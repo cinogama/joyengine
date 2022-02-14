@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <cassert>
 
+#include <string>
+
 void* je_mem_alloc(size_t sz)
 {
     return malloc(sz);
@@ -92,6 +94,39 @@ namespace jeecs
                 return last_node;
             }
         };
+
+        template<typename T>
+        struct default_construct_function
+        {
+            static void constructor(void* _ptr)
+            {
+                new(_ptr)T;
+            }
+        };
+        template<typename T>
+        struct destruct_function
+        {
+            static void destructor(void* _ptr)
+            {
+                ((T*)_ptr)->~T();
+            }
+        };
+        template<typename T>
+        struct copy_construct_function
+        {
+            static void copy(void* _ptr, const void* _be_copy_ptr)
+            {
+                new(_ptr)T(*(const T*)_be_copy_ptr);
+            }
+        };
+        template<typename T>
+        struct move_construct_function
+        {
+            static void move(void* _ptr, void* _be_moved_ptr)
+            {
+                new(_ptr)T(std::move(*(T*)_be_moved_ptr));
+            }
+        };
     }
 
     namespace core
@@ -113,8 +148,12 @@ namespace jeecs
 
             friend class chunk;
 
+            class entity;
+
             class chunk
             {
+                friend class entity;
+
                 JECS_DISABLE_MOVE_AND_COPY(chunk);
 
                 struct _entity_inform
@@ -168,6 +207,10 @@ namespace jeecs
                 {
                     return _m_free_entity_count == 0;
                 }
+                inline void* chunk_buffer() const noexcept
+                {
+                    return _m_array_of_components_buffer;
+                }
             public:
 
                 chunk* last; // used for free list;
@@ -175,9 +218,29 @@ namespace jeecs
 
             struct entity
             {
-                chunk*      _m_storage_chunk;
+                chunk* _m_storage_chunk;
                 entity_id_t _m_entity_id;
                 version_t   _m_version;
+                inline void* _get_component_addr(size_t _component_offset)const noexcept
+                {
+                    static_assert(sizeof(size_t) == sizeof(void*), "size_t should have same length as void*");
+
+                    return
+                        reinterpret_cast<void*>(
+                            reinterpret_cast<size_t>(
+                                _m_storage_chunk->chunk_buffer()
+                                ) + _component_offset);
+                }
+
+                template<typename ComponentT>
+                inline ComponentT* get_component() const noexcept
+                {
+                    size_t offset = 
+                        _m_storage_chunk->_m_arch_group->get_component_offset_in_chunk<ComponentT>(_m_entity_id);
+
+                    return (ComponentT*)_get_component_addr(offset);
+                }
+
             };
 
         private:
@@ -186,8 +249,22 @@ namespace jeecs
                 typehash_t m_type_hash;
                 size_t     m_type_size;
 
+                using construct_func_t = void(*)(void*);
+                using destruct_func_t = void(*)(void*);
+                using copy_construct_func_t = void(*)(void*, const void*);
+                using move_construct_func_t = void(*)(void*, void*);
+
+                construct_func_t    m_construct_func;
+                destruct_func_t     m_destruct_func;
+                move_construct_func_t m_move_construct_func;
+
                 size_t     m_chunk_size;
                 size_t     m_offset;
+
+                inline size_t get_component_offset(entity_id_t eid) const noexcept
+                {
+                    return m_offset + m_chunk_size * eid;
+                }
             };
 
         private:
@@ -195,7 +272,7 @@ namespace jeecs
             size_t           _m_components_count;
             size_t           _m_chunk_size;
 
-            std::atomic<> _m_usable_entity_count;
+            std::atomic_int64_t _m_usable_entity_count;
 
             basic::atomic_list<chunk> _m_chunks;
 
@@ -211,10 +288,16 @@ namespace jeecs
                     {
                         typeid(ComponentT).hash_code(),
                         sizeof(ComponentT),
+                        basic::default_construct_function<ComponentT>::constructor,
+                        basic::destruct_function<ComponentT>::destructor,
+                        basic::move_construct_function<ComponentT>::move,
                     },
                     {
                         typeid(ComponentTs).hash_code(),
                         sizeof(ComponentTs),
+                        basic::default_construct_function<ComponentTs>::constructor,
+                        basic::destruct_function<ComponentTs>::destructor,
+                        basic::move_construct_function<ComponentTs>::move,
                     }...
                 };
                 std::sort(&_typeids[0], &_typeids[_m_components_count],
@@ -267,8 +350,8 @@ namespace jeecs
                 basic::destroy_free(current);
                 return last_chunk;
             }
-        public:
-            entity new_entity()
+
+            inline void _new_empty_entity(chunk** out_chunk, entity_id_t* out_eid, version_t* out_ever)
             {
                 while (true)
                 {
@@ -277,10 +360,11 @@ namespace jeecs
                         chunk* current_chunk = _m_chunks.peek();
                         while (current_chunk)
                         {
-                            entity_id_t eid;
-                            version_t   ever;
-                            if (current_chunk->alloc_new_entity(&eid, &ever))
-                                return entity{ current_chunk, eid ,ever };
+                            if (current_chunk->alloc_new_entity(out_eid, out_ever))
+                            {
+                                *out_chunk = current_chunk;
+                                return;
+                            }
                         }
 
                         //  Should not execute here, because '_m_usable_entity_count'
@@ -293,48 +377,70 @@ namespace jeecs
                     _create_new_chunk();
                 }
             }
+
+            template<typename ComponentT>
+            inline _component_info* _find_component_info() const
+            {
+                for (size_t ci = 0; ci < _m_components_count; ci++)
+                {
+                    if (_m_components[ci].m_type_hash == typeid(ComponentT).hash_code())
+                        return &_m_components[ci];
+                }
+
+                abort();
+                return nullptr;
+            }
+
+        public:
+            inline entity new_entity()
+            {
+                entity created_entity;
+                _new_empty_entity(
+                    &created_entity._m_storage_chunk,
+                    &created_entity._m_entity_id,
+                    &created_entity._m_version);
+
+                for (size_t ci = 0; ci < _m_components_count; ci++)
+                {
+                    size_t component_addr_offset =
+                        _m_components[ci].get_component_offset(created_entity._m_entity_id);
+
+                    _m_components[ci].m_construct_func(
+                        created_entity._get_component_addr(component_addr_offset)
+                    );
+                }
+                return created_entity;
+            }
+
+            template<typename ComponentT>
+            inline size_t get_component_offset_in_chunk(entity_id_t eid) const noexcept
+            {
+                auto* component_info = _find_component_info<ComponentT>();
+                return component_info->get_component_offset(eid);
+            }
         };
     }
 
 
-    class entity
-    {
-
-    };
 }
 
-struct sz4
+struct heyman
 {
-    int m1;
+    heyman()
+    {
+        std::cout << "Helloworld~:" << this << std::endl;
+    }
 };
-
-struct sz8
-{
-    double m1;
-};
-
-struct sz12
-{
-    int m1;
-    int m2;
-    int m3;
-};
-
-struct xx
-{
-    char m0;
-    sz4 m1;
-    sz8 m2;
-    sz12 m3;
-};
-
 
 int main()
 {
     jeecs::core::arch_group a;
-    a.init_arch_group<char, sz4, sz8, sz12>();
-    
+    a.init_arch_group<std::string, heyman>();
+
     auto entity = a.new_entity();
+    int* string = entity.get_component<int>();
+
+
     system("cls");
 
 }
