@@ -13,6 +13,10 @@
 #include <cassert>
 
 #include <string>
+#include <set>
+
+#include <shared_mutex>
+#include <unordered_map>
 
 void* je_mem_alloc(size_t sz)
 {
@@ -127,6 +131,13 @@ namespace jeecs
                 new(_ptr)T(std::move(*(T*)_be_moved_ptr));
             }
         };
+
+        template<typename T>
+        constexpr auto type_hash()
+        {
+            return typeid(T).hash_code();
+        }
+
     }
 
     namespace core
@@ -134,6 +145,9 @@ namespace jeecs
         using entity_id_t = size_t;
         using version_t = size_t;
         using atomic_version_t = std::atomic_size_t;
+        using typehash_t = decltype(basic::type_hash<int>());
+        using rw_mutex_t = std::shared_mutex;
+        using orderd_type_set_t = std::set<typehash_t>;
 
         constexpr entity_id_t INVALID_ENTITY_ID = SIZE_MAX;
 
@@ -141,11 +155,9 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(arch_group);
         public:
-            constexpr static size_t CHUNK_ENTITY_GROUP = 32;
+            constexpr static size_t CHUNK_ENTITY_GROUP = 64;
             constexpr static size_t ALLIGN_BASE_COUNT = 8;
         public:
-            using typehash_t = decltype(typeid(int).hash_code());
-
             friend class chunk;
 
             class entity;
@@ -160,6 +172,18 @@ namespace jeecs
                 {
                     std::atomic_flag m_in_used = {};
                     atomic_version_t m_version = 0;
+
+                    enum entity_state_mask :uint8_t
+                    {
+                        NOT_ACTIVE = 1 << 0,            // entity has been created/destroied, need active
+                        COMPONENT_REMOVING = 1 << 1,    // some component is removing from this entity
+                        COMPONENT_ADDING = 1 << 2,      // some component is adding to this entity
+                        DESTROYING = 1 << 3,            // this entity will be destroy
+                    };
+                    std::atomic_uint8_t m_state = entity_state_mask::NOT_ACTIVE;
+
+                    static_assert(sizeof(m_state) == sizeof(entity_state_mask),
+                        "size of 'm_state' and 'entity_state_mask' must be equal.");
                 };
 
                 // A chunk will store AoC, C will allign with 8 bytes.
@@ -171,11 +195,20 @@ namespace jeecs
                 _entity_inform      _m_entity_informs[CHUNK_ENTITY_GROUP];
                 void* _m_array_of_components_buffer;
 
+                // NOTE: In arch update, component-adding/removing should be update first,
+                //       
+                std::atomic_size_t _m_adding_component_entity_count;
+                std::atomic_size_t _m_removing_component_entity_count;
+                std::atomic_size_t _m_destroying_entity_count;
+
             public:
                 chunk(arch_group* _arch_group)
                     : last(nullptr)
                     , _m_free_entity_count(CHUNK_ENTITY_GROUP)
                     , _m_arch_group(_arch_group)
+                    , _m_destroying_entity_count(0)
+                    , _m_adding_component_entity_count(0)
+                    , _m_removing_component_entity_count(0)
                 {
                     _m_array_of_components_buffer = je_mem_alloc(_arch_group->_m_chunk_size);
                 }
@@ -183,6 +216,10 @@ namespace jeecs
                 {
                     // ATTENTION: NEED DO DESSTRUCT FUNCTION
                     je_mem_free(_m_array_of_components_buffer);
+
+                    // Before chunk destruct, all entity in chunk must be free.
+                    if (_m_free_entity_count != CHUNK_ENTITY_GROUP)
+                        abort();
                 }
 
             public:
@@ -211,16 +248,30 @@ namespace jeecs
                 {
                     return _m_array_of_components_buffer;
                 }
+                void destroy(entity_id_t eid, version_t ever)
+                {
+                    if (_m_entity_informs[eid].m_version == ever)
+                    {
+                        uint8_t old_mask = _m_entity_informs[eid].m_state.fetch_or(_entity_inform::entity_state_mask::DESTROYING);
+                        if (!(old_mask & _entity_inform::entity_state_mask::DESTROYING))
+                        {
+                            ++_m_destroying_entity_count;
+                            ++_m_arch_group->_m_destroying_entity_count;
+                        }
+                    }
+                }
             public:
-
                 chunk* last; // used for free list;
             };
 
-            struct entity
+            class entity
             {
+                friend class arch_group;
+
                 chunk* _m_storage_chunk;
                 entity_id_t _m_entity_id;
                 version_t   _m_version;
+            public:
                 inline void* _get_component_addr(size_t _component_offset)const noexcept
                 {
                     static_assert(sizeof(size_t) == sizeof(void*), "size_t should have same length as void*");
@@ -235,16 +286,19 @@ namespace jeecs
                 template<typename ComponentT>
                 inline ComponentT* get_component() const noexcept
                 {
-                    size_t offset = 
+                    size_t offset =
                         _m_storage_chunk->_m_arch_group->get_component_offset_in_chunk<ComponentT>(_m_entity_id);
 
                     return (ComponentT*)_get_component_addr(offset);
                 }
 
+                void destroy()
+                {
+                    _m_storage_chunk->destroy(_m_entity_id, _m_version);
+                }
             };
 
-        private:
-            struct _component_info
+            struct type_info
             {
                 typehash_t m_type_hash;
                 size_t     m_type_size;
@@ -265,10 +319,20 @@ namespace jeecs
                 {
                     return m_offset + m_chunk_size * eid;
                 }
+
+                template<typename T>
+
             };
 
         private:
-            _component_info* _m_components;
+
+
+        private:
+            std::atomic_size_t _m_adding_component_entity_count;
+            std::atomic_size_t _m_removing_component_entity_count;
+            std::atomic_size_t _m_destroying_entity_count;
+
+            type_info* _m_components;
             size_t           _m_components_count;
             size_t           _m_chunk_size;
 
@@ -286,14 +350,14 @@ namespace jeecs
 
                 _component_info _typeids[] = {
                     {
-                        typeid(ComponentT).hash_code(),
+                        basic::type_hash<ComponentT>(),
                         sizeof(ComponentT),
                         basic::default_construct_function<ComponentT>::constructor,
                         basic::destruct_function<ComponentT>::destructor,
                         basic::move_construct_function<ComponentT>::move,
                     },
                     {
-                        typeid(ComponentTs).hash_code(),
+                        basic::type_hash<ComponentTs>(),
                         sizeof(ComponentTs),
                         basic::default_construct_function<ComponentTs>::constructor,
                         basic::destruct_function<ComponentTs>::destructor,
@@ -351,7 +415,7 @@ namespace jeecs
                 return last_chunk;
             }
 
-            inline void _new_empty_entity(chunk** out_chunk, entity_id_t* out_eid, version_t* out_ever)
+            inline void _new_empty_entity(entity* entity)
             {
                 while (true)
                 {
@@ -360,9 +424,9 @@ namespace jeecs
                         chunk* current_chunk = _m_chunks.peek();
                         while (current_chunk)
                         {
-                            if (current_chunk->alloc_new_entity(out_eid, out_ever))
+                            if (current_chunk->alloc_new_entity(&entity->_m_entity_id, &entity->_m_version))
                             {
-                                *out_chunk = current_chunk;
+                                entity->_m_storage_chunk = current_chunk;
                                 return;
                             }
                         }
@@ -379,11 +443,11 @@ namespace jeecs
             }
 
             template<typename ComponentT>
-            inline _component_info* _find_component_info() const
+            inline type_info* _find_component_info() const
             {
                 for (size_t ci = 0; ci < _m_components_count; ci++)
                 {
-                    if (_m_components[ci].m_type_hash == typeid(ComponentT).hash_code())
+                    if (_m_components[ci].m_type_hash == basic::type_hash<ComponentT>())
                         return &_m_components[ci];
                 }
 
@@ -395,10 +459,7 @@ namespace jeecs
             inline entity new_entity()
             {
                 entity created_entity;
-                _new_empty_entity(
-                    &created_entity._m_storage_chunk,
-                    &created_entity._m_entity_id,
-                    &created_entity._m_version);
+                _new_empty_entity(&created_entity);
 
                 for (size_t ci = 0; ci < _m_components_count; ci++)
                 {
@@ -419,8 +480,67 @@ namespace jeecs
                 return component_info->get_component_offset(eid);
             }
         };
-    }
+        class type_factory
+        {
+            rw_mutex_t _m_arch_group_map_mx;
+            std::unordered_map<typehash_t, arch_group*> _m_arch_group_map;
 
+            rw_mutex_t _m_arch_group_map_mx;
+            std::unordered_map<typehash_t, typehash_t> _m_arch_group_map;
+
+            template<typename T>
+            static arch_group::type_info find_or_register_type(const std::string_view & name)
+            {
+
+            }
+        };
+        class arch_group_manager
+        {
+            template<typename ... HashTs>
+            inline static constexpr typehash_t _sorted_arch_hash(HashTs...hasht) noexcept
+            {
+                std::set<typehash_t> hashs = { ((typehash_t)hasht) ... };
+                typehash_t result = 0;
+                for (typehash_t hash : hashs)
+                {
+                    result *= result;
+                    result += hash;
+                }
+
+                return result;
+            }
+
+            template<typename ... ComponentTs>
+            inline static constexpr typehash_t _sorted_arch_hash() noexcept
+            {
+                // TODO: AVOID HASH COLLISION
+                return _sorted_arch_hash(basic::type_hash<ComponentTs>()...);
+            }
+        private:
+            rw_mutex_t _m_arch_group_map_mx;
+            std::unordered_map<typehash_t, arch_group*> _m_arch_group_map;
+
+        private:
+            arch_group* _find_or_add_arch_group(typehash_t _typeshash)
+            {
+                do
+                {
+                    std::shared_lock sg1(_m_arch_group_map_mx);
+                    auto fnd = _m_arch_group_map.find(_typeshash);
+                    if (fnd != _m_arch_group_map.end())
+                        return fnd->second;
+                } while (0);
+
+                jeecs::core::arch_group* new_arch = basic::create_new<jeecs::core::arch_group>();
+                new_arch->init_arch_group<std::string, heyman>();
+
+                std::lock_guard g1(_m_arch_group_map_mx);
+            }
+        public:
+
+        };
+
+    }
 
 }
 
@@ -434,13 +554,10 @@ struct heyman
 
 int main()
 {
-    jeecs::core::arch_group a;
-    a.init_arch_group<std::string, heyman>();
-
-    auto entity = a.new_entity();
-    int* string = entity.get_component<int>();
-
-
+    while (true)
+    {
+        entity.destroy();
+    }
     system("cls");
 
 }
