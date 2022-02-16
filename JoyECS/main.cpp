@@ -8,26 +8,11 @@
 #include "jeecs.hpp"
 
 #include <iostream>
-//#include <algorithm>
-//#include <typeinfo>
-//#include <atomic>
-//#include <cstdint>
-//#include <cassert>
-//
-//#include <string>
-//#include <set>
-//
-//#include <shared_mutex>
-//#include <unordered_map>
-
-
-
 
 int main()
 {
-    while (true)
-    {
-        std::cout << typeid(int).name() << std::endl;
-    }
+    auto* tinfo = jeecs::typing::type_info::of<jeecs::typing::type_info>("type_info");
+
+    jeecs::typing::type_info::unregister_all_type_in_shutdown();
 
 }

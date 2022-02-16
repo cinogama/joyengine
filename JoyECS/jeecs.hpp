@@ -5,9 +5,19 @@
 #else
 
 #include <cstdint>
+#include <cstring>
+#include <cstdlib>
+
 #include <typeinfo>
 
 #include <atomic>
+#include <vector>
+#include <mutex>
+#include <set>
+
+#include <algorithm>
+
+#include <cassert>
 
 #define RS_FORCE_CAPI extern "C"{
 #define RS_FORCE_CAPI_END }
@@ -34,12 +44,21 @@ namespace jeecs
     {
         using typehash_t = size_t;
         using typeid_t = size_t;
+
+        constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
+
         struct type_info;
 
         using construct_func_t = void(*)(void*);
         using destruct_func_t = void(*)(void*);
         using copy_func_t = void(*)(void*, const void*);
         using move_func_t = void(*)(void*, void*);
+    }
+
+    namespace arch
+    {
+        constexpr size_t ALLIGN_BASE = 8;
+        constexpr size_t CHUNK_SIZE = 64 * 1024; // 64K
     }
 }
 
@@ -48,7 +67,8 @@ JE_API void* je_mem_alloc(size_t sz);
 JE_API void je_mem_free(void* ptr);
 
 // You should promise: different type should have different name.
-JE_API jeecs::typing::typeid_t je_typing_find_or_register(
+JE_API bool je_typing_find_or_register(
+    jeecs::typing::typeid_t* out_typeid,
     const char* _name,
     jeecs::typing::typehash_t _hash,
     size_t                    _size,
@@ -57,10 +77,12 @@ JE_API jeecs::typing::typeid_t je_typing_find_or_register(
     jeecs::typing::copy_func_t      _copier,
     jeecs::typing::move_func_t      _mover);
 
-JE_API jeecs::typing::type_info* je_typing_get_info_by_id(
+JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
     jeecs::typing::typeid_t _id);
 
-JE_API void je_typing_clear_register_buffer();
+JE_API void je_typing_unregister(
+    jeecs::typing::typeid_t _id);
+
 
 RS_FORCE_CAPI_END
 
@@ -106,6 +128,15 @@ namespace jeecs
                 address[i].~T();
 
             je_mem_free(address);
+        }
+
+        inline char* make_new_string(const char* _str)
+        {
+            size_t str_length = strlen(_str);
+            char* str = (char*)je_mem_alloc(str_length + 1);
+            memcpy(str, _str, str_length + 1);
+
+            return str;
         }
 
         template<typename NodeT>
@@ -168,8 +199,10 @@ namespace jeecs
     {
         struct type_info
         {
+            typeid_t    m_id;
+
             typehash_t  m_hash;
-            const char* m_typename;
+            const char* m_typename;   // will be free by je_typing_unregister
             size_t      m_size;
             size_t      m_chunk_size; // calc by je_typing_find_or_register
 
@@ -178,25 +211,124 @@ namespace jeecs
             copy_func_t         m_copier;
             move_func_t         m_mover;
 
-            template<typename T>
-            static type_info* of(const char* _typename = typeid(T).name())
-            {
-                static typeid_t* registed_typeid = je_typing_find_or_register(
-                    _typename, 
-                    basic::type_hash<T>(),
-                    sizeof(T),
-                    basic::default_functions<T>::constructor,
-                    basic::default_functions<T>::destructor,
-                    basic::default_functions<T>::copier,
-                    basic::default_functions<T>::mover);
+        private:
+            inline static std::atomic_bool      _m_shutdown_flag = false;
 
-                static type_info* registed_typeinfo = je_typing_get_info_by_id(registed_typeid);
+            class _type_unregister_guard
+            {
+                friend struct type_info;
+                _type_unregister_guard() = default;
+                std::mutex            _m_self_registed_typeid_mx;
+                std::vector<typeid_t> _m_self_registed_typeid;
+
+            public:
+                ~_type_unregister_guard()
+                {
+                    std::lock_guard g1(_m_self_registed_typeid_mx);
+                    for (typeid_t typeindex : _m_self_registed_typeid)
+                        je_typing_unregister(typeindex);
+                    _m_self_registed_typeid.clear();
+                    _m_shutdown_flag = true;
+                }
+
+                template<typename T>
+                typeid_t _register_or_get_type_id(const char* _typename)
+                {
+                    typeid_t id = INVALID_TYPE_ID;
+                    if (je_typing_find_or_register(
+                        &id,
+                        _typename,
+                        basic::type_hash<T>(),
+                        sizeof(T),
+                        basic::default_functions<T>::constructor,
+                        basic::default_functions<T>::destructor,
+                        basic::default_functions<T>::copier,
+                        basic::default_functions<T>::mover))
+                    {
+                        // store to list for unregister
+                        std::lock_guard g1(_m_self_registed_typeid_mx);
+                        _m_self_registed_typeid.push_back(id);
+                    }
+                    return id;
+                }
+            };
+            inline static _type_unregister_guard _type_guard;
+
+        public:
+            static void unregister_all_type_in_shutdown()
+            {
+                _type_guard.~_type_unregister_guard();
+            }
+            template<typename T>
+            static typeid_t id(const char* _typename = typeid(T).name())
+            {
+                assert(!_m_shutdown_flag);
+                static typeid_t registed_typeid = _type_guard._register_or_get_type_id<T>(_typename);
+                return registed_typeid;
+            }
+            template<typename T>
+            static const type_info* of(const char* _typename = typeid(T).name())
+            {
+                assert(!_m_shutdown_flag);
+                static typeid_t registed_typeid = id<T>(_typename);
+                static const type_info* registed_typeinfo = je_typing_get_info_by_id(registed_typeid);
 
                 return registed_typeinfo;
+            }
+            static const type_info* of(typeid_t _tid)
+            {
+                assert(!_m_shutdown_flag);
+                return je_typing_get_info_by_id(_tid);
+            }
+
+            void construct(void* addr) const
+            {
+                m_constructor(addr);
+            }
+            void destruct(void* addr) const
+            {
+                m_destructor(addr);
+            }
+            void copy(void* dst_addr, const void* src_addr) const
+            {
+                m_copier(dst_addr, src_addr);
+            }
+            void move(void* dst_addr, void* src_addr) const
+            {
+                m_mover(dst_addr, src_addr);
             }
         };
     }
 
+    namespace arch
+    {
+        class arch_type
+        {
+            // ahahahah, arch_type is coming!
+            using types_set = std::set<typing::typeid_t>;
+
+            std::vector<const typing::type_info*> _m_arch_typeinfo;
+            size_t _m_entity_size;
+            size_t _m_entity_per_chunk;
+        public:
+            arch_type(const types_set& _types_set)
+            {
+                for (typing::typeid_t tid : _types_set)
+                    _m_arch_typeinfo.push_back(typing::type_info::of(tid));
+
+                std::sort(_m_arch_typeinfo.begin(), _m_arch_typeinfo.end(),
+                    [](const typing::type_info* a, const typing::type_info* b) {
+                        return a->m_size < b->m_size;
+                    });
+
+                _m_entity_size = 0;
+                for (auto* typeinfo : _m_arch_typeinfo)
+                    _m_entity_size += typeinfo->m_chunk_size;
+
+                _m_entity_per_chunk = CHUNK_SIZE / _m_entity_size;
+            }
+        };
+    }
 }
 
 #endif
