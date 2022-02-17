@@ -14,8 +14,10 @@
 #include <atomic>
 #include <vector>
 #include <mutex>
+#include <shared_mutex>
 #include <set>
 #include <unordered_map>
+#include <map>
 #include <algorithm>
 
 
@@ -341,6 +343,14 @@ namespace jeecs
                 {
                     std::atomic_flag m_in_used = {};
                     version_t m_version = 0;
+
+                    enum class entity_stat
+                    {
+                        UNAVAILABLE,    // Entity is destroied or just not ready,
+                        READY,          // Entity is OK, and just work as normal.
+                        MODIFIED,       // Some component will add/remove from this entity, it need update.
+                    };
+                    entity_stat m_stat = entity_stat::UNAVAILABLE;
                 };
 
                 _entity_meta* _m_entities_meta;
@@ -358,6 +368,8 @@ namespace jeecs
                 }
                 ~arch_chunk()
                 {
+                    // All entity in chunk should be free.
+                    assert(_m_free_count == _m_entity_count);
                     basic::destroy_free_n(_m_entities_meta, _m_entity_count);
                 }
 
@@ -447,9 +459,21 @@ namespace jeecs
                 size_t mem_offset = 0;
                 for (auto* typeinfo : _m_arch_typeinfo)
                 {
-                    const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id] 
+                    const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id]
                         = arch_type_info{ typeinfo, mem_offset };
                     mem_offset += typeinfo->m_chunk_size * _m_entity_count_per_chunk;
+                }
+            }
+
+            ~arch_type()
+            {
+                arch_chunk* chunk = _m_chunks.pick_all();
+                while (chunk)
+                {
+                    auto* next_chunk = chunk->last;
+                    basic::destroy_free(chunk);
+
+                    chunk = next_chunk;
                 }
             }
 
@@ -507,6 +531,47 @@ namespace jeecs
                 }
 
                 return entity{ chunk ,entity_id, entity_version };
+            }
+        };
+
+        class arch_manager
+        {
+            using arch_map_t = std::map<types_set, arch_type*>;
+
+            arch_map_t _m_arch_types_mapping;
+            std::shared_mutex _m_arch_types_mapping_mx;
+        public:
+            ~arch_manager()
+            {
+                for (auto& [types, archtype] : _m_arch_types_mapping)
+                    basic::destroy_free(archtype);
+            }
+
+            arch_type* find_or_add_arch(const types_set& _types)
+            {
+                do
+                {
+                    std::shared_lock sg1(_m_arch_types_mapping_mx);
+                    auto fnd = _m_arch_types_mapping.find(_types);
+                    if (fnd != _m_arch_types_mapping.end())
+                    {
+                        return fnd->second;
+                    }
+                } while (0);
+
+                std::lock_guard g1(_m_arch_types_mapping_mx);
+                jeecs::arch::arch_type*& atype = _m_arch_types_mapping[_types];
+                if (nullptr == atype)
+                    atype = basic::create_new<jeecs::arch::arch_type>(_types);
+
+                return atype;
+            }
+            arch_type::entity create_an_entity_with_component(const types_set& _types)
+            {
+                if (_types.empty())
+                    return arch_type::entity{ nullptr, 0, 0 };
+
+                return find_or_add_arch(_types)->instance_entity();
             }
         };
     }
