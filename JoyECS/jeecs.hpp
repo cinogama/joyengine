@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <cassert>
 
 #include <typeinfo>
 
@@ -14,10 +15,9 @@
 #include <vector>
 #include <mutex>
 #include <set>
-
+#include <unordered_map>
 #include <algorithm>
 
-#include <cassert>
 
 #define RS_FORCE_CAPI extern "C"{
 #define RS_FORCE_CAPI_END }
@@ -57,7 +57,11 @@ namespace jeecs
 
     namespace arch
     {
-        constexpr size_t ALLIGN_BASE = 8;
+        using entity_id_in_chunk_t = size_t;
+        using types_set = std::set<typing::typeid_t>;
+
+        constexpr entity_id_in_chunk_t INVALID_ENTITY_ID = SIZE_MAX;
+        constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
         constexpr size_t CHUNK_SIZE = 64 * 1024; // 64K
     }
 }
@@ -260,14 +264,14 @@ namespace jeecs
                 _type_guard.~_type_unregister_guard();
             }
             template<typename T>
-            static typeid_t id(const char* _typename = typeid(T).name())
+            inline static typeid_t id(const char* _typename = typeid(T).name())
             {
                 assert(!_m_shutdown_flag);
                 static typeid_t registed_typeid = _type_guard._register_or_get_type_id<T>(_typename);
                 return registed_typeid;
             }
             template<typename T>
-            static const type_info* of(const char* _typename = typeid(T).name())
+            inline static const type_info* of(const char* _typename = typeid(T).name())
             {
                 assert(!_m_shutdown_flag);
                 static typeid_t registed_typeid = id<T>(_typename);
@@ -275,7 +279,7 @@ namespace jeecs
 
                 return registed_typeinfo;
             }
-            static const type_info* of(typeid_t _tid)
+            inline static const type_info* of(typeid_t _tid)
             {
                 assert(!_m_shutdown_flag);
                 return je_typing_get_info_by_id(_tid);
@@ -304,28 +308,205 @@ namespace jeecs
     {
         class arch_type
         {
+            JECS_DISABLE_MOVE_AND_COPY(arch_type);
             // ahahahah, arch_type is coming!
-            using types_set = std::set<typing::typeid_t>;
 
-            std::vector<const typing::type_info*> _m_arch_typeinfo;
-            size_t _m_entity_size;
-            size_t _m_entity_per_chunk;
+            struct arch_type_info
+            {
+                const typing::type_info* m_typeinfo;
+                size_t m_begin_offset_in_chunk;
+            };
+
+            using types_list = std::vector<const typing::type_info*>;
+            using archtypes_map = std::unordered_map<typing::typeid_t, arch_type_info>;
+            using version_t = size_t;
+
+            const types_list      _m_arch_typeinfo;
+            const archtypes_map   _m_arch_typeinfo_mapping;
+            const size_t    _m_entity_size;
+            const size_t    _m_entity_count_per_chunk;
+
+            class arch_chunk
+            {
+                JECS_DISABLE_MOVE_AND_COPY(arch_chunk);
+
+                using byte_t = uint8_t;
+                static_assert(sizeof(byte_t) == 1, "sizeof(uint8_t) should be 1.");
+
+                byte_t _m_chunk_buffer[CHUNK_SIZE];
+                const archtypes_map& _m_arch_typeinfo_mapping;
+                const size_t _m_entity_count;
+                const size_t _m_entity_size;
+                struct _entity_meta
+                {
+                    std::atomic_flag m_in_used = {};
+                    version_t m_version = 0;
+                };
+
+                _entity_meta* _m_entities_meta;
+                std::atomic_size_t _m_free_count;
+            public:
+                arch_chunk* last; // for atomic_list;
+            public:
+                arch_chunk(arch_type* _arch_type)
+                    : _m_entity_count(_arch_type->_m_entity_count_per_chunk)
+                    , _m_entity_size(_arch_type->_m_entity_size)
+                    , _m_free_count(_arch_type->_m_entity_count_per_chunk)
+                    , _m_arch_typeinfo_mapping(_arch_type->_m_arch_typeinfo_mapping)
+                {
+                    _m_entities_meta = basic::create_new_n<_entity_meta>(_m_entity_count);
+                }
+                ~arch_chunk()
+                {
+                    basic::destroy_free_n(_m_entities_meta, _m_entity_count);
+                }
+
+            public:
+                bool alloc_entity_id(entity_id_in_chunk_t* out_id, version_t* out_version)
+                {
+                    size_t free_entity_count = _m_free_count;
+                    while (free_entity_count)
+                    {
+                        if (_m_free_count.compare_exchange_weak(free_entity_count, free_entity_count - 1))
+                        {
+                            // OK There is a usable place for entity
+                            for (size_t id = 0; id < _m_entity_count; id++)
+                            {
+                                if (!_m_entities_meta[id].m_in_used.test_and_set())
+                                {
+                                    *out_id = id;
+                                    *out_version = ++(_m_entities_meta[id].m_version);
+                                    return true;
+                                }
+                            }
+                            assert(false); // entity count is ok, but there is no free place. that should not happend.
+                        }
+                        free_entity_count = _m_free_count; // Fail to compare, update the count and retry.
+                    }
+                    return false;
+                }
+                inline void* get_component_addr(entity_id_in_chunk_t _eid, size_t _chunksize, size_t _offset)const noexcept
+                {
+                    return (void*)(_m_chunk_buffer + _offset + _eid * _chunksize);
+                }
+                inline bool is_entity_valid(entity_id_in_chunk_t eid, version_t eversion) const noexcept
+                {
+                    if (_m_entities_meta[eid].m_version != eversion)
+                        return false;
+                    return true;
+                }
+                inline void* get_component_addr_with_typeid(entity_id_in_chunk_t eid, typing::typeid_t tid) const noexcept
+                {
+                    const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
+                    return get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
+
+                }
+            };
+            std::atomic_size_t _m_free_count;
+            basic::atomic_list<arch_chunk> _m_chunks;
+
+        public:
+            struct entity
+            {
+                arch_chunk* _m_in_chunk;
+                entity_id_in_chunk_t   _m_id;
+                version_t              _m_version;
+
+                // Do not invoke this function if possiable, you should get component by arch_type & system.
+                template<typename CT>
+                CT* get_component() const
+                {
+                    assert(_m_in_chunk->is_entity_valid(_m_id, _m_version));
+                    return (CT*)_m_in_chunk->get_component_addr_with_typeid(_m_id, typing::type_info::id<CT>());
+                }
+            };
+
         public:
             arch_type(const types_set& _types_set)
+                : _m_entity_size(0)
+                , _m_free_count(0)
+                , _m_entity_count_per_chunk(0)
             {
                 for (typing::typeid_t tid : _types_set)
-                    _m_arch_typeinfo.push_back(typing::type_info::of(tid));
+                    const_cast<types_list&>(_m_arch_typeinfo).push_back(typing::type_info::of(tid));
 
-                std::sort(_m_arch_typeinfo.begin(), _m_arch_typeinfo.end(),
+                std::sort(const_cast<types_list&>(_m_arch_typeinfo).begin(),
+                    const_cast<types_list&>(_m_arch_typeinfo).end(),
                     [](const typing::type_info* a, const typing::type_info* b) {
                         return a->m_size < b->m_size;
                     });
 
-                _m_entity_size = 0;
+                const_cast<size_t&>(_m_entity_size) = 0;
                 for (auto* typeinfo : _m_arch_typeinfo)
-                    _m_entity_size += typeinfo->m_chunk_size;
+                {
+                    const_cast<size_t&>(_m_entity_size) += typeinfo->m_chunk_size;
+                }
 
-                _m_entity_per_chunk = CHUNK_SIZE / _m_entity_size;
+                const_cast<size_t&>(_m_entity_count_per_chunk) = CHUNK_SIZE / _m_entity_size;
+
+                size_t mem_offset = 0;
+                for (auto* typeinfo : _m_arch_typeinfo)
+                {
+                    const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id] 
+                        = arch_type_info{ typeinfo, mem_offset };
+                    mem_offset += typeinfo->m_chunk_size * _m_entity_count_per_chunk;
+                }
+            }
+
+            arch_chunk* _create_new_chunk()
+            {
+                arch_chunk* new_chunk = basic::create_new<arch_chunk>(this);
+                _m_chunks.add_one(new_chunk);
+                _m_free_count += _m_entity_count_per_chunk;
+                return new_chunk;
+            }
+
+            void alloc_entity(arch_chunk** out_chunk, entity_id_in_chunk_t* out_eid, version_t* out_eversion)
+            {
+                while (true)
+                {
+                    size_t free_entity_count = _m_free_count;
+                    while (free_entity_count)
+                    {
+                        if (_m_free_count.compare_exchange_weak(free_entity_count, free_entity_count - 1))
+                        {
+                            // OK There is a usable place for entity
+                            arch_chunk* peek_chunk = _m_chunks.peek();
+                            while (peek_chunk)
+                            {
+                                if (peek_chunk->alloc_entity_id(out_eid, out_eversion))
+                                {
+                                    *out_chunk = peek_chunk;
+                                    return;
+                                }
+                                peek_chunk = peek_chunk->last;
+                            }
+
+                            assert(false); // entity count is ok, but there is no free place. that should not happend.
+                        }
+                        free_entity_count = _m_free_count; // Fail to compare, update the count and retry.
+                    }
+                    _create_new_chunk();
+                }
+            }
+
+            entity instance_entity()
+            {
+                arch_chunk* chunk;
+                entity_id_in_chunk_t entity_id;
+                version_t            entity_version;
+
+                alloc_entity(&chunk, &entity_id, &entity_version);
+                for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
+                {
+                    void* component_addr = chunk->get_component_addr(entity_id,
+                        arch_typeinfo.second.m_typeinfo->m_chunk_size,
+                        arch_typeinfo.second.m_begin_offset_in_chunk);
+
+                    arch_typeinfo.second.m_typeinfo->construct(component_addr);
+                }
+
+                return entity{ chunk ,entity_id, entity_version };
             }
         };
     }
