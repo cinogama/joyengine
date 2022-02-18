@@ -28,9 +28,6 @@ int main()
     auto* tinfo = jeecs::typing::type_info::of<jeecs::typing::type_info>("type_info");
 
     arch::arch_manager am;
-
-    auto empty_entity = am.create_an_entity_with_component({});
-    auto entity_1 = am.create_an_entity_with_component({});
     auto entity_2 = am.create_an_entity_with_component({ typing::type_info::id<int>() });
     auto entity_3 = am.create_an_entity_with_component({ typing::type_info::id<std::string>() });
 }

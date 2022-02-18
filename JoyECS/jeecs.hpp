@@ -568,9 +568,7 @@ namespace jeecs
             }
             arch_type::entity create_an_entity_with_component(const types_set& _types)
             {
-                if (_types.empty())
-                    return arch_type::entity{ nullptr, 0, 0 };
-
+                assert(!_types.empty());
                 return find_or_add_arch(_types)->instance_entity();
             }
         };
