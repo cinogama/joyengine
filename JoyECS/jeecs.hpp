@@ -572,6 +572,12 @@ namespace jeecs
                 return find_or_add_arch(_types)->instance_entity();
             }
         };
+
+        class command_buffer
+        {
+            // Command buffer used to store operations happend in a entity.
+
+        };
     }
 }
 
