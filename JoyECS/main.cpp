@@ -17,7 +17,9 @@ struct ecs_system
         WRITE,
         READ_AFTER_WRITE,
 
+        CONTAIN,
         NONE,
+        ANY,
     };
     enum sequence
     {
@@ -310,6 +312,8 @@ int main()
         = ecs_system::dependence_type::WRITE;
     sys5->m_dependence_list[typing::type_info::of<custom>()->m_id]
         = ecs_system::dependence_type::READ_AFTER_WRITE;
+    sys5->m_dependence_list[typing::type_info::of<std::string>()->m_id]
+        = ecs_system::dependence_type::NONE;
 
     ecs_world ew;
     ew.regist_system(sys1);
