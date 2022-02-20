@@ -19,6 +19,9 @@
 #include <unordered_map>
 #include <map>
 #include <algorithm>
+#ifdef __cpp_lib_execution
+#include <execution>
+#endif
 
 
 #define RS_FORCE_CAPI extern "C"{
@@ -61,6 +64,7 @@ namespace jeecs
     {
         using entity_id_in_chunk_t = size_t;
         using types_set = std::set<typing::typeid_t>;
+        using version_t = size_t;
 
         constexpr entity_id_in_chunk_t INVALID_ENTITY_ID = SIZE_MAX;
         constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
@@ -113,23 +117,31 @@ namespace jeecs
         template<typename T, typename  ... ArgTs>
         T* create_new(ArgTs&& ... args)
         {
+            static_assert(!std::is_void<T>::value);
+
             return new(je_mem_alloc(sizeof(T)))T(args...);
         }
         template<typename T, typename  ... ArgTs>
         T* create_new_n(size_t n)
         {
+            static_assert(!std::is_void<T>::value);
+
             return new(je_mem_alloc(sizeof(T) * n))T[n];
         }
 
         template<typename T>
         void destroy_free(T* address)
         {
+            static_assert(!std::is_void<T>::value);
+
             address->~T();
             je_mem_free(address);
         }
         template<typename T>
         void destroy_free_n(T* address, size_t n)
         {
+            static_assert(!std::is_void<T>::value);
+
             for (size_t i = 0; i < n; i++)
                 address[i].~T();
 
@@ -308,6 +320,9 @@ namespace jeecs
 
     namespace arch
     {
+        class command_buffer;
+        class arch_manager;
+
         class arch_type
         {
             JECS_DISABLE_MOVE_AND_COPY(arch_type);
@@ -321,13 +336,16 @@ namespace jeecs
 
             using types_list = std::vector<const typing::type_info*>;
             using archtypes_map = std::unordered_map<typing::typeid_t, arch_type_info>;
-            using version_t = size_t;
 
             const types_list      _m_arch_typeinfo;
+            const types_set       _m_types_set;
             const archtypes_map   _m_arch_typeinfo_mapping;
             const size_t    _m_entity_size;
             const size_t    _m_entity_count_per_chunk;
 
+            arch_manager* _m_arch_manager;
+
+        public:
             class arch_chunk
             {
                 JECS_DISABLE_MOVE_AND_COPY(arch_chunk);
@@ -336,6 +354,7 @@ namespace jeecs
                 static_assert(sizeof(byte_t) == 1, "sizeof(uint8_t) should be 1.");
 
                 byte_t _m_chunk_buffer[CHUNK_SIZE];
+                const types_set& _m_types;
                 const archtypes_map& _m_arch_typeinfo_mapping;
                 const size_t _m_entity_count;
                 const size_t _m_entity_size;
@@ -348,13 +367,13 @@ namespace jeecs
                     {
                         UNAVAILABLE,    // Entity is destroied or just not ready,
                         READY,          // Entity is OK, and just work as normal.
-                        MODIFIED,       // Some component will add/remove from this entity, it need update.
                     };
                     entity_stat m_stat = entity_stat::UNAVAILABLE;
                 };
 
                 _entity_meta* _m_entities_meta;
                 std::atomic_size_t _m_free_count;
+                arch_type* _m_arch_type;
             public:
                 arch_chunk* last; // for atomic_list;
             public:
@@ -363,6 +382,8 @@ namespace jeecs
                     , _m_entity_size(_arch_type->_m_entity_size)
                     , _m_free_count(_arch_type->_m_entity_count_per_chunk)
                     , _m_arch_typeinfo_mapping(_arch_type->_m_arch_typeinfo_mapping)
+                    , _m_types(_arch_type->_m_types_set)
+                    , _m_arch_type(_arch_type)
                 {
                     _m_entities_meta = basic::create_new_n<_entity_meta>(_m_entity_count);
                 }
@@ -374,6 +395,15 @@ namespace jeecs
                 }
 
             public:
+                // ATTENTION: move_component_to WILL INVOKE DESTRUCT FUNCTION OF from_component
+                inline void move_component_to(entity_id_in_chunk_t eid, typing::typeid_t tid, void* from_component)const
+                {
+                    const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
+                    void* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
+                    arch_typeinfo.m_typeinfo->move(component_addr, from_component);
+                    arch_typeinfo.m_typeinfo->destruct(from_component);
+                }
+
                 bool alloc_entity_id(entity_id_in_chunk_t* out_id, version_t* out_version)
                 {
                     size_t free_entity_count = _m_free_count;
@@ -413,7 +443,45 @@ namespace jeecs
                     return get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
 
                 }
+                inline void destruct_component_addr_with_typeid(entity_id_in_chunk_t eid, typing::typeid_t tid) const noexcept
+                {
+                    const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
+                    auto* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
+
+                    arch_typeinfo.m_typeinfo->destruct(component_addr);
+
+                }
+                inline const types_set& types()const noexcept
+                {
+                    return _m_types;
+                }
+                inline arch_type* get_arch_type()const noexcept
+                {
+                    return _m_arch_type;
+                }
+            private:
+                // Following function only invoke by command_buffer
+                friend class command_buffer;
+
+                void command_active_entity(entity_id_in_chunk_t eid) noexcept
+                {
+                    _m_entities_meta[eid].m_stat = _entity_meta::entity_stat::READY;
+                }
+
+                void command_close_entity(entity_id_in_chunk_t eid) noexcept
+                {
+                    // TODO: MULTI-THREAD PROBLEM
+                    _m_entities_meta[eid].m_stat = _entity_meta::entity_stat::UNAVAILABLE;
+                    ++_m_entities_meta[eid].m_version;
+                    _m_entities_meta[eid].m_in_used.clear();
+
+                    ++_m_free_count;
+                    ++_m_arch_type->_m_free_count;
+                }
             };
+
+        private:
+
             std::atomic_size_t _m_free_count;
             basic::atomic_list<arch_chunk> _m_chunks;
 
@@ -426,18 +494,41 @@ namespace jeecs
 
                 // Do not invoke this function if possiable, you should get component by arch_type & system.
                 template<typename CT>
-                CT* get_component() const
+                inline CT* get_component() const
                 {
                     assert(_m_in_chunk->is_entity_valid(_m_id, _m_version));
                     return (CT*)_m_in_chunk->get_component_addr_with_typeid(_m_id, typing::type_info::id<CT>());
                 }
+
+                inline arch_chunk* chunk()const noexcept
+                {
+                    return _m_in_chunk;
+                }
+
+                inline bool operator < (const entity& another) const noexcept
+                {
+                    if (_m_in_chunk < another._m_in_chunk)
+                        return true;
+                    if (_m_in_chunk > another._m_in_chunk)
+                        return false;
+                    if (_m_id < another._m_id)
+                        return true;
+                    return false;
+                }
+
+                inline bool valid() const noexcept
+                {
+                    return _m_in_chunk->is_entity_valid(_m_id, _m_version);
+                }
             };
 
         public:
-            arch_type(const types_set& _types_set)
+            arch_type(arch_manager* _arch_manager, const types_set& _types_set)
                 : _m_entity_size(0)
                 , _m_free_count(0)
                 , _m_entity_count_per_chunk(0)
+                , _m_types_set(_types_set)
+                , _m_arch_manager(_arch_manager)
             {
                 for (typing::typeid_t tid : _types_set)
                     const_cast<types_list&>(_m_arch_typeinfo).push_back(typing::type_info::of(tid));
@@ -532,15 +623,24 @@ namespace jeecs
 
                 return entity{ chunk ,entity_id, entity_version };
             }
+
+            arch_manager* get_arch_mgr()const noexcept
+            {
+                return _m_arch_manager;
+            }
+
         };
 
         class arch_manager
         {
+            JECS_DISABLE_MOVE_AND_COPY(arch_manager);
+
             using arch_map_t = std::map<types_set, arch_type*>;
 
             arch_map_t _m_arch_types_mapping;
             std::shared_mutex _m_arch_types_mapping_mx;
         public:
+            arch_manager() = default;
             ~arch_manager()
             {
                 for (auto& [types, archtype] : _m_arch_types_mapping)
@@ -562,7 +662,7 @@ namespace jeecs
                 std::lock_guard g1(_m_arch_types_mapping_mx);
                 jeecs::arch::arch_type*& atype = _m_arch_types_mapping[_types];
                 if (nullptr == atype)
-                    atype = basic::create_new<jeecs::arch::arch_type>(_types);
+                    atype = basic::create_new<jeecs::arch::arch_type>(this, _types);
 
                 return atype;
             }
@@ -575,8 +675,267 @@ namespace jeecs
 
         class command_buffer
         {
-            // Command buffer used to store operations happend in a entity.
+            // command_buffer used to store operations happend in a entity.
+            JECS_DISABLE_MOVE_AND_COPY(command_buffer);
 
+            struct _entity_command_buffer
+            {
+                JECS_DISABLE_MOVE_AND_COPY(_entity_command_buffer);
+
+                struct typed_component
+                {
+                    const typing::type_info* m_typeinfo;
+                    void* m_component_addr;
+
+                    typed_component* last;
+
+                    typed_component(const typing::type_info* id, void* addr)
+                        : m_typeinfo(id)
+                        , m_component_addr(addr)
+                    {
+                        // Do nothing else
+                    }
+                };
+
+                basic::atomic_list<typed_component> m_removed_components;
+                basic::atomic_list<typed_component> m_append_components;
+                bool                                m_entity_removed_flag;
+
+                _entity_command_buffer() = default;
+            };
+
+            std::shared_mutex _m_entity_command_buffer_mx;
+            std::map<arch_type::entity, _entity_command_buffer> _m_entity_command_buffer;
+
+            _entity_command_buffer& _find_or_create_buffer_for(const arch_type::entity& e)
+            {
+                do
+                {
+                    std::shared_lock sg1(_m_entity_command_buffer_mx);
+                    auto fnd = _m_entity_command_buffer.find(e);
+                    if (fnd != _m_entity_command_buffer.end())
+                        return fnd->second;
+
+                } while (0);
+
+                std::lock_guard g1(_m_entity_command_buffer_mx);
+                return _m_entity_command_buffer[e];
+            }
+        public:
+            command_buffer() = default;
+
+            void init_new_entity(const arch_type::entity& e)
+            {
+                _find_or_create_buffer_for(e);
+            }
+
+            void remove_entity(const arch_type::entity& e)
+            {
+                _find_or_create_buffer_for(e).m_entity_removed_flag = true;
+            }
+
+            void* append_component(const arch_type::entity& e, const typing::type_info* component_type)
+            {
+                // Instance component
+                void* created_component = je_mem_alloc(component_type->m_size);
+                component_type->construct(created_component);
+
+                _find_or_create_buffer_for(e).m_append_components.add_one(
+                    basic::create_new<_entity_command_buffer::typed_component>(component_type, created_component)
+                );
+
+                return created_component;
+            }
+
+            void remove_component(const arch_type::entity& e, const typing::type_info* component_type)
+            {
+                _find_or_create_buffer_for(e).m_removed_components.add_one(
+                    basic::create_new<_entity_command_buffer::typed_component>(component_type, nullptr)
+                );
+            }
+
+        public:
+            void update()
+            {
+                // Update all operate in this buffer
+                std::for_each(
+#ifdef __cpp_lib_execution
+                    std::execution::par_unseq,
+#endif
+                    _m_entity_command_buffer.begin(), _m_entity_command_buffer.end(),
+                    [](std::pair<const arch_type::entity, _entity_command_buffer>& _buf_in_entity)
+                    {
+                        //  If entity not valid, skip component append&remove&active, but need 
+                        // free temp components.
+                        arch_type::entity current_entity = _buf_in_entity.first;
+
+                        if (current_entity.valid())
+                        {
+                            if (_buf_in_entity.second.m_entity_removed_flag)
+                            {
+                                // Remove all new component;
+                                auto* append_typed_components = _buf_in_entity.second.m_append_components.pick_all();
+                                while (append_typed_components)
+                                {
+                                    // Free template component
+                                    auto current_typed_component = append_typed_components;
+                                    append_typed_components = append_typed_components->last;
+
+                                    current_typed_component->m_typeinfo
+                                        ->m_destructor(current_typed_component->m_component_addr);
+                                    je_mem_free(current_typed_component->m_component_addr);
+
+                                    basic::destroy_free(current_typed_component);
+                                }
+
+                                auto* removed_typed_components = _buf_in_entity.second.m_removed_components.pick_all();
+                                while (removed_typed_components)
+                                {
+                                    auto current_typed_component = removed_typed_components;
+                                    removed_typed_components = removed_typed_components->last;
+
+                                    basic::destroy_free(current_typed_component);
+                                }
+
+                                // Remove all component
+                                types_set origin_chunk_types = current_entity.chunk()->types();
+                                for (typing::typeid_t type_id : origin_chunk_types)
+                                {
+                                    current_entity.chunk()->destruct_component_addr_with_typeid(
+                                        current_entity._m_id,
+                                        type_id
+                                    );
+                                }
+
+                                // OK, Mark old entity chunk is freed, 
+                                current_entity.chunk()->command_close_entity(current_entity._m_id);
+                            }
+                            else
+                            {
+                                // 1. Mark entity as active..
+                                current_entity.chunk()->command_active_entity(current_entity._m_id);
+
+                                types_set new_chunk_types = current_entity.chunk()->types();
+
+                                // 2. Destroy removed component..
+                                auto* removed_typed_components = _buf_in_entity.second.m_removed_components.pick_all();
+                                while (removed_typed_components)
+                                {
+                                    auto current_typed_component = removed_typed_components;
+                                    removed_typed_components = removed_typed_components->last;
+
+                                    assert(current_typed_component->m_component_addr == nullptr);
+                                    if (new_chunk_types.erase(current_typed_component->m_typeinfo->m_id))
+                                    {
+                                        current_entity.chunk()
+                                            ->destruct_component_addr_with_typeid(current_entity._m_id,
+                                                current_typed_component->m_typeinfo->m_id);
+                                    }
+
+                                    basic::destroy_free(current_typed_component);
+                                }
+
+                                // 3. Prepare append component..(component may be repeated, so we using last one and give warning)
+                                std::unordered_map<typing::typeid_t, void*> append_component_type_addr_set;
+                                auto* append_typed_components = _buf_in_entity.second.m_append_components.pick_all();
+                                while (append_typed_components)
+                                {
+                                    // Free template component
+                                    auto current_typed_component = append_typed_components;
+                                    append_typed_components = append_typed_components->last;
+
+                                    assert(new_chunk_types.find(current_typed_component->m_typeinfo->m_id) == new_chunk_types.end());
+
+                                    auto& addr_place = append_component_type_addr_set[current_typed_component->m_typeinfo->m_id];
+                                    if (addr_place)
+                                    {
+                                        // This type of component already in list, destruct/free it and give warning
+                                        // TODO: WARNING~
+                                        current_typed_component->m_typeinfo->m_destructor(addr_place);
+                                        je_mem_free(addr_place);
+                                    }
+                                    addr_place = current_typed_component->m_component_addr;
+                                    new_chunk_types.insert(current_typed_component->m_typeinfo->m_id);
+
+                                    basic::destroy_free(current_typed_component);
+                                }
+
+                                // 5. Almost done! get new arch type:
+                                auto* current_arch_type = current_entity.chunk()->get_arch_type();
+                                auto* new_arch_type = current_arch_type->get_arch_mgr()->find_or_add_arch(new_chunk_types);
+
+                                if (new_arch_type == current_arch_type)
+                                {
+                                    // New & old arch is same, rebuilt in place.
+                                    for (auto [type_id, component_addr] : append_component_type_addr_set)
+                                    {
+                                        current_entity.chunk()->move_component_to(current_entity._m_id, type_id, component_addr);
+                                        je_mem_free(component_addr);
+                                    }
+                                }
+                                else
+                                {
+                                    arch_type::arch_chunk* chunk;
+                                    entity_id_in_chunk_t entity_id;
+                                    version_t entity_version;
+
+                                    new_arch_type->alloc_entity(&chunk, &entity_id, &entity_version);
+                                    // Entity alloced, move component to here..
+
+                                    for (typing::typeid_t type_id : new_chunk_types)
+                                    {
+                                        auto fnd = append_component_type_addr_set.find(type_id);
+                                        if (fnd == append_component_type_addr_set.end())
+                                        {
+                                            // 1. Move old component
+                                            chunk->move_component_to(entity_id, type_id,
+                                                current_entity.chunk()->get_component_addr_with_typeid(
+                                                    current_entity._m_id, type_id));
+                                        }
+                                        else
+                                        {
+                                            // 2. Move new component
+                                            chunk->move_component_to(entity_id, type_id, fnd->second);
+                                            je_mem_free(fnd->second);
+                                        }
+                                    }
+
+                                    // OK, Mark old entity chunk is freed, 
+                                    current_entity.chunk()->command_close_entity(current_entity._m_id);
+                                }
+
+                            }// End component modify
+                        }
+                        else
+                        {
+                            auto* append_typed_components = _buf_in_entity.second.m_append_components.pick_all();
+                            while (append_typed_components)
+                            {
+                                // Free template component
+                                auto current_typed_component = append_typed_components;
+                                append_typed_components = append_typed_components->last;
+
+                                current_typed_component->m_typeinfo
+                                    ->destruct(current_typed_component->m_component_addr);
+                                je_mem_free(current_typed_component->m_component_addr);
+
+                                basic::destroy_free(current_typed_component);
+                            }
+
+                            auto* removed_typed_components = _buf_in_entity.second.m_removed_components.pick_all();
+                            while (removed_typed_components)
+                            {
+                                auto current_typed_component = removed_typed_components;
+                                removed_typed_components = removed_typed_components->last;
+
+                                basic::destroy_free(current_typed_component);
+                            }
+                        }
+                    });
+
+                // Finish! clear buffer.
+                _m_entity_command_buffer.clear();
+            }
         };
     }
 }
