@@ -144,6 +144,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="jeecs_arch_system.cpp" />
+    <ClCompile Include="jeecs_log.cpp" />
     <ClCompile Include="jeecs_memory_mgr.cpp" />
     <ClCompile Include="jeecs_type_mgr.cpp" />
     <ClCompile Include="main.cpp" />

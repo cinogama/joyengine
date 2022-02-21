@@ -27,6 +27,9 @@
     <ClCompile Include="jeecs_arch_system.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="jeecs_log.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="jeecs.hpp">
