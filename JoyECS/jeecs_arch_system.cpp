@@ -8,7 +8,6 @@ namespace jeecs_impl
     using version_t = size_t;
 
     constexpr entity_id_in_chunk_t INVALID_ENTITY_ID = SIZE_MAX;
-    constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
     constexpr size_t CHUNK_SIZE = 64 * 1024; // 64K
 
     class command_buffer;

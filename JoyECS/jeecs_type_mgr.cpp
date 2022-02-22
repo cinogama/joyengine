@@ -66,7 +66,7 @@ namespace jeecs_impl
             jeecs::typing::type_info* tinfo = jeecs::basic::create_new<jeecs::typing::type_info>();
             tinfo->m_typename = jeecs::basic::make_new_string(_name);
             tinfo->m_size = _size;
-            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, jeecs::arch::ALLIGN_BASE);
+            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, jeecs::typing::ALLIGN_BASE);
             tinfo->m_hash = _hash;
             tinfo->m_constructor = _constructor;
             tinfo->m_destructor = _destructor;

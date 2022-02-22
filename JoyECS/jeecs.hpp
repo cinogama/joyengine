@@ -51,6 +51,7 @@ namespace jeecs
         using typeid_t = size_t;
 
         constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
+        constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
 
         struct type_info;
 
@@ -238,6 +239,24 @@ namespace jeecs
             return typeid(T).hash_code();
         }
 
+        template<typename ... ArgTs>
+        struct type_index_in_varargs
+        {
+            template<size_t Index, typename AimT, typename CurrentT, typename ... Ts>
+            constexpr static size_t _index()
+            {
+                if constexpr (std::is_same<AimT, CurrentT>::value)
+                    return Index;
+                else
+                    return _index<Index + 1, AimT, Ts...>();
+            }
+
+            template<typename AimArgT>
+            constexpr size_t index_of() const noexcept
+            {
+                return _index<0, AimArgT, ArgTs...>();
+            }
+        };
     }
 
     namespace typing
@@ -345,7 +364,7 @@ namespace jeecs
         };
     }
 
-    
+
 }
 
 #endif
