@@ -345,7 +345,7 @@ namespace jeecs_impl
             UNABLE_DETERMINE,
         };
         using dependences_t = std::unordered_map<jeecs::typing::typeid_t, dependence_type>;
-        
+
     public:
         dependences_t m_dependence_list;
         std::vector<arch_type*> m_arch_types;
@@ -492,13 +492,65 @@ namespace jeecs_impl
             return find_or_add_arch(_types)->instance_entity();
         }
     public:
-
         // Only invoke by update..
         inline bool _arch_modified() noexcept
         {
             return !_m_arch_modified.test_and_set();
         }
 
+        inline void _update_system_func_arch(ecs_system_function* modify_sys_func) const
+        {
+            types_set need_set, any_set, except_set;
+            for (auto& depend : modify_sys_func->m_dependence_list)
+            {
+                switch (depend.second)
+                {
+                case ecs_system_function::dependence_type::ANY:
+                    any_set.insert(depend.first); break;
+                case ecs_system_function::dependence_type::EXCEPT:
+                    except_set.insert(depend.first); break;
+                case ecs_system_function::dependence_type::CONTAIN:
+                case ecs_system_function::dependence_type::READ_AFTER_WRITE:
+                case ecs_system_function::dependence_type::READ_FROM_LAST_FRAME:
+                case ecs_system_function::dependence_type::WRITE:
+                    need_set.insert(depend.first); break;
+                default:
+                    assert(false); //  Unknown type
+                }
+            }
+
+            static auto contain = [](const types_set& a, const types_set& b)
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) == a.end())
+                        return false;
+                return true;
+            };
+            static auto contain_any = [](const types_set& a, const types_set& b)
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) != a.end())
+                        return true;
+                return false;
+            };
+            static auto except = [](const types_set& a, const types_set& b)
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) != a.end())
+                        return false;
+                return true;
+            };
+
+            // OK Get fetched arch_types;
+            modify_sys_func->m_arch_types.clear();
+            for (auto& [typeset, arch] : _m_arch_types_mapping)
+            {
+                if (contain(typeset, need_set)
+                    && contain_any(typeset, any_set)
+                    && except(typeset, except_set))
+                    modify_sys_func->m_arch_types.push_back(arch);
+            }
+        }
     };
 
     class command_buffer
@@ -820,6 +872,12 @@ namespace jeecs_impl
 
             return dependence_system_chain;
         }
+
+        inline bool _system_modified()noexcept
+        {
+            return !_m_system_modified.test_and_set();
+        }
+
     public:
         ecs_world() = default;
 
@@ -989,21 +1047,34 @@ namespace jeecs_impl
             _m_registed_system.push_back(sys);
         }
 
-        inline bool _system_modified()noexcept
-        {
-            return !_m_system_modified.test_and_set();
-        }
     public:
         void update()
         {
-            // If system added/removed update dependence relationship.
+            // If system added/removed, update dependence relationship.
             if (!_system_modified())
                 build_dependence_graph();
 
             // If arch changed, update system's data from..
             if (_m_arch_manager._arch_modified())
             {
+                for (auto* sys_func : _m_registed_system)
+                    _m_arch_manager._update_system_func_arch(sys_func);
+            }
 
+            // Ok, execute chain:
+            for (auto& seq: _m_execute_seq)
+            {
+                std::for_each(
+#ifdef __cpp_lib_execution
+                    std::execution::par_unseq,
+#endif
+                    seq.begin(), seq.end(),
+                    [](ecs_system_function* func)
+                    {
+                        // Fxxk! I don't even know what to do !
+                        func;
+                    }
+                );
             }
         }
     };
