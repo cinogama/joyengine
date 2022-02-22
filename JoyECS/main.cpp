@@ -33,23 +33,65 @@ struct renderer
 
 };
 
-struct ecs_system
+struct game_world
 {
-    template<typename ReturnT , typename ThisT, typename ... ArgTs>
-    void register_system_func(ReturnT(ThisT::* system_func)(ArgTs ...))
+    void register_system_func_to_world()
     {
 
     }
 };
 
-struct graphic_system : public ecs_system
+struct game_system
 {
-    void xx1(const position* pos, const renderer * renderer)
+    template<typename T>
+    struct accessor_base
     {
-        
+    private:
+        T* _m_component_addr;
+    public:
+        T* operator ->() const noexcept { return _m_component_addr; }
+        T& operator * () const noexcept { return *_m_component_addr; }
+    };
+
+    struct read_last_frame_base {};
+    struct read_updated_base {};
+    struct write_base {};
+
+    template<typename T>
+    struct read : read_last_frame_base, accessor_base<T> { static_assert(sizeof(read) == sizeof(T*)); };
+
+    template<typename T>
+    struct read_newest : read_updated_base, accessor_base<T> { static_assert(sizeof(read_newest) == sizeof(T*)); };
+
+    template<typename T>
+    struct write : write_base, accessor_base<T> { static_assert(sizeof(write) == sizeof(T*)); };
+
+private:
+    game_world* _m_game_world;
+
+public:
+    game_system(game_world* world)
+        : _m_game_world(_m_game_world)
+    {
+
     }
 
-    graphic_system(void * world)
+    template<typename ReturnT, typename ThisT, typename ... ArgTs>
+    void register_system_func(ReturnT(ThisT::* system_func)(ArgTs ...))
+    {
+        // 1. Anylize depend
+    }
+};
+
+struct graphic_system : public game_system
+{
+    void xx1(const position* pos, const renderer* renderer)
+    {
+
+    }
+
+    graphic_system(game_world* world)
+        :game_system(world)
     {
         register_system_func(xx1);
     }
@@ -58,7 +100,7 @@ struct graphic_system : public ecs_system
 int main()
 {
     using namespace jeecs;
-   
+
     /*
     auto* tinfo = jeecs::typing::type_info::of<jeecs::typing::type_info>("type_info");
 
