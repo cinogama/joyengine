@@ -364,7 +364,35 @@ namespace jeecs
         };
     }
 
+    struct game_system_function
+    {
+        struct arch_index_info
+        {
+            size_t m_rw_component_count;
+            size_t m_entity_count_per_arch_chunk;
 
+            size_t* m_component_mem_begin_offsets;
+            size_t* m_component_sizes;
+
+            template<typename T>
+            T get_component_accessor(void* chunk_addr, size_t eid, size_t cid) const noexcept
+            {
+                //return reinterpret_cast<T>((uint8_t*)(m_component_mem_begin_offsets[cid])
+                //    + m_component_sizes[cid] * eid);
+                static const chunk_cmpt_offset = je_arch_component_buffer_offset();
+
+                auto chunmem = *(uint8_t**)(((uint8_t*)chunk_addr) + chunk_cmpt_offset);
+
+                return reinterpret_cast<T>(
+                    chunmem
+                    + m_component_mem_begin_offsets[cid]
+                    + m_component_sizes[cid] * eid);
+            }
+        };
+
+        arch_index_info* m_archs;
+        size_t m_arch_count;
+    };
 }
 
 #endif

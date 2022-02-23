@@ -64,28 +64,7 @@ struct game_system
     template<typename T>
     struct write : write_base, accessor_base<T> { static_assert(sizeof(write) == sizeof(T*)); };
 public:
-    struct game_system_function
-    {
-        struct arch_index_info
-        {
-            size_t m_rw_component_count;
-            size_t m_entity_count_per_arch_chunk;
-
-            void** m_component_mem_begin_offsets;
-            size_t* m_component_sizes;
-            void** m_entity_meta_indexer;
-
-            template<typename T>
-            T get_component_accessor(size_t eid, size_t cid) const noexcept
-            {
-                return reinterpret_cast<T>((uint8_t*)(m_component_mem_begin_offsets[cid])
-                    + m_component_sizes[cid] * eid);
-            }
-        };
-
-        arch_index_info* m_archs;
-        size_t m_arch_count;
-    };
+    
 
 private:
     game_world* _m_game_world;
@@ -109,16 +88,25 @@ public:
 
             for (size_t arch_index = 0; arch_index < gsf.m_arch_count; ++arch_index)
             {
-                for (size_t entity_index = 0;
-                    entity_index < gsf.m_archs[arch_index].m_entity_count_per_arch_chunk;
-                    entity_index++)
+                void * current_chunk = je_arch_get_chunk(arch_index);
+                while (current_chunk)
                 {
-                    // TODO: GET CHUNK! HERE IS NO CHUNK GETTER!!!
-                    (((ThisT*)_this)->*system_func)(
-                        gsf.m_archs[arch_index]
-                        .get_component_accessor<ArgTs>(entity_index, tindexer.index_of<ArgTs>())...
-                    );
+                    for (size_t entity_index = 0;
+                        entity_index < gsf.m_archs[arch_index].m_entity_count_per_arch_chunk;
+                        entity_index++)
+                    {
+                        // TODO: GET CHUNK! HERE IS NO CHUNK GETTER!!!
+                        (((ThisT*)_this)->*system_func)(
+                            gsf.m_archs[arch_index]
+                            .get_component_accessor<ArgTs>(
+                                current_chunk, 
+                                entity_index, 
+                                tindexer.index_of<ArgTs>()
+                                )...
+                            );
+                    }
 
+                    je_arch_next_chunk(current_chunk);
                 }
             }
         };
@@ -127,7 +115,7 @@ public:
 
 struct graphic_system : public game_system
 {
-    void xx1(const position* pos, const renderer* renderer)
+    void rend_work(const position* pos, const renderer* renderer)
     {
 
     }
@@ -135,7 +123,7 @@ struct graphic_system : public game_system
     graphic_system(game_world* world)
         :game_system(world)
     {
-        register_system_func(&graphic_system::xx1);
+        register_system_func(&graphic_system::rend_work);
     }
 };
 
