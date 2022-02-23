@@ -61,9 +61,25 @@ namespace jeecs
         using destruct_func_t = void(*)(void*);
         using copy_func_t = void(*)(void*, const void*);
         using move_func_t = void(*)(void*, void*);
+
+        using entity_id_in_chunk_t = size_t;
+        using version_t = size_t;
     }
 
     struct game_system_function;
+
+    struct game_entity
+    {
+        enum class entity_stat
+        {
+            UNAVAILABLE,    // Entity is destroied or just not ready,
+            READY,          // Entity is OK, and just work as normal.
+        };
+
+        void* _m_in_chunk;
+        jeecs::typing::entity_id_in_chunk_t   _m_id;
+        jeecs::typing::version_t              _m_version;
+    };
 }
 
 RS_FORCE_CAPI
@@ -100,6 +116,14 @@ JE_API void* je_arch_get_chunk(void* archtype);
 
 JE_API void* je_arch_next_chunk(void* chunk);
 
+JE_API const void* je_arch_entity_meta_addr_in_chunk(void* chunk);
+
+JE_API size_t je_arch_entity_meta_size();
+
+JE_API size_t je_arch_entity_meta_state_offset();
+
+JE_API size_t je_arch_entity_meta_version_offset();
+
 ////////////////////// ECS //////////////////////
 
 JE_API void* je_ecs_world_create();
@@ -108,14 +132,22 @@ JE_API void je_ecs_world_destroy(void* world);
 
 JE_API void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function);
 
-JE_API void je_ecs_world_update(void * world);
+JE_API void je_ecs_world_update(void* world);
 
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
-    void** out_archaddr,
-    size_t* out_eid,
-    size_t* out_version,
+    jeecs::game_entity* out_entity,
     jeecs::typing::typeid_t* component_ids);
+
+JE_API void* je_ecs_world_entity_add_component(
+    void* world,
+    const jeecs::game_entity* entity,
+    const jeecs::typing::type_info* component_info);
+
+JE_API void je_ecs_world_entity_remove_component(
+    void* world,
+    const jeecs::game_entity* entity,
+    const jeecs::typing::type_info* component_info);
 
 RS_FORCE_CAPI_END
 
@@ -406,7 +438,7 @@ namespace jeecs
 
         using system_function_pak_t = std::function<void(const game_system_function*)>;
         using destructor_t = void(*)(game_system_function*);
-        using invoker_t = void(*)(const game_system_function*,system_function_pak_t*);
+        using invoker_t = void(*)(const game_system_function*, system_function_pak_t*);
 
         struct arch_index_info
         {
@@ -427,6 +459,24 @@ namespace jeecs
 
                 return *(T*)(&ptr);
             }
+
+            inline static jeecs::game_entity::entity_stat get_entity_state(const void* entity_meta, size_t eid)
+            {
+                static const size_t meta_size = je_arch_entity_meta_size();
+                static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
+
+                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_stat_offset;
+                return *(const jeecs::game_entity::entity_stat*)_addr;
+            }
+
+            inline static jeecs::typing::version_t get_entity_version(const void* entity_meta, size_t eid)
+            {
+                static const size_t meta_size = je_arch_entity_meta_size();
+                static const size_t meta_entity_version_offset = je_arch_entity_meta_version_offset();
+
+                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_version_offset;
+                return *(const jeecs::typing::version_t*)_addr;
+            }
         };
 
         struct typeid_dependence_pair
@@ -446,7 +496,7 @@ namespace jeecs
     private:
         destructor_t _m_destructor;
 
-        static void _updater(const game_system_function* _this,system_function_pak_t* pak)
+        static void _updater(const game_system_function* _this, system_function_pak_t* pak)
         {
             (*pak)(_this);
         }
@@ -487,7 +537,6 @@ namespace jeecs
                 m_dependence_count = depends.size();
                 m_dependence = (typeid_dependence_pair*)je_mem_alloc(sizeof(typeid_dependence_pair) * m_dependence_count);
                 memcpy(m_dependence, depends.data(), sizeof(typeid_dependence_pair) * m_dependence_count);
-
             }
         }
 

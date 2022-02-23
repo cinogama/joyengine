@@ -3,11 +3,9 @@
 
 namespace jeecs_impl
 {
-    using entity_id_in_chunk_t = size_t;
     using types_set = std::set<jeecs::typing::typeid_t>;
-    using version_t = size_t;
 
-    constexpr entity_id_in_chunk_t INVALID_ENTITY_ID = SIZE_MAX;
+    constexpr jeecs::typing::entity_id_in_chunk_t INVALID_ENTITY_ID = SIZE_MAX;
     constexpr size_t CHUNK_SIZE = 64 * 1024; // 64K
 
     class command_buffer;
@@ -39,6 +37,16 @@ namespace jeecs_impl
         class arch_chunk
         {
             JECS_DISABLE_MOVE_AND_COPY(arch_chunk);
+        public:
+            struct entity_meta
+            {
+                std::atomic_flag m_in_used = {};
+                jeecs::typing::version_t m_version = 0;
+
+                jeecs::game_entity::entity_stat m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
+            };
+
+        private:
 
             using byte_t = uint8_t;
             static_assert(sizeof(byte_t) == 1, "sizeof(uint8_t) should be 1.");
@@ -49,20 +57,8 @@ namespace jeecs_impl
             const archtypes_map& _m_arch_typeinfo_mapping;
             const size_t _m_entity_count;
             const size_t _m_entity_size;
-            struct _entity_meta
-            {
-                std::atomic_flag m_in_used = {};
-                version_t m_version = 0;
-
-                enum class entity_stat
-                {
-                    UNAVAILABLE,    // Entity is destroied or just not ready,
-                    READY,          // Entity is OK, and just work as normal.
-                };
-                entity_stat m_stat = entity_stat::UNAVAILABLE;
-            };
-
-            _entity_meta* _m_entities_meta;
+            
+            entity_meta* _m_entities_meta;
             std::atomic_size_t _m_free_count;
             arch_type* _m_arch_type;
         public:
@@ -78,7 +74,7 @@ namespace jeecs_impl
             {
                 static_assert(offsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
 
-                _m_entities_meta = jeecs::basic::create_new_n<_entity_meta>(_m_entity_count);
+                _m_entities_meta = jeecs::basic::create_new_n<entity_meta>(_m_entity_count);
             }
             ~arch_chunk()
             {
@@ -89,7 +85,7 @@ namespace jeecs_impl
 
         public:
             // ATTENTION: move_component_to WILL INVOKE DESTRUCT FUNCTION OF from_component
-            inline void move_component_to(entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid, void* from_component)const
+            inline void move_component_to(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid, void* from_component)const
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
                 void* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
@@ -97,7 +93,7 @@ namespace jeecs_impl
                 arch_typeinfo.m_typeinfo->destruct(from_component);
             }
 
-            bool alloc_entity_id(entity_id_in_chunk_t* out_id, version_t* out_version)
+            bool alloc_entity_id(jeecs::typing::entity_id_in_chunk_t* out_id, jeecs::typing::version_t* out_version)
             {
                 size_t free_entity_count = _m_free_count;
                 while (free_entity_count)
@@ -120,23 +116,23 @@ namespace jeecs_impl
                 }
                 return false;
             }
-            inline void* get_component_addr(entity_id_in_chunk_t _eid, size_t _chunksize, size_t _offset)const noexcept
+            inline void* get_component_addr(jeecs::typing::entity_id_in_chunk_t _eid, size_t _chunksize, size_t _offset)const noexcept
             {
                 return (void*)(_m_chunk_buffer + _offset + _eid * _chunksize);
             }
-            inline bool is_entity_valid(entity_id_in_chunk_t eid, version_t eversion) const noexcept
+            inline bool is_entity_valid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::version_t eversion) const noexcept
             {
                 if (_m_entities_meta[eid].m_version != eversion)
                     return false;
                 return true;
             }
-            inline void* get_component_addr_with_typeid(entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
+            inline void* get_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
                 return get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
 
             }
-            inline void destruct_component_addr_with_typeid(entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
+            inline void destruct_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
                 auto* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
@@ -152,19 +148,24 @@ namespace jeecs_impl
             {
                 return _m_arch_type;
             }
+            inline const entity_meta* get_entity_meta()const noexcept
+            {
+                return _m_entities_meta;
+            }
+
         private:
             // Following function only invoke by command_buffer
             friend class command_buffer;
 
-            void command_active_entity(entity_id_in_chunk_t eid) noexcept
+            void command_active_entity(jeecs::typing::entity_id_in_chunk_t eid) noexcept
             {
-                _m_entities_meta[eid].m_stat = _entity_meta::entity_stat::READY;
+                _m_entities_meta[eid].m_stat = jeecs::game_entity::entity_stat::READY;
             }
 
-            void command_close_entity(entity_id_in_chunk_t eid) noexcept
+            void command_close_entity(jeecs::typing::entity_id_in_chunk_t eid) noexcept
             {
                 // TODO: MULTI-THREAD PROBLEM
-                _m_entities_meta[eid].m_stat = _entity_meta::entity_stat::UNAVAILABLE;
+                _m_entities_meta[eid].m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
                 ++_m_entities_meta[eid].m_version;
                 _m_entities_meta[eid].m_in_used.clear();
 
@@ -182,8 +183,8 @@ namespace jeecs_impl
         struct entity
         {
             arch_chunk* _m_in_chunk;
-            entity_id_in_chunk_t   _m_id;
-            version_t              _m_version;
+            jeecs::typing::entity_id_in_chunk_t   _m_id;
+            jeecs::typing::version_t              _m_version;
 
             // Do not invoke this function if possiable, you should get component by arch_type & system.
             template<typename CT>
@@ -223,6 +224,13 @@ namespace jeecs_impl
             , _m_types_set(_types_set)
             , _m_arch_manager(_arch_manager)
         {
+            static_assert(offsetof(jeecs::game_entity, _m_in_chunk)
+                == offsetof(entity, _m_in_chunk));
+            static_assert(offsetof(jeecs::game_entity, _m_id)
+                == offsetof(entity, _m_id));
+            static_assert(offsetof(jeecs::game_entity, _m_version)
+                == offsetof(entity, _m_version));
+
             for (jeecs::typing::typeid_t tid : _types_set)
                 const_cast<types_list&>(_m_arch_typeinfo).push_back(jeecs::typing::type_info::of(tid));
 
@@ -269,7 +277,7 @@ namespace jeecs_impl
             return new_chunk;
         }
 
-        void alloc_entity(arch_chunk** out_chunk, entity_id_in_chunk_t* out_eid, version_t* out_eversion)
+        void alloc_entity(arch_chunk** out_chunk, jeecs::typing::entity_id_in_chunk_t* out_eid, jeecs::typing::version_t* out_eversion)
         {
             while (true)
             {
@@ -301,8 +309,8 @@ namespace jeecs_impl
         entity instance_entity()
         {
             arch_chunk* chunk;
-            entity_id_in_chunk_t entity_id;
-            version_t            entity_version;
+            jeecs::typing::entity_id_in_chunk_t entity_id;
+            jeecs::typing::version_t            entity_version;
 
             alloc_entity(&chunk, &entity_id, &entity_version);
             for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
@@ -824,8 +832,8 @@ namespace jeecs_impl
                             else
                             {
                                 arch_type::arch_chunk* chunk;
-                                entity_id_in_chunk_t entity_id;
-                                version_t entity_version;
+                                jeecs::typing::entity_id_in_chunk_t entity_id;
+                                jeecs::typing::version_t entity_version;
 
                                 new_arch_type->alloc_entity(&chunk, &entity_id, &entity_version);
                                 // Entity alloced, move component to here..
@@ -850,6 +858,9 @@ namespace jeecs_impl
 
                                 // OK, Mark old entity chunk is freed, 
                                 current_entity.chunk()->command_close_entity(current_entity._m_id);
+
+                                // Active new one
+                                chunk->command_active_entity(entity_id);
                             }
 
                         }// End component modify
@@ -890,6 +901,7 @@ namespace jeecs_impl
     {
         JECS_DISABLE_MOVE_AND_COPY(ecs_world);
 
+        command_buffer _m_command_buffer;
         arch_manager _m_arch_manager;
         std::vector<ecs_system_function*> _m_registed_system;
         std::list<std::list<ecs_system_function*>> _m_execute_seq;
@@ -915,7 +927,7 @@ namespace jeecs_impl
                     else if (seq == ecs_system_function::sequence::UNABLE_DETERMINE)
                     {
                         // conflict between registed_system and (*insert_place), report error and break
-                        jeecs::debug::log_error("[error] sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
+                        jeecs::debug::log_error("sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
                         break;
                     }
                 }
@@ -926,13 +938,13 @@ namespace jeecs_impl
                     if (seq == ecs_system_function::sequence::UNABLE_DETERMINE)
                     {
                         // conflict between registed_system and (*check_place), report error and break
-                        jeecs::debug::log_error("[error] sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
+                        jeecs::debug::log_error("sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
                     }
                     else if (seq == ecs_system_function::sequence::ONLY_HAPPEND_AFTER)
                     {
                         // registed_system should happend at insert_place, but here require happend after (*check_place),
                         // that is impossiable, report error.
-                        jeecs::debug::log_error("[error] sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
+                        jeecs::debug::log_error("sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
                     }
                 }
                 dependence_system_chain.insert(insert_place, registed_system);
@@ -1119,11 +1131,14 @@ namespace jeecs_impl
         void update()
         {
             // If system added/removed, update dependence relationship.
-            if (!_system_modified())
+            bool system_changed_flag = false;
+            if (_system_modified())
+            {
                 build_dependence_graph();
-
+                system_changed_flag = true;
+            }
             // If arch changed, update system's data from..
-            if (_m_arch_manager._arch_modified())
+            if (_m_arch_manager._arch_modified() || system_changed_flag)
             {
                 for (auto* sys_func : _m_registed_system)
                     _m_arch_manager._update_system_func_arch(sys_func);
@@ -1143,11 +1158,21 @@ namespace jeecs_impl
                     }
                 );
             }
+
+            // Complete command buffer:
+            _m_command_buffer.update();
         }
 
-        inline arch_type::entity create_entity_with_component(const types_set & types)
+        inline arch_type::entity create_entity_with_component(const types_set& types)
         {
-            return _m_arch_manager.create_an_entity_with_component(types);
+            auto&& entity = _m_arch_manager.create_an_entity_with_component(types);
+            _m_command_buffer.init_new_entity(entity);
+            return entity;
+        }
+
+        inline command_buffer& get_command_buffer() noexcept
+        {
+            return _m_command_buffer;
         }
     };
 
@@ -1188,14 +1213,62 @@ void je_ecs_world_update(void* world)
 
 void je_ecs_world_create_entity_with_components(
     void* world,
-    void** out_archaddr,
-    size_t* out_eid,
-    size_t* out_version,
+    jeecs::game_entity* out_entity,
     jeecs::typing::typeid_t* component_ids)
 {
     jeecs_impl::types_set types;
     while (*component_ids != jeecs::typing::INVALID_TYPE_ID)
         types.insert(*(component_ids++));
-   
-    ((jeecs_impl::ecs_world*)world)->create_entity_with_component(types);
+
+    auto&& entity = ((jeecs_impl::ecs_world*)world)->create_entity_with_component(types);
+
+    if (out_entity)
+    {
+        out_entity->_m_in_chunk = entity._m_in_chunk;
+        out_entity->_m_id = entity._m_id;
+        out_entity->_m_version = entity._m_version;
+    }
 }
+
+void* je_ecs_world_entity_add_component(
+    void* world,
+    const jeecs::game_entity* entity,
+    const jeecs::typing::type_info* component_info)
+{
+    return ((jeecs_impl::ecs_world*)world)->get_command_buffer().append_component(
+        reinterpret_cast<const jeecs_impl::arch_type::entity&>(*entity),
+        component_info
+    );
+}
+
+void je_ecs_world_entity_remove_component(
+    void* world,
+    const jeecs::game_entity* entity,
+    const jeecs::typing::type_info* component_info)
+{
+    ((jeecs_impl::ecs_world*)world)->get_command_buffer().remove_component(
+        reinterpret_cast<const jeecs_impl::arch_type::entity&>(*entity),
+        component_info
+    );
+}
+
+size_t je_arch_entity_meta_size()
+{
+    return sizeof(jeecs_impl::arch_type::arch_chunk::entity_meta);
+}
+
+size_t je_arch_entity_meta_state_offset()
+{
+    return offsetof(jeecs_impl::arch_type::arch_chunk::entity_meta, m_stat);
+}
+
+size_t je_arch_entity_meta_version_offset()
+{
+    return offsetof(jeecs_impl::arch_type::arch_chunk::entity_meta, m_version);
+}
+
+const void* je_arch_entity_meta_addr_in_chunk(void* chunk)
+{
+    return ((jeecs_impl::arch_type::arch_chunk*)chunk)->get_entity_meta();
+}
+

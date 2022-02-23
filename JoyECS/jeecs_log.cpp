@@ -17,8 +17,8 @@ void je_log(int level, const char* format, ...)
     size_t total_buffer_sz = vsnprintf(nullptr, 0, format, va);
     va_end(va);
 
-    char* buf = (char*)je_mem_alloc(total_buffer_sz + 1);
-    vsnprintf(buf, total_buffer_sz, format, vb);
+    char* buf = (char*)je_mem_alloc(total_buffer_sz + 2);
+    vsnprintf(buf, total_buffer_sz + 1, format, vb);
     va_end(vb);
 
     FILE* output_place = stdout;
