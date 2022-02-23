@@ -20,6 +20,8 @@
 #include <unordered_set>
 #include <map>
 #include <algorithm>
+#include <functional>
+
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -61,6 +63,7 @@ namespace jeecs
         using move_func_t = void(*)(void*, void*);
     }
 
+    struct game_system_function;
 }
 
 RS_FORCE_CAPI
@@ -91,6 +94,28 @@ JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
 JE_API void je_typing_unregister(
     jeecs::typing::typeid_t _id);
 
+////////////////////// ARCH //////////////////////
+
+JE_API void* je_arch_get_chunk(void* archtype);
+
+JE_API void* je_arch_next_chunk(void* chunk);
+
+////////////////////// ECS //////////////////////
+
+JE_API void* je_ecs_world_create();
+
+JE_API void je_ecs_world_destroy(void* world);
+
+JE_API void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function);
+
+JE_API void je_ecs_world_update(void * world);
+
+JE_API void je_ecs_world_create_entity_with_components(
+    void* world,
+    void** out_archaddr,
+    size_t* out_eid,
+    size_t* out_version,
+    jeecs::typing::typeid_t* component_ids);
 
 RS_FORCE_CAPI_END
 
@@ -189,7 +214,7 @@ namespace jeecs
         {
             std::atomic<NodeT*> last_node = nullptr;
 
-            void add_one(NodeT* node)
+            void add_one(NodeT* node) noexcept
             {
                 NodeT* last_last_node = last_node;// .exchange(node);
                 do
@@ -198,7 +223,7 @@ namespace jeecs
                 } while (!last_node.compare_exchange_weak(last_last_node, node));
             }
 
-            NodeT* pick_all()
+            NodeT* pick_all() noexcept
             {
                 NodeT* result = nullptr;
                 result = last_node.exchange(nullptr);
@@ -206,7 +231,7 @@ namespace jeecs
                 return result;
             }
 
-            NodeT* peek()
+            NodeT* peek() const noexcept
             {
                 return last_node;
             }
@@ -366,32 +391,120 @@ namespace jeecs
 
     struct game_system_function
     {
+        enum dependence_type : uint8_t
+        {
+            // Operation
+            READ_FROM_LAST_FRAME,
+            WRITE,
+            READ_AFTER_WRITE,
+
+            // Constraint
+            EXCEPT,
+            CONTAIN,
+            ANY,
+        };
+
+        using system_function_pak_t = std::function<void(const game_system_function*)>;
+        using destructor_t = void(*)(game_system_function*);
+        using invoker_t = void(*)(const game_system_function*,system_function_pak_t*);
+
         struct arch_index_info
         {
-            size_t m_rw_component_count;
+            void* m_archtype;
             size_t m_entity_count_per_arch_chunk;
 
             size_t* m_component_mem_begin_offsets;
             size_t* m_component_sizes;
 
             template<typename T>
-            T get_component_accessor(void* chunk_addr, size_t eid, size_t cid) const noexcept
+            inline T get_component_accessor(void* chunk_addr, size_t eid, size_t cid) const noexcept
             {
-                //return reinterpret_cast<T>((uint8_t*)(m_component_mem_begin_offsets[cid])
-                //    + m_component_sizes[cid] * eid);
-                static const chunk_cmpt_offset = je_arch_component_buffer_offset();
+                static_assert(sizeof(T) == sizeof(uint8_t*));
 
-                auto chunmem = *(uint8_t**)(((uint8_t*)chunk_addr) + chunk_cmpt_offset);
-
-                return reinterpret_cast<T>(
-                    chunmem
+                uint8_t* ptr = (uint8_t*)chunk_addr
                     + m_component_mem_begin_offsets[cid]
-                    + m_component_sizes[cid] * eid);
+                    + m_component_sizes[cid] * eid;
+
+                return *(T*)(&ptr);
             }
+        };
+
+        struct typeid_dependence_pair
+        {
+            typing::typeid_t m_tid;
+            dependence_type  m_depend;
         };
 
         arch_index_info* m_archs;
         size_t m_arch_count;
+        typeid_dependence_pair* m_dependence;
+        size_t m_dependence_count;
+        system_function_pak_t* m_function;
+        invoker_t m_invoker;
+        size_t m_rw_component_count;
+
+    private:
+        destructor_t _m_destructor;
+
+        static void _updater(const game_system_function* _this,system_function_pak_t* pak)
+        {
+            (*pak)(_this);
+        }
+
+        static void _destructor(game_system_function* _this)
+        {
+            _this->~game_system_function();
+            je_mem_free(_this);
+        }
+
+        ~game_system_function()
+        {
+            basic::destroy_free(m_function);
+
+            if (m_dependence)
+            {
+                je_mem_free(m_dependence);
+            }
+        }
+        game_system_function(const system_function_pak_t& sys_function, size_t rw_func_count)
+            : m_archs(nullptr)
+            , m_arch_count(0)
+            , m_function(basic::create_new<system_function_pak_t>(sys_function))
+            , _m_destructor(_destructor)
+            , m_invoker(_updater)
+            , m_dependence(nullptr)
+            , m_dependence_count(0)
+            , m_rw_component_count(rw_func_count)
+        {
+
+        }
+    public:
+        void set_depends(const std::vector<typeid_dependence_pair>& depends)
+        {
+            assert(nullptr == m_dependence && 0 == m_dependence_count);
+            if (!depends.empty())
+            {
+                m_dependence_count = depends.size();
+                m_dependence = (typeid_dependence_pair*)je_mem_alloc(sizeof(typeid_dependence_pair) * m_dependence_count);
+                memcpy(m_dependence, depends.data(), sizeof(typeid_dependence_pair) * m_dependence_count);
+
+            }
+        }
+
+        void update() const
+        {
+            m_invoker(this, m_function);
+        }
+
+    public:
+        static game_system_function* create(const system_function_pak_t& sys_function, size_t rw_func_count)
+        {
+            return new(je_mem_alloc(sizeof(game_system_function)))game_system_function(sys_function, rw_func_count);
+        }
+        static void destory(game_system_function* _this)
+        {
+            _this->_m_destructor(_this);
+        }
     };
 }
 

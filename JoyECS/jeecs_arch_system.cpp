@@ -44,6 +44,7 @@ namespace jeecs_impl
             static_assert(sizeof(byte_t) == 1, "sizeof(uint8_t) should be 1.");
 
             byte_t _m_chunk_buffer[CHUNK_SIZE];
+
             const types_set& _m_types;
             const archtypes_map& _m_arch_typeinfo_mapping;
             const size_t _m_entity_count;
@@ -75,6 +76,8 @@ namespace jeecs_impl
                 , _m_types(_arch_type->_m_types_set)
                 , _m_arch_type(_arch_type)
             {
+                static_assert(offsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
+
                 _m_entities_meta = jeecs::basic::create_new_n<_entity_meta>(_m_entity_count);
             }
             ~arch_chunk()
@@ -319,22 +322,26 @@ namespace jeecs_impl
             return _m_arch_manager;
         }
 
+        arch_chunk* get_head_chunk() const noexcept
+        {
+            return _m_chunks.peek();
+        }
+
+        size_t get_entity_count_per_chunk() const noexcept
+        {
+            return _m_entity_count_per_chunk;
+        }
+
+        const arch_type_info* get_arch_type_info_by_type_id(jeecs::typing::typeid_t tid) const
+        {
+            return &_m_arch_typeinfo_mapping.at(tid);
+        }
     };
 
     struct ecs_system_function
     {
-        enum dependence_type : uint8_t
-        {
-            // Operation
-            READ_FROM_LAST_FRAME,
-            WRITE,
-            READ_AFTER_WRITE,
+        JECS_DISABLE_MOVE_AND_COPY(ecs_system_function);
 
-            // Constraint
-            EXCEPT,
-            CONTAIN,
-            ANY,
-        };
         enum sequence
         {
             CAN_HAPPEND_SAME_TIME,
@@ -343,13 +350,26 @@ namespace jeecs_impl
             ONLY_HAPPEND_AFTER,
             UNABLE_DETERMINE,
         };
-        using dependences_t = std::unordered_map<jeecs::typing::typeid_t, dependence_type>;
+        using dependences_t = std::unordered_map<jeecs::typing::typeid_t, jeecs::game_system_function::dependence_type>;
 
     public:
         dependences_t m_dependence_list;
         std::vector<arch_type*> m_arch_types;
+        jeecs::game_system_function* m_game_system_function;
 
     public:
+        ecs_system_function(jeecs::game_system_function* gsf)
+            :m_game_system_function(gsf)
+        {
+            for (size_t dindex = 0; dindex < gsf->m_dependence_count; dindex++)
+                m_dependence_list[gsf->m_dependence[dindex].m_tid] = gsf->m_dependence[dindex].m_depend;
+        }
+        ~ecs_system_function()
+        {
+            jeecs::game_system_function::destory(m_game_system_function);
+        }
+    public:
+
         sequence check_dependence(const dependences_t& depend) const noexcept
         {
             bool write_conflict = false;
@@ -388,49 +408,49 @@ namespace jeecs_impl
                 {
                     auto aim_require_type = fnd->second;
 
-                    if ((depend_type == dependence_type::EXCEPT
-                        || aim_require_type == dependence_type::EXCEPT)
+                    if ((depend_type == jeecs::game_system_function::dependence_type::EXCEPT
+                        || aim_require_type == jeecs::game_system_function::dependence_type::EXCEPT)
                         && depend_type != aim_require_type)
                     {
                         // These two set will not meet at same time, just skip them
                         return sequence::CAN_HAPPEND_SAME_TIME;
                     }
-                    else if (aim_require_type == dependence_type::EXCEPT)
+                    else if (aim_require_type == jeecs::game_system_function::dependence_type::EXCEPT)
                     {
                         result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                     }
-                    else if (aim_require_type == dependence_type::WRITE)
+                    else if (aim_require_type == jeecs::game_system_function::dependence_type::WRITE)
                     {
-                        if (depend_type == dependence_type::READ_FROM_LAST_FRAME)
+                        if (depend_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
                             result = decided_depend_seq(sequence::ONLY_HAPPEND_BEFORE);
-                        else if (depend_type == dependence_type::WRITE)
+                        else if (depend_type == jeecs::game_system_function::dependence_type::WRITE)
                         {
                             write_conflict = true;
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                         }
-                        else if (depend_type == dependence_type::READ_AFTER_WRITE)
+                        else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
                             result = decided_depend_seq(sequence::ONLY_HAPPEND_AFTER);
                         else
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                     }
-                    else if (aim_require_type == dependence_type::READ_FROM_LAST_FRAME)
+                    else if (aim_require_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
                     {
-                        if (depend_type == dependence_type::READ_FROM_LAST_FRAME)
+                        if (depend_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                        else if (depend_type == dependence_type::WRITE)
+                        else if (depend_type == jeecs::game_system_function::dependence_type::WRITE)
                             result = decided_depend_seq(sequence::ONLY_HAPPEND_AFTER);
-                        else if (depend_type == dependence_type::READ_AFTER_WRITE)
+                        else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                         else
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                     }
-                    else if (aim_require_type == dependence_type::READ_AFTER_WRITE)
+                    else if (aim_require_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
                     {
-                        if (depend_type == dependence_type::READ_FROM_LAST_FRAME)
+                        if (depend_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                        else if (depend_type == dependence_type::WRITE)
+                        else if (depend_type == jeecs::game_system_function::dependence_type::WRITE)
                             result = decided_depend_seq(sequence::ONLY_HAPPEND_BEFORE);
-                        else if (depend_type == dependence_type::READ_AFTER_WRITE)
+                        else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                         else
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
@@ -445,6 +465,8 @@ namespace jeecs_impl
 
             return result;
         }
+
+
     };
 
     class arch_manager
@@ -499,19 +521,21 @@ namespace jeecs_impl
 
         inline void _update_system_func_arch(ecs_system_function* modify_sys_func) const
         {
+            // TODO: OPTMIZE..
+
             types_set need_set, any_set, except_set;
             for (auto& depend : modify_sys_func->m_dependence_list)
             {
                 switch (depend.second)
                 {
-                case ecs_system_function::dependence_type::ANY:
+                case jeecs::game_system_function::dependence_type::ANY:
                     any_set.insert(depend.first); break;
-                case ecs_system_function::dependence_type::EXCEPT:
+                case jeecs::game_system_function::dependence_type::EXCEPT:
                     except_set.insert(depend.first); break;
-                case ecs_system_function::dependence_type::CONTAIN:
-                case ecs_system_function::dependence_type::READ_AFTER_WRITE:
-                case ecs_system_function::dependence_type::READ_FROM_LAST_FRAME:
-                case ecs_system_function::dependence_type::WRITE:
+                case jeecs::game_system_function::dependence_type::CONTAIN:
+                case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
+                case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
+                case jeecs::game_system_function::dependence_type::WRITE:
                     need_set.insert(depend.first); break;
                 default:
                     assert(false); //  Unknown type
@@ -530,7 +554,7 @@ namespace jeecs_impl
                 for (auto type_id : b)
                     if (a.find(type_id) != a.end())
                         return true;
-                return false;
+                return b.empty();
             };
             static auto except = [](const types_set& a, const types_set& b)
             {
@@ -548,6 +572,51 @@ namespace jeecs_impl
                     && contain_any(typeset, any_set)
                     && except(typeset, except_set))
                     modify_sys_func->m_arch_types.push_back(arch);
+            }
+
+            // Update game_system..
+            if (modify_sys_func->m_game_system_function->m_rw_component_count)
+            {
+                if (modify_sys_func->m_game_system_function->m_archs
+                    && modify_sys_func->m_game_system_function->m_arch_count)
+                {
+                    // Free old arch infos
+                    for (size_t aindex = 0; aindex < modify_sys_func->m_game_system_function->m_arch_count; aindex++)
+                    {
+                        auto& ainfo = modify_sys_func->m_game_system_function->m_archs[aindex];
+                        je_mem_free(ainfo.m_component_sizes);
+                        je_mem_free(ainfo.m_component_mem_begin_offsets);
+                    }
+
+                    je_mem_free(modify_sys_func->m_game_system_function->m_archs);
+                }
+
+                modify_sys_func->m_game_system_function->m_arch_count = modify_sys_func->m_arch_types.size();
+                if (modify_sys_func->m_game_system_function->m_arch_count)
+                {
+                    modify_sys_func->m_game_system_function->m_archs = (jeecs::game_system_function::arch_index_info*)je_mem_alloc(
+                        modify_sys_func->m_game_system_function->m_arch_count * sizeof(jeecs::game_system_function::arch_index_info));
+
+                    for (size_t aindex = 0; aindex < modify_sys_func->m_game_system_function->m_arch_count; aindex++)
+                    {
+                        auto& ainfo = modify_sys_func->m_game_system_function->m_archs[aindex];
+                        ainfo.m_archtype = modify_sys_func->m_arch_types[aindex];
+                        ainfo.m_entity_count_per_arch_chunk = modify_sys_func->m_arch_types[aindex]->get_entity_count_per_chunk();
+
+                        ainfo.m_component_sizes = (size_t*)je_mem_alloc(modify_sys_func->m_game_system_function->m_rw_component_count * sizeof(size_t));
+                        ainfo.m_component_mem_begin_offsets = (size_t*)je_mem_alloc(modify_sys_func->m_game_system_function->m_rw_component_count * sizeof(size_t));
+                        for (size_t cindex = 0; cindex < modify_sys_func->m_game_system_function->m_rw_component_count; cindex++)
+                        {
+                            auto* arch_typeinfo = modify_sys_func->m_arch_types[aindex]->get_arch_type_info_by_type_id(
+                                modify_sys_func->m_game_system_function->m_dependence[cindex].m_tid
+                            );
+
+                            ainfo.m_component_sizes[cindex] = arch_typeinfo->m_typeinfo->m_chunk_size;
+                            ainfo.m_component_mem_begin_offsets[cindex] = arch_typeinfo->m_begin_offset_in_chunk;
+                        }
+                    }
+                }
+
             }
         }
     };
@@ -1017,17 +1086,17 @@ namespace jeecs_impl
                         const char* wtype = "";
                         switch (dep_type)
                         {
-                        case ecs_system_function::dependence_type::EXCEPT:
+                        case jeecs::game_system_function::dependence_type::EXCEPT:
                             wtype = "EXCEPT"; break;
-                        case ecs_system_function::dependence_type::ANY:
+                        case jeecs::game_system_function::dependence_type::ANY:
                             wtype = "ANY"; break;
-                        case ecs_system_function::dependence_type::CONTAIN:
+                        case jeecs::game_system_function::dependence_type::CONTAIN:
                             wtype = "CONTAIN"; break;
-                        case ecs_system_function::dependence_type::READ_FROM_LAST_FRAME:
+                        case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
                             wtype = "READ(LF)"; break;
-                        case ecs_system_function::dependence_type::READ_AFTER_WRITE:
+                        case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
                             wtype = "READ(AF)"; break;
-                        case ecs_system_function::dependence_type::WRITE:
+                        case jeecs::game_system_function::dependence_type::WRITE:
                             wtype = "WRITE"; break;
                         default:
                             assert(false);
@@ -1061,7 +1130,7 @@ namespace jeecs_impl
             }
 
             // Ok, execute chain:
-            for (auto& seq: _m_execute_seq)
+            for (auto& seq : _m_execute_seq)
             {
                 std::for_each(
 #ifdef __cpp_lib_execution
@@ -1070,12 +1139,63 @@ namespace jeecs_impl
                     seq.begin(), seq.end(),
                     [](ecs_system_function* func)
                     {
-                        // Fxxk! I don't even know what to do !
-                        func;
+                        func->m_game_system_function->update();
                     }
                 );
             }
         }
+
+        inline arch_type::entity create_entity_with_component(const types_set & types)
+        {
+            return _m_arch_manager.create_an_entity_with_component(types);
+        }
     };
 
+}
+
+
+void* je_arch_get_chunk(void* archtype)
+{
+    return ((jeecs_impl::arch_type*)archtype)->get_head_chunk();
+}
+
+void* je_arch_next_chunk(void* chunk)
+{
+    return ((jeecs_impl::arch_type::arch_chunk*)chunk)->last;
+}
+
+void* je_ecs_world_create()
+{
+    return jeecs::basic::create_new<jeecs_impl::ecs_world>();
+}
+
+void je_ecs_world_destroy(void* world)
+{
+    jeecs::basic::destroy_free((jeecs_impl::ecs_world*)world);
+}
+
+void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function)
+{
+    jeecs_impl::ecs_world* ecsworld = (jeecs_impl::ecs_world*)world;
+
+    ecsworld->regist_system(jeecs::basic::create_new<jeecs_impl::ecs_system_function>(game_system_function));
+}
+
+void je_ecs_world_update(void* world)
+{
+    ((jeecs_impl::ecs_world*)world)->update();
+}
+
+void je_ecs_world_create_entity_with_components(
+    void* world,
+    void** out_archaddr,
+    size_t* out_eid,
+    size_t* out_version,
+    jeecs::typing::typeid_t* component_ids)
+{
+    jeecs_impl::types_set types;
+    while (*component_ids != jeecs::typing::INVALID_TYPE_ID)
+        types.insert(*(component_ids++));
+   
+    ((jeecs_impl::ecs_world*)world)->create_entity_with_component(types);
 }
