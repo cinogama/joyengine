@@ -68,6 +68,10 @@ namespace jeecs
 
     struct game_system_function;
 
+    struct game_system;
+
+    struct game_world;
+
     struct game_entity
     {
         enum class entity_stat
@@ -131,6 +135,8 @@ JE_API void* je_ecs_world_create();
 JE_API void je_ecs_world_destroy(void* world);
 
 JE_API void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function);
+
+JE_API void je_ecs_world_unregister_system_func(void* world, jeecs::game_system_function* game_system_function);
 
 JE_API void je_ecs_world_update(void* world);
 
