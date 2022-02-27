@@ -30,6 +30,9 @@
     <ClCompile Include="jeecs_log.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="jeecs_time_sleep.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="jeecs.hpp">
