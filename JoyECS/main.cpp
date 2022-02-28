@@ -9,27 +9,52 @@
 
 namespace jeecs // Transform
 {
-    struct LocalPosition
+    namespace Transform
     {
-        float x = 0, y = 0, z = 0;
-    };
-    struct LocalRotation
-    {
-        float x = 0, y = 0, z = 0, w = 1.f;
-    };
-    struct LocalScale
-    {
-        float x = 1.f, y = 1.f, z = 1.f;
-    };
-    struct Translation
-    {
-        float local2world[16] = {};
-        float rotation[16] = {};
-    };
-    struct LocalToParent
-    {
-        size_t parent_id_in_manager;
-    };
+        // An entity without childs and parent will contain these components:
+        // LocalPosition/LocalRotation/LocalScale and using LocalToWorld to apply
+        // local transform to Translation
+        // If an entity have childs, it will have ChildAnchor 
+        // If an entity have parent, it will have Parent LocalToParent and without
+        // LocalToWorld.
+
+        struct LocalPosition
+        {
+            float x = 0, y = 0, z = 0;
+        };
+        struct LocalRotation
+        {
+            float x = 0, y = 0, z = 0, w = 1.f;
+        };
+        struct LocalScale
+        {
+            float x = 1.f, y = 1.f, z = 1.f;
+        };
+
+        struct ChildAnchor
+        {
+            size_t anchor_id;
+        };
+
+        struct Parent
+        {
+        };
+
+        struct LocalToParent
+        {
+        };
+
+        struct LocalToWorld
+        {
+        };
+
+        struct Translation
+        {
+            float local2world[16] = {};
+            float rotation[16] = {};
+        };
+    }
+
 }
 
 struct TranslationUpdatingSystem :public jeecs::game_system
