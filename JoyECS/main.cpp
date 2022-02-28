@@ -7,50 +7,89 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#include <iostream>
-
-struct position
+namespace jeecs // Transform
 {
-    float x, y, z;
-};
+    struct LocalPosition
+    {
+        float x = 0, y = 0, z = 0;
+    };
+    struct LocalRotation
+    {
+        float x = 0, y = 0, z = 0, w = 1.f;
+    };
+    struct LocalScale
+    {
+        float x = 1.f, y = 1.f, z = 1.f;
+    };
+    struct Translation
+    {
+        float local2world[16] = {};
+        float rotation[16] = {};
+    };
+    struct LocalToParent
+    {
+        size_t parent_id_in_manager;
+    };
+}
 
-struct renderer
+struct TranslationUpdatingSystem :public jeecs::game_system
 {
-    float x, y, z;
-};
-
-struct rigidbory
-{
-    float x, y, z;
-};
-
-
-struct example_system :jeecs::game_system
-{
-    void executing_with_pos_1(const position* pos)
+    TranslationUpdatingSystem(jeecs::game_world world)
+        : jeecs::game_system(world)
     {
-        std::cout << je_clock_time() << std::endl;
-    }
-    void executing_with_pos_2(const position* pos, const renderer* renderer)
-    {
-        std::cout << "B: " << pos << std::endl;
-    }
-    void executing_with_pos_3(const rigidbory* pos, position* renderer)
-    {
-        std::cout << "C: " << pos << std::endl;
-    }
-    void executing_with_pos_4(rigidbory* pos, position* renderer)
-    {
-        std::cout << "D: " << pos << std::endl;
+        register_system_func(&TranslationUpdatingSystem::apply_local_position_to_l2w,
+            {
+                except<jeecs::LocalToParent>()
+            });
+        register_system_func(&TranslationUpdatingSystem::apply_local_scale_to_l2w,
+            {
+                except<jeecs::LocalToParent>()
+            });
+        register_system_func(&TranslationUpdatingSystem::apply_local_rotation_to_l2w,
+            {
+                except<jeecs::LocalToParent>()
+            });
+        register_system_func(&TranslationUpdatingSystem::apply_non_rotation_to_l2w,
+            {
+                except<jeecs::LocalToParent>(),
+                except<jeecs::LocalRotation>()
+            });
     }
 
-    example_system(jeecs::game_world gw)
-        : jeecs::game_system(gw)
+    void apply_local_position_to_l2w(
+        read<jeecs::LocalPosition> pos,     // read LocalPosition
+        jeecs::Translation* local2world    // write LocalToWorld
+    )
     {
-        register_system_func(&example_system::executing_with_pos_1);
-        register_system_func(&example_system::executing_with_pos_2);
-        register_system_func(&example_system::executing_with_pos_3);
-        register_system_func(&example_system::executing_with_pos_4);
+        local2world->local2world[3 + 0 * 4] = pos->x;
+        local2world->local2world[3 + 1 * 4] = pos->y;
+        local2world->local2world[3 + 2 * 4] = pos->z;
+    }
+
+    void apply_local_scale_to_l2w(
+        read<jeecs::LocalScale> scale,      // read LocalScale
+        jeecs::Translation* local2world    // write LocalToWorld
+    )
+    {
+        local2world->local2world[0 + 0 * 4] = scale->x;
+        local2world->local2world[1 + 1 * 4] = scale->y;
+        local2world->local2world[2 + 2 * 4] = scale->z;
+        local2world->local2world[3 + 3 * 4] = 1.0f;
+    }
+
+    void apply_local_rotation_to_l2w(
+        read<jeecs::LocalRotation> rotation,      // read LocalScale
+        jeecs::Translation* local2world    // write LocalToWorld
+    )
+    {
+        //TODO: generate rotation matrix for entity
+    }
+
+    void apply_non_rotation_to_l2w(
+        jeecs::Translation* local2world    // write LocalToWorld
+    )
+    {
+        //TODO: generate rotation matrix for non-rotation entity
     }
 };
 
@@ -59,12 +98,18 @@ int main()
     using namespace jeecs;
     using namespace std;
 
+    jeecs::enrty::module_entry();
+
     game_universe universe = game_universe::create_universe();
 
     game_world world = universe.create_world();
-    world.add_system<example_system>();
+    world.add_system<TranslationUpdatingSystem>();
 
-    world.add_entity<position>();
+    world.add_entity<LocalPosition, LocalRotation, LocalScale, Translation, LocalToParent>();
 
-    je_clock_sleep_for(12000000000.);
+    je_clock_sleep_for(5.);
+    game_universe::destroy_universe(universe);
+    je_clock_sleep_for(5.);
+
+    jeecs::enrty::module_leave();
 }

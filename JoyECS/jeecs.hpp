@@ -21,6 +21,8 @@
 #include <map>
 #include <algorithm>
 #include <functional>
+#include <type_traits>
+#include <cstddef>
 
 #ifdef __cpp_lib_execution
 #include <execution>
@@ -61,6 +63,8 @@ namespace jeecs
         using destruct_func_t = void(*)(void*);
         using copy_func_t = void(*)(void*, const void*);
         using move_func_t = void(*)(void*, void*);
+        using to_string_func_t = const char* (*)(void*);
+        using parse_func_t = void(*)(void*, const char*);
 
         using entity_id_in_chunk_t = size_t;
         using version_t = size_t;
@@ -177,6 +181,8 @@ JE_API double je_clock_time();
 JE_API void je_clock_sleep_until(double time);
 
 JE_API void je_clock_sleep_for(double time);
+
+JE_API void je_clock_suppress_sleep(double sup_stax);
 
 RS_FORCE_CAPI_END
 
@@ -361,6 +367,7 @@ namespace jeecs
             copy_func_t         m_copier;
             move_func_t         m_mover;
 
+
         private:
             inline static std::atomic_bool      _m_shutdown_flag = false;
 
@@ -488,6 +495,12 @@ namespace jeecs
 
                 return *(T*)(&ptr);
             }
+
+            //template<typename T, typename IndexerT>
+            //inline T get_component_accessor_expander(void* chunk_addr, size_t eid, IndexerT & indexer) const noexcept
+            //{
+            //    return get_component_accessor<T>(chunk_addr, eid,  indexer.template index_of<T>());
+            //}
 
             inline static jeecs::game_entity::entity_stat get_entity_state(const void* entity_meta, size_t eid)
             {
@@ -645,21 +658,23 @@ namespace jeecs
         struct read_updated_base :accessor_base {};
         struct write_base :accessor_base {};
 
+    public:
+
         template<typename T>
         struct read : read_last_frame_base {
         public:
             void* _m_component_addr;
         public:
-            T* operator ->() const noexcept { return (T*)_m_component_addr; }
-            T& operator * () const noexcept { return *(T*)_m_component_addr; }
+            const T* operator ->() const noexcept { return (const T*)_m_component_addr; }
+            const T& operator * () const noexcept { return *(const T*)_m_component_addr; }
         };
         template<typename T>
         struct read_newest : read_updated_base {
         public:
             void* _m_component_addr;
         public:
-            T* operator ->() const noexcept { return (T*)_m_component_addr; }
-            T& operator * () const noexcept { return *(T*)_m_component_addr; }
+            const T* operator ->() const noexcept { return (const T*)_m_component_addr; }
+            const T& operator * () const noexcept { return *(const T*)_m_component_addr; }
         };
         template<typename T>
         struct write : write_base {
@@ -669,8 +684,6 @@ namespace jeecs
             T* operator ->() const noexcept { return (T*)_m_component_addr; }
             T& operator * () const noexcept { return *(T*)_m_component_addr; }
         };
-    public:
-
 
     private:
         game_world _m_game_world;
@@ -695,7 +708,7 @@ namespace jeecs
             {
                 if constexpr (std::is_pointer<T>::value)
                 {
-                    if constexpr (std::is_const<std::remove_pointer<T>::type>::value)
+                    if constexpr (std::is_const<typename std::remove_pointer<T>::type>::value)
                         return jeecs::game_system_function::dependence_type::READ_AFTER_WRITE;
                     else
                         return jeecs::game_system_function::dependence_type::WRITE;
@@ -760,8 +773,26 @@ namespace jeecs
                 0 != sizeof...(ArgTs) && is_game_entity<ArgTs...>::value;
         };
 
+        struct requirement
+        {
+            game_system_function::dependence_type m_depend;
+            typing::typeid_t m_required_id;
+        };
+
+        template<typename T>
+        inline static requirement except()
+        {
+            return requirement{ game_system_function::dependence_type::EXCEPT, jeecs::typing::type_info::id<T>() };
+        }
+
+        template<typename T>
+        inline static requirement any_of()
+        {
+            return requirement{ game_system_function::dependence_type::ANY, jeecs::typing::type_info::id<T>() };
+        }
+
         template<typename ReturnT, typename ThisT, typename ... ArgTs>
-        inline auto register_normal_invoker(ReturnT(ThisT::* system_func)(ArgTs ...))
+        inline auto pack_normal_invoker(ReturnT(ThisT::* system_func)(ArgTs ...), const std::vector<requirement>& requirement)
         {
             auto invoker = [this, system_func](const jeecs::game_system_function* sysfunc) {
 
@@ -782,9 +813,9 @@ namespace jeecs
                                 == jeecs::game_system_function::arch_index_info::get_entity_state(entity_meta_addr, entity_index))
                             {
                                 ((static_cast<ThisT*>(this))->*system_func)(
-                                    sysfunc->m_archs[arch_index]
-                                    .get_component_accessor<ArgTs>(
-                                        current_chunk, entity_index, tindexer.index_of<ArgTs>()
+
+                                    sysfunc->m_archs[arch_index].get_component_accessor<ArgTs>(
+                                        current_chunk, entity_index, tindexer.template index_of<ArgTs>()
                                         )...
                                     );
                             }
@@ -797,9 +828,14 @@ namespace jeecs
             auto* gsys = jeecs::game_system_function::create(invoker, sizeof...(ArgTs));
             std::vector<jeecs::game_system_function::typeid_dependence_pair> depends
                 = { {
-                        jeecs::typing::type_info::id<origin_component<ArgTs>::type>(),
+                        jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
                         depend_type<ArgTs>(),
                     }... };
+
+            for (auto& req : requirement)
+            {
+                depends.push_back({ req.m_required_id,req.m_depend });
+            }
 
             gsys->set_depends(depends);
 
@@ -807,7 +843,7 @@ namespace jeecs
         }
 
         template<typename ReturnT, typename ThisT, typename ET, typename ... ArgTs>
-        inline auto register_normal_invoker_with_entity(ReturnT(ThisT::* system_func)(ET, ArgTs ...))
+        inline auto pack_normal_invoker_with_entity(ReturnT(ThisT::* system_func)(ET, ArgTs ...), const std::vector<requirement>& requirement)
         {
             auto invoker = [this, system_func](const jeecs::game_system_function* sysfunc) {
 
@@ -834,9 +870,8 @@ namespace jeecs
 
                                 ((static_cast<ThisT*>(this))->*system_func)(
                                     gentity,
-                                    sysfunc->m_archs[arch_index]
-                                    .get_component_accessor<ArgTs>(
-                                        current_chunk, entity_index, tindexer.index_of<ArgTs>()
+                                    sysfunc->m_archs[arch_index].get_component_accessor<ArgTs>(
+                                        current_chunk, entity_index, tindexer.template index_of<ArgTs>()
                                         )...
                                     );
                             }
@@ -853,22 +888,27 @@ namespace jeecs
                         depend_type<ArgTs>(),
                     }... };
 
+            for (auto& req : requirement)
+            {
+                depends.push_back({ req.m_required_id,req.m_depend });
+            }
+
             gsys->set_depends(depends);
 
             return gsys;
         }
 
         template<typename ReturnT, typename ThisT, typename ... ArgTs>
-        inline jeecs::game_system_function* register_system_func(ReturnT(ThisT::* sysf)(ArgTs ...))
+        inline jeecs::game_system_function* register_system_func(ReturnT(ThisT::* sysf)(ArgTs ...), const std::vector<requirement>& requirement = {})
         {
             static_assert(sizeof...(ArgTs));
 
             jeecs::game_system_function::system_function_pak_t invoker;
 
             if constexpr (is_need_game_entity<ArgTs...>::value)
-                return _m_game_world.register_system_func_to_world(register_normal_invoker_with_entity(sysf));
+                return _m_game_world.register_system_func_to_world(pack_normal_invoker_with_entity(sysf, requirement));
             else
-                return _m_game_world.register_system_func_to_world(register_normal_invoker(sysf));
+                return _m_game_world.register_system_func_to_world(pack_normal_invoker(sysf, requirement));
 
         }
     };
@@ -904,6 +944,21 @@ namespace jeecs
             return je_ecs_universe_destroy(universe._m_universe_addr);
         }
     };
+
+
+    namespace enrty
+    {
+        inline void module_entry()
+        {
+            // 0. register built-in components
+        }
+
+        inline void module_leave()
+        {
+            // 0. ungister this module components
+            typing::type_info::unregister_all_type_in_shutdown();
+        }
+    }
 
 }
 

@@ -37,25 +37,28 @@ void je_log(int level, const char* format, ...)
         output_place = stderr; break;
     }
 
+    static std::mutex output_mx;
+    std::lock_guard g1(output_mx);
+
 #ifdef _WIN32
     HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
     switch (level)
     {
     case JE_LOG_NORMAL:
-        SetConsoleTextAttribute(handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE); fputs("[normal] ", output_place);
+        SetConsoleTextAttribute(handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE); fputs("[NORM] ", output_place);
         break;
     case JE_LOG_INFO:
-        SetConsoleTextAttribute(handle, FOREGROUND_INTENSITY | FOREGROUND_BLUE | FOREGROUND_GREEN); fputs("[infor] ", output_place);
+        SetConsoleTextAttribute(handle, FOREGROUND_INTENSITY | FOREGROUND_BLUE | FOREGROUND_GREEN); fputs("[INFO] ", output_place);
         break;
     case JE_LOG_WARNING:
-        SetConsoleTextAttribute(handle, FOREGROUND_INTENSITY | FOREGROUND_RED | FOREGROUND_GREEN); fputs("[warni] ", output_place);
+        SetConsoleTextAttribute(handle, FOREGROUND_INTENSITY | FOREGROUND_RED | FOREGROUND_GREEN); fputs("[WARN] ", output_place);
         break;
     case JE_LOG_ERROR:
-        SetConsoleTextAttribute(handle, FOREGROUND_INTENSITY | FOREGROUND_RED); fputs("[error] ", output_place);
+        SetConsoleTextAttribute(handle, FOREGROUND_INTENSITY | FOREGROUND_RED); fputs("[ERRR] ", output_place);
         break;
     case JE_LOG_FATAL:
     default:
-        SetConsoleTextAttribute(handle, BACKGROUND_INTENSITY | BACKGROUND_RED); fputs("[fatal] ", output_place);
+        SetConsoleTextAttribute(handle, BACKGROUND_INTENSITY | BACKGROUND_RED); fputs("[FATL] ", output_place);
         break;
     }
 #else

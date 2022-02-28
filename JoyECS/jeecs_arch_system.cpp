@@ -1,10 +1,15 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include <list>
+#include <thread>
+
 #ifdef NDEBUG
-#   define je_arch_log(...) ((void)0)
+#   define DEBUG_ARCH_LOG(...) ((void)0)
+#   define DEBUG_ARCH_LOG_WARN(...) ((void)0)
 #else
-#   define je_arch_log(...) jeecs::debug::log_info( __VA_ARGS__ );
+#   define DEBUG_ARCH_LOG(...) jeecs::debug::log_info( __VA_ARGS__ );
+#   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::log_warn( __VA_ARGS__ );
 #endif
 
 namespace jeecs_impl
@@ -79,7 +84,9 @@ namespace jeecs_impl
                 , _m_types(_arch_type->_m_types_set)
                 , _m_arch_type(_arch_type)
             {
-                static_assert(offsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
+                static_assert(
+                    ((size_t) & reinterpret_cast<char const volatile&>((
+                        ((jeecs_impl::arch_type::arch_chunk*)0)->_m_chunk_buffer))) == 0);
 
                 _m_entities_meta = jeecs::basic::create_new_n<entity_meta>(_m_entity_count);
             }
@@ -830,7 +837,7 @@ namespace jeecs_impl
 
         void append_system(ecs_world* w, jeecs::game_system_function* game_system_function)
         {
-            je_arch_log("World: %p append system:%p operation has been committed to the command buffer.",
+            DEBUG_ARCH_LOG("World: %p append system:%p operation has been committed to the command buffer.",
                 w, game_system_function);
 
             std::shared_lock sl(_m_command_executer_guard_mx);
@@ -843,7 +850,7 @@ namespace jeecs_impl
 
         void remove_system(ecs_world* w, jeecs::game_system_function* game_system_function)
         {
-            je_arch_log("World: %p remove system:%p operation has been committed to the command buffer.",
+            DEBUG_ARCH_LOG("World: %p remove system:%p operation has been committed to the command buffer.",
                 w, game_system_function);
 
             std::shared_lock sl(_m_command_executer_guard_mx);
@@ -858,7 +865,7 @@ namespace jeecs_impl
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
-            je_arch_log("World: %p The destroy world operation has been committed to the command buffer.", w);
+            DEBUG_ARCH_LOG("World: %p The destroy world operation has been committed to the command buffer.", w);
             _find_or_create_buffer_for(w).m_destroy_world = true;
         }
 
@@ -1407,19 +1414,25 @@ namespace jeecs_impl
                 ecs_world* world = _buf_in_world.first;
 
                 if (_buf_in_world.second.m_destroy_world)
-                {
                     world->ready_to_destroy();
-                    //goto destroy_worlds_system_operation;
-                }
 
                 auto* append_system = _buf_in_world.second.m_append_system.pick_all();
                 while (append_system)
                 {
-                    // Free template system
                     auto current_append_system = append_system;
                     append_system = append_system->last;
-
-                    world->register_system(current_append_system->m_ecs_system_function);
+                    if (world->is_destroying())
+                    {
+                        DEBUG_ARCH_LOG_WARN("System: %p, is trying add to world: %p, but this world is destroying.",
+                            current_append_system->m_system_function, world);
+                        jeecs::basic::destroy_free(current_append_system->m_ecs_system_function);
+                    }
+                    else
+                    {
+                        DEBUG_ARCH_LOG("System: %p, added to world: %p.",
+                            current_append_system->m_system_function, world);
+                        world->register_system(current_append_system->m_ecs_system_function);
+                    }
 
                     jeecs::basic::destroy_free(current_append_system);
                 }
@@ -1430,6 +1443,8 @@ namespace jeecs_impl
                     auto current_removed_system = removed_system;
                     removed_system = removed_system->last;
 
+                    DEBUG_ARCH_LOG("System: %p, removed from world: %p.", 
+                        current_removed_system->m_system_function, world);
                     world->unregister_system(current_removed_system->m_system_function);
 
                     jeecs::basic::destroy_free(current_removed_system);
@@ -1481,22 +1496,25 @@ namespace jeecs_impl
                 _m_reading_world_list.begin(), _m_reading_world_list.end(),
                 [this](ecs_world* world)
                 {
-                    je_arch_log("World %p: updating...", world);
+                    DEBUG_ARCH_LOG("World %p: updating...", world);
 
                     double current_time = je_clock_time();
 
-                    while (world->update())
+                    do
                     {
                         if (_m_pause_universe_update_for_world)
                         {
-                            je_arch_log("World %p: stop update for ecs_universe world list modify.", world);
+                            DEBUG_ARCH_LOG("World %p: stop update for ecs_universe world list modify.", world);
                             return;
                         }
+                        if (je_clock_time() > 1.0 + current_time)
+                            current_time = je_clock_time();
 
-                        je_clock_sleep_until(current_time += 0.016'666'666'666'666'66);
-                    }
+                        je_clock_sleep_until(current_time += 0.0166'6667);
 
-                    je_arch_log("World %p: destroied.", world);
+                    } while (world->update());
+
+                    DEBUG_ARCH_LOG("World %p: destroied.", world);
 
                     unstore_system_for_world(world);
 
@@ -1515,7 +1533,7 @@ namespace jeecs_impl
     public:
         ecs_universe()
         {
-            je_arch_log("Ready to create ecs_universe: %p.", this);
+            DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
             _m_universe_update_thread_stop_flag.test_and_set();
             _m_universe_update_thread = std::move(std::thread(
@@ -1537,11 +1555,11 @@ namespace jeecs_impl
             while (_m_pause_universe_update_for_world)
                 std::this_thread::yield();
 
-            je_arch_log("Universe: %p created.", this);
+            DEBUG_ARCH_LOG("Universe: %p created.", this);
         }
         ~ecs_universe()
         {
-            je_arch_log("Universe: %p closing.", this);
+            DEBUG_ARCH_LOG("Universe: %p closing.", this);
 
             do
             {
@@ -1556,12 +1574,16 @@ namespace jeecs_impl
             _m_universe_update_thread_stop_flag.clear();
             _m_universe_update_thread.join();
 
-            je_arch_log("Universe: %p closed.", this);
+            unstore_system_for_world(nullptr);
+
+            assert(_m_stored_systems.empty());
+
+            DEBUG_ARCH_LOG("Universe: %p closed.", this);
         }
     public:
         ecs_world* create_world()
         {
-            je_arch_log("Universe: %p want to create a world.", this);
+            DEBUG_ARCH_LOG("Universe: %p want to create a world.", this);
 
             std::lock_guard g1(_m_world_list_mx);
 
@@ -1570,7 +1592,7 @@ namespace jeecs_impl
             _m_world_list.push_back(world);
             _m_pause_universe_update_for_world = true;
 
-            je_arch_log("Universe: %p create a world: %p.", this, world);
+            DEBUG_ARCH_LOG("Universe: %p create a world: %p.", this, world);
 
             return world;
         }
