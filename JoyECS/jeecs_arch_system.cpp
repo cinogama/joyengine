@@ -917,11 +917,6 @@ namespace jeecs_impl
                         // registed_system can only happend before (*insert_place), so mark here to insert
                         break;
                     }
-                    else if (seq == ecs_system_function::sequence::CAN_HAPPEND_SAME_TIME)
-                    {
-                        ++insert_place;
-                        break;
-                    }
                     else if (seq == ecs_system_function::sequence::UNABLE_DETERMINE)
                     {
                         // conflict between registed_system and (*insert_place), report error and break
