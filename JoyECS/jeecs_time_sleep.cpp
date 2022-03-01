@@ -4,14 +4,22 @@
 #include <chrono>
 #include <thread>
 
-std::chrono::high_resolution_clock _sys_clock;
-auto _start_time = _sys_clock.now();
+std::chrono::high_resolution_clock _hs_clock;
+auto _start_time = _hs_clock.now();
 double _sleep_suppression = 0.0001;
 
 double je_clock_time()
 {
     using namespace std;
-    return (_sys_clock.now() - _start_time) / 1.0s;
+    return (_hs_clock.now() - _start_time) / 1.0s;
+}
+
+std::chrono::system_clock _sys_clock;
+
+jeecs::typing::ms_stamp_t je_clock_time_stamp()
+{
+    using namespace std;
+    return (jeecs::typing::ms_stamp_t)(_sys_clock.now().time_since_epoch() / 1ms);
 }
 
 void je_clock_sleep_until(double time)

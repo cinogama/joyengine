@@ -912,9 +912,14 @@ namespace jeecs_impl
                 for (; insert_place != dependence_system_chain.cend(); ++insert_place)
                 {
                     auto seq = registed_system->check_dependence((*insert_place)->m_dependence_list);
-                    if (seq == ecs_system_function::sequence::ONLY_HAPPEND_BEFORE)
+                    if (seq == ecs_system_function::sequence::ONLY_HAPPEND_BEFORE )
                     {
                         // registed_system can only happend before (*insert_place), so mark here to insert
+                        break;
+                    }
+                    else if (seq == ecs_system_function::sequence::CAN_HAPPEND_SAME_TIME)
+                    {
+                        ++insert_place;
                         break;
                     }
                     else if (seq == ecs_system_function::sequence::UNABLE_DETERMINE)

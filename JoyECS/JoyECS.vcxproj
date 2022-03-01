@@ -148,6 +148,7 @@
     <ClCompile Include="jeecs_memory_mgr.cpp" />
     <ClCompile Include="jeecs_time_sleep.cpp" />
     <ClCompile Include="jeecs_type_mgr.cpp" />
+    <ClCompile Include="jeecs_uid.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
