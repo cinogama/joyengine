@@ -33,15 +33,13 @@ namespace jeecs // Transform
 
         struct ChildAnchor
         {
-            size_t anchor_id;
-        };
-
-        struct Parent
-        {
+            static constexpr size_t INVALID_ANCHOR_ID = (size_t)(-1);
+            size_t anchor_id = INVALID_ANCHOR_ID;
         };
 
         struct LocalToParent
         {
+            size_t parent_anchor_id;
         };
 
         struct LocalToWorld
@@ -50,7 +48,7 @@ namespace jeecs // Transform
 
         struct Translation
         {
-            float local2world[16] = {};
+            float object2world[16] = {};
             float rotation[16] = {};
         };
     }
@@ -59,62 +57,18 @@ namespace jeecs // Transform
 
 struct TranslationUpdatingSystem :public jeecs::game_system
 {
-    TranslationUpdatingSystem(jeecs::game_world world)
-        : jeecs::game_system(world)
+    TranslationUpdatingSystem(jeecs::game_world world) :jeecs::game_system(world)
     {
-        register_system_func(&TranslationUpdatingSystem::apply_local_position_to_l2w,
+        register_system_func(&TranslationUpdatingSystem::example,
             {
-                except<jeecs::LocalToParent>()
+                system_read(&ababa)
             });
-        register_system_func(&TranslationUpdatingSystem::apply_local_scale_to_l2w,
-            {
-                except<jeecs::LocalToParent>()
-            });
-        register_system_func(&TranslationUpdatingSystem::apply_local_rotation_to_l2w,
-            {
-                except<jeecs::LocalToParent>()
-            });
-        register_system_func(&TranslationUpdatingSystem::apply_non_rotation_to_l2w,
-            {
-                except<jeecs::LocalToParent>(),
-                except<jeecs::LocalRotation>()
-            });
+        
     }
 
-    void apply_local_position_to_l2w(
-        read<jeecs::LocalPosition> pos,     // read LocalPosition
-        jeecs::Translation* local2world    // write LocalToWorld
-    )
+    void example(read<jeecs::Transform::LocalPosition> pos)
     {
-        local2world->local2world[3 + 0 * 4] = pos->x;
-        local2world->local2world[3 + 1 * 4] = pos->y;
-        local2world->local2world[3 + 2 * 4] = pos->z;
-    }
-
-    void apply_local_scale_to_l2w(
-        read<jeecs::LocalScale> scale,      // read LocalScale
-        jeecs::Translation* local2world    // write LocalToWorld
-    )
-    {
-        local2world->local2world[0 + 0 * 4] = scale->x;
-        local2world->local2world[1 + 1 * 4] = scale->y;
-        local2world->local2world[2 + 2 * 4] = scale->z;
-        local2world->local2world[3 + 3 * 4] = 1.0f;
-    }
-
-    void apply_local_rotation_to_l2w(
-        read<jeecs::LocalRotation> rotation,      // read LocalScale
-        jeecs::Translation* local2world    // write LocalToWorld
-    )
-    {
-        //TODO: generate rotation matrix for entity
-    }
-
-    void apply_non_rotation_to_l2w(
-        jeecs::Translation* local2world    // write LocalToWorld
-    )
-    {
-        //TODO: generate rotation matrix for non-rotation entity
+        printf("x");
     }
 };
 
@@ -130,7 +84,10 @@ int main()
     game_world world = universe.create_world();
     world.add_system<TranslationUpdatingSystem>();
 
-    world.add_entity<LocalPosition, LocalRotation, LocalScale, Translation, LocalToParent>();
+    world.add_entity<
+        Transform::LocalPosition, 
+        Transform::LocalRotation, 
+        Transform::LocalScale>();
 
     je_clock_sleep_for(5.);
     game_universe::destroy_universe(universe);

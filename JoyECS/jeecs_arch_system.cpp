@@ -23,6 +23,13 @@ namespace jeecs_impl
     class arch_manager;
     class ecs_world;
 
+    inline bool is_system_component_depends(jeecs::typing::typeid_t id)
+    {
+        if (jeecs::typing::type_info::of(id) == nullptr)
+            return true;
+        return false;
+    }
+
     class arch_type
     {
         JECS_DISABLE_MOVE_AND_COPY(arch_type);
@@ -590,19 +597,26 @@ namespace jeecs_impl
             types_set need_set, any_set, except_set;
             for (auto& depend : modify_sys_func->m_dependence_list)
             {
-                switch (depend.second)
+                if (is_system_component_depends(depend.first))
                 {
-                case jeecs::game_system_function::dependence_type::ANY:
-                    any_set.insert(depend.first); break;
-                case jeecs::game_system_function::dependence_type::EXCEPT:
-                    except_set.insert(depend.first); break;
-                case jeecs::game_system_function::dependence_type::CONTAIN:
-                case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
-                case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
-                case jeecs::game_system_function::dependence_type::WRITE:
-                    need_set.insert(depend.first); break;
-                default:
-                    assert(false); //  Unknown type
+                    // Do nothing.
+                }
+                else
+                {
+                    switch (depend.second)
+                    {
+                    case jeecs::game_system_function::dependence_type::ANY:
+                        any_set.insert(depend.first); break;
+                    case jeecs::game_system_function::dependence_type::EXCEPT:
+                        except_set.insert(depend.first); break;
+                    case jeecs::game_system_function::dependence_type::CONTAIN:
+                    case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
+                    case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
+                    case jeecs::game_system_function::dependence_type::WRITE:
+                        need_set.insert(depend.first); break;
+                    default:
+                        assert(false); //  Unknown type
+                    }
                 }
             }
 
@@ -1098,7 +1112,11 @@ namespace jeecs_impl
                         default:
                             assert(false);
                         }
-                        jeecs::debug::log_info("        %s %s", wtype, jeecs::typing::type_info::of(dep_id)->m_typename);
+
+                        if (is_system_component_depends(dep_id))
+                            jeecs::debug::log_info("        %s SYSTEM_COMPONENT: %p", wtype, dep_id);
+                        else
+                            jeecs::debug::log_info("        %s %s", wtype, jeecs::typing::type_info::of(dep_id)->m_typename);
                     }
                 }
             }
@@ -1443,7 +1461,7 @@ namespace jeecs_impl
                     auto current_removed_system = removed_system;
                     removed_system = removed_system->last;
 
-                    DEBUG_ARCH_LOG("System: %p, removed from world: %p.", 
+                    DEBUG_ARCH_LOG("System: %p, removed from world: %p.",
                         current_removed_system->m_system_function, world);
                     world->unregister_system(current_removed_system->m_system_function);
 

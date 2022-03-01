@@ -791,6 +791,21 @@ namespace jeecs
             return requirement{ game_system_function::dependence_type::ANY, jeecs::typing::type_info::id<T>() };
         }
 
+        inline static requirement system_read(const void* offset)
+        {
+            return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME, reinterpret_cast<typing::typeid_t>(offset) };
+        }
+
+        inline static requirement system_write(void* offset)
+        {     
+            return requirement{ game_system_function::dependence_type::WRITE, reinterpret_cast<typing::typeid_t>(offset) };
+        }
+
+        inline static requirement system_read_updated(const void* offset)
+        {
+            return requirement{ game_system_function::dependence_type::READ_AFTER_WRITE, reinterpret_cast<typing::typeid_t>(offset) };
+        }
+
         template<typename ReturnT, typename ThisT, typename ... ArgTs>
         inline auto pack_normal_invoker(ReturnT(ThisT::* system_func)(ArgTs ...), const std::vector<requirement>& requirement)
         {
