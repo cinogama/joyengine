@@ -110,7 +110,7 @@ struct TranslationUpdatingSystem :public game_system
         register_system_func(&TranslationUpdatingSystem::UpdateLocalRotationToWorld,
             {
                 except<LocalToParent>(),
-                after(&TranslationUpdatingSystem::UpdateLocalRotationToWorld),
+                after(&TranslationUpdatingSystem::UpdateLocalScaleToWorld),
             });
         register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslation,
             {
@@ -195,6 +195,7 @@ struct TranslationUpdatingSystem :public game_system
     {
         // TODO
     }
+
 };
 
 #include <iostream>

@@ -960,72 +960,144 @@ namespace jeecs_impl
 
         }
 
-        struct system_dep_graph_node
-        {
-            ecs_system_function* m_ecs_system = nullptr;
+        //struct system_dep_graph_node
+        //{
+        //    ecs_system_function* m_ecs_system = nullptr;
 
-            system_dep_graph_node* m_parent = nullptr;
-            system_dep_graph_node* m_child = nullptr;
-            system_dep_graph_node* m_sibling = nullptr;
+        //    system_dep_graph_node* m_parent = nullptr;
+        //    system_dep_graph_node* m_child = nullptr;
+        //    system_dep_graph_node* m_sibling = nullptr;
 
-            void add_child(system_dep_graph_node* node)
-            {
-                if (m_child)
-                {
-                    auto* child = m_child;
-                    while (child)
-                    {
-                        if (nullptr == child->m_sibling)
-                        {
-                            child->m_sibling = node;
-                            node->m_parent = this;
-                            break;
-                        }
-                        child = child->m_sibling;
-                    }
-                }
-                else
-                    m_child = node;
+        //    void add_child(system_dep_graph_node* node)
+        //    {
+        //        if (m_child)
+        //        {
+        //            auto* child = m_child;
+        //            while (child)
+        //            {
+        //                if (nullptr == child->m_sibling)
+        //                {
+        //                    child->m_sibling = node;
+        //                    node->m_parent = this;
+        //                    break;
+        //                }
+        //                child = child->m_sibling;
+        //            }
+        //        }
+        //        else
+        //            m_child = node;
 
-            }
+        //    }
 
-        };
+        //};
 
-        std::list<system_dep_graph_node*> m_created_nodes;
+        //std::list<system_dep_graph_node*> m_created_nodes;
 
-        system_dep_graph_node* create_node(ecs_system_function* f)
-        {
-            auto* node = new system_dep_graph_node;
-            node->m_ecs_system = f;
+        //system_dep_graph_node* create_node(ecs_system_function* f)
+        //{
+        //    auto* node = new system_dep_graph_node;
+        //    node->m_ecs_system = f;
 
-            m_created_nodes.push_back(node);
-            return node;
-        }
-        void clear_nodes()
-        {
-            for (auto* node : m_created_nodes)
-                delete node;
+        //    m_created_nodes.push_back(node);
+        //    return node;
+        //}
+        //void clear_nodes()
+        //{
+        //    for (auto* node : m_created_nodes)
+        //        delete node;
 
-            m_created_nodes.clear();
-        }
+        //    m_created_nodes.clear();
+        //}
 
         void build_dependence_graph()
         {
-            system_dep_graph_node root;
+            std::list<std::list<ecs_system_function*>> output_layer;
 
-            _m_execute_seq.clear();
-            if (!_m_registed_system.empty())
+            // 1. Create dependence relationship
+            std::unordered_map<ecs_system_function*, std::unordered_set<ecs_system_function*>>
+                depend_map;
+            std::unordered_map<ecs_system_function*, std::unordered_set<ecs_system_function*>>
+                inv_depend_map;
+
+            for (auto cur_sys = _m_registed_system.begin();
+                cur_sys != _m_registed_system.end();
+                ++cur_sys)
             {
-                auto current_sys = _m_registed_system.begin();
-                root.add_child(create_node(*(current_sys++)));
-
-                for (; current_sys != _m_registed_system.end(); ++current_sys)
+                for (auto cmp_sys = cur_sys + 1;
+                    cmp_sys != _m_registed_system.end();
+                    ++cmp_sys)
                 {
-
+                    auto dep = (*cur_sys)->check_dependence((*cmp_sys)->m_dependence_list);
+                    if (dep == ecs_system_function::sequence::ONLY_HAPPEND_AFTER)
+                    {
+                        // cur_sys depends on cmp_sys
+                        depend_map[*cmp_sys].insert(*cur_sys);
+                        inv_depend_map[*cur_sys].insert(*cmp_sys);
+                    }
+                    else if (dep == ecs_system_function::sequence::ONLY_HAPPEND_BEFORE)
+                    {
+                        //  cmp_sys depends on cur_sys
+                        depend_map[*cur_sys].insert(*cmp_sys);
+                        inv_depend_map[*cmp_sys].insert(*cur_sys);
+                    }
+                    else if (dep == ecs_system_function::sequence::UNABLE_DETERMINE)
+                        // error, give warning
+                        jeecs::debug::log_error("sequence conflict between system(%p) and system(%p).",
+                            cmp_sys, (*cur_sys));
                 }
             }
 
-            clear_nodes();
+            // ok we got a depend map, calc depend chain
+            std::vector<ecs_system_function*> current_syss = _m_registed_system;
+            size_t not_ready_system_count = current_syss.size();
+
+            while (not_ready_system_count)
+            {
+                output_layer.push_back({});
+                auto& current_layer = output_layer.back();
+
+                for (auto& cur_sys : current_syss)
+                {
+                    bool can_execute_now = true;
+                    if (cur_sys)
+                    {
+                        for (auto dep_sys : inv_depend_map[cur_sys])
+                        {
+                            if (std::find(current_syss.begin(), current_syss.end(), dep_sys) != current_syss.end())
+                            {
+                                // Depend sys not ready, break
+                                can_execute_now = false;
+                                break;
+                            }
+                        }
+                        if (can_execute_now)
+                            current_layer.push_back(cur_sys);
+                    }
+                }
+
+                if (current_layer.empty())
+                {
+                    // Loop depends, give error
+                    jeecs::debug::log_error("World: %p cannot generate system dependences, maybe interdependent?");
+                    // Insert all system to current layer
+
+                    for (auto& cur_sys : current_syss)
+                        if (cur_sys)
+                            current_layer.push_back(cur_sys);
+                }
+
+                assert(current_layer.size() <= not_ready_system_count);
+                not_ready_system_count -= current_layer.size();
+                for (auto ready_systems : current_layer)
+                {
+                    auto fnd = std::find(current_syss.begin(), current_syss.end(), ready_systems);
+                    assert(fnd != current_syss.end());
+                    *fnd = nullptr;
+                }
+            }
+
+            _m_execute_seq = std::move(output_layer);
+
             //auto&& dependence_system_chain = _generate_dependence_chain();
 
             //std::unordered_set<ecs_system_function*> write_conflict_set;
