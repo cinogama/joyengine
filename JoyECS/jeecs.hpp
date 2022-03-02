@@ -23,6 +23,8 @@
 #include <functional>
 #include <type_traits>
 #include <cstddef>
+#include <cmath>
+#include <random>
 
 #ifdef __cpp_lib_execution
 #include <execution>
@@ -723,6 +725,7 @@ namespace jeecs
             inline const T* operator ->() const noexcept { return (const T*)_m_component_addr; }
             inline const T& operator * () const noexcept { return *(const T*)_m_component_addr; }
             inline const T* operator &() const noexcept { return (const T*)_m_component_addr; };
+            inline operator const T* () const noexcept { return (const T*)_m_component_addr; };
         };
         template<typename T>
         struct read_updated : read_updated_base {
@@ -732,6 +735,7 @@ namespace jeecs
             inline const T* operator ->() const noexcept { return (const T*)_m_component_addr; }
             inline const T& operator * () const noexcept { return *(const T*)_m_component_addr; }
             inline const T* operator &() const noexcept { return (const T*)_m_component_addr; };
+            inline operator const T* () const noexcept { return (const T*)_m_component_addr; };
         };
         template<typename T>
         struct write : write_base {
@@ -741,6 +745,7 @@ namespace jeecs
             inline T* operator ->() const noexcept { return (T*)_m_component_addr; }
             inline T& operator * () const noexcept { return *(T*)_m_component_addr; }
             inline T* operator &() const noexcept { return (T*)_m_component_addr; };
+            inline operator T* () const noexcept { return (T*)_m_component_addr; };
         };
 
     private:
@@ -1061,6 +1066,707 @@ namespace jeecs
             // 0. ungister this module components
             typing::type_info::unregister_all_type_in_shutdown();
         }
+    }
+
+    namespace math
+    {
+        static float clamp(float src, float min, float max)
+        {
+            return (src < min) ? (
+                min
+                ) :
+                (
+                    (src > max) ?
+                    (max) :
+                    (src)
+                    );
+        }
+        template<typename T>
+        T lerp(const T& va, const T& vb, float deg)
+        {
+            return va * (1.0f - deg) + vb * deg;
+        }
+
+        template<typename T>
+        T random(T from, T to)
+        {
+            static std::random_device rd;
+            static std::mt19937 gen(rd());
+
+            if constexpr (std::is_floating_point<T>::value)
+            {
+                std::uniform_real_distribution<> dis(from, to);
+                return (T)dis(gen);
+            }
+            else
+            {
+                std::uniform_int_distribution<> dis(from, to);
+                return (T)dis(gen);
+            }
+
+        }
+
+        struct _basevec2
+        {
+            float x, y;
+            constexpr _basevec2(float _x, float _y) noexcept :x(_x), y(_y) {}
+        };
+        struct _basevec3
+        {
+            float x, y, z;
+            constexpr _basevec3(float _x, float _y, float _z) noexcept :x(_x), y(_y), z(_z) {}
+        };
+        struct _basevec4
+        {
+            float x, y, z, w;
+            constexpr _basevec4(float _x, float _y, float _z, float _w) noexcept :x(_x), y(_y), z(_z), w(_w) {}
+        };
+
+        struct vec2 : public _basevec2
+        {
+            constexpr vec2(float _x = 0.f, float _y = 0.f) noexcept
+                :_basevec2(_x, _y) {}
+            constexpr vec2(const vec2& _v2)noexcept
+                :_basevec2(_v2.x, _v2.y) {}
+            constexpr vec2(vec2&& _v2)noexcept
+                :_basevec2(_v2.x, _v2.y) {}
+
+            constexpr vec2(const _basevec3& _v3)noexcept
+                :_basevec2(_v3.x, _v3.y) {}
+            constexpr vec2(_basevec3&& _v3)noexcept
+                :_basevec2(_v3.x, _v3.y) {}
+            constexpr vec2(const _basevec4& _v4)noexcept
+                :_basevec2(_v4.x, _v4.y) {}
+            constexpr vec2(_basevec4&& _v4)noexcept
+                :_basevec2(_v4.x, _v4.y) {}
+
+            // + - * / with another vec2
+            inline constexpr vec2 operator + (const vec2& _v2) const noexcept
+            {
+                return vec2(x + _v2.x, y + _v2.y);
+            }
+            inline constexpr vec2 operator - (const vec2& _v2) const noexcept
+            {
+                return vec2(x - _v2.x, y - _v2.y);
+            }
+            inline constexpr vec2 operator - () const noexcept
+            {
+                return vec2(-x, -y);
+            }
+            inline constexpr vec2 operator + () const noexcept
+            {
+                return vec2(x, y);
+            }
+            inline constexpr vec2 operator * (const vec2& _v2) const noexcept
+            {
+                return vec2(x * _v2.x, y * _v2.y);
+            }
+            inline constexpr vec2 operator / (const vec2& _v2) const noexcept
+            {
+                return vec2(x / _v2.x, y / _v2.y);
+            }
+            // * / with float
+            inline constexpr vec2 operator * (float _f) const noexcept
+            {
+                return vec2(x * _f, y * _f);
+            }
+            inline constexpr vec2 operator / (float _f) const noexcept
+            {
+                return vec2(x / _f, y / _f);
+            }
+
+            inline constexpr vec2& operator = (const vec2& _v2) noexcept = default;
+            inline constexpr vec2& operator += (const vec2& _v2) noexcept
+            {
+                x += _v2.x;
+                y += _v2.y;
+                return *this;
+            }
+            inline constexpr vec2& operator -= (const vec2& _v2) noexcept
+            {
+                x -= _v2.x;
+                y -= _v2.y;
+                return *this;
+            }
+            inline constexpr vec2& operator *= (const vec2& _v2) noexcept
+            {
+                x *= _v2.x;
+                y *= _v2.y;
+                return *this;
+            }
+            inline constexpr vec2& operator *= (float _f) noexcept
+            {
+                x *= _f;
+                y *= _f;
+                return *this;
+            }
+            inline constexpr vec2& operator /= (const vec2& _v2) noexcept
+            {
+                x /= _v2.x;
+                y /= _v2.y;
+                return *this;
+            }
+            inline constexpr vec2& operator /= (float _f) noexcept
+            {
+                x /= _f;
+                y /= _f;
+                return *this;
+            }
+            // == !=
+            inline constexpr bool operator == (const vec2& _v2) const noexcept
+            {
+                return x == _v2.x && y == _v2.y;
+            }
+            inline constexpr bool operator != (const vec2& _v2) const noexcept
+            {
+                return x != _v2.x || y != _v2.y;
+            }
+
+            // length/ unit/ dot/ cross
+            inline float length() const noexcept
+            {
+                return sqrt(x * x + y * y);
+            }
+            inline vec2 unit() const noexcept
+            {
+                float vlength = length();
+                if (vlength != 0.f)
+                    return vec2(x / vlength, y / vlength);
+                return vec2();
+            }
+            inline constexpr float dot(const vec2& _v2) const noexcept
+            {
+                return x * _v2.x + y * _v2.y;
+            }
+            /*inline constexpr vec2 cross(const vec2& _v2) const noexcept
+            {
+
+            }*/
+
+        };
+        inline static constexpr vec2 operator * (float _f, const vec2& _v2) noexcept
+        {
+            return vec2(_v2.x * _f, _v2.y * _f);
+        }
+
+        struct vec3 :public _basevec3
+        {
+            constexpr vec3(float _x = 0.f, float _y = 0.f, float _z = 0.f)noexcept
+                :_basevec3(_x, _y, _z) {}
+            constexpr vec3(const vec3& _v3)noexcept
+                :_basevec3(_v3.x, _v3.y, _v3.z) {}
+            constexpr vec3(vec3&& _v3)noexcept
+                :_basevec3(_v3.x, _v3.y, _v3.z) {}
+
+            constexpr vec3(const _basevec2& _v2)noexcept
+                :_basevec3(_v2.x, _v2.y, 0.f) {}
+            constexpr vec3(_basevec2&& _v2)noexcept
+                :_basevec3(_v2.x, _v2.y, 0.f) {}
+            constexpr vec3(const _basevec4& _v4)noexcept
+                :_basevec3(_v4.x, _v4.y, _v4.z) {}
+            constexpr vec3(_basevec4&& _v4)noexcept
+                :_basevec3(_v4.x, _v4.y, _v4.z) {}
+
+            // + - * / with another vec3
+            inline constexpr vec3 operator + (const vec3& _v3) const noexcept
+            {
+                return vec3(x + _v3.x, y + _v3.y, z + _v3.z);
+            }
+            inline constexpr vec3 operator - (const vec3& _v3) const noexcept
+            {
+                return vec3(x - _v3.x, y - _v3.y, z - _v3.z);
+            }
+            inline constexpr vec3 operator - () const noexcept
+            {
+                return vec3(-x, -y, -z);
+            }
+            inline constexpr vec3 operator + () const noexcept
+            {
+                return vec3(x, y, z);
+            }
+            inline constexpr vec3 operator * (const vec3& _v3) const noexcept
+            {
+                return vec3(x * _v3.x, y * _v3.y, z * _v3.z);
+            }
+            inline constexpr vec3 operator / (const vec3& _v3) const noexcept
+            {
+                return vec3(x / _v3.x, y / _v3.y, z / _v3.z);
+            }
+            // * / with float
+            inline constexpr vec3 operator * (float _f) const noexcept
+            {
+                return vec3(x * _f, y * _f, z * _f);
+            }
+            inline constexpr vec3 operator / (float _f) const noexcept
+            {
+                return vec3(x / _f, y / _f, z / _f);
+            }
+
+            inline constexpr vec3& operator = (const vec3& _v3) noexcept = default;
+            inline constexpr vec3& operator += (const vec3 & _v3) noexcept
+            {
+                x += _v3.x;
+                y += _v3.y;
+                z += _v3.z;
+                return *this;
+            }
+            inline constexpr vec3& operator -= (const vec3 & _v3) noexcept
+            {
+                x -= _v3.x;
+                y -= _v3.y;
+                z -= _v3.z;
+                return *this;
+            }
+            inline constexpr vec3& operator *= (const vec3 & _v3) noexcept
+            {
+                x *= _v3.x;
+                y *= _v3.y;
+                z *= _v3.z;
+                return *this;
+            }
+            inline constexpr vec3& operator *= (float _f) noexcept
+            {
+                x *= _f;
+                y *= _f;
+                z *= _f;
+                return *this;
+            }
+            inline constexpr vec3& operator /= (const vec3 & _v3) noexcept
+            {
+                x /= _v3.x;
+                y /= _v3.y;
+                z /= _v3.z;
+                return *this;
+            }
+            inline constexpr vec3& operator /= (float _f) noexcept
+            {
+                x /= _f;
+                y /= _f;
+                z /= _f;
+                return *this;
+            }
+            // == !=
+            inline constexpr bool operator == (const vec3& _v3) const noexcept
+            {
+                return x == _v3.x && y == _v3.y && z == _v3.z;
+            }
+            inline constexpr bool operator != (const vec3& _v3) const noexcept
+            {
+                return x != _v3.x || y != _v3.y || z != _v3.z;
+            }
+
+            // length/ unit/ dot/ cross
+            inline float length() const noexcept
+            {
+                return std::sqrt(x * x + y * y + z * z);
+            }
+            inline vec3 unit() const noexcept
+            {
+                float vlength = length();
+                if (vlength != 0.f)
+                    return vec3(x / vlength, y / vlength, z / vlength);
+                return vec3();
+            }
+            inline constexpr float dot(const vec3& _v3) const noexcept
+            {
+                return x * _v3.x + y * _v3.y + z * _v3.z;
+            }
+            inline constexpr vec3 cross(const vec3& _v3) const noexcept
+            {
+                return vec3(
+                    y * _v3.z - z * _v3.y,
+                    z * _v3.x - x * _v3.z,
+                    x * _v3.y - y * _v3.x);
+            }
+
+        };
+        inline static constexpr vec3 operator * (float _f, const vec3& _v3) noexcept
+        {
+            return vec3(_v3.x * _f, _v3.y * _f, _v3.z * _f);
+        }
+
+        struct vec4 :public _basevec4
+        {
+            constexpr vec4(float _x = 0.f, float _y = 0.f, float _z = 0.f, float _w = 0.f)noexcept
+                :_basevec4(_x, _y, _z, _w) {}
+            constexpr vec4(const vec4& _v4)noexcept
+                :_basevec4(_v4.x, _v4.y, _v4.z, _v4.w) {}
+            constexpr vec4(vec4&& _v4)noexcept
+                :_basevec4(_v4.x, _v4.y, _v4.z, _v4.w) {}
+
+            constexpr vec4(const _basevec2& _v2)noexcept
+                :_basevec4(_v2.x, _v2.y, 0.f, 0.f) {}
+            constexpr vec4(_basevec2&& _v2)noexcept
+                :_basevec4(_v2.x, _v2.y, 0.f, 0.f) {}
+            constexpr vec4(const _basevec3& _v3)noexcept
+                :_basevec4(_v3.x, _v3.y, _v3.z, 0.f) {}
+            constexpr vec4(_basevec3&& _v3)noexcept
+                :_basevec4(_v3.x, _v3.y, _v3.z, 0.f) {}
+
+            // + - * / with another vec4
+            inline constexpr vec4 operator + (const vec4& _v4) const noexcept
+            {
+                return vec4(x + _v4.x, y + _v4.y, z + _v4.z, w + _v4.w);
+            }
+            inline constexpr vec4 operator - (const vec4& _v4) const noexcept
+            {
+                return vec4(x - _v4.x, y - _v4.y, z - _v4.z, w - _v4.w);
+            }
+            inline constexpr vec4 operator - () const noexcept
+            {
+                return vec4(-x, -y, -z, -w);
+            }
+            inline constexpr vec4 operator + () const noexcept
+            {
+                return vec4(x, y, z, w);
+            }
+            inline constexpr vec4 operator * (const vec4& _v4) const noexcept
+            {
+                return vec4(x * _v4.x, y * _v4.y, z * _v4.z, w * _v4.w);
+            }
+            inline constexpr vec4 operator / (const vec4& _v4) const noexcept
+            {
+                return vec4(x / _v4.x, y / _v4.y, z / _v4.z, w / _v4.w);
+            }
+            // * / with float
+            inline constexpr vec4 operator * (float _f) const noexcept
+            {
+                return vec4(x * _f, y * _f, z * _f, w * _f);
+            }
+            inline constexpr vec4 operator / (float _f) const noexcept
+            {
+                return vec4(x / _f, y / _f, z / _f, w / _f);
+            }
+
+            inline constexpr vec4& operator = (const vec4& _v4) noexcept = default;
+            inline constexpr vec4& operator += (const vec4 & _v4) noexcept
+            {
+                x += _v4.x;
+                y += _v4.y;
+                z += _v4.z;
+                w += _v4.w;
+                return *this;
+            }
+            inline constexpr vec4& operator -= (const vec4 & _v4) noexcept
+            {
+                x -= _v4.x;
+                y -= _v4.y;
+                z -= _v4.z;
+                w -= _v4.w;
+                return *this;
+            }
+            inline constexpr vec4& operator *= (const vec4 & _v4) noexcept
+            {
+                x *= _v4.x;
+                y *= _v4.y;
+                z *= _v4.z;
+                w *= _v4.w;
+                return *this;
+            }
+            inline constexpr vec4& operator *= (float _f) noexcept
+            {
+                x *= _f;
+                y *= _f;
+                z *= _f;
+                w *= _f;
+                return *this;
+            }
+            inline constexpr vec4& operator /= (const vec4 & _v4) noexcept
+            {
+                x /= _v4.x;
+                y /= _v4.y;
+                z /= _v4.z;
+                w /= _v4.w;
+                return *this;
+            }
+            inline constexpr vec4& operator /= (float _f) noexcept
+            {
+                x /= _f;
+                y /= _f;
+                z /= _f;
+                w /= _f;
+                return *this;
+            }
+
+            // == !=
+            inline constexpr bool operator == (const vec4& _v4) const noexcept
+            {
+                return x == _v4.x && y == _v4.y && z == _v4.z && w == _v4.w;
+            }
+            inline constexpr bool operator != (const vec4& _v4) const noexcept
+            {
+                return x != _v4.x || y != _v4.y || z != _v4.z || w != _v4.w;
+            }
+
+            // length/ unit/ dot/ cross
+            inline float length() const noexcept
+            {
+                return sqrt(x * x + y * y + z * z + w * w);
+            }
+            inline vec4 unit() const noexcept
+            {
+                float vlength = length();
+                if (vlength != 0.f)
+                    return vec4(x / vlength, y / vlength, z / vlength, w / vlength);
+                return vec4();
+            }
+            inline constexpr float dot(const vec4& _v4) const noexcept
+            {
+                return x * _v4.x + y * _v4.y + z * _v4.z + w * _v4.w;
+            }
+            /*inline constexpr vec4 cross(const vec4& _v4) const noexcept
+            {
+            }*/
+
+        };
+        inline static constexpr vec4 operator * (float _f, const vec4& _v4) noexcept
+        {
+            return vec4(_v4.x * _f, _v4.y * _f, _v4.z * _f, _v4.w * _f);
+        }
+
+        struct quat
+        {
+            constexpr static float RAD2DEG = 57.29578f;
+            float x, y, z, w;
+
+            inline constexpr bool operator == (const quat& q) const noexcept
+            {
+                return x == q.x && y == q.y && z == q.z && w == q.w;
+            }
+            inline constexpr bool operator != (const quat& q) const noexcept
+            {
+                return x != q.x || y != q.y || z != q.z || w != q.w;
+            }
+
+            constexpr quat(float _x = 0.f, float _y = 0.f, float _z = 0.f, float _w = 1.f) noexcept
+                :x(_x / (_x * _x + _y * _y + _z * _z + _w * _w))
+                , y(_y / (_x * _x + _y * _y + _z * _z + _w * _w))
+                , z(_z / (_x * _x + _y * _y + _z * _z + _w * _w))
+                , w(_w / (_x * _x + _y * _y + _z * _z + _w * _w)) { }
+
+            quat(float yaw, float pitch, float roll) noexcept
+            {
+                set_euler_angle(yaw, pitch, roll);
+            }
+
+            inline void create_matrix(float* pMatrix) const noexcept
+            {
+                // 转换为矩阵
+                if (!pMatrix) return;
+                float m_x = x;
+                float m_y = y;
+                float m_z = z;
+                float m_w = w;
+                //第一行
+                pMatrix[0] = 1.0f - 2.0f * (m_y * m_y + m_z * m_z);
+                pMatrix[1] = 2.0f * (m_x * m_y + m_z * m_w);
+                pMatrix[2] = 2.0f * (m_x * m_z - m_y * m_w);
+                pMatrix[3] = 0.0f;
+
+                // 第二行
+                pMatrix[4] = 2.0f * (m_x * m_y - m_z * m_w);
+                pMatrix[5] = 1.0f - 2.0f * (m_x * m_x + m_z * m_z);
+                pMatrix[6] = 2.0f * (m_z * m_y + m_x * m_w);
+                pMatrix[7] = 0.0f;
+
+                //第三行
+                pMatrix[8] = 2.0f * (m_x * m_z + m_y * m_w);
+                pMatrix[9] = 2.0f * (m_y * m_z - m_x * m_w);
+                pMatrix[10] = 1.0f - 2.0f * (m_x * m_x + m_y * m_y);
+                pMatrix[11] = 0.0f;
+
+                //第四行
+                pMatrix[12] = 0;
+                pMatrix[13] = 0;
+                pMatrix[14] = 0;
+                pMatrix[15] = 1.0f;
+            }
+            inline void create_inv_matrix(float* pMatrix) const noexcept
+            {
+                // 转换为矩阵
+                if (!pMatrix) return;
+                float m_x = x;
+                float m_y = y;
+                float m_z = z;
+                float m_w = -w;
+                //第一行
+                pMatrix[0] = 1.0f - 2.0f * (m_y * m_y + m_z * m_z);
+                pMatrix[1] = 2.0f * (m_x * m_y + m_z * m_w);
+                pMatrix[2] = 2.0f * (m_x * m_z - m_y * m_w);
+                pMatrix[3] = 0.0f;
+
+                // 第二行
+                pMatrix[4] = 2.0f * (m_x * m_y - m_z * m_w);
+                pMatrix[5] = 1.0f - 2.0f * (m_x * m_x + m_z * m_z);
+                pMatrix[6] = 2.0f * (m_z * m_y + m_x * m_w);
+                pMatrix[7] = 0.0f;
+
+                //第三行
+                pMatrix[8] = 2.0f * (m_x * m_z + m_y * m_w);
+                pMatrix[9] = 2.0f * (m_y * m_z - m_x * m_w);
+                pMatrix[10] = 1.0f - 2.0f * (m_x * m_x + m_y * m_y);
+                pMatrix[11] = 0.0f;
+
+                //第四行
+                pMatrix[12] = 0;
+                pMatrix[13] = 0;
+                pMatrix[14] = 0;
+                pMatrix[15] = 1.0f;
+            }
+
+            inline constexpr float dot(const quat& _quat) const noexcept
+            {
+                return x * _quat.x + y * _quat.y + z * _quat.z + w * _quat.w;
+            }
+            inline void set_euler_angle(float yaw, float pitch, float roll) noexcept
+            {
+                yaw = yaw / RAD2DEG;
+                pitch = pitch / RAD2DEG;
+                roll = roll / RAD2DEG;
+
+                float angle;
+                float sinRoll, sinPitch, sinYaw, cosRoll, cosPitch, cosYaw;
+
+                angle = yaw * 0.5f;
+                sinYaw = sin(angle);
+                cosYaw = cos(angle);
+                angle = pitch * 0.5f;
+                sinPitch = sin(angle);
+                cosPitch = cos(angle);
+                angle = roll * 0.5f;
+                sinRoll = sin(angle);
+                cosRoll = cos(angle);
+
+                float _y = cosRoll * sinPitch * cosYaw + sinRoll * cosPitch * sinYaw;
+                float _x = cosRoll * cosPitch * sinYaw - sinRoll * sinPitch * cosYaw;
+                float _z = sinRoll * cosPitch * cosYaw - cosRoll * sinPitch * sinYaw;
+                float _w = cosRoll * cosPitch * cosYaw + sinRoll * sinPitch * sinYaw;
+
+                float mag = _x * _x + _y * _y + _z * _z + _w * _w;
+
+                x = _x / mag;
+                y = _y / mag;
+                z = _z / mag;
+                w = _w / mag;
+            }
+            inline constexpr void set(float _x, float _y, float _z, float _w) noexcept
+            {
+                x = _x;
+                y = _y;
+                z = _z;
+                w = _w;
+            }
+
+            static inline quat euler(float x, float y, float z) noexcept
+            {
+                quat na;
+                na.set_euler_angle(x, y, z);
+                return na;
+            }
+            static inline quat euler(const vec3& v3) noexcept
+            {
+                quat na;
+                na.set_euler_angle(v3.x, v3.y, v3.z);
+                return na;
+            }
+            static inline quat axis_angle(const vec3& a, float arg) noexcept
+            {
+                auto sv = sin(arg / 2.0f / RAD2DEG);
+                auto cv = cos(arg / 2.0f / RAD2DEG);
+                return quat(a.x * sv, a.y * sv, a.z * sv, cv);
+            }
+
+            static inline constexpr quat lerp(const quat& a, const quat& b, float t)
+            {
+                return quat((1 - t) * a.x + t * b.x,
+                    (1 - t) * a.y + t * b.y,
+                    (1 - t) * a.z + t * b.z,
+                    (1 - t) * a.w + t * b.w);
+            }
+            static inline quat slerp(const quat& a, const quat& b, float t)
+            {
+                float cos_theta = a.dot(b);
+
+                // if B is on opposite hemisphere from A, use -B instead
+                float sign;
+                if (cos_theta < 0.f)
+                {
+                    cos_theta = -cos_theta;
+                    sign = -1.f;
+                }
+                else sign = 1.f;
+                float c1, c2;
+                if (cos_theta > 1.f - FLT_EPSILON)
+                {
+                    // if q2 is (within precision limits) the same as q1,
+                    // just linear interpolate between A and B.
+                    c2 = t;
+                    c1 = 1.f - t;
+                }
+                else
+                {
+                    // float theta = gFloat::ArcCosTable(cos_theta);
+                    // faster than table-based :
+                    //const float theta = myacos(cos_theta);
+                    float theta = acos(cos_theta);
+                    float sin_theta = sin(theta);
+                    float t_theta = t * theta;
+                    float inv_sin_theta = 1.f / sin_theta;
+                    c2 = sin(t_theta) * inv_sin_theta;
+                    c1 = sin(theta - t_theta) * inv_sin_theta;
+                }
+                c2 *= sign; // or c1 *= sign
+                            // just affects the overrall sign of the output
+                            // interpolate
+                return quat(a.x * c1 + b.x * c2, a.y * c1 + b.y * c2, a.z * c1 + b.z * c2, a.w * c1 + b.w * c2);
+            }
+            static inline float delta_angle(const quat& lhs, const quat& rhs)
+            {
+                float cos_theta = lhs.dot(rhs);
+                // if B is on opposite hemisphere from A, use -B instead
+                if (cos_theta < 0.f)
+                {
+                    cos_theta = -cos_theta;
+                }
+                float theta = acos(cos_theta);
+                return 2 * RAD2DEG * theta;
+            }
+
+            inline constexpr quat conjugate() const noexcept
+            {
+                return quat(-x, -y, -z, w);
+            }
+            inline constexpr quat inverse() const noexcept
+            {
+                return quat(-x, -y, -z, w);
+            }
+            inline vec3 euler_angle() const noexcept
+            {
+                float yaw = atan2(2 * (w * x + z * y), 1 - 2 * (x * x + y * y));
+                float pitch = asin(clamp(2 * (w * y - x * z), -1.0f, 1.0f));
+                float roll = atan2(2 * (w * z + x * y), 1 - 2 * (z * z + y * y));
+                return vec3(RAD2DEG * yaw, RAD2DEG * pitch, RAD2DEG * roll);
+            }
+
+            inline constexpr quat operator * (const quat& _quat) const noexcept
+            {
+                float w1 = w;
+                float w2 = _quat.w;
+
+                vec3 v1(x, y, z);
+                vec3 v2(_quat.x, _quat.y, _quat.z);
+                float w3 = w1 * w2 - v1.dot(v2);
+                vec3 v3 = v1.cross(v2) + w1 * v2 + w2 * v1;
+                return quat(v3.x, v3.y, v3.z, w3);
+            }
+            inline constexpr vec3 operator *(const vec3& _v3) const noexcept
+            {
+                vec3 u(x, y, z);
+                return 2.0f * u.dot(_v3) * u
+                    + (w * w - u.dot(u)) * _v3
+                    + 2.0f * w * u.cross(_v3);
+            }
+        };
     }
 
 }

@@ -960,55 +960,6 @@ namespace jeecs_impl
 
         }
 
-        //struct system_dep_graph_node
-        //{
-        //    ecs_system_function* m_ecs_system = nullptr;
-
-        //    system_dep_graph_node* m_parent = nullptr;
-        //    system_dep_graph_node* m_child = nullptr;
-        //    system_dep_graph_node* m_sibling = nullptr;
-
-        //    void add_child(system_dep_graph_node* node)
-        //    {
-        //        if (m_child)
-        //        {
-        //            auto* child = m_child;
-        //            while (child)
-        //            {
-        //                if (nullptr == child->m_sibling)
-        //                {
-        //                    child->m_sibling = node;
-        //                    node->m_parent = this;
-        //                    break;
-        //                }
-        //                child = child->m_sibling;
-        //            }
-        //        }
-        //        else
-        //            m_child = node;
-
-        //    }
-
-        //};
-
-        //std::list<system_dep_graph_node*> m_created_nodes;
-
-        //system_dep_graph_node* create_node(ecs_system_function* f)
-        //{
-        //    auto* node = new system_dep_graph_node;
-        //    node->m_ecs_system = f;
-
-        //    m_created_nodes.push_back(node);
-        //    return node;
-        //}
-        //void clear_nodes()
-        //{
-        //    for (auto* node : m_created_nodes)
-        //        delete node;
-
-        //    m_created_nodes.clear();
-        //}
-
         void build_dependence_graph()
         {
             std::list<std::list<ecs_system_function*>> output_layer;
@@ -1097,124 +1048,6 @@ namespace jeecs_impl
             }
 
             _m_execute_seq = std::move(output_layer);
-
-            //auto&& dependence_system_chain = _generate_dependence_chain();
-
-            //std::unordered_set<ecs_system_function*> write_conflict_set;
-            //std::list<std::list<ecs_system_function*>> output_layer;
-
-            //// Begin to merge chain to layer..
-
-            //for (auto* esystem : dependence_system_chain)
-            //{
-            //    if (output_layer.size())
-            //    {
-            //        bool write_conflict_flag = false;
-
-            //        for (auto* last_layer_system : output_layer.back())
-            //        {
-            //            ecs_system_function::sequence seq = esystem->check_dependence(last_layer_system->m_dependence_list);
-            //            switch (seq)
-            //            {
-            //            case ecs_system_function::CAN_HAPPEND_SAME_TIME:
-            //                // Do nothing
-            //                break;
-            //            case ecs_system_function::ONLY_HAPPEND_AFTER:
-            //                // Create new layer to place this system;
-            //                goto jmp_here_to_insert_next_system;
-            //                break;
-            //            case ecs_system_function::sequence::WRITE_CONFLICT:
-            //                write_conflict_flag = true;
-            //                break;
-            //            case ecs_system_function::ONLY_HAPPEND_BEFORE:
-            //            case ecs_system_function::UNABLE_DETERMINE:
-            //                break;
-            //            default:
-            //                assert(false);
-            //                break;
-            //            }
-            //        }
-
-            //        // OK, Can happend at same time,
-
-            //        if (write_conflict_flag)
-            //            write_conflict_set.insert(esystem);
-            //        else
-            //            // Insert this system to wc_set, when this seq end, make layers
-            //            output_layer.back().push_back(esystem);
-            //    }
-            //    else
-            //    {
-            //        // Only new layer can be here
-            //    jmp_here_to_insert_next_system:;
-
-            //        std::list<std::list<ecs_system_function*>> write_conflict_lists;
-            //        for (auto* esys : write_conflict_set)
-            //        {
-            //            bool has_insert_to_layer = false;
-            //            for (auto& layers : write_conflict_lists)
-            //            {
-            //                bool can_not_happend_at_same_time = false;
-            //                for (auto* lsys : layers)
-            //                {
-            //                    auto seq = esys->check_dependence(lsys->m_dependence_list);
-            //                    if (seq != ecs_system_function::sequence::CAN_HAPPEND_SAME_TIME)
-            //                    {
-            //                        can_not_happend_at_same_time = true;
-            //                        break;
-            //                    }
-            //                }
-            //                if (!can_not_happend_at_same_time)
-            //                {
-            //                    has_insert_to_layer = true;
-            //                    layers.push_back(esys);
-            //                    break;
-            //                }
-            //            }
-
-            //            if (!has_insert_to_layer)
-            //                write_conflict_lists.push_back({ esys });
-            //        }
-
-            //        write_conflict_set.clear();
-            //        output_layer.insert(output_layer.end(), write_conflict_lists.begin(), write_conflict_lists.end());
-
-            //        output_layer.push_back({ esystem });
-            //    }
-
-            //}
-
-            //std::list<std::list<ecs_system_function*>> write_conflict_lists;
-            //for (auto* esys : write_conflict_set)
-            //{
-            //    bool has_insert_to_layer = false;
-            //    for (auto& layers : write_conflict_lists)
-            //    {
-            //        bool can_not_happend_at_same_time = false;
-            //        for (auto* lsys : layers)
-            //        {
-            //            auto seq = esys->check_dependence(lsys->m_dependence_list);
-            //            if (seq != ecs_system_function::sequence::CAN_HAPPEND_SAME_TIME)
-            //            {
-            //                can_not_happend_at_same_time = true;
-            //                break;
-            //            }
-            //        }
-            //        if (!can_not_happend_at_same_time)
-            //        {
-            //            has_insert_to_layer = true;
-            //            layers.push_back(esys);
-            //            break;
-            //        }
-            //    }
-
-            //    if (!has_insert_to_layer)
-            //        write_conflict_lists.push_back({ esys });
-            //}
-            //write_conflict_set.clear();
-            //output_layer.insert(output_layer.end(), write_conflict_lists.begin(), write_conflict_lists.end());
-
-            //_m_execute_seq = std::move(output_layer);
         }
 
         void display_execute_seq()
@@ -1303,6 +1136,9 @@ namespace jeecs_impl
                 }
 
                 // Ok, execute chain:
+
+                auto current = je_clock_time();
+
                 for (auto& seq : _m_execute_seq)
                 {
                     std::for_each(
@@ -1316,6 +1152,10 @@ namespace jeecs_impl
                         }
                     );
                 }
+
+                auto endwork = je_clock_time();
+
+                jeecs::debug::log_warn("A round of system scheduler: %f", endwork - current);
             }
             else
             {

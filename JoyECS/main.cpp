@@ -33,45 +33,82 @@ namespace jeecs // Transform
 
         struct LocalPosition
         {
-            float x = 0, y = 0, z = 0;
+            math::vec3 pos;
         };
         struct LocalRotation
         {
-            float x = 0, y = 0, z = 0, w = 1.f;
+            math::quat rot;
         };
         struct LocalScale
         {
-            float x = 1.f, y = 1.f, z = 1.f;
+            math::vec3 scale;
         };
 
         struct ChildAnchor
         {
-            jeecs::typing::uid_t anchor_id = je_uid_generate();
+            typing::uid_t anchor_id = je_uid_generate();
         };
 
         struct LocalToParent
         {
-            float x, y, z;
-            float scale_x, scale_y, scale_z;
-            float rx, ry, rz, rw;
+            math::vec3 pos;
+            math::vec3 scale;
+            math::quat rot;
 
-            jeecs::typing::uid_t parent_uid;
+            typing::uid_t parent_uid;
         };
 
         struct LocalToWorld
         {
-            float x, y, z;
-            float scale_x, scale_y, scale_z;
-            float rx, ry, rz, rw;
+            math::vec3 pos;
+            math::vec3 scale;
+            math::quat rot;
         };
+        static_assert(offsetof(LocalToParent, pos) == offsetof(LocalToWorld, pos));
+        static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
+        static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
 
         struct Translation
         {
             float object2world[16] = {};
-            float rotation[16] = {};
+            float objectrotation[16] = {};
+            math::quat rotation;
+
+            inline void set_position(const math::vec3& _v3) noexcept
+            {
+                object2world[0 + 3 * 4] = _v3.x;
+                object2world[1 + 3 * 4] = _v3.y;
+                object2world[2 + 3 * 4] = _v3.z;
+            }
+
+            inline void set_scale(const math::vec3& _v3) noexcept
+            {
+                object2world[0 + 0 * 4] = _v3.x;
+                object2world[1 + 1 * 4] = _v3.y;
+                object2world[2 + 2 * 4] = _v3.z;
+                object2world[3 + 3 * 4] = 1.f;
+            }
+
+            inline constexpr math::vec3 get_position() const noexcept
+            {
+                return math::vec3(
+                    object2world[0 + 3 * 4],
+                    object2world[1 + 3 * 4],
+                    object2world[2 + 3 * 4]);
+            }
+            inline constexpr math::vec3 get_scale() const noexcept
+            {
+                return math::vec3(
+                    object2world[0 + 0 * 4],
+                    object2world[1 + 1 * 4],
+                    object2world[2 + 2 * 4]);
+            }
         };
     }
-
+    namespace Physics
+    {
+        // Entity with physics effect will 
+    }
 }
 
 using namespace jeecs;
@@ -81,7 +118,7 @@ struct TranslationUpdatingSystem :public game_system
 {
     struct anchor
     {
-        const Translation* m_parent_translation;
+        const Translation* m_translation;
     };
 
     std::unordered_map<typing::uid_t, anchor> m_anchor_list;
@@ -92,7 +129,7 @@ struct TranslationUpdatingSystem :public game_system
             {
                 system_write(&m_anchor_list),
             });
-        register_system_func(&TranslationUpdatingSystem::UpdateChildAnchor,
+        register_system_func(&TranslationUpdatingSystem::UpdateChildAnchorTranslation,
             {
                 system_write(&m_anchor_list),
                 after(&TranslationUpdatingSystem::PreUpdateChildAnchor),
@@ -105,12 +142,10 @@ struct TranslationUpdatingSystem :public game_system
         register_system_func(&TranslationUpdatingSystem::UpdateLocalScaleToWorld,
             {
                 except<LocalToParent>(),
-                after(&TranslationUpdatingSystem::UpdateLocalPositionToWorld),
             });
         register_system_func(&TranslationUpdatingSystem::UpdateLocalRotationToWorld,
             {
                 except<LocalToParent>(),
-                after(&TranslationUpdatingSystem::UpdateLocalScaleToWorld),
             });
         register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslation,
             {
@@ -124,76 +159,78 @@ struct TranslationUpdatingSystem :public game_system
         register_system_func(&TranslationUpdatingSystem::UpdateLocalScaleToParent,
             {
                 except<LocalToWorld>(),
-                after(&TranslationUpdatingSystem::UpdateLocalPositionToParent),
             });
         register_system_func(&TranslationUpdatingSystem::UpdateLocalRotationToParent,
             {
                 except<LocalToWorld>(),
-                after(&TranslationUpdatingSystem::UpdateLocalScaleToParent),
             });
         register_system_func(&TranslationUpdatingSystem::UpdateParentToTranslation,
             {
                 except<LocalToWorld>(),
+                system_read_updated(&m_anchor_list)
             });
     }
     void PreUpdateChildAnchor()
     {
         m_anchor_list.clear();
     }
-    void UpdateChildAnchor(read<ChildAnchor> anchor, read<Translation> trans)
+    void UpdateChildAnchorTranslation(read<ChildAnchor> anchor, read<Translation> trans)
     {
-        m_anchor_list[anchor->anchor_id].m_parent_translation = &trans;
+        m_anchor_list[anchor->anchor_id].m_translation = trans;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
 
     void UpdateLocalPositionToWorld(const LocalPosition* pos, LocalToWorld* l2w)
     {
-        l2w->x = pos->x;
-        l2w->y = pos->y;
-        l2w->z = pos->z;
+        l2w->pos = pos->pos;
     }
     void UpdateLocalScaleToWorld(const LocalScale* scal, LocalToWorld* l2w)
     {
-        l2w->scale_x = scal->x;
-        l2w->scale_y = scal->y;
-        l2w->scale_z = scal->z;
+        l2w->scale = scal->scale;
     }
     void UpdateLocalRotationToWorld(const LocalRotation* rot, LocalToWorld* l2w)
     {
-        l2w->rx = rot->x;
-        l2w->ry = rot->y;
-        l2w->rz = rot->z;
-        l2w->rw = rot->w;
+        l2w->rot = rot->rot;
     }
     void UpdateWorldToTranslation(const LocalToWorld* l2w, Translation* trans)
     {
-        // TODO
+        trans->rotation = l2w->rot;
+        trans->rotation.create_matrix(trans->objectrotation);
+        trans->set_position(l2w->pos);
+        trans->set_scale(l2w->scale);
+
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
     void UpdateLocalPositionToParent(const LocalPosition* pos, LocalToParent* l2p)
     {
-        l2p->x = pos->x;
-        l2p->y = pos->y;
-        l2p->z = pos->z;
+        l2p->pos = pos->pos;
     }
     void UpdateLocalScaleToParent(const LocalScale* scal, LocalToParent* l2p)
     {
-        l2p->scale_x = scal->x;
-        l2p->scale_y = scal->y;
-        l2p->scale_z = scal->z;
+        l2p->scale = scal->scale;
     }
     void UpdateLocalRotationToParent(const LocalRotation* rot, LocalToParent* l2p)
     {
-        l2p->rx = rot->x;
-        l2p->ry = rot->y;
-        l2p->rz = rot->z;
-        l2p->rw = rot->w;
+        l2p->rot = rot->rot;
     }
     void UpdateParentToTranslation(const LocalToParent* l2p, Translation* trans)
     {
-        // TODO
+        // Get parent's translation, then apply them.
+        auto fnd = m_anchor_list.find(l2p->parent_uid);
+        if (fnd != m_anchor_list.end())
+        {
+            const Translation* parent_trans = fnd->second.m_translation;
+            trans->rotation = parent_trans->rotation * l2p->rot;
+            trans->rotation.create_matrix(trans->objectrotation);
+            trans->set_position(parent_trans->rotation * l2p->pos + parent_trans->get_position());
+            trans->set_scale(l2p->scale); // TODO: need apply scale?   
+        }
+        else
+        {
+            // Parent is not exist.. let it destroy?
+        }
     }
 
 };
@@ -208,8 +245,6 @@ int main()
     std::unordered_set<typing::uid_t> x;
 
     jeecs::enrty::module_entry();
-
-    //while (true)
     {
         game_universe universe = game_universe::create_universe();
 
@@ -221,6 +256,14 @@ int main()
             Transform::LocalRotation,
             Transform::LocalScale,
             Transform::ChildAnchor,
+            Transform::LocalToWorld,
+            Transform::Translation>();
+
+        auto entity2 = world.add_entity<
+            Transform::LocalPosition,
+            Transform::LocalRotation,
+            Transform::LocalScale,
+            Transform::LocalToParent,
             Transform::Translation>();
 
         je_clock_sleep_for(0.5);
