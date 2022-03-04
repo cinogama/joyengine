@@ -4,6 +4,8 @@
 #error jeecs.h only support for c++
 #else
 
+#include "rs.h"
+
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>

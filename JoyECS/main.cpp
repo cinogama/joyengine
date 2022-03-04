@@ -70,8 +70,17 @@ namespace jeecs // Transform
 
         struct Translation
         {
-            float object2world[16] = {};
-            float objectrotation[16] = {};
+            float object2world[16] =
+            {
+                1,0,0,0,
+                0,1,0,0,
+                0,0,1,0,
+                0,0,0,1, };
+            float objectrotation[16] = {
+                1,0,0,0,
+                0,1,0,0,
+                0,0,1,0,
+                0,0,0,1, };
             math::quat rotation;
 
             inline void set_position(const math::vec3& _v3) noexcept
@@ -229,7 +238,7 @@ struct TranslationUpdatingSystem :public game_system
         }
         else
         {
-            // Parent is not exist.. let it destroy?
+            // Parent is not exist
         }
     }
 
@@ -237,8 +246,42 @@ struct TranslationUpdatingSystem :public game_system
 
 #include <iostream>
 
-int main()
+int main(int argc, char** argv)
 {
+    rs_init(argc, argv);
+
+    rs_vm m = rs_create_vm();
+    if (rs_load_source(m, "_example.rsn", R"(
+import rscene.std;
+
+extern("rslib_std_print") func print<T>(var x:T):int;
+
+extern func main()
+{
+    var x = func(){};
+    var y = func(){};
+
+    print:<typeof(0)>(1.23);
+
+    if((x && y) || (x && y))
+        std::panic("That should not happend..");
+
+    var a=["Hello", "world"];
+    a->add(666:string);
+
+    std::println(a);
+}
+)"))
+    {
+        rs_invoke_rsfunc(m, rs_extern_symb(m, "::main"), 0);
+    }
+    else
+    {
+        jeecs::debug::log_error(rs_get_compile_error(m, RS_NEED_COLOR));
+    }
+
+    rs_close_vm(m);
+
     using namespace jeecs;
     using namespace std;
 
@@ -272,4 +315,5 @@ int main()
     je_clock_sleep_for(5.);
 
     jeecs::enrty::module_leave();
+    rs_finish();
 }
