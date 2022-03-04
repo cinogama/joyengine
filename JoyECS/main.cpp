@@ -254,14 +254,14 @@ int main(int argc, char** argv)
     if (rs_load_source(m, "_example.rsn", R"(
 import rscene.std;
 
-extern("rslib_std_print") func print<T>(var x:T):int;
+extern("rslib_std_print") func print<T>(var x:T):T;
 
 extern func main()
 {
     var x = func(){};
     var y = func(){};
-
-    print:<typeof(0)>(1.23);
+    var xt = 0;
+    xt = print:<typeof(x)>(y);
 
     if((x && y) || (x && y))
         std::panic("That should not happend..");
