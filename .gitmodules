@@ -1,0 +1,3 @@
+[submodule "3rd/restorablescene"]
+	path = 3rd/restorablescene
+	url = https://gitlab.cinogama.com/cinogamaproject/restorablescene.git
