@@ -13,28 +13,40 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="basic">
+      <UniqueIdentifier>{8b6f66ad-3cdc-4892-88ef-af7e2f82d8f6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core">
+      <UniqueIdentifier>{8c8de42b-16ae-40f9-8e35-7e1662b0248f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="jeecs_type_mgr.cpp">
-      <Filter>源文件</Filter>
+    <ClCompile Include="jeecs_basic_arch_system.cpp">
+      <Filter>basic</Filter>
     </ClCompile>
-    <ClCompile Include="jeecs_memory_mgr.cpp">
-      <Filter>源文件</Filter>
+    <ClCompile Include="jeecs_basic_log.cpp">
+      <Filter>basic</Filter>
     </ClCompile>
-    <ClCompile Include="jeecs_arch_system.cpp">
-      <Filter>源文件</Filter>
+    <ClCompile Include="jeecs_basic_memory_mgr.cpp">
+      <Filter>basic</Filter>
     </ClCompile>
-    <ClCompile Include="jeecs_log.cpp">
-      <Filter>源文件</Filter>
+    <ClCompile Include="jeecs_basic_time_sleep.cpp">
+      <Filter>basic</Filter>
     </ClCompile>
-    <ClCompile Include="jeecs_time_sleep.cpp">
-      <Filter>源文件</Filter>
+    <ClCompile Include="jeecs_basic_type_mgr.cpp">
+      <Filter>basic</Filter>
     </ClCompile>
-    <ClCompile Include="jeecs_uid.cpp">
-      <Filter>源文件</Filter>
+    <ClCompile Include="jeecs_basic_uid.cpp">
+      <Filter>basic</Filter>
+    </ClCompile>
+    <ClCompile Include="jeecs_core_opengl_pipeline.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="jeecs_core_translation_system.cpp">
+      <Filter>core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

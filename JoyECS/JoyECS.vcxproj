@@ -155,12 +155,14 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="jeecs_arch_system.cpp" />
-    <ClCompile Include="jeecs_log.cpp" />
-    <ClCompile Include="jeecs_memory_mgr.cpp" />
-    <ClCompile Include="jeecs_time_sleep.cpp" />
-    <ClCompile Include="jeecs_type_mgr.cpp" />
-    <ClCompile Include="jeecs_uid.cpp" />
+    <ClCompile Include="jeecs_basic_arch_system.cpp" />
+    <ClCompile Include="jeecs_basic_log.cpp" />
+    <ClCompile Include="jeecs_basic_memory_mgr.cpp" />
+    <ClCompile Include="jeecs_basic_time_sleep.cpp" />
+    <ClCompile Include="jeecs_basic_type_mgr.cpp" />
+    <ClCompile Include="jeecs_basic_uid.cpp" />
+    <ClCompile Include="jeecs_core_opengl_pipeline.cpp" />
+    <ClCompile Include="jeecs_core_translation_system.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>

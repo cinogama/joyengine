@@ -116,6 +116,9 @@ namespace jeecs
         void* _m_in_chunk;
         jeecs::typing::entity_id_in_chunk_t   _m_id;
         jeecs::typing::version_t              _m_version;
+
+        template<typename T>
+        inline T* get_component()noexcept;
     };
 }
 
@@ -228,6 +231,11 @@ JE_API void je_ecs_world_entity_remove_component(
     void* world,
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
+
+JE_API void je_ecs_register_system_creator(const char* name, jeecs::game_system*(*create_func)(void*))
+{
+
+}
 
 JE_API double je_clock_time();
 
@@ -1055,19 +1063,12 @@ namespace jeecs
         }
     };
 
-
-    namespace enrty
+    template<typename T>
+    inline T* game_entity::get_component() noexcept
     {
-        inline void module_entry()
-        {
-            // 0. register built-in components
-        }
+        const jeecs::typing::type_info info 
+            = jeecs::typing::type_info::of<T>();
 
-        inline void module_leave()
-        {
-            // 0. ungister this module components
-            typing::type_info::unregister_all_type_in_shutdown();
-        }
     }
 
     namespace math
@@ -1771,6 +1772,177 @@ namespace jeecs
         };
     }
 
+    namespace Transform
+    {
+        // An entity without childs and parent will contain these components:
+        // LocalPosition/LocalRotation/LocalScale and using LocalToWorld to apply
+        // local transform to Translation
+        // If an entity have childs, it will have ChildAnchor 
+        // If an entity have parent, it will have LocalToParent and without
+        // LocalToWorld.
+        /*
+                                                    Parent's Translation--\
+                                                         /(apply)          \
+                                                        /                   \
+                                 LocalToParent-----LocalToParent             >Translation (2x  4x4 matrix)
+                                                 yes  /                     /
+        LocalPosition------------>(HAVE_PARENT?)-----/                     /
+                       /    /              \ no                           /
+        LocalScale----/    /                ---------> LocalToWorld------/
+                          /
+        LocalRotation----/                                (LocalToXXX) Still using 2x 3 vector + 1x quat
+
+        */
+
+        struct LocalPosition
+        {
+            math::vec3 pos;
+        };
+        struct LocalRotation
+        {
+            math::quat rot;
+        };
+        struct LocalScale
+        {
+            math::vec3 scale;
+        };
+
+        struct ChildAnchor
+        {
+            typing::uid_t anchor_id = je_uid_generate();
+        };
+
+        struct LocalToParent
+        {
+            math::vec3 pos;
+            math::vec3 scale;
+            math::quat rot;
+
+            typing::uid_t parent_uid;
+        };
+
+        struct LocalToWorld
+        {
+            math::vec3 pos;
+            math::vec3 scale;
+            math::quat rot;
+        };
+        static_assert(offsetof(LocalToParent, pos) == offsetof(LocalToWorld, pos));
+        static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
+        static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
+
+        struct Translation
+        {
+            float object2world[16] =
+            {
+                1,0,0,0,
+                0,1,0,0,
+                0,0,1,0,
+                0,0,0,1, };
+            float objectrotation[16] = {
+                1,0,0,0,
+                0,1,0,0,
+                0,0,1,0,
+                0,0,0,1, };
+            math::quat rotation;
+
+            inline void set_position(const math::vec3& _v3) noexcept
+            {
+                object2world[0 + 3 * 4] = _v3.x;
+                object2world[1 + 3 * 4] = _v3.y;
+                object2world[2 + 3 * 4] = _v3.z;
+            }
+
+            inline void set_scale(const math::vec3& _v3) noexcept
+            {
+                object2world[0 + 0 * 4] = _v3.x;
+                object2world[1 + 1 * 4] = _v3.y;
+                object2world[2 + 2 * 4] = _v3.z;
+                object2world[3 + 3 * 4] = 1.f;
+            }
+            inline void set_rotation(const math::quat& _quat)noexcept
+            {
+                rotation = _quat;
+                _quat.create_matrix(objectrotation);
+            }
+
+            inline constexpr math::vec3 get_position() const noexcept
+            {
+                return math::vec3(
+                    object2world[0 + 3 * 4],
+                    object2world[1 + 3 * 4],
+                    object2world[2 + 3 * 4]);
+            }
+            inline constexpr math::vec3 get_scale() const noexcept
+            {
+                return math::vec3(
+                    object2world[0 + 0 * 4],
+                    object2world[1 + 1 * 4],
+                    object2world[2 + 2 * 4]);
+            }
+            inline constexpr math::quat get_rotation() const noexcept
+            {
+                return rotation;
+            }
+        };
+    }
+    namespace Renderer
+    {
+        // An entity need to be rendered, must have Transform::Translation and 
+        // Renderer, 
+        /*
+        Camera----------\
+                         >------> Cameras
+                        /          / | \
+        Translation ---<          /  |  \ (for each..)
+                        \        /   |   \
+                         >--  The entities need
+        Material--------/         be rend..
+                       /
+        Shape---------/
+
+        */
+        struct OrthoCamera
+        {
+            float znear = 0;
+            float zfar = 1000;
+        };
+
+        struct Shape
+        {
+
+        };
+
+        struct Material
+        {
+
+        };
+    }
+
+    namespace enrty
+    {
+        inline void module_entry()
+        {
+            // 0. register built-in components
+            jeecs::typing::type_info::of<Transform::LocalPosition>("Transform::LocalPosition");
+            jeecs::typing::type_info::of<Transform::LocalRotation>("Transform::LocalRotation");
+            jeecs::typing::type_info::of<Transform::LocalScale>("Transform::LocalScale");
+            jeecs::typing::type_info::of<Transform::ChildAnchor>("Transform::ChildAnchor");
+            jeecs::typing::type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
+            jeecs::typing::type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
+            jeecs::typing::type_info::of<Transform::Translation>("Transform::Translation");
+
+            jeecs::typing::type_info::of<Renderer::OrthoCamera>("Renderer::OrthoCamera");
+            jeecs::typing::type_info::of<Renderer::Shape>("Renderer::Shape");
+            jeecs::typing::type_info::of<Renderer::Material>("Renderer::Material");
+        }
+
+        inline void module_leave()
+        {
+            // 0. ungister this module components
+            typing::type_info::unregister_all_type_in_shutdown();
+        }
+    }
 }
 
 #endif
