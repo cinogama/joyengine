@@ -765,6 +765,10 @@ namespace jeecs
 
             return gentity;
         }
+        inline operator bool()const noexcept
+        {
+            return handle() != nullptr;
+        }
     };
 
     class game_system
