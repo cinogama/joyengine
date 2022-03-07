@@ -19,6 +19,12 @@
     <Filter Include="core">
       <UniqueIdentifier>{8c8de42b-16ae-40f9-8e35-7e1662b0248f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="core\head">
+      <UniqueIdentifier>{f0278398-3d92-4d39-a998-c28d1b7427c9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="graphic">
+      <UniqueIdentifier>{b9722c3c-9f20-449f-8976-0f1ace020c19}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -42,16 +48,22 @@
     <ClCompile Include="jeecs_basic_uid.cpp">
       <Filter>basic</Filter>
     </ClCompile>
-    <ClCompile Include="jeecs_core_opengl_pipeline.cpp">
+    <ClCompile Include="jeecs_core_register_system.cpp">
       <Filter>core</Filter>
     </ClCompile>
-    <ClCompile Include="jeecs_core_translation_system.cpp">
-      <Filter>core</Filter>
+    <ClCompile Include="jeecs_graphic_api_impl_opengl.cpp">
+      <Filter>graphic</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="jeecs.hpp">
       <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="jeecs_core_translation_system.hpp">
+      <Filter>core\head</Filter>
+    </ClInclude>
+    <ClInclude Include="jeecs_core_graphic_system.h">
+      <Filter>core\head</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

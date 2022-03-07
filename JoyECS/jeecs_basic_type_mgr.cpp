@@ -15,7 +15,7 @@ namespace jeecs_impl
 {
     class type_info_holder
     {
-        std::mutex                              _m_type_holde_mx;
+        std::mutex                              _m_type_holder_mx;
 
         std::vector<jeecs::typing::type_info*>  _m_type_holder_list;
         std::unordered_map<jeecs::typing::typehash_t, jeecs::typing::typeid_t>  _m_type_hash_id_mapping;
@@ -42,9 +42,10 @@ namespace jeecs_impl
             jeecs::typing::construct_func_t _constructor,
             jeecs::typing::destruct_func_t  _destructor,
             jeecs::typing::copy_func_t      _copier,
-            jeecs::typing::move_func_t      _mover)
+            jeecs::typing::move_func_t      _mover,
+            bool                            _is_system)
         {
-            std::lock_guard g1(_m_type_holde_mx);
+            std::lock_guard g1(_m_type_holder_mx);
 
             // 1. Find typeid with hash
             auto fnd_with_hash = _m_type_hash_id_mapping.find(_hash);
@@ -72,6 +73,7 @@ namespace jeecs_impl
             tinfo->m_destructor = _destructor;
             tinfo->m_copier = _copier;
             tinfo->m_mover = _mover;
+            tinfo->m_is_system = _is_system;
 
             // Ok Find a place to store~
             auto holder_fnd = std::find(
@@ -97,20 +99,32 @@ namespace jeecs_impl
 
         jeecs::typing::type_info* get_info_by_id(jeecs::typing::typeid_t id)
         {
-
             if (id && id != jeecs::typing::INVALID_TYPE_ID)
             {
-                std::lock_guard g1(_m_type_holde_mx);
+                std::lock_guard g1(_m_type_holder_mx);
                 if (id <= _m_type_holder_list.size())
                     return _m_type_holder_list[id - 1];
             }
             return nullptr;
         }
+
+        jeecs::typing::type_info* get_info_by_name(const char* name)
+        {
+            if (name)
+            {
+                std::lock_guard g1(_m_type_holder_mx);
+                auto fnd = _m_type_name_id_mapping.find(name);
+                if (fnd != _m_type_name_id_mapping.end())
+                    return _m_type_holder_list[fnd->second - 1];
+            }
+            return nullptr;
+        }
+
         void unregister_by_id(jeecs::typing::typeid_t id)
         {
             if (id && id != jeecs::typing::INVALID_TYPE_ID)
             {
-                std::lock_guard g1(_m_type_holde_mx);
+                std::lock_guard g1(_m_type_holder_mx);
                 if (id <= _m_type_holder_list.size())
                 {
                     jeecs::typing::type_info* typeinfo = nullptr;
@@ -125,7 +139,7 @@ namespace jeecs_impl
     };
 }
 
-JE_API bool je_typing_find_or_register(
+bool je_typing_find_or_register(
     jeecs::typing::typeid_t* out_typeid,
     const char* _name,
     jeecs::typing::typehash_t _hash,
@@ -133,7 +147,8 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::construct_func_t _constructor,
     jeecs::typing::destruct_func_t  _destructor,
     jeecs::typing::copy_func_t      _copier,
-    jeecs::typing::move_func_t      _mover)
+    jeecs::typing::move_func_t      _mover,
+    bool                            _is_system)
 {
     return
         jeecs_impl::type_info_holder::holder()->register_type(
@@ -144,16 +159,23 @@ JE_API bool je_typing_find_or_register(
             _constructor,
             _destructor,
             _copier,
-            _mover);
+            _mover,
+            _is_system);
 }
 
-JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
+const jeecs::typing::type_info* je_typing_get_info_by_id(
     jeecs::typing::typeid_t _id)
 {
     return jeecs_impl::type_info_holder::holder()->get_info_by_id(_id);
 }
 
-JE_API void je_typing_unregister(
+const jeecs::typing::type_info* je_typing_get_info_by_name(
+    const char* type_name)
+{
+    return jeecs_impl::type_info_holder::holder()->get_info_by_name(type_name);
+}
+
+void je_typing_unregister(
     jeecs::typing::typeid_t _id)
 {
     jeecs_impl::type_info_holder::holder()->unregister_by_id(_id);

@@ -1,13 +1,21 @@
+#pragma once
+
 #define JE_IMPL
 #include "jeecs.hpp"
-
-using namespace jeecs;
-using namespace Transform;
 
 namespace jeecs
 {
     struct TranslationUpdatingSystem :public game_system
     {
+        using ChildAnchor = Transform::ChildAnchor;
+        using LocalPosition = Transform::LocalPosition;
+        using LocalRotation = Transform::LocalRotation;
+        using LocalScale = Transform::LocalScale;
+
+        using LocalToParent = Transform::LocalToParent;
+        using LocalToWorld = Transform::LocalToWorld;
+        using Translation = Transform::Translation;
+
         struct anchor
         {
             const Translation* m_translation;
@@ -127,9 +135,4 @@ namespace jeecs
         }
 
     };
-}
-
-void jeecs_prepare_core_system_register()
-{
-
 }

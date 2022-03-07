@@ -1464,7 +1464,7 @@ namespace jeecs_impl
         struct stored_system_instance
         {
             jeecs::game_system* m_system_instance;
-            void(*m_system_destructor)(jeecs::game_system*);
+            const jeecs::typing::type_info* m_system_typeinfo;
         };
 
         std::recursive_mutex _m_stored_systems_mx;
@@ -1598,16 +1598,19 @@ namespace jeecs_impl
             if (fnd != _m_stored_systems.end())
             {
                 for (auto& stored_system : fnd->second)
-                    stored_system.m_system_destructor(stored_system.m_system_instance);
+                {
+                    stored_system.m_system_typeinfo->destruct(stored_system.m_system_instance);
+                    je_mem_free(stored_system.m_system_instance);
+                }
 
                 _m_stored_systems.erase(fnd);
             }
         }
 
-        void store_system_for_world(ecs_world* world, jeecs::game_system* system_instacne, void(*gsystem_destructor)(jeecs::game_system*))
+        void store_system_for_world(ecs_world* world, const jeecs::typing::type_info* system_type, jeecs::game_system* system_instacne)
         {
             std::lock_guard g1(_m_stored_systems_mx);
-            _m_stored_systems[world].push_back(stored_system_instance{ system_instacne,gsystem_destructor });
+            _m_stored_systems[world].push_back(stored_system_instance{ system_instacne,system_type });
         }
     };
 }
@@ -1622,15 +1625,19 @@ void je_ecs_universe_destroy(void* ecs_universe)
     jeecs::basic::destroy_free((jeecs_impl::ecs_universe*)ecs_universe);
 }
 
-void je_ecs_universe_store_world_system_instance(
-    void* ecs_universe,
-    void* world,
-    jeecs::game_system* gsystem_instance,
-    void(*gsystem_destructor)(jeecs::game_system*)
-)
+void* je_ecs_universe_instance_system(
+    void* universe,
+    void* aim_world,
+    const jeecs::typing::type_info* system_type)
 {
-    ((jeecs_impl::ecs_universe*)ecs_universe)->store_system_for_world(
-        (jeecs_impl::ecs_world*)world, gsystem_instance, gsystem_destructor);
+    void * instance = je_mem_alloc(system_type->m_size);
+
+    system_type->construct(instance, aim_world);
+
+    ((jeecs_impl::ecs_universe*)universe)->store_system_for_world(
+        (jeecs_impl::ecs_world*)aim_world, system_type, (jeecs::game_system*)instance);
+
+    return instance;
 }
 
 void* je_arch_get_chunk(void* archtype)

@@ -22,7 +22,7 @@ int main(int argc, char** argv)
         game_universe universe = game_universe::create_universe();
 
         game_world world = universe.create_world();
-        world.add_system<TranslationUpdatingSystem>();
+        world.add_system(typing::type_info::of("jeecs::TranslationUpdatingSystem"));
 
         auto entity = world.add_entity<
             Transform::LocalPosition,

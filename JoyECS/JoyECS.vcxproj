@@ -161,12 +161,14 @@
     <ClCompile Include="jeecs_basic_time_sleep.cpp" />
     <ClCompile Include="jeecs_basic_type_mgr.cpp" />
     <ClCompile Include="jeecs_basic_uid.cpp" />
-    <ClCompile Include="jeecs_core_opengl_pipeline.cpp" />
-    <ClCompile Include="jeecs_core_translation_system.cpp" />
+    <ClCompile Include="jeecs_core_register_system.cpp" />
+    <ClCompile Include="jeecs_graphic_api_impl_opengl.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="jeecs.hpp" />
+    <ClInclude Include="jeecs_core_graphic_system.h" />
+    <ClInclude Include="jeecs_core_translation_system.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\3rd\restorablescene\RestorableScene\RestorableScene.vcxproj">

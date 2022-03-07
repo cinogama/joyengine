@@ -63,7 +63,7 @@ namespace jeecs
 
         struct type_info;
 
-        using construct_func_t = void(*)(void*);
+        using construct_func_t = void(*)(void*, void*);
         using destruct_func_t = void(*)(void*);
         using copy_func_t = void(*)(void*, const void*);
         using move_func_t = void(*)(void*, void*);
@@ -130,9 +130,9 @@ namespace std
         inline constexpr size_t operator() (const jeecs::typing::uid_t& uid) const noexcept
         {
             if constexpr (sizeof(size_t) == 8)
-                return uid.b + uid.a;
+                return uid.b ^ uid.a;
             else
-                return (size_t)(uid.b >> 32) + (size_t)uid.a;
+                return (size_t)(uid.b >> 32) ^ (size_t)uid.a;
         }
     };
 
@@ -166,10 +166,14 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::construct_func_t _constructor,
     jeecs::typing::destruct_func_t  _destructor,
     jeecs::typing::copy_func_t      _copier,
-    jeecs::typing::move_func_t      _mover);
+    jeecs::typing::move_func_t      _mover,
+    bool                            _is_system);
 
 JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
     jeecs::typing::typeid_t _id);
+
+JE_API const jeecs::typing::type_info* je_typing_get_info_by_name(
+    const char* type_name);
 
 JE_API void je_typing_unregister(
     jeecs::typing::typeid_t _id);
@@ -194,11 +198,10 @@ JE_API void* je_ecs_universe_create();
 
 JE_API void je_ecs_universe_destroy(void* universe);
 
-JE_API void je_ecs_universe_store_world_system_instance(
+JE_API void* je_ecs_universe_instance_system(
     void* universe,
-    void* world,
-    jeecs::game_system* gsystem_instance,
-    void(*gsystem_destructor)(jeecs::game_system*)
+    void* aim_world,
+    const jeecs::typing::type_info* system_type
 );
 
 JE_API void* je_ecs_world_in_universe(void* world);
@@ -232,10 +235,7 @@ JE_API void je_ecs_world_entity_remove_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
 
-JE_API void je_ecs_register_system_creator(const char* name, jeecs::game_system*(*create_func)(void*))
-{
-
-}
+/////////////////////////// Time&Sleep /////////////////////////////////
 
 JE_API double je_clock_time();
 
@@ -250,6 +250,31 @@ JE_API void je_clock_suppress_sleep(double sup_stax);
 /////////////////////////// JUID /////////////////////////////////
 
 JE_API jeecs::typing::uid_t je_uid_generate();
+
+/////////////////////////// CORE /////////////////////////////////
+
+JE_API void jeecs_entry_register_core_systems();
+
+/////////////////////////// GRAPHIC //////////////////////////////
+// Here to store low-level-graphic-api.
+
+struct jegl_interface_config
+{
+    size_t m_windows_width, m_windows_height;
+    size_t m_resolution_x, m_resolution_y;
+
+    size_t m_fps;
+};
+
+struct jegl_thread
+{
+    std::thread* _m_thread;
+    void* _m_interface_handle;
+};
+
+JE_API jegl_thread* jegl_start_graphic_thread(jegl_interface_config config);
+
+JE_API void jegl_terminate_graphic_thread(jegl_thread* thread);
 
 RS_FORCE_CAPI_END
 
@@ -374,9 +399,26 @@ namespace jeecs
         template<typename T>
         struct default_functions
         {
-            static void constructor(void* _ptr)
+            template<typename U>
+            struct has_default_constructor
             {
-                new(_ptr)T;
+                template<typename W>
+                using _true_type = std::true_type;
+
+                template<typename V>
+                static auto _tester(int)->_true_type<decltype(new T())>;
+                template<typename V>
+                static std::false_type _tester(...);
+
+                constexpr static bool value = decltype(_tester<U>(0))::value;
+            };
+
+            static void constructor(void* _ptr, void* arg_ptr)
+            {
+                if constexpr (has_default_constructor<T>::value)
+                    new(_ptr)T;
+                else
+                    new(_ptr)T(arg_ptr);
             }
             static void destructor(void* _ptr)
             {
@@ -434,6 +476,7 @@ namespace jeecs
             copy_func_t         m_copier;
             move_func_t         m_mover;
 
+            bool                m_is_system;
 
         private:
             inline static std::atomic_bool      _m_shutdown_flag = false;
@@ -467,7 +510,8 @@ namespace jeecs
                         basic::default_functions<T>::constructor,
                         basic::default_functions<T>::destructor,
                         basic::default_functions<T>::copier,
-                        basic::default_functions<T>::mover))
+                        basic::default_functions<T>::mover,
+                        std::is_base_of<game_system, T>::value))
                     {
                         // store to list for unregister
                         std::lock_guard g1(_m_self_registed_typeid_mx);
@@ -504,10 +548,15 @@ namespace jeecs
                 assert(!_m_shutdown_flag);
                 return je_typing_get_info_by_id(_tid);
             }
-
-            void construct(void* addr) const
+            inline static const type_info* of(const char* name)
             {
-                m_constructor(addr);
+                assert(!_m_shutdown_flag);
+                return je_typing_get_info_by_name(name);
+            }
+
+            void construct(void* addr, void* arg = nullptr) const
+            {
+                m_constructor(addr, arg);
             }
             void destruct(void* addr) const
             {
@@ -687,19 +736,20 @@ namespace jeecs
         {
             return _m_ecs_world_addr;
         }
-        template<typename T, typename ... ArgTs>
-        inline T* add_system(ArgTs&&... args)
-        {
-            T* created_system = basic::create_new<T>(*this, args...);
 
-            je_ecs_universe_store_world_system_instance(
+        inline void* add_system(const typing::type_info * sys_type)
+        {
+            return je_ecs_universe_instance_system(
                 je_ecs_world_in_universe(handle()),
                 handle(),
-                created_system,
-                (void(*)(jeecs::game_system*)) & basic::destroy_free<T>
+                sys_type
             );
+        }
 
-            return created_system;
+        template<typename T>
+        inline T* add_system()
+        {
+            return (T*)add_system(typing::type_info::of<T>());
         }
 
         template<typename ... CompTs>
@@ -1017,16 +1067,24 @@ namespace jeecs
         template<typename ReturnT, typename ThisT, typename ... ArgTs>
         inline jeecs::game_system_function* register_system_func(ReturnT(ThisT::* sysf)(ArgTs ...), const std::vector<requirement>& requirement = {})
         {
-            if constexpr (0 != sizeof...(ArgTs))
+            if (_m_game_world)
             {
-                if constexpr (is_need_game_entity<ArgTs...>::value)
-                    return _m_game_world.register_system_func_to_world(pack_normal_invoker_with_entity(sysf, requirement));
+                if constexpr (0 != sizeof...(ArgTs))
+                {
+                    if constexpr (is_need_game_entity<ArgTs...>::value)
+                        return _m_game_world.register_system_func_to_world(pack_normal_invoker_with_entity(sysf, requirement));
+                    else
+                        return _m_game_world.register_system_func_to_world(pack_normal_invoker(sysf, requirement));
+                }
                 else
+                {
                     return _m_game_world.register_system_func_to_world(pack_normal_invoker(sysf, requirement));
+                }
             }
             else
             {
-                return _m_game_world.register_system_func_to_world(pack_normal_invoker(sysf, requirement));
+                debug::log_warn("Unable to register system function with 'register_system_func' in independence system.");
+                return nullptr;
             }
         }
     };
@@ -1066,7 +1124,7 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::get_component() noexcept
     {
-        const jeecs::typing::type_info info 
+        const jeecs::typing::type_info info
             = jeecs::typing::type_info::of<T>();
 
     }
@@ -1306,21 +1364,21 @@ namespace jeecs
             }
 
             inline constexpr vec3& operator = (const vec3& _v3) noexcept = default;
-            inline constexpr vec3& operator += (const vec3 & _v3) noexcept
+            inline constexpr vec3& operator += (const vec3& _v3) noexcept
             {
                 x += _v3.x;
                 y += _v3.y;
                 z += _v3.z;
                 return *this;
             }
-            inline constexpr vec3& operator -= (const vec3 & _v3) noexcept
+            inline constexpr vec3& operator -= (const vec3& _v3) noexcept
             {
                 x -= _v3.x;
                 y -= _v3.y;
                 z -= _v3.z;
                 return *this;
             }
-            inline constexpr vec3& operator *= (const vec3 & _v3) noexcept
+            inline constexpr vec3& operator *= (const vec3& _v3) noexcept
             {
                 x *= _v3.x;
                 y *= _v3.y;
@@ -1334,7 +1392,7 @@ namespace jeecs
                 z *= _f;
                 return *this;
             }
-            inline constexpr vec3& operator /= (const vec3 & _v3) noexcept
+            inline constexpr vec3& operator /= (const vec3& _v3) noexcept
             {
                 x /= _v3.x;
                 y /= _v3.y;
@@ -1442,7 +1500,7 @@ namespace jeecs
             }
 
             inline constexpr vec4& operator = (const vec4& _v4) noexcept = default;
-            inline constexpr vec4& operator += (const vec4 & _v4) noexcept
+            inline constexpr vec4& operator += (const vec4& _v4) noexcept
             {
                 x += _v4.x;
                 y += _v4.y;
@@ -1450,7 +1508,7 @@ namespace jeecs
                 w += _v4.w;
                 return *this;
             }
-            inline constexpr vec4& operator -= (const vec4 & _v4) noexcept
+            inline constexpr vec4& operator -= (const vec4& _v4) noexcept
             {
                 x -= _v4.x;
                 y -= _v4.y;
@@ -1458,7 +1516,7 @@ namespace jeecs
                 w -= _v4.w;
                 return *this;
             }
-            inline constexpr vec4& operator *= (const vec4 & _v4) noexcept
+            inline constexpr vec4& operator *= (const vec4& _v4) noexcept
             {
                 x *= _v4.x;
                 y *= _v4.y;
@@ -1474,7 +1532,7 @@ namespace jeecs
                 w *= _f;
                 return *this;
             }
-            inline constexpr vec4& operator /= (const vec4 & _v4) noexcept
+            inline constexpr vec4& operator /= (const vec4& _v4) noexcept
             {
                 x /= _v4.x;
                 y /= _v4.y;
@@ -1935,6 +1993,9 @@ namespace jeecs
             jeecs::typing::type_info::of<Renderer::OrthoCamera>("Renderer::OrthoCamera");
             jeecs::typing::type_info::of<Renderer::Shape>("Renderer::Shape");
             jeecs::typing::type_info::of<Renderer::Material>("Renderer::Material");
+
+            // 1. register core&graphic systems.
+            jeecs_entry_register_core_systems();
         }
 
         inline void module_leave()
@@ -1942,6 +2003,11 @@ namespace jeecs
             // 0. ungister this module components
             typing::type_info::unregister_all_type_in_shutdown();
         }
+    }
+
+    namespace graphic
+    {
+
     }
 }
 
