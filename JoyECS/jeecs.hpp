@@ -739,6 +739,7 @@ namespace jeecs
 
         inline void* add_system(const typing::type_info * sys_type)
         {
+            assert(sys_type->m_is_system);
             return je_ecs_universe_instance_system(
                 je_ecs_world_in_universe(handle()),
                 handle(),
@@ -1112,6 +1113,16 @@ namespace jeecs
         game_world create_world()
         {
             return je_ecs_world_create(_m_universe_addr);
+        }
+
+        inline void* add_shared_system(const typing::type_info* typeinfo)
+        {
+            assert(typeinfo->m_is_system);
+            return je_ecs_universe_instance_system(
+                handle(),
+                nullptr,
+                typeinfo
+            );
         }
 
     public:

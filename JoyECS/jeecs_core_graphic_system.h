@@ -29,7 +29,7 @@ namespace jeecs
 
         void SimpleRendJob(const Translation* trans, const Material* mat, const Shape* shape)
         {
-            
+            debug::log_fatal("TEST");
         }
     };
 

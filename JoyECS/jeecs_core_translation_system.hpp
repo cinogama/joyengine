@@ -98,7 +98,6 @@ namespace jeecs
             trans->set_rotation(l2w->rot);
             trans->set_position(l2w->pos);
             trans->set_scale(l2w->scale);
-
         }
 
         ///////////////////////////////////////////////////////////////////////////////////
