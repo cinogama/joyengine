@@ -204,6 +204,12 @@ JE_API void* je_ecs_universe_instance_system(
     const jeecs::typing::type_info* system_type
 );
 
+JE_API void je_ecs_universe_attach_shared_system_to(
+    void* universe,
+    void* aim_world,
+    const jeecs::typing::type_info* system_type
+);
+
 JE_API void* je_ecs_world_in_universe(void* world);
 
 JE_API void* je_ecs_world_create(void* in_universe);
@@ -272,7 +278,10 @@ struct jegl_thread
     void* _m_interface_handle;
 };
 
-JE_API jegl_thread* jegl_start_graphic_thread(jegl_interface_config config);
+JE_API jegl_thread* jegl_start_graphic_thread(
+    jegl_interface_config config, 
+    void(*frame_rend_work)(void*),
+    void* arg);
 
 JE_API void jegl_terminate_graphic_thread(jegl_thread* thread);
 
@@ -426,11 +435,17 @@ namespace jeecs
             }
             static void copier(void* _ptr, const void* _be_copy_ptr)
             {
-                new(_ptr)T(*(const T*)_be_copy_ptr);
+                if constexpr (std::is_copy_constructible<T>::value)
+                    new(_ptr)T(*(const T*)_be_copy_ptr);
+                else
+                    debug::log_fatal("This type: '%s' is not copy-constructible but you try to do it.");
             }
             static void mover(void* _ptr, void* _be_moved_ptr)
             {
-                new(_ptr)T(std::move(*(T*)_be_moved_ptr));
+                if constexpr (std::is_move_constructible<T>::value)
+                    new(_ptr)T(std::move(*(T*)_be_moved_ptr));
+                else
+                    debug::log_fatal("This type: '%s' is not move-constructible but you try to do it.");
             }
         };
 
@@ -651,18 +666,24 @@ namespace jeecs
         invoker_t m_invoker;
         size_t m_rw_component_count;
 
-    private:
-        destructor_t _m_destructor;
+        game_system_function* last;
 
+    private:
         static void _updater(const game_system_function* _this, system_function_pak_t* pak)
         {
             (*pak)(_this);
         }
-
-        static void _destructor(game_system_function* _this)
+    public:
+        game_system_function(const system_function_pak_t& sys_function, size_t rw_func_count)
+            : m_archs(nullptr)
+            , m_arch_count(0)
+            , m_function(basic::create_new<system_function_pak_t>(sys_function))
+            , m_invoker(_updater)
+            , m_dependence(nullptr)
+            , m_dependence_count(0)
+            , m_rw_component_count(rw_func_count)
         {
-            _this->~game_system_function();
-            je_mem_free(_this);
+
         }
 
         ~game_system_function()
@@ -674,19 +695,7 @@ namespace jeecs
                 je_mem_free(m_dependence);
             }
         }
-        game_system_function(const system_function_pak_t& sys_function, size_t rw_func_count)
-            : m_archs(nullptr)
-            , m_arch_count(0)
-            , m_function(basic::create_new<system_function_pak_t>(sys_function))
-            , _m_destructor(_destructor)
-            , m_invoker(_updater)
-            , m_dependence(nullptr)
-            , m_dependence_count(0)
-            , m_rw_component_count(rw_func_count)
-        {
 
-        }
-    public:
         void set_depends(const std::vector<typeid_dependence_pair>& depends)
         {
             assert(nullptr == m_dependence && 0 == m_dependence_count);
@@ -701,16 +710,6 @@ namespace jeecs
         void update() const
         {
             m_invoker(this, m_function);
-        }
-
-    public:
-        static game_system_function* create(const system_function_pak_t& sys_function, size_t rw_func_count)
-        {
-            return new(je_mem_alloc(sizeof(game_system_function)))game_system_function(sys_function, rw_func_count);
-        }
-        static void destory(game_system_function* _this)
-        {
-            _this->_m_destructor(_this);
         }
     };
 
@@ -737,7 +736,7 @@ namespace jeecs
             return _m_ecs_world_addr;
         }
 
-        inline void* add_system(const typing::type_info * sys_type)
+        inline void* add_system(const typing::type_info* sys_type)
         {
             assert(sys_type->m_is_system);
             return je_ecs_universe_instance_system(
@@ -815,6 +814,7 @@ namespace jeecs
 
     private:
         game_world _m_game_world;
+        basic::atomic_list<game_system_function> _m_registed_system_func;
 
     public:
         game_system(game_world world)
@@ -823,9 +823,26 @@ namespace jeecs
 
         }
 
+        ~game_system()
+        {
+            auto chain = _m_registed_system_func.pick_all();
+            while (chain)
+            {
+                auto current_chain = chain;
+                chain = chain->last;
+
+                basic::destroy_free(current_chain);
+            }
+        }
+
         const game_world* get_world() const noexcept
         {
             return &_m_game_world;
+        }
+
+        game_system_function* get_registed_function_chain() const noexcept
+        {
+            return _m_registed_system_func.peek();
         }
 
     public:
@@ -914,6 +931,12 @@ namespace jeecs
         }
 
         template<typename T>
+        inline static constexpr requirement contain()
+        {
+            return requirement{ game_system_function::dependence_type::CONTAIN, jeecs::typing::type_info::id<T>() };
+        }
+
+        template<typename T>
         inline static constexpr requirement any_of()
         {
             return requirement{ game_system_function::dependence_type::ANY, jeecs::typing::type_info::id<T>() };
@@ -996,7 +1019,7 @@ namespace jeecs
                 }
             };
 
-            auto* gsys = jeecs::game_system_function::create(invoker, sizeof...(ArgTs));
+            auto* gsys = basic::create_new<jeecs::game_system_function>(invoker, sizeof...(ArgTs));
             std::vector<jeecs::game_system_function::typeid_dependence_pair> depends
                 = { {
                         jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
@@ -1052,7 +1075,7 @@ namespace jeecs
                 }
             };
 
-            auto* gsys = jeecs::game_system_function::create(invoker, sizeof...(ArgTs));
+            auto* gsys = basic::create_new<jeecs::game_system_function>(invoker, sizeof...(ArgTs));
             std::vector<jeecs::game_system_function::typeid_dependence_pair> depends
                 = { {
                         jeecs::typing::type_info::id<origin_component<ArgTs>::type>(),
@@ -1072,25 +1095,24 @@ namespace jeecs
         template<typename ReturnT, typename ThisT, typename ... ArgTs>
         inline jeecs::game_system_function* register_system_func(ReturnT(ThisT::* sysf)(ArgTs ...), const std::vector<requirement>& requirement = {})
         {
-            if (_m_game_world)
+            game_system_function* game_system_function = nullptr;
+            if constexpr (0 != sizeof...(ArgTs))
             {
-                if constexpr (0 != sizeof...(ArgTs))
-                {
-                    if constexpr (is_need_game_entity<ArgTs...>::value)
-                        return _m_game_world.register_system_func_to_world(pack_normal_invoker_with_entity(sysf, requirement));
-                    else
-                        return _m_game_world.register_system_func_to_world(pack_normal_invoker(sysf, requirement));
-                }
+                if constexpr (is_need_game_entity<ArgTs...>::value)
+                    game_system_function = pack_normal_invoker_with_entity(sysf, requirement);
                 else
-                {
-                    return _m_game_world.register_system_func_to_world(pack_normal_invoker(sysf, requirement));
-                }
+                    game_system_function = pack_normal_invoker(sysf, requirement);
             }
             else
-            {
-                debug::log_warn("Unable to register system function with 'register_system_func' in independence system.");
-                return nullptr;
-            }
+                game_system_function = pack_normal_invoker(sysf, requirement);
+
+
+            _m_registed_system_func.add_one(game_system_function);
+
+            if (_m_game_world)
+                _m_game_world.register_system_func_to_world(game_system_function);
+
+            return game_system_function;
         }
     };
 
@@ -1123,6 +1145,11 @@ namespace jeecs
                 nullptr,
                 typeinfo
             );
+        }
+
+        inline void attach_shared_system_to(const typing::type_info* typeinfo, game_world world)
+        {
+            je_ecs_universe_attach_shared_system_to(handle(), world.handle(), typeinfo);
         }
 
     public:
@@ -1917,21 +1944,24 @@ namespace jeecs
                 0,1,0,0,
                 0,0,1,0,
                 0,0,0,1, };
+
+            math::vec3 position = { 0,0,0 };
+            math::vec3 scale = { 1,1,1 };
             math::quat rotation;
 
             inline void set_position(const math::vec3& _v3) noexcept
             {
+                position = _v3;
                 object2world[0 + 3 * 4] = _v3.x;
                 object2world[1 + 3 * 4] = _v3.y;
                 object2world[2 + 3 * 4] = _v3.z;
             }
-
             inline void set_scale(const math::vec3& _v3) noexcept
             {
+                scale = _v3;
                 object2world[0 + 0 * 4] = _v3.x;
                 object2world[1 + 1 * 4] = _v3.y;
                 object2world[2 + 2 * 4] = _v3.z;
-                object2world[3 + 3 * 4] = 1.f;
             }
             inline void set_rotation(const math::quat& _quat)noexcept
             {
@@ -1939,24 +1969,36 @@ namespace jeecs
                 _quat.create_matrix(objectrotation);
             }
 
-            inline constexpr math::vec3 get_position() const noexcept
+            inline void set_inverse_position(const math::vec3& _v3) noexcept
             {
-                return math::vec3(
-                    object2world[0 + 3 * 4],
-                    object2world[1 + 3 * 4],
-                    object2world[2 + 3 * 4]);
+                position = _v3;
+                object2world[0 + 3 * 4] = -_v3.x;
+                object2world[1 + 3 * 4] = -_v3.y;
+                object2world[2 + 3 * 4] = -_v3.z;
             }
-            inline constexpr math::vec3 get_scale() const noexcept
+            inline void set_inverse_rotation(const math::quat& _quat)noexcept
             {
-                return math::vec3(
-                    object2world[0 + 0 * 4],
-                    object2world[1 + 1 * 4],
-                    object2world[2 + 2 * 4]);
+                rotation = _quat;
+                _quat.create_inv_matrix(objectrotation);
             }
-            inline constexpr math::quat get_rotation() const noexcept
+
+            inline constexpr const math::vec3& get_position() const noexcept
+            {
+                return position;
+            }
+            inline constexpr const math::vec3& get_scale() const noexcept
+            {
+                return scale;
+            }
+            inline constexpr const math::quat& get_rotation() const noexcept
             {
                 return rotation;
             }
+        };
+
+        struct InverseTranslation
+        {
+
         };
     }
     namespace Renderer
@@ -2004,6 +2046,7 @@ namespace jeecs
             jeecs::typing::type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
             jeecs::typing::type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
             jeecs::typing::type_info::of<Transform::Translation>("Transform::Translation");
+            jeecs::typing::type_info::of<Transform::InverseTranslation>("Transform::InverseTranslation");
 
             jeecs::typing::type_info::of<Renderer::OrthoCamera>("Renderer::OrthoCamera");
             jeecs::typing::type_info::of<Renderer::Shape>("Renderer::Shape");

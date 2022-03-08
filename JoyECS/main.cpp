@@ -18,13 +18,17 @@ int main(int argc, char** argv)
     std::unordered_set<typing::uid_t> x;
 
     jeecs::enrty::module_entry();
+
+    while(true)
     {
         game_universe universe = game_universe::create_universe();
+        universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
 
         game_world world = universe.create_world();
         world.add_system(typing::type_info::of("jeecs::TranslationUpdatingSystem"));
-        world.add_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
         
+        universe.attach_shared_system_to(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"), world);
+
         auto entity = world.add_entity<
             Transform::LocalPosition,
             Transform::LocalRotation,
@@ -45,6 +49,7 @@ int main(int argc, char** argv)
         je_clock_sleep_for(0.5);
         game_universe::destroy_universe(universe);
     }
+
     je_clock_sleep_for(5.);
 
     jeecs::enrty::module_leave();

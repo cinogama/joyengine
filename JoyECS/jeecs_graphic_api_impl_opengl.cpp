@@ -8,7 +8,7 @@
 
 std::atomic_flag _graphic_terminate_flag;
 
-void opengl_graphic_work_thread(jegl_interface_config config)
+void opengl_graphic_work_thread(jegl_interface_config config, void(*frame_rend_work)(void*), void * arg)
 {
     double time_per_sec = 1.0 / config.m_fps;
     double current_frame_time = je_clock_time();
@@ -16,7 +16,7 @@ void opengl_graphic_work_thread(jegl_interface_config config)
     {
         // Ready for rend..
 
-
+        frame_rend_work(arg);
 
         if (je_clock_time() - current_frame_time >= 1.0)
             current_frame_time = je_clock_time();
@@ -25,7 +25,12 @@ void opengl_graphic_work_thread(jegl_interface_config config)
     }
 }
 
-jegl_thread* jegl_start_graphic_thread(jegl_interface_config config)
+//////////////////////////////////// API /////////////////////////////////////////
+
+jegl_thread* jegl_start_graphic_thread(
+    jegl_interface_config config,
+    void(*frame_rend_work)(void*),
+    void* arg)
 {
     jegl_thread* th = jeecs::basic::create_new<jegl_thread>();
 
@@ -35,7 +40,9 @@ jegl_thread* jegl_start_graphic_thread(jegl_interface_config config)
     th->_m_thread =
         jeecs::basic::create_new<std::thread>(
             opengl_graphic_work_thread,
-            config);
+            config,
+            frame_rend_work,
+            arg);
 
     return th;
 }

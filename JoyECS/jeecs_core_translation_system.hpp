@@ -15,6 +15,7 @@ namespace jeecs
         using LocalToParent = Transform::LocalToParent;
         using LocalToWorld = Transform::LocalToWorld;
         using Translation = Transform::Translation;
+        using InverseTranslation = Transform::InverseTranslation;
 
         struct anchor
         {
@@ -49,6 +50,12 @@ namespace jeecs
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslation,
                 {
+                    except<InverseTranslation>(),
+                    except<LocalToParent>(),
+                });
+            register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslationInverse,
+                {
+                    contain<InverseTranslation>(),
                     except<LocalToParent>(),
                 });
             /////////////////////////////////////////////////////////////////////////////////
@@ -66,6 +73,13 @@ namespace jeecs
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateParentToTranslation,
                 {
+                    except<InverseTranslation>(),
+                    except<LocalToWorld>(),
+                    system_read_updated(&m_anchor_list)
+                });
+            register_system_func(&TranslationUpdatingSystem::UpdateParentToTranslationInverse,
+                {
+                    contain<InverseTranslation>(),
                     except<LocalToWorld>(),
                     system_read_updated(&m_anchor_list)
                 });
@@ -99,6 +113,12 @@ namespace jeecs
             trans->set_position(l2w->pos);
             trans->set_scale(l2w->scale);
         }
+        void UpdateWorldToTranslationInverse(const LocalToWorld* l2w, Translation* trans)
+        {
+            trans->set_inverse_rotation(l2w->rot);
+            trans->set_inverse_position(l2w->pos);
+            trans->set_scale(l2w->scale); // no need for inverse scale..
+        }
 
         ///////////////////////////////////////////////////////////////////////////////////
         void UpdateLocalPositionToParent(const LocalPosition* pos, LocalToParent* l2p)
@@ -127,11 +147,25 @@ namespace jeecs
             else
             {
                 // Parent is not exist, treate it as l2w
-                trans->set_rotation(l2p->rot);
-                trans->set_position(l2p->pos);
-                trans->set_scale(l2p->scale);
+                UpdateWorldToTranslation(reinterpret_cast<const LocalToWorld*>(l2p), trans);
             }
         }
-
+        void UpdateParentToTranslationInverse(const LocalToParent* l2p, Translation* trans)
+        {
+            // Get parent's translation, then apply them.
+            auto fnd = m_anchor_list.find(l2p->parent_uid);
+            if (fnd != m_anchor_list.end())
+            {
+                const Translation* parent_trans = fnd->second.m_translation;
+                trans->set_inverse_rotation(parent_trans->get_rotation() * l2p->rot);
+                trans->set_inverse_position(parent_trans->get_rotation() * l2p->pos + parent_trans->get_position());
+                trans->set_scale(l2p->scale); // TODO: need apply scale?   
+            }
+            else
+            {
+                // Parent is not exist, treate it as l2w
+                UpdateWorldToTranslationInverse(reinterpret_cast<const LocalToWorld*>(l2p), trans);
+            }
+        }
     };
 }

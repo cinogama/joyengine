@@ -11,25 +11,65 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include <queue>
+
 namespace jeecs
 {
     struct DefaultGraphicPipelineSystem : public game_system
     {
         using Translation = Transform::Translation;
+        using InverseTranslation = Transform::InverseTranslation;
 
         using OrthoCamera = Renderer::OrthoCamera;
         using Material = Renderer::Material;
         using Shape = Renderer::Shape;
-        
+
+        jegl_thread* glthread = nullptr;
+        // std::priority_queue 
+
         DefaultGraphicPipelineSystem()
             : game_system(nullptr)
         {
             // GraphicSystem is a public system and not belong to any world.
+
+            jegl_interface_config config;
+            config.m_fps = 60;
+            config.m_resolution_x = 1024;
+            config.m_resolution_y = 768;
+
+            glthread = jegl_start_graphic_thread(config, 
+                [](void* ptr) 
+                {
+                    ((DefaultGraphicPipelineSystem*)ptr)->Frame(); 
+                }, this);
+
+            register_system_func(&DefaultGraphicPipelineSystem::SimplePrepareCamera,
+                {
+                    contain<InverseTranslation>()  // Used for inverse mats
+                });
+            register_system_func(&DefaultGraphicPipelineSystem::SimpleRendObject);
+
+        }
+        ~DefaultGraphicPipelineSystem()
+        {
+            jegl_terminate_graphic_thread(glthread);
         }
 
-        void SimpleRendJob(const Translation* trans, const Material* mat, const Shape* shape)
+        void Frame()
         {
-            debug::log_fatal("TEST");
+            // Here to rend a frame..
+
+        }
+
+        void SimplePrepareCamera(const Translation* trans, const OrthoCamera* camera)
+        {
+            // Camera must contain:
+            //  InverseTranslation
+        }
+
+        void SimpleRendObject(const Translation* trans, const Material* mat, const Shape* shape)
+        {
+            // RendOb will be input to a chain and used for swap
         }
     };
 

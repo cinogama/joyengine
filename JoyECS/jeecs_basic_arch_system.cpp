@@ -437,7 +437,6 @@ namespace jeecs_impl
                     je_mem_free(m_game_system_function->m_archs);
                 }
             }
-            jeecs::game_system_function::destory(m_game_system_function);
         }
     public:
 
@@ -1465,6 +1464,7 @@ namespace jeecs_impl
         {
             jeecs::game_system* m_system_instance;
             const jeecs::typing::type_info* m_system_typeinfo;
+            ecs_world* m_attached_world; // only used in shared_system
         };
 
         std::recursive_mutex _m_stored_systems_mx;
@@ -1610,7 +1610,51 @@ namespace jeecs_impl
         void store_system_for_world(ecs_world* world, const jeecs::typing::type_info* system_type, jeecs::game_system* system_instacne)
         {
             std::lock_guard g1(_m_stored_systems_mx);
-            _m_stored_systems[world].push_back(stored_system_instance{ system_instacne,system_type });
+            _m_stored_systems[world].push_back(stored_system_instance{ system_instacne,system_type, world });
+        }
+
+        void attach_shared_system_to_world(ecs_world* world, const jeecs::typing::type_info* system_type)
+        {
+            std::lock_guard g1(_m_stored_systems_mx);
+            stored_system_instance* fnd = nullptr;
+            for (auto& shared_system : _m_stored_systems[nullptr])
+            {
+                if (shared_system.m_system_typeinfo == system_type)
+                {
+                    fnd = &shared_system;
+                    break;
+                }
+            }
+
+            if (fnd)
+            {
+                if (fnd->m_attached_world)
+                {
+                    // Disattach from old world
+                    auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
+
+                    while (func_chain)
+                    {
+                        fnd->m_attached_world->get_command_buffer().remove_system(fnd->m_attached_world, func_chain);
+                        func_chain = func_chain->last;
+                    }
+                }
+                if (world)
+                {
+                    // Attach to new world.
+                    auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
+
+                    while (func_chain)
+                    {
+                        world->get_command_buffer().append_system(world, func_chain);
+                        func_chain = func_chain->last;
+                    }
+                }
+                fnd->m_attached_world = world;
+            }
+            else
+                jeecs::debug::log_error("There is no shared-system: '%s' in universe:%p.",
+                    system_type->m_typename, this);
         }
     };
 }
@@ -1630,7 +1674,7 @@ void* je_ecs_universe_instance_system(
     void* aim_world,
     const jeecs::typing::type_info* system_type)
 {
-    void * instance = je_mem_alloc(system_type->m_size);
+    void* instance = je_mem_alloc(system_type->m_size);
 
     system_type->construct(instance, aim_world);
 
@@ -1638,6 +1682,16 @@ void* je_ecs_universe_instance_system(
         (jeecs_impl::ecs_world*)aim_world, system_type, (jeecs::game_system*)instance);
 
     return instance;
+}
+
+void je_ecs_universe_attach_shared_system_to(
+    void* universe,
+    void* aim_world,
+    const jeecs::typing::type_info* system_type
+)
+{
+    ((jeecs_impl::ecs_universe*)universe)->attach_shared_system_to_world(
+        (jeecs_impl::ecs_world*)aim_world, system_type);
 }
 
 void* je_arch_get_chunk(void* archtype)
@@ -1754,3 +1808,4 @@ void* je_ecs_world_in_universe(void* world)
 {
     return  ((jeecs_impl::ecs_world*)world)->get_universe();
 }
+
