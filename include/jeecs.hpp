@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
+#include <cfloat>
 
 #include <typeinfo>
 
@@ -27,7 +28,7 @@
 #include <cstddef>
 #include <cmath>
 #include <random>
-
+#include <thread>
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
