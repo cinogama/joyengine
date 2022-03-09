@@ -4,7 +4,7 @@
 #include "jeecs.hpp"
 
 #include "jeecs_core_translation_system.hpp"
-#include "jeecs_core_graphic_system.h"
+#include "jeecs_core_graphic_system.hpp"
 
 void jeecs_entry_register_core_systems()
 {
