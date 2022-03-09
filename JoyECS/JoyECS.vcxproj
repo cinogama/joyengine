@@ -172,6 +172,9 @@
     <ClInclude Include="jeecs_core_translation_system.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\3rd\glew\build\vc15\glew_static.vcxproj">
+      <Project>{664e6f0d-6784-4760-9565-d54f8eb1edf4}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\3rd\restorablescene\RestorableScene\RestorableScene.vcxproj">
       <Project>{0db28885-57ca-4c81-a1c8-fef70af7b68a}</Project>
     </ProjectReference>
