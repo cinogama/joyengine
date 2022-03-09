@@ -54,6 +54,9 @@
     <ClCompile Include="jeecs_graphic_api_impl_opengl.cpp">
       <Filter>graphic</Filter>
     </ClCompile>
+    <ClCompile Include="jeecs_graphic_api_basic.cpp">
+      <Filter>graphic</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="jeecs.hpp">

@@ -37,28 +37,35 @@ namespace jeecs
             config.m_resolution_x = 1024;
             config.m_resolution_y = 768;
 
-            glthread = jegl_start_graphic_thread(config, 
-                [](void* ptr) 
+            glthread = jegl_start_graphic_thread(
+                config,
+                jegl_using_opengl_apis,
+                [](void* ptr)
                 {
-                    ((DefaultGraphicPipelineSystem*)ptr)->Frame(); 
+                    ((DefaultGraphicPipelineSystem*)ptr)->Frame();
                 }, this);
 
             register_system_func(&DefaultGraphicPipelineSystem::SimplePrepareCamera,
                 {
-                    contain<InverseTranslation>()  // Used for inverse mats
+                    contain<InverseTranslation>(),  // Used for inverse mats
+                    before(&DefaultGraphicPipelineSystem::FlushPipeLine)
                 });
-            register_system_func(&DefaultGraphicPipelineSystem::SimpleRendObject);
-
+            register_system_func(&DefaultGraphicPipelineSystem::SimpleRendObject,
+                {
+                    before(&DefaultGraphicPipelineSystem::FlushPipeLine)
+                });
+            register_system_func(&DefaultGraphicPipelineSystem::FlushPipeLine);
         }
         ~DefaultGraphicPipelineSystem()
         {
-            jegl_terminate_graphic_thread(glthread);
+            if (glthread)
+                jegl_terminate_graphic_thread(glthread);
         }
 
         void Frame()
         {
             // Here to rend a frame..
-
+            jeecs::debug::log_fatal("Emmmm i'm wrong..");
         }
 
         void SimplePrepareCamera(const Translation* trans, const OrthoCamera* camera)
@@ -70,6 +77,12 @@ namespace jeecs
         void SimpleRendObject(const Translation* trans, const Material* mat, const Shape* shape)
         {
             // RendOb will be input to a chain and used for swap
+        }
+
+        void FlushPipeLine()
+        {
+            if (glthread)
+                jegl_update(glthread);
         }
     };
 

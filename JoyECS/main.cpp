@@ -19,7 +19,7 @@ int main(int argc, char** argv)
 
     jeecs::enrty::module_entry();
 
-    while(true)
+    //while(true)
     {
         game_universe universe = game_universe::create_universe();
         universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));

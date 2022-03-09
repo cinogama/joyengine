@@ -272,18 +272,50 @@ struct jegl_interface_config
     size_t m_fps;
 };
 
+struct jegl_thread_notifier;
+
+struct jegl_graphic_api;
+
 struct jegl_thread
 {
     std::thread* _m_thread;
+    jegl_thread_notifier* _m_thread_notifier;
     void* _m_interface_handle;
+
+    jegl_graphic_api* m_apis;
 };
 
+struct jegl_graphic_api
+{
+    using custom_interface_info_t = void*;
+
+    using startup_interface_func_t = custom_interface_info_t(*)(jegl_thread*, const jegl_interface_config*);
+    using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t);
+    using update_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t);
+
+    startup_interface_func_t    init_interface;
+    shutdown_interface_func_t   shutdown_interface;
+    update_interface_func_t     update_interface;
+};
+static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
+
+using jeecs_api_register_func_t = void(*)(jegl_graphic_api*);
+
 JE_API jegl_thread* jegl_start_graphic_thread(
-    jegl_interface_config config, 
+    jegl_interface_config config,
+    jeecs_api_register_func_t register_func,
     void(*frame_rend_work)(void*),
     void* arg);
 
-JE_API void jegl_terminate_graphic_thread(jegl_thread* thread);
+JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);
+
+JE_API void jegl_update(jegl_thread* thread_handle);
+
+JE_API void jegl_reboot_graphic_thread(
+    jegl_thread* thread_handle,
+    jegl_interface_config config);
+
+JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis);
 
 RS_FORCE_CAPI_END
 
@@ -958,7 +990,7 @@ namespace jeecs
         }
 
         template<typename T>
-        inline static constexpr requirement pre(T val)
+        inline static constexpr requirement before(T val)
         {
             return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME,
                 *reinterpret_cast<typing::typeid_t*>(&val) };

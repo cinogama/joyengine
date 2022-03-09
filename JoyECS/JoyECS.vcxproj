@@ -162,6 +162,7 @@
     <ClCompile Include="jeecs_basic_type_mgr.cpp" />
     <ClCompile Include="jeecs_basic_uid.cpp" />
     <ClCompile Include="jeecs_core_register_system.cpp" />
+    <ClCompile Include="jeecs_graphic_api_basic.cpp" />
     <ClCompile Include="jeecs_graphic_api_impl_opengl.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
