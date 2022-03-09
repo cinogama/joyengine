@@ -65,7 +65,6 @@ namespace jeecs
         void Frame()
         {
             // Here to rend a frame..
-            jeecs::debug::log_fatal("Emmmm i'm wrong..");
         }
 
         void SimplePrepareCamera(const Translation* trans, const OrthoCamera* camera)

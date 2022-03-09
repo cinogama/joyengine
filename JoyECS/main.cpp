@@ -46,7 +46,7 @@ int main(int argc, char** argv)
             Renderer::Material,
             Renderer::Shape>();
 
-        je_clock_sleep_for(0.5);
+        je_clock_sleep_for(1);
         game_universe::destroy_universe(universe);
     }
 
