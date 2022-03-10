@@ -201,6 +201,8 @@ JE_API void je_universe_loop(void* universe);
 
 JE_API void je_ecs_universe_destroy(void* universe);
 
+JE_API void je_ecs_universe_stop(void* universe);
+
 JE_API void* je_ecs_universe_instance_system(
     void* universe,
     void* aim_world,
@@ -1197,6 +1199,11 @@ namespace jeecs
             je_universe_loop(handle());
         }
 
+        inline void stop() const noexcept
+        {
+            je_ecs_universe_stop(handle());
+        }
+
         inline operator bool() const noexcept
         {
             return _m_universe_addr;
@@ -1209,7 +1216,7 @@ namespace jeecs
         }
         static void destroy_universe(game_universe universe)
         {
-            return je_ecs_universe_destroy(universe._m_universe_addr);
+            return je_ecs_universe_destroy(universe.handle());
         }
     };
 

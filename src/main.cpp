@@ -14,43 +14,45 @@ int main(int argc, char** argv)
     rs_init(argc, argv);
     using namespace jeecs;
     using namespace std;
-
-    rs_vm vmm = rs_create_vm();
-    rs_load_source(vmm, "_example.rsn", "import rscene.std; std::println(\"Helloworld\");");
-    rs_run(vmm);
-    rs_close_vm(vmm);
-
+    
+    // When abort try clear rs-state and module
+    at_quick_exit(rs_finish);
+    at_quick_exit(jeecs::enrty::module_leave);
 
     std::unordered_set<typing::uid_t> x;
 
     jeecs::enrty::module_entry();
 
-    game_universe universe = game_universe::create_universe();
-    universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
+    // while (true)
+    {
+        game_universe universe = game_universe::create_universe();
+        universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
 
-    game_world world = universe.create_world();
-    world.add_system(typing::type_info::of("jeecs::TranslationUpdatingSystem"));
+        game_world world = universe.create_world();
+        world.add_system(typing::type_info::of("jeecs::TranslationUpdatingSystem"));
 
-    universe.attach_shared_system_to(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"), world);
+        universe.attach_shared_system_to(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"), world);
 
-    auto entity = world.add_entity<
-        Transform::LocalPosition,
-        Transform::LocalRotation,
-        Transform::LocalScale,
-        Transform::ChildAnchor,
-        Transform::LocalToWorld,
-        Transform::Translation>();
+        auto entity = world.add_entity<
+            Transform::LocalPosition,
+            Transform::LocalRotation,
+            Transform::LocalScale,
+            Transform::ChildAnchor,
+            Transform::LocalToWorld,
+            Transform::Translation>();
 
-    auto entity2 = world.add_entity<
-        Transform::LocalPosition,
-        Transform::LocalRotation,
-        Transform::LocalScale,
-        Transform::LocalToParent,
-        Transform::Translation,
-        Renderer::Material,
-        Renderer::Shape>();
+        auto entity2 = world.add_entity<
+            Transform::LocalPosition,
+            Transform::LocalRotation,
+            Transform::LocalScale,
+            Transform::LocalToParent,
+            Transform::Translation,
+            Renderer::Material,
+            Renderer::Shape>();
 
-    universe.wait();
+        universe.wait();
+        game_universe::destroy_universe(universe);
+    }
 
     je_clock_sleep_for(1);
 

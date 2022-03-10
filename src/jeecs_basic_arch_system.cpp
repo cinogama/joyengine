@@ -1542,6 +1542,17 @@ namespace jeecs_impl
                             je_clock_sleep_for(0.1);
                         }
                     }
+
+                    // invoke callback
+                    auto* callback_func_node = m_exit_callback_list.pick_all();
+                    while (callback_func_node)
+                    {
+                        auto* current_callback = callback_func_node;
+                        callback_func_node = callback_func_node->last;
+
+                        current_callback->m_method();
+                        jeecs::basic::destroy_free(current_callback);
+                    }
                 }
             ));
 
@@ -1569,6 +1580,19 @@ namespace jeecs_impl
         {
             DEBUG_ARCH_LOG("Universe: %p closing.", this);
 
+            stop_universe_loop();
+            if (_m_universe_update_thread.joinable())
+                _m_universe_update_thread.join();
+
+            unstore_system_for_world(nullptr);
+
+            assert(_m_stored_systems.empty());
+
+            DEBUG_ARCH_LOG("Universe: %p closed.", this);
+        }
+    public:
+        void stop_universe_loop() noexcept
+        {
             do
             {
                 std::lock_guard g1(_m_world_list_mx);
@@ -1580,26 +1604,8 @@ namespace jeecs_impl
             } while (0);
 
             _m_universe_update_thread_stop_flag.clear();
-
-            if (_m_universe_update_thread.joinable())
-                _m_universe_update_thread.join();
-
-            unstore_system_for_world(nullptr);
-
-            auto* callback_func_node = m_exit_callback_list.pick_all();
-            while (callback_func_node)
-            {
-                auto* current_callback = callback_func_node;
-                callback_func_node = callback_func_node->last;
-
-                current_callback->m_method();
-            }
-
-            assert(_m_stored_systems.empty());
-
-            DEBUG_ARCH_LOG("Universe: %p closed.", this);
         }
-    public:
+
         ecs_world* create_world()
         {
             DEBUG_ARCH_LOG("Universe: %p want to create a world.", this);
@@ -1712,6 +1718,11 @@ void je_universe_loop(void* ecs_universe)
 void je_ecs_universe_destroy(void* ecs_universe)
 {
     jeecs::basic::destroy_free((jeecs_impl::ecs_universe*)ecs_universe);
+}
+
+void je_ecs_universe_stop(void* ecs_universe)
+{
+    ((jeecs_impl::ecs_universe*)ecs_universe)->stop_universe_loop();
 }
 
 void* je_ecs_universe_instance_system(

@@ -89,7 +89,7 @@ namespace jeecs
                     // ready to shutdown current universe
 
                     if (current_universe)
-                        game_universe::destroy_universe(current_universe);
+                        current_universe.stop();
                 }
         }
     };
