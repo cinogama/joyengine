@@ -25,17 +25,19 @@ namespace jeecs
         using Shape = Renderer::Shape;
 
         jegl_thread* glthread = nullptr;
-        // std::priority_queue 
+        game_universe current_universe = nullptr;
 
-        DefaultGraphicPipelineSystem()
+        DefaultGraphicPipelineSystem(game_universe universe)
             : game_system(nullptr)
+            , current_universe(universe)
         {
             // GraphicSystem is a public system and not belong to any world.
 
-            jegl_interface_config config;
+            jegl_interface_config config = {};
             config.m_fps = 60;
             config.m_resolution_x = 1024;
             config.m_resolution_y = 768;
+            config.m_title = "JoyEngineECS(JoyEngine 4.0)";
 
             glthread = jegl_start_graphic_thread(
                 config,
@@ -81,7 +83,14 @@ namespace jeecs
         void FlushPipeLine()
         {
             if (glthread)
-                jegl_update(glthread);
+                if (!jegl_update(glthread))
+                {
+                    // update is not work now, means graphic thread want to exit..
+                    // ready to shutdown current universe
+
+                    if (current_universe)
+                        game_universe::destroy_universe(current_universe);
+                }
         }
     };
 

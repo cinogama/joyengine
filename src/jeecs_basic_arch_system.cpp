@@ -1136,7 +1136,7 @@ namespace jeecs_impl
 
                 // Ok, execute chain:
 
-                auto current = je_clock_time();
+                //  auto current = je_clock_time();
 
                 for (auto& seq : _m_execute_seq)
                 {
@@ -1152,9 +1152,8 @@ namespace jeecs_impl
                     );
                 }
 
-                auto endwork = je_clock_time();
-
-                jeecs::debug::log_warn("A round of system scheduler: %f", endwork - current);
+                //auto endwork = je_clock_time();
+                //jeecs::debug::log_warn("A round of system scheduler: %f", endwork - current);
             }
             else
             {
@@ -1551,6 +1550,21 @@ namespace jeecs_impl
 
             DEBUG_ARCH_LOG("Universe: %p created.", this);
         }
+
+        struct callback_function_node
+        {
+            callback_function_node* last;
+            std::function<void(void)> m_method;
+        };
+        jeecs::basic::atomic_list<callback_function_node> m_exit_callback_list;
+
+        inline void register_exit_callback(const std::function<void(void)>& function)noexcept
+        {
+            callback_function_node* node = jeecs::basic::create_new<callback_function_node>();
+            node->m_method = function;
+            m_exit_callback_list.add_one(node);
+        }
+
         ~ecs_universe()
         {
             DEBUG_ARCH_LOG("Universe: %p closing.", this);
@@ -1566,9 +1580,20 @@ namespace jeecs_impl
             } while (0);
 
             _m_universe_update_thread_stop_flag.clear();
-            _m_universe_update_thread.join();
+
+            if (_m_universe_update_thread.joinable())
+                _m_universe_update_thread.join();
 
             unstore_system_for_world(nullptr);
+
+            auto* callback_func_node = m_exit_callback_list.pick_all();
+            while (callback_func_node)
+            {
+                auto* current_callback = callback_func_node;
+                callback_func_node = callback_func_node->last;
+
+                current_callback->m_method();
+            }
 
             assert(_m_stored_systems.empty());
 
@@ -1664,6 +1689,26 @@ void* je_ecs_universe_create()
     return jeecs::basic::create_new<jeecs_impl::ecs_universe>();
 }
 
+void je_universe_loop(void* ecs_universe)
+{
+    std::condition_variable exit_cv;
+    std::mutex exit_mx;
+    std::atomic_flag exit_flag = {};
+    exit_flag.test_and_set();
+
+    ((jeecs_impl::ecs_universe*)ecs_universe)->register_exit_callback([&]() {
+        std::lock_guard g1(exit_mx);
+        exit_flag.clear();
+        exit_cv.notify_all();
+        });
+
+    do
+    {
+        std::unique_lock uq1(exit_mx);
+        exit_cv.wait(uq1, [&]()->bool {return !exit_flag.test_and_set(); });
+    } while (0);
+}
+
 void je_ecs_universe_destroy(void* ecs_universe)
 {
     jeecs::basic::destroy_free((jeecs_impl::ecs_universe*)ecs_universe);
@@ -1676,7 +1721,10 @@ void* je_ecs_universe_instance_system(
 {
     void* instance = je_mem_alloc(system_type->m_size);
 
-    system_type->construct(instance, aim_world);
+    if (aim_world)
+        system_type->construct(instance, aim_world);
+    else
+        system_type->construct(instance, universe);
 
     ((jeecs_impl::ecs_universe*)universe)->store_system_for_world(
         (jeecs_impl::ecs_world*)aim_world, system_type, (jeecs::game_system*)instance);

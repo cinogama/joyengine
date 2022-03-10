@@ -1,5 +1,3 @@
-#pragma once
-
 #define JE_IMPL
 #include "jeecs.hpp"
 

@@ -1,5 +1,3 @@
-#pragma once
-
 #define JE_IMPL
 #include "jeecs.hpp"
 
@@ -35,9 +33,15 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*), vo
             if (thread->_m_thread_notifier->m_reboot_flag)
                 break;
 
-            thread->m_apis->update_interface(thread, custom_interface);
-
-            frame_rend_work(arg);
+            if (!thread->m_apis->update_interface(thread, custom_interface))
+            {
+                // graphic thread want to exit. mark stop update
+                thread->m_stop_update = true;
+            }
+            else
+            {
+                frame_rend_work(arg);
+            }
 
             std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
             thread->_m_thread_notifier->m_update_flag = false;
@@ -125,8 +129,11 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
     jeecs::basic::destroy_free(thread);
 }
 
-void jegl_update(jegl_thread* thread)
+bool jegl_update(jegl_thread* thread)
 {
+    if (thread->m_stop_update)
+        return false;
+
     do
     {
         std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
@@ -143,6 +150,8 @@ void jegl_update(jegl_thread* thread)
             return !thread->_m_thread_notifier->m_update_flag;
             });
     } while (0);
+
+    return true;
 }
 
 void jegl_reboot_graphic_thread(jegl_thread* thread_handle, jegl_interface_config config)

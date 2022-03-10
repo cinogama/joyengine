@@ -197,6 +197,8 @@ JE_API size_t je_arch_entity_meta_version_offset();
 
 JE_API void* je_ecs_universe_create();
 
+JE_API void je_universe_loop(void* universe);
+
 JE_API void je_ecs_universe_destroy(void* universe);
 
 JE_API void* je_ecs_universe_instance_system(
@@ -271,6 +273,10 @@ struct jegl_interface_config
     size_t m_resolution_x, m_resolution_y;
 
     size_t m_fps;
+
+    const char* m_title;
+
+    bool m_fullscreen;
 };
 
 struct jegl_thread_notifier;
@@ -284,6 +290,7 @@ struct jegl_thread
     void* _m_interface_handle;
 
     jegl_graphic_api* m_apis;
+    std::atomic_bool  m_stop_update;
 };
 
 struct jegl_graphic_api
@@ -292,7 +299,7 @@ struct jegl_graphic_api
 
     using startup_interface_func_t = custom_interface_info_t(*)(jegl_thread*, const jegl_interface_config*);
     using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t);
-    using update_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t);
+    using update_interface_func_t = bool(*)(jegl_thread*, custom_interface_info_t);
 
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
@@ -310,7 +317,7 @@ JE_API jegl_thread* jegl_start_graphic_thread(
 
 JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);
 
-JE_API void jegl_update(jegl_thread* thread_handle);
+JE_API bool jegl_update(jegl_thread* thread_handle);
 
 JE_API void jegl_reboot_graphic_thread(
     jegl_thread* thread_handle,
@@ -448,7 +455,7 @@ namespace jeecs
                 using _true_type = std::true_type;
 
                 template<typename V>
-                static auto _tester(int)->_true_type<decltype(new T())>;
+                static auto _tester(int)->_true_type<decltype(new V())>;
                 template<typename V>
                 static std::false_type _tester(...);
 
@@ -1185,6 +1192,16 @@ namespace jeecs
             je_ecs_universe_attach_shared_system_to(handle(), world.handle(), typeinfo);
         }
 
+        inline void wait()const noexcept
+        {
+            je_universe_loop(handle());
+        }
+
+        inline operator bool() const noexcept
+        {
+            return _m_universe_addr;
+        }
+
     public:
         static game_universe create_universe()
         {
@@ -1687,31 +1704,27 @@ namespace jeecs
 
             inline void create_matrix(float* pMatrix) const noexcept
             {
-                // 转换为矩阵
                 if (!pMatrix) return;
                 float m_x = x;
                 float m_y = y;
                 float m_z = z;
                 float m_w = w;
-                //第一行
+
                 pMatrix[0] = 1.0f - 2.0f * (m_y * m_y + m_z * m_z);
                 pMatrix[1] = 2.0f * (m_x * m_y + m_z * m_w);
                 pMatrix[2] = 2.0f * (m_x * m_z - m_y * m_w);
                 pMatrix[3] = 0.0f;
 
-                // 第二行
                 pMatrix[4] = 2.0f * (m_x * m_y - m_z * m_w);
                 pMatrix[5] = 1.0f - 2.0f * (m_x * m_x + m_z * m_z);
                 pMatrix[6] = 2.0f * (m_z * m_y + m_x * m_w);
                 pMatrix[7] = 0.0f;
 
-                //第三行
                 pMatrix[8] = 2.0f * (m_x * m_z + m_y * m_w);
                 pMatrix[9] = 2.0f * (m_y * m_z - m_x * m_w);
                 pMatrix[10] = 1.0f - 2.0f * (m_x * m_x + m_y * m_y);
                 pMatrix[11] = 0.0f;
 
-                //第四行
                 pMatrix[12] = 0;
                 pMatrix[13] = 0;
                 pMatrix[14] = 0;
@@ -1719,31 +1732,28 @@ namespace jeecs
             }
             inline void create_inv_matrix(float* pMatrix) const noexcept
             {
-                // 转换为矩阵
+
                 if (!pMatrix) return;
                 float m_x = x;
                 float m_y = y;
                 float m_z = z;
                 float m_w = -w;
-                //第一行
+
                 pMatrix[0] = 1.0f - 2.0f * (m_y * m_y + m_z * m_z);
                 pMatrix[1] = 2.0f * (m_x * m_y + m_z * m_w);
                 pMatrix[2] = 2.0f * (m_x * m_z - m_y * m_w);
                 pMatrix[3] = 0.0f;
 
-                // 第二行
                 pMatrix[4] = 2.0f * (m_x * m_y - m_z * m_w);
                 pMatrix[5] = 1.0f - 2.0f * (m_x * m_x + m_z * m_z);
                 pMatrix[6] = 2.0f * (m_z * m_y + m_x * m_w);
                 pMatrix[7] = 0.0f;
 
-                //第三行
                 pMatrix[8] = 2.0f * (m_x * m_z + m_y * m_w);
                 pMatrix[9] = 2.0f * (m_y * m_z - m_x * m_w);
                 pMatrix[10] = 1.0f - 2.0f * (m_x * m_x + m_y * m_y);
                 pMatrix[11] = 0.0f;
 
-                //第四行
                 pMatrix[12] = 0;
                 pMatrix[13] = 0;
                 pMatrix[14] = 0;
