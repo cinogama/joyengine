@@ -16,4 +16,4 @@ endif()
 
 add_executable(joyecs ${joyecs_srcs})
 target_link_libraries(joyecs ${jeecs_system_libs})
-target_link_libraries(joyecs rscene glew_s)
+target_link_libraries(joyecs rscene glew_s glfw)

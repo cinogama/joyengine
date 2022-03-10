@@ -19,7 +19,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
 
 # 包含子项目。
+add_subdirectory("3rd/glfw")
 add_subdirectory("3rd/glew/build/cmake")
 add_subdirectory("3rd/restorablescene")
-
 add_subdirectory ("src")

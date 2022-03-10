@@ -6,3 +6,7 @@
 	path = 3rd/glew
 	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/glew-2.2.0.git
 	branch = master
+[submodule "3rd/glfw"]
+	path = 3rd/glfw
+	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/glfw.git
+	branch = 3.3-stable
