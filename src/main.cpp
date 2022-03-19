@@ -14,7 +14,32 @@ int main(int argc, char** argv)
     rs_init(argc, argv);
     using namespace jeecs;
     using namespace std;
-    
+
+    rs_vm v = rs_create_vm();
+    rs_load_source(v, "example.rsn", R"(
+import rscene.std;
+
+func foo()
+{
+    outside@
+    for(;;)
+    {
+        while(true)
+        {
+            break outside;
+        }
+        std::println("This line will not display.");
+    }
+    std::panic("Haihai!`");
+}
+
+foo();
+
+)");
+    std::cout << rs_get_compile_error(v, RS_NEED_COLOR);
+    rs_run(v);
+    rs_close_vm(v);
+
     // When abort try clear rs-state and module
     at_quick_exit(rs_finish);
     at_quick_exit(jeecs::enrty::module_leave);
@@ -31,7 +56,7 @@ int main(int argc, char** argv)
         game_world world = universe.create_world();
         world.add_system(typing::type_info::of("jeecs::TranslationUpdatingSystem"));
 
-        universe.attach_shared_system_to(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"), world);
+        world.attach_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
 
         auto entity = world.add_entity<
             Transform::LocalPosition,

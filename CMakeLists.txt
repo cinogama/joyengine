@@ -17,7 +17,12 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
 add_subdirectory("3rd/glew/build/cmake")
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic rscene" FORCE)
 add_subdirectory("3rd/restorablescene")
+
+
 add_subdirectory("src")

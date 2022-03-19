@@ -42,10 +42,7 @@ namespace jeecs
             glthread = jegl_start_graphic_thread(
                 config,
                 jegl_using_opengl_apis,
-                [](void* ptr)
-                {
-                    ((DefaultGraphicPipelineSystem*)ptr)->Frame();
-                }, this);
+                [](void* ptr){((DefaultGraphicPipelineSystem*)ptr)->Frame();}, this);
 
             register_system_func(&DefaultGraphicPipelineSystem::SimplePrepareCamera,
                 {
@@ -64,20 +61,46 @@ namespace jeecs
                 jegl_terminate_graphic_thread(glthread);
         }
 
+        struct CameraArch
+        {
+            const Translation* translation;
+            const OrthoCamera* camera;
+        };
+        struct RendererArch
+        {
+            const Translation* translation;
+            const Material* material;
+            const Shape* shape;
+        };
+
+        std::vector<CameraArch> m_camera_list;
+        std::vector<RendererArch> m_renderer_list;
+
         void Frame()
         {
             // Here to rend a frame..
+
+
+            m_renderer_list.clear();
         }
 
         void SimplePrepareCamera(const Translation* trans, const OrthoCamera* camera)
         {
-            // Camera must contain:
-            //  InverseTranslation
+            // Calc camera proj matrix
+            m_camera_list.push_back(
+                CameraArch{
+                    trans, camera
+                }
+            );
         }
 
         void SimpleRendObject(const Translation* trans, const Material* mat, const Shape* shape)
         {
             // RendOb will be input to a chain and used for swap
+            m_renderer_list.emplace_back(
+                RendererArch{
+                    trans, mat, shape
+                });
         }
 
         void FlushPipeLine()

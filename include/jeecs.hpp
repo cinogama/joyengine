@@ -101,9 +101,7 @@ namespace jeecs
     }
 
     struct game_system_function;
-
     class game_system;
-
     class game_world;
 
     struct game_entity
@@ -121,6 +119,11 @@ namespace jeecs
         template<typename T>
         inline T* get_component()noexcept;
     };
+
+    namespace Transform
+    {
+        struct Translation;
+    }
 }
 
 namespace std
@@ -295,6 +298,72 @@ struct jegl_thread
     std::atomic_bool  m_stop_update;
 };
 
+struct jegl_texture
+{
+    using pixel_data_t = uint8_t;
+    enum texture_format
+    {
+        MONO,
+        RGB,
+        RGBA,
+    };
+    pixel_data_t*   m_pixels;
+    size_t          m_width;
+    size_t          m_height;
+};
+
+struct jegl_vertex
+{
+    enum vertex_type
+    {
+        LINES,
+        LINELOOP,
+        LINESTRIP,
+        TRIANGLES,
+        TRIANGLESTRIP,
+        QUADS,
+    };
+    float* m_vertex_datas;
+    size_t* m_vertex_formats;
+    size_t m_format_count;
+    size_t m_point_count;
+    vertex_type m_type;
+};
+
+struct jegl_material
+{
+
+};
+
+struct jegl_resource
+{
+    using jegl_custom_resource_t = void*;
+    enum type
+    {
+        VERTEX,         // Mesh
+        TEXTURE,        // Texture
+        MATERIAL,       // Shaders & Uniforms
+    };
+    type m_type;
+    jeecs::typing::version_t m_graphic_threadver;
+
+    union
+    {
+        void* m_ptr;
+        size_t m_handle;
+        uint32_t m_uint;
+    };
+    union
+    {
+        jegl_custom_resource_t m_custom_resource;
+        jegl_texture* m_raw_texture_data;
+        jegl_vertex* m_raw_vertex_data;
+        jegl_material* m_raw_material_data;
+    };
+
+
+};
+
 struct jegl_graphic_api
 {
     using custom_interface_info_t = void*;
@@ -303,9 +372,15 @@ struct jegl_graphic_api
     using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t);
     using update_interface_func_t = bool(*)(jegl_thread*, custom_interface_info_t);
 
+    using using_resource_func_t = void(*)(jegl_resource*);
+    using close_resource_func_t = void(*)(jegl_resource*);
+
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
     update_interface_func_t     update_interface;
+
+    using_resource_func_t       using_resource;
+    close_resource_func_t       close_resource;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -324,6 +399,12 @@ JE_API bool jegl_update(jegl_thread* thread_handle);
 JE_API void jegl_reboot_graphic_thread(
     jegl_thread* thread_handle,
     jegl_interface_config config);
+
+JE_API jegl_resource* jegl_load_texture(const char* path);
+
+JE_API jegl_resource* jegl_load_vertex(const char* path);
+
+JE_API jegl_resource* jegl_load_material(const char* path);
 
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis);
 
@@ -807,10 +888,21 @@ namespace jeecs
 
             return gentity;
         }
+
+        inline void attach_shared_system(const typing::type_info* system_id)
+        {
+            je_ecs_universe_attach_shared_system_to(
+                je_ecs_world_in_universe(handle()),
+                handle(),
+                system_id
+            );
+        }
+
         inline operator bool()const noexcept
         {
             return handle() != nullptr;
         }
+        
     };
 
     class game_system
