@@ -10,3 +10,7 @@
 	path = 3rd/glfw
 	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/glfw.git
 	branch = 3.3-stable
+[submodule "3rd/stb"]
+	path = 3rd/stb
+	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/stb.git
+	branch = master

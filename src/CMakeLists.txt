@@ -6,6 +6,7 @@ include_directories("../include")
 include_directories("../3rd/restorablescene/include")
 include_directories("../3rd/glew/include")
 include_directories("../3rd/glfw/include")
+include_directories("../3rd/stb")
 
 file(GLOB_RECURSE joyecs_srcs *.cpp)
 

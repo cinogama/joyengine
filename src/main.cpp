@@ -18,25 +18,26 @@ int main(int argc, char** argv)
     rs_vm v = rs_create_vm();
     rs_load_source(v, "example.rsn", R"(
 import rscene.std;
+import rscene.co;
 
-func foo()
+func co_work(var id:int)
 {
-    outside@
+    std::println("I'm co:", id);
     for(;;)
-    {
-        while(true)
-        {
-            break outside;
-        }
-        std::println("This line will not display.");
-    }
-    std::panic("Haihai!`");
+       std::co::sleep(1);
 }
 
-foo();
+var colist = []:array<std::co>;
+
+for(var i=0;i<10000;i+=1)
+    colist->add(std::co(co_work, i));
+
+while(true)
+    std::sleep(1);
 
 )");
     std::cout << rs_get_compile_error(v, RS_NEED_COLOR);
+    std::cout << rs_get_compile_warning(v, RS_NEED_COLOR);
     rs_run(v);
     rs_close_vm(v);
 
