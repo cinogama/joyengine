@@ -1,6 +1,9 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 struct jegl_thread_notifier
 {
     jegl_interface_config m_interface_config;
@@ -158,4 +161,42 @@ void jegl_reboot_graphic_thread(jegl_thread* thread_handle, jegl_interface_confi
 {
     thread_handle->_m_thread_notifier->m_interface_config = config;
     thread_handle->_m_thread_notifier->m_reboot_flag = true;
+}
+
+jegl_resource* jegl_load_texture(const char* path)
+{
+    if (jeecs_file* texfile = jeecs_file_open(path))
+    {
+        jegl_resource* texture = jeecs::basic::create_new<jegl_resource>();
+        texture->m_raw_texture_data = jeecs::basic::create_new<jegl_texture>();
+
+        unsigned char* fbuf = new unsigned char[texfile->m_file_length];
+        int w, h, cdepth;
+
+        texture->m_raw_texture_data->m_pixels = stbi_load_from_memory(
+            fbuf,
+            texfile->m_file_length,
+            &w, &h, &cdepth,
+            STBI_rgb_alpha
+        );
+
+        delete[] fbuf;
+
+        if (texture->m_raw_texture_data->m_pixels == nullptr)
+        {
+            jeecs::debug::log_error("Fail to load texture form file: '%s'", path);
+            jeecs::basic::destroy_free(texture->m_raw_texture_data);
+            jeecs::basic::destroy_free(texture);
+            return nullptr;
+        }
+
+        texture->m_raw_texture_data->m_width = (size_t)w;
+        texture->m_raw_texture_data->m_height = (size_t)h;
+        texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
+
+        return texture;
+    }
+
+    jeecs::debug::log_error("Fail to open file: '%s'", path);
+    return nullptr;
 }

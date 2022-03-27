@@ -324,65 +324,45 @@ JE_API void je_typing_unregister(
 ////////////////////// ARCH //////////////////////
 
 JE_API void* je_arch_get_chunk(void* archtype);
-
 JE_API void* je_arch_next_chunk(void* chunk);
-
 JE_API const void* je_arch_entity_meta_addr_in_chunk(void* chunk);
-
 JE_API size_t je_arch_entity_meta_size();
-
 JE_API size_t je_arch_entity_meta_state_offset();
-
 JE_API size_t je_arch_entity_meta_version_offset();
 
 ////////////////////// ECS //////////////////////
 
 JE_API void* je_ecs_universe_create();
-
 JE_API void je_universe_loop(void* universe);
-
 JE_API void je_ecs_universe_destroy(void* universe);
-
 JE_API void je_ecs_universe_stop(void* universe);
-
 JE_API void* je_ecs_universe_instance_system(
     void* universe,
     void* aim_world,
     const jeecs::typing::type_info* system_type
 );
-
 JE_API void je_ecs_universe_attach_shared_system_to(
     void* universe,
     void* aim_world,
     const jeecs::typing::type_info* system_type
 );
-
 JE_API void* je_ecs_world_in_universe(void* world);
-
 JE_API void* je_ecs_world_create(void* in_universe);
-
 JE_API void je_ecs_world_destroy(void* world);
-
 JE_API void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function);
-
 JE_API void je_ecs_world_unregister_system_func(void* world, jeecs::game_system_function* game_system_function);
-
 JE_API bool je_ecs_world_update(void* world);
-
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
     jeecs::typing::typeid_t* component_ids);
-
 JE_API void je_ecs_world_destroy_entity(
     void* world,
     const jeecs::game_entity* entity);
-
 JE_API void* je_ecs_world_entity_add_component(
     void* world,
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
-
 JE_API void je_ecs_world_entity_remove_component(
     void* world,
     const jeecs::game_entity* entity,
@@ -391,13 +371,9 @@ JE_API void je_ecs_world_entity_remove_component(
 /////////////////////////// Time&Sleep /////////////////////////////////
 
 JE_API double je_clock_time();
-
 JE_API jeecs::typing::ms_stamp_t je_clock_time_stamp();
-
 JE_API void je_clock_sleep_until(double time);
-
 JE_API void je_clock_sleep_for(double time);
-
 JE_API void je_clock_suppress_sleep(double sup_stax);
 
 /////////////////////////// JUID /////////////////////////////////
@@ -407,6 +383,22 @@ JE_API jeecs::typing::uid_t je_uid_generate();
 /////////////////////////// CORE /////////////////////////////////
 
 JE_API void jeecs_entry_register_core_systems();
+
+/////////////////////////// FILE /////////////////////////////////
+
+struct jeecs_file
+{
+    FILE* m_native_file_handle;
+    size_t m_file_length;
+};
+
+JE_API jeecs_file* jeecs_file_open(const char* path);
+JE_API void        jeecs_file_close(jeecs_file* file);
+JE_API size_t      jeecs_file_read(
+    void* out_buffer, 
+    size_t elem_size, 
+    size_t count, 
+    jeecs_file* file);
 
 /////////////////////////// GRAPHIC //////////////////////////////
 // Here to store low-level-graphic-api.
@@ -449,6 +441,7 @@ struct jegl_texture
     pixel_data_t* m_pixels;
     size_t          m_width;
     size_t          m_height;
+    texture_format  m_format;
 };
 
 struct jegl_vertex

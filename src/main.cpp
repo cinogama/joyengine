@@ -16,24 +16,63 @@ int main(int argc, char** argv)
     using namespace std;
 
     rs_vm v = rs_create_vm();
-    rs_load_source(v, "example.rsn", R"(
-import rscene.std;
-import rscene.co;
 
-func co_work(var id:int)
+    rs_virtual_source("jeecs/shader.rsn", R"(
+
+// JoyEngine Shader (C)Cinogama. 2022.
+
+using float = gchandle;
+using vec2 = gchandle;
+using vec3 = gchandle;
+using vec4 = gchandle;
+using mat2x2 = gchandle;
+using mat3x3 = gchandle;
+using mat4x4 = gchandle;
+
+using vertex_in = gchandle;
+using vertex_out = gchandle;
+using fragment_out = gchandle;
+
+namespace float
 {
-    std::println("I'm co:", id);
-    for(;;)
-       std::co::sleep(1);
+    extern("jeecs_shader_float_create")
+        func create(var val:real):float;
+    extern("jeecs_shader_float_create")
+        func create(var val:real):float;
+    
+    extern("jeecs_shader_float_create")
+        func operator + (var a:float, var b:float):float;
 }
 
-var colist = []:array<std::co>;
 
-for(var i=0;i<10000;i+=1)
-    colist->add(std::co(co_work, i));
+#macro if{
+    lexer->error(
+        "The 'if' statement in rscene shader is deprecated.");
+}
+#macro while{
+    lexer->error(
+        "The 'while' statement in rscene shader is deprecated.");
+}
+#macro for{
+    lexer->error(
+        "The 'for' statement in rscene shader is deprecated.");
+}
 
-while(true)
-    std::sleep(1);
+)", false);
+
+    rs_load_source(v, "example.rsn", R"(
+import jeecs.shader;
+
+
+extern func vert(var in : vertex_in) : vertex_out
+{
+    return nil;
+}
+
+extern func frag(var in : vertex_out) : fragment_out
+{
+    return nil;
+}
 
 )");
     std::cout << rs_get_compile_error(v, RS_NEED_COLOR);
@@ -49,6 +88,7 @@ while(true)
 
     jeecs::enrty::module_entry();
 
+    goto debug_endl;
     // while (true)
     {
         game_universe universe = game_universe::create_universe();
@@ -81,6 +121,8 @@ while(true)
     }
 
     je_clock_sleep_for(1);
+
+debug_endl:
 
     jeecs::enrty::module_leave();
     rs_finish();
