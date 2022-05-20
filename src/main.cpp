@@ -88,7 +88,7 @@ extern func frag(var in : vertex_out) : fragment_out
 
     jeecs::enrty::module_entry();
 
-    goto debug_endl;
+    // goto debug_endl;
     // while (true)
     {
         game_universe universe = game_universe::create_universe();

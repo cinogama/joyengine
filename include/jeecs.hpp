@@ -438,7 +438,7 @@ struct jegl_texture
         RGB,
         RGBA,
     };
-    pixel_data_t* m_pixels;
+    pixel_data_t*   m_pixels;
     size_t          m_width;
     size_t          m_height;
     texture_format  m_format;

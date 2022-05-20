@@ -35,8 +35,8 @@ namespace jeecs
 
             jegl_interface_config config = {};
             config.m_fps = 60;
-            config.m_resolution_x = 1024;
-            config.m_resolution_y = 768;
+            config.m_resolution_x = 320;
+            config.m_resolution_y = 240;
             config.m_title = "JoyEngineECS(JoyEngine 4.0)";
 
             glthread = jegl_start_graphic_thread(

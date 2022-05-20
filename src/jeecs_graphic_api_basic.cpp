@@ -163,11 +163,30 @@ void jegl_reboot_graphic_thread(jegl_thread* thread_handle, jegl_interface_confi
     thread_handle->_m_thread_notifier->m_reboot_flag = true;
 }
 
+void jegl_close_resource(jegl_resource* resource)
+{
+    switch (resource->m_type)
+    {
+    case jegl_resource::TEXTURE:
+        // close resource's raw data, then send this resource to closing-queue
+        stbi_image_free(resource->m_raw_texture_data->m_pixels);
+        jeecs::basic::destroy_free(resource->m_raw_texture_data);
+        break;
+    default:
+        jeecs::debug::log_error("Unknown resource type to close.");
+        return;
+    }
+    // Send this resource to all graphic_t
+    aaaa;
+}
+
 jegl_resource* jegl_load_texture(const char* path)
 {
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
         jegl_resource* texture = jeecs::basic::create_new<jegl_resource>();
+        texture->m_graphic_threadver = 0;
+        texture->m_type = jegl_resource::TEXTURE;
         texture->m_raw_texture_data = jeecs::basic::create_new<jegl_texture>();
 
         unsigned char* fbuf = new unsigned char[texfile->m_file_length];

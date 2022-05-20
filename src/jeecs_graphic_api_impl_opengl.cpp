@@ -108,9 +108,22 @@ void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 
 }
 
+JE_API void gl_using_resource(jegl_resource* resource)
+{
+
+}
+
+JE_API void gl_close_resource(jegl_resource* resource)
+{
+    
+}
+
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 {
     write_to_apis->init_interface = gl_startup;
     write_to_apis->update_interface = gl_update;
     write_to_apis->shutdown_interface = gl_shutdown;
+
+    write_to_apis->using_resource = gl_using_resource;
+    write_to_apis->close_resource = gl_close_resource;
 }
