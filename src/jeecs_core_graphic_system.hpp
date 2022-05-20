@@ -42,7 +42,8 @@ namespace jeecs
             glthread = jegl_start_graphic_thread(
                 config,
                 jegl_using_opengl_apis,
-                [](void* ptr){((DefaultGraphicPipelineSystem*)ptr)->Frame();}, this);
+                [](void* ptr, jegl_thread* glthread)
+                {((DefaultGraphicPipelineSystem*)ptr)->Frame(glthread);}, this);
 
             register_system_func(&DefaultGraphicPipelineSystem::SimplePrepareCamera,
                 {
@@ -76,7 +77,7 @@ namespace jeecs
         std::vector<CameraArch> m_camera_list;
         std::vector<RendererArch> m_renderer_list;
 
-        void Frame()
+        void Frame(jegl_thread* glthread)
         {
             // Here to rend a frame..
 

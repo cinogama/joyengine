@@ -477,14 +477,20 @@ struct jegl_resource
         MATERIAL,       // Shaders & Uniforms
     };
     type m_type;
-    jeecs::typing::version_t m_graphic_threadver;
 
-    union
+    struct context_resource
     {
-        void* m_ptr;
-        size_t m_handle;
-        uint32_t m_uint;
+        context_resource* m_last_context;
+        jegl_thread* m_graphic_thread;
+        union
+        {
+            void* m_ptr;
+            size_t m_handle;
+            uint32_t m_uint;
+        };
     };
+    context_resource* m_context_res;
+
     union
     {
         jegl_custom_resource_t m_custom_resource;
@@ -492,8 +498,6 @@ struct jegl_resource
         jegl_vertex* m_raw_vertex_data;
         jegl_material* m_raw_material_data;
     };
-
-
 };
 
 struct jegl_graphic_api
@@ -521,7 +525,7 @@ using jeecs_api_register_func_t = void(*)(jegl_graphic_api*);
 JE_API jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
     jeecs_api_register_func_t register_func,
-    void(*frame_rend_work)(void*),
+    void(*frame_rend_work)(void*, jegl_thread*),
     void* arg);
 
 JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);

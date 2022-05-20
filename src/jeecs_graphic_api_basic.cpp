@@ -66,7 +66,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*), vo
 jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
     jeecs_api_register_func_t register_func,
-    void(*frame_rend_work)(void*),
+    void(*frame_rend_work)(void*, jegl_thread*),
     void* arg)
 {
     jegl_thread* thread_handle = jeecs::basic::create_new<jegl_thread>();
@@ -163,6 +163,15 @@ void jegl_reboot_graphic_thread(jegl_thread* thread_handle, jegl_interface_confi
     thread_handle->_m_thread_notifier->m_reboot_flag = true;
 }
 
+void jegl_using_resource(jegl_resource* resource, jegl_thread* context)
+{
+    if (resource->m_context_res)
+    {
+
+    }
+
+}
+
 void jegl_close_resource(jegl_resource* resource)
 {
     switch (resource->m_type)
@@ -177,7 +186,7 @@ void jegl_close_resource(jegl_resource* resource)
         return;
     }
     // Send this resource to all graphic_t
-    aaaa;
+    FUCK!;
 }
 
 jegl_resource* jegl_load_texture(const char* path)
