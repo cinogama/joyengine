@@ -16,12 +16,15 @@ struct jegl_thread_notifier
     std::atomic_bool m_reboot_flag;
 };
 
-void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*), void* arg)
+thread_local jegl_thread* _current_graphic_thread = nullptr;
+jeecs::basic::atomic_list<jegl_resource::jegl_destroy_resouce> _destroing_graphic_resources;
+void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jegl_thread*), void* arg)
 {
+    _current_graphic_thread = thread;
     do
     {
         auto custom_interface = thread->m_apis->init_interface(thread, &thread->_m_thread_notifier->m_interface_config);
-
+        ++thread->m_version;
         while (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
         {
             do
@@ -36,6 +39,32 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*), vo
             if (thread->_m_thread_notifier->m_reboot_flag)
                 break;
 
+            auto* del_res = _destroing_graphic_resources.pick_all();
+            while (del_res)
+            {
+                auto* cur_del_res = del_res;
+                del_res = del_res->last;
+
+                if (cur_del_res->m_destroy_resource->m_graphic_thread == thread
+                    && cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
+                {
+                    thread->m_apis->close_resource(cur_del_res->m_destroy_resource);
+                    jeecs::basic::destroy_free(cur_del_res->m_destroy_resource);
+                    jeecs::basic::destroy_free(cur_del_res);
+                }
+                else if (--cur_del_res->m_retry_times)
+                    // Need re-try
+                    _destroing_graphic_resources.add_one(cur_del_res);
+                else
+                {
+                    // Free this
+                    jeecs::debug::log_warn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!"
+                        , cur_del_res->m_destroy_resource);
+                    jeecs::basic::destroy_free(cur_del_res->m_destroy_resource);
+                    jeecs::basic::destroy_free(cur_del_res);
+                }
+            }
+
             if (!thread->m_apis->update_interface(thread, custom_interface))
             {
                 // graphic thread want to exit. mark stop update
@@ -43,7 +72,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*), vo
             }
             else
             {
-                frame_rend_work(arg);
+                frame_rend_work(arg, thread);
             }
 
             std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
@@ -71,6 +100,7 @@ jegl_thread* jegl_start_graphic_thread(
 {
     jegl_thread* thread_handle = jeecs::basic::create_new<jegl_thread>();
 
+    thread_handle->m_version = 0;
     thread_handle->_m_thread_notifier = jeecs::basic::create_new<jegl_thread_notifier>();
     thread_handle->m_apis = jeecs::basic::create_new<jegl_graphic_api>();
 
@@ -163,13 +193,18 @@ void jegl_reboot_graphic_thread(jegl_thread* thread_handle, jegl_interface_confi
     thread_handle->_m_thread_notifier->m_reboot_flag = true;
 }
 
-void jegl_using_resource(jegl_resource* resource, jegl_thread* context)
+void jegl_using_resource(jegl_resource* resource)
 {
-    if (resource->m_context_res)
-    {
+    // This function is not thread safe.
+    if (!_current_graphic_thread)
+        return jeecs::debug::log_error("Graphic resource only usable in graphic thread.");
 
-    }
+    if (!resource->m_graphic_thread)
+        resource->m_graphic_thread = _current_graphic_thread;
+    if (_current_graphic_thread != resource->m_graphic_thread)
+        return jeecs::debug::log_error("This resource has been used in graphic thread:%p.", resource->m_graphic_thread);
 
+    _current_graphic_thread->m_apis->using_resource(resource);
 }
 
 void jegl_close_resource(jegl_resource* resource)
@@ -180,13 +215,17 @@ void jegl_close_resource(jegl_resource* resource)
         // close resource's raw data, then send this resource to closing-queue
         stbi_image_free(resource->m_raw_texture_data->m_pixels);
         jeecs::basic::destroy_free(resource->m_raw_texture_data);
+        resource->m_raw_texture_data = nullptr;
         break;
     default:
         jeecs::debug::log_error("Unknown resource type to close.");
         return;
     }
-    // Send this resource to all graphic_t
-    FUCK!;
+    // Send this resource to destroing list;
+    auto* del_res = new jegl_resource::jegl_destroy_resouce;
+    del_res->m_retry_times = 15;
+    del_res->m_destroy_resource = resource;
+    _destroing_graphic_resources.add_one(del_res);
 }
 
 jegl_resource* jegl_load_texture(const char* path)
@@ -194,7 +233,7 @@ jegl_resource* jegl_load_texture(const char* path)
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
         jegl_resource* texture = jeecs::basic::create_new<jegl_resource>();
-        texture->m_graphic_threadver = 0;
+        texture->m_graphic_thread = nullptr;
         texture->m_type = jegl_resource::TEXTURE;
         texture->m_raw_texture_data = jeecs::basic::create_new<jegl_texture>();
 

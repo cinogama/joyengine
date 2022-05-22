@@ -26,3 +26,4 @@ add_subdirectory("3rd/restorablescene")
 
 
 add_subdirectory("src")
+add_subdirectory("driver")

@@ -18,10 +18,19 @@ endif()
 
 if (${BUILD_SHARED_LIBS})
 	add_definitions(-DRS_SHARED_LIB)
+	add_library(joyecs SHARED ${joyecs_srcs})
+	if(UNIX)
+		add_compile_options(-Wall -rdynamic)
+endif()
 else()
 	add_definitions(-DRS_STATIC_LIB)
+	add_library(joyecs STATIC ${joyecs_srcs})
 endif()
 
-add_executable(joyecs ${joyecs_srcs})
+
+
+set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)
+set_target_properties(joyecs PROPERTIES PREFIX "")
+
 target_link_libraries(joyecs ${jeecs_system_libs})
 target_link_libraries(joyecs rscene glew_s glfw)

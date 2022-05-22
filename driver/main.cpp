@@ -15,71 +15,6 @@ int main(int argc, char** argv)
     using namespace jeecs;
     using namespace std;
 
-    rs_vm v = rs_create_vm();
-
-    rs_virtual_source("jeecs/shader.rsn", R"(
-
-// JoyEngine Shader (C)Cinogama. 2022.
-
-using float = gchandle;
-using vec2 = gchandle;
-using vec3 = gchandle;
-using vec4 = gchandle;
-using mat2x2 = gchandle;
-using mat3x3 = gchandle;
-using mat4x4 = gchandle;
-
-using vertex_in = gchandle;
-using vertex_out = gchandle;
-using fragment_out = gchandle;
-
-namespace float
-{
-    extern("jeecs_shader_float_create")
-        func create(var val:real):float;
-    extern("jeecs_shader_float_create")
-        func create(var val:real):float;
-    
-    extern("jeecs_shader_float_create")
-        func operator + (var a:float, var b:float):float;
-}
-
-
-#macro if{
-    lexer->error(
-        "The 'if' statement in rscene shader is deprecated.");
-}
-#macro while{
-    lexer->error(
-        "The 'while' statement in rscene shader is deprecated.");
-}
-#macro for{
-    lexer->error(
-        "The 'for' statement in rscene shader is deprecated.");
-}
-
-)", false);
-
-    rs_load_source(v, "example.rsn", R"(
-import jeecs.shader;
-
-
-extern func vert(var in : vertex_in) : vertex_out
-{
-    return nil;
-}
-
-extern func frag(var in : vertex_out) : fragment_out
-{
-    return nil;
-}
-
-)");
-    std::cout << rs_get_compile_error(v, RS_NEED_COLOR);
-    std::cout << rs_get_compile_warning(v, RS_NEED_COLOR);
-    rs_run(v);
-    rs_close_vm(v);
-
     // When abort try clear rs-state and module
     at_quick_exit(rs_finish);
     at_quick_exit(jeecs::enrty::module_leave);
@@ -87,6 +22,33 @@ extern func frag(var in : vertex_out) : fragment_out
     std::unordered_set<typing::uid_t> x;
 
     jeecs::enrty::module_entry();
+
+    rs_vm v = rs_create_vm();
+    if (!rs_load_source(v, "xx.rsn", R"(
+import rscene.std;
+
+func operator  (var a:string, var b:int)
+{
+    var result = "";
+    for (var i=0; i<b; i+=1)
+        result += a;
+    return result;
+}
+
+std::println("Helloworld" > 5);
+
+while(true);
+)"))
+    {
+        printf(rs_get_compile_error(v, RS_NEED_COLOR));
+    }
+    
+    rs_run(v);
+    rs_close_vm(v);
+
+    jeecs::enrty::module_leave();
+    rs_finish();
+    return 0;
 
     // goto debug_endl;
     // while (true)

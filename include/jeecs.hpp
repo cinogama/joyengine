@@ -425,6 +425,8 @@ struct jegl_thread
     jegl_thread_notifier* _m_thread_notifier;
     void* _m_interface_handle;
 
+    jeecs::typing::version_t m_version;
+
     jegl_graphic_api* m_apis;
     std::atomic_bool  m_stop_update;
 };
@@ -469,6 +471,13 @@ struct jegl_material
 
 struct jegl_resource
 {
+    struct jegl_destroy_resouce
+    {
+        jegl_resource* m_destroy_resource;
+        size_t m_retry_times;
+        jegl_destroy_resouce* last;
+    };
+
     using jegl_custom_resource_t = void*;
     enum type
     {
@@ -477,19 +486,14 @@ struct jegl_resource
         MATERIAL,       // Shaders & Uniforms
     };
     type m_type;
-
-    struct context_resource
+    jegl_thread* m_graphic_thread;
+    jeecs::typing::version_t m_graphic_thread_version;
+    union
     {
-        context_resource* m_last_context;
-        jegl_thread* m_graphic_thread;
-        union
-        {
-            void* m_ptr;
-            size_t m_handle;
-            uint32_t m_uint;
-        };
+        void* m_ptr;
+        size_t m_handle;
+        uint32_t m_uint;
     };
-    context_resource* m_context_res;
 
     union
     {
