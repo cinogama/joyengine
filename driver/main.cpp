@@ -11,47 +11,33 @@
 
 int main(int argc, char** argv)
 {
-    rs_init(argc, argv);
+    je_init(argc, argv);
     using namespace jeecs;
     using namespace std;
 
-    // When abort try clear rs-state and module
-    at_quick_exit(rs_finish);
-    at_quick_exit(jeecs::enrty::module_leave);
+    rs_vm v = rs_create_vm();
+    rs_load_source(v, "x.rsn", R"(
+import rscene.std;
+import je.shader;
 
-    std::unordered_set<typing::uid_t> x;
+func main()
+{
+    while (true)
+    {
+        var a = float(1);
+        var b = a + float(3.14);
+    }
+}
+main();
+)");
+    std::cout << rs_get_compile_error(v, RS_NEED_COLOR) << std::endl;
+    rs_run(v);
 
     jeecs::enrty::module_entry();
 
-    rs_vm v = rs_create_vm();
-    if (!rs_load_source(v, "xx.rsn", R"(
-import rscene.std;
+    at_quick_exit(jeecs::enrty::module_leave);
+    atexit(jeecs::enrty::module_leave);
 
-func operator  (var a:string, var b:int)
-{
-    var result = "";
-    for (var i=0; i<b; i+=1)
-        result += a;
-    return result;
-}
-
-std::println("Helloworld" > 5);
-
-while(true);
-)"))
-    {
-        printf(rs_get_compile_error(v, RS_NEED_COLOR));
-    }
-    
-    rs_run(v);
-    rs_close_vm(v);
-
-    jeecs::enrty::module_leave();
-    rs_finish();
-    return 0;
-
-    // goto debug_endl;
-    // while (true)
     {
         game_universe universe = game_universe::create_universe();
         universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
@@ -83,9 +69,4 @@ while(true);
     }
 
     je_clock_sleep_for(1);
-
-debug_endl:
-
-    jeecs::enrty::module_leave();
-    rs_finish();
 }

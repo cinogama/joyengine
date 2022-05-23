@@ -293,6 +293,9 @@ RS_FORCE_CAPI
 JE_API void* je_mem_alloc(size_t sz);
 JE_API void je_mem_free(void* ptr);
 
+JE_API void je_init(int argc, char** argv);
+JE_API void je_finish(void);
+
 #define JE_LOG_NORMAL 0
 #define JE_LOG_INFO 1
 #define JE_LOG_WARNING 2
@@ -326,13 +329,13 @@ JE_API void je_typing_unregister(
 JE_API void* je_arch_get_chunk(void* archtype);
 JE_API void* je_arch_next_chunk(void* chunk);
 JE_API const void* je_arch_entity_meta_addr_in_chunk(void* chunk);
-JE_API size_t je_arch_entity_meta_size();
-JE_API size_t je_arch_entity_meta_state_offset();
-JE_API size_t je_arch_entity_meta_version_offset();
+JE_API size_t je_arch_entity_meta_size(void);
+JE_API size_t je_arch_entity_meta_state_offset(void);
+JE_API size_t je_arch_entity_meta_version_offset(void);
 
 ////////////////////// ECS //////////////////////
 
-JE_API void* je_ecs_universe_create();
+JE_API void* je_ecs_universe_create(void);
 JE_API void je_universe_loop(void* universe);
 JE_API void je_ecs_universe_destroy(void* universe);
 JE_API void je_ecs_universe_stop(void* universe);
@@ -378,11 +381,11 @@ JE_API void je_clock_suppress_sleep(double sup_stax);
 
 /////////////////////////// JUID /////////////////////////////////
 
-JE_API jeecs::typing::uid_t je_uid_generate();
+JE_API jeecs::typing::uid_t je_uid_generate(void);
 
 /////////////////////////// CORE /////////////////////////////////
 
-JE_API void jeecs_entry_register_core_systems();
+JE_API void jeecs_entry_register_core_systems(void);
 
 /////////////////////////// FILE /////////////////////////////////
 

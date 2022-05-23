@@ -8,7 +8,8 @@ include_directories("../3rd/glew/include")
 include_directories("../3rd/glfw/include")
 include_directories("../3rd/stb")
 
-file(GLOB_RECURSE joyecs_srcs *.cpp)
+file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
+file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
 
 if (WIN32)
 	list(APPEND jeecs_system_libs OpenGL32)
@@ -18,13 +19,13 @@ endif()
 
 if (${BUILD_SHARED_LIBS})
 	add_definitions(-DRS_SHARED_LIB)
-	add_library(joyecs SHARED ${joyecs_srcs})
+	add_library(joyecs SHARED ${joyecs_srcs_cpp} ${joyecs_srcs_hpp})
 	if(UNIX)
 		add_compile_options(-Wall -rdynamic)
 endif()
 else()
 	add_definitions(-DRS_STATIC_LIB)
-	add_library(joyecs STATIC ${joyecs_srcs})
+	add_library(joyecs STATIC ${joyecs_srcs_cpp} ${joyecs_srcs_hpp})
 endif()
 
 
