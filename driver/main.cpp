@@ -20,15 +20,22 @@ int main(int argc, char** argv)
 import rscene.std;
 import je.shader;
 
-func main()
+func vert(var in : vertex_in)
 {
-    while (true)
-    {
-        var a = float(1);
-        var b = a + float(3.14);
-    }
+    var opos =  in->in:<float3>(0);
+    var ouv2 =   in->in:<float>(0);
+
+    return vertex_out(opos, ouv2);
 }
-main();
+func frag(var in : fragment_in)
+{
+    return fragment_out(float4(0, 0, 0, 1));
+}
+
+vert(vertex_in());
+
+std::panic("...");
+
 )");
     std::cout << rs_get_compile_error(v, RS_NEED_COLOR) << std::endl;
     rs_run(v);
