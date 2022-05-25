@@ -22,10 +22,10 @@ int main(int argc, char** argv)
 import rscene.std;
 import je.shader;
 
-var module_trans_mat    = uniform:<float4x4>("je_modle_trans");
-var camera_trans_mat    = uniform:<float4x4>("je_camera_trans");
-var project_mat         = uniform:<float4x4>("je_project_trans");
-var mvp_mat             = uniform_block:<float4x4>("je_mvp_mat");
+//var module_trans_mat    = uniform:<float4x4>("je_modle_trans");
+//var camera_trans_mat    = uniform_block:<float4x4>("je_camera_trans");
+//var project_mat         = uniform_block:<float4x4>("je_project_trans");
+//var mvp_mat             = uniform_block:<float4x4>("je_mvp_mat");
 
 func vert(var vdata : vertex_in)
 {
@@ -33,9 +33,9 @@ func vert(var vdata : vertex_in)
     var ionormal    = vdata->in:<float3>(1);
     var iuv         = vdata->in:<float2>(2);
 
-    var oposition = mvp_mat * iposition;
-    var onormal   = mvp_mat * ionormal;
-    var ouv       = iuv;
+    var oposition = float4(iposition->yzx(), float(1));
+    var onormal   = ionormal->zyx();
+    var ouv       = iuv->yx();
 
     return vertex_out(oposition, onormal, ouv);
 }
