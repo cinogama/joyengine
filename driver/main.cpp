@@ -12,6 +12,8 @@
 int main(int argc, char** argv)
 {
     je_init(argc, argv);
+    at_quick_exit(je_finish);
+
     using namespace jeecs;
     using namespace std;
 
@@ -20,14 +22,24 @@ int main(int argc, char** argv)
 import rscene.std;
 import je.shader;
 
-func vert(var in : vertex_in)
-{
-    var opos =  in->in:<float3>(0);
-    var ouv2 =   in->in:<float>(0);
+var module_trans_mat    = uniform:<float4x4>("je_modle_trans");
+var camera_trans_mat    = uniform:<float4x4>("je_camera_trans");
+var project_mat         = uniform:<float4x4>("je_project_trans");
+var mvp_mat             = uniform_block:<float4x4>("je_mvp_mat");
 
-    return vertex_out(opos, ouv2);
+func vert(var vdata : vertex_in)
+{
+    var iposition   = vdata->in:<float3>(0);
+    var ionormal    = vdata->in:<float3>(1);
+    var iuv         = vdata->in:<float2>(2);
+
+    var oposition = mvp_mat * iposition;
+    var onormal   = mvp_mat * ionormal;
+    var ouv       = iuv;
+
+    return vertex_out(oposition, onormal, ouv);
 }
-func frag(var in : fragment_in)
+func frag(var fdata : fragment_in)
 {
     return fragment_out(float4(0, 0, 0, 1));
 }
@@ -39,12 +51,13 @@ std::panic("...");
 )");
     std::cout << rs_get_compile_error(v, RS_NEED_COLOR) << std::endl;
     rs_run(v);
+    rs_close_vm(v);
+
 
     jeecs::enrty::module_entry();
-
     at_quick_exit(jeecs::enrty::module_leave);
-    atexit(jeecs::enrty::module_leave);
 
+    if(0)
     {
         game_universe universe = game_universe::create_universe();
         universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
@@ -76,4 +89,5 @@ std::panic("...");
     }
 
     je_clock_sleep_for(1);
+    je_finish();
 }

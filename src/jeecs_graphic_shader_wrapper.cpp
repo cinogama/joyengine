@@ -30,12 +30,12 @@ struct jegl_shader_value
     type m_type;
     size_t m_ref_count;
 
-    std::atomic_flag _m_spin;
-    inline void lock()
+    mutable std::atomic_flag _m_spin;
+    inline void lock() const noexcept
     {
         while (_m_spin.test_and_set());
     }
-    inline void unlock()
+    inline void unlock() const noexcept
     {
         _m_spin.clear();
     }
@@ -123,6 +123,7 @@ struct jegl_shader_value
 
     inline bool is_init_value() const noexcept
     {
+        std::lock_guard g(*this);
         return !(m_type & CALC_VALUE);
     }
     inline bool is_calc_value() const noexcept
@@ -131,7 +132,13 @@ struct jegl_shader_value
     }
     inline bool is_shader_in_value() const noexcept
     {
+        std::lock_guard g(*this);
         return m_type & SHADER_IN_VALUE;
+    }
+    inline type get_type() const
+    {
+        std::lock_guard g(*this);
+        return (type)(m_type & TYPE_MASK);
     }
 };
 
@@ -175,7 +182,7 @@ RS_API rs_api jeecs_shader_float_create(rs_vm vm, rs_value args, size_t argc)
 
 RS_API rs_api jeecs_shader_float4_create(rs_vm vm, rs_value args, size_t argc)
 {
-    return rs_ret_gchandle(vm, 
+    return rs_ret_gchandle(vm,
         new jegl_shader_value(
             (float)rs_real(args + 0),
             (float)rs_real(args + 1),
@@ -286,7 +293,8 @@ RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
     for (size_t i = 2; i < argc; ++i)
     {
         jegl_shader_value* sval = (jegl_shader_value*)rs_pointer(args + i);
-        _types[i - 2] = sval->m_type;
+        std::lock_guard g(*sval);
+        _types[i - 2] = sval->get_type();
         _args[i - 2] = sval;
 
         if (sval->is_calc_value())
@@ -304,7 +312,7 @@ RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
     if (result_is_const)
     {
         auto* result = (*reduce_func)(_args.size(), _args.data());
-        if ((result->m_type & result_type & jegl_shader_value::TYPE_MASK) != result_type)
+        if (result->get_type() != result_type)
         {
             _free_shader_value(result);
             rs_halt("Cannot do this operations: return type dis-matched.");
@@ -335,7 +343,7 @@ struct vertex_in_data_storage
         auto fnd = m_in_from_vao_guard.find(pos);
         if (fnd != m_in_from_vao_guard.end())
         {
-            if ((fnd->second->m_type & type & jegl_shader_value::TYPE_MASK) == 0)
+            if (fnd->second->get_type() != type)
                 return nullptr;
             return fnd->second;
         }
@@ -361,7 +369,7 @@ RS_API rs_api jeecs_shader_get_vertex_in(rs_vm vm, rs_value args, size_t argc)
 
     auto* result = storage->get_val_at(pos, type);
     if (!result)
-        rs_halt(("Type didn't match: vertex_in[" + std::to_string(pos) + "] has been used, but is not this type.").c_str());
+        rs_halt(("vertex_in[" + std::to_string(pos) + "] has been used, but type didn't match.").c_str());
 
     return rs_ret_gchandle(vm, result, nullptr, nullptr);
 }
