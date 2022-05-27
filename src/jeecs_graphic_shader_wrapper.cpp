@@ -4,15 +4,18 @@
 #include <variant>
 #include <string>
 #include <unordered_map>
+
 struct jegl_shader_value
 {
-    enum type : uint32_t
+    using type_base_t = uint32_t;
+    enum type : type_base_t
     {
         INIT_VALUE = 0x0000,
         CALC_VALUE = 0x0001,
         SHADER_IN_VALUE = 0x0002,
+        UNIFORM_VARIABLE = 0x0004,
         //
-        TYPE_MASK = 0x0FF0,
+        TYPE_MASK = 0x0FFF0,
 
         FLOAT = 0x0010,
         FLOAT2 = 0x0020,
@@ -59,6 +62,10 @@ struct jegl_shader_value
         {
             size_t m_shader_in_index;
         };
+        struct
+        {
+            const char* m_unifrom_varname;
+        };
     };
 
     jegl_shader_value(float init_val)
@@ -92,13 +99,40 @@ struct jegl_shader_value
         m_float4[2] = z;
         m_float4[3] = w;
     }
-
+    jegl_shader_value(float* data, type typing)
+        : m_type((type)(typing | type::INIT_VALUE))
+        , m_ref_count(0)
+    {
+        if (data)
+        {
+            if (typing == type::FLOAT4x4)
+            {
+                float* wdata = (float*)&m_float4x4;
+                for (size_t i = 0; i < 16; i++)
+                    wdata[i] = data[i];
+            }
+            else if (typing == type::FLOAT3x3)
+            {
+                float* wdata = (float*)&m_float3x3;
+                for (size_t i = 0; i < 9; i++)
+                    wdata[i] = data[i];
+            }
+            else if (typing == type::FLOAT2x2)
+            {
+                float* wdata = (float*)&m_float2x2;
+                for (size_t i = 0; i < 4; i++)
+                    wdata[i] = data[i];
+            }
+            else
+                rs_fail(0xD000, "Unknown type to init, should be f");
+        }
+    }
     void set_used_val(size_t id)
     {
     }
 
     template<typename T, typename ... TS>
-    void set_used_val(size_t id, T&& val, TS&& ... args)
+    void set_used_val(size_t id, T val, TS ... args)
     {
         static_assert(std::is_same<T, jegl_shader_value*>::value);
         m_opnums[id] = val;
@@ -109,15 +143,15 @@ struct jegl_shader_value
         set_used_val(id + 1, args...);
     }
 
-    template<typename ... TS>
-    jegl_shader_value(type resulttype, const char* operat, TS&&... args)
+    template<typename T, typename ... TS>
+    jegl_shader_value(type resulttype, const char* operat, T val, TS... args)
         : m_type((type)(resulttype | type::CALC_VALUE))
         , m_opname(jeecs::basic::make_new_string(operat))
-        , m_opnums_count(sizeof...(args))
+        , m_opnums_count(sizeof...(args) + 1)
         , m_ref_count(0)
     {
         m_opnums = new jegl_shader_value * [m_opnums_count];
-        set_used_val(0, args...);
+        set_used_val(0, val, args...);
     }
 
     jegl_shader_value(type resulttype, const char* operat, size_t opnum_count)
@@ -136,6 +170,13 @@ struct jegl_shader_value
     {
     }
 
+    jegl_shader_value(type resulttype, const char* operat)
+        : m_type((type)(resulttype | type::CALC_VALUE | type::UNIFORM_VARIABLE))
+        , m_unifrom_varname(jeecs::basic::make_new_string(operat))
+        , m_ref_count(0)
+    {
+    }
+
     inline bool is_init_value() const noexcept
     {
         std::lock_guard g(*this);
@@ -150,6 +191,11 @@ struct jegl_shader_value
         std::lock_guard g(*this);
         return m_type & SHADER_IN_VALUE;
     }
+    inline bool is_uniform_variable() const noexcept
+    {
+        std::lock_guard g(*this);
+        return m_type & UNIFORM_VARIABLE;
+    }
     inline type get_type() const
     {
         std::lock_guard g(*this);
@@ -159,19 +205,30 @@ struct jegl_shader_value
 
 void delete_shader_value(jegl_shader_value* shader_val)
 {
-    std::lock_guard g(*shader_val);
-    if (shader_val->m_type & jegl_shader_value::HAS_BEEN_USED)
+    do
     {
-        if (0 == --shader_val->m_ref_count)
-            // Last ref cleared, reset it to NOT USED VALUE
-            shader_val->m_type = (jegl_shader_value::type)(shader_val->m_type & ~(jegl_shader_value::HAS_BEEN_USED));
+        std::lock_guard g(*shader_val);
+        if (shader_val->m_type & jegl_shader_value::HAS_BEEN_USED)
+        {
+            if (0 == --shader_val->m_ref_count)
+                // Last ref cleared, reset it to NOT USED VALUE
+                shader_val->m_type = (jegl_shader_value::type)(shader_val->m_type & ~(jegl_shader_value::HAS_BEEN_USED));
 
-        //Still have some value ref it, continue~
-        return;
-    }
+            //Still have some value ref it, continue~
+            return;
+        }
+    } while (0);
     if (shader_val->is_calc_value())
     {
-        if (!shader_val->is_shader_in_value())
+        if (shader_val->is_shader_in_value())
+        {
+            ;
+        }
+        else if (shader_val->is_uniform_variable())
+        {
+            je_mem_free((void*)shader_val->m_unifrom_varname);
+        }
+        else
         {
             for (size_t i = 0; i < shader_val->m_opnums_count; ++i)
                 delete_shader_value(shader_val->m_opnums[i]);
@@ -219,9 +276,28 @@ RS_API rs_api jeecs_shader_float4_create(rs_vm vm, rs_value args, size_t argc)
             (float)rs_real(args + 2),
             (float)rs_real(args + 3)), nullptr, _free_shader_value);
 }
+RS_API rs_api jeecs_shader_float4x4_create(rs_vm vm, rs_value args, size_t argc)
+{
+    float data[16] = {};
+    for (size_t i = 0; i < 16; i++)
+        data[i] = (float)rs_real(args + i);
+    return rs_ret_gchandle(vm,
+        new jegl_shader_value(data, jegl_shader_value::FLOAT4x4),
+        nullptr, _free_shader_value);
+}
+
+RS_API rs_api jeecs_shader_create_rot_mat4x4(rs_vm vm, rs_value args, size_t argc)
+{
+    float data[16] = {};
+    jeecs::math::quat q((float)rs_real(args + 0), (float)rs_real(args + 1), (float)rs_real(args + 2));
+    q.create_matrix(data);
+    return rs_ret_gchandle(vm,
+        new jegl_shader_value(data, jegl_shader_value::FLOAT4x4),
+        nullptr, _free_shader_value);
+}
 
 using calc_func_t = std::function<jegl_shader_value* (size_t, jegl_shader_value**)>;
-using operation_t = std::variant<jegl_shader_value::type, calc_func_t>;
+using operation_t = std::variant<jegl_shader_value::type_base_t, calc_func_t>;
 
 #define reduce_method [](size_t argc, jegl_shader_value** args)->jegl_shader_value*
 #include "jeecs_graphic_shader_wrapper_methods.hpp"
@@ -231,7 +307,7 @@ struct action_node
 {
     std::vector<action_node*> m_next_step;
 
-    jegl_shader_value::type m_acceptable_type;
+    jegl_shader_value::type_base_t m_acceptable_types;
     calc_func_t m_reduce_const_function;
 
     ~action_node()
@@ -239,10 +315,10 @@ struct action_node
         for (auto* node : m_next_step)
             delete node;
     }
-    action_node*& get_next_step(jegl_shader_value::type type)
+    action_node*& _get_next_step(jegl_shader_value::type_base_t type)
     {
         auto fnd = std::find_if(m_next_step.begin(), m_next_step.end(),
-            [&](action_node* v) {if (v->m_acceptable_type == type)return true; return false; });
+            [&](action_node* v) {if (v->m_acceptable_types == type)return true; return false; });
         if (fnd == m_next_step.end())
             return m_next_step.emplace_back(nullptr);
         return *fnd;
@@ -259,14 +335,14 @@ std::unordered_map<std::string, action_node*> _generate_accpetable_tree()
 
         for (auto& type_or_act : type_lists)
         {
-            if (auto type = std::get_if<jegl_shader_value::type>(&type_or_act))
+            if (auto type = std::get_if<jegl_shader_value::type_base_t>(&type_or_act))
             {
-                if (auto& new_act_node = (*act_node)->get_next_step(*type))
+                if (auto& new_act_node = (*act_node)->_get_next_step(*type))
                     act_node = &new_act_node;
                 else
                 {
                     new_act_node = new action_node;
-                    new_act_node->m_acceptable_type = *type;
+                    new_act_node->m_acceptable_types = *type;
                     act_node = &new_act_node;
                 }
             }
@@ -286,6 +362,30 @@ const std::unordered_map<std::string, action_node*>& shader_operation_map() {
     return _s;
 }
 
+calc_func_t* _get_reduce_func(action_node* cur_node, jegl_shader_value::type* argts, size_t argc, size_t index)
+{
+    if (index == argc)
+    {
+        if (cur_node->m_reduce_const_function)
+            return &cur_node->m_reduce_const_function;
+        else
+            return nullptr;
+    }
+
+    assert(index < argc&& cur_node);
+
+    for (auto* next_step : cur_node->m_next_step)
+    {
+        if (next_step->m_acceptable_types & argts[index])
+        {
+            auto* fnd = _get_reduce_func(next_step, argts, argc, index + 1);
+            if (fnd)
+                return fnd;
+        }
+    }
+    return nullptr;
+}
+
 calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argts, size_t argc)
 {
     auto& _shader_operation_map = shader_operation_map();
@@ -293,26 +393,49 @@ calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argt
     if (fnd == _shader_operation_map.end())
         return nullptr;
     auto* cur_node = fnd->second;
-    for (size_t i = 0; i < argc; ++i)
-    {
-        if (auto* next_node = cur_node->get_next_step(argts[i]))
-            cur_node = next_node;
-        else
-            return nullptr;
-    }
-    if (cur_node->m_reduce_const_function)
-        return &cur_node->m_reduce_const_function;
-    return nullptr;
+    return _get_reduce_func(cur_node, argts, argc, 0);
+}
+
+RS_API rs_api jeecs_shader_create_uniform_variable(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_gchandle(vm,
+        new jegl_shader_value((jegl_shader_value::type)rs_int(args + 0), rs_string(args + 1)), nullptr, _free_shader_value);
 }
 
 RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
 {
     bool result_is_const = true;
+    std::vector<jegl_shader_value*> tmp_svalue;
+    struct AutoRelease
+    {
+        std::function<void(void)> _m_func;
+        AutoRelease(const std::function<void(void)>& f) :_m_func(f) {}
+        ~AutoRelease() { _m_func(); }
+    };
+    AutoRelease auto_release([&]() {
+        for (auto& tmp : tmp_svalue)
+            delete_shader_value(tmp);
+        });
+
     std::vector<jegl_shader_value::type> _types(argc - 2);
     std::vector<jegl_shader_value*> _args(argc - 2);
     for (size_t i = 2; i < argc; ++i)
     {
-        jegl_shader_value* sval = (jegl_shader_value*)rs_pointer(args + i);
+        auto value_type = rs_valuetype(args + i);
+        if (value_type != RS_INTEGER_TYPE && value_type != RS_REAL_TYPE && value_type != RS_GCHANDLE_TYPE)
+        {
+            rs_halt("Cannot do this operations: argument type should be number or shader_value.");
+            return rs_ret_nil(vm);
+        }
+
+        jegl_shader_value* sval;
+        if (value_type == RS_GCHANDLE_TYPE)
+            sval = (jegl_shader_value*)rs_pointer(args + i);
+        else
+        {
+            sval = new jegl_shader_value((float)rs_cast_real(args + i));
+            tmp_svalue.push_back(sval);
+        }
         _types[i - 2] = sval->get_type();
         _args[i - 2] = sval;
 
@@ -343,7 +466,7 @@ RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
     jegl_shader_value* val =
         new jegl_shader_value(result_type, rs_string(args + 1), argc - 2);
     for (size_t i = 2; i < argc; ++i)
-        val->set_used_val(i - 2, (jegl_shader_value*)rs_pointer(args + i));
+        val->set_used_val(i - 2, _args[i - 2]);
 
     return rs_ret_gchandle(vm, val, nullptr, _free_shader_value);
 }
@@ -476,6 +599,20 @@ protected func apply_operation<ShaderResultT>(var operation_name:string, ...)
                 operation_name, ......);
 }
 
+extern("libjoyecs", "jeecs_shader_create_uniform_variable")
+protected func _uniform<ShaderResultT>(
+    var result_type : shader_value_type,
+    var uniform_name : string
+) : ShaderResultT;
+
+func uniform<ShaderResultT>(var uniform_name:string) : ShaderResultT
+{
+    return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name);
+}
+
+extern("libjoyecs", "jeecs_shader_create_rot_mat4x4")
+func rotation(var x:real, var y:real, var z:real) : float4x4;
+
 using vertex_in = handle;
 namespace vertex_in
 {
@@ -518,6 +655,8 @@ namespace float
 {
     extern("libjoyecs", "jeecs_shader_float_create")
     func create(var init_val:real) : float;
+
+    func create(...) : float{return apply_operation:<float>("float", ......);}
 
     func operator + (var a:float, var b:float) : float
     {
@@ -646,5 +785,23 @@ namespace float4
     func wxyz(var self:float4) : float4{return apply_operation:<float3>(".wxyz", self);}
     func wyxz(var self:float4) : float4{return apply_operation:<float3>(".wyxz", self);}
     
+}
+namespace float4x4
+{
+    extern("libjoyecs", "jeecs_shader_float4x4_create")
+    func create(var p00:real, var p01:real, var p02:real, var p03:real,
+                var p10:real, var p11:real, var p12:real, var p13:real,
+                var p20:real, var p21:real, var p22:real, var p23:real,
+                var p30:real, var p31:real, var p32:real, var p33:real): float4x4;
+
+    func operator * (var a:float4x4, var b:float4x4) : float4x4
+    {
+        return apply_operation:<float4x4>("*", a, b);
+    }
+
+    func operator * (var a:float4x4, var b:float4) : float4
+    {
+        return apply_operation:<float4>("*", a, b);
+    }
 }
 )";

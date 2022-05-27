@@ -22,10 +22,7 @@ int main(int argc, char** argv)
 import rscene.std;
 import je.shader;
 
-//var module_trans_mat    = uniform:<float4x4>("je_modle_trans");
-//var camera_trans_mat    = uniform_block:<float4x4>("je_camera_trans");
-//var project_mat         = uniform_block:<float4x4>("je_project_trans");
-//var mvp_mat             = uniform_block:<float4x4>("je_mvp_mat");
+var mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
 
 func vert(var vdata : vertex_in)
 {
@@ -33,9 +30,14 @@ func vert(var vdata : vertex_in)
     var ionormal    = vdata->in:<float3>(1);
     var iuv         = vdata->in:<float2>(2);
 
-    var oposition = float4(iposition->yzx(), float(1));
-    var onormal   = ionormal->zyx();
-    var ouv       = iuv->yx();
+    var example_mat1 = rotation(0,0,10);
+    var example_mat2 = rotation(0,0,20);
+
+    var result = example_mat1 * example_mat2 * float4(1,0,0,1);
+
+    var oposition = mvp * float4(iposition,1);
+    var onormal   = ionormal;
+    var ouv       = iuv;
 
     return vertex_out(oposition, onormal, ouv);
 }
@@ -44,6 +46,7 @@ func frag(var fdata : fragment_in)
     return fragment_out(float4(0, 0, 0, 1));
 }
 
+while(true)
 vert(vertex_in());
 
 std::panic("...");

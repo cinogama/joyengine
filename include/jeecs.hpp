@@ -1933,11 +1933,17 @@ namespace jeecs
                 return x != q.x || y != q.y || z != q.z || w != q.w;
             }
 
-            constexpr quat(float _x = 0.f, float _y = 0.f, float _z = 0.f, float _w = 1.f) noexcept
-                :x(_x / (_x * _x + _y * _y + _z * _z + _w * _w))
+            constexpr quat(float _x, float _y, float _z, float _w) noexcept
+                : x(_x / (_x * _x + _y * _y + _z * _z + _w * _w))
                 , y(_y / (_x * _x + _y * _y + _z * _z + _w * _w))
                 , z(_z / (_x * _x + _y * _y + _z * _z + _w * _w))
                 , w(_w / (_x * _x + _y * _y + _z * _z + _w * _w)) { }
+
+            constexpr quat() noexcept
+                : x(0.f)
+                , y(0.f)
+                , z(0.f)
+                , w(1.f) { }
 
             quat(float yaw, float pitch, float roll) noexcept
             {
