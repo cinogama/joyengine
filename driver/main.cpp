@@ -30,11 +30,6 @@ func vert(var vdata : vertex_in)
     var ionormal    = vdata->in:<float3>(1);
     var iuv         = vdata->in:<float2>(2);
 
-    var example_mat1 = rotation(0,0,10);
-    var example_mat2 = rotation(0,0,20);
-
-    var result = example_mat1 * example_mat2 * float4(1,0,0,1);
-
     var oposition = mvp * float4(iposition,1);
     var onormal   = ionormal;
     var ouv       = iuv;
@@ -43,13 +38,17 @@ func vert(var vdata : vertex_in)
 }
 func frag(var fdata : fragment_in)
 {
-    return fragment_out(float4(0, 0, 0, 1));
+    var iuv = fdata->in:<float2>(2);
+    var ipos_v3 = fdata->in:<float4>(0)->xyz();
+
+    return fragment_out(float4(ipos_v3, 1), iuv);
 }
 
-while(true)
-vert(vertex_in());
+var wraped = shader::generate();
+std::println(shader::debug::generate_glsl_vertex(wraped));
+std::println("==========================================");
+std::println(shader::debug::generate_glsl_fragment(wraped));
 
-std::panic("...");
 
 )");
     std::cout << rs_get_compile_error(v, RS_NEED_COLOR) << std::endl;

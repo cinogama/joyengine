@@ -4,6 +4,7 @@
 #include <variant>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 struct jegl_shader_value
 {
@@ -26,8 +27,6 @@ struct jegl_shader_value
         FLOAT3x3 = 0x0200,
         FLOAT4x4 = 0x0400,
 
-
-        HAS_BEEN_USED = 0x8000'0000,
     };
 
     type m_type;
@@ -131,15 +130,20 @@ struct jegl_shader_value
     {
     }
 
+    void add_useref_count()
+    {
+        std::lock_guard g1(*this);
+        ++m_ref_count;
+    }
+
     template<typename T, typename ... TS>
     void set_used_val(size_t id, T val, TS ... args)
     {
         static_assert(std::is_same<T, jegl_shader_value*>::value);
         m_opnums[id] = val;
-        val->lock();
-        val->m_type = (type)(val->m_type | type::HAS_BEEN_USED);
-        ++val->m_ref_count;
-        val->unlock();
+
+        val->add_useref_count();
+
         set_used_val(id + 1, args...);
     }
 
@@ -208,13 +212,9 @@ void delete_shader_value(jegl_shader_value* shader_val)
     do
     {
         std::lock_guard g(*shader_val);
-        if (shader_val->m_type & jegl_shader_value::HAS_BEEN_USED)
+        if (shader_val->m_ref_count)
         {
-            if (0 == --shader_val->m_ref_count)
-                // Last ref cleared, reset it to NOT USED VALUE
-                shader_val->m_type = (jegl_shader_value::type)(shader_val->m_type & ~(jegl_shader_value::HAS_BEEN_USED));
-
-            //Still have some value ref it, continue~
+            --shader_val->m_ref_count;
             return;
         }
     } while (0);
@@ -251,7 +251,6 @@ RS_API rs_api jeecs_shader_float_create(rs_vm vm, rs_value args, size_t argc)
 {
     return rs_ret_gchandle(vm, new jegl_shader_value((float)rs_real(args + 0)), nullptr, _free_shader_value);
 }
-
 RS_API rs_api jeecs_shader_float2_create(rs_vm vm, rs_value args, size_t argc)
 {
     return rs_ret_gchandle(vm,
@@ -285,7 +284,6 @@ RS_API rs_api jeecs_shader_float4x4_create(rs_vm vm, rs_value args, size_t argc)
         new jegl_shader_value(data, jegl_shader_value::FLOAT4x4),
         nullptr, _free_shader_value);
 }
-
 RS_API rs_api jeecs_shader_create_rot_mat4x4(rs_vm vm, rs_value args, size_t argc)
 {
     float data[16] = {};
@@ -401,7 +399,6 @@ RS_API rs_api jeecs_shader_create_uniform_variable(rs_vm vm, rs_value args, size
     return rs_ret_gchandle(vm,
         new jegl_shader_value((jegl_shader_value::type)rs_int(args + 0), rs_string(args + 1)), nullptr, _free_shader_value);
 }
-
 RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
 {
     bool result_is_const = true;
@@ -491,6 +488,7 @@ struct vertex_in_data_storage
         }
         auto& shval = m_in_from_vao_guard[pos];
         shval = new jegl_shader_value(type);
+        shval->m_shader_in_index = pos;
         return shval;
     }
 };
@@ -525,6 +523,95 @@ RS_API rs_api jeecs_shader_set_vertex_out(rs_vm vm, rs_value args, size_t argc)
     return rs_ret_nil(vm);
 }
 
+struct shader_value_outs
+{
+    std::vector<jegl_shader_value*> out_values;
+    ~shader_value_outs()
+    {
+        for (auto* val : out_values)
+            delete_shader_value(val);
+    }
+};
+
+struct shader_wrapper
+{
+    shader_value_outs* vertex_out;
+    shader_value_outs* fragment_out;
+
+    ~shader_wrapper()
+    {
+        delete vertex_out;
+        delete fragment_out;
+    }
+};
+
+RS_API rs_api jeecs_shader_create_shader_value_out(rs_vm vm, rs_value args, size_t argc)
+{
+    shader_value_outs* values = new shader_value_outs;
+    values->out_values.resize(argc);
+    for (size_t i = 0; i < argc; i++)
+    {
+        values->out_values[i] = (jegl_shader_value*)rs_pointer(args + i);
+        values->out_values[i]->add_useref_count();
+    }
+    return rs_ret_pointer(vm, values);
+}
+RS_API rs_api jeecs_shader_create_fragment_in(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_val(vm, args + 0);
+}
+RS_API rs_api jeecs_shader_get_fragment_in(rs_vm vm, rs_value args, size_t argc)
+{
+    shader_value_outs* values = (shader_value_outs*)rs_pointer(args + 0);
+    jegl_shader_value::type type = (jegl_shader_value::type)rs_int(args + 1);
+    size_t pos = (size_t)rs_int(args + 2);
+
+    if (pos >= values->out_values.size())
+        rs_halt(("fragment_in[" + std::to_string(pos) + "] out of range.").c_str());
+
+    auto* result = values->out_values[pos];
+    if (result->get_type() != type)
+        rs_halt(("fragment_in[" + std::to_string(pos) + "] type didn't match.").c_str());
+
+    auto* val = new jegl_shader_value(type);
+    val->m_shader_in_index = pos;
+    return rs_ret_gchandle(vm, val, nullptr, _free_shader_value);
+}
+RS_API rs_api jeecs_shader_wrap_result_pack(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_gchandle(vm, new shader_wrapper{
+        (shader_value_outs*)rs_pointer(args + 0),
+        (shader_value_outs*)rs_pointer(args + 1)
+        }, nullptr,
+        [](void* ptr) {
+            delete (shader_wrapper*)ptr;
+        });
+}
+
+#include "jeecs_graphic_shader_wrapper_glsl.hpp"
+
+std::string _generate_glsl_vertex_by_wrapper(shader_wrapper* wrap)
+{
+    return _generate_code_for_glsl_vertex(wrap->vertex_out);
+}
+
+std::string _generate_glsl_fragment_by_wrapper(shader_wrapper* wrap)
+{
+    return _generate_code_for_glsl_fragment(wrap->fragment_out);
+}
+
+RS_API rs_api jeecs_shader_wrap_glsl_vertex(rs_vm vm, rs_value args, size_t argc)
+{
+    shader_wrapper* wrap = (shader_wrapper*)rs_pointer(args + 0);
+    return rs_ret_string(vm, _generate_glsl_vertex_by_wrapper(wrap).c_str());
+}
+
+RS_API rs_api jeecs_shader_wrap_glsl_fragment(rs_vm vm, rs_value args, size_t argc)
+{
+    shader_wrapper* wrap = (shader_wrapper*)rs_pointer(args + 0);
+    return rs_ret_string(vm, _generate_glsl_fragment_by_wrapper(wrap).c_str());
+}
+
 const char* shader_wrapper_path = "je/shader.rsn";
 const char* shader_wrapper_src = R"(
 // JoyEngineECS RScene shader wrapper
@@ -535,7 +622,11 @@ enum shader_value_type
 {
     INIT_VALUE = 0x0000,
     CALC_VALUE = 0x0001,
+    SHADER_IN_VALUE = 0x0002,
+    UNIFORM_VARIABLE = 0x0004,
     //
+    TYPE_MASK = 0x0FFF0,
+
     FLOAT = 0x0010,
     FLOAT2 = 0x0020,
     FLOAT3 = 0x0040,
@@ -545,7 +636,6 @@ enum shader_value_type
     FLOAT3x3 = 0x0200,
     FLOAT4x4 = 0x0400,
 
-    HAS_BEEN_USED = 0x8000,
 }
 
 using float = gchandle;
@@ -616,7 +706,6 @@ func rotation(var x:real, var y:real, var z:real) : float4x4;
 using vertex_in = handle;
 namespace vertex_in
 {
-    // Only used for debug..
     extern("libjoyecs", "jeecs_shader_create_vertex_in")
     func create() : vertex_in;
 
@@ -629,26 +718,33 @@ namespace vertex_in
     }
 }
 
-using vertex_out = gchandle;
+using vertex_out = handle; // nogc! will free by shader_wrapper
 namespace vertex_out
 {
-    // extern("libjoyecs", "jeecs_shader_set_vertex_out")
-    func create(var position : float4, ...)
-    {
-        return nil:vertex_out;
-    }
+    extern("libjoyecs", "jeecs_shader_create_shader_value_out")
+    func create(var position : float4, ...) : vertex_out;
 }
 
 using fragment_in = handle;
 namespace fragment_in
 {
-    
+    extern("libjoyecs", "jeecs_shader_create_fragment_in")
+    func create(var data_from_vert:vertex_out) : fragment_in;
+
+    extern("libjoyecs", "jeecs_shader_get_fragment_in")
+    private func _in<ValueT>(var self:fragment_in, var type:shader_value_type, var id:int) : ValueT;
+
+    func in<ValueT>(var self:fragment_in, var id:int) : ValueT
+    {
+        return self->_in:<ValueT>(_get_type_enum:<ValueT>(), id) as ValueT;
+    }
 }
 
-using fragment_out = gchandle;
+using fragment_out = handle; // nogc! will free by shader_wrapper
 namespace fragment_out
 {
-    func create(...){}
+    extern("libjoyecs", "jeecs_shader_create_shader_value_out")
+    func create(...):fragment_out;
 }
 
 namespace float
@@ -804,4 +900,30 @@ namespace float4x4
         return apply_operation:<float4>("*", a, b);
     }
 }
+
+namespace shader
+{
+    using shader_wrapper = gchandle;
+
+    extern("libjoyecs", "jeecs_shader_wrap_result_pack")
+    private func _wraped_shader(var vertout, var fragout) : shader_wrapper;
+
+    protected extern func generate()
+    {
+        var vertex_out = vert(vertex_in());
+        var fragment_out = frag(fragment_in(vertex_out));
+
+        return _wraped_shader(vertex_out, fragment_out);
+    }
+
+    namespace debug
+    {
+        extern("libjoyecs", "jeecs_shader_wrap_glsl_vertex")
+        func generate_glsl_vertex(var wrapper:shader_wrapper) : string;
+
+        extern("libjoyecs", "jeecs_shader_wrap_glsl_fragment")
+        func generate_glsl_fragment(var wrapper:shader_wrapper) : string;
+    }
+}
+
 )";
