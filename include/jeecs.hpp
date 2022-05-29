@@ -398,9 +398,9 @@ struct jeecs_file
 JE_API jeecs_file* jeecs_file_open(const char* path);
 JE_API void        jeecs_file_close(jeecs_file* file);
 JE_API size_t      jeecs_file_read(
-    void* out_buffer, 
-    size_t elem_size, 
-    size_t count, 
+    void* out_buffer,
+    size_t elem_size,
+    size_t count,
     jeecs_file* file);
 
 /////////////////////////// GRAPHIC //////////////////////////////
@@ -443,7 +443,7 @@ struct jegl_texture
         RGB,
         RGBA,
     };
-    pixel_data_t*   m_pixels;
+    pixel_data_t* m_pixels;
     size_t          m_width;
     size_t          m_height;
     texture_format  m_format;
@@ -453,7 +453,7 @@ struct jegl_vertex
 {
     enum vertex_type
     {
-        LINES,
+        LINES = 0,
         LINELOOP,
         LINESTRIP,
         TRIANGLES,
@@ -464,12 +464,14 @@ struct jegl_vertex
     size_t* m_vertex_formats;
     size_t m_format_count;
     size_t m_point_count;
+    size_t m_data_count_per_point;
     vertex_type m_type;
 };
 
-struct jegl_material
+struct jegl_shader
 {
-
+    const char* m_vertex_glsl_src;
+    const char* m_fragment_glsl_src;
 };
 
 struct jegl_resource
@@ -486,7 +488,7 @@ struct jegl_resource
     {
         VERTEX,         // Mesh
         TEXTURE,        // Texture
-        MATERIAL,       // Shaders & Uniforms
+        SHADER,        // Shader
     };
     type m_type;
     jegl_thread* m_graphic_thread;
@@ -495,7 +497,11 @@ struct jegl_resource
     {
         void* m_ptr;
         size_t m_handle;
-        uint32_t m_uint;
+        struct
+        {
+            uint32_t m_uint1;
+            uint32_t m_uint2;
+        };
     };
 
     union
@@ -503,7 +509,7 @@ struct jegl_resource
         jegl_custom_resource_t m_custom_resource;
         jegl_texture* m_raw_texture_data;
         jegl_vertex* m_raw_vertex_data;
-        jegl_material* m_raw_material_data;
+        jegl_shader* m_raw_shader_data;
     };
 };
 
@@ -515,15 +521,21 @@ struct jegl_graphic_api
     using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t);
     using update_interface_func_t = bool(*)(jegl_thread*, custom_interface_info_t);
 
-    using using_resource_func_t = void(*)(jegl_resource*);
-    using close_resource_func_t = void(*)(jegl_resource*);
+    using init_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
+    using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
+    using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
+
+    using draw_vertex_func_t = void(*)(jegl_resource*, jegl_resource*);
 
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
     update_interface_func_t     update_interface;
 
+    init_resource_func_t        init_resource;
     using_resource_func_t       using_resource;
     close_resource_func_t       close_resource;
+
+    draw_vertex_func_t          draw_vertex;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -544,12 +556,25 @@ JE_API void jegl_reboot_graphic_thread(
     jegl_interface_config config);
 
 JE_API jegl_resource* jegl_load_texture(const char* path);
-
 JE_API jegl_resource* jegl_load_vertex(const char* path);
+JE_API jegl_resource* jegl_create_vertex(
+    jegl_vertex::vertex_type type,
+    float* datas,
+    size_t* format,
+    size_t pointcount);
 
-JE_API jegl_resource* jegl_load_material(const char* path);
+JE_API void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
+JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src);
+JE_API jegl_resource* jegl_load_shader(const char* path);
 
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis);
+
+JE_API void jegl_using_resource(jegl_resource* resource);
+JE_API void jegl_close_resource(jegl_resource* resource);
+
+JE_API void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad);
+
+JE_API jegl_thread* jegl_current_thread();
 
 RS_FORCE_CAPI_END
 

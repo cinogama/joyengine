@@ -26,12 +26,29 @@ namespace jeecs
 
         jegl_thread* glthread = nullptr;
         game_universe current_universe = nullptr;
+        jegl_resource* shader;
 
         DefaultGraphicPipelineSystem(game_universe universe)
             : game_system(nullptr)
             , current_universe(universe)
         {
             // GraphicSystem is a public system and not belong to any world.
+
+            shader = jegl_load_shader_source("je/builtin/unlit.shader", R"(
+import je.shader;
+
+func vert(var vdata : vertex_in)
+{
+    var ipos = vdata->in:<float3>(0);
+    return vertex_out(float4(ipos, 1));
+}
+
+func frag(var fdata : fragment_in)
+{
+    return fragment_out(float4(1,0,0,1));
+}
+
+)");
 
             jegl_interface_config config = {};
             config.m_fps = 60;
@@ -43,7 +60,7 @@ namespace jeecs
                 config,
                 jegl_using_opengl_apis,
                 [](void* ptr, jegl_thread* glthread)
-                {((DefaultGraphicPipelineSystem*)ptr)->Frame(glthread);}, this);
+                {((DefaultGraphicPipelineSystem*)ptr)->Frame(glthread); }, this);
 
             register_system_func(&DefaultGraphicPipelineSystem::SimplePrepareCamera,
                 {
@@ -80,7 +97,16 @@ namespace jeecs
         void Frame(jegl_thread* glthread)
         {
             // Here to rend a frame..
+            float databuf[] = { -0.5f, 0.0f, 0.0f,
+                                0.5f, 0.2f, 0.0f,
+                                0.0f, 0.5f, 0.0f };
+            size_t vao[] = { 3, 0 };
 
+            auto triangle = jegl_create_vertex(jegl_vertex::TRIANGLES, databuf, vao, 3);
+
+
+            jegl_draw_vertex_with_shader(triangle, shader);
+            jegl_close_resource(triangle);
 
             m_renderer_list.clear();
         }

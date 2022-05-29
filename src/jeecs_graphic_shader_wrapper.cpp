@@ -15,8 +15,9 @@ struct jegl_shader_value
         CALC_VALUE = 0x0001,
         SHADER_IN_VALUE = 0x0002,
         UNIFORM_VARIABLE = 0x0004,
+        UNIFORM_BLOCK_VARIABLE = 0x0008,
         //
-        TYPE_MASK = 0x0FFF0,
+        TYPE_MASK = 0x00000FFF0,
 
         FLOAT = 0x0010,
         FLOAT2 = 0x0020,
@@ -26,6 +27,8 @@ struct jegl_shader_value
         FLOAT2x2 = 0x0100,
         FLOAT3x3 = 0x0200,
         FLOAT4x4 = 0x0400,
+
+        TEXTURE2D = 0x0800,
 
     };
 
@@ -174,9 +177,9 @@ struct jegl_shader_value
     {
     }
 
-    jegl_shader_value(type resulttype, const char* operat)
-        : m_type((type)(resulttype | type::CALC_VALUE | type::UNIFORM_VARIABLE))
-        , m_unifrom_varname(jeecs::basic::make_new_string(operat))
+    jegl_shader_value(type resulttype, const char* uniform_name, bool is_predef)
+        : m_type((type)(resulttype | type::CALC_VALUE | (is_predef ? type::UNIFORM_BLOCK_VARIABLE : type::UNIFORM_VARIABLE)))
+        , m_unifrom_varname(jeecs::basic::make_new_string(uniform_name))
         , m_ref_count(0)
     {
     }
@@ -198,7 +201,12 @@ struct jegl_shader_value
     inline bool is_uniform_variable() const noexcept
     {
         std::lock_guard g(*this);
-        return m_type & UNIFORM_VARIABLE;
+        return (m_type & UNIFORM_VARIABLE) || (m_type & UNIFORM_BLOCK_VARIABLE);
+    }
+    inline bool is_block_uniform_variable() const noexcept
+    {
+        std::lock_guard g(*this);
+        return m_type & UNIFORM_BLOCK_VARIABLE;
     }
     inline type get_type() const
     {
@@ -397,7 +405,8 @@ calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argt
 RS_API rs_api jeecs_shader_create_uniform_variable(rs_vm vm, rs_value args, size_t argc)
 {
     return rs_ret_gchandle(vm,
-        new jegl_shader_value((jegl_shader_value::type)rs_int(args + 0), rs_string(args + 1)), nullptr, _free_shader_value);
+        new jegl_shader_value((jegl_shader_value::type)rs_int(args + 0), rs_string(args + 1), rs_bool(args + 2))
+        , nullptr, _free_shader_value);
 }
 RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
 {
@@ -451,13 +460,16 @@ RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
     if (result_is_const)
     {
         auto* result = (*reduce_func)(_args.size(), _args.data());
-        if (result->get_type() != result_type)
+        if (result) // if result == nullptr, there is no method for constant, calc it in shader~
         {
-            _free_shader_value(result);
-            rs_halt("Cannot do this operations: return type dis-matched.");
-            return rs_ret_nil(vm);
+            if (result->get_type() != result_type)
+            {
+                _free_shader_value(result);
+                rs_halt("Cannot do this operations: return type dis-matched.");
+                return rs_ret_nil(vm);
+            }
+            return rs_ret_gchandle(vm, result, nullptr, _free_shader_value);
         }
-        return rs_ret_gchandle(vm, result, nullptr, _free_shader_value);
     }
 
     jegl_shader_value* val =
@@ -624,8 +636,9 @@ enum shader_value_type
     CALC_VALUE = 0x0001,
     SHADER_IN_VALUE = 0x0002,
     UNIFORM_VARIABLE = 0x0004,
+    UNIFORM_BLOCK_VARIABLE = 0x0008,
     //
-    TYPE_MASK = 0x0FFF0,
+    TYPE_MASK = 0x00000FFF0,
 
     FLOAT = 0x0010,
     FLOAT2 = 0x0020,
@@ -635,6 +648,8 @@ enum shader_value_type
     FLOAT2x2 = 0x0100,
     FLOAT3x3 = 0x0200,
     FLOAT4x4 = 0x0400,
+
+    TEXTURE2D = 0x0800,
 
 }
 
@@ -646,6 +661,8 @@ using float4 = gchandle;
 using float2x2 = gchandle;
 using float3x3 = gchandle;
 using float4x4 = gchandle;
+
+using texture2d = gchandle;
 
 protected func _type_is_same<AT, BT>() : bool
 {
@@ -670,8 +687,10 @@ protected func _get_type_enum<ShaderValueT>() : shader_value_type
         return shader_value_type::FLOAT3x3;
     else if (_type_is_same:<ShaderValueT, float4x4>())
         return shader_value_type::FLOAT4x4;
+    else if (_type_is_same:<ShaderValueT, texture2d>())
+        return shader_value_type::TEXTURE2D;
 
-    std::panic("Unknown type, not shader type?");
+    std::halt("Unknown type, not shader type?");
 }
 
 extern("libjoyecs", "jeecs_shader_apply_operation")
@@ -692,12 +711,18 @@ protected func apply_operation<ShaderResultT>(var operation_name:string, ...)
 extern("libjoyecs", "jeecs_shader_create_uniform_variable")
 protected func _uniform<ShaderResultT>(
     var result_type : shader_value_type,
-    var uniform_name : string
+    var uniform_name : string,
+    var is_uniform_block : bool
 ) : ShaderResultT;
 
 func uniform<ShaderResultT>(var uniform_name:string) : ShaderResultT
 {
-    return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name);
+    return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, false);
+}
+
+func shared_uniform<ShaderResultT>(var uniform_name:string) : ShaderResultT
+{
+    return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, true);
 }
 
 extern("libjoyecs", "jeecs_shader_create_rot_mat4x4")
@@ -926,4 +951,37 @@ namespace shader
     }
 }
 
+// Default unifrom
+var je_time = shared_uniform:<float4>("JOYENGINE_TIMES");
+
+var je_trans_m_t = uniform:<float4x4>("JOYENGINE_TRANS_M_TRANSLATE");
+var je_trans_m_r = uniform:<float4x4>("JOYENGINE_TRANS_M_ROTATION");
+
+var je_trans_v_t = uniform:<float4x4>("JOYENGINE_TRANS_V_TRANSLATE");
+var je_trans_v_r = uniform:<float4x4>("JOYENGINE_TRANS_V_ROTATION");
+
+var je_trans_m = uniform:<float4x4>("JOYENGINE_TRANS_M");
+var je_trans_v = uniform:<float4x4>("JOYENGINE_TRANS_V");
+var je_trans_p = uniform:<float4x4>("JOYENGINE_TRANS_P");
+
+var je_trans_mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
+var je_trans_mv = uniform:<float4x4>("JOYENGINE_TRANS_MV");
+var je_trans_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
+
+func texture(var tex:texture2d, var uv:float2):float4
+{
+    return apply_operation:<float4>("texture", tex, uv);
+};
+
 )";
+
+void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)
+{
+    write_to_shader->m_vertex_glsl_src
+        = jeecs::basic::make_new_string(
+            _generate_glsl_vertex_by_wrapper((shader_wrapper*)shader_generator).c_str());
+
+    write_to_shader->m_fragment_glsl_src
+        = jeecs::basic::make_new_string(
+            _generate_glsl_fragment_by_wrapper((shader_wrapper*)shader_generator).c_str());
+}

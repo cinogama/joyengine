@@ -201,4 +201,7 @@ const std::vector<std::pair<std::string, std::vector<operation_t>>> _operation_t
             }}},
 #undef A
 #undef B
+        //
+    {"texture", {jegl_shader_value::TEXTURE2D, jegl_shader_value::FLOAT2,
+            reduce_method{return nullptr; }} },
 };

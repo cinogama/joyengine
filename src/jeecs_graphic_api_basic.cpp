@@ -17,6 +17,8 @@ struct jegl_thread_notifier
 };
 
 thread_local jegl_thread* _current_graphic_thread = nullptr;
+void* const INVALID_RESOURCE = (void*)(size_t)-1;
+
 jeecs::basic::atomic_list<jegl_resource::jegl_destroy_resouce> _destroing_graphic_resources;
 void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jegl_thread*), void* arg)
 {
@@ -48,7 +50,9 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                 if (cur_del_res->m_destroy_resource->m_graphic_thread == thread
                     && cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
                 {
-                    thread->m_apis->close_resource(cur_del_res->m_destroy_resource);
+                    if (cur_del_res->m_destroy_resource->m_ptr != INVALID_RESOURCE)
+                        thread->m_apis->close_resource(thread, cur_del_res->m_destroy_resource);
+
                     jeecs::basic::destroy_free(cur_del_res->m_destroy_resource);
                     jeecs::basic::destroy_free(cur_del_res);
                 }
@@ -195,16 +199,27 @@ void jegl_reboot_graphic_thread(jegl_thread* thread_handle, jegl_interface_confi
 
 void jegl_using_resource(jegl_resource* resource)
 {
+    bool need_init_resouce = false;
     // This function is not thread safe.
     if (!_current_graphic_thread)
         return jeecs::debug::log_error("Graphic resource only usable in graphic thread.");
 
     if (!resource->m_graphic_thread)
+    {
+        need_init_resouce = true;
         resource->m_graphic_thread = _current_graphic_thread;
+        resource->m_graphic_thread_version = _current_graphic_thread->m_version;
+    }
     if (_current_graphic_thread != resource->m_graphic_thread)
         return jeecs::debug::log_error("This resource has been used in graphic thread:%p.", resource->m_graphic_thread);
-
-    _current_graphic_thread->m_apis->using_resource(resource);
+    if (resource->m_graphic_thread_version != _current_graphic_thread->m_version)
+    {
+        need_init_resouce = true;
+        resource->m_graphic_thread_version = _current_graphic_thread->m_version;
+    }
+    if (need_init_resouce)
+        _current_graphic_thread->m_apis->init_resource(_current_graphic_thread, resource);
+    _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
 }
 
 void jegl_close_resource(jegl_resource* resource)
@@ -216,6 +231,20 @@ void jegl_close_resource(jegl_resource* resource)
         stbi_image_free(resource->m_raw_texture_data->m_pixels);
         jeecs::basic::destroy_free(resource->m_raw_texture_data);
         resource->m_raw_texture_data = nullptr;
+        break;
+    case jegl_resource::SHADER:
+        // close resource's raw data, then send this resource to closing-queue
+        je_mem_free((void*)resource->m_raw_shader_data->m_vertex_glsl_src);
+        je_mem_free((void*)resource->m_raw_shader_data->m_fragment_glsl_src);
+        jeecs::basic::destroy_free(resource->m_raw_shader_data);
+        resource->m_raw_shader_data = nullptr;
+        break;
+    case jegl_resource::VERTEX:
+        // close resource's raw data, then send this resource to closing-queue
+        je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_datas);
+        je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_formats);
+        jeecs::basic::destroy_free(resource->m_raw_vertex_data);
+        resource->m_raw_vertex_data = nullptr;
         break;
     default:
         jeecs::debug::log_error("Unknown resource type to close.");
@@ -236,6 +265,7 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_graphic_thread = nullptr;
         texture->m_type = jegl_resource::TEXTURE;
         texture->m_raw_texture_data = jeecs::basic::create_new<jegl_texture>();
+        texture->m_ptr = INVALID_RESOURCE;
 
         unsigned char* fbuf = new unsigned char[texfile->m_file_length];
         int w, h, cdepth;
@@ -266,4 +296,122 @@ jegl_resource* jegl_load_texture(const char* path)
 
     jeecs::debug::log_error("Fail to open file: '%s'", path);
     return nullptr;
+}
+
+jegl_resource* jegl_create_vertex(
+    jegl_vertex::vertex_type type,
+    float* datas,
+    size_t* format,
+    size_t pointcount)
+{
+    jegl_resource* vertex = jeecs::basic::create_new<jegl_resource>();
+    vertex->m_graphic_thread = nullptr;
+    vertex->m_type = jegl_resource::VERTEX;
+    vertex->m_raw_vertex_data = jeecs::basic::create_new<jegl_vertex>();
+    vertex->m_ptr = INVALID_RESOURCE;
+
+    vertex->m_raw_vertex_data->m_point_count = pointcount;
+
+    size_t format_count = 0;
+    auto* _format = format;
+
+    size_t datacount_per_point = 0;
+    while (*_format)
+    {
+        datacount_per_point += *_format;
+        ++format_count;
+        ++_format;
+    }
+
+    vertex->m_raw_vertex_data->m_type = type;
+    vertex->m_raw_vertex_data->m_format_count = format_count;
+    vertex->m_raw_vertex_data->m_point_count = pointcount;
+    vertex->m_raw_vertex_data->m_data_count_per_point = datacount_per_point;
+
+    vertex->m_raw_vertex_data->m_vertex_datas
+        = (float*)je_mem_alloc(pointcount * datacount_per_point * sizeof(float));
+    vertex->m_raw_vertex_data->m_vertex_formats
+        = (size_t*)je_mem_alloc(format_count * sizeof(size_t));
+
+    memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas, 
+        pointcount * datacount_per_point * sizeof(float));
+
+    memcpy(vertex->m_raw_vertex_data->m_vertex_formats, format,
+        format_count * sizeof(size_t));
+
+    return vertex;
+}
+
+jegl_resource* jegl_load_shader_source(const char* path, const char* src)
+{
+    rs_vm vmm = rs_create_vm();
+    if (!rs_load_source(vmm, path, src))
+    {
+        // Compile error
+        jeecs::debug::log_error(rs_get_compile_error(vmm, RS_NEED_COLOR));
+        jeecs::debug::log_error("Fail to load shader: %s.", path);
+        rs_close_vm(vmm);
+        return nullptr;
+    }
+    if (rs_has_compile_warning(vmm))
+    {
+        jeecs::debug::log_warn(rs_get_compile_warning(vmm, RS_NEED_COLOR));
+        jeecs::debug::log_warn("There are some warning when loading shader: %s.", path);
+    }
+
+    rs_run(vmm);
+
+    auto generate_shader_func = rs_extern_symb(vmm, "shader::generate");
+    if (!generate_shader_func)
+    {
+        jeecs::debug::log_error("Fail to load shader: %s. you should import je.shader.", path);
+        rs_close_vm(vmm);
+        return nullptr;
+    }
+    if (rs_value retval = rs_invoke_rsfunc(vmm, generate_shader_func, 0))
+    {
+        void* shader_graph = rs_pointer(retval);
+
+        jegl_shader* _shader = jeecs::basic::create_new<jegl_shader>();
+        jegl_shader_generate_glsl(shader_graph, _shader);
+
+        jegl_resource* shader = jeecs::basic::create_new<jegl_resource>();
+        shader->m_graphic_thread = nullptr;
+        shader->m_type = jegl_resource::SHADER;
+        shader->m_raw_shader_data = _shader;
+        shader->m_ptr = INVALID_RESOURCE;
+
+        rs_close_vm(vmm);
+        return shader;
+    }
+    else
+    {
+        jeecs::debug::log_error("Fail to load shader: %s: %s.", path, rs_get_runtime_error(vmm));
+        rs_close_vm(vmm);
+        return nullptr;
+    }
+
+}
+jegl_resource* jegl_load_shader(const char* path)
+{
+    if (jeecs_file* texfile = jeecs_file_open(path))
+    {
+        char* src = (char*)je_mem_alloc(texfile->m_file_length);
+        jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
+        jeecs_file_close(texfile);
+
+        return jegl_load_shader_source(path, src);
+    }
+    jeecs::debug::log_error("Fail to open file: '%s'", path);
+    return nullptr;
+}
+
+jegl_thread* jegl_current_thread()
+{
+    return _current_graphic_thread;
+}
+
+void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad)
+{
+    _current_graphic_thread->m_apis->draw_vertex(vert, shad);
 }

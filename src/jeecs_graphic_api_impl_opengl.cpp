@@ -54,14 +54,14 @@ void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int st
     KEYBOARD_STATE[key] = stage;
 }
 
-jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread*, const jegl_interface_config* config)
+jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config)
 {
     jeecs::debug::log("Graphic thread start!");
 
     GRAPHIC_THREAD_ID = std::this_thread::get_id();
 
-    glfwInit();
-    glewInit();
+    if (!glfwInit())
+        jeecs::debug::log_fatal("Failed to init glfw.");
 
     WINDOWS_SIZE_WIDTH = config->m_windows_width ? config->m_windows_width : config->m_resolution_x;
     WINDOWS_SIZE_HEIGHT = config->m_windows_height ? config->m_windows_height : config->m_resolution_y;
@@ -77,6 +77,9 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread*, const jegl_in
     glfwSetScrollCallback(WINDOWS_HANDLE, glfw_callback_mouse_scroll_changed);
     glfwSetKeyCallback(WINDOWS_HANDLE, glfw_callback_keyboard_stage_changed);
     glfwSwapInterval(0);
+
+    if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
+        jeecs::debug::log_fatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
 
     glEnable(GL_MULTISAMPLE);
 
@@ -108,14 +111,182 @@ void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 
 }
 
-JE_API void gl_using_resource(jegl_resource* resource)
+void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 {
+    if (resource->m_type == jegl_resource::type::SHADER)
+    {
+        GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(vertex_shader, 1, &resource->m_raw_shader_data->m_vertex_glsl_src, NULL);
+        glCompileShader(vertex_shader);
 
+        GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragment_shader, 1, &resource->m_raw_shader_data->m_fragment_glsl_src, NULL);
+        glCompileShader(fragment_shader);
+
+        GLuint shader_program = glCreateProgram();
+        glAttachShader(shader_program, vertex_shader);
+        glAttachShader(shader_program, fragment_shader);
+        glLinkProgram(shader_program);
+
+        // Check this program is acceptable?
+        GLint errmsg_len;
+        GLint errmsg_written_len;
+        glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &errmsg_len);
+        if (errmsg_len > 0)
+        {
+            jeecs::debug::log_error("Some error happend when tring compile shader %p, please check.", resource);
+            glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
+            if (errmsg_len > 0)
+            {
+                std::vector<char> errmsg_buf(errmsg_len + 1);
+                glGetShaderInfoLog(vertex_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+                jeecs::debug::log_error("In vertex shader: \n%s", errmsg_buf.data());
+            }
+            glGetShaderiv(fragment_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
+            if (errmsg_len > 0)
+            {
+                std::vector<char> errmsg_buf(errmsg_len + 1);
+                glGetShaderInfoLog(fragment_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+                jeecs::debug::log_error("In fragment shader: \n%s", errmsg_buf.data());
+            }
+            glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &errmsg_len);
+            if (errmsg_len > 0)
+            {
+                std::vector<char> errmsg_buf(errmsg_len + 1);
+                glGetProgramInfoLog(shader_program, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+                jeecs::debug::log_error("In shader program link: \n%s", errmsg_buf.data());
+            }
+
+            jeecs::debug::log_error("Failed to compile shader %p, please check.", resource);
+        }
+        else
+            resource->m_uint1 = shader_program;
+
+        glDeleteShader(vertex_shader);
+        glDeleteShader(fragment_shader);
+    }
+    else if (resource->m_type == jegl_resource::type::TEXTURE)
+    {
+        GLuint texture;
+        glGenTextures(1, &texture);
+
+        glBindTexture(GL_TEXTURE_2D, texture);
+
+        // TODO: Enable modify them in raw data.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        GLint texture_aim_format = GL_RGBA;
+        GLint texture_src_format = GL_RGBA;
+
+        switch (resource->m_raw_texture_data->m_format)
+        {
+        case jegl_texture::texture_format::MONO:
+            texture_src_format = GL_R; break;
+        case jegl_texture::texture_format::RGB:
+            texture_src_format = GL_RGB; break;
+        case jegl_texture::texture_format::RGBA:
+            texture_src_format = GL_RGBA; break;
+        default:
+            jeecs::debug::log_error("Unknown texture raw-data format.");
+        }
+
+        glTexImage2D(GL_TEXTURE_2D,
+            0, texture_aim_format,
+            resource->m_raw_texture_data->m_width,
+            resource->m_raw_texture_data->m_height,
+            0, texture_src_format,
+            GL_UNSIGNED_BYTE,
+            resource->m_raw_texture_data->m_pixels);
+
+        glGenerateMipmap(GL_TEXTURE_2D);
+        resource->m_uint1 = texture;
+    }
+    else if (resource->m_type == jegl_resource::type::VERTEX)
+    {
+        GLuint vao, vbo;
+        glGenVertexArrays(1, &vao);
+        glGenBuffers(1, &vbo);
+
+        glBindVertexArray(vao);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER,
+            resource->m_raw_vertex_data->m_point_count * resource->m_raw_vertex_data->m_data_count_per_point * sizeof(float),
+            resource->m_raw_vertex_data->m_vertex_datas,
+            GL_STATIC_DRAW);
+
+        size_t offset = 0;
+        for (unsigned int i = 0; i < (unsigned int)resource->m_raw_vertex_data->m_format_count; i++)
+        {
+            glEnableVertexAttribArray(i);
+            glVertexAttribPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i],
+                GL_FLOAT, GL_FALSE,
+                (GLsizei)(resource->m_raw_vertex_data->m_data_count_per_point * sizeof(float)),
+                (void*)(offset * sizeof(float)));
+
+            offset += resource->m_raw_vertex_data->m_vertex_formats[i];
+        }
+        resource->m_uint1 = vao;
+        resource->m_uint2 = vbo;
+    }
+    else
+        jeecs::debug::log_error("Unknown resource type when initing resource %p, please check.", resource);
 }
 
-JE_API void gl_close_resource(jegl_resource* resource)
+inline void _gl_using_shader_program(jegl_resource* resource)
 {
-    
+    glUseProgram(resource->m_uint1);
+}
+
+inline void _gl_using_texture2d(jegl_resource* resource)
+{
+    glBindTexture(GL_TEXTURE_2D, resource->m_uint1);
+}
+
+inline void _gl_using_vertex(jegl_resource* resource)
+{
+    glBindVertexArray(resource->m_uint1);
+}
+
+void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
+{
+    if (resource->m_type == jegl_resource::type::SHADER)
+        _gl_using_shader_program(resource);
+    else if (resource->m_type == jegl_resource::type::TEXTURE)
+        _gl_using_texture2d(resource);
+    else if (resource->m_type == jegl_resource::type::VERTEX)
+        _gl_using_vertex(resource);
+}
+
+JE_API void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
+{
+    if (resource->m_type == jegl_resource::type::SHADER)
+        glDeleteProgram(resource->m_uint1);
+    else if (resource->m_type == jegl_resource::type::TEXTURE)
+        glDeleteTextures(1, &resource->m_uint1);
+    else if (resource->m_type == jegl_resource::type::VERTEX)
+    {
+        glDeleteVertexArrays(1, &resource->m_uint1);
+        glDeleteBuffers(1, &resource->m_uint2);
+    }
+    else
+        jeecs::debug::log_error("Unknown resource type when closing resource %p, please check.", resource);
+}
+
+JE_API void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shader)
+{
+    const static GLenum DRAW_METHODS[] = {  GL_LINES,
+                                            GL_LINE_LOOP,
+                                            GL_LINE_STRIP,
+                                            GL_TRIANGLES,
+                                            GL_TRIANGLE_STRIP,
+                                            GL_QUADS };
+
+    jegl_using_resource(shader);
+    jegl_using_resource(vert);
+    glDrawArrays(DRAW_METHODS[vert->m_raw_vertex_data->m_type], 0, vert->m_raw_vertex_data->m_point_count);
 }
 
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
@@ -124,6 +295,9 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_interface = gl_update;
     write_to_apis->shutdown_interface = gl_shutdown;
 
+    write_to_apis->init_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;
     write_to_apis->close_resource = gl_close_resource;
+
+    write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
 }
