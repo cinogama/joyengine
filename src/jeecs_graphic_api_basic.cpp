@@ -268,8 +268,10 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_ptr = INVALID_RESOURCE;
 
         unsigned char* fbuf = new unsigned char[texfile->m_file_length];
+        jeecs_file_read(fbuf, sizeof(unsigned char), texfile->m_file_length, texfile);
         int w, h, cdepth;
 
+        stbi_set_flip_vertically_on_load(true);
         texture->m_raw_texture_data->m_pixels = stbi_load_from_memory(
             fbuf,
             texfile->m_file_length,
@@ -414,4 +416,9 @@ jegl_thread* jegl_current_thread()
 void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad)
 {
     _current_graphic_thread->m_apis->draw_vertex(vert, shad);
+}
+
+void jegl_using_texture(jegl_resource* texture, size_t pass)
+{
+    _current_graphic_thread->m_apis->bind_texture(texture, pass);
 }

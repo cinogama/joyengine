@@ -27,25 +27,30 @@ namespace jeecs
         jegl_thread* glthread = nullptr;
         game_universe current_universe = nullptr;
         jegl_resource* shader;
+        jegl_resource* texture;
 
         DefaultGraphicPipelineSystem(game_universe universe)
             : game_system(nullptr)
             , current_universe(universe)
         {
             // GraphicSystem is a public system and not belong to any world.
-
+            texture = jegl_load_texture((rs_exe_path() + std::string("funny.png")).c_str());
             shader = jegl_load_shader_source("je/builtin/unlit.shader", R"(
 import je.shader;
 
 func vert(var vdata : vertex_in)
 {
     var ipos = vdata->in:<float3>(0);
-    return vertex_out(float4(ipos, 1));
+    var iuv = vdata->in:<float2>(1);
+    return vertex_out(float4(ipos, 1), iuv);
 }
+
+var main_texture = uniform:<texture2d>("MAIN_TEXTURE");
 
 func frag(var fdata : fragment_in)
 {
-    return fragment_out(float4(1,0,0,1));
+    var uv = fdata->in:<float2>(1);
+    return fragment_out(texture(main_texture, uv));
 }
 
 )");
@@ -97,18 +102,20 @@ func frag(var fdata : fragment_in)
         void Frame(jegl_thread* glthread)
         {
             // Here to rend a frame..
-            float databuf[] = { -0.5f, 0.0f, 0.0f,
-                                0.5f, 0.2f, 0.0f,
-                                0.0f, 0.5f, 0.0f };
-            size_t vao[] = { 3, 0 };
+            float databuf[] = { -0.5f, -0.5f, 0.0f,     0.0f,   0.0f,
+                                0.5f, -0.5f, 0.0f,      1.0f,   0.0f,
+                                0.5f, 0.5f, 0.0f,       1.0f,   1.0f,
+                                -0.5f, 0.5f, 0.0f,      0.0f,  1.0f, };
+            size_t vao[] = { 3, 2, 0 };
 
-            auto triangle = jegl_create_vertex(jegl_vertex::TRIANGLES, databuf, vao, 3);
+            auto triangle = jegl_create_vertex(jegl_vertex::QUADS, databuf, vao, 4);
 
-
+            jegl_using_texture(texture, 0);
             jegl_draw_vertex_with_shader(triangle, shader);
             jegl_close_resource(triangle);
 
             m_renderer_list.clear();
+            m_camera_list.clear();
         }
 
         void SimplePrepareCamera(const Translation* trans, const OrthoCamera* camera)

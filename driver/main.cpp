@@ -47,6 +47,17 @@ int main(int argc, char** argv)
             Renderer::Material,
             Renderer::Shape>();
 
+        entity2.get_component<Transform::LocalToParent>()->parent_uid =
+            entity.get_component<Transform::ChildAnchor>()->anchor_uid;
+
+        auto entity3 = world.add_entity<
+            Transform::LocalPosition,
+            Transform::LocalRotation,
+            Transform::LocalToWorld,
+            Transform::Translation,
+            Transform::InverseTranslation,
+            Renderer::OrthoCamera>();
+
         universe.wait();
         game_universe::destroy_universe(universe);
     }

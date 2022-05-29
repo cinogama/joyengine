@@ -36,16 +36,22 @@ namespace jeecs
                     after(&TranslationUpdatingSystem::PreUpdateChildAnchor),
                 });
             /////////////////////////////////////////////////////////////////////////////////
+            register_system_func(&TranslationUpdatingSystem::PreUpdateLocalToWorld);
+            register_system_func(&TranslationUpdatingSystem::PreUpdateLocalToParent);
+            /////////////////////////////////////////////////////////////////////////////////
             register_system_func(&TranslationUpdatingSystem::UpdateLocalPositionToWorld,
                 {
+                    after(&TranslationUpdatingSystem::PreUpdateLocalToWorld),
                     except<LocalToParent>(),
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateLocalScaleToWorld,
                 {
+                    after(&TranslationUpdatingSystem::PreUpdateLocalToWorld),
                     except<LocalToParent>(),
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateLocalRotationToWorld,
                 {
+                    after(&TranslationUpdatingSystem::PreUpdateLocalToWorld),
                     except<LocalToParent>(),
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslation,
@@ -61,14 +67,17 @@ namespace jeecs
             /////////////////////////////////////////////////////////////////////////////////
             register_system_func(&TranslationUpdatingSystem::UpdateLocalPositionToParent,
                 {
+                    after(&TranslationUpdatingSystem::PreUpdateLocalToParent),
                     except<LocalToWorld>(),
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateLocalScaleToParent,
                 {
+                    after(&TranslationUpdatingSystem::PreUpdateLocalToParent),
                     except<LocalToWorld>(),
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateLocalRotationToParent,
                 {
+                    after(&TranslationUpdatingSystem::PreUpdateLocalToParent),
                     except<LocalToWorld>(),
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateParentToTranslation,
@@ -88,9 +97,21 @@ namespace jeecs
         {
             m_anchor_list.clear();
         }
+        void PreUpdateLocalToWorld(LocalToWorld* l2w)
+        {
+            l2w->pos = math::vec3();
+            l2w->rot = math::quat();
+            l2w->scale = math::vec3(1.0f, 1.0f, 1.0f);
+        }
+        void PreUpdateLocalToParent(LocalToParent* l2p)
+        {
+            l2p->pos = math::vec3();
+            l2p->rot = math::quat();
+            l2p->scale = math::vec3(1.0f, 1.0f, 1.0f);
+        }
         void UpdateChildAnchorTranslation(read<ChildAnchor> anchor, read<Translation> trans)
         {
-            m_anchor_list[anchor->anchor_id].m_translation = trans;
+            m_anchor_list[anchor->anchor_uid].m_translation = trans;
         }
 
         ///////////////////////////////////////////////////////////////////////////////////

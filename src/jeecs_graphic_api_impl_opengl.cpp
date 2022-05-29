@@ -82,7 +82,7 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
         jeecs::debug::log_fatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
 
     glEnable(GL_MULTISAMPLE);
-
+    glEnable(GL_TEXTURE_2D);
     return nullptr;
 }
 
@@ -260,7 +260,7 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
         _gl_using_vertex(resource);
 }
 
-JE_API void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
+void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
 {
     if (resource->m_type == jegl_resource::type::SHADER)
         glDeleteProgram(resource->m_uint1);
@@ -275,14 +275,21 @@ JE_API void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
         jeecs::debug::log_error("Unknown resource type when closing resource %p, please check.", resource);
 }
 
-JE_API void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shader)
+void gl_bind_texture(jegl_resource* texture, size_t pass)
 {
-    const static GLenum DRAW_METHODS[] = {  GL_LINES,
-                                            GL_LINE_LOOP,
-                                            GL_LINE_STRIP,
-                                            GL_TRIANGLES,
-                                            GL_TRIANGLE_STRIP,
-                                            GL_QUADS };
+    glActiveTexture(GL_TEXTURE0 + (GLint)pass);
+    jegl_using_resource(texture);
+}
+
+void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shader)
+{
+    const static GLenum DRAW_METHODS[] = {  
+        GL_LINES,
+        GL_LINE_LOOP,
+        GL_LINE_STRIP,
+        GL_TRIANGLES,
+        GL_TRIANGLE_STRIP,
+        GL_QUADS };
 
     jegl_using_resource(shader);
     jegl_using_resource(vert);
@@ -300,4 +307,5 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->close_resource = gl_close_resource;
 
     write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
+    write_to_apis->bind_texture = gl_bind_texture;
 }

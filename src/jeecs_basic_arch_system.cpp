@@ -223,11 +223,18 @@ namespace jeecs_impl
             jeecs::typing::version_t              _m_version;
 
             // Do not invoke this function if possiable, you should get component by arch_type & system.
+            template<typename CT = void>
+            inline CT* get_component(jeecs::typing::typeid_t tid) const
+            {
+                if (_m_in_chunk->is_entity_valid(_m_id, _m_version))
+                    return (CT*)_m_in_chunk->get_component_addr_with_typeid(_m_id, tid);
+                return nullptr;
+            }
+
             template<typename CT>
             inline CT* get_component() const
             {
-                assert(_m_in_chunk->is_entity_valid(_m_id, _m_version));
-                return (CT*)_m_in_chunk->get_component_addr_with_typeid(_m_id, jeecs::typing::type_info::id<CT>());
+                return get_component<CT>(jeecs::typing::type_info::id<CT>())
             }
 
             inline arch_chunk* chunk()const noexcept
@@ -1851,6 +1858,13 @@ const void* je_arch_entity_meta_addr_in_chunk(void* chunk)
     return ((jeecs_impl::arch_type::arch_chunk*)chunk)->get_entity_meta();
 }
 
+void* je_ecs_world_entity_get_component(
+    const jeecs::game_entity* entity,
+    const jeecs::typing::type_info* component_info)
+{
+    return reinterpret_cast<const jeecs_impl::arch_type::entity&>(*entity).get_component(component_info->m_id);
+}
+
 void je_ecs_world_destroy_entity(
     void* world,
     const jeecs::game_entity* entity)
@@ -1867,4 +1881,3 @@ void* je_ecs_world_in_universe(void* world)
 {
     return  ((jeecs_impl::ecs_world*)world)->get_universe();
 }
-

@@ -117,7 +117,7 @@ namespace jeecs
         jeecs::typing::version_t              _m_version;
 
         template<typename T>
-        inline T* get_component()noexcept;
+        inline T* get_component() const noexcept;
     };
 
     namespace basic
@@ -370,6 +370,9 @@ JE_API void je_ecs_world_entity_remove_component(
     void* world,
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
+JE_API void* je_ecs_world_entity_get_component(
+    const jeecs::game_entity* entity,
+    const jeecs::typing::type_info* component_info);
 
 /////////////////////////// Time&Sleep /////////////////////////////////
 
@@ -526,6 +529,7 @@ struct jegl_graphic_api
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
 
     using draw_vertex_func_t = void(*)(jegl_resource*, jegl_resource*);
+    using bind_texture_func_t = void(*)(jegl_resource*, size_t);
 
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
@@ -536,6 +540,7 @@ struct jegl_graphic_api
     close_resource_func_t       close_resource;
 
     draw_vertex_func_t          draw_vertex;
+    bind_texture_func_t         bind_texture;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -572,6 +577,7 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis);
 JE_API void jegl_using_resource(jegl_resource* resource);
 JE_API void jegl_close_resource(jegl_resource* resource);
 
+JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
 JE_API void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad);
 
 JE_API jegl_thread* jegl_current_thread();
@@ -1481,11 +1487,9 @@ namespace jeecs
     };
 
     template<typename T>
-    inline T* game_entity::get_component() noexcept
+    inline T* game_entity::get_component()const noexcept
     {
-        const jeecs::typing::type_info info
-            = jeecs::typing::type_info::of<T>();
-
+        return (T*)je_ecs_world_entity_get_component(this, typing::type_info::of<T>());
     }
 
     namespace math
@@ -2220,12 +2224,12 @@ namespace jeecs
         };
         struct LocalScale
         {
-            math::vec3 scale;
+            math::vec3 scale = { 1.0f, 1.0f, 1.0f };
         };
 
         struct ChildAnchor
         {
-            typing::uid_t anchor_id = je_uid_generate();
+            typing::uid_t anchor_uid = je_uid_generate();
         };
 
         struct LocalToParent
