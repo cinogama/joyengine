@@ -39,16 +39,15 @@ namespace jeecs
         {
             // GraphicSystem is a public system and not belong to any world.
             texture = jegl_load_texture((rs_exe_path() + std::string("funny.png")).c_str());
-            float databuf[] = { -0.5f, -0.5f, 0.0f,     0.0f,   0.0f,
-                              0.5f, -0.5f, 0.0f,      1.0f,   0.0f,
-                              0.5f, 0.5f, 0.0f,       1.0f,   1.0f,
-                              -0.5f, 0.5f, 0.0f,      0.0f,  1.0f, };
+            float databuf[] = { -1.0f, -1.0f, 0.0f,     0.0f,   0.0f,
+                              1.f, -1.0f, 0.0f,      1.0f,   0.0f,
+                              1.f, 1.f, 0.0f,       1.0f,   1.0f,
+                              -1.f, 1.f, 0.0f,      0.0f,  1.0f, };
             size_t vao[] = { 3, 2, 0 };
 
             vertex = jegl_create_vertex(jegl_vertex::QUADS, databuf, vao, 4);
-            shader = jegl_load_shader_source("je/builtin/unlit.shader", R"(
+            shader = jegl_load_shader_source("je/builtin/unlit.shader", u8R"(
 import je.shader;
-import je.gui;
 
 func vert(var vdata : vertex_in)
 {
@@ -64,51 +63,13 @@ func frag(var fdata : fragment_in)
     var uv = fdata->in:<float2>(1);
     return fragment_out(float4(1,0,1,1));
 }
-
-func gui_helloworld()
-{
-    using je::gui;
-
-    var close_form = false;
-
-    Begin("Helloworld");
-    {
-        Text("This form is a demo~!");
-        if (Button("close"))
-            close_form = true;
-    }
-    End();
-
-    return close_form;
-}
-
-func gui_mainmenu()
-{
-    using je::gui;
-    BeginMainMenuBar();
-
-    if (MenuItem("File"))
-    {
-        //BeginMenuBar();
-        {
-            MenuItem("Open");
-            MenuItem("Exit");
-        }
-        //EndMenuBar();
-    }
-
-    EndMainMenuBar();
-}
-
-je::gui::launch(gui_mainmenu);
-je::gui::launch(gui_helloworld);
-
 )");
+
 
             jegl_interface_config config = {};
             config.m_fps = 60;
-            config.m_resolution_x = 320;
-            config.m_resolution_y = 240;
+            config.m_resolution_x = 640;
+            config.m_resolution_y = 480;
             config.m_title = "JoyEngineECS(JoyEngine 4.0)";
 
             glthread = jegl_start_graphic_thread(

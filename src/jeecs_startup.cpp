@@ -13,6 +13,15 @@ void je_init(int argc, char** argv)
     rs_init(argc, argv);
     rs_virtual_source(shader_wrapper_path, shader_wrapper_src, false);
     rs_virtual_source(gui_api_path, gui_api_src, false);
+
+    rs_vm vmm = rs_create_vm();
+    if (rs_load_file(vmm, "builtin/Editor/main.rsn"))
+        rs_run(vmm);
+    if (rs_has_compile_warning(vmm))
+        jeecs::debug::log_warn(rs_get_compile_warning(vmm, RS_NEED_COLOR));
+    if (rs_has_compile_error(vmm))
+        jeecs::debug::log_error(rs_get_compile_error(vmm, RS_NEED_COLOR));
+    rs_close_vm(vmm);
 }
 
 void je_finish()

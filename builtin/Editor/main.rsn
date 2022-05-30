@@ -1,0 +1,64 @@
+import rscene.std;
+import je.gui;
+
+import script_editor;
+
+func Editor_MainMenuBar()
+{
+    using je::gui;
+
+    BeginMainMenuBar();
+    if (BeginMenu("JoyEngine"))
+    {
+        MenuItem("打开");
+        Separator();
+        MenuItem("退出");
+
+        EndMenu();
+    }
+    if (BeginMenu("编辑", false))
+    {
+        EndMenu();
+    }
+    if (BeginMenu("视图", false))
+    {
+        EndMenu();
+    }
+     if (BeginMenu("脚本"))
+    {
+        if (MenuItem("打开快捷编辑器"))
+            je::gui::launch(Editor_ScriptEditor);
+
+        EndMenu();
+    }
+    if (BeginMenu("帮助"))
+    {
+        if (MenuItem("关于"))
+            je::gui::launch(Editor_Welcome);
+
+        EndMenu();
+    }
+    EndMainMenuBar();
+}
+
+func Editor_Welcome()
+{
+    using je::gui;
+
+    var exit = false;
+
+    Begin("欢迎", WindowsAttribute::ImGuiWindowFlags_NoResize);
+    Text("欢迎使用JoyEngineECS.");
+    Separator();
+    Text("Copyright (C)Cinogama project. 2022.");
+    Text("Powered by RestorableScene (C)Cinogama project. 2022.");
+    Text("所使用的第三方库包括glew、glfw、imgui及stb的相关信息见版权页");
+    if (Button("确认"))
+        exit = true;
+    End();
+
+    return exit;
+}
+
+je::gui::launch(Editor_MainMenuBar);
+je::gui::launch(Editor_Welcome);

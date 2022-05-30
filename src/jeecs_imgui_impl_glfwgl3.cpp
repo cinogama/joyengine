@@ -1,12 +1,15 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 #include <string>
+#include <unordered_set>
 
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <imgui_stdlib.h>
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+
 
 #include <GLFW/glfw3.h>
 
@@ -19,8 +22,38 @@ import rscene.std;
 namespace je
     namespace gui
 {
+    enum WindowsAttribute
+    {
+        ImGuiWindowFlags_None                   = 0,
+        ImGuiWindowFlags_NoTitleBar             = 0x0000'0001,   // Disable title-bar
+        ImGuiWindowFlags_NoResize               = 0x0000'0002,   // Disable user resizing with the lower-right grip
+        ImGuiWindowFlags_NoMove                 = 0x0000'0004,   // Disable user moving the window
+        ImGuiWindowFlags_NoScrollbar            = 0x0000'0008,   // Disable scrollbars (window can still scroll with mouse or programmatically)
+        ImGuiWindowFlags_NoScrollWithMouse      = 0x0000'0010,   // Disable user vertically scrolling with mouse wheel. On child window, mouse wheel will be forwarded to the parent unless NoScrollbar is also set.
+        ImGuiWindowFlags_NoCollapse             = 0x0000'0020,   // Disable user collapsing window by double-clicking on it. Also referred to as Window Menu Button (e.g. within a docking node).
+        ImGuiWindowFlags_AlwaysAutoResize       = 0x0000'0040,   // Resize every window to its content every frame
+        ImGuiWindowFlags_NoBackground           = 0x0000'0080,   // Disable drawing background color (WindowBg, etc.) and outside border. Similar as using SetNextWindowBgAlpha(0.0f).
+        ImGuiWindowFlags_NoSavedSettings        = 0x0000'0100,   // Never load/save settings in .ini file
+        ImGuiWindowFlags_NoMouseInputs          = 0x0000'0200,   // Disable catching mouse, hovering test with pass through.
+        ImGuiWindowFlags_MenuBar                = 0x0000'0400,  // Has a menu-bar
+        ImGuiWindowFlags_HorizontalScrollbar    = 0x0000'0800,  // Allow horizontal scrollbar to appear (off by default). You may use SetNextWindowContentSize(ImVec2(width,0.0f)); prior to calling Begin() to specify width. Read code in imgui_demo in the "Horizontal Scrolling" section.
+        ImGuiWindowFlags_NoFocusOnAppearing     = 0x0000'1000,  // Disable taking focus when transitioning from hidden to visible state
+        ImGuiWindowFlags_NoBringToFrontOnFocus  = 0x0000'2000,  // Disable bringing window to front when taking focus (e.g. clicking on it or programmatically giving it focus)
+        ImGuiWindowFlags_AlwaysVerticalScrollbar= 0x0000'4000,  // Always show vertical scrollbar (even if ContentSize.y < Size.y)
+        ImGuiWindowFlags_AlwaysHorizontalScrollbar=0x0000'8000,  // Always show horizontal scrollbar (even if ContentSize.x < Size.x)
+        ImGuiWindowFlags_AlwaysUseWindowPadding = 0x0001'0000,  // Ensure child windows without border uses style.WindowPadding (ignored by default for non-bordered child windows, because more convenient)
+        ImGuiWindowFlags_NoNavInputs            = 0x0002'0000,  // No gamepad/keyboard navigation within the window
+        ImGuiWindowFlags_NoNavFocus             = 0x0004'0000,  // No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
+        ImGuiWindowFlags_UnsavedDocument        = 0x0008'0000,  // Display a dot next to the title. When used in a tab/docking context, tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
+        //ImGuiWindowFlags_NoNav                  = ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
+        //ImGuiWindowFlags_NoDecoration           = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse,
+        //ImGuiWindowFlags_NoInputs               = ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
+    }
+
     extern("libjoyecs", "je_gui_begin")
     func Begin(var title:string) : bool;
+    extern("libjoyecs", "je_gui_begin")
+    func Begin(var title:string, var attribute:int) : bool;
 
     extern("libjoyecs", "je_gui_end")
     func End() : bool;
@@ -36,6 +69,12 @@ namespace je
 
     extern("libjoyecs", "je_gui_end_menu_item")
     func MenuItem(var text:string) : void;
+    extern("libjoyecs", "je_gui_end_menu_item")
+    func MenuItem(var text:string, var shortcut:string) : void;
+    extern("libjoyecs", "je_gui_end_menu_item")
+    func MenuItem(var text:string, var enable:bool) : void;
+    extern("libjoyecs", "je_gui_end_menu_item")
+    func MenuItem(var text:string, var shortcut:string, var enable:bool) : void;
 
     extern("libjoyecs", "je_gui_end_main_menu_bar")
     func EndMainMenuBar() : void;
@@ -48,9 +87,35 @@ namespace je
 
     extern("libjoyecs", "je_gui_begin_menu")
     func BeginMenu(var text:string) : bool;
+    extern("libjoyecs", "je_gui_begin_menu")
+    func BeginMenu(var text:string, var enable:bool) : bool;
+
+    using TextBuffer = gchandle;
+    namespace TextBuffer
+    {
+        extern("libjoyecs", "je_gui_create_text_buffer")
+        func create(var text:string):TextBuffer;
+
+        extern("libjoyecs", "je_gui_clear_text_buffer")
+        func clear(var self:TextBuffer):void;
+        
+        extern("libjoyecs", "je_gui_get_text_buffer")
+        func get(var self:TextBuffer):string;
+
+        extern("libjoyecs", "je_gui_set_text_buffer")
+        func set(var self:TextBuffer, var text:string):void;
+    }
+
+    extern("libjoyecs", "je_gui_input_text_multiline")
+    func InputTextMultiline(var label:string, var buffer:TextBuffer) : bool;
+    extern("libjoyecs", "je_gui_input_text_multiline")
+    func InputTextMultiline(var label:string, var buffer:TextBuffer, var width:real, var height:real) : bool;
 
     extern("libjoyecs", "je_gui_end_menu")
     func EndMenu() : void;
+
+    extern("libjoyecs", "je_gui_separator")
+    func Separator() : void;
 
     using job_handle_t = gchandle;
 
@@ -76,6 +141,8 @@ namespace je
 
 RS_API rs_api je_gui_begin(rs_vm vm, rs_value args, size_t argc)
 {
+    if (argc == 2)
+        return rs_ret_bool(vm, ImGui::Begin(rs_string(args), 0, rs_int(args + 1)));
     return rs_ret_bool(vm, ImGui::Begin(rs_string(args)));
 }
 RS_API rs_api je_gui_end(rs_vm vm, rs_value args, size_t argc)
@@ -98,7 +165,16 @@ RS_API rs_api je_gui_begin_main_menu_bar(rs_vm vm, rs_value args, size_t argc)
 }
 RS_API rs_api je_gui_end_menu_item(rs_vm vm, rs_value args, size_t argc)
 {
-    return rs_ret_bool(vm, ImGui::MenuItem(rs_string(args)));
+    if (argc == 2)
+    {
+        if (rs_valuetype(args + 1) == RS_STRING_TYPE)
+            return rs_ret_bool(vm, ImGui::MenuItem(rs_string(args + 0), rs_string(args + 1)));
+        else
+            return rs_ret_bool(vm, ImGui::MenuItem(rs_string(args + 0), 0, false, rs_bool(args + 1)));
+    }
+    if (argc == 3)
+        return rs_ret_bool(vm, ImGui::MenuItem(rs_string(args + 0), rs_string(args + 1), false, rs_bool(args + 2)));
+    return rs_ret_bool(vm, ImGui::MenuItem(rs_string(args + 0)));
 }
 RS_API rs_api je_gui_end_main_menu_bar(rs_vm vm, rs_value args, size_t argc)
 {
@@ -116,6 +192,8 @@ RS_API rs_api je_gui_end_menu_bar(rs_vm vm, rs_value args, size_t argc)
 }
 RS_API rs_api je_gui_begin_menu(rs_vm vm, rs_value args, size_t argc)
 {
+    if (argc == 2)
+        return rs_ret_bool(vm, ImGui::BeginMenu(rs_string(args + 0), rs_bool(args + 1)));
     return rs_ret_bool(vm, ImGui::BeginMenu(rs_string(args + 0)));
 }
 RS_API rs_api je_gui_end_menu(rs_vm vm, rs_value args, size_t argc)
@@ -123,14 +201,56 @@ RS_API rs_api je_gui_end_menu(rs_vm vm, rs_value args, size_t argc)
     ImGui::EndMenu();
     return rs_ret_nil(vm);
 }
+RS_API rs_api je_gui_separator(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::Separator();
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_gui_create_text_buffer(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_gchandle(vm, new std::string(rs_string(args + 0)), nullptr, [](void* ptr) {delete (std::string*)ptr; });
+}
+
+RS_API rs_api je_gui_clear_text_buffer(rs_vm vm, rs_value args, size_t argc)
+{
+    std::string* str = (std::string*)rs_pointer(args + 0);
+    str->clear();
+
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_gui_get_text_buffer(rs_vm vm, rs_value args, size_t argc)
+{
+    std::string* str = (std::string*)rs_pointer(args + 0);
+
+    return rs_ret_string(vm, str->c_str());
+}
+
+RS_API rs_api je_gui_set_text_buffer(rs_vm vm, rs_value args, size_t argc)
+{
+    std::string* str = (std::string*)rs_pointer(args + 0);
+    *str = rs_string(args + 1);
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_gui_input_text_multiline(rs_vm vm, rs_value args, size_t argc)
+{
+    if (argc == 4)
+        return rs_ret_bool(vm, ImGui::InputTextMultiline(rs_string(args + 0), (std::string*)rs_pointer(args + 1),
+            ImVec2(rs_float(args + 2), rs_float(args + 3))));
+    return rs_ret_bool(vm, ImGui::InputTextMultiline(rs_string(args + 0), (std::string*)rs_pointer(args + 1)));
+}
 
 struct gui_rs_job_coroutine
 {
     rs_vm work_vm;
+    rs_integer_t job_handle;
 
     gui_rs_job_coroutine* last;
 };
 jeecs::basic::atomic_list<gui_rs_job_coroutine> _rs_job_list;
+jeecs::basic::atomic_list<gui_rs_job_coroutine> _rs_new_job_list;
 
 RS_API rs_api je_gui_launch(rs_vm vm, rs_value args, size_t argc)
 {
@@ -147,7 +267,8 @@ RS_API rs_api je_gui_launch(rs_vm vm, rs_value args, size_t argc)
 
     gui_rs_job_coroutine* guico = new gui_rs_job_coroutine;
     guico->work_vm = vmm;
-    _rs_job_list.add_one(guico);
+    guico->job_handle = jobfunc;
+    _rs_new_job_list.add_one(guico);
 
     return rs_ret_nil(vm);
 }
@@ -239,19 +360,41 @@ void jegui_update()
     ImGui::NewFrame();
 
     auto chain = _rs_job_list.pick_all();
+    std::unordered_set<rs_integer_t> _displayed_job_handle;
+
     while (chain)
     {
         auto cur_job = chain;
         chain = chain->last;
 
-        auto result = rs_dispatch(cur_job->work_vm);
-        if (result == RS_CONTINUE)
-            _rs_job_list.add_one(cur_job);
-        else
+        if (_displayed_job_handle.find(cur_job->job_handle) == _displayed_job_handle.end())
         {
-            rs_close_vm(cur_job->work_vm);
-            delete cur_job;
+            _displayed_job_handle.insert(cur_job->job_handle);
+            auto result = rs_dispatch(cur_job->work_vm);
+            if (result == RS_CONTINUE)
+            {
+                _rs_job_list.add_one(cur_job);
+                continue;
+            }
         }
+
+        rs_close_vm(cur_job->work_vm);
+        delete cur_job;
+    }
+
+    auto new_job_chain = _rs_new_job_list.pick_all();
+    while (new_job_chain)
+    {
+        auto cur_job = new_job_chain;
+        new_job_chain = new_job_chain->last;
+
+        if (_displayed_job_handle.find(cur_job->job_handle) == _displayed_job_handle.end())
+        {
+            _rs_job_list.add_one(cur_job);
+            continue;
+        }
+        rs_close_vm(cur_job->work_vm);
+        delete cur_job;
     }
 
     ImGui::Render();
@@ -265,6 +408,16 @@ void jegui_shutdown()
     {
         auto cur_job = chain;
         chain = chain->last;
+
+        rs_close_vm(cur_job->work_vm);
+        delete cur_job;
+    }
+
+    auto new_job_chain = _rs_new_job_list.pick_all();
+    while (new_job_chain)
+    {
+        auto cur_job = new_job_chain;
+        new_job_chain = new_job_chain->last;
 
         rs_close_vm(cur_job->work_vm);
         delete cur_job;

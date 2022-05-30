@@ -1,0 +1,16 @@
+import rscene.std;
+import je.gui;
+
+func Editor_ScriptEditor()
+{
+    using je::gui;
+
+    Begin("RScene脚本");
+
+    static var textbuf = TextBuffer("");
+    if (InputTextMultiline("##", textbuf, 500, 300))
+    {
+    }
+
+    End();
+}

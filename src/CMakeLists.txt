@@ -9,6 +9,7 @@ include_directories("../3rd/glfw/include")
 include_directories("../3rd/stb")
 include_directories("../3rd/imgui")
 include_directories("../3rd/imgui/backends")
+include_directories("../3rd/imgui/misc/cpp")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
@@ -25,7 +26,9 @@ set(imgui_glfw_gl3_src	"../3rd/imgui/backends/imgui_impl_glfw.cpp"
 						"../3rd/imgui/imgui.h"
 						"../3rd/imgui/imgui_internal.h"
 						"../3rd/imgui/imgui_tables.cpp"
-						"../3rd/imgui/imgui_widgets.cpp")
+						"../3rd/imgui/imgui_widgets.cpp"
+						"../3rd/imgui/misc/cpp/imgui_stdlib.cpp"
+						"../3rd/imgui/misc/cpp/imgui_stdlib.h")
 
 if (WIN32)
 	list(APPEND jeecs_system_libs OpenGL32)
