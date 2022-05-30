@@ -3,6 +3,7 @@
 
 #include <list>
 #include <thread>
+#include <condition_variable>
 
 #ifdef NDEBUG
 #   define DEBUG_ARCH_LOG(...) ((void)0)
@@ -91,8 +92,7 @@ namespace jeecs_impl
                 , _m_types(_arch_type->_m_types_set)
                 , _m_arch_type(_arch_type)
             {
-                static_assert(
-                    ((size_t) & reinterpret_cast<char const volatile&>((
+                assert(((size_t) & reinterpret_cast<char const volatile&>((
                         ((jeecs_impl::arch_type::arch_chunk*)0)->_m_chunk_buffer))) == 0);
 
                 _m_entities_meta = jeecs::basic::create_new_n<entity_meta>(_m_entity_count);
@@ -234,7 +234,7 @@ namespace jeecs_impl
             template<typename CT>
             inline CT* get_component() const
             {
-                return get_component<CT>(jeecs::typing::type_info::id<CT>())
+                return get_component<CT>(jeecs::typing::type_info::id<CT>());
             }
 
             inline arch_chunk* chunk()const noexcept

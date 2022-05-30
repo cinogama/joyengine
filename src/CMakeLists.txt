@@ -34,4 +34,4 @@ set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)
 set_target_properties(joyecs PROPERTIES PREFIX "")
 
 target_link_libraries(joyecs ${jeecs_system_libs})
-target_link_libraries(joyecs rscene glew_s glfw)
+target_link_libraries(joyecs rscene glew glfw)

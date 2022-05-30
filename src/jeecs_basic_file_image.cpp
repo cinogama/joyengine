@@ -2,6 +2,7 @@
 #include "jeecs.hpp"
 
 #include <cstdio>
+#include<sys/stat.h>
 
 jeecs_file* jeecs_file_open(const char* path)
 {
