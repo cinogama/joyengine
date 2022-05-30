@@ -12,6 +12,7 @@
 #include "jeecs.hpp"
 
 #include <queue>
+#include <list>
 
 namespace jeecs
 {
@@ -20,14 +21,17 @@ namespace jeecs
         using Translation = Transform::Translation;
         using InverseTranslation = Transform::InverseTranslation;
 
+        using Rendqueue = Renderer::Rendqueue;
         using OrthoCamera = Renderer::OrthoCamera;
         using Material = Renderer::Material;
         using Shape = Renderer::Shape;
 
         jegl_thread* glthread = nullptr;
         game_universe current_universe = nullptr;
+
         jegl_resource* shader;
         jegl_resource* texture;
+        jegl_resource* vertex;
 
         DefaultGraphicPipelineSystem(game_universe universe)
             : game_system(nullptr)
@@ -35,6 +39,13 @@ namespace jeecs
         {
             // GraphicSystem is a public system and not belong to any world.
             texture = jegl_load_texture((rs_exe_path() + std::string("funny.png")).c_str());
+            float databuf[] = { -0.5f, -0.5f, 0.0f,     0.0f,   0.0f,
+                              0.5f, -0.5f, 0.0f,      1.0f,   0.0f,
+                              0.5f, 0.5f, 0.0f,       1.0f,   1.0f,
+                              -0.5f, 0.5f, 0.0f,      0.0f,  1.0f, };
+            size_t vao[] = { 3, 2, 0 };
+
+            vertex = jegl_create_vertex(jegl_vertex::QUADS, databuf, vao, 4);
             shader = jegl_load_shader_source("je/builtin/unlit.shader", R"(
 import je.shader;
 
@@ -50,7 +61,7 @@ var main_texture = uniform:<texture2d>("MAIN_TEXTURE");
 func frag(var fdata : fragment_in)
 {
     var uv = fdata->in:<float2>(1);
-    return fragment_out(texture(main_texture, uv));
+    return fragment_out(float4(1,0,1,1));
 }
 
 )");
@@ -69,12 +80,13 @@ func frag(var fdata : fragment_in)
 
             register_system_func(&DefaultGraphicPipelineSystem::SimplePrepareCamera,
                 {
+                    before(&DefaultGraphicPipelineSystem::FlushPipeLine),
+
                     contain<InverseTranslation>(),  // Used for inverse mats
-                    before(&DefaultGraphicPipelineSystem::FlushPipeLine)
                 });
             register_system_func(&DefaultGraphicPipelineSystem::SimpleRendObject,
                 {
-                    before(&DefaultGraphicPipelineSystem::FlushPipeLine)
+                    before(&DefaultGraphicPipelineSystem::FlushPipeLine),
                 });
             register_system_func(&DefaultGraphicPipelineSystem::FlushPipeLine);
         }
@@ -86,54 +98,76 @@ func frag(var fdata : fragment_in)
 
         struct CameraArch
         {
+            const Rendqueue* rendqueue;
             const Translation* translation;
             const OrthoCamera* camera;
+
+            bool operator < (const CameraArch& another) const noexcept
+            {
+                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
+                return a_queue < b_queue;
+            }
         };
         struct RendererArch
         {
+            const Rendqueue* rendqueue;
             const Translation* translation;
             const Material* material;
             const Shape* shape;
+
+            bool operator < (const RendererArch& another) const noexcept
+            {
+                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
+                return a_queue < b_queue;
+            }
         };
 
-        std::vector<CameraArch> m_camera_list;
-        std::vector<RendererArch> m_renderer_list;
+        std::priority_queue<CameraArch> m_camera_list;
+        std::priority_queue<RendererArch> m_renderer_list;
 
         void Frame(jegl_thread* glthread)
         {
             // Here to rend a frame..
-            float databuf[] = { -0.5f, -0.5f, 0.0f,     0.0f,   0.0f,
-                                0.5f, -0.5f, 0.0f,      1.0f,   0.0f,
-                                0.5f, 0.5f, 0.0f,       1.0f,   1.0f,
-                                -0.5f, 0.5f, 0.0f,      0.0f,  1.0f, };
-            size_t vao[] = { 3, 2, 0 };
 
-            auto triangle = jegl_create_vertex(jegl_vertex::QUADS, databuf, vao, 4);
+            if (texture)
+                jegl_using_texture(texture, 0);
 
-            jegl_using_texture(texture, 0);
-            jegl_draw_vertex_with_shader(triangle, shader);
-            jegl_close_resource(triangle);
+            jegl_draw_vertex_with_shader(vertex, shader);
 
-            m_renderer_list.clear();
-            m_camera_list.clear();
+            while (!m_camera_list.empty())
+            {
+                auto& current_camera = m_camera_list.top();
+                {
+
+                }
+                m_camera_list.pop();
+            }
+
+            while (!m_renderer_list.empty())
+                m_renderer_list.pop();
+
+            while (!m_camera_list.empty())
+                m_camera_list.pop();
         }
 
-        void SimplePrepareCamera(const Translation* trans, const OrthoCamera* camera)
+        void SimplePrepareCamera(const Translation* trans, const OrthoCamera* camera, maynot<const Rendqueue*> rendqueue)
         {
             // Calc camera proj matrix
-            m_camera_list.push_back(
+            m_camera_list.emplace(
                 CameraArch{
-                    trans, camera
+                    rendqueue, trans, camera
                 }
             );
         }
 
-        void SimpleRendObject(const Translation* trans, const Material* mat, const Shape* shape)
+        void SimpleRendObject(const Translation* trans, const Material* mat, const Shape* shape, maynot<const Rendqueue*> rendqueue)
         {
             // RendOb will be input to a chain and used for swap
-            m_renderer_list.emplace_back(
+            m_renderer_list.emplace(
                 RendererArch{
-                    trans, mat, shape
+                    rendqueue, trans, mat, shape
                 });
         }
 

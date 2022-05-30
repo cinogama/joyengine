@@ -385,7 +385,10 @@ namespace jeecs_impl
 
         const arch_type_info* get_arch_type_info_by_type_id(jeecs::typing::typeid_t tid) const
         {
-            return &_m_arch_typeinfo_mapping.at(tid);
+            auto fnd = _m_arch_typeinfo_mapping.find(tid);
+            if (fnd != _m_arch_typeinfo_mapping.end())
+                return &fnd->second;
+            return nullptr;
         }
 
         inline void close_all_entity(ecs_world* by_world)
@@ -600,7 +603,7 @@ namespace jeecs_impl
         {
             // TODO: OPTMIZE..
 
-            types_set need_set, any_set, except_set;
+            types_set need_set, any_set, except_set, mayhave_set;
             for (auto& depend : modify_sys_func->m_dependence_list)
             {
                 if (is_system_component_depends(depend.first))
@@ -619,7 +622,13 @@ namespace jeecs_impl
                     case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
                     case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
                     case jeecs::game_system_function::dependence_type::WRITE:
-                        need_set.insert(depend.first); break;
+                        if (mayhave_set.find(depend.first) == mayhave_set.end())
+                            need_set.insert(depend.first); break;
+                    case jeecs::game_system_function::dependence_type::MAY_NOT_HAVE:
+                        // Remove 'MAYHAVE' component need-requirement from need-set; 
+                        mayhave_set.insert(depend.first);
+                        need_set.erase(depend.first);
+                        break;
                     default:
                         assert(false); //  Unknown type
                     }
@@ -701,9 +710,14 @@ namespace jeecs_impl
                             auto* arch_typeinfo = modify_sys_func->m_arch_types[aindex]->get_arch_type_info_by_type_id(
                                 modify_sys_func->m_game_system_function->m_dependence[cindex].m_tid
                             );
-
-                            ainfo.m_component_sizes[cindex] = arch_typeinfo->m_typeinfo->m_chunk_size;
-                            ainfo.m_component_mem_begin_offsets[cindex] = arch_typeinfo->m_begin_offset_in_chunk;
+                            if (arch_typeinfo)
+                            {
+                                ainfo.m_component_sizes[cindex] = arch_typeinfo->m_typeinfo->m_chunk_size;
+                                ainfo.m_component_mem_begin_offsets[cindex] = arch_typeinfo->m_begin_offset_in_chunk;
+                            }
+                            else
+                                ainfo.m_component_sizes[cindex] = ainfo.m_component_mem_begin_offsets[cindex] = 0;
+                            // end of one component datas
                         }
                     }
                 }
@@ -1084,6 +1098,8 @@ namespace jeecs_impl
                             wtype = "READ(AF)"; break;
                         case jeecs::game_system_function::dependence_type::WRITE:
                             wtype = "WRITE"; break;
+                        case jeecs::game_system_function::dependence_type::MAY_NOT_HAVE:
+                            wtype = "MAY_NOT_HAVE"; break;
                         default:
                             assert(false);
                         }

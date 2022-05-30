@@ -889,6 +889,8 @@ namespace jeecs
     {
         enum dependence_type : uint8_t
         {
+            NOTHING,
+
             // Operation
             READ_FROM_LAST_FRAME,
             WRITE,
@@ -898,6 +900,7 @@ namespace jeecs
             EXCEPT,
             CONTAIN,
             ANY,
+            MAY_NOT_HAVE,
         };
 
         using system_function_pak_t = std::function<void(const game_system_function*)>;
@@ -916,11 +919,13 @@ namespace jeecs
             inline T get_component_accessor(void* chunk_addr, size_t eid, size_t cid) const noexcept
             {
                 static_assert(sizeof(T) == sizeof(uint8_t*));
-
-                uint8_t* ptr = (uint8_t*)chunk_addr
-                    + m_component_mem_begin_offsets[cid]
-                    + m_component_sizes[cid] * eid;
-
+                uint8_t* ptr = nullptr;
+                if (m_component_sizes[cid])
+                {
+                    ptr = (uint8_t*)chunk_addr
+                        + m_component_mem_begin_offsets[cid]
+                        + m_component_sizes[cid] * eid;
+                }
                 return *(T*)(&ptr);
             }
 
@@ -1087,37 +1092,88 @@ namespace jeecs
         struct read_updated_base :accessor_base {};
         struct write_base :accessor_base {};
 
+        struct describe_base {};
+
     public:
 
         template<typename T>
         struct read : read_last_frame_base {
         public:
+            using component_access_ptr_t = const T*;
+            using component_access_ref_t = const T&;
             void* _m_component_addr;
         public:
-            inline const T* operator ->() const noexcept { return (const T*)_m_component_addr; }
-            inline const T& operator * () const noexcept { return *(const T*)_m_component_addr; }
-            inline const T* operator &() const noexcept { return (const T*)_m_component_addr; };
-            inline operator const T* () const noexcept { return (const T*)_m_component_addr; };
+            inline component_access_ptr_t operator ->() const noexcept { return (component_access_ptr_t)_m_component_addr; }
+            inline component_access_ref_t operator * () const noexcept { return *(component_access_ptr_t)_m_component_addr; }
+            inline component_access_ptr_t operator &() const noexcept { return (component_access_ptr_t)_m_component_addr; };
+            inline operator component_access_ptr_t() const noexcept { return (component_access_ptr_t)_m_component_addr; };
         };
         template<typename T>
         struct read_updated : read_updated_base {
         public:
+            using component_access_ptr_t = const T*;
+            using component_access_ref_t = const T&;
             void* _m_component_addr;
         public:
-            inline const T* operator ->() const noexcept { return (const T*)_m_component_addr; }
-            inline const T& operator * () const noexcept { return *(const T*)_m_component_addr; }
-            inline const T* operator &() const noexcept { return (const T*)_m_component_addr; };
-            inline operator const T* () const noexcept { return (const T*)_m_component_addr; };
+            inline component_access_ptr_t operator ->() const noexcept { return (component_access_ptr_t)_m_component_addr; }
+            inline component_access_ref_t operator * () const noexcept { return *(component_access_ptr_t)_m_component_addr; }
+            inline component_access_ptr_t operator &() const noexcept { return (component_access_ptr_t)_m_component_addr; };
+            inline operator component_access_ptr_t () const noexcept { return (component_access_ptr_t)_m_component_addr; };
         };
         template<typename T>
         struct write : write_base {
         public:
+            using component_access_ptr_t = T*;
+            using component_access_ref_t = T&;
             void* _m_component_addr;
         public:
-            inline T* operator ->() const noexcept { return (T*)_m_component_addr; }
-            inline T& operator * () const noexcept { return *(T*)_m_component_addr; }
-            inline T* operator &() const noexcept { return (T*)_m_component_addr; };
-            inline operator T* () const noexcept { return (T*)_m_component_addr; };
+            inline component_access_ptr_t operator ->() const noexcept { return (component_access_ptr_t)_m_component_addr; }
+            inline component_access_ref_t operator * () const noexcept { return *(component_access_ptr_t)_m_component_addr; }
+            inline component_access_ptr_t operator &() const noexcept { return (component_access_ptr_t)_m_component_addr; };
+            inline operator component_access_ptr_t () const noexcept { return (component_access_ptr_t)_m_component_addr; };
+        };
+
+        template<typename T>
+        struct maynot : describe_base {
+        public:
+            using component_accessor_t = T;
+            constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
+
+            static_assert(std::is_base_of<accessor_base, T>::value, "maynot<T>: T should be component's pointer or accessor.");
+            T _m_component_accessor;
+        public:
+            inline typename T::component_access_ptr_t operator ->() const noexcept { return &_m_component_accessor; }
+            inline typename T::component_access_ref_t operator * () const noexcept { return *_m_component_addr; }
+            inline typename T::component_access_ptr_t operator &() const noexcept { return &_m_component_addr; };
+            inline operator typename T::component_access_ptr_t() const noexcept { return &_m_component_addr; };
+        };
+        template<typename T>
+        struct maynot<T*> : describe_base {
+        public:          
+            using component_accessor_t = T*;
+            constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
+
+            static_assert(!std::is_const<T>::value);
+            T* _m_component_addr;
+        public:
+            inline T* operator ->() const noexcept { return _m_component_addr; }
+            inline T& operator * () const noexcept { return *_m_component_addr; }
+            inline T* operator &() const noexcept { return _m_component_addr; };
+            inline operator T*() const noexcept { return _m_component_addr; };
+        };
+        template<typename T>
+        struct maynot<const T*> : describe_base {
+        public:
+            using component_accessor_t = const T*;
+            constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
+
+            static_assert(!std::is_const<T>::value);
+            const T* _m_component_addr;
+        public:
+            inline const T* operator ->() const noexcept { return _m_component_addr; }
+            inline const T& operator * () const noexcept { return *_m_component_addr; }
+            inline const T* operator &() const noexcept { return _m_component_addr; };
+            inline operator const T* () const noexcept { return _m_component_addr; };
         };
 
     private:
@@ -1155,6 +1211,24 @@ namespace jeecs
 
     public:
         template<typename T>
+        static constexpr jeecs::game_system_function::dependence_type describe_type()
+        {
+            if constexpr (std::is_pointer<T>::value || std::is_base_of<accessor_base, T>::value)
+            {
+                return jeecs::game_system_function::dependence_type::NOTHING;
+            }
+            else if constexpr (std::is_base_of<describe_base, T>::value)
+            {
+                return T::describe;
+            }
+            else
+            {
+                static_assert(std::is_pointer<T>::value || std::is_base_of<accessor_base, T>::value,
+                    "Unknown accessor type: should be accessor(pointer/read/write/read_newest) or describe(maynot).");
+            }
+        }
+
+        template<typename T>
         static constexpr jeecs::game_system_function::dependence_type depend_type()
         {
             if constexpr (std::is_pointer<T>::value || std::is_base_of<accessor_base, T>::value)
@@ -1175,6 +1249,11 @@ namespace jeecs
                     else /* if constexpr (std::is_base_of<read_updated_base, T>::value) */
                         return jeecs::game_system_function::dependence_type::READ_AFTER_WRITE;
                 }
+            }
+            else if constexpr (std::is_base_of<describe_base, T>::value)
+            {
+                // Skip the describe, only get accessor type.
+                return depend_type<typename T::component_accessor_t>();
             }
             else
             {
@@ -1213,6 +1292,12 @@ namespace jeecs
             using type = typename std::remove_cv<T>::type;
         };
 
+        template<typename T>
+        struct origin_component<maynot<T>>
+        {
+            using type = typename origin_component<T>::type;
+        };
+
         template<typename ... ArgTs>
         struct is_need_game_entity
         {
@@ -1242,6 +1327,12 @@ namespace jeecs
         inline static constexpr requirement contain()
         {
             return requirement{ game_system_function::dependence_type::CONTAIN, jeecs::typing::type_info::id<T>() };
+        }
+
+        template<typename T>
+        inline static constexpr requirement may_not_have()
+        {
+            return requirement{ game_system_function::dependence_type::MAY_NOT_HAVE, jeecs::typing::type_info::id<T>() };
         }
 
         template<typename T>
@@ -1286,6 +1377,32 @@ namespace jeecs
                 *reinterpret_cast<typing::typeid_t*>(&val) };
         }
 
+        template<typename ... ArgTs>
+        std::vector<jeecs::game_system_function::typeid_dependence_pair> generate_depend_list(const std::vector<requirement>& requirements)
+        {
+            std::vector<jeecs::game_system_function::typeid_dependence_pair> depends
+                = { {
+                        jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
+                        depend_type<ArgTs>(),
+                    }...
+                  };
+            std::vector<jeecs::game_system_function::typeid_dependence_pair> describe
+                = { {
+                        jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
+                        describe_type<ArgTs>(),
+                    }...
+                };
+            for (auto& desc : describe)
+            {
+                if (desc.m_depend != jeecs::game_system_function::dependence_type::NOTHING)
+                    depends.push_back(desc);
+            }
+            for (auto& req : requirements)
+                depends.push_back({ req.m_required_id,req.m_depend });
+
+            return depends;
+        }
+
         template<typename ReturnT, typename ThisT, typename ... ArgTs>
         inline auto pack_normal_invoker(ReturnT(ThisT::* system_func)(ArgTs ...), const std::vector<requirement>& requirement)
         {
@@ -1328,15 +1445,8 @@ namespace jeecs
             };
 
             auto* gsys = basic::create_new<jeecs::game_system_function>(invoker, sizeof...(ArgTs));
-            std::vector<jeecs::game_system_function::typeid_dependence_pair> depends
-                = { {
-                        jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
-                        depend_type<ArgTs>(),
-                    }... };
 
-            for (auto& req : requirement)
-                depends.push_back({ req.m_required_id,req.m_depend });
-
+            std::vector<jeecs::game_system_function::typeid_dependence_pair> depends = generate_depend_list<ArgTs...>(requirement);
             depends.push_back({ current(system_func).m_required_id, current(system_func).m_depend });
 
             gsys->set_depends(depends);
@@ -1384,15 +1494,8 @@ namespace jeecs
             };
 
             auto* gsys = basic::create_new<jeecs::game_system_function>(invoker, sizeof...(ArgTs));
-            std::vector<jeecs::game_system_function::typeid_dependence_pair> depends
-                = { {
-                        jeecs::typing::type_info::id<origin_component<ArgTs>::type>(),
-                        depend_type<ArgTs>(),
-                    }... };
 
-            for (auto& req : requirement)
-                depends.push_back({ req.m_required_id,req.m_depend });
-
+            std::vector<jeecs::game_system_function::typeid_dependence_pair> depends = generate_depend_list<ArgTs...>(requirement);
             depends.push_back({ current(system_func).m_required_id, current(system_func).m_depend });
 
             gsys->set_depends(depends);
@@ -2337,6 +2440,10 @@ namespace jeecs
         Shape---------/
 
         */
+        struct Rendqueue
+        {
+            int rend_queue = 0;
+        };
         struct OrthoCamera
         {
             float znear = 0;
@@ -2350,7 +2457,7 @@ namespace jeecs
 
         struct Material
         {
-
+            std::vector<jegl_resource> shaders;
         };
     }
 
