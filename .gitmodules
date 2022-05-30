@@ -14,3 +14,7 @@
 	path = 3rd/stb
 	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/stb.git
 	branch = master
+[submodule "3rd/imgui"]
+	path = 3rd/imgui
+	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/imgui
+	branch = stable_v1_87
