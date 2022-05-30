@@ -48,6 +48,7 @@ namespace jeecs
             vertex = jegl_create_vertex(jegl_vertex::QUADS, databuf, vao, 4);
             shader = jegl_load_shader_source("je/builtin/unlit.shader", R"(
 import je.shader;
+import je.gui;
 
 func vert(var vdata : vertex_in)
 {
@@ -63,6 +64,44 @@ func frag(var fdata : fragment_in)
     var uv = fdata->in:<float2>(1);
     return fragment_out(float4(1,0,1,1));
 }
+
+func gui_helloworld()
+{
+    using je::gui;
+
+    var close_form = false;
+
+    Begin("Helloworld");
+    {
+        Text("This form is a demo~!");
+        if (Button("close"))
+            close_form = true;
+    }
+    End();
+
+    return close_form;
+}
+
+func gui_mainmenu()
+{
+    using je::gui;
+    BeginMainMenuBar();
+
+    if (MenuItem("File"))
+    {
+        //BeginMenuBar();
+        {
+            MenuItem("Open");
+            MenuItem("Exit");
+        }
+        //EndMenuBar();
+    }
+
+    EndMainMenuBar();
+}
+
+je::gui::launch(gui_mainmenu);
+je::gui::launch(gui_helloworld);
 
 )");
 

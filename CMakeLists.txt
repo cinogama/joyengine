@@ -23,5 +23,20 @@ set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic rscene" FORCE)
 add_subdirectory("3rd/restorablescene")
 
 
+if(WIN32)
+    add_custom_target(COPY_BUILTIN_FILES 
+        COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/\" /Y /E /I)
+else()
+    add_custom_target(COPY_BUILTIN_FILES 
+        COMMAND mkdir -p \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/\" && cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\" -r)
+endif()
+
 add_subdirectory("src")
-add_subdirectory("driver")
+
+include_directories("include")
+include_directories("3rd/restorablescene/include")
+
+file(GLOB_RECURSE jedriver_src driver/*.cpp)
+add_executable(jedriver ${jedriver_src})
+add_dependencies(jedriver COPY_BUILTIN_FILES)
+target_link_libraries(jedriver joyecs)

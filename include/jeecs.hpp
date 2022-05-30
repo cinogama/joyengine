@@ -390,6 +390,7 @@ struct jegl_graphic_api
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
     update_interface_func_t     update_interface;
+    update_interface_func_t     late_update_interface;
 
     init_resource_func_t        init_resource;
     using_resource_func_t       using_resource;

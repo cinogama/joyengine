@@ -71,14 +71,13 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             }
 
             if (!thread->m_apis->update_interface(thread, custom_interface))
-            {
                 // graphic thread want to exit. mark stop update
                 thread->m_stop_update = true;
-            }
             else
-            {
                 frame_rend_work(arg, thread);
-            }
+            
+            if (!thread->m_apis->late_update_interface(thread, custom_interface))
+                thread->m_stop_update = true;
 
             std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
             thread->_m_thread_notifier->m_update_flag = false;

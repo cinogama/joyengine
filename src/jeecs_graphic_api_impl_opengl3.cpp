@@ -5,6 +5,8 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+#include "jeecs_imgui_api.hpp"
+
 // Here is low-level-graphic-api impl.
 // OpenGL version.
 
@@ -83,6 +85,9 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
 
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_TEXTURE_2D);
+
+    jegui_init(WINDOWS_HANDLE);
+
     return nullptr;
 }
 
@@ -101,12 +106,21 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
     return true;
 }
 
+bool gl_lateupdate(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
+{
+    assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
+
+    jegui_update();
+    return true;
+}
+
 void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 {
     assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
 
     jeecs::debug::log("Graphic thread shutdown!");
 
+    jegui_shutdown();
     glfwDestroyWindow(WINDOWS_HANDLE);
 
 }
@@ -300,6 +314,7 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 {
     write_to_apis->init_interface = gl_startup;
     write_to_apis->update_interface = gl_update;
+    write_to_apis->late_update_interface = gl_lateupdate;
     write_to_apis->shutdown_interface = gl_shutdown;
 
     write_to_apis->init_resource = gl_init_resource;
