@@ -75,7 +75,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                 thread->m_stop_update = true;
             else
                 frame_rend_work(arg, thread);
-            
+
             if (!thread->m_apis->late_update_interface(thread, custom_interface))
                 thread->m_stop_update = true;
 
@@ -257,6 +257,11 @@ void jegl_close_resource(jegl_resource* resource)
     _destroing_graphic_resources.add_one(del_res);
 }
 
+JE_API void jegl_get_windows_size(size_t* x, size_t* y)
+{
+    _current_graphic_thread->m_apis->get_windows_size(_current_graphic_thread, x, y);
+}
+
 jegl_resource* jegl_load_texture(const char* path)
 {
     if (jeecs_file* texfile = jeecs_file_open(path))
@@ -300,11 +305,18 @@ jegl_resource* jegl_load_texture(const char* path)
     return nullptr;
 }
 
+jegl_resource* jegl_load_vertex(const char* path)
+{
+    // TODO: Not support now!
+    abort();
+}
+
 jegl_resource* jegl_create_vertex(
     jegl_vertex::vertex_type type,
-    float* datas,
-    size_t* format,
-    size_t pointcount)
+    const float* datas,
+    const size_t* format,
+    size_t data_length,
+    size_t format_length)
 {
     jegl_resource* vertex = jeecs::basic::create_new<jegl_resource>();
     vertex->m_graphic_thread = nullptr;
@@ -312,34 +324,30 @@ jegl_resource* jegl_create_vertex(
     vertex->m_raw_vertex_data = jeecs::basic::create_new<jegl_vertex>();
     vertex->m_ptr = INVALID_RESOURCE;
 
-    vertex->m_raw_vertex_data->m_point_count = pointcount;
-
-    size_t format_count = 0;
-    auto* _format = format;
-
     size_t datacount_per_point = 0;
-    while (*_format)
-    {
-        datacount_per_point += *_format;
-        ++format_count;
-        ++_format;
-    }
+    for (size_t i = 0; i < format_length; ++i)
+        datacount_per_point += format[i];
+
+    auto point_count = data_length / format_length;
+
+    if (data_length % format_length)
+        jeecs::debug::log_warn("Vertex data & format not matched, please check.");
 
     vertex->m_raw_vertex_data->m_type = type;
-    vertex->m_raw_vertex_data->m_format_count = format_count;
-    vertex->m_raw_vertex_data->m_point_count = pointcount;
+    vertex->m_raw_vertex_data->m_format_count = format_length;
+    vertex->m_raw_vertex_data->m_point_count = point_count;
     vertex->m_raw_vertex_data->m_data_count_per_point = datacount_per_point;
 
     vertex->m_raw_vertex_data->m_vertex_datas
-        = (float*)je_mem_alloc(pointcount * datacount_per_point * sizeof(float));
+        = (float*)je_mem_alloc(point_count * datacount_per_point * sizeof(float));
     vertex->m_raw_vertex_data->m_vertex_formats
-        = (size_t*)je_mem_alloc(format_count * sizeof(size_t));
+        = (size_t*)je_mem_alloc(format_length * sizeof(size_t));
 
-    memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas, 
-        pointcount * datacount_per_point * sizeof(float));
+    memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas,
+        point_count * datacount_per_point * sizeof(float));
 
     memcpy(vertex->m_raw_vertex_data->m_vertex_formats, format,
-        format_count * sizeof(size_t));
+        format_length * sizeof(size_t));
 
     return vertex;
 }
@@ -416,6 +424,11 @@ jegl_thread* jegl_current_thread()
 void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad)
 {
     _current_graphic_thread->m_apis->draw_vertex(vert, shad);
+}
+
+void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+{
+    _current_graphic_thread->m_apis->set_rend_buffer(_current_graphic_thread, framebuffer, x, y, w, h);
 }
 
 void jegl_using_texture(jegl_resource* texture, size_t pass)

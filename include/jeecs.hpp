@@ -380,6 +380,8 @@ struct jegl_graphic_api
     using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t);
     using update_interface_func_t = bool(*)(jegl_thread*, custom_interface_info_t);
 
+    using get_windows_size_func_t = void(*)(jegl_thread*, size_t*, size_t*);
+
     using init_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
@@ -387,10 +389,14 @@ struct jegl_graphic_api
     using draw_vertex_func_t = void(*)(jegl_resource*, jegl_resource*);
     using bind_texture_func_t = void(*)(jegl_resource*, size_t);
 
+    using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h);
+
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
     update_interface_func_t     update_interface;
     update_interface_func_t     late_update_interface;
+
+    get_windows_size_func_t     get_windows_size;
 
     init_resource_func_t        init_resource;
     using_resource_func_t       using_resource;
@@ -398,6 +404,8 @@ struct jegl_graphic_api
 
     draw_vertex_func_t          draw_vertex;
     bind_texture_func_t         bind_texture;
+
+    set_rendbuf_func_t          set_rend_buffer;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -417,13 +425,18 @@ JE_API void jegl_reboot_graphic_thread(
     jegl_thread* thread_handle,
     jegl_interface_config config);
 
+JE_API void jegl_get_windows_size(size_t* x, size_t* y);
+
 JE_API jegl_resource* jegl_load_texture(const char* path);
+JE_API jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::texture_format format);
+
 JE_API jegl_resource* jegl_load_vertex(const char* path);
 JE_API jegl_resource* jegl_create_vertex(
-    jegl_vertex::vertex_type type,
-    float* datas,
-    size_t* format,
-    size_t pointcount);
+    jegl_vertex::vertex_type    type,
+    const float* datas,
+    const size_t* format,
+    size_t                      data_length,
+    size_t                      format_length);
 
 JE_API void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
 JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src);
@@ -436,6 +449,8 @@ JE_API void jegl_close_resource(jegl_resource* resource);
 
 JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
 JE_API void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad);
+
+JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 
 JE_API jegl_thread* jegl_current_thread();
 
@@ -628,149 +643,146 @@ namespace jeecs
             }
         };
 
-        namespace basic
+        template<typename T, typename CounterT = std::atomic_size_t>
+        class shared_pointer
         {
-            template<typename T, typename COUNTT = std::atomic_size_t>
-            class shared_pointer
+            T* ptr = nullptr;
+            CounterT* ref_count = nullptr;
+            void(*release_func)(T*) = nullptr;
+
+            static_assert(sizeof(CounterT) == sizeof(size_t));
+
+            static void DEFAULT_DESTROY_FUNCTION(T* ptr) { delete ptr; }
+
+        public:
+            void clear()
             {
-                T* ptr = nullptr;
-                COUNTT* ref_count = nullptr;
-                void(*release_func)(T*) = nullptr;
-
-                static_assert(sizeof(COUNTT) == sizeof(size_t));
-
-                static void DEFAULT_DESTROY_FUNCTION(T* ptr) { delete ptr; }
-
-            public:
-                void clear()
+                if (ptr)
                 {
-                    if (ptr)
+                    if (!-- * ref_count)
                     {
-                        if (!-- * ref_count)
-                        {
-                            // Recycle
-                            release_func(ptr);
+                        // Recycle
+                        release_func(ptr);
 
-                            ref_count->~COUNTT();
-                            je_mem_free(ref_count);
-                        }
+                        ref_count->~CounterT();
+                        je_mem_free(ref_count);
                     }
                 }
-                ~shared_pointer()
-                {
-                    clear();
-                }
+            }
+            ~shared_pointer()
+            {
+                clear();
+            }
 
-                shared_pointer() = default;
-                shared_pointer(T* v, void(*f)(T*) = nullptr) :
-                    ptr(v),
-                    release_func(f ? f : DEFAULT_DESTROY_FUNCTION),
-                    ref_count(new (je_mem_alloc(sizeof(COUNTT))) COUNTT(1))
-                {
+            shared_pointer() = default;
+            shared_pointer(T* v, void(*f)(T*) = nullptr) :
+                ptr(v),
+                release_func(f ? f : DEFAULT_DESTROY_FUNCTION),
+                ref_count(new (je_mem_alloc(sizeof(CounterT))) CounterT(1))
+            {
 
-                }
+            }
 
-                shared_pointer(const shared_pointer& v)
-                {
-                    ptr = v.ptr;
-                    release_func = v.release_func;
-                    if (ref_count = v.ref_count)
-                        ++* ref_count;
-                }
+            shared_pointer(const shared_pointer& v)
+            {
+                ptr = v.ptr;
+                release_func = v.release_func;
+                if (ref_count = v.ref_count)
+                    ++* ref_count;
+            }
 
-                shared_pointer(shared_pointer&& v)
-                {
-                    ptr = v.ptr;
-                    release_func = v.release_func;
-                    ref_count = v.ref_count;
-                    v.ptr = nullptr;
-                }
+            shared_pointer(shared_pointer&& v)
+            {
+                ptr = v.ptr;
+                release_func = v.release_func;
+                ref_count = v.ref_count;
+                v.ptr = nullptr;
+            }
 
-                shared_pointer& operator =(const shared_pointer& v)
-                {
-                    clear();
+            shared_pointer& operator =(const shared_pointer& v)
+            {
+                clear();
 
-                    ptr = v.ptr;
-                    release_func = v.release_func;
-                    if (ref_count = v.ref_count)
-                        ++* ref_count;
+                ptr = v.ptr;
+                release_func = v.release_func;
+                if (ref_count = v.ref_count)
+                    ++* ref_count;
 
-                    return *this;
-                }
+                return *this;
+            }
 
-                shared_pointer& operator =(shared_pointer&& v)noexcept
-                {
-                    clear();
+            shared_pointer& operator =(shared_pointer&& v)noexcept
+            {
+                clear();
 
-                    ptr = v.ptr;
-                    release_func = v.release_func;
-                    ref_count = v.ref_count;
-                    v.ptr = nullptr;
+                ptr = v.ptr;
+                release_func = v.release_func;
+                ref_count = v.ref_count;
+                v.ptr = nullptr;
 
-                    return *this;
-                }
+                return *this;
+            }
 
-                T* get() const
-                {
-                    return ptr;
-                }
-                operator T& ()const
-                {
-                    return *ptr;
-                }
-                T& operator * ()const
-                {
-                    return *ptr;
-                }
-                operator T* ()const
-                {
-                    return ptr;
-                }
-                operator bool()const
-                {
-                    return ptr;
-                }
-                T* operator -> ()const
-                {
-                    return ptr;
-                }
+            T* get() const
+            {
+                return ptr;
+            }
+            operator T& ()const
+            {
+                return *ptr;
+            }
+            T& operator * ()const
+            {
+                return *ptr;
+            }
+            operator T* ()const
+            {
+                return ptr;
+            }
+            operator bool()const
+            {
+                return ptr;
+            }
+            T* operator -> ()const
+            {
+                return ptr;
+            }
 
-                bool operator ==(const T* pointer)const
-                {
-                    return ptr == pointer;
-                }
-                bool operator !=(const T* pointer)const
-                {
-                    return ptr != pointer;
-                }
-                bool operator ==(const shared_pointer& pointer)const
-                {
-                    return ptr == pointer.ptr;
-                }
-                bool operator !=(const shared_pointer& pointer)const
-                {
-                    return ptr != pointer.ptr;
-                }
+            bool operator ==(const T* pointer)const
+            {
+                return ptr == pointer;
+            }
+            bool operator !=(const T* pointer)const
+            {
+                return ptr != pointer;
+            }
+            bool operator ==(const shared_pointer& pointer)const
+            {
+                return ptr == pointer.ptr;
+            }
+            bool operator !=(const shared_pointer& pointer)const
+            {
+                return ptr != pointer.ptr;
+            }
 
-                /*  std::string to_string() const
-                  {
-                      if constexpr (Meta::try_get_to_string_of<T>)
-                          return ptr->to_string();
-                      else
-                          return Tool::to_cppstring(Tool::factory::__default_to_string_function<T>(ptr));
-                  }
-                  void parse(const char* cstr)
-                  {
-                      if constexpr (Meta::try_get_parse_of<T>)
-                          ptr->parse(cstr);
-                      else
-                          Tool::factory::__default_parse_function<T>(ptr, cstr);
-                  }*/
-            };
+            /*  std::string to_string() const
+                {
+                    if constexpr (Meta::try_get_to_string_of<T>)
+                        return ptr->to_string();
+                    else
+                        return Tool::to_cppstring(Tool::factory::__default_to_string_function<T>(ptr));
+                }
+                void parse(const char* cstr)
+                {
+                    if constexpr (Meta::try_get_parse_of<T>)
+                        ptr->parse(cstr);
+                    else
+                        Tool::factory::__default_parse_function<T>(ptr, cstr);
+                }*/
+        };
 
-            template<typename T>
-            using resource = shared_pointer<T>;
-        }
+        template<typename T>
+        using resource = shared_pointer<T>;
     }
 
     namespace typing
@@ -1141,6 +1153,7 @@ namespace jeecs
             constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
 
             static_assert(std::is_base_of<accessor_base, T>::value, "maynot<T>: T should be component's pointer or accessor.");
+
             T _m_component_accessor;
         public:
             inline typename T::component_access_ptr_t operator ->() const noexcept { return &_m_component_accessor; }
@@ -1150,17 +1163,18 @@ namespace jeecs
         };
         template<typename T>
         struct maynot<T*> : describe_base {
-        public:          
+        public:
             using component_accessor_t = T*;
             constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
 
             static_assert(!std::is_const<T>::value);
+
             T* _m_component_addr;
         public:
             inline T* operator ->() const noexcept { return _m_component_addr; }
             inline T& operator * () const noexcept { return *_m_component_addr; }
             inline T* operator &() const noexcept { return _m_component_addr; };
-            inline operator T*() const noexcept { return _m_component_addr; };
+            inline operator T* () const noexcept { return _m_component_addr; };
         };
         template<typename T>
         struct maynot<const T*> : describe_base {
@@ -1169,6 +1183,7 @@ namespace jeecs
             constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
 
             static_assert(!std::is_const<T>::value);
+
             const T* _m_component_addr;
         public:
             inline const T* operator ->() const noexcept { return _m_component_addr; }
@@ -1232,6 +1247,7 @@ namespace jeecs
         template<typename T>
         static constexpr jeecs::game_system_function::dependence_type depend_type()
         {
+            static_assert(std::is_pod<T>::value);
             if constexpr (std::is_pointer<T>::value || std::is_base_of<accessor_base, T>::value)
             {
                 if constexpr (std::is_pointer<T>::value)
@@ -1386,13 +1402,13 @@ namespace jeecs
                         jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
                         depend_type<ArgTs>(),
                     }...
-                  };
+            };
             std::vector<jeecs::game_system_function::typeid_dependence_pair> describe
                 = { {
                         jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
                         describe_type<ArgTs>(),
                     }...
-                };
+            };
             for (auto& desc : describe)
             {
                 if (desc.m_depend != jeecs::game_system_function::dependence_type::NOTHING)
@@ -2296,6 +2312,69 @@ namespace jeecs
         };
     }
 
+    namespace graphic
+    {
+        class resouce_basic
+        {
+            JECS_DISABLE_MOVE_AND_COPY(resouce_basic);
+
+            jegl_resource* _m_resouce;
+        protected:
+            resouce_basic(jegl_resource* res) noexcept
+                :_m_resouce(res)
+            {
+
+            }
+        public:
+            operator jegl_resource* () const noexcept
+            {
+                return _m_resouce;
+            }
+            ~resouce_basic()
+            {
+                if (_m_resouce)
+                    jegl_close_resource(_m_resouce);
+            }
+        };
+
+        class texture : public resouce_basic
+        {
+        public:
+            explicit texture(const std::string& str)
+                : resouce_basic(jegl_load_texture(str.c_str()))
+            {
+            }
+        };
+
+        class shader : public resouce_basic
+        {
+        public:
+            explicit shader(const std::string& name_path, const std::string& src)
+                : resouce_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
+            {
+            }
+            explicit shader(const std::string& src_path)
+                : resouce_basic(jegl_load_shader(src_path.c_str()))
+            {
+            }
+        };
+
+        class vertex : public resouce_basic
+        {
+        public:
+            using type = jegl_vertex::vertex_type;
+
+            explicit vertex(const std::string& str)
+                : resouce_basic(jegl_load_vertex(str.c_str()))
+            {
+            }
+            explicit vertex(type vertex_type, const std::vector<float>& pdatas, const std::vector<size_t>& formats)
+                : resouce_basic(jegl_create_vertex(vertex_type, pdatas.data(), formats.data(), pdatas.size(), formats.size()))
+            {
+            }
+        };
+    }
+
     namespace Transform
     {
         // An entity without childs and parent will contain these components:
@@ -2445,10 +2524,15 @@ namespace jeecs
         {
             int rend_queue = 0;
         };
+
         struct OrthoCamera
         {
             float znear = 0;
             float zfar = 1000;
+        };
+        struct Viewport
+        {
+            math::vec4 viewport;
         };
 
         struct Shape

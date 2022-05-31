@@ -5,11 +5,12 @@ func Editor_ScriptEditor()
 {
     using je::gui;
 
-    Begin("RScene脚本");
+    Begin("RScene脚本", WindowsAttribute::ImGuiWindowFlags_NoResize);
 
     static var textbuf = TextBuffer("");
     if (InputTextMultiline("##", textbuf, 500, 300))
     {
+        std::println(textbuf->get());
     }
 
     End();

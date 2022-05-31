@@ -122,18 +122,24 @@ namespace je
     extern("libjoyecs", "je_gui_launch")
     private func _launch<LT, FT>(var coloop:LT, var job_func:FT, ...) : job_handle_t;
 
+    private func dialog(var job_func:dynamic, ...) : job_handle_t
+    {
+        var result = nil:dynamic;
+        while (!result)
+        {
+            result = (job_func:dynamic(...))(......);
+            if (result)
+            {
+                // If function return something, handle them here
+                /* Do something... */
+            }
+            std::break_yield();
+        }
+    }
+
     func launch<FT>(var job_func:FT, ...) : job_handle_t
     {
-        var _loop_job = func(var job_func:FT, ...)
-                        {
-                            var result = nil:dynamic;
-                            while (!result)
-                            {
-                                result = job_func(......);
-                                std::break_yield();
-                            }
-                        };
-        return _launch(_loop_job, job_func, ......);
+        return _launch(dialog, job_func, ......);
     }
 }
 

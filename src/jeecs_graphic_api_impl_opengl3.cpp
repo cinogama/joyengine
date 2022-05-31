@@ -297,7 +297,7 @@ void gl_bind_texture(jegl_resource* texture, size_t pass)
 
 void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shader)
 {
-    const static GLenum DRAW_METHODS[] = {  
+    const static GLenum DRAW_METHODS[] = {
         GL_LINES,
         GL_LINE_LOOP,
         GL_LINE_STRIP,
@@ -310,6 +310,17 @@ void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shader)
     glDrawArrays(DRAW_METHODS[vert->m_raw_vertex_data->m_type], 0, vert->m_raw_vertex_data->m_point_count);
 }
 
+void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h)
+{
+    glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
+}
+
+void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
+{
+    *w = WINDOWS_SIZE_WIDTH;
+    *h = WINDOWS_SIZE_HEIGHT;
+}
+
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 {
     write_to_apis->init_interface = gl_startup;
@@ -317,10 +328,14 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->late_update_interface = gl_lateupdate;
     write_to_apis->shutdown_interface = gl_shutdown;
 
-    write_to_apis->init_resource = gl_init_resource;
+    write_to_apis->get_windows_size = gl_get_windows_size;
+
+        write_to_apis->init_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;
     write_to_apis->close_resource = gl_close_resource;
 
     write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
     write_to_apis->bind_texture = gl_bind_texture;
+
+    write_to_apis->set_rend_buffer = gl_set_rend_to_framebuffer;
 }

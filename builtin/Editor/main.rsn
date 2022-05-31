@@ -3,6 +3,7 @@ import je.gui;
 
 import script_editor;
 
+// 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
 {
     using je::gui;
@@ -41,6 +42,7 @@ func Editor_MainMenuBar()
     EndMainMenuBar();
 }
 
+// 关于信息窗口
 func Editor_Welcome()
 {
     using je::gui;
