@@ -16,11 +16,11 @@ int main(int argc, char** argv)
 
     using namespace jeecs;
     using namespace std;
-    
+
     jeecs::enrty::module_entry();
     at_quick_exit(jeecs::enrty::module_leave);
 
-    if(1)
+    if (1)
     {
         game_universe universe = game_universe::create_universe();
         universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));

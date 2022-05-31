@@ -954,19 +954,19 @@ namespace shader
 // Default unifrom
 var je_time = shared_uniform:<float4>("JOYENGINE_TIMES");
 
-var je_trans_m_t = uniform:<float4x4>("JOYENGINE_TRANS_M_TRANSLATE");
-var je_trans_m_r = uniform:<float4x4>("JOYENGINE_TRANS_M_ROTATION");
+var je_mt = uniform:<float4x4>("JOYENGINE_TRANS_M_TRANSLATE");
+var je_mr = uniform:<float4x4>("JOYENGINE_TRANS_M_ROTATION");
 
-var je_trans_v_t = uniform:<float4x4>("JOYENGINE_TRANS_V_TRANSLATE");
-var je_trans_v_r = uniform:<float4x4>("JOYENGINE_TRANS_V_ROTATION");
+var je_vt = uniform:<float4x4>("JOYENGINE_TRANS_V_TRANSLATE");
+var je_vr = uniform:<float4x4>("JOYENGINE_TRANS_V_ROTATION");
 
-var je_trans_m = uniform:<float4x4>("JOYENGINE_TRANS_M");
-var je_trans_v = uniform:<float4x4>("JOYENGINE_TRANS_V");
-var je_trans_p = uniform:<float4x4>("JOYENGINE_TRANS_P");
+var je_m = uniform:<float4x4>("JOYENGINE_TRANS_M");
+var je_v = uniform:<float4x4>("JOYENGINE_TRANS_V");
+var je_p = uniform:<float4x4>("JOYENGINE_TRANS_P");
 
-var je_trans_mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
-var je_trans_mv = uniform:<float4x4>("JOYENGINE_TRANS_MV");
-var je_trans_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
+var je_mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
+var je_mv = uniform:<float4x4>("JOYENGINE_TRANS_MV");
+var je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
 
 func texture(var tex:texture2d, var uv:float2):float4
 {

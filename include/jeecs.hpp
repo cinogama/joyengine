@@ -390,6 +390,7 @@ struct jegl_graphic_api
     using bind_texture_func_t = void(*)(jegl_resource*, size_t);
 
     using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h);
+    using update_shared_uniform_func_t = void(*)(jegl_thread*, size_t offset, size_t datalen, const void* data);
 
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
@@ -406,6 +407,7 @@ struct jegl_graphic_api
     bind_texture_func_t         bind_texture;
 
     set_rendbuf_func_t          set_rend_buffer;
+    update_shared_uniform_func_t update_shared_uniform;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -451,6 +453,7 @@ JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
 JE_API void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad);
 
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
+JE_API void jegl_update_shared_uniform(size_t offset, size_t datalen, const void* data);
 
 JE_API jegl_thread* jegl_current_thread();
 
@@ -2349,6 +2352,19 @@ namespace jeecs
         class shader : public resouce_basic
         {
         public:
+            bool m_initlized = false;
+            uint32_t m_builtin_uniform_m_t = 0;
+            uint32_t m_builtin_uniform_m_r = 0;
+            uint32_t m_builtin_uniform_v_t = 0;
+            uint32_t m_builtin_uniform_v_r = 0;
+            uint32_t m_builtin_uniform_v_r = 0;
+            uint32_t m_builtin_uniform_m = 0;
+            uint32_t m_builtin_uniform_v = 0;
+            uint32_t m_builtin_uniform_p = 0;
+            uint32_t m_builtin_uniform_mvp = 0;
+            uint32_t m_builtin_uniform_mv = 0;
+            uint32_t m_builtin_uniform_vp = 0;
+
             explicit shader(const std::string& name_path, const std::string& src)
                 : resouce_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
             {
@@ -2573,11 +2589,6 @@ namespace jeecs
             // 0. ungister this module components
             typing::type_info::unregister_all_type_in_shutdown();
         }
-    }
-
-    namespace graphic
-    {
-
     }
 }
 

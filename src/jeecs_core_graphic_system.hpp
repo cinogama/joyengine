@@ -53,7 +53,7 @@ func vert(var vdata:vertex_in)
 {
     var ipos = vdata->in:<float3>(0);
 
-    var opos = je_trans_mvp * float4(ipos, 1);
+    var opos = float4(ipos, 1);
 
     return vertex_out(opos);
 }
@@ -140,6 +140,19 @@ func frag(var fdata:fragment_in)
             size_t RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT;
             jegl_get_windows_size(&RENDAIMBUFFER_WIDTH, &RENDAIMBUFFER_HEIGHT);
 
+            // TODO: Update shared uniform.
+            double current_time = je_clock_time();
+
+            math::vec4 shader_time =
+            { (float)current_time ,
+            (float)abs(2.0 * (current_time * 2.0 - double(int(current_time * 2.0)) - 0.5)) ,
+            (float)abs(2.0 * (current_time - double(int(current_time)) - 0.5)),
+            (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5)) };
+
+            jegl_update_shared_uniform(0, sizeof(math::vec4), &shader_time);
+
+            jegl_draw_vertex_with_shader(*default_shape_quad, *default_shader);
+
             while (!m_camera_list.empty())
             {
                 auto& current_camera = m_camera_list.top();
@@ -154,7 +167,7 @@ func frag(var fdata:fragment_in)
                     else
                         jegl_rend_to_framebuffer(nullptr, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
-                    // TODO: Pass shared uniform.
+                    // TODO: Update camera shared uniform.
 
                     for (auto& rendentity : m_renderer_entities)
                     {
@@ -162,9 +175,9 @@ func frag(var fdata:fragment_in)
                         jegl_draw_vertex_with_shader();*/
                         assert(rendentity.material);
 
-                        // TODO: Calc needed matrix and pass
+                        // TODO: Calc needed matrix and update uniform
 
-                        auto& drawing_shape = 
+                        auto& drawing_shape =
                             (rendentity.shape && rendentity.shape->vertex)
                             ? rendentity.shape->vertex
                             : default_shape_quad;
@@ -173,6 +186,8 @@ func frag(var fdata:fragment_in)
 
                         for (auto& shader_pass : rendentity.material->shaders)
                         {
+                            if((*shader_pass).)
+
                             jegl_draw_vertex_with_shader(*drawing_shape, *shader_pass);
                         }
 
@@ -196,7 +211,11 @@ func frag(var fdata:fragment_in)
             );
         }
 
-        void SimpleRendObject(const Translation* trans, const Material* mat, maynot<const Shape*> shape, maynot<const Rendqueue*> rendqueue)
+        void SimpleRendObject(
+            const Translation* trans,
+            const Material* mat,
+            maynot<const Shape*> shape,
+            maynot<const Rendqueue*> rendqueue)
         {
             // RendOb will be input to a chain and used for swap
             m_renderer_list.emplace(

@@ -435,3 +435,8 @@ void jegl_using_texture(jegl_resource* texture, size_t pass)
 {
     _current_graphic_thread->m_apis->bind_texture(texture, pass);
 }
+
+void jegl_update_shared_uniform(size_t offset, size_t datalen, const void* data)
+{
+    _current_graphic_thread->m_apis->update_shared_uniform(_current_graphic_thread, offset, datalen, data);
+}

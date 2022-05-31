@@ -86,6 +86,17 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_TEXTURE_2D);
 
+    GLuint ubo;
+    glGenBuffers(1, &ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    glBufferData(GL_UNIFORM_BUFFER,
+        sizeof(jeecs::math::vec4),
+        NULL, GL_DYNAMIC_COPY); // Ô¤·ÖÅä¿Õ¼ä
+
+    glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0,
+        sizeof(jeecs::math::vec4)
+    );
+
     jegui_init(WINDOWS_HANDLE);
 
     return nullptr;
@@ -321,6 +332,11 @@ void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
     *h = WINDOWS_SIZE_HEIGHT;
 }
 
+void gl_update_shared_uniform(jegl_thread*, size_t offset, size_t datalen, const void* data)
+{
+    glBufferSubData(GL_UNIFORM_BUFFER, offset, datalen, data);
+}
+
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 {
     write_to_apis->init_interface = gl_startup;
@@ -338,4 +354,6 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->bind_texture = gl_bind_texture;
 
     write_to_apis->set_rend_buffer = gl_set_rend_to_framebuffer;
+
+    write_to_apis->update_shared_uniform = gl_update_shared_uniform;
 }
