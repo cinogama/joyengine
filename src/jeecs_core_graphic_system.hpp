@@ -31,6 +31,7 @@ namespace jeecs
         game_universe current_universe = nullptr;
 
         basic::resource<graphic::vertex> default_shape_quad;
+        basic::resource<graphic::shader> default_shader;
 
         DefaultGraphicPipelineSystem(game_universe universe)
             : game_system(nullptr)
@@ -43,7 +44,26 @@ namespace jeecs
                     0.5f, -0.5f, 0.0f,      1.0f, 0.0f,
                     0.5f, 0.5f, 0.0f,       1.0f, 1.0f,
                     -0.5f, 0.5f, 0.0f,      0.0f, 1.0f, },
-                    { 3, 2});
+                    { 3, 2 });
+
+            default_shader = new graphic::shader("je/default.shader", R"(
+// Default shader
+import je.shader;
+func vert(var vdata:vertex_in)
+{
+    var ipos = vdata->in:<float3>(0);
+
+    var opos = je_trans_mvp * float4(ipos, 1);
+
+    return vertex_out(opos);
+}
+func frag(var fdata:fragment_in)
+{
+    var flashing_color = je_time->y();
+    return vertex_out(float4(flashing_color, 0, flashing_color, 1));
+}
+
+)");
 
             jegl_interface_config config = {};
             config.m_fps = 60;
@@ -134,10 +154,28 @@ namespace jeecs
                     else
                         jegl_rend_to_framebuffer(nullptr, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
+                    // TODO: Pass shared uniform.
+
                     for (auto& rendentity : m_renderer_entities)
                     {
                         /*jegl_using_texture();
                         jegl_draw_vertex_with_shader();*/
+                        assert(rendentity.material);
+
+                        // TODO: Calc needed matrix and pass
+
+                        auto& drawing_shape = 
+                            (rendentity.shape && rendentity.shape->vertex)
+                            ? rendentity.shape->vertex
+                            : default_shape_quad;
+
+                        // TODO: Bind texture here
+
+                        for (auto& shader_pass : rendentity.material->shaders)
+                        {
+                            jegl_draw_vertex_with_shader(*drawing_shape, *shader_pass);
+                        }
+
                     }
                 }
                 m_camera_list.pop();
