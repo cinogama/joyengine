@@ -15,7 +15,6 @@ namespace jeecs
         using LocalToParent = Transform::LocalToParent;
         using LocalToWorld = Transform::LocalToWorld;
         using Translation = Transform::Translation;
-        using InverseTranslation = Transform::InverseTranslation;
 
         struct anchor
         {
@@ -39,7 +38,7 @@ namespace jeecs
             register_system_func(&TranslationUpdatingSystem::UpdateLocalToWorld,
                 {
                     except<LocalToParent>(),
-                }); 
+                });
             register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslation,
                 {
                     except<LocalToParent>(),
@@ -74,39 +73,12 @@ namespace jeecs
                 = temp_mat_trans[1][1]
                 = temp_mat_trans[2][2]
                 = temp_mat_trans[3][3] = 1.0f;
-            temp_mat_trans[0][3] = local->pos.x;
-            temp_mat_trans[1][3] = local->pos.y;
-            temp_mat_trans[2][3] = local->pos.z;
+            temp_mat_trans[3][0] = local->pos.x;
+            temp_mat_trans[3][1] = local->pos.y;
+            temp_mat_trans[3][2] = local->pos.z;
 
             float temp_mat_rotation[4][4];
             local->rot.create_matrix(temp_mat_rotation);
-
-            float temp_mat_trans_rot[4][4];
-            math::mat4xmat4(temp_mat_trans_rot, temp_mat_trans, temp_mat_rotation);
-
-            float temp_mat_scale[4][4] = {};
-            temp_mat_scale[0][0] = local->scale.x;
-            temp_mat_scale[1][1] = local->scale.y;
-            temp_mat_scale[2][2] = local->scale.z;
-            temp_mat_scale[3][3] = 1.0f;
-
-            math::mat4xmat4(out_mat, temp_mat_trans_rot, temp_mat_scale);
-        }
-
-        template<typename T>
-        void _generate_inv_mat_from_local(float(*out_mat)[4], const T* local)
-        {
-            float temp_mat_trans[4][4] = {};
-            temp_mat_trans[0][0]
-                = temp_mat_trans[1][1]
-                = temp_mat_trans[2][2]
-                = temp_mat_trans[3][3] = 1.0f;
-            temp_mat_trans[0][3] = -local->pos.x;
-            temp_mat_trans[1][3] = -local->pos.y;
-            temp_mat_trans[2][3] = -local->pos.z;
-
-            float temp_mat_rotation[4][4];
-            local->rot.create_inv_matrix(temp_mat_rotation);
 
             float temp_mat_trans_rot[4][4];
             math::mat4xmat4(temp_mat_trans_rot, temp_mat_trans, temp_mat_rotation);

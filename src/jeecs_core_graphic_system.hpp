@@ -19,11 +19,15 @@ namespace jeecs
     struct DefaultGraphicPipelineSystem : public game_system
     {
         using Translation = Transform::Translation;
-        using InverseTranslation = Transform::InverseTranslation;
 
         using Rendqueue = Renderer::Rendqueue;
-        using OrthoCamera = Renderer::OrthoCamera;
-        using Viewport = Renderer::Viewport;
+
+        using Clip = Camera::Clip;
+        using PerspectiveProjection = Camera::PerspectiveProjection;
+        using OrthoProjection = Camera::OrthoProjection;
+        using Projection = Camera::Projection;
+        using Viewport = Camera::Viewport;
+
         using Material = Renderer::Material;
         using Shape = Renderer::Shape;
 
@@ -54,7 +58,7 @@ func vert(var vdata:vertex_in)
 {
     var ipos = vdata->in:<float3>(0);
 
-    var opos = je_mvp * float4(ipos, 1);
+    var opos = je_p * je_v * je_m * float4(ipos, 1);
 
     return vertex_out(opos);
 }
@@ -77,12 +81,16 @@ func frag(var fdata:fragment_in)
                 jegl_using_opengl_apis,
                 [](void* ptr, jegl_thread* glthread)
                 {((DefaultGraphicPipelineSystem*)ptr)->Frame(glthread); }, this);
-
+            register_system_func(&DefaultGraphicPipelineSystem::CalculateProjection,
+                {
+                    any_of<PerspectiveProjection>(),
+                    any_of<OrthoProjection>(),
+                });
             register_system_func(&DefaultGraphicPipelineSystem::SimplePrepareCamera,
                 {
                     before(&DefaultGraphicPipelineSystem::FlushPipeLine),
-
-                    contain<InverseTranslation>(),  // Used for inverse mats
+                    any_of<PerspectiveProjection>(),
+                    any_of<OrthoProjection>(),
                 });
             register_system_func(&DefaultGraphicPipelineSystem::SimpleRendObject,
                 {
@@ -99,8 +107,7 @@ func frag(var fdata:fragment_in)
         struct CameraArch
         {
             const Rendqueue* rendqueue;
-            const Translation* translation;
-            const OrthoCamera* camera;
+            const Projection* projection;
             const Viewport* viewport;
 
             bool operator < (const CameraArch& another) const noexcept
@@ -128,6 +135,9 @@ func frag(var fdata:fragment_in)
         std::priority_queue<CameraArch> m_camera_list;
         std::priority_queue<RendererArch> m_renderer_list;
 
+        size_t WINDOWS_WIDTH = 0;
+        size_t WINDOWS_HEIGHT = 0;
+
         void Frame(jegl_thread* glthread)
         {
             std::list<RendererArch> m_renderer_entities;
@@ -137,9 +147,9 @@ func frag(var fdata:fragment_in)
                 m_renderer_entities.push_back(m_renderer_list.top());
                 m_renderer_list.pop();
             }
+            jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
+            const size_t RENDAIMBUFFER_WIDTH = WINDOWS_WIDTH, RENDAIMBUFFER_HEIGHT = WINDOWS_HEIGHT;
 
-            size_t RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT;
-            jegl_get_windows_size(&RENDAIMBUFFER_WIDTH, &RENDAIMBUFFER_HEIGHT);
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();
@@ -159,16 +169,17 @@ func frag(var fdata:fragment_in)
                     // TODO: If camera has component named 'RendToTexture' handle it.
                     if (current_camera.viewport)
                         jegl_rend_to_framebuffer(nullptr,
-                            current_camera.viewport->viewport.x,
-                            current_camera.viewport->viewport.y,
-                            current_camera.viewport->viewport.z,
-                            current_camera.viewport->viewport.w);
+                            current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
+                            current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT,
+                            current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH,
+                            current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT);
                     else
                         jegl_rend_to_framebuffer(nullptr, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
-                    const float(&MAT4_VIEW)[4][4] = current_camera.translation->object2world;
+                    jegl_clear_framebuffer(nullptr);
 
-                    float MAT4_PROJECTION[4][4] = {};
+                    const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
+                    const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
 
                     float MAT4_VP[4][4]; math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
                     // TODO: Update camera shared uniform.
@@ -180,7 +191,7 @@ func frag(var fdata:fragment_in)
                         assert(rendentity.material && rendentity.translation);
 
                         const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
-                        
+
                         float MAT4_MVP[4][4];  math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         // TODO: Calc needed matrix and update uniform
 
@@ -207,7 +218,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
-                            
+
 #undef NEED_AND_SET_UNIFORM
                             jegl_draw_vertex_with_shader(*drawing_shape, *shader_pass);
                         }
@@ -217,17 +228,50 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                 m_camera_list.pop();
             }
         }
+        void CalculateProjection(
+            Projection* projection,
+            const Translation* translation,
+            maynot<const OrthoProjection*> ortho,
+            maynot<const PerspectiveProjection*> perspec,
+            maynot<const Clip*> clip)
+        {
+            float mat_inv_rotation[4][4];
+            translation->world_rotation.create_inv_matrix(mat_inv_rotation);
+            float mat_inv_position[4][4] = {};
+            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
+            mat_inv_position[3][0] = -translation->world_position.x;
+            mat_inv_position[3][1] = -translation->world_position.y;
+            mat_inv_position[3][2] = -translation->world_position.z;
+
+            // TODO: Optmize
+            math::mat4xmat4(projection->view, mat_inv_rotation, mat_inv_position);
+
+            assert(ortho || perspec);
+            float znear = clip ? clip->znear : 0.3f;
+            float zfar = clip ? clip->zfar : 1000.0f;
+            if (ortho)
+            {
+                graphic::ortho_projection(projection->projection,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    ortho->scale, znear, zfar);
+            }
+            else
+            {
+                graphic::perspective_projection(projection->projection,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    perspec->angle, znear, zfar);
+            }
+        }
 
         void SimplePrepareCamera(
-            const Translation* trans,
-            const OrthoCamera* camera,
+            const Projection* projection,
             maynot<const Rendqueue*> rendqueue,
             maynot<const Viewport*> cameraviewport)
         {
             // Calc camera proj matrix
             m_camera_list.emplace(
                 CameraArch{
-                    rendqueue, trans, camera, cameraviewport
+                    rendqueue, projection, cameraviewport
                 }
             );
         }

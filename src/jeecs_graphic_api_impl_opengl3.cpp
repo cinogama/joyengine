@@ -85,6 +85,7 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
 
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_TEXTURE_2D);
+    glEnable(GL_DEPTH_TEST);
 
     GLuint ubo;
     glGenBuffers(1, &ubo);
@@ -397,6 +398,18 @@ void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource*, size_t x, size_t y
 {
     glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }
+void gl_clear_framebuffer_color(jegl_thread*, jegl_resource*)
+{
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+void gl_clear_framebuffer(jegl_thread*, jegl_resource*)
+{
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+void gl_clear_framebuffer_depth(jegl_thread*, jegl_resource*)
+{
+    glClear(GL_DEPTH_BUFFER_BIT);
+}
 
 void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
 {
@@ -421,6 +434,9 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->bind_texture = gl_bind_texture;
 
     write_to_apis->set_rend_buffer = gl_set_rend_to_framebuffer;
+    write_to_apis->clear_rend_buffer = gl_clear_framebuffer;
+    write_to_apis->clear_rend_buffer_color = gl_clear_framebuffer_color;
+    write_to_apis->clear_rend_buffer_depth = gl_clear_framebuffer_depth;
 
     write_to_apis->update_shared_uniform = gl_update_shared_uniform;
 

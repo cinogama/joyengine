@@ -328,9 +328,9 @@ jegl_resource* jegl_create_vertex(
     for (size_t i = 0; i < format_length; ++i)
         datacount_per_point += format[i];
 
-    auto point_count = data_length / format_length;
+    auto point_count = data_length / datacount_per_point;
 
-    if (data_length % format_length)
+    if (data_length % datacount_per_point)
         jeecs::debug::log_warn("Vertex data & format not matched, please check.");
 
     vertex->m_raw_vertex_data->m_type = type;
@@ -426,6 +426,19 @@ void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad)
     _current_graphic_thread->m_apis->draw_vertex(vert, shad);
 }
 
+void jegl_clear_framebuffer(jegl_resource* framebuffer)
+{
+    _current_graphic_thread->m_apis->clear_rend_buffer(_current_graphic_thread, framebuffer);
+}
+void jegl_clear_framebuffer_color(jegl_resource* framebuffer)
+{
+    _current_graphic_thread->m_apis->clear_rend_buffer_color(_current_graphic_thread, framebuffer);
+}
+void jegl_clear_framebuffer_depth(jegl_resource* framebuffer) 
+{
+    _current_graphic_thread->m_apis->clear_rend_buffer_depth(_current_graphic_thread, framebuffer);
+}
+
 void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
     _current_graphic_thread->m_apis->set_rend_buffer(_current_graphic_thread, framebuffer, x, y, w, h);
@@ -447,7 +460,7 @@ int jegl_uniform_location(jegl_resource* shader, const char* name)
     return _current_graphic_thread->m_apis->get_uniform_location(shader, name);
 }
 
-void jegl_uniform_float(jegl_resource* shader, int location, int value)
+void jegl_uniform_int(jegl_resource* shader, int location, int value)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::INT, &value);

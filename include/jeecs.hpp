@@ -414,6 +414,7 @@ struct jegl_graphic_api
     using bind_texture_func_t = void(*)(jegl_resource*, size_t);
 
     using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h);
+    using clear_framebuf_func_t = void(*)(jegl_thread*, jegl_resource*);
     using update_shared_uniform_func_t = void(*)(jegl_thread*, size_t offset, size_t datalen, const void* data);
 
     using get_uniform_location_func_t = int(*)(jegl_resource*, const char*);
@@ -434,6 +435,9 @@ struct jegl_graphic_api
     bind_texture_func_t         bind_texture;
 
     set_rendbuf_func_t          set_rend_buffer;
+    clear_framebuf_func_t       clear_rend_buffer;
+    clear_framebuf_func_t       clear_rend_buffer_color;
+    clear_framebuf_func_t       clear_rend_buffer_depth;
     update_shared_uniform_func_t update_shared_uniform;
 
     get_uniform_location_func_t get_uniform_location;   // this function only used after the shader has been 'using' now.
@@ -483,10 +487,13 @@ JE_API void jegl_close_resource(jegl_resource* resource);
 JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
 JE_API void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad);
 
+JE_API void jegl_clear_framebuffer(jegl_resource* framebuffer);
+JE_API void jegl_clear_framebuffer_color(jegl_resource* framebuffer);
+JE_API void jegl_clear_framebuffer_depth(jegl_resource* framebuffer);
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 JE_API void jegl_update_shared_uniform(size_t offset, size_t datalen, const void* data);
 
-JE_API void jegl_uniform_float(jegl_resource* shader, int location, int value);
+JE_API void jegl_uniform_int(jegl_resource* shader, int location, int value);
 JE_API void jegl_uniform_float(jegl_resource* shader, int location, float value);
 JE_API void jegl_uniform_float2(jegl_resource* shader, int location, float x, float y);
 JE_API void jegl_uniform_float3(jegl_resource* shader, int location, float x, float y, float z);
@@ -1693,9 +1700,9 @@ namespace jeecs
 
         inline void mat4xmat4(float* out_result, const float* left, const float* right)
         {
-#define R(x, y) (out_result[(x) + (y) * 4])
-#define A(x, y) (left[(x) + (y) * 4])
-#define B(x, y) (right[(x) + (y) * 4])
+#define R(x, y) (out_result[(x) * 4 + (y)])
+#define A(x, y) (left[(x) * 4 + (y)])
+#define B(x, y) (right[(x) * 4 + (y)])
             memset(out_result, 0, 16 * sizeof(float));
             for (size_t iy = 0; iy < 4; iy++)
                 for (size_t ix = 0; ix < 4; ix++)
@@ -2452,6 +2459,79 @@ namespace jeecs
             {
             }
         };
+
+        inline void ortho_projection(
+            float(*out_proj_mat)[4],
+            float windows_width,
+            float windows_height,
+            float scale,
+            float znear,
+            float zfar)
+        {
+            const float RATIO = 1024.0f;
+            const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
+
+            const float R = WIDTH_HEIGHT_RATIO * RATIO / 2.0f / scale / 100.0f;
+            const float L = -R;
+            const float T = RATIO / 2.0f / scale / 100.0f;
+            const float B = -T;
+
+            auto m = out_proj_mat;
+            m[0][0] = 2.0f / (R - L);
+            m[0][1] = 0;
+            m[0][2] = 0;
+            m[0][3] = 0;
+
+            m[1][0] = 0;
+            m[1][1] = 2.0f / (T - B);
+            m[1][2] = 0;
+            m[1][3] = 0;
+
+            m[2][0] = 0;
+            m[2][1] = 0;
+            m[2][2] = 2.0f / (zfar - znear);
+            m[2][3] = 0;
+
+            m[3][0] = -((R + L) / (R - L));
+            m[3][1] = -((T + B) / (T - B));
+            m[3][2] = -((zfar + znear) / (zfar - znear));
+            m[3][3] = 1;
+        }
+
+        inline void perspective_projection(
+            float(*out_proj_mat)[4],
+            float windows_width,
+            float windows_height,
+            float angle,
+            float znear,
+            float zfar)
+        {
+            const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
+            const float ZRANGE = znear - zfar;
+            const float TAN_HALF_FOV = tanf(angle / math::quat::RAD2DEG / 2.0f);
+
+
+            auto m = out_proj_mat;
+            m[0][0] = 1.0f / (TAN_HALF_FOV * WIDTH_HEIGHT_RATIO);
+            m[0][1] = 0;
+            m[0][2] = 0;
+            m[0][3] = 0;
+
+            m[1][0] = 0;
+            m[1][1] = 1.0f / TAN_HALF_FOV;
+            m[1][2] = 0;
+            m[1][3] = 0;
+
+            m[2][0] = 0;
+            m[2][1] = 0;
+            m[2][2] = (-znear - zfar) / ZRANGE;
+            m[2][3] = 1.0f;
+
+            m[3][0] = 0;
+            m[3][1] = 0;
+            m[3][2] = 2.0f * zfar * znear / ZRANGE;
+            m[3][3] = 0;
+        }
     }
 
     namespace Transform
@@ -2535,17 +2615,17 @@ namespace jeecs
             }
         };
 
-        struct InverseTranslation
-        {
-            float inverse_object2world[4][4] = { };
-        };
     }
     namespace Renderer
     {
         // An entity need to be rendered, must have Transform::Translation and 
         // Renderer, 
         /*
-        Camera----------\
+
+        (Viewport)
+        OrthoProjection/PerspectiveProjection
+        Projection
+        Clip  ----------\
                          >------> Cameras
                         /          / | \
         Translation ---<          /  |  \ (for each..)
@@ -2553,22 +2633,12 @@ namespace jeecs
                          >--  The entities need
         Material--------/         be rend..
                        /
-        Shape---------/
+        (Shape)-------/
 
         */
         struct Rendqueue
         {
             int rend_queue = 0;
-        };
-
-        struct OrthoCamera
-        {
-            float znear = 0;
-            float zfar = 1000;
-        };
-        struct Viewport
-        {
-            math::vec4 viewport;
         };
 
         struct Shape
@@ -2581,7 +2651,35 @@ namespace jeecs
             std::vector<basic::resource<graphic::shader>> shaders;
         };
     }
+    namespace Camera
+    {
+        struct Clip
+        {
+            float znear = 0.3f;
+            float zfar = 1000.0f;
+        };
 
+        struct Projection
+        {
+            float view[4][4];
+            float projection[4][4];
+        };
+
+        struct OrthoProjection
+        {
+            float scale = 1.0f;
+        };
+
+        struct PerspectiveProjection
+        {
+            float angle = 75.0f;
+        };
+
+        struct Viewport
+        {
+            math::vec4 viewport = math::vec4(0, 0, 1, 1);
+        };
+    }
     namespace enrty
     {
         inline void module_entry()
@@ -2594,11 +2692,16 @@ namespace jeecs
             jeecs::typing::type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
             jeecs::typing::type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
             jeecs::typing::type_info::of<Transform::Translation>("Transform::Translation");
-            jeecs::typing::type_info::of<Transform::InverseTranslation>("Transform::InverseTranslation");
 
-            jeecs::typing::type_info::of<Renderer::OrthoCamera>("Renderer::OrthoCamera");
+            jeecs::typing::type_info::of<Renderer::Rendqueue>("Renderer::Shape");
             jeecs::typing::type_info::of<Renderer::Shape>("Renderer::Shape");
             jeecs::typing::type_info::of<Renderer::Material>("Renderer::Material");
+
+            jeecs::typing::type_info::of<Camera::Clip>("Camera::Clip");
+            jeecs::typing::type_info::of<Camera::Projection>("Camera::Projection");
+            jeecs::typing::type_info::of<Camera::OrthoProjection>("Camera::OrthoProjection");
+            jeecs::typing::type_info::of<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
+            jeecs::typing::type_info::of<Camera::Viewport>("Camera::Viewport");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();

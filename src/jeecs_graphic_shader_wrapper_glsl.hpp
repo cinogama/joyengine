@@ -176,7 +176,7 @@ std::string _generate_code_for_glsl_impl(
                 std::string result = "mat3(";
                 for (size_t iy = 0; iy < 3; iy++)
                     for (size_t ix = 0; ix < 3; ix++)
-                        result += std::to_string(value->m_float2x2[ix][iy]) + ((ix == 2 && iy == 2) ? ")" : ",");
+                        result += std::to_string(value->m_float3x3[ix][iy]) + ((ix == 2 && iy == 2) ? ")" : ",");
 
                 apply += result;
                 break;
@@ -186,7 +186,7 @@ std::string _generate_code_for_glsl_impl(
                 std::string result = "mat4(";
                 for (size_t iy = 0; iy < 4; iy++)
                     for (size_t ix = 0; ix < 4; ix++)
-                        result += std::to_string(value->m_float2x2[ix][iy]) + ((ix == 3 && iy == 3) ? ")" : ",");
+                        result += std::to_string(value->m_float4x4[ix][iy]) + ((ix == 3 && iy == 3) ? ")" : ",");
 
                 apply += result;
                 break;

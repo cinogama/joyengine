@@ -47,8 +47,8 @@ int main(int argc, char** argv)
             Renderer::Material,
             Renderer::Shape>();
 
-        entity.get_component<Transform::LocalRotation>()->rot = jeecs::math::quat(0, 0, 25);
-        entity2.get_component<Transform::LocalPosition>()->pos = jeecs::math::vec3(10, 0, 0);
+        entity.get_component<Transform::LocalRotation>()->rot = jeecs::math::quat(0, 0, 0);
+        entity2.get_component<Transform::LocalPosition>()->pos = jeecs::math::vec3(0.25, 0, 0.5);
         entity2.get_component<Transform::LocalToParent>()->parent_uid =
             entity.get_component<Transform::ChildAnchor>()->anchor_uid;
 
@@ -57,8 +57,13 @@ int main(int argc, char** argv)
             Transform::LocalRotation,
             Transform::LocalToWorld,
             Transform::Translation,
-            Transform::InverseTranslation,
-            Renderer::OrthoCamera>();
+            Camera::Clip,
+            Camera::PerspectiveProjection,
+            Camera::Projection,
+            Camera::Viewport>();
+
+        entity3.get_component<Transform::LocalRotation>()->rot = math::quat(0, 0, 15);
+        entity3.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, -10);
 
         universe.wait();
         game_universe::destroy_universe(universe);
