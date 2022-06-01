@@ -4,6 +4,7 @@
 #include <list>
 #include <thread>
 #include <condition_variable>
+#include <unordered_map>
 
 #ifdef NDEBUG
 #   define DEBUG_ARCH_LOG(...) ((void)0)
@@ -93,7 +94,7 @@ namespace jeecs_impl
                 , _m_arch_type(_arch_type)
             {
                 assert(((size_t) & reinterpret_cast<char const volatile&>((
-                        ((jeecs_impl::arch_type::arch_chunk*)0)->_m_chunk_buffer))) == 0);
+                    ((jeecs_impl::arch_type::arch_chunk*)0)->_m_chunk_buffer))) == 0);
 
                 _m_entities_meta = jeecs::basic::create_new_n<entity_meta>(_m_entity_count);
             }
@@ -415,7 +416,7 @@ namespace jeecs_impl
             ONLY_HAPPEND_AFTER,
             UNABLE_DETERMINE,
         };
-        using dependences_t = std::unordered_map<jeecs::typing::typeid_t, jeecs::game_system_function::dependence_type>;
+        using dependences_t = std::unordered_multimap<jeecs::typing::typeid_t, jeecs::game_system_function::dependence_type>;
 
     public:
         dependences_t m_dependence_list;
@@ -427,7 +428,7 @@ namespace jeecs_impl
             :m_game_system_function(gsf)
         {
             for (size_t dindex = 0; dindex < gsf->m_dependence_count; dindex++)
-                m_dependence_list[gsf->m_dependence[dindex].m_tid] = gsf->m_dependence[dindex].m_depend;
+                m_dependence_list.insert(std::make_pair(gsf->m_dependence[dindex].m_tid, gsf->m_dependence[dindex].m_depend));
         }
         ~ecs_system_function()
         {

@@ -915,6 +915,8 @@ namespace float4x4
                 var p20:real, var p21:real, var p22:real, var p23:real,
                 var p30:real, var p31:real, var p32:real, var p33:real): float4x4;
 
+    func create(...) : float4x4{return apply_operation:<float4x4>("float4x4", ......);}
+
     func operator * (var a:float4x4, var b:float4x4) : float4x4
     {
         return apply_operation:<float4x4>("*", a, b);

@@ -49,11 +49,12 @@ namespace jeecs
             default_shader = new graphic::shader("je/default.shader", R"(
 // Default shader
 import je.shader;
+
 func vert(var vdata:vertex_in)
 {
     var ipos = vdata->in:<float3>(0);
 
-    var opos = float4(ipos, 1);
+    var opos = je_mvp * float4(ipos, 1);
 
     return vertex_out(opos);
 }
@@ -151,8 +152,6 @@ func frag(var fdata:fragment_in)
 
             jegl_update_shared_uniform(0, sizeof(math::vec4), &shader_time);
 
-            jegl_draw_vertex_with_shader(*default_shape_quad, *default_shader);
-
             while (!m_camera_list.empty())
             {
                 auto& current_camera = m_camera_list.top();
@@ -167,15 +166,25 @@ func frag(var fdata:fragment_in)
                     else
                         jegl_rend_to_framebuffer(nullptr, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
+                    const float(&MAT4_VIEW)[4][4] = current_camera.translation->object2world;
+
+                    float MAT4_PROJECTION[4][4] = {};
+
+                    float MAT4_VP[4][4]; math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
                     // TODO: Update camera shared uniform.
 
                     for (auto& rendentity : m_renderer_entities)
                     {
                         /*jegl_using_texture();
                         jegl_draw_vertex_with_shader();*/
-                        assert(rendentity.material);
+                        assert(rendentity.material && rendentity.translation);
 
+                        const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
+                        
+                        float MAT4_MVP[4][4];  math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         // TODO: Calc needed matrix and update uniform
+
+                        // float MAT4_MV[4][4]; math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL); ?
 
                         auto& drawing_shape =
                             (rendentity.shape && rendentity.shape->vertex)
@@ -184,10 +193,22 @@ func frag(var fdata:fragment_in)
 
                         // TODO: Bind texture here
 
-                        for (auto& shader_pass : rendentity.material->shaders)
+                        //for (auto& shader_pass : rendentity.material->shaders)
+                        auto& shader_pass = default_shader;
                         {
-                            if((*shader_pass).)
+                            auto* builtin_uniform = shader_pass->m_builtin;
+#define NEED_AND_SET_UNIFORM(ITEM, TYPE, VALUE) \
+if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, VALUE)
 
+                            NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                            NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                            NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+
+                            NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                            NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+                            
+#undef NEED_AND_SET_UNIFORM
                             jegl_draw_vertex_with_shader(*drawing_shape, *shader_pass);
                         }
 

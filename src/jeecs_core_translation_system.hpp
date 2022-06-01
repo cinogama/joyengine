@@ -36,59 +36,21 @@ namespace jeecs
                     after(&TranslationUpdatingSystem::PreUpdateChildAnchor),
                 });
             /////////////////////////////////////////////////////////////////////////////////
-            register_system_func(&TranslationUpdatingSystem::PreUpdateLocalToWorld);
-            register_system_func(&TranslationUpdatingSystem::PreUpdateLocalToParent);
-            /////////////////////////////////////////////////////////////////////////////////
-            register_system_func(&TranslationUpdatingSystem::UpdateLocalPositionToWorld,
+            register_system_func(&TranslationUpdatingSystem::UpdateLocalToWorld,
                 {
-                    after(&TranslationUpdatingSystem::PreUpdateLocalToWorld),
                     except<LocalToParent>(),
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateLocalScaleToWorld,
-                {
-                    after(&TranslationUpdatingSystem::PreUpdateLocalToWorld),
-                    except<LocalToParent>(),
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateLocalRotationToWorld,
-                {
-                    after(&TranslationUpdatingSystem::PreUpdateLocalToWorld),
-                    except<LocalToParent>(),
-                });
+                }); 
             register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslation,
                 {
-                    except<InverseTranslation>(),
-                    except<LocalToParent>(),
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslationInverse,
-                {
-                    contain<InverseTranslation>(),
                     except<LocalToParent>(),
                 });
             /////////////////////////////////////////////////////////////////////////////////
-            register_system_func(&TranslationUpdatingSystem::UpdateLocalPositionToParent,
+            register_system_func(&TranslationUpdatingSystem::UpdateLocalToParent,
                 {
-                    after(&TranslationUpdatingSystem::PreUpdateLocalToParent),
-                    except<LocalToWorld>(),
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateLocalScaleToParent,
-                {
-                    after(&TranslationUpdatingSystem::PreUpdateLocalToParent),
-                    except<LocalToWorld>(),
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateLocalRotationToParent,
-                {
-                    after(&TranslationUpdatingSystem::PreUpdateLocalToParent),
                     except<LocalToWorld>(),
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateParentToTranslation,
                 {
-                    except<InverseTranslation>(),
-                    except<LocalToWorld>(),
-                    system_read_updated(&m_anchor_list)
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateParentToTranslationInverse,
-                {
-                    contain<InverseTranslation>(),
                     except<LocalToWorld>(),
                     system_read_updated(&m_anchor_list)
                 });
@@ -97,62 +59,95 @@ namespace jeecs
         {
             m_anchor_list.clear();
         }
-        void PreUpdateLocalToWorld(LocalToWorld* l2w)
-        {
-            l2w->pos = math::vec3();
-            l2w->rot = math::quat();
-            l2w->scale = math::vec3(1.0f, 1.0f, 1.0f);
-        }
-        void PreUpdateLocalToParent(LocalToParent* l2p)
-        {
-            l2p->pos = math::vec3();
-            l2p->rot = math::quat();
-            l2p->scale = math::vec3(1.0f, 1.0f, 1.0f);
-        }
+
         void UpdateChildAnchorTranslation(read<ChildAnchor> anchor, read<Translation> trans)
         {
             m_anchor_list[anchor->anchor_uid].m_translation = trans;
         }
 
         ///////////////////////////////////////////////////////////////////////////////////
+        template<typename T>
+        void _generate_mat_from_local(float(*out_mat)[4], const T* local)
+        {
+            float temp_mat_trans[4][4] = {};
+            temp_mat_trans[0][0]
+                = temp_mat_trans[1][1]
+                = temp_mat_trans[2][2]
+                = temp_mat_trans[3][3] = 1.0f;
+            temp_mat_trans[0][3] = local->pos.x;
+            temp_mat_trans[1][3] = local->pos.y;
+            temp_mat_trans[2][3] = local->pos.z;
 
-        void UpdateLocalPositionToWorld(const LocalPosition* pos, LocalToWorld* l2w)
-        {
-            l2w->pos = pos->pos;
+            float temp_mat_rotation[4][4];
+            local->rot.create_matrix(temp_mat_rotation);
+
+            float temp_mat_trans_rot[4][4];
+            math::mat4xmat4(temp_mat_trans_rot, temp_mat_trans, temp_mat_rotation);
+
+            float temp_mat_scale[4][4] = {};
+            temp_mat_scale[0][0] = local->scale.x;
+            temp_mat_scale[1][1] = local->scale.y;
+            temp_mat_scale[2][2] = local->scale.z;
+            temp_mat_scale[3][3] = 1.0f;
+
+            math::mat4xmat4(out_mat, temp_mat_trans_rot, temp_mat_scale);
         }
-        void UpdateLocalScaleToWorld(const LocalScale* scal, LocalToWorld* l2w)
+
+        template<typename T>
+        void _generate_inv_mat_from_local(float(*out_mat)[4], const T* local)
         {
-            l2w->scale = scal->scale;
+            float temp_mat_trans[4][4] = {};
+            temp_mat_trans[0][0]
+                = temp_mat_trans[1][1]
+                = temp_mat_trans[2][2]
+                = temp_mat_trans[3][3] = 1.0f;
+            temp_mat_trans[0][3] = -local->pos.x;
+            temp_mat_trans[1][3] = -local->pos.y;
+            temp_mat_trans[2][3] = -local->pos.z;
+
+            float temp_mat_rotation[4][4];
+            local->rot.create_inv_matrix(temp_mat_rotation);
+
+            float temp_mat_trans_rot[4][4];
+            math::mat4xmat4(temp_mat_trans_rot, temp_mat_trans, temp_mat_rotation);
+
+            float temp_mat_scale[4][4] = {};
+            temp_mat_scale[0][0] = local->scale.x;
+            temp_mat_scale[1][1] = local->scale.y;
+            temp_mat_scale[2][2] = local->scale.z;
+            temp_mat_scale[3][3] = 1.0f;
+
+            math::mat4xmat4(out_mat, temp_mat_trans_rot, temp_mat_scale);
         }
-        void UpdateLocalRotationToWorld(const LocalRotation* rot, LocalToWorld* l2w)
+
+        void UpdateLocalToWorld(
+            maynot<const LocalPosition*> position,
+            maynot<const LocalRotation*> rotation,
+            maynot<const LocalScale*>    scale,
+            LocalToWorld* l2w)
         {
-            l2w->rot = rot->rot;
+            l2w->pos = position ? position->pos : math::vec3();
+            l2w->rot = rotation ? rotation->rot : math::quat();
+            l2w->scale = scale ? scale->scale : math::vec3(1, 1, 1);
         }
         void UpdateWorldToTranslation(const LocalToWorld* l2w, Translation* trans)
         {
             trans->set_rotation(l2w->rot);
             trans->set_position(l2w->pos);
             trans->set_scale(l2w->scale);
-        }
-        void UpdateWorldToTranslationInverse(const LocalToWorld* l2w, Translation* trans)
-        {
-            trans->set_inverse_rotation(l2w->rot);
-            trans->set_inverse_position(l2w->pos);
-            trans->set_scale(l2w->scale); // no need for inverse scale..
-        }
 
+            _generate_mat_from_local(trans->object2world, l2w);
+        }
         ///////////////////////////////////////////////////////////////////////////////////
-        void UpdateLocalPositionToParent(const LocalPosition* pos, LocalToParent* l2p)
+        void UpdateLocalToParent(
+            maynot<const LocalPosition*> position,
+            maynot<const LocalRotation*> rotation,
+            maynot<const LocalScale*>    scale,
+            LocalToParent* l2P)
         {
-            l2p->pos = pos->pos;
-        }
-        void UpdateLocalScaleToParent(const LocalScale* scal, LocalToParent* l2p)
-        {
-            l2p->scale = scal->scale;
-        }
-        void UpdateLocalRotationToParent(const LocalRotation* rot, LocalToParent* l2p)
-        {
-            l2p->rot = rot->rot;
+            l2P->pos = position ? position->pos : math::vec3();
+            l2P->rot = rotation ? rotation->rot : math::quat();
+            l2P->scale = scale ? scale->scale : math::vec3(1, 1, 1);
         }
         void UpdateParentToTranslation(const LocalToParent* l2p, Translation* trans)
         {
@@ -161,31 +156,18 @@ namespace jeecs
             if (fnd != m_anchor_list.end())
             {
                 const Translation* parent_trans = fnd->second.m_translation;
-                trans->set_rotation(parent_trans->rotation * l2p->rot);
-                trans->set_position(parent_trans->rotation * l2p->pos + parent_trans->get_position());
-                trans->set_scale(l2p->scale); // TODO: need apply scale?   
+                trans->set_rotation(parent_trans->world_rotation * l2p->rot);
+                trans->set_position(parent_trans->world_rotation * l2p->pos + parent_trans->world_position);
+                trans->set_scale(l2p->scale); // TODO: need apply scale? 
+
+                float local_trans[4][4];
+                _generate_mat_from_local(local_trans, l2p);
+                math::mat4xmat4(trans->object2world, parent_trans->object2world, local_trans);
             }
             else
             {
                 // Parent is not exist, treate it as l2w
                 UpdateWorldToTranslation(reinterpret_cast<const LocalToWorld*>(l2p), trans);
-            }
-        }
-        void UpdateParentToTranslationInverse(const LocalToParent* l2p, Translation* trans)
-        {
-            // Get parent's translation, then apply them.
-            auto fnd = m_anchor_list.find(l2p->parent_uid);
-            if (fnd != m_anchor_list.end())
-            {
-                const Translation* parent_trans = fnd->second.m_translation;
-                trans->set_inverse_rotation(parent_trans->get_rotation() * l2p->rot);
-                trans->set_inverse_position(parent_trans->get_rotation() * l2p->pos + parent_trans->get_position());
-                trans->set_scale(l2p->scale); // TODO: need apply scale?   
-            }
-            else
-            {
-                // Parent is not exist, treate it as l2w
-                UpdateWorldToTranslationInverse(reinterpret_cast<const LocalToWorld*>(l2p), trans);
             }
         }
     };

@@ -60,6 +60,7 @@ namespace jeecs
         using typeid_t = size_t;
 
         constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
+        constexpr uint32_t INVALID_UINT32 = (uint32_t)-1;
         constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
 
         struct type_info;
@@ -329,8 +330,31 @@ struct jegl_vertex
 
 struct jegl_shader
 {
+    enum uniform_type
+    {
+        INT,
+        FLOAT,
+        FLOAT2,
+        FLOAT3,
+        FLOAT4,
+        FLOAT4X4
+    };
+    struct builtin_uniform_location
+    {
+        uint32_t m_builtin_uniform_m_t = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_m_r = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_v_t = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_v_r = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_m = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_v = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_p = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_mvp = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_mv = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_vp = jeecs::typing::INVALID_UINT32;
+    };
     const char* m_vertex_glsl_src;
     const char* m_fragment_glsl_src;
+    builtin_uniform_location m_builtin_uniforms;
 };
 
 struct jegl_resource
@@ -392,6 +416,9 @@ struct jegl_graphic_api
     using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h);
     using update_shared_uniform_func_t = void(*)(jegl_thread*, size_t offset, size_t datalen, const void* data);
 
+    using get_uniform_location_func_t = int(*)(jegl_resource*, const char*);
+    using set_uniform_func_t = void(*)(jegl_resource*, int, jegl_shader::uniform_type, const void*);
+
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
     update_interface_func_t     update_interface;
@@ -408,6 +435,10 @@ struct jegl_graphic_api
 
     set_rendbuf_func_t          set_rend_buffer;
     update_shared_uniform_func_t update_shared_uniform;
+
+    get_uniform_location_func_t get_uniform_location;   // this function only used after the shader has been 'using' now.
+    set_uniform_func_t          set_uniform;            // too,
+
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -454,6 +485,13 @@ JE_API void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* sha
 
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 JE_API void jegl_update_shared_uniform(size_t offset, size_t datalen, const void* data);
+
+JE_API void jegl_uniform_float(jegl_resource* shader, int location, int value);
+JE_API void jegl_uniform_float(jegl_resource* shader, int location, float value);
+JE_API void jegl_uniform_float2(jegl_resource* shader, int location, float x, float y);
+JE_API void jegl_uniform_float3(jegl_resource* shader, int location, float x, float y, float z);
+JE_API void jegl_uniform_float4(jegl_resource* shader, int location, float x, float y, float z, float w);
+JE_API void jegl_uniform_float4x4(jegl_resource* shader, int location, const float(*mat)[4]);
 
 JE_API jegl_thread* jegl_current_thread();
 
@@ -1653,6 +1691,31 @@ namespace jeecs
 
         }
 
+        inline void mat4xmat4(float* out_result, const float* left, const float* right)
+        {
+#define R(x, y) (out_result[(x) + (y) * 4])
+#define A(x, y) (left[(x) + (y) * 4])
+#define B(x, y) (right[(x) + (y) * 4])
+            memset(out_result, 0, 16 * sizeof(float));
+            for (size_t iy = 0; iy < 4; iy++)
+                for (size_t ix = 0; ix < 4; ix++)
+                {
+                    R(ix, iy)
+                        += A(ix, 0) * B(0, iy)
+                        + A(ix, 1) * B(1, iy)
+                        + A(ix, 2) * B(2, iy)
+                        + A(ix, 3) * B(3, iy);
+                }
+
+#undef R
+#undef A
+#undef B
+        }
+        inline void mat4xmat4(float(*out_result)[4], const float(*left)[4], const float(*right)[4])
+        {
+            return mat4xmat4((float*)out_result, (const float*)left, (const float*)right);
+        }
+
         struct _basevec2
         {
             float x, y;
@@ -2160,6 +2223,15 @@ namespace jeecs
                 pMatrix[15] = 1.0f;
             }
 
+            inline void create_matrix(float(*pMatrix)[4]) const
+            {
+                create_matrix((float*)pMatrix);
+            }
+            inline void create_inv_matrix(float(*pMatrix)[4]) const
+            {
+                create_inv_matrix((float*)pMatrix);
+            }
+
             inline constexpr float dot(const quat& _quat) const noexcept
             {
                 return x * _quat.x + y * _quat.y + z * _quat.z + w * _quat.w;
@@ -2352,25 +2424,16 @@ namespace jeecs
         class shader : public resouce_basic
         {
         public:
-            bool m_initlized = false;
-            uint32_t m_builtin_uniform_m_t = 0;
-            uint32_t m_builtin_uniform_m_r = 0;
-            uint32_t m_builtin_uniform_v_t = 0;
-            uint32_t m_builtin_uniform_v_r = 0;
-            uint32_t m_builtin_uniform_v_r = 0;
-            uint32_t m_builtin_uniform_m = 0;
-            uint32_t m_builtin_uniform_v = 0;
-            uint32_t m_builtin_uniform_p = 0;
-            uint32_t m_builtin_uniform_mvp = 0;
-            uint32_t m_builtin_uniform_mv = 0;
-            uint32_t m_builtin_uniform_vp = 0;
+            jegl_shader::builtin_uniform_location* m_builtin;
 
             explicit shader(const std::string& name_path, const std::string& src)
                 : resouce_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
+                , m_builtin(&((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms)
             {
             }
             explicit shader(const std::string& src_path)
                 : resouce_basic(jegl_load_shader(src_path.c_str()))
+                , m_builtin(&((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms)
             {
             }
         };
@@ -2452,72 +2515,29 @@ namespace jeecs
 
         struct Translation
         {
-            float object2world[16] =
-            {
-                1,0,0,0,
-                0,1,0,0,
-                0,0,1,0,
-                0,0,0,1, };
-            float objectrotation[16] = {
-                1,0,0,0,
-                0,1,0,0,
-                0,0,1,0,
-                0,0,0,1, };
+            float object2world[4][4] = { };
 
-            math::vec3 position = { 0,0,0 };
-            math::vec3 scale = { 1,1,1 };
-            math::quat rotation;
+            math::vec3 world_position = { 0,0,0 };
+            math::quat world_rotation;
+            math::vec3 local_scale = { 1,1,1 };
 
             inline void set_position(const math::vec3& _v3) noexcept
             {
-                position = _v3;
-                object2world[0 + 3 * 4] = _v3.x;
-                object2world[1 + 3 * 4] = _v3.y;
-                object2world[2 + 3 * 4] = _v3.z;
+                world_position = _v3;
             }
             inline void set_scale(const math::vec3& _v3) noexcept
             {
-                scale = _v3;
-                object2world[0 + 0 * 4] = _v3.x;
-                object2world[1 + 1 * 4] = _v3.y;
-                object2world[2 + 2 * 4] = _v3.z;
+                local_scale = _v3;
             }
             inline void set_rotation(const math::quat& _quat)noexcept
             {
-                rotation = _quat;
-                _quat.create_matrix(objectrotation);
-            }
-
-            inline void set_inverse_position(const math::vec3& _v3) noexcept
-            {
-                position = _v3;
-                object2world[0 + 3 * 4] = -_v3.x;
-                object2world[1 + 3 * 4] = -_v3.y;
-                object2world[2 + 3 * 4] = -_v3.z;
-            }
-            inline void set_inverse_rotation(const math::quat& _quat)noexcept
-            {
-                rotation = _quat;
-                _quat.create_inv_matrix(objectrotation);
-            }
-
-            inline constexpr const math::vec3& get_position() const noexcept
-            {
-                return position;
-            }
-            inline constexpr const math::vec3& get_scale() const noexcept
-            {
-                return scale;
-            }
-            inline constexpr const math::quat& get_rotation() const noexcept
-            {
-                return rotation;
+                world_rotation = _quat;
             }
         };
 
         struct InverseTranslation
         {
-
+            float inverse_object2world[4][4] = { };
         };
     }
     namespace Renderer

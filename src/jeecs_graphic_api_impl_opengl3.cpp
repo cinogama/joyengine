@@ -136,6 +136,47 @@ void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 
 }
 
+
+void gl_update_shared_uniform(jegl_thread*, size_t offset, size_t datalen, const void* data)
+{
+    glBufferSubData(GL_UNIFORM_BUFFER, offset, datalen, data);
+}
+
+int gl_get_uniform_location(jegl_resource* shader, const char* name)
+{
+    return (int)glGetUniformLocation(shader->m_uint1, name);
+}
+
+void gl_set_uniform(jegl_resource*, int location, jegl_shader::uniform_type type, const void* val)
+{
+    switch (type)
+    {
+    case jegl_shader::INT:
+        glUniform1i((GLuint)location, *(const int*)val); break;
+    case jegl_shader::FLOAT:
+        glUniform1f((GLuint)location, *(const float*)val); break;
+    case jegl_shader::FLOAT2:
+        glUniform2f((GLuint)location
+            , ((const jeecs::math::vec2*)val)->x
+            , ((const jeecs::math::vec2*)val)->y); break;
+    case jegl_shader::FLOAT3:
+        glUniform3f((GLuint)location
+            , ((const jeecs::math::vec3*)val)->x
+            , ((const jeecs::math::vec3*)val)->y
+            , ((const jeecs::math::vec3*)val)->z); break;
+    case jegl_shader::FLOAT4:
+        glUniform4f((GLuint)location
+            , ((const jeecs::math::vec4*)val)->x
+            , ((const jeecs::math::vec4*)val)->y
+            , ((const jeecs::math::vec4*)val)->z
+            , ((const jeecs::math::vec4*)val)->w); break;
+    case jegl_shader::FLOAT4X4:
+        glUniformMatrix4fv((GLuint)location, 1, false, (float*)val); break;
+    default:
+        jeecs::debug::log_error("Unknown uniform variable type to set."); break;
+    }
+}
+
 void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 {
     if (resource->m_type == jegl_resource::type::SHADER)
@@ -185,7 +226,38 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             jeecs::debug::log_error("Failed to compile shader %p, please check.", resource);
         }
         else
+        {
+            /*
+var je_mt = uniform:<float4x4>("JOYENGINE_TRANS_M_TRANSLATE");
+var je_mr = uniform:<float4x4>("JOYENGINE_TRANS_M_ROTATION");
+
+var je_vt = uniform:<float4x4>("JOYENGINE_TRANS_V_TRANSLATE");
+var je_vr = uniform:<float4x4>("JOYENGINE_TRANS_V_ROTATION");
+
+var je_m = uniform:<float4x4>("JOYENGINE_TRANS_M");
+var je_v = uniform:<float4x4>("JOYENGINE_TRANS_V");
+var je_p = uniform:<float4x4>("JOYENGINE_TRANS_P");
+
+var je_mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
+var je_mv = uniform:<float4x4>("JOYENGINE_TRANS_MV");
+var je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
+*/
             resource->m_uint1 = shader_program;
+            auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
+            builtin_uniforms.m_builtin_uniform_m_t = gl_get_uniform_location(resource, "JOYENGINE_TRANS_M_TRANSLATE");
+            builtin_uniforms.m_builtin_uniform_m_r = gl_get_uniform_location(resource, "JOYENGINE_TRANS_M_ROTATION");
+
+            builtin_uniforms.m_builtin_uniform_v_t = gl_get_uniform_location(resource, "JOYENGINE_TRANS_V_TRANSLATE");
+            builtin_uniforms.m_builtin_uniform_v_r = gl_get_uniform_location(resource, "JOYENGINE_TRANS_V_ROTATION");
+
+            builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(resource, "JOYENGINE_TRANS_M");
+            builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(resource, "JOYENGINE_TRANS_V");
+            builtin_uniforms.m_builtin_uniform_p = gl_get_uniform_location(resource, "JOYENGINE_TRANS_P");
+
+            builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MVP");
+            builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MV");
+            builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_VP");
+        }
 
         glDeleteShader(vertex_shader);
         glDeleteShader(fragment_shader);
@@ -332,11 +404,6 @@ void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
     *h = WINDOWS_SIZE_HEIGHT;
 }
 
-void gl_update_shared_uniform(jegl_thread*, size_t offset, size_t datalen, const void* data)
-{
-    glBufferSubData(GL_UNIFORM_BUFFER, offset, datalen, data);
-}
-
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 {
     write_to_apis->init_interface = gl_startup;
@@ -346,7 +413,7 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 
     write_to_apis->get_windows_size = gl_get_windows_size;
 
-        write_to_apis->init_resource = gl_init_resource;
+    write_to_apis->init_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;
     write_to_apis->close_resource = gl_close_resource;
 
@@ -356,4 +423,7 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->set_rend_buffer = gl_set_rend_to_framebuffer;
 
     write_to_apis->update_shared_uniform = gl_update_shared_uniform;
+
+    write_to_apis->get_uniform_location = gl_get_uniform_location;
+    write_to_apis->set_uniform = gl_set_uniform;
 }

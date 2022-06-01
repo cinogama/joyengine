@@ -35,6 +35,9 @@ public:
     }
     bool get_var_name(jegl_shader_value* val, std::string& var_name, bool is_in_fragment)
     {
+        if (val->is_init_value())
+            return true;
+
         auto fnd = _calced_value.find(val);
         if (fnd == _calced_value.end())
         {
@@ -142,7 +145,7 @@ std::string _generate_code_for_glsl_impl(
         }
         else
         {
-            std::string apply = "    const " + _glsl_wrapper_contex::get_type_name(value) + " " + varname + " = ";
+            std::string apply/* = "    const " + _glsl_wrapper_contex::get_type_name(value) + " " + varname + " = "*/;
 
             switch (value->get_type())
             {
@@ -194,7 +197,8 @@ std::string _generate_code_for_glsl_impl(
                 break;
             }
 
-            out += apply + ";\n";
+            /*out += apply + ";\n";*/
+            return apply;
         }
     }
 
