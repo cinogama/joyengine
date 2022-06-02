@@ -50,6 +50,7 @@ namespace jeecs
                 });
             register_system_func(&TranslationUpdatingSystem::UpdateParentToTranslation,
                 {
+                    after(&TranslationUpdatingSystem::UpdateWorldToTranslation),
                     except<LocalToWorld>(),
                     system_read_updated(&m_anchor_list)
                 });

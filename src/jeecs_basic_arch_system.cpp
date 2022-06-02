@@ -476,9 +476,17 @@ namespace jeecs_impl
                 return sequence::UNABLE_DETERMINE;
             };
 
+            bool has_excepted_component = false;
+            bool cannot_happend_in_same_time = false;
+
             for (auto [depend_tid, depend_type] : m_dependence_list)
             {
+                bool is_normal_component_id = !(jeecs::typing::NOT_TYPEID_FLAG & depend_tid);
+
                 // Check dependence
+                if (has_excepted_component && is_normal_component_id)
+                    continue;
+
                 auto fnd = depend.find(depend_tid);
 
                 if (fnd == depend.end())
@@ -494,7 +502,8 @@ namespace jeecs_impl
                         && depend_type != aim_require_type)
                     {
                         // These two set will not meet at same time, just skip them
-                        return sequence::CAN_HAPPEND_SAME_TIME;
+                        if (!cannot_happend_in_same_time)
+                            has_excepted_component = true;
                     }
                     else if (aim_require_type == jeecs::game_system_function::dependence_type::EXCEPT)
                     {
@@ -510,7 +519,10 @@ namespace jeecs_impl
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                         }
                         else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
+                        {
+                            if (!is_normal_component_id) { has_excepted_component = false; cannot_happend_in_same_time = true; }
                             result = decided_depend_seq(sequence::ONLY_HAPPEND_AFTER);
+                        }
                         else
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                     }
@@ -519,7 +531,10 @@ namespace jeecs_impl
                         if (depend_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                         else if (depend_type == jeecs::game_system_function::dependence_type::WRITE)
+                        {
+                            if (!is_normal_component_id) { has_excepted_component = false; cannot_happend_in_same_time = true; }
                             result = decided_depend_seq(sequence::ONLY_HAPPEND_AFTER);
+                        }
                         else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                         else
@@ -530,7 +545,10 @@ namespace jeecs_impl
                         if (depend_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                         else if (depend_type == jeecs::game_system_function::dependence_type::WRITE)
+                        {
+                            if (!is_normal_component_id) { has_excepted_component = false; cannot_happend_in_same_time = true; }
                             result = decided_depend_seq(sequence::ONLY_HAPPEND_BEFORE);
+                        }
                         else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
                             result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                         else
@@ -540,6 +558,9 @@ namespace jeecs_impl
                         result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
                 }
             }
+
+            if (has_excepted_component)
+                return sequence::CAN_HAPPEND_SAME_TIME;
 
             if (write_conflict && result == sequence::CAN_HAPPEND_SAME_TIME)
                 return sequence::WRITE_CONFLICT;

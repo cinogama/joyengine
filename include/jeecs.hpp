@@ -59,6 +59,7 @@ namespace jeecs
         using typehash_t = size_t;
         using typeid_t = size_t;
 
+        constexpr typeid_t NOT_TYPEID_FLAG = ((typeid_t)1) << ((typeid_t)(8 * sizeof(NOT_TYPEID_FLAG)) - 1);
         constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
         constexpr uint32_t INVALID_UINT32 = (uint32_t)-1;
         constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
@@ -1408,38 +1409,41 @@ namespace jeecs
 
         inline static requirement system_read(const void* offset)
         {
-            return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME, reinterpret_cast<typing::typeid_t>(offset) };
+            return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME, 
+                typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
         }
 
         inline static requirement system_write(void* offset)
         {
-            return requirement{ game_system_function::dependence_type::WRITE, reinterpret_cast<typing::typeid_t>(offset) };
+            return requirement{ game_system_function::dependence_type::WRITE, 
+                typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
         }
 
         inline static requirement system_read_updated(const void* offset)
         {
-            return requirement{ game_system_function::dependence_type::READ_AFTER_WRITE, reinterpret_cast<typing::typeid_t>(offset) };
+            return requirement{ game_system_function::dependence_type::READ_AFTER_WRITE, 
+                typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
         }
 
         template<typename T>
         inline static constexpr requirement before(T val)
         {
             return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME,
-                *reinterpret_cast<typing::typeid_t*>(&val) };
+                typing::NOT_TYPEID_FLAG | *reinterpret_cast<typing::typeid_t*>(&val) };
         }
 
         template<typename T>
         inline static constexpr requirement after(T val)
         {
             return requirement{ game_system_function::dependence_type::READ_AFTER_WRITE,
-                *reinterpret_cast<typing::typeid_t*>(&val) };
+                typing::NOT_TYPEID_FLAG | *reinterpret_cast<typing::typeid_t*>(&val) };
         }
 
         template<typename T>
         inline static constexpr requirement current(T val)
         {
             return requirement{ game_system_function::dependence_type::WRITE,
-                *reinterpret_cast<typing::typeid_t*>(&val) };
+                typing::NOT_TYPEID_FLAG | *reinterpret_cast<typing::typeid_t*>(&val) };
         }
 
         template<typename ... ArgTs>
