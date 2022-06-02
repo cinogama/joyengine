@@ -4,8 +4,8 @@ import je.gui;
 func Editor_ScriptEditor()
 {
     using je::gui;
-
-    Begin("RScene脚本", WindowsAttribute::ImGuiWindowFlags_NoResize);
+    var open = true;
+    Begin("RScene脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
 
     static var textbuf = TextBuffer("");
     if (InputTextMultiline("##", textbuf, 500, 300))
@@ -14,4 +14,5 @@ func Editor_ScriptEditor()
     }
 
     End();
+    return !open;
 }

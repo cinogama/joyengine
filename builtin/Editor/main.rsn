@@ -64,3 +64,24 @@ func Editor_Welcome()
 
 je::gui::launch(Editor_MainMenuBar);
 je::gui::launch(Editor_Welcome);
+
+func Editor_Test()
+{
+    using je::gui;
+    var opened = true;
+
+    Begin("测试窗口", 0, ref opened);
+        if (Button("关闭"))
+            opened = false;
+
+    static var ListboxSelectItem = -1;
+    if (ListBox("##", ["AAA", "BBBBBBBB", "CCCC", "DDDDDDD", "EEE", "FFF"], ref ListboxSelectItem, 2))
+    {
+        
+    }
+    End();
+
+    return !opened;
+}
+je::gui::launch(Editor_Test);
+

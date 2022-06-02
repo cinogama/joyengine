@@ -54,6 +54,8 @@ namespace je
     func Begin(var title:string) : bool;
     extern("libjoyecs", "je_gui_begin")
     func Begin(var title:string, var attribute:int) : bool;
+    extern("libjoyecs", "je_gui_begin")
+    func Begin(var title:string, var attribute:int, ref closed:bool) : bool;
 
     extern("libjoyecs", "je_gui_end")
     func End() : bool;
@@ -68,13 +70,13 @@ namespace je
     func BeginMainMenuBar() : bool;
 
     extern("libjoyecs", "je_gui_end_menu_item")
-    func MenuItem(var text:string) : void;
+    func MenuItem(var text:string) : bool;
     extern("libjoyecs", "je_gui_end_menu_item")
-    func MenuItem(var text:string, var shortcut:string) : void;
+    func MenuItem(var text:string, var shortcut:string) : bool;
     extern("libjoyecs", "je_gui_end_menu_item")
-    func MenuItem(var text:string, var enable:bool) : void;
+    func MenuItem(var text:string, var enable:bool) : bool;
     extern("libjoyecs", "je_gui_end_menu_item")
-    func MenuItem(var text:string, var shortcut:string, var enable:bool) : void;
+    func MenuItem(var text:string, var shortcut:string, var enable:bool) : bool;
 
     extern("libjoyecs", "je_gui_end_main_menu_bar")
     func EndMainMenuBar() : void;
@@ -89,6 +91,33 @@ namespace je
     func BeginMenu(var text:string) : bool;
     extern("libjoyecs", "je_gui_begin_menu")
     func BeginMenu(var text:string, var enable:bool) : bool;
+
+    extern("libjoyecs", "je_gui_listbox")
+    func ListBox(var label:string, var items:array<string>) : int;
+    extern("libjoyecs", "je_gui_listbox")
+    func ListBox(var label:string, var items:array<string>, ref select_item:int) : int;
+    extern("libjoyecs", "je_gui_listbox")
+    func ListBox(var label:string, var items:array<string>, ref select_item:int, var height_count:int) : int;
+
+    extern("libjoyecs", "je_gui_begin_listbox")
+    func BeginListBox(var label:string, var width:real, var height:real):bool;
+    extern("libjoyecs", "je_gui_begin_selectable")
+    func Selectable(var label:string):bool;
+    extern("libjoyecs", "je_gui_end_listbox")
+    func EndListBox() : void;
+
+    extern("libjoyecs", "je_gui_sameline")
+    func SameLine():void;
+
+    extern("libjoyecs", "je_gui_begingroup")
+    func BeginGroup():void;
+    extern("libjoyecs", "je_gui_endgroup")
+    func EndGroup():void;
+
+    extern("libjoyecs", "je_gui_treenode")
+    func TreeNode(var label:string):bool;
+    extern("libjoyecs", "je_gui_treepop")
+    func TreePop():void;
 
     using TextBuffer = gchandle;
     namespace TextBuffer
@@ -145,8 +174,76 @@ namespace je
 
 )";
 
+//
+RS_API rs_api je_gui_begin_listbox(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_bool(vm, ImGui::BeginListBox(rs_string(args + 0), ImVec2(rs_float(args + 1), rs_float(args + 2))));
+}
+RS_API rs_api je_gui_begin_selectable(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_bool(vm, ImGui::Selectable(rs_string(args + 0)));
+}
+RS_API rs_api je_gui_end_listbox(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::EndListBox();
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_gui_sameline(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::SameLine();
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_gui_begingroup(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::BeginGroup();
+    return rs_ret_nil(vm);
+}
+RS_API rs_api je_gui_endgroup(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::EndGroup();
+    return rs_ret_nil(vm);
+}
+
+
+RS_API rs_api je_gui_treenode(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_bool(vm, ImGui::TreeNode(rs_string(args + 0)));
+}
+RS_API rs_api je_gui_treepop(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::TreePop();
+    return rs_ret_nil(vm);
+}
+
+
+RS_API rs_api je_gui_listbox(rs_vm vm, rs_value args, size_t argc)
+{
+    int selected_item = argc >= 3 ? (int)rs_int(args + 2) : -1;
+    int max_height_item = argc == 4 ? (int)rs_int(args + 3) : -1;
+
+    std::vector<const char*> items(rs_lengthof(args + 1));
+    for (size_t i = 0; i < items.size(); i++)
+        items[i] = rs_string(rs_arr_get(args + 1, i));
+
+    bool val_changed = ImGui::ListBox(rs_string(args + 0), &selected_item, items.data(), items.size(), max_height_item);
+
+    if (argc >= 3)
+        rs_set_int(args + 2, selected_item);
+
+    return rs_ret_bool(vm, val_changed);
+}
+
 RS_API rs_api je_gui_begin(rs_vm vm, rs_value args, size_t argc)
 {
+    if (argc == 3)
+    {
+        bool showing = true;
+        ImGui::Begin(rs_string(args), &showing, rs_int(args + 1));
+        rs_set_bool(args + 2, showing);
+        return rs_ret_bool(vm, showing);
+    }
     if (argc == 2)
         return rs_ret_bool(vm, ImGui::Begin(rs_string(args), 0, rs_int(args + 1)));
     return rs_ret_bool(vm, ImGui::Begin(rs_string(args)));
@@ -348,7 +445,7 @@ void jegui_init(void* window_handle)
         auto* file_buf = je_mem_alloc(ttf_file->m_file_length);
         jeecs_file_read(file_buf, sizeof(char), ttf_file->m_file_length, ttf_file);
 
-        io.Fonts->AddFontFromMemoryTTF(file_buf, ttf_file->m_file_length, 18, nullptr,
+        io.Fonts->AddFontFromMemoryTTF(file_buf, ttf_file->m_file_length, 16, nullptr,
             io.Fonts->GetGlyphRangesChineseFull());
 
         // je_mem_free(file_buf); // No need to free.
