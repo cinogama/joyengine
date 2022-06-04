@@ -7,22 +7,28 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_editor.hpp"
+
 #include <iostream>
 
 int main(int argc, char** argv)
 {
     je_init(argc, argv);
+    atexit(je_finish);
     at_quick_exit(je_finish);
 
     using namespace jeecs;
     using namespace std;
 
     jeecs::enrty::module_entry();
+    atexit(jeecs::enrty::module_leave);
     at_quick_exit(jeecs::enrty::module_leave);
 
     if (1)
     {
         game_universe universe = game_universe::create_universe();
+        ::jedbg_set_editor_universe(universe.handle());
+
         universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
 
         game_world world = universe.create_world();
@@ -70,5 +76,4 @@ int main(int argc, char** argv)
     }
 
     je_clock_sleep_for(1);
-    je_finish();
 }

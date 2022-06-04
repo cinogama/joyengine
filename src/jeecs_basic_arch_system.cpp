@@ -943,50 +943,8 @@ namespace jeecs_impl
         std::list<std::list<ecs_system_function*>> _m_execute_seq;
         std::atomic_flag _m_system_modified = {};
 
-        //std::list<ecs_system_function*> _generate_dependence_chain() const
-        //{
-        //    std::list<ecs_system_function*>dependence_system_chain;
 
-        //    // Walk throw all registered system. build dependence chain.
-        //    for (ecs_system_function* registed_system : _m_registed_system)
-        //    {
-        //        auto insert_place = dependence_system_chain.cbegin();
-        //        for (; insert_place != dependence_system_chain.cend(); ++insert_place)
-        //        {
-        //            auto seq = registed_system->check_dependence((*insert_place)->m_dependence_list);
-        //            if (seq == ecs_system_function::sequence::ONLY_HAPPEND_BEFORE )
-        //            {
-        //                // registed_system can only happend before (*insert_place), so mark here to insert
-        //                break;
-        //            }
-        //            else if (seq == ecs_system_function::sequence::UNABLE_DETERMINE)
-        //            {
-        //                // conflict between registed_system and (*insert_place), report error and break
-        //                jeecs::debug::log_error("sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
-        //                break;
-        //            }
-        //        }
-        //        // OK, Then continue check...
-        //        for (auto check_place = insert_place; check_place != dependence_system_chain.cend(); ++check_place)
-        //        {
-        //            auto seq = registed_system->check_dependence((*check_place)->m_dependence_list);
-        //            if (seq == ecs_system_function::sequence::UNABLE_DETERMINE)
-        //            {
-        //                // conflict between registed_system and (*check_place), report error and break
-        //                jeecs::debug::log_error("sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
-        //            }
-        //            else if (seq == ecs_system_function::sequence::ONLY_HAPPEND_AFTER)
-        //            {
-        //                // registed_system should happend at insert_place, but here require happend after (*check_place),
-        //                // that is impossiable, report error.
-        //                jeecs::debug::log_error("sequence conflict between system(%p) and system(%p).", registed_system, (*insert_place));
-        //            }
-        //        }
-        //        dependence_system_chain.insert(insert_place, registed_system);
-        //    }
-
-        //    return dependence_system_chain;
-        //}
+        std::string _m_name;
 
         std::atomic_bool _m_destroying_flag = false;
 
@@ -998,8 +956,20 @@ namespace jeecs_impl
     public:
         ecs_world(ecs_universe* universe)
             :_m_universe(universe)
+            , _m_name("anonymous")
         {
 
+        }
+
+        const std::string& _name() const noexcept
+        {
+            // NOTE: This function used for editor
+            return _m_name;
+        }
+        const std::string& _name(const std::string& new_name) noexcept
+        {
+            // NOTE: This function used for editor
+            return _m_name = new_name;
         }
 
         void build_dependence_graph()
@@ -1213,7 +1183,7 @@ namespace jeecs_impl
                 _m_command_buffer.update();
 
 
-                jeecs::basic::destroy_free(this);
+                // Return false and world will be closed by universe-loop.
                 return false;
             }
 
@@ -1563,6 +1533,8 @@ namespace jeecs_impl
                         _m_world_list.erase(fnd);
                     else
                         assert(false);
+
+                    jeecs::basic::destroy_free(world);
                 }
             );
 
@@ -1665,6 +1637,12 @@ namespace jeecs_impl
             DEBUG_ARCH_LOG("Universe: %p create a world: %p.", this, world);
 
             return world;
+        }
+        std::vector<ecs_world*> _get_all_worlds()
+        {
+            // NOTE: This function is designed for editor
+            std::lock_guard g1(_m_world_list_mx);
+            return _m_world_list;
         }
 
         void unstore_system_for_world(ecs_world* world)
@@ -1830,11 +1808,6 @@ void je_ecs_world_unregister_system_func(void* world, jeecs::game_system_functio
     ecsworld->get_command_buffer().remove_system(ecsworld, game_system_function);
 }
 
-bool je_ecs_world_update(void* world)
-{
-    return ((jeecs_impl::ecs_world*)world)->update();
-}
-
 void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
@@ -1919,3 +1892,56 @@ void* je_ecs_world_in_universe(void* world)
 {
     return  ((jeecs_impl::ecs_world*)world)->get_universe();
 }
+
+//////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
+
+RS_API rs_api je_editor_get_alive_worlds(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs_impl::ecs_universe* universe = (jeecs_impl::ecs_universe*)rs_pointer(args + 0);
+    rs_value out_array = args + 1;
+
+    auto result = std::move(universe->_get_all_worlds());
+    for (auto* worlds : result)
+        rs_set_pointer(rs_arr_add(out_array, nullptr), worlds);
+
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_editor_get_world_name(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)rs_pointer(args + 0);
+    return rs_ret_string(vm, world->_name().c_str());
+}
+
+RS_API rs_api je_editor_set_world_name(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)rs_pointer(args + 0);
+    return rs_ret_string(vm, world->_name(rs_string(args + 1)).c_str());
+}
+
+RS_API rs_api je_editor_create_world(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs_impl::ecs_universe* universe = (jeecs_impl::ecs_universe*)rs_pointer(args + 0);
+    return rs_ret_pointer(vm, universe->create_world());
+}
+
+RS_API rs_api je_editor_remove_world(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)rs_pointer(args + 0);
+    je_ecs_world_destroy(world);
+
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_editor_attach_shared_system_to_world(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)rs_pointer(args + 0);
+    jeecs::game_world gworld(world);
+
+    auto* typeinfo = jeecs::typing::type_info::of(rs_string(args + 1));
+    if (typeinfo)
+        gworld.attach_shared_system(typeinfo);
+
+    return rs_ret_nil(vm);
+}
+

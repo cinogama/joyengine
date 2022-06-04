@@ -1,0 +1,29 @@
+import rscene.std;
+import je.gui;
+
+namespace generic
+{
+    func AskFor(var title:string, var shown:string, var trigger:dynamic(...), ...)
+    {
+        using je::gui;
+
+        var open = true;
+
+        Begin(title, WindowsAttribute::ImGuiWindowFlags_NoResize
+                    + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+        {
+            Text(shown);
+            if (Button("确定"))
+            {
+                trigger(......);
+                open = false;
+            }
+            SameLine();
+            if (Button("取消"))
+                open = false;
+        }
+        End();
+
+        return !open;
+    }
+}

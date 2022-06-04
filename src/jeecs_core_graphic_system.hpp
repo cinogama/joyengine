@@ -58,7 +58,7 @@ func vert(var vdata:vertex_in)
 {
     var ipos = vdata->in:<float3>(0);
 
-    var opos = je_p * je_v * je_m * float4(ipos, 1);
+    var opos = je_mvp * float4(ipos, 1);
 
     return vertex_out(opos);
 }

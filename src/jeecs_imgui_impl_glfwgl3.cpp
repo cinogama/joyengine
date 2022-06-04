@@ -69,14 +69,20 @@ namespace je
     extern("libjoyecs", "je_gui_begin_main_menu_bar")
     func BeginMainMenuBar() : bool;
 
-    extern("libjoyecs", "je_gui_end_menu_item")
+    extern("libjoyecs", "je_gui_menu_item")
     func MenuItem(var text:string) : bool;
-    extern("libjoyecs", "je_gui_end_menu_item")
+    extern("libjoyecs", "je_gui_menu_item")
     func MenuItem(var text:string, var shortcut:string) : bool;
-    extern("libjoyecs", "je_gui_end_menu_item")
+    extern("libjoyecs", "je_gui_menu_item")
     func MenuItem(var text:string, var enable:bool) : bool;
-    extern("libjoyecs", "je_gui_end_menu_item")
+    extern("libjoyecs", "je_gui_menu_item")
     func MenuItem(var text:string, var shortcut:string, var enable:bool) : bool;
+    extern("libjoyecs", "je_gui_menu_item")
+    func MenuItem(var text:string, var shortcut:string, ref selected:bool, var enable:bool) : bool;
+    func MenuItem(var text:string, ref selected:bool, var enable:bool) : bool
+    {
+        return MenuItem(text, "", ref selected, enable);
+    }
 
     extern("libjoyecs", "je_gui_end_main_menu_bar")
     func EndMainMenuBar() : void;
@@ -98,11 +104,15 @@ namespace je
     func ListBox(var label:string, var items:array<string>, ref select_item:int) : int;
     extern("libjoyecs", "je_gui_listbox")
     func ListBox(var label:string, var items:array<string>, ref select_item:int, var height_count:int) : int;
+    extern("libjoyecs", "je_gui_listbox_withsize")
+    func ListBox(var label:string, var items:array<string>, ref select_item:int, var width:real, var height:real) : int;
 
     extern("libjoyecs", "je_gui_begin_listbox")
     func BeginListBox(var label:string, var width:real, var height:real):bool;
     extern("libjoyecs", "je_gui_begin_selectable")
     func Selectable(var label:string):bool;
+    extern("libjoyecs", "je_gui_begin_selectable")
+    func Selectable(var label:string, var selected:bool):bool;
     extern("libjoyecs", "je_gui_end_listbox")
     func EndListBox() : void;
 
@@ -119,6 +129,45 @@ namespace je
     extern("libjoyecs", "je_gui_treepop")
     func TreePop():void;
 
+    extern("libjoyecs", "je_gui_beginpopup_contextitem")
+    func BeginPopupContextItem(var label:string):bool;
+    extern("libjoyecs", "je_gui_beginpopup_contextitem")
+    func BeginPopupContextItem():bool;
+
+    extern("libjoyecs", "je_gui_beginpopup_contextwindow")
+    func BeginPopupContextWindow(var label:string):bool;
+    extern("libjoyecs", "je_gui_beginpopup_contextwindow")
+    func BeginPopupContextWindow():bool;
+
+    enum PopupAttribute
+    {
+        NONE
+    }
+
+    extern("libjoyecs", "je_gui_openpopup_on_item_click")
+    func OpenPopupOnItemClick():void;
+    extern("libjoyecs", "je_gui_openpopup_on_item_click")
+    func OpenPopupOnItemClick(var flag:PopupAttribute):void;
+    extern("libjoyecs", "je_gui_openpopup_on_item_click")
+    func OpenPopupOnItemClick(var label:string):void;
+    extern("libjoyecs", "je_gui_openpopup_on_item_click")
+    func OpenPopupOnItemClick(var label:string, var flag:PopupAttribute):void;
+
+    extern("libjoyecs", "je_gui_openpopup")
+    func OpenPopup(var label:string):void;     
+
+    extern("libjoyecs", "je_gui_beginpopup")
+    func BeginPopup(var label:string):bool;
+
+    extern("libjoyecs", "je_gui_endpopup")
+    func EndPopup():void;
+
+    extern("libjoyecs", "je_gui_push_id")
+    func PushID(var id:int):void;
+
+    extern("libjoyecs", "je_gui_pop_id")
+    func PopID():void;
+
     using TextBuffer = gchandle;
     namespace TextBuffer
     {
@@ -134,6 +183,9 @@ namespace je
         extern("libjoyecs", "je_gui_set_text_buffer")
         func set(var self:TextBuffer, var text:string):void;
     }
+
+    extern("libjoyecs", "je_gui_input_text_box")
+    func InputText(var label:string, var buffer:TextBuffer) : bool;
 
     extern("libjoyecs", "je_gui_input_text_multiline")
     func InputTextMultiline(var label:string, var buffer:TextBuffer) : bool;
@@ -175,12 +227,70 @@ namespace je
 )";
 
 //
+RS_API rs_api je_gui_push_id(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::PushID(rs_int(args + 0));
+    return rs_ret_nil(vm);
+}
+RS_API rs_api je_gui_pop_id(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::PopID();
+    return rs_ret_nil(vm);
+}
+RS_API rs_api je_gui_beginpopup_contextitem(rs_vm vm, rs_value args, size_t argc)
+{
+    if (argc)
+        return rs_ret_bool(vm, ImGui::BeginPopupContextItem(rs_string(args + 0)));
+    return rs_ret_bool(vm, ImGui::BeginPopupContextItem());
+}
+RS_API rs_api je_gui_beginpopup_contextwindow(rs_vm vm, rs_value args, size_t argc)
+{
+    if (argc)
+        return rs_ret_bool(vm, ImGui::BeginPopupContextWindow(rs_string(args + 0)));
+    return rs_ret_bool(vm, ImGui::BeginPopupContextWindow());
+}
+
+RS_API rs_api je_gui_beginpopup(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_bool(vm, ImGui::BeginPopup(rs_string(args + 0)));
+}
+
+RS_API rs_api je_gui_openpopup_on_item_click(rs_vm vm, rs_value args, size_t argc)
+{
+    if (argc == 0)
+        ImGui::OpenPopupOnItemClick();
+    else if (argc == 1)
+    {
+        if (rs_valuetype(args + 0) == RS_STRING_TYPE)
+            ImGui::OpenPopupOnItemClick(rs_string(args + 0));
+        else
+            ImGui::OpenPopupOnItemClick(nullptr, rs_int(args + 0));
+    }
+    else
+        ImGui::OpenPopupOnItemClick(rs_string(args + 0), rs_int(args + 1));
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_gui_openpopup(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::OpenPopup(rs_string(args + 0));
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_gui_endpopup(rs_vm vm, rs_value args, size_t argc)
+{
+    ImGui::EndPopup();
+    return rs_ret_nil(vm);
+}
+
 RS_API rs_api je_gui_begin_listbox(rs_vm vm, rs_value args, size_t argc)
 {
     return rs_ret_bool(vm, ImGui::BeginListBox(rs_string(args + 0), ImVec2(rs_float(args + 1), rs_float(args + 2))));
 }
 RS_API rs_api je_gui_begin_selectable(rs_vm vm, rs_value args, size_t argc)
 {
+    if (argc == 2)
+        return rs_ret_bool(vm, ImGui::Selectable(rs_string(args + 0), rs_bool(args + 1)));
     return rs_ret_bool(vm, ImGui::Selectable(rs_string(args + 0)));
 }
 RS_API rs_api je_gui_end_listbox(rs_vm vm, rs_value args, size_t argc)
@@ -217,7 +327,6 @@ RS_API rs_api je_gui_treepop(rs_vm vm, rs_value args, size_t argc)
     return rs_ret_nil(vm);
 }
 
-
 RS_API rs_api je_gui_listbox(rs_vm vm, rs_value args, size_t argc)
 {
     int selected_item = argc >= 3 ? (int)rs_int(args + 2) : -1;
@@ -233,6 +342,34 @@ RS_API rs_api je_gui_listbox(rs_vm vm, rs_value args, size_t argc)
         rs_set_int(args + 2, selected_item);
 
     return rs_ret_bool(vm, val_changed);
+}
+
+RS_API rs_api je_gui_listbox_withsize(rs_vm vm, rs_value args, size_t argc)
+{
+    //func ListBox(var label:string, var items:array<string>, ref select_item:int, var width:real, var height:real) : int;
+    int origin_selected_index = rs_int(args + 2);
+    int selected_index = -1;
+    bool value_updated = false;
+    if (ImGui::BeginListBox(rs_string(args + 0), ImVec2(rs_float(args + 3), rs_float(args + 4))))
+    {
+        size_t sz = (size_t)rs_lengthof(args + 1);
+        for (size_t i = 0; i < sz; i++)
+        {
+            rs_string_t item = rs_string(rs_arr_get(args + 1, i));
+            if (ImGui::Selectable(item, i == origin_selected_index))
+            {
+                value_updated = true;
+                selected_index = i;
+            }
+
+        }
+        if (!value_updated)
+            selected_index = origin_selected_index;
+
+        rs_set_int(args + 2, selected_index);
+        ImGui::EndListBox();
+    }
+    return rs_ret_bool(vm, value_updated);
 }
 
 RS_API rs_api je_gui_begin(rs_vm vm, rs_value args, size_t argc)
@@ -266,7 +403,7 @@ RS_API rs_api je_gui_begin_main_menu_bar(rs_vm vm, rs_value args, size_t argc)
 {
     return rs_ret_bool(vm, ImGui::BeginMainMenuBar());
 }
-RS_API rs_api je_gui_end_menu_item(rs_vm vm, rs_value args, size_t argc)
+RS_API rs_api je_gui_menu_item(rs_vm vm, rs_value args, size_t argc)
 {
     if (argc == 2)
     {
@@ -277,6 +414,14 @@ RS_API rs_api je_gui_end_menu_item(rs_vm vm, rs_value args, size_t argc)
     }
     if (argc == 3)
         return rs_ret_bool(vm, ImGui::MenuItem(rs_string(args + 0), rs_string(args + 1), false, rs_bool(args + 2)));
+    if (argc == 4)
+    {
+        bool selected = rs_bool(args + 2);
+        bool clicked = ImGui::MenuItem(rs_string(args + 0), rs_string(args + 1), &selected, rs_bool(args + 3));
+        rs_set_bool(args + 2, selected);
+
+        return rs_ret_bool(vm, clicked);
+    }
     return rs_ret_bool(vm, ImGui::MenuItem(rs_string(args + 0)));
 }
 RS_API rs_api je_gui_end_main_menu_bar(rs_vm vm, rs_value args, size_t argc)
@@ -335,6 +480,11 @@ RS_API rs_api je_gui_set_text_buffer(rs_vm vm, rs_value args, size_t argc)
     std::string* str = (std::string*)rs_pointer(args + 0);
     *str = rs_string(args + 1);
     return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_gui_input_text_box(rs_vm vm, rs_value args, size_t argc)
+{
+    return rs_ret_bool(vm, ImGui::InputText(rs_string(args + 0), (std::string*)rs_pointer(args + 1)));
 }
 
 RS_API rs_api je_gui_input_text_multiline(rs_vm vm, rs_value args, size_t argc)

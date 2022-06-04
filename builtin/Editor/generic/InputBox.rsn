@@ -1,0 +1,34 @@
+import rscene.std;
+import je.gui;
+
+namespace generic
+{
+    func InputBox(var title:string, var shown:string, var trigger:dynamic(string, ...), ...)
+    {
+        using je::gui;
+
+        var open = true;
+
+        static var text_buffer = TextBuffer("");
+        Begin(title, WindowsAttribute::ImGuiWindowFlags_NoResize
+                    + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+        {
+            Text(shown);
+            InputText("##", text_buffer);
+            if (Button("确定"))
+            {
+                trigger(text_buffer->get(), ......);
+                open = false;
+            }
+            SameLine();
+            if (Button("清除"))
+                text_buffer->clear();
+            SameLine();
+            if (Button("取消"))
+                open = false;
+        }
+        End();
+
+        return !open;
+    }
+}

@@ -212,7 +212,7 @@ JE_API void* je_ecs_world_create(void* in_universe);
 JE_API void je_ecs_world_destroy(void* world);
 JE_API void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function);
 JE_API void je_ecs_world_unregister_system_func(void* world, jeecs::game_system_function* game_system_function);
-JE_API bool je_ecs_world_update(void* world);
+
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
@@ -1144,6 +1144,10 @@ namespace jeecs
             return handle() != nullptr;
         }
 
+        void destroy() const noexcept
+        {
+            je_ecs_world_destroy(_m_ecs_world_addr);
+        }
     };
 
     class game_system
@@ -1704,9 +1708,9 @@ namespace jeecs
 
         inline void mat4xmat4(float* out_result, const float* left, const float* right)
         {
-#define R(x, y) (out_result[(x) * 4 + (y)])
-#define A(x, y) (left[(x) * 4 + (y)])
-#define B(x, y) (right[(x) * 4 + (y)])
+#define R(x, y) (out_result[(x) + (y)* 4])
+#define A(x, y) (left[(x) + (y)* 4])
+#define B(x, y) (right[(x) + (y)* 4])
             memset(out_result, 0, 16 * sizeof(float));
             for (size_t iy = 0; iy < 4; iy++)
                 for (size_t ix = 0; ix < 4; ix++)

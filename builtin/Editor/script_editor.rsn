@@ -1,10 +1,11 @@
 import rscene.std;
 import je.gui;
 
-func Editor_ScriptEditor()
+func Editor_ScriptEditor(ref open:bool)
 {
     using je::gui;
-    var open = true;
+    if(!open) return !open;
+
     Begin("RScene脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
 
     static var textbuf = TextBuffer("");

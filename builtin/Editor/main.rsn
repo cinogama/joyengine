@@ -2,6 +2,7 @@ import rscene.std;
 import je.gui;
 
 import script_editor;
+import worldlist;
 
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
@@ -21,14 +22,24 @@ func Editor_MainMenuBar()
     {
         EndMenu();
     }
-    if (BeginMenu("视图", false))
+    if (BeginMenu("视图"))
     {
+        static var active_worlds_shown = false;
+        static var active_world_entitys_shown = false;
+
+        if (MenuItem("活动世界列表", ref active_worlds_shown, true) && active_worlds_shown)
+            launch(je::editor::Form_WorldList, ref active_worlds_shown);
+        if (MenuItem("实体列表", ref active_world_entitys_shown, true) && active_world_entitys_shown)
+            ; // TODO
+
         EndMenu();
     }
      if (BeginMenu("脚本"))
     {
-        if (MenuItem("打开快捷编辑器"))
-            je::gui::launch(Editor_ScriptEditor);
+        static var editor_opened = false;
+
+        if (MenuItem("打开快捷编辑器", ref editor_opened, true) && editor_opened)
+            launch(Editor_ScriptEditor, ref editor_opened);
 
         EndMenu();
     }
@@ -77,11 +88,10 @@ func Editor_Test()
     static var ListboxSelectItem = -1;
     if (ListBox("##", ["AAA", "BBBBBBBB", "CCCC", "DDDDDDD", "EEE", "FFF"], ref ListboxSelectItem, 2))
     {
-        
+
     }
     End();
 
     return !opened;
 }
 je::gui::launch(Editor_Test);
-

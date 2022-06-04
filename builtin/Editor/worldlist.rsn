@@ -1,0 +1,110 @@
+import rscene.std;
+import je.gui;
+import je.editor;
+
+import generic.InputBox;
+import generic.AskFor;
+
+namespace je
+{
+    namespace editor
+    {
+        using WorldMsg
+        {
+            var m_name = "";
+            var m_addr = 0x0000h : je::editor::world;
+            func create(var worlds: je::editor::world)
+            {
+                var self = new();
+                self.m_name = worlds->name();
+                self.m_addr = worlds;
+                return self;
+            }
+        }
+
+        private func EditWorldContextMenu(var worldmsg:WorldMsg)
+        {
+            using je::gui;
+
+            if (BeginPopupContextItem())
+            {
+                MenuItem(F"世界 {worldmsg.m_addr}", false);
+                if (MenuItem(F"删除 {worldmsg.m_name}"))
+                {
+                    launch(generic::AskFor, "确认删除世界"
+                                            , F"确定要删除世界 {worldmsg.m_name} 吗？若未保存将永久遗失！"
+                                            , func(var world_addr : je::editor::world)
+                                              {
+                                                    world_addr->close();
+                                                    if (world_addr)
+                                                    // TODO: IF CURRENT IS RENDING, ATTACH GRAPHIC SYSTEM TO ANOTHER WORLD
+                                                             ADD HAS_ATTACHED_SHARED_SYSTEM FUNCTION TO CHECK ABOUT IT.
+
+                                              }, worldmsg.m_addr);
+                }
+                Separator();
+                MenuItem("渲染此世界");
+                MenuItem("保存");
+                MenuItem("重命名");
+                Separator();
+                MenuItem("详情");
+
+                EndPopup();
+            }
+        }
+
+        func Form_WorldList(ref open:bool)
+        {
+            using je::gui;
+            if (!open) return !open;
+
+            Begin("活动世界列表",
+                            WindowsAttribute::ImGuiWindowFlags_NoResize
+                            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                            + WindowsAttribute::ImGuiWindowFlags_MenuBar
+                            , ref open);
+
+                if (BeginMenuBar())
+                {
+                    if (BeginMenu("新建..."))
+                    {
+                        if (MenuItem("新建世界"))
+                            launch(generic::InputBox, "创建新世界", "新世界命名:",
+                                    func(var name:string)
+                                    {
+                                        if (name == "") name = "New world";
+
+                                        var world = je::editor::world();
+                                        world->name(name);
+                                    });
+                        EndMenu();
+                    }
+                    EndMenuBar();
+                }
+
+                var in_list_worlds = []:array< WorldMsg >;
+                for (var world : je::editor::world::all_worlds())
+                {
+                    in_list_worlds->add(WorldMsg(world));
+                }
+
+                static var select_index = -1;
+                if (BeginListBox("##", 200, 400))
+                {
+                    for(var i = 0; i < in_list_worlds->len(); i+=1)
+                    {
+                        var worldname = in_list_worlds[i].m_name;
+
+                        if (Selectable(worldname, i == select_index))
+                            select_index = i;
+
+                        EditWorldContextMenu(in_list_worlds[i]);
+                    }
+                    EndListBox();
+                }
+            End();
+
+            return !open;
+        }
+    }
+}
