@@ -1,0 +1,55 @@
+import rscene.std;
+import je.gui;
+import je.editor;
+
+namespace editor
+{
+    protected func DisplayEntity(var entity:je::editor::entity)
+    {
+        using je::gui;
+
+        Button(entity->name());
+        /* SameLine();
+        if (TreeNode("##" + entity:string))
+        {
+            // 获取子实体，
+            Button("实体2");
+            SameLine();
+            if (TreeNode("##" + 122:string))
+            {
+                // 获取子实体，
+
+                TreePop();
+            }
+            TreePop();
+        } */
+    }
+
+    func Form_EntityList(ref open:bool)
+    {
+        using je::gui;
+        if (!open) return !open;
+
+        Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                        , ref open);
+
+            if (BeginMenuBar())
+            {
+                if (BeginMenu("新建..."))
+                {
+                    if (MenuItem("新建实体"))
+                        ; // TODO
+
+                    EndMenu();
+                }
+                EndMenuBar();
+            }
+            var rendworld = je::editor::world::rend();
+
+            for (var entity : rendworld->get_all_entity())
+                DisplayEntity(entity);
+        End();
+        return !open;
+    }
+}

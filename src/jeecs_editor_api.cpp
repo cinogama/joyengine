@@ -13,7 +13,13 @@ import rscene.std;
 namespace je
     namespace editor
 {
+    extern("libjoyecs", "je_editor_exit_enging")
+    func exit():void;
+
     using universe = handle;
+    using world = handle;
+    using entity = gchandle;
+
     namespace universe
     {
         protected func create() : universe
@@ -27,8 +33,6 @@ namespace je
             return u;
         }
     }
-
-    using world = handle;
     namespace world
     {
         func all_worlds() : array<world>
@@ -48,7 +52,25 @@ namespace je
 
             return _create_world_in_universe(universe());
         }
-            
+        
+        func get_shared_system_attached_world(var sys:string):world
+        {
+            extern("libjoyecs", "je_editor_get_shared_system_attached_system")
+            func _get_shared_system_attached_world(var _universe:universe, var sys:string):world;
+
+            return _get_shared_system_attached_world(universe(), sys);
+        }
+
+        func rend():world
+        {
+            return get_shared_system_attached_world("jeecs::DefaultGraphicPipelineSystem");
+        }
+        func rend(var self:world):world
+        {
+            self->attach_shared_system("jeecs::DefaultGraphicPipelineSystem");
+            return self;
+        }
+
         // Member functions
         extern("libjoyecs", "je_editor_get_world_name")
         func name(var self:world):string;
@@ -61,6 +83,25 @@ namespace je
 
         extern("libjoyecs", "je_editor_attach_shared_system_to_world")
         func attach_shared_system(var self:world, var system_name:string):void;
+
+        func get_all_entity(var self:world)
+        {
+            extern("libjoyecs", "je_editor_get_all_entity_from_world")
+            func _get_all_entity(var self:world, var out_result:array<entity>):void;
+        
+            var result = []:array<entity>;
+            _get_all_entity(self, result);
+            return result;
+        }
+        
+    }
+    namespace entity
+    {
+        extern("libjoyecs", "je_editor_try_get_entity_name")
+        func name(var self:entity) :string;
+
+         extern("libjoyecs", "je_editor_set_entity_name")
+        func name(var self:entity, var name:string) :string;
     }
 }
 
@@ -77,4 +118,10 @@ void jedbg_set_editor_universe(void* universe_handle)
 RS_API rs_api je_editor_get_editor_universe(rs_vm vm, rs_value args, size_t argc)
 {
     return rs_ret_pointer(vm, _universe_address.handle());
+}
+
+RS_API rs_api je_editor_exit_enging(rs_vm vm, rs_value args, size_t argc)
+{
+    _universe_address.stop();
+    return rs_ret_nil(vm);
 }

@@ -150,6 +150,8 @@ func frag(var fdata:fragment_in)
             jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
             const size_t RENDAIMBUFFER_WIDTH = WINDOWS_WIDTH, RENDAIMBUFFER_HEIGHT = WINDOWS_HEIGHT;
 
+            // Clear frame buffer, (TODO: Only clear depth)
+            jegl_clear_framebuffer(nullptr);
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();
@@ -167,6 +169,8 @@ func frag(var fdata:fragment_in)
                 auto& current_camera = m_camera_list.top();
                 {
                     // TODO: If camera has component named 'RendToTexture' handle it.
+                    jegl_resource* rend_aim_buffer = nullptr;
+
                     if (current_camera.viewport)
                         jegl_rend_to_framebuffer(nullptr,
                             current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
@@ -176,7 +180,9 @@ func frag(var fdata:fragment_in)
                     else
                         jegl_rend_to_framebuffer(nullptr, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
-                    jegl_clear_framebuffer(nullptr);
+                    // If camera rend to texture, clear the frame buffer (if need)
+                    if(rend_aim_buffer)
+                        jegl_clear_framebuffer(nullptr);
 
                     const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
                     const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;

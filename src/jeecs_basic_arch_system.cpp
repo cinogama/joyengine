@@ -150,7 +150,10 @@ namespace jeecs_impl
             }
             inline void* get_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
             {
-                const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
+                auto fnd = _m_arch_typeinfo_mapping.find(tid);
+                if (fnd == _m_arch_typeinfo_mapping.end())
+                    return nullptr;
+                const arch_type_info& arch_typeinfo = fnd->second;
                 return get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
 
             }
@@ -189,7 +192,10 @@ namespace jeecs_impl
                     }
                 }
             }
-
+            inline size_t get_entity_count_in_chunk() const noexcept
+            {
+                return _m_entity_count;
+            }
         private:
             // Following function only invoke by command_buffer
             friend class command_buffer;
@@ -446,8 +452,12 @@ namespace jeecs_impl
                     }
 
                     je_mem_free(m_game_system_function->m_archs);
+
+                    m_game_system_function->m_archs = nullptr;
+                    m_game_system_function->m_arch_count = 0;
                 }
             }
+            m_game_system_function->m_attached_flag.clear();
         }
     public:
 
@@ -577,13 +587,17 @@ namespace jeecs_impl
 
         using arch_map_t = std::map<types_set, arch_type*>;
 
+        ecs_world* _m_world;
         arch_map_t _m_arch_types_mapping;
         mutable std::shared_mutex _m_arch_types_mapping_mx;
 
         std::atomic_flag _m_arch_modified = {};
 
     public:
-        arch_manager() = default;
+        arch_manager(ecs_world* world) :_m_world(world)
+        {
+
+        }
         ~arch_manager()
         {
             for (auto& [types, archtype] : _m_arch_types_mapping)
@@ -755,6 +769,22 @@ namespace jeecs_impl
                 archtype->close_all_entity(by_world);
             }
         }
+
+        inline std::vector<arch_type*> _get_all_arch_types() const noexcept
+        {
+            // THIS FUNCTION ONLY FOR EDITOR
+            std::vector<arch_type*> arch_list;
+            std::shared_lock sg1(_m_arch_types_mapping_mx);
+            for (auto& pair : _m_arch_types_mapping)
+                arch_list.push_back(pair.second);
+
+            return arch_list;
+        }
+
+        inline ecs_world* get_world() const noexcept
+        {
+            return _m_world;
+        }
     };
 
     class command_buffer
@@ -898,9 +928,10 @@ namespace jeecs_impl
 
             std::shared_lock sl(_m_command_executer_guard_mx);
 
+            auto* func_instance = jeecs::basic::create_new<jeecs_impl::ecs_system_function>(game_system_function);
+
             _find_or_create_buffer_for(w).m_append_system.add_one(
-                jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function,
-                    jeecs::basic::create_new<jeecs_impl::ecs_system_function>(game_system_function))
+                jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function, func_instance)
             );
         }
 
@@ -940,9 +971,9 @@ namespace jeecs_impl
         command_buffer _m_command_buffer;
         arch_manager _m_arch_manager;
         std::vector<ecs_system_function*> _m_registed_system;
+        std::vector<ecs_system_function*> _m_non_registed_system;
         std::list<std::list<ecs_system_function*>> _m_execute_seq;
         std::atomic_flag _m_system_modified = {};
-
 
         std::string _m_name;
 
@@ -957,8 +988,15 @@ namespace jeecs_impl
         ecs_world(ecs_universe* universe)
             :_m_universe(universe)
             , _m_name("anonymous")
+            , _m_arch_manager(this)
         {
 
+        }
+
+        arch_manager& _get_arch_mgr() noexcept
+        {
+            // NOTE: This function used for editor
+            return _m_arch_manager;
         }
 
         const std::string& _name() const noexcept
@@ -1113,6 +1151,12 @@ namespace jeecs_impl
             _m_registed_system.push_back(sys);
         }
 
+        void register_system_next_frame(ecs_system_function* sys)
+        {
+            _m_system_modified.clear();
+            _m_non_registed_system.push_back(sys);
+        }
+
         void unregister_system(jeecs::game_system_function* sys)
         {
             _m_system_modified.clear();
@@ -1123,6 +1167,17 @@ namespace jeecs_impl
                 {
                     jeecs::basic::destroy_free(*i);
                     _m_registed_system.erase(i);
+                    break;
+                }
+            }
+
+            // Try remove the system from non_registed_system set;
+            for (auto i = _m_non_registed_system.begin(); i != _m_non_registed_system.end(); i++)
+            {
+                if ((*i)->m_game_system_function == sys)
+                {
+                    jeecs::basic::destroy_free(*i);
+                    _m_non_registed_system.erase(i);
                     break;
                 }
             }
@@ -1137,6 +1192,18 @@ namespace jeecs_impl
                 bool system_changed_flag = false;
                 if (_system_modified())
                 {
+                    // Try add non_registed system to world
+                    std::vector<ecs_system_function*> non_registed_systems;
+                    non_registed_systems.swap(_m_non_registed_system);
+                    for (auto* non_registed_sys : non_registed_systems)
+                    {
+                        if (non_registed_sys->m_game_system_function->m_attached_flag.test_and_set())
+                            // Still not ready!
+                            this->register_system_next_frame(non_registed_sys);
+                        else
+                            this->register_system(non_registed_sys);
+                    }
+
                     build_dependence_graph();
                     system_changed_flag = true;
 
@@ -1414,7 +1481,7 @@ namespace jeecs_impl
             std::execution::par_unseq,
 #endif
             _m_world_command_buffer.begin(), _m_world_command_buffer.end(),
-            [](std::pair<ecs_world* const, _world_command_buffer>& _buf_in_world)
+            [this](std::pair<ecs_world* const, _world_command_buffer>& _buf_in_world)
             {
                 //  If entity not valid, skip component append&remove&active, but need 
                 // free temp components.
@@ -1436,9 +1503,21 @@ namespace jeecs_impl
                     }
                     else
                     {
-                        DEBUG_ARCH_LOG("System: %p, added to world: %p.",
-                            current_append_system->m_system_function, world);
-                        world->register_system(current_append_system->m_ecs_system_function);
+                        if (current_append_system->m_ecs_system_function->m_game_system_function->m_attached_flag.test_and_set())
+                        {
+                            // Current system has been attached to another world, retry in next frame
+                            DEBUG_ARCH_LOG_WARN("System: %p, has been attached by another world, try add it next frame.",
+                                current_append_system->m_system_function);
+
+                            world->register_system_next_frame(current_append_system->m_ecs_system_function);
+                        }
+                        else
+                        {
+                            DEBUG_ARCH_LOG("System: %p, added to world: %p.",
+                                current_append_system->m_system_function, world);
+
+                            world->register_system(current_append_system->m_ecs_system_function);
+                        }
                     }
 
                     jeecs::basic::destroy_free(current_append_system);
@@ -1684,6 +1763,13 @@ namespace jeecs_impl
             {
                 if (fnd->m_attached_world)
                 {
+                    if (fnd->m_attached_world == world)
+                    {
+                        // FUCK YOU!
+                        DEBUG_ARCH_LOG_WARN("Shared system has been attached to world: %p, skip.", world);
+                        return;
+                    }
+
                     // Disattach from old world
                     auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
 
@@ -1693,6 +1779,8 @@ namespace jeecs_impl
                         func_chain = func_chain->last;
                     }
                 }
+
+                // NOTE: Attach system in next universe update.
                 if (world)
                 {
                     // Attach to new world.
@@ -1709,6 +1797,26 @@ namespace jeecs_impl
             else
                 jeecs::debug::log_error("There is no shared-system: '%s' in universe:%p.",
                     system_type->m_typename, this);
+        }
+
+        ecs_world* _shared_system_attached_world(const jeecs::typing::type_info* system_type)
+        {
+            // This function only worked for editor
+            std::lock_guard g1(_m_stored_systems_mx);
+            stored_system_instance* fnd = nullptr;
+            for (auto& shared_system : _m_stored_systems[nullptr])
+            {
+                if (shared_system.m_system_typeinfo == system_type)
+                {
+                    fnd = &shared_system;
+                    break;
+                }
+            }
+
+            if (fnd)
+                return fnd->m_attached_world;
+
+            return nullptr;
         }
     };
 }
@@ -1821,9 +1929,7 @@ void je_ecs_world_create_entity_with_components(
 
     if (out_entity)
     {
-        out_entity->_m_in_chunk = entity._m_in_chunk;
-        out_entity->_m_id = entity._m_id;
-        out_entity->_m_version = entity._m_version;
+        out_entity->_set_arch_chunk_info(entity._m_in_chunk, entity._m_id, entity._m_version);
     }
 }
 
@@ -1893,6 +1999,12 @@ void* je_ecs_world_in_universe(void* world)
     return  ((jeecs_impl::ecs_world*)world)->get_universe();
 }
 
+JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
+{
+    auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk;
+    return chunk->get_arch_type()->get_arch_mgr()->get_world();
+}
+
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
 
 RS_API rs_api je_editor_get_alive_worlds(rs_vm vm, rs_value args, size_t argc)
@@ -1945,3 +2057,71 @@ RS_API rs_api je_editor_attach_shared_system_to_world(rs_vm vm, rs_value args, s
     return rs_ret_nil(vm);
 }
 
+RS_API rs_api je_editor_get_shared_system_attached_system(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs_impl::ecs_universe* universe = (jeecs_impl::ecs_universe*)rs_pointer(args + 0);
+    auto* typeinfo = jeecs::typing::type_info::of(rs_string(args + 1));
+
+    if (typeinfo)
+        return rs_ret_pointer(vm, universe->_shared_system_attached_world(typeinfo));
+
+    return rs_ret_pointer(vm, nullptr);
+}
+
+RS_API rs_api je_editor_get_all_entity_from_world(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)rs_pointer(args + 0);
+    rs_value out_result_arr = args + 1;
+
+    auto&& archs = world->_get_arch_mgr()._get_all_arch_types();
+    for (auto& arch : archs)
+    {
+        auto* chunk = arch->get_head_chunk();
+        while (chunk)
+        {
+            size_t entity_count_in_chunk = chunk->get_entity_count_in_chunk();
+            auto* entity_meta_arr = chunk->get_entity_meta();
+            for (size_t i = 0; i < entity_count_in_chunk; ++i)
+            {
+                if (entity_meta_arr[i].m_stat == jeecs::game_entity::entity_stat::READY)
+                {
+                    jeecs::game_entity* entity = jeecs::basic::create_new<jeecs::game_entity>();
+                    entity->_set_arch_chunk_info(chunk, i, entity_meta_arr[i].m_version);
+
+                    rs_set_gchandle(rs_arr_add(out_result_arr, nullptr), entity, nullptr,
+                        [](void* ptr)
+                        {
+                            jeecs::basic::destroy_free((jeecs::game_entity*)ptr);
+                        });
+                }
+            }
+
+            chunk = chunk->last;
+        }
+    }
+    return rs_ret_nil(vm);
+}
+
+RS_API rs_api je_editor_try_get_entity_name(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)rs_pointer(args + 0);
+    jeecs::Editor::Name* name = entity->get_component<jeecs::Editor::Name>();
+
+    if (name)
+        return rs_ret_string(vm, name->name);
+    else
+        return rs_ret_string(vm, "[No name entity]");
+}
+
+RS_API rs_api je_editor_set_entity_name(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)rs_pointer(args + 0);
+    rs_string_t setting_name = rs_string(args + 1);
+
+    jeecs::Editor::Name* name = entity->get_component<jeecs::Editor::Name>();
+    if (!name)
+        name = entity->add_component<jeecs::Editor::Name>();
+    name->set_name(setting_name);
+
+    return rs_ret_string(vm, setting_name);
+}

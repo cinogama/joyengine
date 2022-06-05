@@ -1,8 +1,12 @@
 import rscene.std;
 import je.gui;
+import je.editor;
 
 import script_editor;
 import worldlist;
+import entitylist;
+
+import generic.AskFor;
 
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
@@ -14,7 +18,8 @@ func Editor_MainMenuBar()
     {
         MenuItem("打开");
         Separator();
-        MenuItem("退出");
+        if (MenuItem("退出"))
+            launch(generic::AskFor, "确认退出", "即将关闭JoyEngine，是否继续？", je::editor::exit);
 
         EndMenu();
     }
@@ -26,11 +31,14 @@ func Editor_MainMenuBar()
     {
         static var active_worlds_shown = false;
         static var active_world_entitys_shown = false;
+        static var inspector_shown = false;
 
         if (MenuItem("活动世界列表", ref active_worlds_shown, true) && active_worlds_shown)
-            launch(je::editor::Form_WorldList, ref active_worlds_shown);
-        if (MenuItem("实体列表", ref active_world_entitys_shown, true) && active_world_entitys_shown)
-            ; // TODO
+            launch(editor::Form_WorldList, ref active_worlds_shown);
+        if (MenuItem("层级面板", ref active_world_entitys_shown, true) && active_world_entitys_shown)
+            launch(editor::Form_EntityList, ref active_world_entitys_shown);
+        if (MenuItem("检视面板", ref inspector_shown, true) && inspector_shown)
+            /*Inspector*/; // TODO
 
         EndMenu();
     }

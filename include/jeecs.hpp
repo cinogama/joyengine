@@ -118,8 +118,21 @@ namespace jeecs
         jeecs::typing::entity_id_in_chunk_t   _m_id;
         jeecs::typing::version_t              _m_version;
 
+        inline void _set_arch_chunk_info(
+            void* chunk,
+            jeecs::typing::entity_id_in_chunk_t index,
+            jeecs::typing::version_t ver) noexcept
+        {
+            _m_in_chunk = chunk;
+            _m_id = index;
+            _m_version = ver;
+        }
+
         template<typename T>
         inline T* get_component() const noexcept;
+
+        template<typename T>
+        inline T* add_component() const noexcept;
     };
 }
 
@@ -231,6 +244,8 @@ JE_API void je_ecs_world_entity_remove_component(
 JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
+
+JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
 
 /////////////////////////// Time&Sleep /////////////////////////////////
 
@@ -1030,6 +1045,9 @@ namespace jeecs
         invoker_t m_invoker;
         size_t m_rw_component_count;
 
+        std::atomic_flag m_attached_flag; // NOTE: Shared system attach will fail if this flag not reset.
+                                          //       It will be reset while jeecs_impl::ecs_system_function destruct.
+
         game_system_function* last;
 
     private:
@@ -1047,7 +1065,7 @@ namespace jeecs
             , m_dependence_count(0)
             , m_rw_component_count(rw_func_count)
         {
-
+            m_attached_flag.clear();
         }
 
         ~game_system_function()
@@ -1413,19 +1431,19 @@ namespace jeecs
 
         inline static requirement system_read(const void* offset)
         {
-            return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME, 
+            return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME,
                 typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
         }
 
         inline static requirement system_write(void* offset)
         {
-            return requirement{ game_system_function::dependence_type::WRITE, 
+            return requirement{ game_system_function::dependence_type::WRITE,
                 typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
         }
 
         inline static requirement system_read_updated(const void* offset)
         {
-            return requirement{ game_system_function::dependence_type::READ_AFTER_WRITE, 
+            return requirement{ game_system_function::dependence_type::READ_AFTER_WRITE,
                 typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
         }
 
@@ -1666,6 +1684,12 @@ namespace jeecs
     inline T* game_entity::get_component()const noexcept
     {
         return (T*)je_ecs_world_entity_get_component(this, typing::type_info::of<T>());
+    }
+
+    template<typename T>
+    inline T* game_entity::add_component()const noexcept
+    {
+        return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, typing::type_info::of<T>());
     }
 
     namespace math
@@ -2688,6 +2712,26 @@ namespace jeecs
             math::vec4 viewport = math::vec4(0, 0, 1, 1);
         };
     }
+    namespace Editor
+    {
+        struct Name
+        {
+            char* name;
+            Name()
+            {
+                name = jeecs::basic::make_new_string("[Default entity name]");
+            }
+            ~Name()
+            {
+                je_mem_free(name);
+            }
+            void set_name(const std::string& nname)
+            {
+                je_mem_free(name);
+                name = jeecs::basic::make_new_string(nname.c_str());
+            }
+        };
+    }
     namespace enrty
     {
         inline void module_entry()
@@ -2710,6 +2754,8 @@ namespace jeecs
             jeecs::typing::type_info::of<Camera::OrthoProjection>("Camera::OrthoProjection");
             jeecs::typing::type_info::of<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
             jeecs::typing::type_info::of<Camera::Viewport>("Camera::Viewport");
+
+            jeecs::typing::type_info::of<Editor::Name>("Editor::Name");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();
