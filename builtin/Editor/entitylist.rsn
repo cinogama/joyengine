@@ -4,11 +4,25 @@ import je.editor;
 
 namespace editor
 {
+    protected func EntityMenu(var entity:je::editor::entity)
+    {
+        using je::gui;
+        OpenPopupOnItemClick("entity_edit_menu" + "##" + entity->get_desc_str());
+        if (BeginPopup("entity_edit_menu" + "##" + entity->get_desc_str()))
+        {
+            MenuItem(F"实体 {entity->get_desc_str()}", false);
+            Separator();
+            MenuItem(F"删除 {entity->name()}");
+            EndPopup();
+        }
+    }
     protected func DisplayEntity(var entity:je::editor::entity)
     {
         using je::gui;
 
-        Button(entity->name());
+        Button(entity->name() + "##" + entity->get_desc_str());
+        EntityMenu(entity);
+
         /* SameLine();
         if (TreeNode("##" + entity:string))
         {

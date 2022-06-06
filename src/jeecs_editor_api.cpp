@@ -100,8 +100,28 @@ namespace je
         extern("libjoyecs", "je_editor_try_get_entity_name")
         func name(var self:entity) :string;
 
-         extern("libjoyecs", "je_editor_set_entity_name")
+        extern("libjoyecs", "je_editor_set_entity_name")
         func name(var self:entity, var name:string) :string;
+
+        extern("libjoyecs", "je_editor_get_entity_chunk")
+        func get_chunk(var self:entity) :handle;
+
+        extern("libjoyecs", "je_editor_get_entity_chunk_id")
+        func get_id(var self:entity) :handle;
+
+        extern("libjoyecs", "je_editor_get_entity_version")
+        func get_version(var self:entity) :handle;
+
+        func get_desc(var self:entity)
+        {
+            return [self->get_chunk(), self->get_id(), self->get_version()];
+        }
+        
+        func get_desc_str(var self:entity)
+        {
+            var result = self->get_desc();
+            return F"[{result[0]}:{result[1]}v{result[2]}]";
+        }
     }
 }
 

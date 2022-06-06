@@ -27,6 +27,7 @@ namespace editor
         if (BeginPopupContextItem())
         {
             MenuItem(F"世界 {worldmsg.m_addr}", false);
+            Separator();
             if (MenuItem(F"删除 {worldmsg.m_name}"))
             {
                 launch(generic::AskFor, "确认删除世界"
