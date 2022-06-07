@@ -122,6 +122,64 @@ namespace je
             var result = self->get_desc();
             return F"[{result[0]}:{result[1]}v{result[2]}]";
         }
+
+        extern("libjoyecs", "je_editor_entity_is_child")
+        func is_child(var parent_self:entity, var child_or_not:entity):bool;
+
+        extern("libjoyecs", "je_editor_entity_is_top")
+        func is_top(var parent_self:entity):bool;
+
+        func select_all_child(var self:entity, var childs:array<entity>)
+        {
+            var result = []:array<entity>;
+            for (var entity : childs)
+                if (self->is_child(entity))
+                    result->add(entity);
+            return result;
+        }
+
+        using iterator
+        {
+            var m_all_entity = nil  :array::iterator<entity>;
+            var m_judge = nil       :bool(entity);
+            var m_child_judge = nil :bool(entity,entity)      
+
+            func create(var arriter : array::iterator<entity>, var judger : bool(entity))
+            {
+                var self = new();
+                self.m_all_entity = arriter;
+                self.m_judge = judger;
+
+                return self;
+            }
+
+            func iter(var self:iterator)
+            {
+                return self;
+            }
+            func next(var self:iterator, ref out_entity:entity):bool
+            {
+                while (true)
+                {
+                    if (!self.m_all_entity->next(0 /* We dont need index */, ref out_entity))
+                        return false;
+                    if (self.m_judge(out_entity))
+                        return true;
+                }
+            }
+        }
+        
+        // STATIC FUNCTION
+        func top_entitys(var allentity:array<entity>)
+        {
+            return iterator(allentity->iter(), func(var e:entity){
+                return e->is_top();
+            });
+        }
+    
+        func childs(var self:entity, var allentity:array<entity>)
+        {
+        }
     }
 }
 

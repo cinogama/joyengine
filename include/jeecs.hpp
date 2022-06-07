@@ -96,6 +96,11 @@ namespace jeecs
                     uint32_t v; // Random
                 };
             };
+
+            inline bool operator == (const uuid& uid) const noexcept
+            {
+                return a == uid.a && b == uid.b;
+            }
         };
 
         using uid_t = uuid;

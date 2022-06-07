@@ -2115,7 +2115,7 @@ RS_API rs_api je_editor_try_get_entity_name(rs_vm vm, rs_value args, size_t argc
 
 RS_API rs_api je_editor_set_entity_name(rs_vm vm, rs_value args, size_t argc)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)rs_pointer(args + 0);    
+    jeecs::game_entity* entity = (jeecs::game_entity*)rs_pointer(args + 0);
     return rs_ret_pointer(vm, entity->_m_in_chunk);
 }
 
@@ -2136,3 +2136,28 @@ RS_API rs_api je_editor_get_entity_version(rs_vm vm, rs_value args, size_t argc)
     jeecs::game_entity* entity = (jeecs::game_entity*)rs_pointer(args + 0);
     return rs_ret_handle(vm, entity->_m_version);
 }
+
+RS_API rs_api je_editor_entity_is_child(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs::game_entity* parent_entity = (jeecs::game_entity*)rs_pointer(args + 0);
+    jeecs::game_entity* child_entity = (jeecs::game_entity*)rs_pointer(args + 1);
+
+    jeecs::Transform::ChildAnchor* anchor = parent_entity->get_component<jeecs::Transform::ChildAnchor>();
+    if (!anchor)
+        return rs_ret_bool(vm, false);
+
+    jeecs::Transform::LocalToParent* l2p = child_entity->get_component<jeecs::Transform::LocalToParent>();
+    if (!l2p)
+        return rs_ret_bool(vm, false);
+
+    return rs_ret_bool(vm, l2p->parent_uid == anchor->anchor_uid);
+}
+
+RS_API rs_api je_editor_entity_is_top(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)rs_pointer(args + 0);
+
+    jeecs::Transform::LocalToParent* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
+    return rs_ret_bool(vm, !l2p);
+}
+
