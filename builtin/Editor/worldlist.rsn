@@ -32,14 +32,7 @@ namespace editor
             {
                 launch(generic::AskFor, "确认删除世界"
                                         , F"确定要删除世界 {worldmsg.m_name} 吗？若未保存将永久遗失！"
-                                        , func(var world_addr : je::editor::world)
-                                            {
-                                                world_addr->close();
-                                                //if (world_addr)
-                                                // TODO: IF CURRENT IS RENDING, ATTACH GRAPHIC SYSTEM TO ANOTHER WORLD
-                                                //         ADD HAS_ATTACHED_SHARED_SYSTEM FUNCTION TO CHECK ABOUT IT.
-
-                                            }, worldmsg.m_addr);
+                                        , func(){ worldmsg.m_addr->close() });
             }
             Separator();
             if (MenuItem("渲染此世界"))

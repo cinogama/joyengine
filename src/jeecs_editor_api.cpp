@@ -93,6 +93,11 @@ namespace je
             _get_all_entity(self, result);
             return result;
         }
+
+        func top_entitys(var self:world)
+        {
+            return entity::entity_iter(self->get_all_entity(), func(var e:entity){return e->is_top()});
+        }
         
     }
     namespace entity
@@ -138,47 +143,51 @@ namespace je
             return result;
         }
 
-        using iterator
+        using entity_iter
         {
-            var m_all_entity = nil  :array::iterator<entity>;
-            var m_judge = nil       :bool(entity);
-            var m_child_judge = nil :bool(entity,entity)      
-
-            func create(var arriter : array::iterator<entity>, var judger : bool(entity))
+            var m_all_entity_list = []  : array<entity>;
+            var m_curretn_iter = nil    : array::iterator<entity>;
+            var m_check_func = nil      : bool(entity);
+            var m_current_entity = nil  : entity;
+        
+            func create(var entities:array<entity>, var judge:bool(entity))
             {
                 var self = new();
-                self.m_all_entity = arriter;
-                self.m_judge = judger;
-
+                self.m_all_entity_list = entities;
+                self.m_curretn_iter = entities->iter();
+                self.m_check_func = judge;
                 return self;
             }
 
-            func iter(var self:iterator)
+            func iter(var self:entity_iter)
             {
                 return self;
             }
-            func next(var self:iterator, ref out_entity:entity):bool
-            {
-                while (true)
-                {
-                    if (!self.m_all_entity->next(0 /* We dont need index */, ref out_entity))
-                        return false;
-                    if (self.m_judge(out_entity))
-                        return true;
-                }
-            }
-        }
         
-        // STATIC FUNCTION
-        func top_entitys(var allentity:array<entity>)
-        {
-            return iterator(allentity->iter(), func(var e:entity){
-                return e->is_top();
-            });
-        }
-    
-        func childs(var self:entity, var allentity:array<entity>)
-        {
+            func next(var self:entity_iter, ref out_iter:entity_iter, ref out_entity:entity):bool
+            {
+                while (self.m_curretn_iter->next(0 /*dont need index*/, ref out_entity))
+                {
+                    if (self.m_check_func(out_entity))
+                    {
+                        self.m_current_entity = out_entity;
+                        out_iter = self;
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            func childs(var self:entity_iter)
+            {
+                var current_entity = self.m_current_entity;
+                return entity_iter(self.m_all_entity_list, 
+                                    func(var e:entity)
+                                    {
+                                        if (current_entity->is_child(e)) return true;
+                                        return false;
+                                    });
+            }
         }
     }
 }

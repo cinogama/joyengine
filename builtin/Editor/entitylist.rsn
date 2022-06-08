@@ -16,34 +16,22 @@ namespace editor
             EndPopup();
         }
     }
-    protected func DisplayEntity(
-        var all_entity  :array< je::editor::entity >,
-        var entitys     :array< je::editor::entity >,
-        var displayed   :map< je::editor::entity, bool >)
+    protected func DisplayEntity(var entity_walker : je::editor::entity::entity_iter) : int
     {
         using je::gui;
 
-        for (var entity : entitys)
+        var count = 0;
+        for (var iter, entity : entity_walker)
         {
-            if (displayed->contain(entity))
-                continue;
-            displayed[entity] = true;
-
             Button(entity->name() + "##" + entity->get_desc_str());
             EntityMenu(entity);
 
-            var all_child = entity->select_all_child(all_entity);
-            if (all_child->len())
-            {
-                SameLine();
-                if (TreeNode("##" + entity->get_desc_str()))
-                {
-                    DisplayEntity(all_entity, all_child, displayed);
+            // TODO: 子实体
+            DisplayEntity(entity_walker->childs());
 
-                    TreePop();
-                }
-            }
+            count += 1;
         }
+        return count;
     }
 
     func Form_EntityList(ref open:bool)
@@ -68,8 +56,8 @@ namespace editor
             }
             var rendworld = je::editor::world::rend();
 
-            var all_entitys = rendworld->get_all_entity();
-            DisplayEntity(all_entitys, all_entitys, {}:map< je::editor::entity, bool >);
+            var top_entity_walker = rendworld->top_entitys();
+            DisplayEntity(top_entity_walker);
         End();
         return !open;
     }

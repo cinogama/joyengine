@@ -3,7 +3,7 @@ import je.gui;
 
 namespace generic
 {
-    func InputBox(var title:string, var shown:string, var trigger:dynamic(string, ...), ...)
+    func InputBox(var title:string, var shown:string, var trigger:void(string))
     {
         using je::gui;
 
@@ -17,7 +17,7 @@ namespace generic
             InputText("##", text_buffer);
             if (Button("确定"))
             {
-                trigger(text_buffer->get(), ......);
+                trigger(text_buffer->get());
                 open = false;
             }
             SameLine();

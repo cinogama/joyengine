@@ -3,7 +3,7 @@ import je.gui;
 
 namespace generic
 {
-    func AskFor(var title:string, var shown:string, var trigger:dynamic(...), ...)
+    func AskFor(var title:string, var shown:string, var trigger:void())
     {
         using je::gui;
 
@@ -15,7 +15,7 @@ namespace generic
             Text(shown);
             if (Button("确定"))
             {
-                trigger(......);
+                trigger();
                 open = false;
             }
             SameLine();
