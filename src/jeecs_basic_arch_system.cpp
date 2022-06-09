@@ -1726,17 +1726,23 @@ namespace jeecs_impl
 
         void unstore_system_for_world(ecs_world* world)
         {
-            std::lock_guard g1(_m_stored_systems_mx);
-            auto fnd = _m_stored_systems.find(world);
-            if (fnd != _m_stored_systems.end())
+            std::vector<stored_system_instance> removing_sys_instances;
+            do
             {
-                for (auto& stored_system : fnd->second)
-                {
-                    stored_system.m_system_typeinfo->destruct(stored_system.m_system_instance);
-                    je_mem_free(stored_system.m_system_instance);
-                }
+                std::lock_guard g1(_m_stored_systems_mx);
+                auto fnd = _m_stored_systems.find(world);
 
-                _m_stored_systems.erase(fnd);
+                if (fnd != _m_stored_systems.end())
+                {
+                    removing_sys_instances = std::move(fnd->second);
+                    _m_stored_systems.erase(fnd);
+                }
+            } while (0);
+
+            for (auto& stored_system : removing_sys_instances)
+            {
+                stored_system.m_system_typeinfo->destruct(stored_system.m_system_instance);
+                je_mem_free(stored_system.m_system_instance);
             }
         }
 

@@ -17,7 +17,7 @@ namespace editor
             Separator();
             if (MenuItem(F"删除 {entity->name()}"))
             {
-                launch(generic::AskFor, "删除实体", F"确定要删除实体{entity->name()}吗？",
+                launch(generic::AskFor, "删除实体", F"确定要删除实体 {entity->name()} 吗？",
                         func(){
                             entity->destroy();
                         });
