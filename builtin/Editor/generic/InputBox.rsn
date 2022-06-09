@@ -10,6 +10,7 @@ namespace generic
         var open = true;
 
         static var text_buffer = TextBuffer("");
+
         Begin(title, WindowsAttribute::ImGuiWindowFlags_NoResize
                     + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
         {

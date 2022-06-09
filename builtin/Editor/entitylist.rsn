@@ -2,6 +2,8 @@ import rscene.std;
 import je.gui;
 import je.editor;
 
+import generic.InputBox;
+
 namespace editor
 {
     protected func EntityMenu(var entity:je::editor::entity)
@@ -13,6 +15,13 @@ namespace editor
             MenuItem(F"实体 {entity->get_desc_str()}", false);
             Separator();
             MenuItem(F"删除 {entity->name()}");
+            if (MenuItem("重命名"))
+                launch(generic::InputBox, F"重命名实体{entity->name()}", "请输入实体的新名称",
+                        func (var name:string)
+                        {
+                            if (name != "")
+                                entity->name(name);
+                        });
             EndPopup();
         }
     }
@@ -27,8 +36,12 @@ namespace editor
             EntityMenu(entity);
 
             // TODO: 子实体
-            DisplayEntity(entity_walker->childs());
-
+            SameLine();
+            if (TreeNode("##" + entity->get_desc_str()))
+            {
+                DisplayEntity(entity_walker->childs());
+                TreePop();
+            }
             count += 1;
         }
         return count;

@@ -2108,7 +2108,7 @@ RS_API rs_api je_editor_try_get_entity_name(rs_vm vm, rs_value args, size_t argc
     jeecs::Editor::Name* name = entity->get_component<jeecs::Editor::Name>();
 
     if (name)
-        return rs_ret_string(vm, name->name);
+        return rs_ret_string(vm, name->name.c_str());
     else
         return rs_ret_string(vm, "[No name entity]");
 }
@@ -2116,7 +2116,11 @@ RS_API rs_api je_editor_try_get_entity_name(rs_vm vm, rs_value args, size_t argc
 RS_API rs_api je_editor_set_entity_name(rs_vm vm, rs_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)rs_pointer(args + 0);
-    return rs_ret_pointer(vm, entity->_m_in_chunk);
+    jeecs::Editor::Name* name = entity->get_component<jeecs::Editor::Name>();
+    if (!name)
+        name = entity->add_component<jeecs::Editor::Name>();
+    name->set_name(rs_string(args + 1));
+    return rs_ret_string(vm, rs_string(args + 1));
 }
 
 RS_API rs_api je_editor_get_entity_chunk(rs_vm vm, rs_value args, size_t argc)

@@ -2721,18 +2721,13 @@ namespace jeecs
     {
         struct Name
         {
-            char* name;
+            std::string name;
             Name()
             {
                 name = jeecs::basic::make_new_string("[Default entity name]");
             }
-            ~Name()
-            {
-                je_mem_free(name);
-            }
             void set_name(const std::string& nname)
             {
-                je_mem_free(name);
                 name = jeecs::basic::make_new_string(nname.c_str());
             }
         };
