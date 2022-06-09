@@ -138,6 +138,10 @@ namespace jeecs
 
         template<typename T>
         inline T* add_component() const noexcept;
+
+        inline jeecs::game_world game_world() const noexcept;
+
+        inline void destroy() const noexcept;
     };
 }
 
@@ -1153,6 +1157,11 @@ namespace jeecs
             return gentity;
         }
 
+        inline void remove_entity(const game_entity & entity)
+        {
+            je_ecs_world_destroy_entity(handle(), &entity);
+        }
+
         inline void attach_shared_system(const typing::type_info* system_id)
         {
             je_ecs_universe_attach_shared_system_to(
@@ -1695,6 +1704,16 @@ namespace jeecs
     inline T* game_entity::add_component()const noexcept
     {
         return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, typing::type_info::of<T>());
+    }
+
+    inline jeecs::game_world game_entity::game_world() const noexcept
+    {
+        return jeecs::game_world(je_ecs_world_of_entity(this));
+    }
+
+    inline void game_entity::destroy() const noexcept
+    {
+        game_world().remove_entity(*this);
     }
 
     namespace math

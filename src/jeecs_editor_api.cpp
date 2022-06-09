@@ -111,6 +111,9 @@ namespace je
         extern("libjoyecs", "je_editor_get_entity_chunk")
         func get_chunk(var self:entity) :handle;
 
+        extern("libjoyecs", "je_editor_destroy_entity")
+        func destroy(var self:entity) :void;
+
         extern("libjoyecs", "je_editor_get_entity_chunk_id")
         func get_id(var self:entity) :handle;
 

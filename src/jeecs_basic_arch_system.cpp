@@ -2165,3 +2165,10 @@ RS_API rs_api je_editor_entity_is_top(rs_vm vm, rs_value args, size_t argc)
     return rs_ret_bool(vm, !l2p);
 }
 
+RS_API rs_api je_editor_destroy_entity(rs_vm vm, rs_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)rs_pointer(args + 0);
+
+    entity->destroy();
+    return rs_ret_nil(vm);
+}
