@@ -2,8 +2,8 @@ import rscene.std;
 import je.gui;
 import je.editor;
 
-import generic.InputBox;
-import generic.AskFor;
+import builtin.Editor.generic.InputBox;
+import builtin.Editor.generic.AskFor;
 
 namespace editor
 {

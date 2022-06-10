@@ -2,9 +2,11 @@ import rscene.std;
 import je.gui;
 import je.editor;
 
+import View.worldlist;
+import View.entitylist;
+import View.inspector;
+
 import script_editor;
-import worldlist;
-import entitylist;
 
 import generic.AskFor;
 
@@ -31,14 +33,14 @@ func Editor_MainMenuBar()
     {
         static var active_worlds_shown = false;
         static var active_world_entitys_shown = false;
-        static var inspector_shown = false;
+        static var active_inspector_shown = false;
 
         if (MenuItem("活动世界列表", ref active_worlds_shown, true) && active_worlds_shown)
             launch(editor::Form_WorldList, ref active_worlds_shown);
         if (MenuItem("层级面板", ref active_world_entitys_shown, true) && active_world_entitys_shown)
             launch(editor::Form_EntityList, ref active_world_entitys_shown);
-        if (MenuItem("检视面板", ref inspector_shown, true) && inspector_shown)
-            /*Inspector*/; // TODO
+        if (MenuItem("检视面板", ref active_inspector_shown, true) && active_inspector_shown)
+            launch(editor::Form_Inspector, ref active_inspector_shown);
 
         EndMenu();
     }

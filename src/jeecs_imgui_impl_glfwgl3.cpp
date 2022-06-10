@@ -198,6 +198,8 @@ namespace je
     extern("libjoyecs", "je_gui_separator")
     func Separator() : void;
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     using job_handle_t = gchandle;
 
     extern("libjoyecs", "je_gui_launch")
