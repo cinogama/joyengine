@@ -3,7 +3,7 @@
 cmake_minimum_required (VERSION 3.8)
 
 include_directories("../include")
-include_directories("../3rd/restorablescene/include")
+include_directories("../3rd/woolang/include")
 include_directories("../3rd/glew/include")
 include_directories("../3rd/glfw/include")
 include_directories("../3rd/stb")
@@ -52,4 +52,4 @@ set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)
 set_target_properties(joyecs PROPERTIES PREFIX "")
 
 target_link_libraries(joyecs ${jeecs_system_libs})
-target_link_libraries(joyecs rscene glew_s glfw)
+target_link_libraries(joyecs woolang glew_s glfw)

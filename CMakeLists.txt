@@ -19,8 +19,8 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
 add_subdirectory("3rd/glew/build/cmake")
-set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic rscene" FORCE)
-add_subdirectory("3rd/restorablescene")
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
+add_subdirectory("3rd/woolang")
 
 
 if(WIN32)
@@ -34,7 +34,7 @@ endif()
 add_subdirectory("src")
 
 include_directories("include")
-include_directories("3rd/restorablescene/include")
+include_directories("3rd/woolang/include")
 
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
 add_executable(jedriver ${jedriver_src})
