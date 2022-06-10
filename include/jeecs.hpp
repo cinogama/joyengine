@@ -4,7 +4,7 @@
 #error jeecs.h only support for c++
 #else
 
-#include "rs.h"
+#include "wo.h"
 
 #include <cstdint>
 #include <cstring>
@@ -33,8 +33,8 @@
 #include <execution>
 #endif
 
-#define RS_FORCE_CAPI extern "C"{
-#define RS_FORCE_CAPI_END }
+#define WO_FORCE_CAPI extern "C"{
+#define WO_FORCE_CAPI_END }
 
 #ifdef _WIN32
 #   define JE_IMPORT __declspec(dllimport)
@@ -169,7 +169,7 @@ namespace std
     };
 }
 
-RS_FORCE_CAPI
+WO_FORCE_CAPI
 JE_API void* je_mem_alloc(size_t sz);
 JE_API void je_mem_free(void* ptr);
 
@@ -527,7 +527,7 @@ JE_API void jegl_uniform_float4x4(jegl_resource* shader, int location, const flo
 
 JE_API jegl_thread* jegl_current_thread();
 
-RS_FORCE_CAPI_END
+WO_FORCE_CAPI_END
 
 namespace jeecs
 {

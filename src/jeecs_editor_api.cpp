@@ -3,12 +3,12 @@
 
 #include "jeecs_editor.hpp"
 
-const char* jeecs_editor_api_path = "je/editor.rsn";
+const char* jeecs_editor_api_path = "je/editor.wo";
 const char* jeecs_editor_api_src = R"(
 // EDITOR API ONLY USED IN EDITOR
 // P.S. I seem to be talking nonsense...
 
-import rscene.std;
+import woo.std;
 
 namespace je
     namespace editor
@@ -205,13 +205,13 @@ void jedbg_set_editor_universe(void* universe_handle)
     _universe_address = jeecs::game_universe(universe_handle);
 }
 
-RS_API rs_api je_editor_get_editor_universe(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api je_editor_get_editor_universe(wo_vm vm, wo_value args, size_t argc)
 {
-    return rs_ret_pointer(vm, _universe_address.handle());
+    return wo_ret_pointer(vm, _universe_address.handle());
 }
 
-RS_API rs_api je_editor_exit_enging(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api je_editor_exit_enging(wo_vm vm, wo_value args, size_t argc)
 {
     _universe_address.stop();
-    return rs_ret_nil(vm);
+    return wo_ret_nil(vm);
 }

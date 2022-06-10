@@ -1,4 +1,4 @@
-import rscene.std;
+import woo.std;
 import je.gui;
 import je.editor;
 

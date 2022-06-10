@@ -354,33 +354,33 @@ jegl_resource* jegl_create_vertex(
 
 jegl_resource* jegl_load_shader_source(const char* path, const char* src)
 {
-    rs_vm vmm = rs_create_vm();
-    if (!rs_load_source(vmm, path, src))
+    wo_vm vmm = wo_create_vm();
+    if (!wo_load_source(vmm, path, src))
     {
         // Compile error
-        jeecs::debug::log_error(rs_get_compile_error(vmm, RS_NEED_COLOR));
+        jeecs::debug::log_error(wo_get_compile_error(vmm, WO_NEED_COLOR));
         jeecs::debug::log_error("Fail to load shader: %s.", path);
-        rs_close_vm(vmm);
+        wo_close_vm(vmm);
         return nullptr;
     }
-    if (rs_has_compile_warning(vmm))
+    if (wo_has_compile_warning(vmm))
     {
-        jeecs::debug::log_warn(rs_get_compile_warning(vmm, RS_NEED_COLOR));
+        jeecs::debug::log_warn(wo_get_compile_warning(vmm, WO_NEED_COLOR));
         jeecs::debug::log_warn("There are some warning when loading shader: %s.", path);
     }
 
-    rs_run(vmm);
+    wo_run(vmm);
 
-    auto generate_shader_func = rs_extern_symb(vmm, "shader::generate");
+    auto generate_shader_func = wo_extern_symb(vmm, "shader::generate");
     if (!generate_shader_func)
     {
         jeecs::debug::log_error("Fail to load shader: %s. you should import je.shader.", path);
-        rs_close_vm(vmm);
+        wo_close_vm(vmm);
         return nullptr;
     }
-    if (rs_value retval = rs_invoke_rsfunc(vmm, generate_shader_func, 0))
+    if (wo_value retval = wo_invoke_rsfunc(vmm, generate_shader_func, 0))
     {
-        void* shader_graph = rs_pointer(retval);
+        void* shader_graph = wo_pointer(retval);
 
         jegl_shader* _shader = jeecs::basic::create_new<jegl_shader>();
         jegl_shader_generate_glsl(shader_graph, _shader);
@@ -391,13 +391,13 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
         shader->m_raw_shader_data = _shader;
         shader->m_ptr = INVALID_RESOURCE;
 
-        rs_close_vm(vmm);
+        wo_close_vm(vmm);
         return shader;
     }
     else
     {
-        jeecs::debug::log_error("Fail to load shader: %s: %s.", path, rs_get_runtime_error(vmm));
-        rs_close_vm(vmm);
+        jeecs::debug::log_error("Fail to load shader: %s: %s.", path, wo_get_runtime_error(vmm));
+        wo_close_vm(vmm);
         return nullptr;
     }
 

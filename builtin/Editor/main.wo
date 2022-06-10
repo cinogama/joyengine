@@ -1,4 +1,4 @@
-import rscene.std;
+import woo.std;
 import je.gui;
 import je.editor;
 
@@ -74,7 +74,7 @@ func Editor_Welcome()
     Text("欢迎使用JoyEngineECS.");
     Separator();
     Text("Copyright (C)Cinogama project. 2022.");
-    Text("Powered by RestorableScene (C)Cinogama project. 2022.");
+    Text("Powered by WooLang (C)Cinogama project. 2022.");
     Text("所使用的第三方库包括glew、glfw、imgui及stb的相关信息见版权页");
     if (Button("确认"))
         exit = true;

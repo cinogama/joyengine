@@ -126,7 +126,7 @@ struct jegl_shader_value
                     wdata[i] = data[i];
             }
             else
-                rs_fail(0xD000, "Unknown type to init, should be f");
+                wo_fail(0xD000, "Unknown type to init, should be f");
         }
     }
     void set_used_val(size_t id)
@@ -255,49 +255,49 @@ void _free_shader_value(void* shader_value)
     delete_shader_value(shader_val);
 }
 
-RS_API rs_api jeecs_shader_float_create(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args, size_t argc)
 {
-    return rs_ret_gchandle(vm, new jegl_shader_value((float)rs_real(args + 0)), nullptr, _free_shader_value);
+    return wo_ret_gchandle(vm, new jegl_shader_value((float)wo_real(args + 0)), nullptr, _free_shader_value);
 }
-RS_API rs_api jeecs_shader_float2_create(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_float2_create(wo_vm vm, wo_value args, size_t argc)
 {
-    return rs_ret_gchandle(vm,
+    return wo_ret_gchandle(vm,
         new jegl_shader_value(
-            (float)rs_real(args + 0),
-            (float)rs_real(args + 1)), nullptr, _free_shader_value);
+            (float)wo_real(args + 0),
+            (float)wo_real(args + 1)), nullptr, _free_shader_value);
 }
-RS_API rs_api jeecs_shader_float3_create(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_float3_create(wo_vm vm, wo_value args, size_t argc)
 {
-    return rs_ret_gchandle(vm,
+    return wo_ret_gchandle(vm,
         new jegl_shader_value(
-            (float)rs_real(args + 0),
-            (float)rs_real(args + 1),
-            (float)rs_real(args + 2)), nullptr, _free_shader_value);
+            (float)wo_real(args + 0),
+            (float)wo_real(args + 1),
+            (float)wo_real(args + 2)), nullptr, _free_shader_value);
 }
-RS_API rs_api jeecs_shader_float4_create(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_float4_create(wo_vm vm, wo_value args, size_t argc)
 {
-    return rs_ret_gchandle(vm,
+    return wo_ret_gchandle(vm,
         new jegl_shader_value(
-            (float)rs_real(args + 0),
-            (float)rs_real(args + 1),
-            (float)rs_real(args + 2),
-            (float)rs_real(args + 3)), nullptr, _free_shader_value);
+            (float)wo_real(args + 0),
+            (float)wo_real(args + 1),
+            (float)wo_real(args + 2),
+            (float)wo_real(args + 3)), nullptr, _free_shader_value);
 }
-RS_API rs_api jeecs_shader_float4x4_create(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args, size_t argc)
 {
     float data[16] = {};
     for (size_t i = 0; i < 16; i++)
-        data[i] = (float)rs_real(args + i);
-    return rs_ret_gchandle(vm,
+        data[i] = (float)wo_real(args + i);
+    return wo_ret_gchandle(vm,
         new jegl_shader_value(data, jegl_shader_value::FLOAT4x4),
         nullptr, _free_shader_value);
 }
-RS_API rs_api jeecs_shader_create_rot_mat4x4(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_rot_mat4x4(wo_vm vm, wo_value args, size_t argc)
 {
     float data[16] = {};
-    jeecs::math::quat q((float)rs_real(args + 0), (float)rs_real(args + 1), (float)rs_real(args + 2));
+    jeecs::math::quat q((float)wo_real(args + 0), (float)wo_real(args + 1), (float)wo_real(args + 2));
     q.create_matrix(data);
-    return rs_ret_gchandle(vm,
+    return wo_ret_gchandle(vm,
         new jegl_shader_value(data, jegl_shader_value::FLOAT4x4),
         nullptr, _free_shader_value);
 }
@@ -402,13 +402,13 @@ calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argt
     return _get_reduce_func(cur_node, argts, argc, 0);
 }
 
-RS_API rs_api jeecs_shader_create_uniform_variable(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args, size_t argc)
 {
-    return rs_ret_gchandle(vm,
-        new jegl_shader_value((jegl_shader_value::type)rs_int(args + 0), rs_string(args + 1), rs_bool(args + 2))
+    return wo_ret_gchandle(vm,
+        new jegl_shader_value((jegl_shader_value::type)wo_int(args + 0), wo_string(args + 1), wo_bool(args + 2))
         , nullptr, _free_shader_value);
 }
-RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
 {
     bool result_is_const = true;
     std::vector<jegl_shader_value*> tmp_svalue;
@@ -427,19 +427,19 @@ RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
     std::vector<jegl_shader_value*> _args(argc - 2);
     for (size_t i = 2; i < argc; ++i)
     {
-        auto value_type = rs_valuetype(args + i);
-        if (value_type != RS_INTEGER_TYPE && value_type != RS_REAL_TYPE && value_type != RS_GCHANDLE_TYPE)
+        auto value_type = wo_valuetype(args + i);
+        if (value_type != WO_INTEGER_TYPE && value_type != WO_REAL_TYPE && value_type != WO_GCHANDLE_TYPE)
         {
-            rs_halt("Cannot do this operations: argument type should be number or shader_value.");
-            return rs_ret_nil(vm);
+            wo_halt("Cannot do this operations: argument type should be number or shader_value.");
+            return wo_ret_nil(vm);
         }
 
         jegl_shader_value* sval;
-        if (value_type == RS_GCHANDLE_TYPE)
-            sval = (jegl_shader_value*)rs_pointer(args + i);
+        if (value_type == WO_GCHANDLE_TYPE)
+            sval = (jegl_shader_value*)wo_pointer(args + i);
         else
         {
-            sval = new jegl_shader_value((float)rs_cast_real(args + i));
+            sval = new jegl_shader_value((float)wo_cast_real(args + i));
             tmp_svalue.push_back(sval);
         }
         _types[i - 2] = sval->get_type();
@@ -448,13 +448,13 @@ RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
         if (sval->is_calc_value())
             result_is_const = false;
     }
-    jegl_shader_value::type result_type = (jegl_shader_value::type)rs_int(args + 0);
-    rs_string_t operation = rs_string(args + 1);
+    jegl_shader_value::type result_type = (jegl_shader_value::type)wo_int(args + 0);
+    wo_string_t operation = wo_string(args + 1);
     auto* reduce_func = get_const_reduce_func(operation, _types.data(), _types.size());
     if (!reduce_func)
     {
-        rs_halt("Cannot do this operations: no matched operation with these types.");
-        return rs_ret_nil(vm);
+        wo_halt("Cannot do this operations: no matched operation with these types.");
+        return wo_ret_nil(vm);
     }
 
     if (result_is_const)
@@ -465,19 +465,19 @@ RS_API rs_api jeecs_shader_apply_operation(rs_vm vm, rs_value args, size_t argc)
             if (result->get_type() != result_type)
             {
                 _free_shader_value(result);
-                rs_halt("Cannot do this operations: return type dis-matched.");
-                return rs_ret_nil(vm);
+                wo_halt("Cannot do this operations: return type dis-matched.");
+                return wo_ret_nil(vm);
             }
-            return rs_ret_gchandle(vm, result, nullptr, _free_shader_value);
+            return wo_ret_gchandle(vm, result, nullptr, _free_shader_value);
         }
     }
 
     jegl_shader_value* val =
-        new jegl_shader_value(result_type, rs_string(args + 1), argc - 2);
+        new jegl_shader_value(result_type, wo_string(args + 1), argc - 2);
     for (size_t i = 2; i < argc; ++i)
         val->set_used_val(i - 2, _args[i - 2]);
 
-    return rs_ret_gchandle(vm, val, nullptr, _free_shader_value);
+    return wo_ret_gchandle(vm, val, nullptr, _free_shader_value);
 }
 
 struct vertex_in_data_storage
@@ -505,34 +505,34 @@ struct vertex_in_data_storage
     }
 };
 
-RS_API rs_api jeecs_shader_create_vertex_in(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_vertex_in(wo_vm vm, wo_value args, size_t argc)
 {
     // This function is used for debug
-    return rs_ret_gchandle(vm, new vertex_in_data_storage, nullptr, [](void* ptr) {
+    return wo_ret_gchandle(vm, new vertex_in_data_storage, nullptr, [](void* ptr) {
         delete (vertex_in_data_storage*)ptr;
         });
 }
 
-RS_API rs_api jeecs_shader_get_vertex_in(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args, size_t argc)
 {
-    vertex_in_data_storage* storage = (vertex_in_data_storage*)rs_pointer(args + 0);
-    jegl_shader_value::type type = (jegl_shader_value::type)rs_int(args + 1);
-    size_t pos = (size_t)rs_int(args + 2);
+    vertex_in_data_storage* storage = (vertex_in_data_storage*)wo_pointer(args + 0);
+    jegl_shader_value::type type = (jegl_shader_value::type)wo_int(args + 1);
+    size_t pos = (size_t)wo_int(args + 2);
 
     auto* result = storage->get_val_at(pos, type);
     if (!result)
-        rs_halt(("vertex_in[" + std::to_string(pos) + "] has been used, but type didn't match.").c_str());
+        wo_halt(("vertex_in[" + std::to_string(pos) + "] has been used, but type didn't match.").c_str());
 
-    return rs_ret_gchandle(vm, result, nullptr, nullptr);
+    return wo_ret_gchandle(vm, result, nullptr, nullptr);
 }
 
-RS_API rs_api jeecs_shader_set_vertex_out(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_set_vertex_out(wo_vm vm, wo_value args, size_t argc)
 {
-    jegl_shader_value* vertex_out_pos = (jegl_shader_value*)rs_pointer(args + 0);
+    jegl_shader_value* vertex_out_pos = (jegl_shader_value*)wo_pointer(args + 0);
     if (vertex_out_pos->get_type() != jegl_shader_value::FLOAT4)
-        rs_halt("First value of vertex_out must be FLOAT4 for position.");
+        wo_halt("First value of vertex_out must be FLOAT4 for position.");
 
-    return rs_ret_nil(vm);
+    return wo_ret_nil(vm);
 }
 
 struct shader_value_outs
@@ -557,43 +557,43 @@ struct shader_wrapper
     }
 };
 
-RS_API rs_api jeecs_shader_create_shader_value_out(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size_t argc)
 {
     shader_value_outs* values = new shader_value_outs;
     values->out_values.resize(argc);
     for (size_t i = 0; i < argc; i++)
     {
-        values->out_values[i] = (jegl_shader_value*)rs_pointer(args + i);
+        values->out_values[i] = (jegl_shader_value*)wo_pointer(args + i);
         values->out_values[i]->add_useref_count();
     }
-    return rs_ret_pointer(vm, values);
+    return wo_ret_pointer(vm, values);
 }
-RS_API rs_api jeecs_shader_create_fragment_in(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t argc)
 {
-    return rs_ret_val(vm, args + 0);
+    return wo_ret_val(vm, args + 0);
 }
-RS_API rs_api jeecs_shader_get_fragment_in(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_get_fragment_in(wo_vm vm, wo_value args, size_t argc)
 {
-    shader_value_outs* values = (shader_value_outs*)rs_pointer(args + 0);
-    jegl_shader_value::type type = (jegl_shader_value::type)rs_int(args + 1);
-    size_t pos = (size_t)rs_int(args + 2);
+    shader_value_outs* values = (shader_value_outs*)wo_pointer(args + 0);
+    jegl_shader_value::type type = (jegl_shader_value::type)wo_int(args + 1);
+    size_t pos = (size_t)wo_int(args + 2);
 
     if (pos >= values->out_values.size())
-        rs_halt(("fragment_in[" + std::to_string(pos) + "] out of range.").c_str());
+        wo_halt(("fragment_in[" + std::to_string(pos) + "] out of range.").c_str());
 
     auto* result = values->out_values[pos];
     if (result->get_type() != type)
-        rs_halt(("fragment_in[" + std::to_string(pos) + "] type didn't match.").c_str());
+        wo_halt(("fragment_in[" + std::to_string(pos) + "] type didn't match.").c_str());
 
     auto* val = new jegl_shader_value(type);
     val->m_shader_in_index = pos;
-    return rs_ret_gchandle(vm, val, nullptr, _free_shader_value);
+    return wo_ret_gchandle(vm, val, nullptr, _free_shader_value);
 }
-RS_API rs_api jeecs_shader_wrap_result_pack(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc)
 {
-    return rs_ret_gchandle(vm, new shader_wrapper{
-        (shader_value_outs*)rs_pointer(args + 0),
-        (shader_value_outs*)rs_pointer(args + 1)
+    return wo_ret_gchandle(vm, new shader_wrapper{
+        (shader_value_outs*)wo_pointer(args + 0),
+        (shader_value_outs*)wo_pointer(args + 1)
         }, nullptr,
         [](void* ptr) {
             delete (shader_wrapper*)ptr;
@@ -612,23 +612,23 @@ std::string _generate_glsl_fragment_by_wrapper(shader_wrapper* wrap)
     return _generate_code_for_glsl_fragment(wrap->fragment_out);
 }
 
-RS_API rs_api jeecs_shader_wrap_glsl_vertex(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_wrap_glsl_vertex(wo_vm vm, wo_value args, size_t argc)
 {
-    shader_wrapper* wrap = (shader_wrapper*)rs_pointer(args + 0);
-    return rs_ret_string(vm, _generate_glsl_vertex_by_wrapper(wrap).c_str());
+    shader_wrapper* wrap = (shader_wrapper*)wo_pointer(args + 0);
+    return wo_ret_string(vm, _generate_glsl_vertex_by_wrapper(wrap).c_str());
 }
 
-RS_API rs_api jeecs_shader_wrap_glsl_fragment(rs_vm vm, rs_value args, size_t argc)
+WO_API wo_api jeecs_shader_wrap_glsl_fragment(wo_vm vm, wo_value args, size_t argc)
 {
-    shader_wrapper* wrap = (shader_wrapper*)rs_pointer(args + 0);
-    return rs_ret_string(vm, _generate_glsl_fragment_by_wrapper(wrap).c_str());
+    shader_wrapper* wrap = (shader_wrapper*)wo_pointer(args + 0);
+    return wo_ret_string(vm, _generate_glsl_fragment_by_wrapper(wrap).c_str());
 }
 
-const char* shader_wrapper_path = "je/shader.rsn";
+const char* shader_wrapper_path = "je/shader.wo";
 const char* shader_wrapper_src = R"(
 // JoyEngineECS RScene shader wrapper
 
-import rscene.std;
+import woo.std;
 
 enum shader_value_type
 {
