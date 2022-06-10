@@ -14,3 +14,7 @@
 	path = 3rd/imgui
 	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/imgui
 	branch = stable_v1_87
+[submodule "3rd/woolang"]
+	path = 3rd/woolang
+	url = https://gitlab.cinogama.com/cinogamaproject/woolang.git
+	branch = master
