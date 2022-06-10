@@ -7,6 +7,28 @@ import builtin.Editor.generic.AskFor;
 
 namespace editor
 {
+    protected var _inspected_entity = nil:je::editor::entity;
+
+    func InspectEntity(var entity : je::editor::entity)
+    {
+        if (entity == nil || entity->valid())
+            _inspected_entity = entity;
+    }
+
+    protected func ShownEntityDetail(var entity : je::editor::entity)
+    {
+        using je::gui;
+
+        for (var component_info : entity->get_all_components())
+        {
+            if (TreeNode(component_info))
+            {
+                Text("<此组件没有详细信息>");
+                TreePop();
+            }            
+        }
+    }
+
     func Form_Inspector(ref open:bool)
     {
         using je::gui;
@@ -14,8 +36,11 @@ namespace editor
 
         Begin("检视面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
                         , ref open);
-
-        Text("无选中实体");
+        
+            if (_inspected_entity)
+                ShownEntityDetail(_inspected_entity);
+            else
+                Text("无选中实体");
         
         End();
         return !open;

@@ -32,11 +32,12 @@ namespace editor
             {
                 launch(generic::AskFor, "确认删除世界"
                                         , F"确定要删除世界 {worldmsg.m_name} 吗？若未保存将永久遗失！"
-                                        , func(){ worldmsg.m_addr->close() });
+                                        , func(){ InspectEntity(nil); worldmsg.m_addr->close() });
             }
             Separator();
             if (MenuItem("渲染此世界"))
             {
+                InspectEntity(nil);
                 worldmsg.m_addr->rend();
             }
             MenuItem("保存");

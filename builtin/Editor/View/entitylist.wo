@@ -42,7 +42,9 @@ namespace editor
             if (entity->name()->beginwith("##"))
                 continue; // 以##开头，这是一个编辑器实体，跳过此实体
 
-            Button(entity->name() + "##" + entity->get_desc_str());
+            if (Button(entity->name() + "##" + entity->get_desc_str()))
+                InspectEntity(entity);
+
             EntityMenu(entity);
 
             // TODO: 子实体
@@ -78,9 +80,13 @@ namespace editor
                 EndMenuBar();
             }
             var rendworld = je::editor::world::rend();
-
-            var top_entity_walker = rendworld->top_entitys();
-            DisplayEntity(top_entity_walker);
+            if(rendworld)
+            {
+                var top_entity_walker = rendworld->top_entitys();
+                if (DisplayEntity(top_entity_walker) == 0)
+                    Text("当前世界没有实体");
+            }                
+            
         End();
         return !open;
     }

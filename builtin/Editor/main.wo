@@ -21,7 +21,8 @@ func Editor_MainMenuBar()
         MenuItem("打开");
         Separator();
         if (MenuItem("退出"))
-            launch(generic::AskFor, "确认退出", "即将关闭JoyEngine，是否继续？", je::editor::exit);
+            launch(generic::AskFor, "确认退出", "即将关闭JoyEngine，是否继续？", 
+                        func(){editor::InspectEntity(nil); je::editor::exit();});
 
         EndMenu();
     }

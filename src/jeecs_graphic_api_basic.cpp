@@ -39,7 +39,8 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             } while (0);
             // Ready for rend..
 
-            if (thread->_m_thread_notifier->m_reboot_flag)
+            if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
+                || thread->_m_thread_notifier->m_reboot_flag)
                 break;
 
             auto* del_res = _destroing_graphic_resources.pick_all();
@@ -434,7 +435,7 @@ void jegl_clear_framebuffer_color(jegl_resource* framebuffer)
 {
     _current_graphic_thread->m_apis->clear_rend_buffer_color(_current_graphic_thread, framebuffer);
 }
-void jegl_clear_framebuffer_depth(jegl_resource* framebuffer) 
+void jegl_clear_framebuffer_depth(jegl_resource* framebuffer)
 {
     _current_graphic_thread->m_apis->clear_rend_buffer_depth(_current_graphic_thread, framebuffer);
 }
@@ -493,7 +494,7 @@ void jegl_uniform_float4(jegl_resource* shader, int location, float x, float y, 
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::FLOAT4, &value);
 }
 
-void jegl_uniform_float4x4(jegl_resource* shader, int location, const float (*mat)[4])
+void jegl_uniform_float4x4(jegl_resource* shader, int location, const float(*mat)[4])
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::FLOAT4X4, mat);

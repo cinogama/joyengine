@@ -192,6 +192,19 @@ namespace je
                                     });
             }
         }
+
+        func get_all_components(var self : entity)
+        {
+            extern("libjoyecs", "je_editor_get_all_components_from_entity")
+            func _get_all_components_from_entity(var e:entity, var out_result:array<string>):void;
+            
+            var result = []:array<string>;
+            _get_all_components_from_entity(self, result);
+            return result;
+        }
+
+        extern("libjoyecs", "je_editor_check_entity_is_valid")
+        func valid(var self : entity):bool;
     }
 }
 

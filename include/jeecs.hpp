@@ -142,6 +142,8 @@ namespace jeecs
         inline jeecs::game_world game_world() const noexcept;
 
         inline void destroy() const noexcept;
+
+        inline bool valid() const noexcept;
     };
 }
 
@@ -255,6 +257,8 @@ JE_API void* je_ecs_world_entity_get_component(
     const jeecs::typing::type_info* component_info);
 
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
+
+JE_API bool je_ecs_world_validate_entity(const jeecs::game_entity* entity);
 
 /////////////////////////// Time&Sleep /////////////////////////////////
 
@@ -1704,6 +1708,11 @@ namespace jeecs
     inline T* game_entity::add_component()const noexcept
     {
         return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, typing::type_info::of<T>());
+    }
+
+    inline bool game_entity::valid() const noexcept
+    {
+        return je_ecs_world_validate_entity(this);
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept

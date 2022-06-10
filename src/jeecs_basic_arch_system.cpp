@@ -42,10 +42,10 @@ namespace jeecs_impl
             const jeecs::typing::type_info* m_typeinfo;
             size_t m_begin_offset_in_chunk;
         };
-
+    public:
         using types_list = std::vector<const jeecs::typing::type_info*>;
         using archtypes_map = std::unordered_map<jeecs::typing::typeid_t, arch_type_info>;
-
+    private:
         const types_list      _m_arch_typeinfo;
         const types_set       _m_types_set;
         const archtypes_map   _m_arch_typeinfo_mapping;
@@ -407,6 +407,16 @@ namespace jeecs_impl
 
                 chunk = chunk->last;
             }
+        }
+        
+        inline const types_set& get_types()const noexcept
+        {
+            return _m_types_set;
+        }
+
+        inline const types_list& get_type_infos()const noexcept
+        {
+            return _m_arch_typeinfo;
         }
     };
 
@@ -2011,6 +2021,12 @@ JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
     return chunk->get_arch_type()->get_arch_mgr()->get_world();
 }
 
+JE_API bool je_ecs_world_validate_entity(const jeecs::game_entity* entity)
+{
+    auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk;
+    return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
+}
+
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
 
 WO_API wo_api je_editor_get_alive_worlds(wo_vm vm, wo_value args, size_t argc)
@@ -2178,3 +2194,25 @@ WO_API wo_api je_editor_destroy_entity(wo_vm vm, wo_value args, size_t argc)
     entity->destroy();
     return wo_ret_nil(vm);
 }
+
+WO_API wo_api je_editor_get_all_components_from_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    wo_value out_result = args + 1;
+
+    auto* cur_chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk;
+    auto& cur_arch_type_infos = cur_chunk->get_arch_type()->get_type_infos();
+
+    for (auto* typeinfo : cur_arch_type_infos)
+        wo_set_string(wo_arr_add(out_result, nullptr), typeinfo->m_typename);
+
+    return wo_ret_nil(vm);
+}
+
+WO_API wo_api je_editor_check_entity_is_valid(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    
+    return wo_ret_bool(vm, entity->valid());
+}
+
