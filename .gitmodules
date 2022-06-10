@@ -1,7 +1,3 @@
-[submodule "3rd/restorablescene"]
-	path = 3rd/restorablescene
-	url = https://gitlab.cinogama.com/cinogamaproject/restorablescene.git
-	branch = master
 [submodule "3rd/glew"]
 	path = 3rd/glew
 	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/glew-2.2.0.git
