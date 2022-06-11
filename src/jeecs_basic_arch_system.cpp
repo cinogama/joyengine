@@ -408,7 +408,7 @@ namespace jeecs_impl
                 chunk = chunk->last;
             }
         }
-        
+
         inline const types_set& get_types()const noexcept
         {
             return _m_types_set;
@@ -2212,7 +2212,7 @@ WO_API wo_api je_editor_get_all_components_from_entity(wo_vm vm, wo_value args, 
 WO_API wo_api je_editor_check_entity_is_valid(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    
+
     return wo_ret_bool(vm, entity->valid());
 }
 
