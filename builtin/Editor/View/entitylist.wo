@@ -16,12 +16,10 @@ namespace editor
             MenuItem(F"实体 {entity->get_desc_str()}", false);
             Separator();
             if (MenuItem(F"删除 {entity->name()}"))
-            {
                 launch(generic::AskFor, "删除实体", F"确定要删除实体 {entity->name()} 吗？",
                         func(){
                             entity->destroy();
                         });
-            }
             if (MenuItem("重命名"))
                 launch(generic::InputBox, F"重命名实体{entity->name()}", "请输入实体的新名称",
                         func (var name:string)
@@ -29,6 +27,8 @@ namespace editor
                             if (name != "")
                                 entity->name(name);
                         });
+            Separator();
+            MenuItem("改变布局（修改组件）");
             EndPopup();
         }
     }
