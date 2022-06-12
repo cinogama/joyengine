@@ -22,7 +22,7 @@ namespace je
 
     namespace universe
     {
-        protected func create() : universe
+        private func create() : universe
         {
             extern("libjoyecs", "je_editor_get_editor_universe")
             func _universe():handle;

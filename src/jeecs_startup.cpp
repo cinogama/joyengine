@@ -21,6 +21,7 @@ void je_init(int argc, char** argv)
     wo_virtual_source(gui_api_path, gui_api_src, false);
 
     bool failed_in_start_editor = false;
+
     wo_vm vmm = wo_create_vm();
     if (wo_load_file(vmm, "builtin/Editor/main.wo"))
         wo_run(vmm);
