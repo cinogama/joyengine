@@ -7,7 +7,7 @@ import builtin.Editor.generic.AskFor;
 
 namespace editor
 {
-    protected var _inspected_entity = nil:je::editor::entity;
+    private var _inspected_entity = nil:je::editor::entity;
 
     func InspectEntity(var entity : je::editor::entity)
     {
