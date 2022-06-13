@@ -1,93 +1,11 @@
 import woo.std;
 import je.gui;
-import je.editor;
+import je;
 
 import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
 
 namespace editor
 {
-    protected func EntityMenu(var entity:je::editor::entity)
-    {
-        using je::gui;
-        OpenPopupOnItemClick("entity_edit_menu" + "##" + entity->get_desc_str());
-        if (BeginPopup("entity_edit_menu" + "##" + entity->get_desc_str()))
-        {
-            MenuItem(F"实体 {entity->get_desc_str()}", false);
-            Separator();
-            if (MenuItem(F"删除 {entity->name()}"))
-                launch(generic::AskFor, "删除实体", F"确定要删除实体 {entity->name()} 吗？",
-                        func(){
-                            entity->destroy();
-                        });
-            if (MenuItem("重命名"))
-                launch(generic::InputBox, F"重命名实体{entity->name()}", "请输入实体的新名称",
-                        func (var name:string)
-                        {
-                            if (name != "")
-                                entity->name(name);
-                        });
-            Separator();
-            MenuItem("改变布局（修改组件）");
-            EndPopup();
-        }
-    }
-    protected func DisplayEntity(var entity_walker : je::editor::entity::entity_iter) : int
-    {
-        using je::gui;
 
-        var count = 0;
-        for (var iter, entity : entity_walker)
-        {
-            if (entity->name()->beginwith("##"))
-                continue; // 以##开头，这是一个编辑器实体，跳过此实体
-
-            if (Button(entity->name() + "##" + entity->get_desc_str()))
-                InspectEntity(entity);
-
-            EntityMenu(entity);
-
-            // TODO: 子实体
-            SameLine();
-            if (TreeNode("##" + entity->get_desc_str()))
-            {
-                DisplayEntity(entity_walker->childs());
-                TreePop();
-            }
-            count += 1;
-        }
-        return count;
-    }
-
-    func Form_EntityList(ref open:bool)
-    {
-        using je::gui;
-        if (!open) return !open;
-
-        Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                        , ref open);
-
-            if (BeginMenuBar())
-            {
-                if (BeginMenu("新建..."))
-                {
-                    if (MenuItem("新建实体"))
-                        ; // TODO
-
-                    EndMenu();
-                }
-                EndMenuBar();
-            }
-            var rendworld = je::editor::world::rend();
-            if(rendworld)
-            {
-                var top_entity_walker = rendworld->top_entitys();
-                if (DisplayEntity(top_entity_walker) == 0)
-                    Text("当前世界没有实体");
-            }                
-            
-        End();
-        return !open;
-    }
 }

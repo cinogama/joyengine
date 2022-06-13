@@ -10,13 +10,13 @@ extern const char* shader_wrapper_src;
 extern const char* gui_api_path;
 extern const char* gui_api_src;
 
-extern const char* jeecs_editor_api_path;
-extern const char* jeecs_editor_api_src;
+extern const char* jeecs_woolang_api_path;
+extern const char* jeecs_woolang_api_src;
 
 void je_init(int argc, char** argv)
 {
     wo_init(argc, argv);
-    wo_virtual_source(jeecs_editor_api_path, jeecs_editor_api_src, false);
+    wo_virtual_source(jeecs_woolang_api_path, jeecs_woolang_api_src, false);
     wo_virtual_source(shader_wrapper_path, shader_wrapper_src, false);
     wo_virtual_source(gui_api_path, gui_api_src, false);
 

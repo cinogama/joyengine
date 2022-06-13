@@ -104,27 +104,27 @@ func frag(var fdata:fragment_in)
                 jegl_terminate_graphic_thread(glthread);
         }
 
-        struct CameraArch
+        struct camera_arch
         {
             const Rendqueue* rendqueue;
             const Projection* projection;
             const Viewport* viewport;
 
-            bool operator < (const CameraArch& another) const noexcept
+            bool operator < (const camera_arch& another) const noexcept
             {
                 int a_queue = rendqueue ? rendqueue->rend_queue : 0;
                 int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
                 return a_queue < b_queue;
             }
         };
-        struct RendererArch
+        struct renderer_arch
         {
             const Rendqueue* rendqueue;
             const Translation* translation;
             const Material* material;
             const Shape* shape;
 
-            bool operator < (const RendererArch& another) const noexcept
+            bool operator < (const renderer_arch& another) const noexcept
             {
                 int a_queue = rendqueue ? rendqueue->rend_queue : 0;
                 int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
@@ -132,15 +132,15 @@ func frag(var fdata:fragment_in)
             }
         };
 
-        std::priority_queue<CameraArch> m_camera_list;
-        std::priority_queue<RendererArch> m_renderer_list;
+        std::priority_queue<camera_arch> m_camera_list;
+        std::priority_queue<renderer_arch> m_renderer_list;
 
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
 
         void Frame(jegl_thread* glthread)
         {
-            std::list<RendererArch> m_renderer_entities;
+            std::list<renderer_arch> m_renderer_entities;
 
             while (!m_renderer_list.empty())
             {
@@ -276,7 +276,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         {
             // Calc camera proj matrix
             m_camera_list.emplace(
-                CameraArch{
+                camera_arch{
                     rendqueue, projection, cameraviewport
                 }
             );
@@ -290,7 +290,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         {
             // RendOb will be input to a chain and used for swap
             m_renderer_list.emplace(
-                RendererArch{
+                renderer_arch{
                     rendqueue, trans, mat, shape
                 });
         }

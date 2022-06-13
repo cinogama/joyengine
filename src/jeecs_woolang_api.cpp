@@ -3,13 +3,34 @@
 
 #include "jeecs_editor.hpp"
 
-const char* jeecs_editor_api_path = "je/editor.wo";
-const char* jeecs_editor_api_src = R"(
-// EDITOR API ONLY USED IN EDITOR
-// P.S. I seem to be talking nonsense...
+jeecs::game_universe _universe_address = nullptr;
 
+void jedbg_set_editor_universe(void* universe_handle)
+{
+    jeecs::debug::log_info("Editor will work at universe: %p", universe_handle);
+    _universe_address = jeecs::game_universe(universe_handle);
+}
+
+WO_API wo_api je_editor_get_editor_universe(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_pointer(vm, _universe_address.handle());
+}
+
+WO_API wo_api je_wooapi_exit(wo_vm vm, wo_value args, size_t argc)
+{
+    _universe_address.stop();
+    return wo_ret_nil(vm);
+}
+
+const char* jeecs_woolang_api_path = "je.wo";
+const char* jeecs_woolang_api_src = R"(
 import woo.std;
-
+namespace je
+{
+    extern("libjoyecs", "je_wooapi_exit")
+    func exit():void;
+}
+/*
 namespace je
     namespace editor
 {
@@ -169,7 +190,7 @@ namespace je
         
             func next(var self:entity_iter, ref out_iter:entity_iter, ref out_entity:entity):bool
             {
-                while (self.m_curretn_iter->next(0 /*dont need index*/, ref out_entity))
+                while (self.m_curretn_iter->next(0, ref out_entity))
                 {
                     if (self.m_check_func(out_entity))
                     {
@@ -206,25 +227,7 @@ namespace je
         extern("libjoyecs", "je_editor_check_entity_is_valid")
         func valid(var self : entity):bool;
     }
-}
+}*/
 
 )";
 
-jeecs::game_universe _universe_address = nullptr;
-
-void jedbg_set_editor_universe(void* universe_handle)
-{
-    jeecs::debug::log_info("Editor will work at universe: %p", universe_handle);
-    _universe_address = jeecs::game_universe(universe_handle);
-}
-
-WO_API wo_api je_editor_get_editor_universe(wo_vm vm, wo_value args, size_t argc)
-{
-    return wo_ret_pointer(vm, _universe_address.handle());
-}
-
-WO_API wo_api je_editor_exit_enging(wo_vm vm, wo_value args, size_t argc)
-{
-    _universe_address.stop();
-    return wo_ret_nil(vm);
-}

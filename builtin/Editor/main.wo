@@ -1,6 +1,6 @@
 import woo.std;
 import je.gui;
-import je.editor;
+import je;
 
 import View.worldlist;
 import View.entitylist;
@@ -22,7 +22,10 @@ func Editor_MainMenuBar()
         Separator();
         if (MenuItem("退出"))
             launch(generic::AskFor, "确认退出", "即将关闭JoyEngine，是否继续？", 
-                        func(){editor::InspectEntity(nil); je::editor::exit();});
+                        func()
+                        {
+                            je::exit();
+                        });
 
         EndMenu();
     }
@@ -37,11 +40,11 @@ func Editor_MainMenuBar()
         static var active_inspector_shown = false;
 
         if (MenuItem("活动世界列表", ref active_worlds_shown, true) && active_worlds_shown)
-            launch(editor::Form_WorldList, ref active_worlds_shown);
+            ;
         if (MenuItem("层级面板", ref active_world_entitys_shown, true) && active_world_entitys_shown)
-            launch(editor::Form_EntityList, ref active_world_entitys_shown);
+            ;
         if (MenuItem("检视面板", ref active_inspector_shown, true) && active_inspector_shown)
-            launch(editor::Form_Inspector, ref active_inspector_shown);
+            ;
 
         EndMenu();
     }
@@ -87,6 +90,7 @@ func Editor_Welcome()
 je::gui::launch(Editor_MainMenuBar);
 je::gui::launch(Editor_Welcome);
 
+/*
 func Editor_Test()
 {
     using je::gui;
@@ -106,3 +110,4 @@ func Editor_Test()
     return !opened;
 }
 je::gui::launch(Editor_Test);
+*/
