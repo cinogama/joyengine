@@ -29,6 +29,53 @@ namespace je
 {
     extern("libjoyecs", "je_wooapi_exit")
     func exit():void;
+
+    using universe = handle;
+    namespace universe
+    {
+        private func create()
+        {
+            extern("libjoyecs", "je_editor_get_editor_universe")
+            func _universe():universe;
+
+            var u = _universe();
+            if (!u) std::panic("Failed to get edit-universe.");
+
+            return u;
+        }
+    }
+
+    using world = handle;
+    namespace world
+    {
+        func create()
+        {
+            extern("libjoyecs", "je_editor_create_world")
+            func _create_world_in_universe(var _universe:universe):world;
+
+            return _create_world_in_universe(universe());
+        }
+
+        namespace editor
+        {
+            func list() : array<world>
+            {
+                extern("libjoyecs", "je_editor_get_alive_worlds")
+                func _get_all_worlds(var universe:universe, var out_arrs:array<world>) : void;
+
+                var result = []:array<world>;
+                _get_all_worlds(universe(), result);
+                return result;
+            }
+            func find_world_with_shared_system(var sys:string):world
+            {
+                //extern("libjoyecs", "je_editor_get_shared_system_attached_system")
+               // func _get_shared_system_attached_world(var _universe:universe, var sys:string):world;
+
+                //return _get_shared_system_attached_world(universe(), sys);
+            }
+        }
+    }
 }
 /*
 namespace je
@@ -40,40 +87,8 @@ namespace je
     using universe = handle;
     using world = handle;
     using entity = gchandle;
-
-    namespace universe
-    {
-        private func create() : universe
-        {
-            extern("libjoyecs", "je_editor_get_editor_universe")
-            func _universe():handle;
-
-            var u = _universe();
-            if (!u) std::panic("Failed to get edit-universe.");
-
-            return u;
-        }
-    }
     namespace world
     {
-        func all_worlds() : array<world>
-        {
-            extern("libjoyecs", "je_editor_get_alive_worlds")
-            func _all_worlds(var universe:universe, var out_arrs:array<world>) : void;
-
-            var result = []:array<world>;
-            _all_worlds(universe(), result);
-            return result;
-        }
-
-        func create()
-        {
-            extern("libjoyecs", "je_editor_create_world")
-            func _create_world_in_universe(var _universe:universe):world;
-
-            return _create_world_in_universe(universe());
-        }
-        
         func get_shared_system_attached_world(var sys:string):world
         {
             extern("libjoyecs", "je_editor_get_shared_system_attached_system")
