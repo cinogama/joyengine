@@ -1,4 +1,5 @@
 #define JE_IMPL
+#define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
 #include <list>
@@ -907,6 +908,15 @@ namespace jeecs_impl
             _find_or_create_buffer_for(e).m_entity_removed_flag = true;
         }
 
+        // ATTENTION: 
+        /*
+        if (e.get_component<...>())
+            e.get_component<...>();
+
+        THIS OPERATION IS NOT THREAD SAFE.
+        * If need to get component and add it if this component,
+        * There is NO-WAY! for now!!!
+        */
         void* append_component(const arch_type::entity& e, const jeecs::typing::type_info* component_type)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
@@ -1955,7 +1965,7 @@ void* je_ecs_world_entity_add_component(
     const jeecs::typing::type_info* component_info)
 {
     return ((jeecs_impl::ecs_world*)world)->get_command_buffer().append_component(
-        reinterpret_cast<const jeecs_impl::arch_type::entity&>(*entity),
+        *std::launder(reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity)),
         component_info
     );
 }
@@ -1966,7 +1976,7 @@ void je_ecs_world_entity_remove_component(
     const jeecs::typing::type_info* component_info)
 {
     ((jeecs_impl::ecs_world*)world)->get_command_buffer().remove_component(
-        reinterpret_cast<const jeecs_impl::arch_type::entity&>(*entity),
+        *std::launder(reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity)),
         component_info
     );
 }
@@ -1995,7 +2005,9 @@ void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info)
 {
-    return reinterpret_cast<const jeecs_impl::arch_type::entity&>(*entity).get_component(component_info->m_id);
+    auto& ecs_entity = *std::launder(reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity));
+    auto* component = ecs_entity.get_component(component_info->m_id);
+    return component;
 }
 
 void je_ecs_world_destroy_entity(
@@ -2015,85 +2027,65 @@ void* je_ecs_world_in_universe(void* world)
     return  ((jeecs_impl::ecs_world*)world)->get_universe();
 }
 
-JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
+void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
 {
     auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk;
     return chunk->get_arch_type()->get_arch_mgr()->get_world();
 }
 
-JE_API bool je_ecs_world_validate_entity(const jeecs::game_entity* entity)
+bool je_ecs_world_validate_entity(const jeecs::game_entity* entity)
 {
     auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk;
     return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
 }
 
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
-
-WO_API wo_api je_editor_get_alive_worlds(wo_vm vm, wo_value args, size_t argc)
+void** jedbg_get_all_worlds_in_universe(void* _universe)
 {
-    jeecs_impl::ecs_universe* universe = (jeecs_impl::ecs_universe*)wo_pointer(args + 0);
-    wo_value out_array = args + 1;
-
+    jeecs_impl::ecs_universe* universe = (jeecs_impl::ecs_universe*)_universe;
     auto result = std::move(universe->_get_all_worlds());
+
+    void** out_result = (void**)je_mem_alloc(sizeof(void*) * (result.size() + 1));
+
+    void** write_place = out_result;
     for (auto* worlds : result)
-        wo_set_pointer(wo_arr_add(out_array, nullptr), worlds);
+        *(write_place++) = (void*)worlds;
+    *write_place = nullptr;
 
-    return wo_ret_nil(vm);
+    return out_result;
 }
 
-WO_API wo_api je_editor_get_world_name(wo_vm vm, wo_value args, size_t argc)
+const char* jedbg_get_world_name(void* _world)
 {
-    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)wo_pointer(args + 0);
-    return wo_ret_string(vm, world->_name().c_str());
+    return ((jeecs_impl::ecs_world*)_world)->_name().c_str();
 }
 
-WO_API wo_api je_editor_set_world_name(wo_vm vm, wo_value args, size_t argc)
+void jedbg_set_world_name(void* _world, const char* name)
 {
-    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)wo_pointer(args + 0);
-    return wo_ret_string(vm, world->_name(wo_string(args + 1)).c_str());
+    ((jeecs_impl::ecs_world*)_world)->_name(name);
 }
 
-WO_API wo_api je_editor_create_world(wo_vm vm, wo_value args, size_t argc)
+void* jedbg_get_shared_system_location_world(void* _universe, const jeecs::typing::type_info* tinfo)
 {
-    jeecs_impl::ecs_universe* universe = (jeecs_impl::ecs_universe*)wo_pointer(args + 0);
-    return wo_ret_pointer(vm, universe->create_world());
+    return ((jeecs_impl::ecs_universe*)_universe)->_shared_system_attached_world(tinfo);
 }
 
-WO_API wo_api je_editor_remove_world(wo_vm vm, wo_value args, size_t argc)
+void jedbg_free_entity_list(jeecs::game_entity** _entity_list)
 {
-    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)wo_pointer(args + 0);
-    je_ecs_world_destroy(world);
-
-    return wo_ret_nil(vm);
+    auto* index = _entity_list;
+    while (index)
+    {
+        jeecs::basic::destroy_free(index);
+        ++index;
+    }
+    je_mem_free(_entity_list);
 }
 
-WO_API wo_api je_editor_attach_shared_system_to_world(wo_vm vm, wo_value args, size_t argc)
+jeecs::game_entity** jedbg_get_all_entity_in_world(void* _world)
 {
-    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)wo_pointer(args + 0);
-    jeecs::game_world gworld(world);
+    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)_world;
 
-    auto* typeinfo = jeecs::typing::type_info::of(wo_string(args + 1));
-    if (typeinfo)
-        gworld.attach_shared_system(typeinfo);
-
-    return wo_ret_nil(vm);
-}
-
-WO_API wo_api je_editor_get_shared_system_attached_system(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs_impl::ecs_universe* universe = (jeecs_impl::ecs_universe*)wo_pointer(args + 0);
-    auto* typeinfo = jeecs::typing::type_info::of(wo_string(args + 1));
-
-    if (typeinfo)
-        return wo_ret_pointer(vm, universe->_shared_system_attached_world(typeinfo));
-
-    return wo_ret_pointer(vm, nullptr);
-}
-
-WO_API wo_api je_editor_get_all_entity_from_world(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)wo_pointer(args + 0);
-    wo_value out_result_arr = args + 1;
+    std::vector<jeecs::game_entity*> out_entities;
 
     auto&& archs = world->_get_arch_mgr()._get_all_arch_types();
     for (auto& arch : archs)
@@ -2110,109 +2102,51 @@ WO_API wo_api je_editor_get_all_entity_from_world(wo_vm vm, wo_value args, size_
                     jeecs::game_entity* entity = jeecs::basic::create_new<jeecs::game_entity>();
                     entity->_set_arch_chunk_info(chunk, i, entity_meta_arr[i].m_version);
 
-                    wo_set_gchandle(wo_arr_add(out_result_arr, nullptr), entity, nullptr,
-                        [](void* ptr)
-                        {
-                            jeecs::basic::destroy_free((jeecs::game_entity*)ptr);
-                        });
+                    out_entities.push_back(entity);
                 }
             }
-
             chunk = chunk->last;
         }
     }
-    return wo_ret_nil(vm);
+    jeecs::game_entity** out_result = (jeecs::game_entity**)je_mem_alloc(sizeof(jeecs::game_entity*) * (out_entities.size() + 1));
+    memcpy(out_result, out_entities.data(), out_entities.size() * sizeof(jeecs::game_entity*));
+    out_result[out_entities.size()] = nullptr;
+
+    return out_result;
 }
 
-WO_API wo_api je_editor_try_get_entity_name(wo_vm vm, wo_value args, size_t argc)
+const jeecs::typing::type_info** jedbg_get_all_components_from_entity(jeecs::game_entity* _entity)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    jeecs::Editor::Name* name = entity->get_component<jeecs::Editor::Name>();
-
-    if (name)
-        return wo_ret_string(vm, name->name.c_str());
-    else
-        return wo_ret_string(vm, "[No name entity]");
-}
-
-WO_API wo_api je_editor_set_entity_name(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    jeecs::Editor::Name* name = entity->get_component<jeecs::Editor::Name>();
-    if (!name)
-        name = entity->add_component<jeecs::Editor::Name>();
-    name->set_name(wo_string(args + 1));
-    return wo_ret_string(vm, wo_string(args + 1));
-}
-
-WO_API wo_api je_editor_get_entity_chunk(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    return wo_ret_pointer(vm, entity->_m_in_chunk);
-}
-
-WO_API wo_api je_editor_get_entity_chunk_id(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    return wo_ret_handle(vm, entity->_m_id);
-}
-
-WO_API wo_api je_editor_get_entity_version(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    return wo_ret_handle(vm, entity->_m_version);
-}
-
-WO_API wo_api je_editor_entity_is_child(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* parent_entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    jeecs::game_entity* child_entity = (jeecs::game_entity*)wo_pointer(args + 1);
-
-    jeecs::Transform::ChildAnchor* anchor = parent_entity->get_component<jeecs::Transform::ChildAnchor>();
-    if (!anchor)
-        return wo_ret_bool(vm, false);
-
-    jeecs::Transform::LocalToParent* l2p = child_entity->get_component<jeecs::Transform::LocalToParent>();
-    if (!l2p)
-        return wo_ret_bool(vm, false);
-
-    return wo_ret_bool(vm, l2p->parent_uid == anchor->anchor_uid);
-}
-
-WO_API wo_api je_editor_entity_is_top(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-
-    jeecs::Transform::LocalToParent* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
-    return wo_ret_bool(vm, !l2p);
-}
-
-WO_API wo_api je_editor_destroy_entity(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-
-    entity->destroy();
-    return wo_ret_nil(vm);
-}
-
-WO_API wo_api je_editor_get_all_components_from_entity(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    wo_value out_result = args + 1;
-
-    auto* cur_chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk;
+    auto* cur_chunk = (jeecs_impl::arch_type::arch_chunk*)_entity->_m_in_chunk;
     auto& cur_arch_type_infos = cur_chunk->get_arch_type()->get_type_infos();
 
+    const jeecs::typing::type_info** outresult = (const jeecs::typing::type_info**)je_mem_alloc(
+        sizeof(const jeecs::typing::type_info*) * cur_arch_type_infos.size() + 1);
+    
+    auto write_result = outresult;
     for (auto* typeinfo : cur_arch_type_infos)
-        wo_set_string(wo_arr_add(out_result, nullptr), typeinfo->m_typename);
+    {
+        *(write_result++) = typeinfo;
+    }
+    *write_result = nullptr;
 
-    return wo_ret_nil(vm);
+    // Sort by id.
+    std::sort(outresult, write_result, 
+        [](const jeecs::typing::type_info* a, const jeecs::typing::type_info*b) {
+            return a->m_id < b->m_id;
+        });
+
+    return outresult;
 }
 
-WO_API wo_api je_editor_check_entity_is_valid(wo_vm vm, wo_value args, size_t argc)
+static void* _editor_universe;
+
+void jedbg_set_editor_universe(void* universe_handle)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-
-    return wo_ret_bool(vm, entity->valid());
+    _editor_universe = universe_handle;
 }
 
+void* jedbg_get_editor_universe()
+{
+    return _editor_universe;
+}

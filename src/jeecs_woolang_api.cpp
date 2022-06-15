@@ -1,79 +1,106 @@
 #define JE_IMPL
+#define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
-#include "jeecs_editor.hpp"
-
-jeecs::game_universe _universe_address = nullptr;
-
-void jedbg_set_editor_universe(void* universe_handle)
+// ECS UNIVERSE
+WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::debug::log_info("Editor will work at universe: %p", universe_handle);
-    _universe_address = jeecs::game_universe(universe_handle);
+    void* universe = jedbg_get_editor_universe();
+    if (!universe)
+        wo_halt("failed to get editor universe.");
+    return wo_ret_pointer(vm, universe);
 }
 
-WO_API wo_api je_editor_get_editor_universe(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_pointer(vm, _universe_address.handle());
+    return wo_ret_pointer(vm,
+        jeecs::game_universe(wo_pointer(args + 0)).create_world().handle());
 }
 
-WO_API wo_api je_wooapi_exit(wo_vm vm, wo_value args, size_t argc)
+
+// ECS WORLD
+WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args, size_t argc)
 {
-    _universe_address.stop();
+    jeecs::game_world(wo_pointer(args + 0)).close();
     return wo_ret_nil(vm);
 }
+
+WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t argc)
+{
+    void* universe = wo_pointer(args + 0);
+    wo_value out_array = args + 1;
+
+    auto result = jedbg_get_all_worlds_in_universe(universe);
+    {
+        auto worldlist = result;
+        while (worldlist)
+            wo_set_pointer(wo_arr_add(out_array, nullptr), *(worldlist++));
+    }
+    je_mem_free(result);
+    return wo_ret_nil(vm);
+}
+
+// ECS OTHER
+WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_universe(jedbg_get_editor_universe()).stop();
+    return wo_ret_nil(vm);
+}
+
 
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
 import woo.std;
 namespace je
 {
-    extern("libjoyecs", "je_wooapi_exit")
+    extern("libjoyecs", "wojeapi_exit")
     func exit():void;
+
+    using typeinfo = handle;
+    namespace typeinfo
+    {
+        
+    }
 
     using universe = handle;
     namespace universe
     {
-        private func create()
+        extern("libjoyecs", "wojeapi_get_edit_universe")
+        func current() : universe;
+
+        extern("libjoyecs", "wojeapi_create_world_in_universe")
+        func create_world(var self:universe) : world;
+
+        namespace editor
         {
-            extern("libjoyecs", "je_editor_get_editor_universe")
-            func _universe():universe;
+            func worlds_list(var self:universe)
+            {
+                extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
+                func _get_all_worlds(var universe:universe, var out_arrs:array<world>) : void;
 
-            var u = _universe();
-            if (!u) std::panic("Failed to get edit-universe.");
+                var result = []:array<world>;
+                _get_all_worlds(self, result);
 
-            return u;
+                return result;
+            }
         }
     }
 
     using world = handle;
     namespace world
     {
-        func create()
-        {
-            extern("libjoyecs", "je_editor_create_world")
-            func _create_world_in_universe(var _universe:universe):world;
-
-            return _create_world_in_universe(universe());
-        }
+        extern("libjoyecs", "wojeapi_close_world")
+        func close(var self:world) : void;
 
         namespace editor
         {
-            func list() : array<world>
+            /* func shared_system_located(var sys:string):world
             {
-                extern("libjoyecs", "je_editor_get_alive_worlds")
-                func _get_all_worlds(var universe:universe, var out_arrs:array<world>) : void;
+                extern("libjoyecs", "je_editor_get_shared_system_attached_system")
+                func _get_shared_system_attached_world(var _universe:universe, var sys:string):world;
 
-                var result = []:array<world>;
-                _get_all_worlds(universe(), result);
-                return result;
-            }
-            func find_world_with_shared_system(var sys:string):world
-            {
-                //extern("libjoyecs", "je_editor_get_shared_system_attached_system")
-               // func _get_shared_system_attached_world(var _universe:universe, var sys:string):world;
-
-                //return _get_shared_system_attached_world(universe(), sys);
-            }
+                return _get_shared_system_attached_world(universe(), sys);
+            }*/
         }
     }
 }

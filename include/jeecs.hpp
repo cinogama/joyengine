@@ -141,9 +141,13 @@ namespace jeecs
 
         inline jeecs::game_world game_world() const noexcept;
 
-        inline void destroy() const noexcept;
+        inline void close() const noexcept;
 
         inline bool valid() const noexcept;
+
+        inline std::string name();
+
+        inline std::string name(const std::string& _name);
     };
 }
 
@@ -531,6 +535,33 @@ JE_API void jegl_uniform_float4(jegl_resource* shader, int location, float x, fl
 JE_API void jegl_uniform_float4x4(jegl_resource* shader, int location, const float(*mat)[4]);
 
 JE_API jegl_thread* jegl_current_thread();
+
+// DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
+#ifdef JE_ENABLE_DEBUG_API
+
+// NOTE: need free the return result by 'je_mem_free'
+// will return all alive world pointer in the universe.
+// [world1, world2,..., nullptr]
+JE_API void** jedbg_get_all_worlds_in_universe(void* _universes);
+
+JE_API const char* jedbg_get_world_name(void* _world);
+
+JE_API void jedbg_set_world_name(void* _world, const char* name);
+
+JE_API void* jedbg_get_shared_system_location_world(void* _universe, const jeecs::typing::type_info* tinfo);
+
+JE_API void jedbg_free_entity_list(jeecs::game_entity** _entity_list);
+
+// NOTE: need free the return result by 'jedbg_free_entity_list'
+JE_API jeecs::game_entity** jedbg_get_all_entity_in_world(void* _world);
+
+// NOTE: need free the return result by 'je_mem_free'
+JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(jeecs::game_entity* _entity);
+
+JE_API void jedbg_set_editor_universe(void* universe_handle);
+
+JE_API void* jedbg_get_editor_universe();
+#endif
 
 WO_FORCE_CAPI_END
 
@@ -1162,7 +1193,7 @@ namespace jeecs
             return gentity;
         }
 
-        inline void remove_entity(const game_entity & entity)
+        inline void remove_entity(const game_entity& entity)
         {
             je_ecs_world_destroy_entity(handle(), &entity);
         }
@@ -1181,7 +1212,7 @@ namespace jeecs
             return handle() != nullptr;
         }
 
-        void destroy() const noexcept
+        void close() const noexcept
         {
             je_ecs_world_destroy(_m_ecs_world_addr);
         }
@@ -1721,7 +1752,7 @@ namespace jeecs
         return jeecs::game_world(je_ecs_world_of_entity(this));
     }
 
-    inline void game_entity::destroy() const noexcept
+    inline void game_entity::close() const noexcept
     {
         game_world().remove_entity(*this);
     }
@@ -3037,21 +3068,34 @@ namespace jeecs
         struct Name
         {
             jeecs::string name;
-            Name()
-            {
-                name = jeecs::basic::make_new_string("[Default entity name]");
-            }
-            void set_name(const std::string& nname)
-            {
-                name = jeecs::basic::make_new_string(nname.c_str());
-            }
         };
     }
+
+    inline std::string game_entity::name()
+    {
+        Editor::Name* c_name = get_component<Editor::Name>();
+        if (c_name)
+            return c_name->name;
+        return "";
+    }
+
+    inline std::string game_entity::name(const std::string& _name)
+    {
+        Editor::Name* c_name = get_component<Editor::Name>();
+        if (!c_name)
+            c_name = add_component<Editor::Name>();
+
+        assert(c_name);
+        return c_name->name = _name;
+    }
+
     namespace enrty
     {
         inline void module_entry()
         {
             // 0. register built-in components
+            jeecs::typing::type_info::of<Editor::Name>("Editor::Name");
+
             jeecs::typing::type_info::of<Transform::LocalPosition>("Transform::LocalPosition");
             jeecs::typing::type_info::of<Transform::LocalRotation>("Transform::LocalRotation");
             jeecs::typing::type_info::of<Transform::LocalScale>("Transform::LocalScale");
@@ -3069,8 +3113,6 @@ namespace jeecs
             jeecs::typing::type_info::of<Camera::OrthoProjection>("Camera::OrthoProjection");
             jeecs::typing::type_info::of<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
             jeecs::typing::type_info::of<Camera::Viewport>("Camera::Viewport");
-
-            jeecs::typing::type_info::of<Editor::Name>("Editor::Name");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();

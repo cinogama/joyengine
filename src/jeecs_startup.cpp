@@ -1,9 +1,6 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#include "jeecs_editor.hpp"
-
-
 extern const char* shader_wrapper_path;
 extern const char* shader_wrapper_src;
 

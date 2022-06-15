@@ -5,9 +5,8 @@
 *
 */
 #define JE_IMPL
+#define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
-
-#include "jeecs_editor.hpp"
 
 #include <iostream>
 
@@ -27,7 +26,7 @@ int main(int argc, char** argv)
     if (1)
     {
         game_universe universe = game_universe::create_universe();
-        ::jedbg_set_editor_universe(universe.handle());
+        jedbg_set_editor_universe(universe.handle());
 
         universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
 
