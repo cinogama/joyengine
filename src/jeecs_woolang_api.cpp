@@ -47,6 +47,26 @@ WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_nil(vm);
 }
 
+// ECS TYPEINFO
+WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args, size_t argc)
+{
+    if (wo_valuetype(args + 0) == WO_INTEGER_TYPE)
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of((jeecs::typing::typeid_t)wo_int(args + 0)));
+    else //if (wo_valuetype(args + 0) == WO_STRING_TYPE)
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of((jeecs::typing::typeid_t)wo_string(args + 0)));
+}
+
+WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    return wo_ret_int(vm, type->m_id);
+}
+
+WO_API wo_api wojeapi_type_name(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    return wo_ret_string(vm, type->m_typename);
+}
 
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
@@ -59,7 +79,17 @@ namespace je
     using typeinfo = handle;
     namespace typeinfo
     {
-        
+        extern("libjoyecs", "wojeapi_type_of")
+        func create(var name:string):typeinfo;
+
+        extern("libjoyecs", "wojeapi_type_of")
+        func create(var id:int):typeinfo;
+
+        extern("libjoyecs", "wojeapi_type_id")
+        func id(var self:typeinfo) : int;
+
+        extern("libjoyecs", "wojeapi_type_name")
+        func name(var self:typeinfo) : string;
     }
 
     using universe = handle;
