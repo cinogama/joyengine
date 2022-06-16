@@ -233,6 +233,12 @@ namespace je
         }
     }
     
+    using component
+    {
+        var type = 0H: typeinfo;
+        var addr = 0H: handle;
+    }
+
     using entity = gchandle;
     namespace entity
     {
@@ -248,7 +254,12 @@ namespace je
             func chunk_info(var self: srting): string;
 
             extern("libjoyecs", "wojeapi_is_entity_valid")
-            func valid(var self: srting): bool;
+            func valid(var self: entity): bool;
+
+            func get_components(var self: entity): array<component>
+            {
+                return []: array<component>;
+            }
         }
     }
 }
