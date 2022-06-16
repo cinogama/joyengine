@@ -2065,23 +2065,17 @@ void jedbg_set_world_name(void* _world, const char* name)
     ((jeecs_impl::ecs_world*)_world)->_name(name);
 }
 
-void* jedbg_get_shared_system_location_world(void* _universe, const jeecs::typing::type_info* tinfo)
+void* jedbg_get_shared_system_attached_world(void* _universe, const jeecs::typing::type_info* tinfo)
 {
     return ((jeecs_impl::ecs_universe*)_universe)->_shared_system_attached_world(tinfo);
 }
 
-void jedbg_free_entity_list(jeecs::game_entity** _entity_list)
+void jedbg_free_entity(jeecs::game_entity* _entity_list)
 {
-    auto* index = _entity_list;
-    while (index)
-    {
-        jeecs::basic::destroy_free(index);
-        ++index;
-    }
-    je_mem_free(_entity_list);
+    jeecs::basic::destroy_free(_entity_list);
 }
 
-jeecs::game_entity** jedbg_get_all_entity_in_world(void* _world)
+jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world)
 {
     jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)_world;
 

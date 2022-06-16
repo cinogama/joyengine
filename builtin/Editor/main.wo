@@ -36,12 +36,12 @@ func Editor_MainMenuBar()
     if (BeginMenu("视图"))
     {
         static var active_worlds_shown = false;
-        static var active_world_entitys_shown = false;
+        static var active_world_entities_shown = false;
         static var active_inspector_shown = false;
 
         if (MenuItem("活动世界列表", ref active_worlds_shown, true) && active_worlds_shown)
             ;
-        if (MenuItem("层级面板", ref active_world_entitys_shown, true) && active_world_entitys_shown)
+        if (MenuItem("层级面板", ref active_world_entities_shown, true) && active_world_entities_shown)
             ;
         if (MenuItem("检视面板", ref active_inspector_shown, true) && active_inspector_shown)
             ;

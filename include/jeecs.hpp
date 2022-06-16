@@ -548,12 +548,12 @@ JE_API const char* jedbg_get_world_name(void* _world);
 
 JE_API void jedbg_set_world_name(void* _world, const char* name);
 
-JE_API void* jedbg_get_shared_system_location_world(void* _universe, const jeecs::typing::type_info* tinfo);
+JE_API void* jedbg_get_shared_system_attached_world(void* _universe, const jeecs::typing::type_info* tinfo);
 
-JE_API void jedbg_free_entity_list(jeecs::game_entity** _entity_list);
+JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
 
-// NOTE: need free the return result by 'jedbg_free_entity_list'
-JE_API jeecs::game_entity** jedbg_get_all_entity_in_world(void* _world);
+// NOTE: need free the return result by 'je_mem_free'(and elem with jedbg_free_entity)
+JE_API jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(jeecs::game_entity* _entity);

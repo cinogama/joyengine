@@ -17,12 +17,10 @@ WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args, size_t a
         jeecs::game_universe(wo_pointer(args + 0)).create_world().handle());
 }
 
-
-// ECS WORLD
-WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_get_shared_system_attached_world(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::game_world(wo_pointer(args + 0)).close();
-    return wo_ret_nil(vm);
+    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+    return wo_ret_pointer(vm, jedbg_get_shared_system_attached_world(wo_pointer(args + 0), type));
 }
 
 WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t argc)
@@ -40,6 +38,62 @@ WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t
     return wo_ret_nil(vm);
 }
 
+// ECS WORLD
+WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world(wo_pointer(args + 0)).close();
+    return wo_ret_nil(vm);
+}
+
+WO_API wo_api wojeapi_get_world_name(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm, jedbg_get_world_name(wo_pointer(args + 0)));
+}
+
+WO_API wo_api wojeapi_set_world_name(wo_vm vm, wo_value args, size_t argc)
+{
+    jedbg_set_world_name(wo_pointer(args + 0), wo_string(args + 1));
+    return wo_ret_nil(vm);
+}
+
+WO_API wo_api wojeapi_attach_shared_system_to_world(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world gworld = wo_pointer(args + 0);
+    gworld.attach_shared_system((const jeecs::typing::type_info*)wo_pointer(args + 1));
+    return wo_ret_nil(vm);
+}
+
+WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value out_arr = args + 1;
+
+    auto entities = jedbg_get_all_entities_in_world(wo_pointer(args + 0));
+    auto entity_iter = entities;
+    while (entity_iter)
+    {
+        wo_set_gchandle(wo_arr_add(out_arr, nullptr), *(entity_iter++), nullptr,
+            [](void* entity_ptr) {
+                jedbg_free_entity((jeecs::game_entity*)entity_ptr);
+            });
+    }
+    je_mem_free(entities);
+
+    return wo_ret_val(vm, out_arr);
+}
+
+// ECS ENTITY
+WO_API wo_api wojeapi_get_entity_name(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    return wo_ret_string(vm, entity->name().c_str());
+}
+
+WO_API wo_api wojeapi_set_entity_name(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    return wo_ret_string(vm, entity->name(wo_string(args + 1)).c_str());
+}
+
 // ECS OTHER
 WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
 {
@@ -53,7 +107,7 @@ WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args, size_t argc)
     if (wo_valuetype(args + 0) == WO_INTEGER_TYPE)
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of((jeecs::typing::typeid_t)wo_int(args + 0)));
     else //if (wo_valuetype(args + 0) == WO_STRING_TYPE)
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of((jeecs::typing::typeid_t)wo_string(args + 0)));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of(wo_string(args + 0)));
 }
 
 WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args, size_t argc)
@@ -80,16 +134,16 @@ namespace je
     namespace typeinfo
     {
         extern("libjoyecs", "wojeapi_type_of")
-        func create(var name:string):typeinfo;
+        func create(var name: string):typeinfo;
 
         extern("libjoyecs", "wojeapi_type_of")
-        func create(var id:int):typeinfo;
+        func create(var id: int):typeinfo;
 
         extern("libjoyecs", "wojeapi_type_id")
-        func id(var self:typeinfo) : int;
+        func id(var self: typeinfo) : int;
 
         extern("libjoyecs", "wojeapi_type_name")
-        func name(var self:typeinfo) : string;
+        func name(var self: typeinfo) : string;
     }
 
     using universe = handle;
@@ -99,11 +153,11 @@ namespace je
         func current() : universe;
 
         extern("libjoyecs", "wojeapi_create_world_in_universe")
-        func create_world(var self:universe) : world;
+        func create_world(var self: universe) : world;
 
         namespace editor
         {
-            func worlds_list(var self:universe)
+            func worlds_list(var self: universe)
             {
                 extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
                 func _get_all_worlds(var universe:universe, var out_arrs:array<world>) : void;
@@ -113,6 +167,9 @@ namespace je
 
                 return result;
             }
+
+            extern("libjoyecs", "wojeapi_get_shared_system_attached_world")
+            func get_shared_system_attached_world(var self:universe, var systype:typeinfo): world;
         }
     }
 
@@ -120,17 +177,61 @@ namespace je
     namespace world
     {
         extern("libjoyecs", "wojeapi_close_world")
-        func close(var self:world) : void;
+        func close(var self: world) : void;
+
+        extern("libjoyecs", "wojeapi_attach_shared_system_to_world")
+        func attach_shared_system(var self: world, var systype: typeinfo): void;
+
+        func rend(var self: world)
+        {
+            // ATTENTION: Built-in components or systems's typeinfo will not unregister
+            //            so I can let them static here, but you should pay attention to
+            //            the life-cycle of custom type / woolang vm.
+            const static var graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
+            return self->attach_shared_system(graphic_typeinfo);
+        } 
+
+        func rend(): world
+        {
+            const static var graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
+            return universe::current()->editor::get_shared_system_attached_world(graphic_typeinfo);
+        }
+    
+        extern("libjoyecs", "wojeapi_close_world")
+        func close(var self: world): void;
 
         namespace editor
         {
-            /* func shared_system_located(var sys:string):world
-            {
-                extern("libjoyecs", "je_editor_get_shared_system_attached_system")
-                func _get_shared_system_attached_world(var _universe:universe, var sys:string):world;
+            extern("libjoyecs", "wojeapi_get_world_name")
+            func name(var self: world): string;
 
-                return _get_shared_system_attached_world(universe(), sys);
-            }*/
+            extern("libjoyecs", "wojeapi_set_world_name")
+            func name(var self: world, var _name: string): void;
+
+            func get_all_entities(var self: world): array<entity>
+            {
+                extern("libjoyecs", "wojeapi_get_all_entities_from_world")
+                func _get_all_entities_from_world(var world: world, var out_result: array<entity>): array<entity>;
+
+                var result = []: array<entity>;
+                return _get_all_entities_from_world(self, result);
+            }
+        }
+    }
+    
+    using entity = gchandle;
+    namespace entity
+    {
+        namespace editor
+        {
+            extern("libjoyecs", "wojeapi_get_entity_name")
+            func name(var self: entity): string;
+
+            extern("libjoyecs", "wojeapi_set_entity_name")
+            func name(var self: entity, var name: string): string;
+
+            extern("libjoyecs", "wojeapi_get_entity_chunk_info")
+            func chunk_info(var self: srting): string;
         }
     }
 }
@@ -138,61 +239,6 @@ namespace je
 namespace je
     namespace editor
 {
-    extern("libjoyecs", "je_editor_exit_enging")
-    func exit():void;
-
-    using universe = handle;
-    using world = handle;
-    using entity = gchandle;
-    namespace world
-    {
-        func get_shared_system_attached_world(var sys:string):world
-        {
-            extern("libjoyecs", "je_editor_get_shared_system_attached_system")
-            func _get_shared_system_attached_world(var _universe:universe, var sys:string):world;
-
-            return _get_shared_system_attached_world(universe(), sys);
-        }
-
-        func rend():world
-        {
-            return get_shared_system_attached_world("jeecs::DefaultGraphicPipelineSystem");
-        }
-        func rend(var self:world):world
-        {
-            self->attach_shared_system("jeecs::DefaultGraphicPipelineSystem");
-            return self;
-        }
-
-        // Member functions
-        extern("libjoyecs", "je_editor_get_world_name")
-        func name(var self:world):string;
-
-        extern("libjoyecs", "je_editor_set_world_name")
-        func name(var self:world, var newname:string):string;
-
-        extern("libjoyecs", "je_editor_remove_world")
-        func close(var self:world):void;
-
-        extern("libjoyecs", "je_editor_attach_shared_system_to_world")
-        func attach_shared_system(var self:world, var system_name:string):void;
-
-        func get_all_entity(var self:world)
-        {
-            extern("libjoyecs", "je_editor_get_all_entity_from_world")
-            func _get_all_entity(var self:world, var out_result:array<entity>):void;
-        
-            var result = []:array<entity>;
-            _get_all_entity(self, result);
-            return result;
-        }
-
-        func top_entitys(var self:world)
-        {
-            return entity::entity_iter(self->get_all_entity(), func(var e:entity){return e->is_top()});
-        }
-        
-    }
     namespace entity
     {
         extern("libjoyecs", "je_editor_try_get_entity_name")
