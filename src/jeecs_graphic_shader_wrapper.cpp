@@ -664,14 +664,14 @@ using float4x4 = gchandle;
 
 using texture2d = gchandle;
 
-protected func _type_is_same<AT, BT>() : bool
+private func _type_is_same<AT, BT>() : bool
 {
     if (func():AT{}() is BT)
         return true;
     return false;
 }
 
-protected func _get_type_enum<ShaderValueT>() : shader_value_type
+private func _get_type_enum<ShaderValueT>() : shader_value_type
 {
     if (_type_is_same:<ShaderValueT, float>())
         return shader_value_type::FLOAT;
@@ -694,13 +694,13 @@ protected func _get_type_enum<ShaderValueT>() : shader_value_type
 }
 
 extern("libjoyecs", "jeecs_shader_apply_operation")
-protected func _apply_operation<ShaderResultT>(
+private func _apply_operation<ShaderResultT>(
     var result_type : shader_value_type,
     var operation_name : string,
     ...
 ) : ShaderResultT;
 
-protected func apply_operation<ShaderResultT>(var operation_name:string, ...) 
+private func apply_operation<ShaderResultT>(var operation_name:string, ...) 
     : ShaderResultT
 {
     return _apply_operation:<ShaderResultT>(
@@ -709,7 +709,7 @@ protected func apply_operation<ShaderResultT>(var operation_name:string, ...)
 }
 
 extern("libjoyecs", "jeecs_shader_create_uniform_variable")
-protected func _uniform<ShaderResultT>(
+private func _uniform<ShaderResultT>(
     var result_type : shader_value_type,
     var uniform_name : string,
     var is_uniform_block : bool
@@ -935,7 +935,7 @@ namespace shader
     extern("libjoyecs", "jeecs_shader_wrap_result_pack")
     private func _wraped_shader(var vertout, var fragout) : shader_wrapper;
 
-    protected extern func generate()
+    private extern func generate()
     {
         var vertex_out = vert(vertex_in());
         var fragment_out = frag(fragment_in(vertex_out));

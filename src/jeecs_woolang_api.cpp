@@ -94,6 +94,20 @@ WO_API wo_api wojeapi_set_entity_name(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, entity->name(wo_string(args + 1)).c_str());
 }
 
+WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args, size_t argc)
+{
+    char buf[64];
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    sprintf(buf, "[%p:%zuv%zu]", entity->_m_in_chunk, entity->_m_id, entity->_m_version);
+    return wo_ret_string(vm, buf);
+}
+
+WO_API wo_api wojeapi_is_entity_valid(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, entity->valid());
+}
+
 // ECS OTHER
 WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
 {
@@ -232,120 +246,12 @@ namespace je
 
             extern("libjoyecs", "wojeapi_get_entity_chunk_info")
             func chunk_info(var self: srting): string;
+
+            extern("libjoyecs", "wojeapi_is_entity_valid")
+            func valid(var self: srting): bool;
         }
     }
 }
-/*
-namespace je
-    namespace editor
-{
-    namespace entity
-    {
-        extern("libjoyecs", "je_editor_try_get_entity_name")
-        func name(var self:entity) :string;
-
-        extern("libjoyecs", "je_editor_set_entity_name")
-        func name(var self:entity, var name:string) :string;
-
-        extern("libjoyecs", "je_editor_get_entity_chunk")
-        func get_chunk(var self:entity) :handle;
-
-        extern("libjoyecs", "je_editor_destroy_entity")
-        func destroy(var self:entity) :void;
-
-        extern("libjoyecs", "je_editor_get_entity_chunk_id")
-        func get_id(var self:entity) :handle;
-
-        extern("libjoyecs", "je_editor_get_entity_version")
-        func get_version(var self:entity) :handle;
-
-        func get_desc(var self:entity)
-        {
-            return [self->get_chunk(), self->get_id(), self->get_version()];
-        }
-        
-        func get_desc_str(var self:entity)
-        {
-            var result = self->get_desc();
-            return F"[{result[0]}:{result[1]}v{result[2]}]";
-        }
-
-        extern("libjoyecs", "je_editor_entity_is_child")
-        func is_child(var parent_self:entity, var child_or_not:entity):bool;
-
-        extern("libjoyecs", "je_editor_entity_is_top")
-        func is_top(var parent_self:entity):bool;
-
-        func select_all_child(var self:entity, var childs:array<entity>)
-        {
-            var result = []:array<entity>;
-            for (var entity : childs)
-                if (self->is_child(entity))
-                    result->add(entity);
-            return result;
-        }
-
-        using entity_iter
-        {
-            var m_all_entity_list = []  : array<entity>;
-            var m_curretn_iter = nil    : array::iterator<entity>;
-            var m_check_func = nil      : bool(entity);
-            var m_current_entity = nil  : entity;
-        
-            func create(var entities:array<entity>, var judge:bool(entity))
-            {
-                var self = new();
-                self.m_all_entity_list = entities;
-                self.m_curretn_iter = entities->iter();
-                self.m_check_func = judge;
-                return self;
-            }
-
-            func iter(var self:entity_iter)
-            {
-                return self;
-            }
-        
-            func next(var self:entity_iter, ref out_iter:entity_iter, ref out_entity:entity):bool
-            {
-                while (self.m_curretn_iter->next(0, ref out_entity))
-                {
-                    if (self.m_check_func(out_entity))
-                    {
-                        self.m_current_entity = out_entity;
-                        out_iter = self;
-                        return true;
-                    }
-                }
-                return false;
-            }
-
-            func childs(var self:entity_iter)
-            {
-                var current_entity = self.m_current_entity;
-                return entity_iter(self.m_all_entity_list, 
-                                    func(var e:entity)
-                                    {
-                                        if (current_entity->is_child(e)) return true;
-                                        return false;
-                                    });
-            }
-        }
-
-        func get_all_components(var self : entity)
-        {
-            extern("libjoyecs", "je_editor_get_all_components_from_entity")
-            func _get_all_components_from_entity(var e:entity, var out_result:array<string>):void;
-            
-            var result = []:array<string>;
-            _get_all_components_from_entity(self, result);
-            return result;
-        }
-
-        extern("libjoyecs", "je_editor_check_entity_is_valid")
-        func valid(var self : entity):bool;
-    }
-}*/
 
 )";
 
