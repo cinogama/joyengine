@@ -108,6 +108,28 @@ WO_API wo_api wojeapi_is_entity_valid(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, entity->valid());
 }
 
+WO_API wo_api wojeapi_get_all_components_types_from_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    wo_value out_arr = args + 1;
+
+    auto types = jedbg_get_all_components_from_entity(entity);
+    auto typeindex = types;
+    while (typeindex)
+        wo_set_pointer(wo_arr_add(out_arr, nullptr), (void*)*(typeindex++));
+    je_mem_free(types);
+
+    return wo_ret_val(vm, out_arr);
+}
+
+WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    return wo_ret_pointer(vm, je_ecs_world_entity_get_component(entity,
+                    (const jeecs::typing::type_info*)wo_pointer(args + 1)));
+}
+
 // ECS OTHER
 WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
 {
@@ -142,32 +164,32 @@ import woo.std;
 namespace je
 {
     extern("libjoyecs", "wojeapi_exit")
-    func exit():void;
+    func exit(): void;
 
     using typeinfo = handle;
     namespace typeinfo
     {
         extern("libjoyecs", "wojeapi_type_of")
-        func create(var name: string):typeinfo;
+        func create(var name: string): typeinfo;
 
         extern("libjoyecs", "wojeapi_type_of")
-        func create(var id: int):typeinfo;
+        func create(var id: int): typeinfo;
 
         extern("libjoyecs", "wojeapi_type_id")
-        func id(var self: typeinfo) : int;
+        func id(var self: typeinfo): int;
 
         extern("libjoyecs", "wojeapi_type_name")
-        func name(var self: typeinfo) : string;
+        func name(var self: typeinfo): string;
     }
 
     using universe = handle;
     namespace universe
     {
         extern("libjoyecs", "wojeapi_get_edit_universe")
-        func current() : universe;
+        func current(): universe;
 
         extern("libjoyecs", "wojeapi_create_world_in_universe")
-        func create_world(var self: universe) : world;
+        func create_world(var self: universe): world;
 
         namespace editor
         {
@@ -232,12 +254,6 @@ namespace je
             }
         }
     }
-    
-    using component
-    {
-        var type = 0H: typeinfo;
-        var addr = 0H: handle;
-    }
 
     using entity = gchandle;
     namespace entity
@@ -251,15 +267,31 @@ namespace je
             func name(var self: entity, var name: string): string;
 
             extern("libjoyecs", "wojeapi_get_entity_chunk_info")
-            func chunk_info(var self: srting): string;
+            func chunk_info(var self: string): string;
 
             extern("libjoyecs", "wojeapi_is_entity_valid")
             func valid(var self: entity): bool;
 
-            func get_components(var self: entity): array<component>
+            func get_components_type(var self: entity): array<typeinfo>
             {
-                return []: array<component>;
+                extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")
+                func _get_components_type_from_entity(
+                    var entity: entity, var out_result: array<typeinfo>): array<typeinfo>;
+
+                return _get_components_type_from_entity(self, []: array<typeinfo>);
             }
+
+            extern("libjoyecs", "wojeapi_get_component_from_entity")
+            func get_component(var self: entity, var type: typeinfo): component;
+        }
+    }
+
+    using component = handle;
+    namespace component
+    {
+        namespace editor
+        {
+            
         }
     }
 }
