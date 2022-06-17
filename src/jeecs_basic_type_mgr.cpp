@@ -60,6 +60,10 @@ namespace jeecs_impl
             if (fnd_with_name != _m_type_name_id_mapping.end())
             {
                 *out_typeid = fnd_with_name->second;
+
+                // Register alias-hash
+                _m_type_hash_id_mapping[_hash] = *out_typeid;
+                jeecs::debug::log_warn("Type '%s' with different type-hash. alias-hash has been created.");
                 return false;
             }
 

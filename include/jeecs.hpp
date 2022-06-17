@@ -3104,7 +3104,7 @@ namespace jeecs
             jeecs::typing::type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
             jeecs::typing::type_info::of<Transform::Translation>("Transform::Translation");
 
-            jeecs::typing::type_info::of<Renderer::Rendqueue>("Renderer::Shape");
+            jeecs::typing::type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
             jeecs::typing::type_info::of<Renderer::Shape>("Renderer::Shape");
             jeecs::typing::type_info::of<Renderer::Material>("Renderer::Material");
 

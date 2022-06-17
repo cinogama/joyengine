@@ -881,30 +881,30 @@ namespace float4
     func wxy(var self:float4) : float3{return apply_operation:<float3>(".wxy", self);}
     func wyx(var self:float4) : float3{return apply_operation:<float3>(".wyx", self);}
 
-    func xyzw(var self:float4) : float4{return apply_operation:<float3>(".xyzw", self);}
-    func xzyw(var self:float4) : float4{return apply_operation:<float3>(".xzyw", self);}
-    func yxzw(var self:float4) : float4{return apply_operation:<float3>(".yxzw", self);}
-    func yzxw(var self:float4) : float4{return apply_operation:<float3>(".yzxw", self);}
-    func zxyw(var self:float4) : float4{return apply_operation:<float3>(".zxyw", self);}
-    func zyxw(var self:float4) : float4{return apply_operation:<float3>(".zyxw", self);}
-    func wyzx(var self:float4) : float4{return apply_operation:<float3>(".wyzx", self);}
-    func wzyx(var self:float4) : float4{return apply_operation:<float3>(".wzyx", self);}
-    func ywzx(var self:float4) : float4{return apply_operation:<float3>(".ywzx", self);}
-    func yzwx(var self:float4) : float4{return apply_operation:<float3>(".yzwx", self);}
-    func zwyx(var self:float4) : float4{return apply_operation:<float3>(".zwyx", self);}
-    func zywx(var self:float4) : float4{return apply_operation:<float3>(".zywx", self);}
-    func xwzy(var self:float4) : float4{return apply_operation:<float3>(".xwzy", self);}
-    func xzwy(var self:float4) : float4{return apply_operation:<float3>(".xzwy", self);}
-    func wxzy(var self:float4) : float4{return apply_operation:<float3>(".wxzy", self);}
-    func wzxy(var self:float4) : float4{return apply_operation:<float3>(".wzxy", self);}
-    func zxwy(var self:float4) : float4{return apply_operation:<float3>(".zxwy", self);}
-    func zwxy(var self:float4) : float4{return apply_operation:<float3>(".zwxy", self);}
-    func xywz(var self:float4) : float4{return apply_operation:<float3>(".xywz", self);}
-    func xwyz(var self:float4) : float4{return apply_operation:<float3>(".xwyz", self);}
-    func yxwz(var self:float4) : float4{return apply_operation:<float3>(".yxwz", self);}
-    func ywxz(var self:float4) : float4{return apply_operation:<float3>(".ywxz", self);}
-    func wxyz(var self:float4) : float4{return apply_operation:<float3>(".wxyz", self);}
-    func wyxz(var self:float4) : float4{return apply_operation:<float3>(".wyxz", self);}
+    func xyzw(var self:float4) : float4{return apply_operation:<float4>(".xyzw", self);}
+    func xzyw(var self:float4) : float4{return apply_operation:<float4>(".xzyw", self);}
+    func yxzw(var self:float4) : float4{return apply_operation:<float4>(".yxzw", self);}
+    func yzxw(var self:float4) : float4{return apply_operation:<float4>(".yzxw", self);}
+    func zxyw(var self:float4) : float4{return apply_operation:<float4>(".zxyw", self);}
+    func zyxw(var self:float4) : float4{return apply_operation:<float4>(".zyxw", self);}
+    func wyzx(var self:float4) : float4{return apply_operation:<float4>(".wyzx", self);}
+    func wzyx(var self:float4) : float4{return apply_operation:<float4>(".wzyx", self);}
+    func ywzx(var self:float4) : float4{return apply_operation:<float4>(".ywzx", self);}
+    func yzwx(var self:float4) : float4{return apply_operation:<float4>(".yzwx", self);}
+    func zwyx(var self:float4) : float4{return apply_operation:<float4>(".zwyx", self);}
+    func zywx(var self:float4) : float4{return apply_operation:<float4>(".zywx", self);}
+    func xwzy(var self:float4) : float4{return apply_operation:<float4>(".xwzy", self);}
+    func xzwy(var self:float4) : float4{return apply_operation:<float4>(".xzwy", self);}
+    func wxzy(var self:float4) : float4{return apply_operation:<float4>(".wxzy", self);}
+    func wzxy(var self:float4) : float4{return apply_operation:<float4>(".wzxy", self);}
+    func zxwy(var self:float4) : float4{return apply_operation:<float4>(".zxwy", self);}
+    func zwxy(var self:float4) : float4{return apply_operation:<float4>(".zwxy", self);}
+    func xywz(var self:float4) : float4{return apply_operation:<float4>(".xywz", self);}
+    func xwyz(var self:float4) : float4{return apply_operation:<float4>(".xwyz", self);}
+    func yxwz(var self:float4) : float4{return apply_operation:<float4>(".yxwz", self);}
+    func ywxz(var self:float4) : float4{return apply_operation:<float4>(".ywxz", self);}
+    func wxyz(var self:float4) : float4{return apply_operation:<float4>(".wxyz", self);}
+    func wyxz(var self:float4) : float4{return apply_operation:<float4>(".wyxz", self);}
     
 }
 namespace float4x4
