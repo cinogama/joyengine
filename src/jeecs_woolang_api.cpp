@@ -31,7 +31,7 @@ WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t
     auto result = jedbg_get_all_worlds_in_universe(universe);
     {
         auto worldlist = result;
-        while (worldlist)
+        while (*worldlist)
             wo_set_pointer(wo_arr_add(out_array, nullptr), *(worldlist++));
     }
     je_mem_free(result);
@@ -69,7 +69,7 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
 
     auto entities = jedbg_get_all_entities_in_world(wo_pointer(args + 0));
     auto entity_iter = entities;
-    while (entity_iter)
+    while (*entity_iter)
     {
         wo_set_gchandle(wo_arr_add(out_arr, nullptr), *(entity_iter++), nullptr,
             [](void* entity_ptr) {
@@ -115,7 +115,7 @@ WO_API wo_api wojeapi_get_all_components_types_from_entity(wo_vm vm, wo_value ar
 
     auto types = jedbg_get_all_components_from_entity(entity);
     auto typeindex = types;
-    while (typeindex)
+    while (*typeindex)
         wo_set_pointer(wo_arr_add(out_arr, nullptr), (void*)*(typeindex++));
     je_mem_free(types);
 
@@ -127,8 +127,69 @@ WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args, size_t 
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
     return wo_ret_pointer(vm, je_ecs_world_entity_get_component(entity,
-                    (const jeecs::typing::type_info*)wo_pointer(args + 1)));
+        (const jeecs::typing::type_info*)wo_pointer(args + 1)));
 }
+
+WO_API wo_api wojeapi_is_top_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    return wo_ret_bool(vm, nullptr == entity->get_component<jeecs::Transform::LocalToParent>());
+}
+
+WO_API wo_api wojeapi_is_child_of_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    jeecs::game_entity* parent = (jeecs::game_entity*)wo_pointer(args + 1);
+
+    jeecs::Transform::LocalToParent* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
+    jeecs::Transform::ChildAnchor* archor = parent->get_component<jeecs::Transform::ChildAnchor>();
+
+    if (l2p && archor)
+    {
+        return wo_ret_bool(vm, l2p->parent_uid == archor->anchor_uid);
+    }
+    return wo_ret_bool(vm, false);
+}
+
+// ECS COMPONENT
+
+struct component_member_iter
+{
+    void* component_addr;
+    const jeecs::typing::member_info* iter;
+
+};
+WO_API wo_api wojeapi_iter_components_member(wo_vm vm, wo_value args, size_t argc)
+{
+    void* component_addr = wo_pointer(args + 0);
+    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+
+    component_member_iter* iter = new component_member_iter;
+    iter->component_addr = component_addr;
+    iter->iter = component_type->m_member_types;
+
+    return wo_ret_gchandle(vm, iter, nullptr, [](void* ptr) {delete (component_member_iter*)ptr; });
+}
+WO_API wo_api wojeapi_member_iterator_next(wo_vm vm, wo_value args, size_t argc)
+{
+    //func next(var self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value): bool;
+    component_member_iter* iter = (component_member_iter*)wo_pointer(args + 0);
+    wo_value out_name = args + 1;
+    wo_value out_type = args + 2;
+    wo_value out_addr = args + 3;
+
+    if (nullptr == iter->iter)
+        return wo_ret_bool(vm, false);
+
+    wo_set_string(out_name, iter->iter->m_member_name);
+    wo_set_pointer(out_type, (void*)iter->iter->m_member_type);
+    wo_set_handle(out_addr, (wo_handle_t)(iter->iter->m_member_offset + (intptr_t)iter->component_addr));
+    iter->iter = iter->iter->m_next_member;
+
+    return wo_ret_bool(vm, true);
+}
+
 
 // ECS OTHER
 WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
@@ -252,6 +313,11 @@ namespace je
                 var result = []: array<entity>;
                 return _get_all_entities_from_world(self, result);
             }
+
+            func top_entity_iter(var self: world): entity::editor::entity_iter
+            {
+                return entity::editor::entity_iter(self->get_all_entities());
+            }
         }
     }
 
@@ -267,23 +333,125 @@ namespace je
             func name(var self: entity, var name: string): string;
 
             extern("libjoyecs", "wojeapi_get_entity_chunk_info")
-            func chunk_info(var self: string): string;
+            func chunk_info(var self: entity): string;
 
             extern("libjoyecs", "wojeapi_is_entity_valid")
             func valid(var self: entity): bool;
 
-            func get_components_type(var self: entity): array<typeinfo>
+            func get_components_types(var self: entity): array<typeinfo>
             {
                 extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")
-                func _get_components_type_from_entity(
+                func _get_components_types_from_entity(
                     var entity: entity, var out_result: array<typeinfo>): array<typeinfo>;
 
-                return _get_components_type_from_entity(self, []: array<typeinfo>);
+                return _get_components_types_from_entity(self, []: array<typeinfo>);
             }
 
             extern("libjoyecs", "wojeapi_get_component_from_entity")
             func get_component(var self: entity, var type: typeinfo): component;
+
+            extern("libjoyecs", "wojeapi_is_top_entity")
+            func is_top(var self: entity): bool;
+
+            extern("libjoyecs", "wojeapi_is_child_of_entity")
+            func is_child_of(var self: entity, var parent: entity): bool;
+
+            using entity_iter
+            {
+                var m_cur_iter = nil: array::iterator<entity>;
+                var m_judge_func = nil: bool(entity);
+                var m_current_entity = nil: entity;
+
+                var m_all_entity_list = nil: array<entity>;
+                var m_not_top_entities = nil: array<entity>;
+                var m_outed_entities = nil: array<entity>;
+
+                private func create(var entitys: array<entity>)
+                {
+                    // walk throw all 'top' entity
+                    var self = new();
+                    self.m_all_entity_list = entitys;
+                    self.m_cur_iter = entitys->iter();
+                    self.m_not_top_entities = []: array<entity>;
+                    self.m_outed_entities = []: array<entity>;
+                    self.m_judge_func = func(var e: entity)
+                                        {
+                                            var result = e->editor::is_top();
+                                            if (!result)
+                                                self.m_not_top_entities->add(e);
+                                            return result
+                                        };
+                    return self;
+                }
+                func childs(var self: entity_iter)
+                {
+                    var chiter = new();
+                    chiter.m_all_entity_list = self.m_all_entity_list;
+                    chiter.m_cur_iter = self.m_all_entity_list->iter();
+                    chiter.m_outed_entities = self.m_outed_entities;
+
+                    var parent_entity = self.m_current_entity;
+                    chiter.m_judge_func = func(var e: entity)
+                                          {
+                                                return e->is_child_of(parent_entity);
+                                          };
+                    return chiter;
+                }
+                func iter(var self: entity_iter)
+                {
+                    return self;
+                }
+                func next(var self: entity_iter, ref out_iter: entity_iter,ref out_entity: entity): bool
+                {
+                    while (self.m_cur_iter->next(0, ref out_entity))
+                    {
+                        if (self.m_judge_func(out_entity))
+                        {
+                            self.m_current_entity = out_entity;
+                            out_iter = self;
+                            self.m_outed_entities->add(out_entity);
+                            return true;
+                        }
+                    }
+                    if (self.m_not_top_entities)
+                    {
+                    continue_find_not_displayed_entity@
+                        while (self.m_not_top_entities->len())
+                        {
+                            var top = self.m_not_top_entities[0];
+                            self.m_not_top_entities->remove(0);
+
+                            if (self.m_outed_entities->find(top) == -1)
+                            {
+                                for (var entity: self.m_all_entity_list)
+                                {
+                                    if (top != entity && top->is_child_of(entity))
+                                        // Parent finded, it's not a orphan entity.
+                                        continue continue_find_not_displayed_entity;
+                                }
+
+                                // Current entity have jeecs::Transform::LocalToParent,
+                                // but it's LocalToParent donot point to any other entity;
+                                self.m_current_entity = top;
+                                out_iter = self;
+                                out_entity = top;
+                                self.m_outed_entities->add(top);
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
+            }
         }
+    }
+
+    using native_value = handle;
+    namespace native_value
+    {
+        //func int(var self: native_value): int;
+        //func float(var self: native_value): real;
+        //func double(var self: native_value): real;
     }
 
     using component = handle;
@@ -291,7 +459,20 @@ namespace je
     {
         namespace editor
         {
-            
+            using member_iterator = gchandle;
+            namespace member_iterator
+            {
+                func iter(var self: member_iterator)
+                {
+                    return ref self;
+                }
+
+                extern("libjoyecs", "wojeapi_member_iterator_next")
+                func next(var self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value): bool;
+            }
+
+            extern("libjoyecs", "wojeapi_iter_components_member")
+            func iter_member(var self: component, var type: typeinfo) : member_iterator;
         }
     }
 }

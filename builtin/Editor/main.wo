@@ -39,10 +39,10 @@ func Editor_MainMenuBar()
         static var active_world_entities_shown = false;
         static var active_inspector_shown = false;
 
-        if (MenuItem("活动世界列表", ref active_worlds_shown, true) && active_worlds_shown)
-            ;
+        if (MenuItem("世界列表", ref active_worlds_shown, true) && active_worlds_shown)
+            launch(editor::WorldList::show, ref active_worlds_shown);
         if (MenuItem("层级面板", ref active_world_entities_shown, true) && active_world_entities_shown)
-            ;
+            launch(editor::EntityList::show, ref active_world_entities_shown);
         if (MenuItem("检视面板", ref active_inspector_shown, true) && active_inspector_shown)
             ;
 
@@ -90,24 +90,44 @@ func Editor_Welcome()
 je::gui::launch(Editor_MainMenuBar);
 je::gui::launch(Editor_Welcome);
 
-/*
-func Editor_Test()
+/////////////////////////////////////////////////////////////
+
+func test_components()
 {
     using je::gui;
+
     var opened = true;
 
     Begin("测试窗口", 0, ref opened);
-        if (Button("关闭"))
-            opened = false;
+        if (Button("测试组件反射"))
+        {
+            std::println("呜呜呜 我被点了");
 
-    static var ListboxSelectItem = -1;
-    if (ListBox("##", ["AAA", "BBBBBBBB", "CCCC", "DDDDDDD", "EEE", "FFF"], ref ListboxSelectItem, 2))
-    {
+            var all_worlds = je::universe::current()->editor::worlds_list();
+            for (var world : all_worlds)
+            {
+                std::println(F"在世界{world->editor::name()}中：");
 
-    }
+                var all_entities = world->editor::get_all_entities();
+                for (var entity : all_entities)
+                {
+                    std::println(F"  在实体{entity->editor::chunk_info()}中：");
+
+                    var all_components_types = entity->editor::get_components_types();
+                    for (var component_type : all_components_types)
+                    {
+                        std::println(F"    在组件{component_type->name()}中：");
+                        var component = entity->editor::get_component(component_type);
+                        for (var name, type, addr : component->editor::iter_member(component_type))
+                        {
+                            std::println(F"      成员{name}: {type->name()}");
+                        }
+                    }
+                }
+            }
+        }
     End();
 
     return !opened;
 }
-je::gui::launch(Editor_Test);
-*/
+je::gui::launch(test_components);

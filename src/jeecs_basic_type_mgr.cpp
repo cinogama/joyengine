@@ -43,7 +43,7 @@ namespace jeecs_impl
             jeecs::typing::destruct_func_t  _destructor,
             jeecs::typing::copy_func_t      _copier,
             jeecs::typing::move_func_t      _mover,
-            bool                            _is_system)
+            je_typing_class                 _typecls)
         {
             std::lock_guard g1(_m_type_holder_mx);
 
@@ -77,7 +77,8 @@ namespace jeecs_impl
             tinfo->m_destructor = _destructor;
             tinfo->m_copier = _copier;
             tinfo->m_mover = _mover;
-            tinfo->m_is_system = _is_system;
+            tinfo->m_type_class = _typecls;
+            tinfo->m_member_types = nullptr;
 
             // Ok Find a place to store~
             auto holder_fnd = std::find(
@@ -124,6 +125,43 @@ namespace jeecs_impl
             return nullptr;
         }
 
+        // ATTENTION: This function do not promise for thread safe.
+        void register_member_by_id(jeecs::typing::typeid_t classid,
+            const jeecs::typing::type_info* _membertype,
+            const char* _member_name,
+            ptrdiff_t _member_offset)
+        {
+            jeecs::typing::member_info* meminfo = jeecs::basic::create_new<jeecs::typing::member_info>();
+
+            auto* classtype = get_info_by_id(classid);
+
+            meminfo->m_class_type = classtype;
+            meminfo->m_member_type = _membertype;
+            meminfo->m_member_name = jeecs::basic::make_new_string(_member_name);
+            meminfo->m_member_offset = _member_offset;
+            meminfo->m_next_member = nullptr;
+
+            auto** m_new_member_ptr = const_cast<jeecs::typing::member_info**>(&classtype->m_member_types);
+            while (*m_new_member_ptr)
+                m_new_member_ptr = &((*m_new_member_ptr)->m_next_member);
+
+            *m_new_member_ptr = meminfo;
+        }
+
+        void unregister_member_info(jeecs::typing::type_info* classtype)
+        {
+            auto* meminfo = classtype->m_member_types;
+            while (meminfo)
+            {
+                auto* curmem = const_cast<jeecs::typing::member_info*>(meminfo);
+                meminfo = meminfo->m_next_member;
+
+                je_mem_free((void*)curmem->m_member_name);
+
+                jeecs::basic::destroy_free(curmem);
+            }
+        }
+
         void unregister_by_id(jeecs::typing::typeid_t id)
         {
             if (id && id != jeecs::typing::INVALID_TYPE_ID)
@@ -137,9 +175,13 @@ namespace jeecs_impl
                     _m_type_hash_id_mapping.erase(typeinfo->m_hash);
                     _m_type_name_id_mapping.erase(typeinfo->m_typename);
                     je_mem_free((void*)typeinfo->m_typename);
+
+                    unregister_member_info(typeinfo);
                 }
             }
         }
+
+
     };
 }
 
@@ -152,7 +194,7 @@ bool je_typing_find_or_register(
     jeecs::typing::destruct_func_t  _destructor,
     jeecs::typing::copy_func_t      _copier,
     jeecs::typing::move_func_t      _mover,
-    bool                            _is_system)
+    je_typing_class                 _typecls)
 {
     return
         jeecs_impl::type_info_holder::holder()->register_type(
@@ -164,7 +206,7 @@ bool je_typing_find_or_register(
             _destructor,
             _copier,
             _mover,
-            _is_system);
+            _typecls);
 }
 
 const jeecs::typing::type_info* je_typing_get_info_by_id(
@@ -183,4 +225,14 @@ void je_typing_unregister(
     jeecs::typing::typeid_t _id)
 {
     jeecs_impl::type_info_holder::holder()->unregister_by_id(_id);
+}
+
+void je_register_member(
+    jeecs::typing::typeid_t         _classid,
+    const jeecs::typing::type_info* _membertype,
+    const char* _member_name,
+    ptrdiff_t                       _member_offset)
+{
+    jeecs_impl::type_info_holder::holder()
+        ->register_member_by_id(_classid, _membertype, _member_name, _member_offset);
 }

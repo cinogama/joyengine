@@ -29,6 +29,7 @@
 #include <cmath>
 #include <random>
 #include <thread>
+#include <type_traits>
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -190,6 +191,12 @@ JE_API void je_finish(void);
 #define JE_LOG_FATAL 4
 JE_API void je_log(int level, const char* format, ...);
 
+typedef enum je_typing_class
+{
+    JE_BASIC_TYPE,
+    JE_COMPONENT,
+    JE_SYSTEM,
+} je_typing_class;
 // You should promise: different type should have different name.
 JE_API bool je_typing_find_or_register(
     jeecs::typing::typeid_t* out_typeid,
@@ -200,7 +207,7 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::destruct_func_t  _destructor,
     jeecs::typing::copy_func_t      _copier,
     jeecs::typing::move_func_t      _mover,
-    bool                            _is_system);
+    je_typing_class                 _typecls);
 
 JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
     jeecs::typing::typeid_t _id);
@@ -210,6 +217,12 @@ JE_API const jeecs::typing::type_info* je_typing_get_info_by_name(
 
 JE_API void je_typing_unregister(
     jeecs::typing::typeid_t _id);
+
+JE_API void je_register_member(
+    jeecs::typing::typeid_t         _classid,
+    const jeecs::typing::type_info* _membertype,
+    const char* _member_name,
+    ptrdiff_t                       _member_offset);
 
 ////////////////////// ARCH //////////////////////
 
@@ -896,6 +909,34 @@ namespace jeecs
 
     namespace typing
     {
+#define JERefRegsiter zzz_jeref_register 
+
+        template<typename T, typename VoidT = void>
+        struct sfinae_has_ref_register : std::false_type
+        {
+            static_assert(std::is_void<VoidT>::value);
+        };
+        template<typename T>
+        struct sfinae_has_ref_register<T, std::void_t<decltype(&T::JERefRegsiter)>> : std::true_type
+        {
+        };
+        template<typename T>
+        struct sfinae_has_ref_register<T, std::void_t<typename T::JERefRegsiter>> : std::true_type
+        {
+        };
+
+        template<typename T, typename VoidT = void>
+        struct sfinae_is_static_ref_register_function : std::false_type
+        {
+            static_assert(std::is_void<VoidT>::value);
+        };
+        template<typename T>
+        struct sfinae_is_static_ref_register_function<T, std::void_t<decltype(T::JERefRegsiter())>> : std::true_type
+        {
+        };
+
+        struct member_info;
+
         struct type_info
         {
             typeid_t    m_id;
@@ -910,8 +951,9 @@ namespace jeecs
             copy_func_t         m_copier;
             move_func_t         m_mover;
 
-            bool                m_is_system;
+            je_typing_class     m_type_class;
 
+            const member_info* m_member_types;
         private:
             inline static std::atomic_bool      _m_shutdown_flag = false;
 
@@ -933,9 +975,24 @@ namespace jeecs
                 }
 
                 template<typename T>
-                typeid_t _register_or_get_type_id(const char* _typename)
+                typeid_t _register_or_get_type_id(const char* _typename, bool* first_init)
                 {
+                    bool is_basic_type = false;
+                    if (nullptr == _typename)
+                    {
+                        // If _typename is nullptr, we will not treat it as a component
+                        _typename = typeid(T).name();
+                        is_basic_type = true;
+                    }
+
+                    je_typing_class current_type = is_basic_type
+                        ? je_typing_class::JE_BASIC_TYPE
+                        : (std::is_base_of<game_system, T>::value
+                            ? je_typing_class::JE_SYSTEM
+                            : je_typing_class::JE_COMPONENT);
+
                     typeid_t id = INVALID_TYPE_ID;
+
                     if (je_typing_find_or_register(
                         &id,
                         _typename,
@@ -945,12 +1002,15 @@ namespace jeecs
                         basic::default_functions<T>::destructor,
                         basic::default_functions<T>::copier,
                         basic::default_functions<T>::mover,
-                        std::is_base_of<game_system, T>::value))
+                        current_type))
                     {
+                        *first_init = true;
                         // store to list for unregister
                         std::lock_guard g1(_m_self_registed_typeid_mx);
                         _m_self_registed_typeid.push_back(id);
                     }
+                    else
+                        *first_init = false;
                     return id;
                 }
             };
@@ -965,9 +1025,22 @@ namespace jeecs
             inline static typeid_t id(const char* _typename = typeid(T).name())
             {
                 assert(!_m_shutdown_flag);
-                static typeid_t registed_typeid = _type_guard._register_or_get_type_id<T>(_typename);
+                bool first_init = false;
+                static typeid_t registed_typeid = _type_guard._register_or_get_type_id<T>(_typename, &first_init);
+                if (first_init)
+                {
+                    if constexpr (sfinae_has_ref_register<T>::value)
+                    {
+                        if constexpr (sfinae_is_static_ref_register_function<T>::value)
+                            T::JERefRegsiter();
+                        else
+                            static_assert(sfinae_is_static_ref_register_function<T>::value,
+                                "T::JERefRegsiter must be static & callable with no arguments.");
+                    }
+                }
                 return registed_typeid;
             }
+
             template<typename T>
             inline static const type_info* of(const char* _typename = typeid(T).name())
             {
@@ -1004,7 +1077,37 @@ namespace jeecs
             {
                 m_mover(dst_addr, src_addr);
             }
+
+            inline bool is_system() const noexcept
+            {
+                return m_type_class == je_typing_class::JE_SYSTEM;
+            }
+            inline bool is_component() const noexcept
+            {
+                return m_type_class == je_typing_class::JE_COMPONENT;
+            }
         };
+
+        struct member_info
+        {
+            const type_info* m_class_type;
+
+            const char* m_member_name;
+            const type_info* m_member_type;
+            ptrdiff_t m_member_offset;
+
+            member_info* m_next_member;
+        };
+
+        template<typename ClassT, typename MemberT>
+        inline void register_member(MemberT(ClassT::* _memboffset), const char* membname)
+        {
+            const type_info* membt = type_info::of<MemberT>(nullptr);
+            assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
+
+            ptrdiff_t member_offset = *reinterpret_cast<ptrdiff_t*>(&_memboffset);
+            je_register_member(type_info::id<ClassT>(), membt, membname, member_offset);
+        }
     }
 
     struct game_system_function
@@ -1165,7 +1268,7 @@ namespace jeecs
 
         inline void* add_system(const typing::type_info* sys_type)
         {
-            assert(sys_type->m_is_system);
+            assert(sys_type->is_system());
             return je_ecs_universe_instance_system(
                 je_ecs_world_in_universe(handle()),
                 handle(),
@@ -1691,7 +1794,7 @@ namespace jeecs
 
         inline void* add_shared_system(const typing::type_info* typeinfo)
         {
-            assert(typeinfo->m_is_system);
+            assert(typeinfo->is_system());
             return je_ecs_universe_instance_system(
                 handle(),
                 nullptr,
@@ -1733,13 +1836,17 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::get_component()const noexcept
     {
-        return (T*)je_ecs_world_entity_get_component(this, typing::type_info::of<T>());
+        auto* type = typing::type_info::of<T>();
+        assert(type->is_component());
+        return (T*)je_ecs_world_entity_get_component(this, type);
     }
 
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
-        return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, typing::type_info::of<T>());
+        auto* type = typing::type_info::of<T>();
+        assert(type->is_component());
+        return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, type);
     }
 
     inline bool game_entity::valid() const noexcept
@@ -2942,19 +3049,37 @@ namespace jeecs
         struct LocalPosition
         {
             math::vec3 pos;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&LocalPosition::pos, "pos");
+            }
         };
         struct LocalRotation
         {
             math::quat rot;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&LocalRotation::rot, "rot");
+            }
         };
         struct LocalScale
         {
             math::vec3 scale = { 1.0f, 1.0f, 1.0f };
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&LocalScale::scale, "scale");
+            }
         };
 
         struct ChildAnchor
         {
             typing::uid_t anchor_uid = je_uid_generate();
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&ChildAnchor::anchor_uid, "anchor_uid");
+            }
         };
 
         struct LocalToParent
@@ -2964,6 +3089,11 @@ namespace jeecs
             math::quat rot;
 
             typing::uid_t parent_uid;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&LocalToParent::parent_uid, "parent_uid");
+            }
         };
 
         struct LocalToWorld
@@ -3022,6 +3152,12 @@ namespace jeecs
         struct Rendqueue
         {
             int rend_queue = 0;
+            using a = decltype(&Rendqueue::rend_queue);
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Rendqueue::rend_queue, "rend_queue");
+            }
         };
 
         struct Shape
@@ -3040,6 +3176,12 @@ namespace jeecs
         {
             float znear = 0.3f;
             float zfar = 1000.0f;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Clip::znear, "znear");
+                typing::register_member(&Clip::zfar, "zfar");
+            }
         };
 
         struct Projection
@@ -3051,16 +3193,28 @@ namespace jeecs
         struct OrthoProjection
         {
             float scale = 1.0f;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&OrthoProjection::scale, "scale");
+            }
         };
 
         struct PerspectiveProjection
         {
             float angle = 75.0f;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&PerspectiveProjection::angle, "angle");
+            }
         };
 
         struct Viewport
         {
             math::vec4 viewport = math::vec4(0, 0, 1, 1);
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Viewport::viewport, "viewport");
+            }
         };
     }
     namespace Editor
@@ -3068,6 +3222,10 @@ namespace jeecs
         struct Name
         {
             jeecs::string name;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Name::name, "name");
+            }
         };
     }
 

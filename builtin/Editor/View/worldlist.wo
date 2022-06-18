@@ -7,5 +7,27 @@ import builtin.Editor.generic.AskFor;
 
 namespace editor
 {
+	namespace WorldList
+	{
+		func show(ref open: bool)
+		{
+			using je::gui;
+			if(!open) return !open;
 
+			Begin("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
+							+ WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+				if (BeginListBox("##", 200, 400))
+				{
+					var worlds = je::universe::current()->editor::worlds_list();
+					for (var world : worlds)
+					{
+						Selectable(world->editor::name() + "##" + world: string);
+					}
+					EndListBox();
+				}
+			End();
+
+			return !open;
+		}
+	}
 }

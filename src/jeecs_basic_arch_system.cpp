@@ -2115,7 +2115,7 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(jeecs::gam
     auto& cur_arch_type_infos = cur_chunk->get_arch_type()->get_type_infos();
 
     const jeecs::typing::type_info** outresult = (const jeecs::typing::type_info**)je_mem_alloc(
-        sizeof(const jeecs::typing::type_info*) * cur_arch_type_infos.size() + 1);
+        sizeof(const jeecs::typing::type_info*) * (cur_arch_type_infos.size() + 1));
     
     auto write_result = outresult;
     for (auto* typeinfo : cur_arch_type_infos)
