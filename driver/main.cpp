@@ -53,7 +53,7 @@ int main(int argc, char** argv)
             Renderer::Shape>();
 
         entity.get_component<Transform::LocalRotation>()->rot = jeecs::math::quat(0, 0, 0);
-        entity2.get_component<Transform::LocalPosition>()->pos = jeecs::math::vec3(0.25, 0, 0.5);
+        entity2.get_component<Transform::LocalPosition>()->pos = jeecs::math::vec3(0, 0, 0);
         entity2.get_component<Transform::LocalToParent>()->parent_uid =
             entity.get_component<Transform::ChildAnchor>()->anchor_uid;
 

@@ -219,6 +219,149 @@ WO_API wo_api wojeapi_type_name(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, type->m_typename);
 }
 
+WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
+{
+    enum basic_type
+    {
+        INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT
+    };
+    basic_type type = (basic_type)wo_int(args + 0);
+
+    switch (type)
+    {
+    case INT:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<int>(nullptr));
+    case FLOAT:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<float>(nullptr));
+    case FLOAT2:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec2>(nullptr));
+    case FLOAT3:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec3>(nullptr));
+    case FLOAT4:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec4>(nullptr));
+    case STRING:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::string>(nullptr));
+    case QUAT:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::quat>(nullptr));
+    default:
+        wo_panic("Unknown basic type.");
+        return wo_ret_nil(vm);
+    }
+}
+
+// Native value
+WO_API wo_api wojeapi_native_value_int(wo_vm vm, wo_value args, size_t argc)
+{
+    int* value = (int*)wo_pointer(args + 0);
+    if (wo_is_ref(args + 1))
+        wo_set_int(args + 1, *value);
+    else
+        *value = wo_int(args + 1);
+    return wo_ret_nil(vm);
+}
+
+WO_API wo_api wojeapi_native_value_float(wo_vm vm, wo_value args, size_t argc)
+{
+    float* value = (float*)wo_pointer(args + 0);
+    if (wo_is_ref(args + 1))
+        wo_set_float(args + 1, *value);
+    else
+        *value = wo_float(args + 1);
+    return wo_ret_nil(vm);
+}
+
+WO_API wo_api wojeapi_native_value_float2(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::vec2* value = (jeecs::math::vec2*)wo_pointer(args + 0);
+    if (wo_is_ref(args + 1))
+        wo_set_float(args + 1, value->x);
+    else
+        value->x = wo_float(args + 1);
+
+    if (wo_is_ref(args + 2))
+        wo_set_float(args + 2, value->y);
+    else
+        value->y = wo_float(args + 2);
+
+    return wo_ret_nil(vm);
+}
+
+WO_API wo_api wojeapi_native_value_float3(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::vec3* value = (jeecs::math::vec3*)wo_pointer(args + 0);
+    if (wo_is_ref(args + 1))
+        wo_set_float(args + 1, value->x);
+    else
+        value->x = wo_float(args + 1);
+
+    if (wo_is_ref(args + 2))
+        wo_set_float(args + 2, value->y);
+    else
+        value->y = wo_float(args + 2);
+
+    if (wo_is_ref(args + 3))
+        wo_set_float(args + 3, value->z);
+    else
+        value->z = wo_float(args + 3);
+
+    return wo_ret_nil(vm);
+}
+
+WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::vec4* value = (jeecs::math::vec4*)wo_pointer(args + 0);
+    if (wo_is_ref(args + 1))
+        wo_set_float(args + 1, value->x);
+    else
+        value->x = wo_float(args + 1);
+
+    if (wo_is_ref(args + 2))
+        wo_set_float(args + 2, value->y);
+    else
+        value->y = wo_float(args + 2);
+
+    if (wo_is_ref(args + 3))
+        wo_set_float(args + 3, value->z);
+    else
+        value->z = wo_float(args + 3);
+
+    if (wo_is_ref(args + 4))
+        wo_set_float(args + 4, value->w);
+    else
+        value->w = wo_float(args + 4);
+
+    return wo_ret_nil(vm);
+}
+
+
+WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::quat* value = (jeecs::math::quat*)wo_pointer(args + 0);
+    auto&& euler_v3 = value->euler_angle();
+
+    bool need_update = false;
+
+    if (wo_is_ref(args + 1))
+        wo_set_float(args + 1, euler_v3.x);
+    else
+        euler_v3.x = wo_float(args + 1), need_update = true;
+
+    if (wo_is_ref(args + 2))
+        wo_set_float(args + 2, euler_v3.y);
+    else
+        euler_v3.y = wo_float(args + 2), need_update = true;
+
+    if (wo_is_ref(args + 3))
+        wo_set_float(args + 3, euler_v3.z);
+    else
+        euler_v3.z = wo_float(args + 3), need_update = true;
+
+    if (need_update)
+        value->set_euler_angle(euler_v3);
+
+    return wo_ret_nil(vm);
+}
+
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
 import woo.std;
@@ -241,6 +384,21 @@ namespace je
 
         extern("libjoyecs", "wojeapi_type_name")
         func name(var self: typeinfo): string;
+
+        enum basic_type
+        {
+            INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT
+        }
+        extern("libjoyecs", "wojeapi_type_basic_type")
+        private func create(var tid: basic_type): typeinfo;
+
+        const var int = typeinfo(basic_type::INT);
+        const var float = typeinfo(basic_type::FLOAT);
+        const var float2 = typeinfo(basic_type::FLOAT2);
+        const var float3 = typeinfo(basic_type::FLOAT3);
+        const var float4 = typeinfo(basic_type::FLOAT4);
+        const var quat = typeinfo(basic_type::QUAT);
+        const var string = typeinfo(basic_type::STRING);
     }
 
     using universe = handle;
@@ -449,9 +607,24 @@ namespace je
     using native_value = handle;
     namespace native_value
     {
-        //func int(var self: native_value): int;
-        //func float(var self: native_value): real;
-        //func double(var self: native_value): real;
+        extern("libjoyecs", "wojeapi_native_value_int")
+        func int(var self: native_value, ref value: int): void;
+
+        extern("libjoyecs", "wojeapi_native_value_float")
+        func float(var self: native_value, ref value: real): void;
+
+        extern("libjoyecs", "wojeapi_native_value_float2")
+        func float2(var self: native_value, ref x: real, ref y: real): void;
+
+        extern("libjoyecs", "wojeapi_native_value_float3")
+        func float3(var self: native_value, ref x: real, ref y: real, ref z: real): void;
+
+        extern("libjoyecs", "wojeapi_native_value_float4")
+        func float4(var self: native_value, ref x: real, ref y: real, ref z: real, ref w: real): void;
+
+        extern("libjoyecs", "wojeapi_native_value_rot_euler3")
+        func euler3(var self: native_value, ref x: real, ref y: real, ref z: real): void;
+
     }
 
     using component = handle;
@@ -464,7 +637,7 @@ namespace je
             {
                 func iter(var self: member_iterator)
                 {
-                    return ref self;
+                    return self;
                 }
 
                 extern("libjoyecs", "wojeapi_member_iterator_next")

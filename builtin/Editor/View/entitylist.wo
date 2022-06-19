@@ -28,6 +28,18 @@ namespace editor
             return !open;
 		}
 
+        private var _current_entity = nil: je::entity;
+
+        func set_current_entity(var current_entity: je::entity)
+        {
+            _current_entity = current_entity;
+        }
+
+        func get_current_entity()
+        {
+            return _current_entity;
+        }
+
         private func _display_entity_with_iter(var entity_iter: je::entity::editor::entity_iter): int
         {
             using je::gui;
@@ -43,7 +55,7 @@ namespace editor
 
                 if (Button(F"{entity_name}##{entity->editor::chunk_info()}"))
                 {
-                    // Do sth here..
+                    set_current_entity(entity);
                 }
                 SameLine();
                 if(TreeNode(F"##{entity->editor::chunk_info()}"))

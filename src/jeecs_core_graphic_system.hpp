@@ -250,7 +250,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             mat_inv_position[3][2] = -translation->world_position.z;
 
             // TODO: Optmize
-            math::mat4xmat4(projection->view, mat_inv_rotation, mat_inv_position);
+            math::mat4xmat4(projection->view, mat_inv_position, mat_inv_rotation);
 
             assert(ortho || perspec);
             float znear = clip ? clip->znear : 0.3f;

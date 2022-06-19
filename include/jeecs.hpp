@@ -1105,7 +1105,8 @@ namespace jeecs
             const type_info* membt = type_info::of<MemberT>(nullptr);
             assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
 
-            ptrdiff_t member_offset = *reinterpret_cast<ptrdiff_t*>(&_memboffset);
+
+            ptrdiff_t member_offset = reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
             je_register_member(type_info::id<ClassT>(), membt, membname, member_offset);
         }
     }
@@ -2446,6 +2447,10 @@ namespace jeecs
             inline constexpr float dot(const quat& _quat) const noexcept
             {
                 return x * _quat.x + y * _quat.y + z * _quat.z + w * _quat.w;
+            }
+            inline void set_euler_angle(const vec3& euler) noexcept
+            {
+                set_euler_angle(euler.x, euler.y, euler.z);
             }
             inline void set_euler_angle(float yaw, float pitch, float roll) noexcept
             {

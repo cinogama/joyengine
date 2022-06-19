@@ -187,6 +187,29 @@ namespace je
     extern("libjoyecs", "je_gui_input_text_box")
     func InputText(var label:string, var buffer:TextBuffer) : bool;
 
+    extern("libjoyecs", "je_gui_input_float_box")
+    func InputFloat(var label: string, ref value: real) : bool;
+    extern("libjoyecs", "je_gui_input_float_box")
+    func InputFloat(var label: string, ref value: real, var format: string) : bool;
+
+    extern("libjoyecs", "je_gui_input_int_box")
+    func InputInt(var label: string, ref value: int) : bool;
+
+    extern("libjoyecs", "je_gui_input_float2_box")
+    func InputFloat2(var label: string, ref x: real, ref y: real) : bool;
+    extern("libjoyecs", "je_gui_input_float2_box")
+    func InputFloat2(var label: string, ref x: real, ref y: real, var format: string) : bool;
+
+    extern("libjoyecs", "je_gui_input_float3_box")
+    func InputFloat3(var label: string, ref x: real, ref y: real, ref z: real) : bool;
+    extern("libjoyecs", "je_gui_input_float3_box")
+    func InputFloat3(var label: string, ref x: real, ref y: real, ref z: real, var format: string) : bool;
+
+    extern("libjoyecs", "je_gui_input_float4_box")
+    func InputFloat4(var label: string, ref x: real, ref y: real, ref z: real, ref w: real) : bool;
+    extern("libjoyecs", "je_gui_input_float4_box")
+    func InputFloat4(var label: string, ref x: real, ref y: real, ref z: real, ref w: real, var format: string) : bool;
+
     extern("libjoyecs", "je_gui_input_text_multiline")
     func InputTextMultiline(var label:string, var buffer:TextBuffer) : bool;
     extern("libjoyecs", "je_gui_input_text_multiline")
@@ -487,6 +510,87 @@ WO_API wo_api je_gui_set_text_buffer(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_bool(vm, ImGui::InputText(wo_string(args + 0), (std::string*)wo_pointer(args + 1)));
+}
+WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    int value = (int)wo_int(args + 1);
+    bool update = false;
+
+    update = ImGui::InputInt(label, &value);
+
+    wo_set_int(args + 1, value);
+    return wo_ret_bool(vm, update);
+}
+WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    float value = wo_float(args + 1);
+    bool update = false;
+
+    if (argc == 2)
+        update = ImGui::InputFloat(label, &value);
+    else if (argc == 3)
+    {
+        wo_string_t format = wo_string(args + 2);
+        update = ImGui::InputFloat(label, &value, 0.f, 0.f, format);
+    }
+    wo_set_float(args + 1, value);
+    return wo_ret_bool(vm, update);
+}
+WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    float values[] = { wo_float(args + 1), wo_float(args + 2) };
+    bool update = false;
+
+    if (argc == 3)
+        update = ImGui::InputFloat2(label, values);
+    else if (argc == 4)
+    {
+        wo_string_t format = wo_string(args + 3);
+        update = ImGui::InputFloat2(label, values, format);
+    }
+    wo_set_float(args + 1, values[0]);
+    wo_set_float(args + 2, values[1]);
+    return wo_ret_bool(vm, update);
+}
+WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
+    bool update = false;
+
+    if (argc == 4)
+        update = ImGui::InputFloat3(label, values);
+    else if (argc == 5)
+    {
+        wo_string_t format = wo_string(args + 4);
+        update = ImGui::InputFloat3(label, values, format);
+    }
+    wo_set_float(args + 1, values[0]);
+    wo_set_float(args + 2, values[1]);
+    wo_set_float(args + 3, values[2]);
+    return wo_ret_bool(vm, update);
+}
+WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
+    bool update = false;
+
+    if (argc == 5)
+        update = ImGui::InputFloat4(label, values);
+    else if (argc == 6)
+    {
+        wo_string_t format = wo_string(args + 5);
+        update = ImGui::InputFloat4(label, values, format);
+    }
+    wo_set_float(args + 1, values[0]);
+    wo_set_float(args + 2, values[1]);
+    wo_set_float(args + 3, values[2]);
+    wo_set_float(args + 4, values[3]);
+    return wo_ret_bool(vm, update);
 }
 
 WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)

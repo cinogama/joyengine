@@ -6,7 +6,7 @@ func Editor_ScriptEditor(ref open:bool)
     using je::gui;
     if(!open) return !open;
 
-    Begin("RScene脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
+    Begin("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
 
     static var textbuf = TextBuffer("");
     if (InputTextMultiline("##", textbuf, 500, 300))

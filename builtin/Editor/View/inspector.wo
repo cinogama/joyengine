@@ -5,7 +5,116 @@ import je;
 import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
 
+import entitylist;
+
 namespace editor
 {
+	namespace Inspector
+	{
+		var _type_widget_methods = {}: map<je::typeinfo, void(string, je::native_value)>;
+		private func _register_default_method()
+		{
+			using je::gui;
 
+			_type_widget_methods[je::typeinfo::float] = 
+				func(var name: string, var addr: je::native_value)
+				{
+					var value = 0.; addr->float(ref value);
+
+					if (InputFloat(name, ref value))
+						addr->float(value);
+				};
+			_type_widget_methods[je::typeinfo::float2] = 
+				func(var name: string, var addr: je::native_value)
+				{
+					var x = 0., y = 0.;
+					addr->float2(ref x, ref y);
+
+					if (InputFloat2(name, ref x, ref y))
+						addr->float2(x, y);
+				};
+			_type_widget_methods[je::typeinfo::float3] = 
+				func(var name: string, var addr: je::native_value)
+				{
+					var x = 0., y = 0., z = 0.;
+					addr->float3(ref x, ref y, ref z);
+
+					if (InputFloat3(name, ref x, ref y, ref z))
+						addr->float3(x, y, z);
+				};
+			_type_widget_methods[je::typeinfo::float4] = 
+				func(var name: string, var addr: je::native_value)
+				{
+					var x = 0., y = 0., z = 0., w = 0.;
+					addr->float4(ref x, ref y, ref z, ref w);
+
+					if (InputFloat4(name, ref x, ref y, ref z, ref w))
+						addr->float4(x, y, z, w);
+				};
+			_type_widget_methods[je::typeinfo::quat] = 
+				func(var name: string, var addr: je::native_value)
+				{
+					var x = 0., y = 0., z = 0.;
+					addr->euler3(ref x, ref y, ref z);
+
+					if (InputFloat3(name, ref x, ref y, ref z))
+						addr->euler3(x, y, z);
+				};
+		}
+		_register_default_method();
+
+		private func _show_edit_widget(var name: string, var type: je::typeinfo, var addr: je::native_value)
+		{
+			using je::gui;
+
+			if (_type_widget_methods->contain(type))
+			{
+				var method = _type_widget_methods[type];
+				assert(method);
+
+				method(name, addr);
+			}
+			else
+			{
+				Text(name);
+				SameLine();
+				Text("<没有合适的控件以展示此值>");
+			}
+		}
+
+		func show(ref open: bool)
+		{
+			using je::gui;
+			if(!open) return !open;
+
+			Begin("检视面板", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+				var current_entity = EntityList::get_current_entity();
+				if (current_entity)
+				{
+					for (var component_type : current_entity->editor::get_components_types())
+					{
+						if (TreeNode(F"{component_type->name()}##{component_type}"))
+						{
+							var member_count = 0;
+							var component_addr = current_entity->editor::get_component(component_type);
+							for (var name, type, addr : component_addr->editor::iter_member(component_type))
+							{
+								member_count += 1;
+								_show_edit_widget(name, type, addr);
+							}
+
+							if (0 == member_count)
+								Text("<此组件没有可编辑字段>");
+
+							TreePop();
+						}
+					}
+				}
+				else
+					Text("<没有选中可编辑的实体>");
+			End();
+
+			return !open;
+		}
+	}
 }

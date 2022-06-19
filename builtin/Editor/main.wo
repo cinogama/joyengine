@@ -44,7 +44,7 @@ func Editor_MainMenuBar()
         if (MenuItem("层级面板", ref active_world_entities_shown, true) && active_world_entities_shown)
             launch(editor::EntityList::show, ref active_world_entities_shown);
         if (MenuItem("检视面板", ref active_inspector_shown, true) && active_inspector_shown)
-            ;
+            launch(editor::Inspector::show, ref active_inspector_shown);
 
         EndMenu();
     }
