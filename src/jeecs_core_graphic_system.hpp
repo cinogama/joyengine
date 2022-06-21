@@ -59,13 +59,12 @@ func vert(var vdata:vertex_in)
     var ipos = vdata->in:<float3>(0);
 
     var opos = je_mvp * float4(ipos, 1);
-
     return vertex_out(opos);
 }
 func frag(var fdata:fragment_in)
 {
     var flashing_color = je_time->y();
-    return vertex_out(float4(flashing_color, 0, flashing_color, 1));
+    return fragment_out(float4(flashing_color, 0, flashing_color, 1));
 }
 
 )");
