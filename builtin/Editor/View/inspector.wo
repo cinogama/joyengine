@@ -82,6 +82,17 @@ namespace editor
 			}
 		}
 
+		using component_chain
+		{
+			var m_map = {}: map<string, component_chain>;
+			var m_component_type = 0x00H: je::typeinfo;
+
+			func create()
+			{
+				return new();
+			}
+		}
+
 		func show(ref open: bool)
 		{
 			using je::gui;
@@ -91,13 +102,35 @@ namespace editor
 				var current_entity = EntityList::get_current_entity();
 				if (current_entity)
 				{
+					var current_component_types = component_chain();
 					for (var component_type : current_entity->editor::get_components_types())
 					{
-						if (TreeNode(F"{component_type->name()}##{component_type}"))
+						var component_type_name = component_type->name();
+						var current_types = current_component_types;
+						var scope_names = component_type_name->split("::");
+
+						for (var name: scope_names)
+						{
+							current_types = current_types.m_map->get(name, component_chain());
+						}
+
+						current_types.m_component_type = component_type;
+					}
+					func waklthrow_and_display_components(var current_node: component_chain, var entity: je::entity): void
+					{
+						for (var name, chain: current_node.m_map)
+						{
+							if (TreeNode(name))
+							{
+								waklthrow_and_display_components(chain, entity);
+								TreePop();
+							}
+						}
+						if (current_node.m_component_type)
 						{
 							var member_count = 0;
-							var component_addr = current_entity->editor::get_component(component_type);
-							for (var name, type, addr : component_addr->editor::iter_member(component_type))
+							var component_addr = entity->editor::get_component(current_node.m_component_type);
+							for (var name, type, addr : component_addr->editor::iter_member(current_node.m_component_type))
 							{
 								member_count += 1;
 								_show_edit_widget(name, type, addr);
@@ -105,10 +138,10 @@ namespace editor
 
 							if (0 == member_count)
 								Text("<此组件没有可编辑字段>");
-
-							TreePop();
 						}
 					}
+
+					waklthrow_and_display_components(current_component_types, current_entity);
 				}
 				else
 					Text("<没有选中可编辑的实体>");
