@@ -130,7 +130,7 @@ namespace editor
 							if (current_node.m_component_type)
 							{
 								var member_count = 0;
-								var component_addr = entity->editor::get_component(current_node.m_component_type);
+								var component_addr = entity->editor::get_component(current_node.m_component_type)->val();
 								for (var name, type, addr : component_addr->editor::iter_member(current_node.m_component_type))
 								{
 									member_count += 1;

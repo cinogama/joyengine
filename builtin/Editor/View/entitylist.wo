@@ -17,13 +17,17 @@ namespace editor
 			Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
                             + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                         , ref open);
-                var current_world = je::world::rend();
-                if(current_world)
+                match(je::world::rend())
                 {
-                    var top_entity_walker = current_world->editor::top_entity_iter();
-                    if (_display_entity_with_iter(top_entity_walker) == 0)
-                        Text("当前世界没有实体");
-                }                     
+                    option::value(current_world)?
+                    {
+                        var top_entity_walker = current_world->editor::top_entity_iter();
+                        if (_display_entity_with_iter(top_entity_walker) == 0)
+                            Text("当前世界没有实体");
+                    } 
+                    option::none?
+                        ; // do nothing
+                }                   
             End();
             return !open;
 		}

@@ -117,7 +117,7 @@ func test_components()
                     for (var component_type : all_components_types)
                     {
                         std::println(F"    在组件{component_type->name()}中：");
-                        var component = entity->editor::get_component(component_type);
+                        var component = entity->editor::get_component(component_type)->val();
                         for (var name, type, addr : component->editor::iter_member(component_type))
                         {
                             std::println(F"      成员{name}: {type->name()}");

@@ -20,7 +20,7 @@ WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args, size_t a
 WO_API wo_api wojeapi_get_shared_system_attached_world(wo_vm vm, wo_value args, size_t argc)
 {
     const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
-    return wo_ret_pointer(vm, jedbg_get_shared_system_attached_world(wo_pointer(args + 0), type));
+    return wo_ret_option_ptr(vm, jedbg_get_shared_system_attached_world(wo_pointer(args + 0), type));
 }
 
 WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t argc)
@@ -126,7 +126,7 @@ WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args, size_t 
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
-    return wo_ret_pointer(vm, je_ecs_world_entity_get_component(entity,
+    return wo_ret_option_ptr(vm, je_ecs_world_entity_get_component(entity,
         (const jeecs::typing::type_info*)wo_pointer(args + 1)));
 }
 
@@ -423,7 +423,7 @@ namespace je
             }
 
             extern("libjoyecs", "wojeapi_get_shared_system_attached_world")
-            func get_shared_system_attached_world(var self:universe, var systype:typeinfo): world;
+            func get_shared_system_attached_world(var self:universe, var systype:typeinfo): option<world>;
         }
     }
 
@@ -445,7 +445,7 @@ namespace je
             return self->attach_shared_system(graphic_typeinfo);
         } 
 
-        func rend(): world
+        func rend(): option<world>
         {
             const static var graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
             return universe::current()->editor::get_shared_system_attached_world(graphic_typeinfo);
@@ -505,7 +505,7 @@ namespace je
             }
 
             extern("libjoyecs", "wojeapi_get_component_from_entity")
-            func get_component(var self: entity, var type: typeinfo): component;
+            func get_component(var self: entity, var type: typeinfo): option<component>;
 
             extern("libjoyecs", "wojeapi_is_top_entity")
             func is_top(var self: entity): bool;
