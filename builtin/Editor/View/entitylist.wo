@@ -17,6 +17,7 @@ namespace editor
 			Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
                             + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                         , ref open);
+
                 match(je::world::rend())
                 {
                     option::value(current_world)?
@@ -27,16 +28,17 @@ namespace editor
                     } 
                     option::none?
                         ; // do nothing
-                }                   
+                }  
+                
             End();
             return !open;
 		}
 
         private var _current_entity = option::none:<je::entity>;
 
-        func set_current_entity(var current_entity: je::entity)
+        func set_current_entity(var current_entity: option<je::entity>)
         {
-            _current_entity = option::value(current_entity);
+            _current_entity = current_entity;
         }
 
         func get_current_entity()
@@ -59,7 +61,7 @@ namespace editor
 
                 if (Button(F"{entity_name}##{entity->editor::chunk_info()}"))
                 {
-                    set_current_entity(entity);
+                    set_current_entity(option::value(entity));
                 }
                 SameLine();
                 if(TreeNode(F"##{entity->editor::chunk_info()}"))

@@ -450,9 +450,6 @@ namespace je
             const static var graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
             return universe::current()->editor::get_shared_system_attached_world(graphic_typeinfo);
         }
-    
-        extern("libjoyecs", "wojeapi_close_world")
-        func close(var self: world): void;
 
         namespace editor
         {
