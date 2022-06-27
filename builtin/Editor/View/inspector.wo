@@ -99,52 +99,54 @@ namespace editor
 			if(!open) return !open;
 
 			Begin("检视面板", WindowsAttribute::ImGuiWindowFlags_None, ref open);
-				var current_entity = EntityList::get_current_entity();
-				if (current_entity)
+				match(EntityList::get_current_entity())
 				{
-					var current_component_types = component_chain();
-					for (var component_type : current_entity->editor::get_components_types())
+					option::value(current_entity)?
 					{
-						var component_type_name = component_type->name();
-						var current_types = current_component_types;
-						var scope_names = component_type_name->split("::");
+						var current_component_types = component_chain();
+						for (var component_type : current_entity->editor::get_components_types())
+						{
+							var component_type_name = component_type->name();
+							var current_types = current_component_types;
+							var scope_names = component_type_name->split("::");
 
-						for (var name: scope_names)
-						{
-							current_types = current_types.m_map->get(name, component_chain());
-						}
-
-						current_types.m_component_type = component_type;
-					}
-					func waklthrow_and_display_components(var current_node: component_chain, var entity: je::entity): void
-					{
-						for (var name, chain: current_node.m_map)
-						{
-							if (TreeNode(name))
+							for (var name: scope_names)
 							{
-								waklthrow_and_display_components(chain, entity);
-								TreePop();
-							}
-						}
-						if (current_node.m_component_type)
-						{
-							var member_count = 0;
-							var component_addr = entity->editor::get_component(current_node.m_component_type);
-							for (var name, type, addr : component_addr->editor::iter_member(current_node.m_component_type))
-							{
-								member_count += 1;
-								_show_edit_widget(name, type, addr);
+								current_types = current_types.m_map->get(name, component_chain());
 							}
 
-							if (0 == member_count)
-								Text("<此组件没有可编辑字段>");
+							current_types.m_component_type = component_type;
 						}
-					}
+						func waklthrow_and_display_components(var current_node: component_chain, var entity: je::entity): void
+						{
+							for (var name, chain: current_node.m_map)
+							{
+								if (TreeNode(name))
+								{
+									waklthrow_and_display_components(chain, entity);
+									TreePop();
+								}
+							}
+							if (current_node.m_component_type)
+							{
+								var member_count = 0;
+								var component_addr = entity->editor::get_component(current_node.m_component_type);
+								for (var name, type, addr : component_addr->editor::iter_member(current_node.m_component_type))
+								{
+									member_count += 1;
+									_show_edit_widget(name, type, addr);
+								}
 
-					waklthrow_and_display_components(current_component_types, current_entity);
+								if (0 == member_count)
+									Text("<此组件没有可编辑字段>");
+							}
+						}
+
+						waklthrow_and_display_components(current_component_types, current_entity);
+					}
+					option::none?
+						Text("<没有选中可编辑的实体>");
 				}
-				else
-					Text("<没有选中可编辑的实体>");
 			End();
 
 			return !open;

@@ -28,11 +28,11 @@ namespace editor
             return !open;
 		}
 
-        private var _current_entity = nil: je::entity;
+        private var _current_entity = option::none:<je::entity>;
 
         func set_current_entity(var current_entity: je::entity)
         {
-            _current_entity = current_entity;
+            _current_entity = option::value(current_entity);
         }
 
         func get_current_entity()

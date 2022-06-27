@@ -516,13 +516,13 @@ namespace je
 
             using entity_iter
             {
-                var m_cur_iter = nil: array::iterator<entity>;
-                var m_judge_func = nil: bool(entity);
-                var m_current_entity = nil: entity;
+                var m_cur_iter = ([]: array<entity>)->iter();
+                var m_judge_func = func(var e: entity){std::panic("invalid function!"); return false;};
+                var m_current_entity = option::none:<entity>;
 
-                var m_all_entity_list = nil: array<entity>;
-                var m_not_top_entities = nil: array<entity>;
-                var m_outed_entities = nil: array<entity>;
+                var m_all_entity_list = []: array<entity>;
+                var m_not_top_entities = []: array<entity>;
+                var m_outed_entities = []: array<entity>;
 
                 private func create(var entitys: array<entity>)
                 {
@@ -548,7 +548,7 @@ namespace je
                     chiter.m_cur_iter = self.m_all_entity_list->iter();
                     chiter.m_outed_entities = self.m_outed_entities;
 
-                    var parent_entity = self.m_current_entity;
+                    var parent_entity = self.m_current_entity->val();
                     chiter.m_judge_func = func(var e: entity)
                                           {
                                                 return e->is_child_of(parent_entity);
@@ -565,7 +565,7 @@ namespace je
                     {
                         if (self.m_judge_func(out_entity))
                         {
-                            self.m_current_entity = out_entity;
+                            self.m_current_entity = option::value(out_entity);
                             out_iter = self;
                             self.m_outed_entities->add(out_entity);
                             return true;
@@ -590,7 +590,7 @@ namespace je
 
                                 // Current entity have jeecs::Transform::LocalToParent,
                                 // but it's LocalToParent donot point to any other entity;
-                                self.m_current_entity = top;
+                                self.m_current_entity = option::value(top);
                                 out_iter = self;
                                 out_entity = top;
                                 self.m_outed_entities->add(top);
