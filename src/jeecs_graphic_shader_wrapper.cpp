@@ -429,10 +429,7 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
     {
         auto value_type = wo_valuetype(args + i);
         if (value_type != WO_INTEGER_TYPE && value_type != WO_REAL_TYPE && value_type != WO_GCHANDLE_TYPE)
-        {
-            wo_halt("Cannot do this operations: argument type should be number or shader_value.");
-            return wo_ret_nil(vm);
-        }
+            return wo_ret_halt(vm, "Cannot do this operations: argument type should be number or shader_value.");
 
         jegl_shader_value* sval;
         if (value_type == WO_GCHANDLE_TYPE)
@@ -452,10 +449,7 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
     wo_string_t operation = wo_string(args + 1);
     auto* reduce_func = get_const_reduce_func(operation, _types.data(), _types.size());
     if (!reduce_func)
-    {
-        wo_halt("Cannot do this operations: no matched operation with these types.");
-        return wo_ret_nil(vm);
-    }
+        return wo_ret_halt(vm, "Cannot do this operations: no matched operation with these types.");
 
     if (result_is_const)
     {
@@ -465,8 +459,7 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
             if (result->get_type() != result_type)
             {
                 _free_shader_value(result);
-                wo_halt("Cannot do this operations: return type dis-matched.");
-                return wo_ret_nil(vm);
+                return wo_ret_halt(vm, "Cannot do this operations: return type dis-matched.");
             }
             return wo_ret_gchandle(vm, result, nullptr, _free_shader_value);
         }
@@ -521,7 +514,7 @@ WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args, size_t argc)
 
     auto* result = storage->get_val_at(pos, type);
     if (!result)
-        wo_halt(("vertex_in[" + std::to_string(pos) + "] has been used, but type didn't match.").c_str());
+        return wo_ret_halt(vm, ("vertex_in[" + std::to_string(pos) + "] has been used, but type didn't match.").c_str());
 
     return wo_ret_gchandle(vm, result, nullptr, nullptr);
 }
@@ -530,9 +523,9 @@ WO_API wo_api jeecs_shader_set_vertex_out(wo_vm vm, wo_value args, size_t argc)
 {
     jegl_shader_value* vertex_out_pos = (jegl_shader_value*)wo_pointer(args + 0);
     if (vertex_out_pos->get_type() != jegl_shader_value::FLOAT4)
-        wo_halt("First value of vertex_out must be FLOAT4 for position.");
+        return wo_ret_halt(vm, "First value of vertex_out must be FLOAT4 for position.");
 
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 struct shader_value_outs
@@ -579,11 +572,11 @@ WO_API wo_api jeecs_shader_get_fragment_in(wo_vm vm, wo_value args, size_t argc)
     size_t pos = (size_t)wo_int(args + 2);
 
     if (pos >= values->out_values.size())
-        wo_halt(("fragment_in[" + std::to_string(pos) + "] out of range.").c_str());
+        return wo_ret_halt(vm, ("fragment_in[" + std::to_string(pos) + "] out of range.").c_str());
 
     auto* result = values->out_values[pos];
     if (result->get_type() != type)
-        wo_halt(("fragment_in[" + std::to_string(pos) + "] type didn't match.").c_str());
+        return wo_ret_halt(vm, ("fragment_in[" + std::to_string(pos) + "] type didn't match.").c_str());
 
     auto* val = new jegl_shader_value(type);
     val->m_shader_in_index = pos;

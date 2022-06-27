@@ -7,7 +7,7 @@ WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
 {
     void* universe = jedbg_get_editor_universe();
     if (!universe)
-        wo_halt("failed to get editor universe.");
+        return wo_ret_halt(vm, "failed to get editor universe.");
     return wo_ret_pointer(vm, universe);
 }
 
@@ -35,14 +35,14 @@ WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t
             wo_set_pointer(wo_arr_add(out_array, nullptr), *(worldlist++));
     }
     je_mem_free(result);
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 // ECS WORLD
 WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_world(wo_pointer(args + 0)).close();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_get_world_name(wo_vm vm, wo_value args, size_t argc)
@@ -53,14 +53,14 @@ WO_API wo_api wojeapi_get_world_name(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_set_world_name(wo_vm vm, wo_value args, size_t argc)
 {
     jedbg_set_world_name(wo_pointer(args + 0), wo_string(args + 1));
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_attach_shared_system_to_world(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_world gworld = wo_pointer(args + 0);
     gworld.attach_shared_system((const jeecs::typing::type_info*)wo_pointer(args + 1));
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_t argc)
@@ -195,7 +195,7 @@ WO_API wo_api wojeapi_member_iterator_next(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_universe(jedbg_get_editor_universe()).stop();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 // ECS TYPEINFO
@@ -244,8 +244,7 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
     case QUAT:
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::quat>(nullptr));
     default:
-        wo_panic("Unknown basic type.");
-        return wo_ret_nil(vm);
+        return wo_ret_panic(vm, "Unknown basic type.");
     }
 }
 
@@ -257,7 +256,7 @@ WO_API wo_api wojeapi_native_value_int(wo_vm vm, wo_value args, size_t argc)
         wo_set_int(args + 1, *value);
     else
         *value = wo_int(args + 1);
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_native_value_float(wo_vm vm, wo_value args, size_t argc)
@@ -267,7 +266,7 @@ WO_API wo_api wojeapi_native_value_float(wo_vm vm, wo_value args, size_t argc)
         wo_set_float(args + 1, *value);
     else
         *value = wo_float(args + 1);
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_native_value_float2(wo_vm vm, wo_value args, size_t argc)
@@ -283,7 +282,7 @@ WO_API wo_api wojeapi_native_value_float2(wo_vm vm, wo_value args, size_t argc)
     else
         value->y = wo_float(args + 2);
 
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_native_value_float3(wo_vm vm, wo_value args, size_t argc)
@@ -304,7 +303,7 @@ WO_API wo_api wojeapi_native_value_float3(wo_vm vm, wo_value args, size_t argc)
     else
         value->z = wo_float(args + 3);
 
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args, size_t argc)
@@ -330,7 +329,7 @@ WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args, size_t argc)
     else
         value->w = wo_float(args + 4);
 
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 
@@ -359,7 +358,7 @@ WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t ar
     if (need_update)
         value->set_euler_angle(euler_v3);
 
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 const char* jeecs_woolang_api_path = "je.wo";
@@ -530,8 +529,6 @@ namespace je
                     var self = new();
                     self.m_all_entity_list = entitys;
                     self.m_cur_iter = option::value(entitys->iter());
-                    self.m_not_top_entities = []: array<entity>;
-                    self.m_outed_entities = []: array<entity>;
                     self.m_judge_func = func(var e: entity)
                                         {
                                             var result = e->editor::is_top();

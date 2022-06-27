@@ -255,12 +255,12 @@ namespace je
 WO_API wo_api je_gui_push_id(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::PushID(wo_int(args + 0));
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_pop_id(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::PopID();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_beginpopup_contextitem(wo_vm vm, wo_value args, size_t argc)
 {
@@ -293,19 +293,19 @@ WO_API wo_api je_gui_openpopup_on_item_click(wo_vm vm, wo_value args, size_t arg
     }
     else
         ImGui::OpenPopupOnItemClick(wo_string(args + 0), wo_int(args + 1));
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_openpopup(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::OpenPopup(wo_string(args + 0));
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_endpopup(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::EndPopup();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_begin_listbox(wo_vm vm, wo_value args, size_t argc)
@@ -321,24 +321,24 @@ WO_API wo_api je_gui_begin_selectable(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_end_listbox(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::EndListBox();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_sameline(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::SameLine();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_begingroup(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::BeginGroup();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_endgroup(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::EndGroup();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 
@@ -349,7 +349,7 @@ WO_API wo_api je_gui_treenode(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_treepop(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::TreePop();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
@@ -413,12 +413,12 @@ WO_API wo_api je_gui_begin(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_end(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::End();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_text(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::Text(wo_string(args));
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_button(wo_vm vm, wo_value args, size_t argc)
 {
@@ -452,7 +452,7 @@ WO_API wo_api je_gui_menu_item(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_end_main_menu_bar(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::EndMainMenuBar();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_begin_menu_bar(wo_vm vm, wo_value args, size_t argc)
 {
@@ -461,7 +461,7 @@ WO_API wo_api je_gui_begin_menu_bar(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_end_menu_bar(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::EndMenuBar();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_begin_menu(wo_vm vm, wo_value args, size_t argc)
 {
@@ -472,12 +472,12 @@ WO_API wo_api je_gui_begin_menu(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_end_menu(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::EndMenu();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_separator(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::Separator();
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_create_text_buffer(wo_vm vm, wo_value args, size_t argc)
@@ -490,7 +490,7 @@ WO_API wo_api je_gui_clear_text_buffer(wo_vm vm, wo_value args, size_t argc)
     std::string* str = (std::string*)wo_pointer(args + 0);
     str->clear();
 
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_get_text_buffer(wo_vm vm, wo_value args, size_t argc)
@@ -504,7 +504,7 @@ WO_API wo_api je_gui_set_text_buffer(wo_vm vm, wo_value args, size_t argc)
 {
     std::string* str = (std::string*)wo_pointer(args + 0);
     *str = wo_string(args + 1);
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
@@ -629,7 +629,7 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
     guico->job_handle = jobfunc;
     _wo_new_job_list.add_one(guico);
 
-    return wo_ret_nil(vm);
+    return wo_ret_void(vm);
 }
 
 void jegui_init(void* window_handle)
