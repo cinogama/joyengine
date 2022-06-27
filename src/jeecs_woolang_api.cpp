@@ -516,7 +516,7 @@ namespace je
 
             using entity_iter
             {
-                var m_cur_iter = ([]: array<entity>)->iter();
+                var m_cur_iter = option::none:<array::iterator<entity>>;
                 var m_judge_func = func(var e: entity){std::panic("invalid function!"); return false;};
                 var m_current_entity = option::none:<entity>;
 
@@ -529,7 +529,7 @@ namespace je
                     // walk throw all 'top' entity
                     var self = new();
                     self.m_all_entity_list = entitys;
-                    self.m_cur_iter = entitys->iter();
+                    self.m_cur_iter = option::value(entitys->iter());
                     self.m_not_top_entities = []: array<entity>;
                     self.m_outed_entities = []: array<entity>;
                     self.m_judge_func = func(var e: entity)
@@ -545,7 +545,7 @@ namespace je
                 {
                     var chiter = new();
                     chiter.m_all_entity_list = self.m_all_entity_list;
-                    chiter.m_cur_iter = self.m_all_entity_list->iter();
+                    chiter.m_cur_iter = option::value(self.m_all_entity_list->iter());
                     chiter.m_outed_entities = self.m_outed_entities;
 
                     var parent_entity = self.m_current_entity->val();
@@ -561,7 +561,8 @@ namespace je
                 }
                 func next(var self: entity_iter, ref out_iter: entity_iter,ref out_entity: entity): bool
                 {
-                    while (self.m_cur_iter->next(0, ref out_entity))
+                    var current_iter = self.m_cur_iter->val();
+                    while (current_iter->next(0, ref out_entity))
                     {
                         if (self.m_judge_func(out_entity))
                         {
