@@ -50,6 +50,9 @@ namespace je
         //ImGuiWindowFlags_NoInputs               = ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
     }
 
+    extern("libjoyecs", "je_gui_job_vm_handle")
+    func JobID() : handle;
+
     extern("libjoyecs", "je_gui_begin")
     func Begin(var title:string) : bool;
     extern("libjoyecs", "je_gui_begin")
@@ -395,6 +398,11 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args, size_t argc)
         ImGui::EndListBox();
     }
     return wo_ret_bool(vm, value_updated);
+}
+
+WO_API wo_api je_gui_job_vm_handle(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_pointer(vm, vm);
 }
 
 WO_API wo_api je_gui_begin(wo_vm vm, wo_value args, size_t argc)
@@ -747,13 +755,7 @@ void jegui_update()
         auto cur_job = new_job_chain;
         new_job_chain = new_job_chain->last;
 
-        if (_displayed_job_handle.find(cur_job->job_handle) == _displayed_job_handle.end())
-        {
-            _wo_job_list.add_one(cur_job);
-            continue;
-        }
-        wo_close_vm(cur_job->work_vm);
-        delete cur_job;
+        _wo_job_list.add_one(cur_job);
     }
 
     ImGui::Render();

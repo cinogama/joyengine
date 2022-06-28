@@ -11,7 +11,7 @@ namespace generic
 
         static var text_buffer = TextBuffer("");
 
-        Begin(title, WindowsAttribute::ImGuiWindowFlags_NoResize
+        Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_NoResize
                     + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
         {
             Text(shown);

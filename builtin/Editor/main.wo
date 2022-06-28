@@ -59,8 +59,9 @@ func Editor_MainMenuBar()
     }
     if (BeginMenu("帮助"))
     {
-        if (MenuItem("关于"))
-            je::gui::launch(Editor_Welcome);
+        static var about_shown = false;
+        if (MenuItem("关于", ref about_shown, true) && about_shown)
+            je::gui::launch(Editor_Welcome, ref about_shown);
 
         EndMenu();
     }
@@ -68,11 +69,12 @@ func Editor_MainMenuBar()
 }
 
 // 关于信息窗口
-func Editor_Welcome()
+func Editor_Welcome(ref open: bool)
 {
     using je::gui;
 
-    var exit = false;
+    if (!open)
+        return !open;
 
     Begin("欢迎", WindowsAttribute::ImGuiWindowFlags_NoResize);
     Text("欢迎使用JoyEngineECS.");
@@ -81,14 +83,13 @@ func Editor_Welcome()
     Text("Powered by WooLang (C)Cinogama project. 2022.");
     Text("所使用的第三方库包括glew、glfw、imgui及stb的相关信息见版权页");
     if (Button("确认"))
-        exit = true;
+        open = false;
     End();
 
-    return exit;
+    return !open;
 }
 
 je::gui::launch(Editor_MainMenuBar);
-je::gui::launch(Editor_Welcome);
 
 /////////////////////////////////////////////////////////////
 

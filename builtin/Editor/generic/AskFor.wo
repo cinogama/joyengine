@@ -9,7 +9,7 @@ namespace generic
 
         var open = true;
 
-        Begin(title, WindowsAttribute::ImGuiWindowFlags_NoResize
+        Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_NoResize
                     + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
         {
             Text(shown);
