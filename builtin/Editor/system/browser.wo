@@ -1,0 +1,20 @@
+import woo.std;
+import je.gui;
+
+namespace editor
+{
+	namespace Browser
+	{
+		func show(ref open: bool)
+		{
+			using je::gui;
+
+			if (!open) return !open;
+
+			Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+			End();
+
+			return !open;
+		}
+	}
+}

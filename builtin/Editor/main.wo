@@ -2,9 +2,11 @@ import woo.std;
 import je.gui;
 import je;
 
-import View.worldlist;
-import View.entitylist;
-import View.inspector;
+import ecsviewer.worldlist;
+import ecsviewer.entitylist;
+import ecsviewer.inspector;
+
+import system.browser;
 
 import script_editor;
 
@@ -38,6 +40,7 @@ func Editor_MainMenuBar()
         static var active_worlds_shown = false;
         static var active_world_entities_shown = false;
         static var active_inspector_shown = false;
+        static var active_browser_shown = false;
 
         if (MenuItem("世界列表", ref active_worlds_shown, true) && active_worlds_shown)
             launch(editor::WorldList::show, ref active_worlds_shown);
@@ -45,6 +48,10 @@ func Editor_MainMenuBar()
             launch(editor::EntityList::show, ref active_world_entities_shown);
         if (MenuItem("检视面板", ref active_inspector_shown, true) && active_inspector_shown)
             launch(editor::Inspector::show, ref active_inspector_shown);
+        Separator();
+        if (MenuItem("文件管理器", ref active_browser_shown, true) && active_browser_shown)
+            launch(editor::Browser::show, ref active_browser_shown);
+
 
         EndMenu();
     }

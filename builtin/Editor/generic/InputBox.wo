@@ -3,32 +3,36 @@ import je.gui;
 
 namespace generic
 {
-    func InputBox(var title:string, var shown:string, var trigger:void(string))
+    func InputBox(var title:string, var shown:string, var default_value: string, var trigger:void(string))
     {
         using je::gui;
 
         var open = true;
 
-        static var text_buffer = TextBuffer("");
-
-        Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_NoResize
-                    + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+        var text_buffer = TextBuffer(default_value);
+        while (open)
         {
-            Text(shown);
-            InputText("##", text_buffer);
-            if (Button("确定"))
+            Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_NoResize
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
             {
-                trigger(text_buffer->get());
-                open = false;
+                Text(shown);
+                InputText("##", text_buffer);
+                if (Button("确定"))
+                {
+                    trigger(text_buffer->get());
+                    open = false;
+                }
+                SameLine();
+                if (Button("清除"))
+                    text_buffer->clear();
+                SameLine();
+                if (Button("取消"))
+                    open = false;
             }
-            SameLine();
-            if (Button("清除"))
-                text_buffer->clear();
-            SameLine();
-            if (Button("取消"))
-                open = false;
+            End();
+
+            std::break_yield();
         }
-        End();
-        return !open;
+        return true;
     }
 }
