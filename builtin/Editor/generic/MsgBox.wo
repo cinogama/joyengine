@@ -1,0 +1,24 @@
+import woo.std;
+import je.gui;
+
+namespace generic
+{
+    func MsgBox(var title:string, var shown:string)
+    {
+        using je::gui;
+
+        var open = true;
+
+        Begin(F"{title}##{JobID()}"
+                    , WindowsAttribute::ImGuiWindowFlags_NoResize
+                    + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+        {
+            Text(shown);
+            if (Button("确定"))
+                open = false;
+        }
+        End();
+
+        return !open;
+    }
+}
