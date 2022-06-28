@@ -29,7 +29,6 @@ namespace generic
                 open = false;
         }
         End();
-
         return !open;
     }
 }

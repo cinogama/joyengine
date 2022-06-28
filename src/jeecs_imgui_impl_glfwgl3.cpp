@@ -727,22 +727,16 @@ void jegui_update()
     ImGui::NewFrame();
 
     auto chain = _wo_job_list.pick_all();
-    std::unordered_set<wo_integer_t> _displayed_job_handle;
-
     while (chain)
     {
         auto cur_job = chain;
         chain = chain->last;
 
-        if (_displayed_job_handle.find(cur_job->job_handle) == _displayed_job_handle.end())
+        auto result = wo_dispatch(cur_job->work_vm);
+        if (result == WO_CONTINUE)
         {
-            _displayed_job_handle.insert(cur_job->job_handle);
-            auto result = wo_dispatch(cur_job->work_vm);
-            if (result == WO_CONTINUE)
-            {
-                _wo_job_list.add_one(cur_job);
-                continue;
-            }
+            _wo_job_list.add_one(cur_job);
+            continue;
         }
 
         wo_close_vm(cur_job->work_vm);
