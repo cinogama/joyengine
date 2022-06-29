@@ -85,7 +85,7 @@ namespace editor
 		using component_chain
 		{
 			var m_map = {}: map<string, component_chain>;
-			var m_component_type = 0x00H: je::typeinfo;
+			var m_component_type = option::none:<je::typeinfo>;
 
 			func create()
 			{
@@ -103,6 +103,7 @@ namespace editor
 				{
 					option::value(current_entity)?
 					{
+						// TODO: 在此处显示一下实体信息
 						var current_component_types = component_chain();
 						for (var component_type : current_entity->editor::get_components_types())
 						{
@@ -115,7 +116,7 @@ namespace editor
 								current_types = current_types.m_map->get(name, component_chain());
 							}
 
-							current_types.m_component_type = component_type;
+							current_types.m_component_type = option::value(component_type);
 						}
 						func waklthrow_and_display_components(var current_node: component_chain, var entity: je::entity): void
 						{
@@ -127,18 +128,23 @@ namespace editor
 									TreePop();
 								}
 							}
-							if (current_node.m_component_type)
+							match (current_node.m_component_type)
 							{
-								var member_count = 0;
-								var component_addr = entity->editor::get_component(current_node.m_component_type)->val();
-								for (var name, type, addr : component_addr->editor::iter_member(current_node.m_component_type))
+								option::value(type)?
 								{
-									member_count += 1;
-									_show_edit_widget(name, type, addr);
-								}
+									var member_count = 0;
+									var component_addr = entity->editor::get_component(type)->val();
+									for (var name, type, addr : component_addr->editor::iter_member(type))
+									{
+										member_count += 1;
+										_show_edit_widget(name, type, addr);
+									}
 
-								if (0 == member_count)
-									Text("<此组件没有可编辑字段>");
+									if (0 == member_count)
+										Text("<此组件没有可编辑字段>");
+								}
+								option::none?
+									; // 啥也不干
 							}
 						}
 

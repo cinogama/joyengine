@@ -50,6 +50,27 @@ namespace je
         //ImGuiWindowFlags_NoInputs               = ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
     }
 
+    enum TreeNodeAttribute
+    {
+        ImGuiTreeNodeFlags_None                 = 0,
+        ImGuiTreeNodeFlags_Selected             = 0x0000'0001,   // Draw as selected
+        ImGuiTreeNodeFlags_Framed               = 0x0000'0002,   // Draw frame with background (e.g. for CollapsingHeader)
+        ImGuiTreeNodeFlags_AllowItemOverlap     = 0x0000'0004,   // Hit testing to allow subsequent widgets to overlap this one
+        ImGuiTreeNodeFlags_NoTreePushOnOpen     = 0x0000'0008,   // Don't do a TreePush() when open (e.g. for CollapsingHeader) = no extra indent nor pushing on ID stack
+        ImGuiTreeNodeFlags_NoAutoOpenOnLog      = 0x0000'0010,   // Don't automatically and temporarily open node when Logging is active (by default logging will automatically open tree nodes)
+        ImGuiTreeNodeFlags_DefaultOpen          = 0x0000'0020,   // Default node to be open
+        ImGuiTreeNodeFlags_OpenOnDoubleClick    = 0x0000'0040,   // Need double-click to open node
+        ImGuiTreeNodeFlags_OpenOnArrow          = 0x0000'0080,   // Only open when clicking on the arrow part. If ImGuiTreeNodeFlags_OpenOnDoubleClick is also set, single-click arrow or double-click all box to open.
+        ImGuiTreeNodeFlags_Leaf                 = 0x0000'0100,   // No collapsing, no arrow (use as a convenience for leaf nodes).
+        ImGuiTreeNodeFlags_Bullet               = 0x0000'0200,   // Display a bullet instead of arrow
+        ImGuiTreeNodeFlags_FramePadding         = 0x0000'0400,  // Use FramePadding (even for an unframed text node) to vertically align text baseline to regular widget height. Equivalent to calling AlignTextToFramePadding().
+        ImGuiTreeNodeFlags_SpanAvailWidth       = 0x0000'0800,  // Extend hit box to the right-most edge, even if not framed. This is not the default in order to allow adding other items on the same line. In the future we may refactor the hit system to be front-to-back, allowing natural overlaps and then this can become the default.
+        ImGuiTreeNodeFlags_SpanFullWidth        = 0x0000'1000,  // Extend hit box to the left-most and right-most edges (bypass the indented area).
+        ImGuiTreeNodeFlags_NavLeftJumpsBackHere = 0x0000'2000,  // (WIP) Nav: left direction may move to this TreeNode() from any of its child (items submitted between TreeNode and TreePop)
+        // ImGuiTreeNodeFlags_NoScrollOnOpen     = 0x0000'4000,  // FIXME: TODO: Disable automatic scroll on TreePop() if node got just open and contents is not visible
+        // ImGuiTreeNodeFlags_CollapsingHeader     = ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_NoAutoOpenOnLog
+    };
+
     extern("libjoyecs", "je_gui_job_vm_handle")
     func JobID() : handle;
 
@@ -129,8 +150,15 @@ namespace je
 
     extern("libjoyecs", "je_gui_treenode")
     func TreeNode(var label:string):bool;
+    extern("libjoyecs", "je_gui_treenodeex")
+    func TreeNodeEx(var label:string, var attrib: int):bool;
     extern("libjoyecs", "je_gui_treepop")
     func TreePop():void;
+
+    extern("libjoyecs", "je_gui_is_itemclicked")
+    func IsItemClicked(): bool;
+    extern("libjoyecs", "je_gui_is_itemtoggledopen")
+    func IsItemToggledOpen(): bool;
 
     extern("libjoyecs", "je_gui_beginpopup_contextitem")
     func BeginPopupContextItem(var label:string):bool;
@@ -344,6 +372,20 @@ WO_API wo_api je_gui_endgroup(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_is_itemclicked(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::IsItemClicked());
+}
+
+WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::IsItemToggledOpen());
+}
+
+WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::TreeNodeEx(wo_string(args + 0), (ImGuiTreeNodeFlags)wo_int(args + 1)));
+}
 
 WO_API wo_api je_gui_treenode(wo_vm vm, wo_value args, size_t argc)
 {

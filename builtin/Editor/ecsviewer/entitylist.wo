@@ -59,12 +59,16 @@ namespace editor
                 if (entity_name == "")
                     entity_name = "<匿名实体>";
 
-                if (Button(F"{entity_name}##{entity->editor::chunk_info()}"))
-                {
+                var attribute = 
+                  TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+
+                var shown_child = TreeNodeEx(F"{entity_name}##{entity->editor::chunk_info()}", attribute);
+                if (IsItemClicked() && !IsItemToggledOpen())
                     set_current_entity(option::value(entity));
-                }
-                SameLine();
-                if(TreeNode(F"##{entity->editor::chunk_info()}"))
+
+                if(shown_child)
                 {
                     _display_entity_with_iter(entity_iter->childs());
                     TreePop();
