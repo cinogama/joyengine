@@ -77,9 +77,9 @@ namespace je
     extern("libjoyecs", "je_gui_begin")
     func Begin(var title:string) : bool;
     extern("libjoyecs", "je_gui_begin")
-    func Begin(var title:string, var attribute:int) : bool;
+    func Begin(var title:string, var attribute:WindowsAttribute) : bool;
     extern("libjoyecs", "je_gui_begin")
-    func Begin(var title:string, var attribute:int, ref closed:bool) : bool;
+    func Begin(var title:string, var attribute:WindowsAttribute, ref closed:bool) : bool;
 
     extern("libjoyecs", "je_gui_end")
     func End() : bool;
@@ -151,7 +151,7 @@ namespace je
     extern("libjoyecs", "je_gui_treenode")
     func TreeNode(var label:string):bool;
     extern("libjoyecs", "je_gui_treenodeex")
-    func TreeNodeEx(var label:string, var attrib: int):bool;
+    func TreeNodeEx(var label:string, var attrib: TreeNodeAttribute):bool;
     extern("libjoyecs", "je_gui_treepop")
     func TreePop():void;
 
