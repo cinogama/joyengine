@@ -510,52 +510,59 @@ namespace je
             extern("libjoyecs", "wojeapi_is_child_of_entity")
             func is_child_of(var self: entity, var parent: entity): bool;
 
-            using entity_iter
+            using entity_iter = struct {
+                m_cur_iter          : array::iterator<entity>,
+                m_judge_func        : bool(entity),
+                m_current_entity    : option<entity>,
+
+                m_all_entity_list   : array<entity>,
+                m_not_top_entities  : array<entity>,
+                m_outed_entities    : array<entity>,
+            };
+            namespace entity_iter
             {
-                var m_cur_iter = option::none:<array::iterator<entity>>;
-                var m_judge_func = func(var e: entity){std::panic("invalid function!"); return false;};
-                var m_current_entity = option::none:<entity>;
-
-                var m_all_entity_list = []: array<entity>;
-                var m_not_top_entities = []: array<entity>;
-                var m_outed_entities = []: array<entity>;
-
                 private func create(var entitys: array<entity>)
                 {
-                    // walk throw all 'top' entity
-                    var self = new();
-                    self.m_all_entity_list = entitys;
-                    self.m_cur_iter = option::value(entitys->iter());
-                    self.m_judge_func = func(var e: entity)
-                                        {
+                    var not_top_entities = []: array<entity>;
+                    return entity_iter{
+                        m_cur_iter = entitys->iter(),
+                        m_judge_func = func(var e: entity)
+                                       {
                                             var result = e->editor::is_top();
                                             if (!result)
-                                                self.m_not_top_entities->add(e);
+                                                not_top_entities->add(e);
                                             return result
-                                        };
-                    return self;
+                                       },
+                        m_current_entity = option::none:<entity>,
+                        m_all_entity_list = entitys,
+                        m_not_top_entities = not_top_entities,
+                        m_outed_entities = []: array<entity>,
+                    };
                 }
+
                 func childs(var self: entity_iter)
                 {
-                    var chiter = new();
-                    chiter.m_all_entity_list = self.m_all_entity_list;
-                    chiter.m_cur_iter = option::value(self.m_all_entity_list->iter());
-                    chiter.m_outed_entities = self.m_outed_entities;
-
                     var parent_entity = self.m_current_entity->val();
-                    chiter.m_judge_func = func(var e: entity)
-                                          {
-                                                return e->is_child_of(parent_entity);
-                                          };
-                    return chiter;
+                    return entity_iter{
+                        m_cur_iter = self.m_all_entity_list->iter(),
+                        m_judge_func = func(var e: entity)
+                                       {
+                                            return e->is_child_of(parent_entity);
+                                       },
+                        m_current_entity = option::none:<entity>,
+                        m_all_entity_list = self.m_all_entity_list,
+                        m_not_top_entities = []: array<entity>,
+                        m_outed_entities = self.m_outed_entities,
+                    };
                 }
+    
                 func iter(var self: entity_iter)
                 {
                     return self;
                 }
                 func next(var self: entity_iter, ref out_iter: entity_iter,ref out_entity: entity): bool
                 {
-                    var current_iter = self.m_cur_iter->val();
+                    var current_iter = self.m_cur_iter;
                     while (current_iter->next(0, ref out_entity))
                     {
                         if (self.m_judge_func(out_entity))
@@ -595,7 +602,7 @@ namespace je
                     }
                     return false;
                 }
-            }
+            } // end of namespace entity_iter
         }
     }
 
