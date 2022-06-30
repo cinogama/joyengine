@@ -9,7 +9,7 @@ func Editor_ScriptEditor(ref open:bool)
     Begin("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
 
     static var textbuf = TextBuffer("");
-    if (InputTextMultiline("##", textbuf, 500, 300))
+    if (InputTextMultiline("##", textbuf, 500.0, 300.0))
     {
         std::println(textbuf->get());
     }

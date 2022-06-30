@@ -39,7 +39,7 @@ namespace editor
 			Begin("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
 							+ WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
 				menu_bar();
-				if (BeginListBox("##", 200, 400))
+				if (BeginListBox("##", 200.0, 400.0))
 				{
 					var worlds = je::universe::current()->editor::worlds_list();
 					for (var world : worlds)
