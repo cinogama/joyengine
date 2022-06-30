@@ -99,10 +99,10 @@ namespace editor
 					{
 						// TODO: 在此处显示一下实体信息
 						var current_component_types = 
-						component_chain{ 
-							m_map = {}: map<string, component_chain>, 
-							m_component_type = option::none:<je::typeinfo> 
-						};
+							component_chain{ 
+								m_map = {}: map<string, component_chain>, 
+								m_component_type = option::none:<je::typeinfo> 
+							};
 						for (var component_type : current_entity->editor::get_components_types())
 						{
 							var component_type_name = component_type->name();
