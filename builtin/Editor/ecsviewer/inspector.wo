@@ -82,16 +82,10 @@ namespace editor
 			}
 		}
 
-		using component_chain
-		{
-			var m_map = {}: map<string, component_chain>;
-			var m_component_type = option::none:<je::typeinfo>;
-
-			func create()
-			{
-				return new();
-			}
-		}
+		using component_chain = struct{
+			m_map:				map<string, component_chain>,
+			m_component_type:	option<je::typeinfo>,
+		};
 
 		func show(ref open: bool)
 		{
@@ -104,16 +98,25 @@ namespace editor
 					option::value(current_entity)?
 					{
 						// TODO: 在此处显示一下实体信息
-						var current_component_types = component_chain();
+						var current_component_types = 
+						component_chain{ 
+							m_map = {}: map<string, component_chain>, 
+							m_component_type = option::none:<je::typeinfo> 
+						};
 						for (var component_type : current_entity->editor::get_components_types())
 						{
 							var component_type_name = component_type->name();
 							var current_types = current_component_types;
 							var scope_names = component_type_name->split("::");
 
+							// 从根开始，找到最终组件所在的节点
 							for (var name: scope_names)
 							{
-								current_types = current_types.m_map->get(name, component_chain());
+								current_types = current_types.m_map->get(name, 
+									component_chain{
+										m_map = {}: map<string, component_chain>,
+										m_component_type = option::none:<je::typeinfo>
+									});
 							}
 
 							current_types.m_component_type = option::value(component_type);
