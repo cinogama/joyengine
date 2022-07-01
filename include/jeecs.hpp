@@ -2633,7 +2633,11 @@ namespace jeecs
             {
                 return nullptr != _m_resouce;
             }
-            operator jegl_resource* () const noexcept
+            inline operator jegl_resource* () const noexcept
+            {
+                return _m_resouce;
+            }
+            inline jegl_resource* resouce() const noexcept
             {
                 return _m_resouce;
             }

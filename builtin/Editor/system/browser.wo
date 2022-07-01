@@ -18,7 +18,15 @@ namespace editor
 			if (!open) return !open;
 
 			Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
-				Image(test_create_image(), 0.2);
+				BeginGroup();
+					ImageButtom(test_create_image(), 0.2);
+					Text("TEST.TXT");
+				EndGroup();
+				SameLine();
+				BeginGroup();
+					ImageButtom(test_create_image(), 0.2);
+					Text("TEST2.TXT");
+				EndGroup();
 			End();
 
 			return !open;
