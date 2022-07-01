@@ -692,7 +692,7 @@ namespace je
                 }
             } // end of namespace entity_iter
         }
-    }
+    } // end of namespace entity
 
     using native_value = handle;
     namespace native_value
