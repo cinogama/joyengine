@@ -6,6 +6,7 @@
 
 jeecs_file* jeecs_file_open(const char* path)
 {
+    // TODO: Open file in work path.
     FILE* fhandle = fopen(path, "rb");
     if (fhandle)
     {

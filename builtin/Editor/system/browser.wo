@@ -5,6 +5,12 @@ namespace editor
 {
 	namespace Browser
 	{
+		func test_create_image()
+		{
+			static var image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/File.png")->val();
+			return image;
+		}
+
 		func show(ref open: bool)
 		{
 			using je::gui;
@@ -12,6 +18,7 @@ namespace editor
 			if (!open) return !open;
 
 			Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+				Image(test_create_image(), 0.2);
 			End();
 
 			return !open;

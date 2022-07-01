@@ -346,10 +346,11 @@ struct jegl_texture
     using pixel_data_t = uint8_t;
     enum texture_format
     {
-        MONO,
-        RGB,
-        RGBA,
+        MONO = 1,
+        RGB = 3,
+        RGBA = 4,
     };
+    // NOTE: Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
     pixel_data_t* m_pixels;
     size_t          m_width;
     size_t          m_height;
@@ -2617,6 +2618,14 @@ namespace jeecs
 
             }
         public:
+            inline operator bool() const noexcept
+            {
+                return nullptr != _m_resouce;
+            }
+            inline bool enabled() const noexcept
+            {
+                return nullptr != _m_resouce;
+            }
             operator jegl_resource* () const noexcept
             {
                 return _m_resouce;
@@ -2634,6 +2643,81 @@ namespace jeecs
             explicit texture(const std::string& str)
                 : resouce_basic(jegl_load_texture(str.c_str()))
             {
+            }
+            explicit texture(size_t width, size_t height, jegl_texture::texture_format format)
+                : resouce_basic(jegl_create_texture(width, height, format))
+            {
+            }
+
+            class pixel
+            {
+                jegl_texture* _m_texture;
+                jegl_texture::pixel_data_t* _m_pixel;
+            public:
+                pixel(jegl_resource* _texture, size_t x, size_t y) noexcept
+                    : _m_texture(_texture->m_raw_texture_data)
+                {
+                    assert(_texture->m_type == jegl_resource::type::TEXTURE);
+                    assert(sizeof(jegl_texture::pixel_data_t) == 1);
+
+                    _m_pixel =
+                        _m_texture->m_pixels
+                        + y * _m_texture->m_width * _m_texture->m_format
+                        + x * _m_texture->m_format;
+                }
+                inline math::vec4 get() const noexcept
+                {
+                    switch (_m_texture->m_format)
+                    {
+                    case jegl_texture::texture_format::MONO:
+                        return math::vec4{ _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f };
+                    case jegl_texture::texture_format::RGB:
+                        return math::vec4{ _m_pixel[0] / 255.0f, _m_pixel[1] / 255.0f, _m_pixel[2] / 255.0f, 1.0f };
+                    case jegl_texture::texture_format::RGBA:
+                        return math::vec4{ _m_pixel[0] / 255.0f, _m_pixel[1] / 255.0f, _m_pixel[2] / 255.0f, _m_pixel[3] / 255.0f };
+                    default:
+                        assert(0); return {};
+                    }
+                }
+                inline void set(const math::vec4& value) const noexcept
+                {
+                    switch (_m_texture->m_format)
+                    {
+                    case jegl_texture::texture_format::MONO:
+                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(value.x * 255.0f);
+                        break;
+                    case jegl_texture::texture_format::RGB:
+                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(value.x * 255.0f);
+                        _m_pixel[1] = (jegl_texture::pixel_data_t)round(value.y * 255.0f);
+                        _m_pixel[2] = (jegl_texture::pixel_data_t)round(value.z * 255.0f);
+                        break;
+                    case jegl_texture::texture_format::RGBA:
+                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(value.x * 255.0f);
+                        _m_pixel[1] = (jegl_texture::pixel_data_t)round(value.y * 255.0f);
+                        _m_pixel[2] = (jegl_texture::pixel_data_t)round(value.z * 255.0f);
+                        _m_pixel[3] = (jegl_texture::pixel_data_t)round(value.w * 255.0f);
+                        break;
+                    default:
+                        assert(0); break;
+                    }
+                }
+
+                inline operator math::vec4()const noexcept
+                {
+                    return get();
+                }
+                inline pixel& operator = (const math::vec4& col) noexcept
+                {
+                    set(col);
+                    return *this;
+                }
+            };
+
+            // pixel's x/y is from LEFT-BUTTOM to RIGHT/TOP
+            pixel pix(size_t x, size_t y) const noexcept
+            {
+                assert(enabled());
+                return pixel(*this, x, y);
             }
         };
 

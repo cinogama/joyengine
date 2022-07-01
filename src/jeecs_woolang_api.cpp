@@ -360,6 +360,71 @@ WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t ar
 
     return wo_ret_void(vm);
 }
+///////////////////////////////////////////////////////////////////////
+WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_texture = jeecs::basic::create_new<jeecs::graphic::texture>(wo_string(args + 0));
+    if (loaded_texture->enabled())
+    {
+        return wo_ret_option_gchandle(vm, loaded_texture, nullptr,
+            [](void* ptr) {
+                jeecs::basic::destroy_free((jeecs::graphic::texture*)ptr);
+            });
+    }
+    jeecs::basic::destroy_free(loaded_texture);
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_texture = jeecs::basic::create_new<jeecs::graphic::texture>(
+        wo_int(args + 0), wo_int(args + 1), jegl_texture::texture_format::RGBA);
+
+    return wo_ret_gchandle(vm, loaded_texture, nullptr,
+        [](void* ptr) {
+            jeecs::basic::destroy_free((jeecs::graphic::texture*)ptr);
+        });
+}
+
+WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_texture = (jeecs::graphic::texture*)wo_pointer(args + 0);
+    auto* pix = jeecs::basic::create_new<jeecs::graphic::texture::pixel>(*loaded_texture, wo_int(args + 1), wo_int(args + 2));
+
+    return wo_ret_gchandle(vm, pix, args + 0, [](void* ptr)
+        {
+            jeecs::basic::destroy_free((jeecs::graphic::texture::pixel*)ptr);
+        });
+}
+
+WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* pix = (jeecs::graphic::texture::pixel*)wo_pointer(args + 0);
+    auto color = pix->get();
+
+    if (wo_is_ref(args + 1))
+        wo_set_float(args + 1, color.x);
+    else
+        color.x = wo_float(args + 1);
+
+    if (wo_is_ref(args + 2))
+        wo_set_float(args + 2, color.y);
+    else
+        color.y = wo_float(args + 2);
+
+    if (wo_is_ref(args + 3))
+        wo_set_float(args + 3, color.z);
+    else
+        color.z = wo_float(args + 3);
+
+    if (wo_is_ref(args + 4))
+        wo_set_float(args + 4, color.w);
+    else
+        color.w = wo_float(args + 4);
+
+    pix->set(color);
+
+    return wo_ret_void(vm);
+}
 
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
@@ -368,6 +433,29 @@ namespace je
 {
     extern("libjoyecs", "wojeapi_exit")
     func exit(): void;
+
+    namespace graphic
+    {
+        using texture = gchandle;
+        namespace texture
+        {
+            extern("libjoyecs", "wojeapi_texture_open")
+            func create(var path: string): option<texture>;
+
+            extern("libjoyecs", "wojeapi_texture_create")
+            func create(var width: int, var height: int): texture;
+
+            extern("libjoyecs", "wojeapi_texture_get_pixel")
+            func pix(var self: texture, var x: int, var y: int): pixel;
+
+            using pixel = gchandle;
+            namespace pixel
+            {
+                extern("libjoyecs", "wojeapi_texture_pixel_color")
+                func color(var self: pixel, ref r: real, ref g: real, ref b: real, ref a: real): void;
+            }
+        }
+    }
 
     using typeinfo = handle;
     namespace typeinfo

@@ -263,6 +263,24 @@ JE_API void jegl_get_windows_size(size_t* x, size_t* y)
     _current_graphic_thread->m_apis->get_windows_size(_current_graphic_thread, x, y);
 }
 
+jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::texture_format format)
+{
+    jegl_resource* texture = jeecs::basic::create_new<jegl_resource>();
+    texture->m_graphic_thread = nullptr;
+    texture->m_type = jegl_resource::TEXTURE;
+    texture->m_raw_texture_data = jeecs::basic::create_new<jegl_texture>();
+    texture->m_ptr = INVALID_RESOURCE;
+
+    texture->m_raw_texture_data->m_pixels = (jegl_texture::pixel_data_t*)stbi__malloc(width * height * format);
+    assert(texture->m_raw_texture_data->m_pixels);
+
+    texture->m_raw_texture_data->m_width = width;
+    texture->m_raw_texture_data->m_height = height;
+    texture->m_raw_texture_data->m_format = format;
+
+    return texture;
+}
+
 jegl_resource* jegl_load_texture(const char* path)
 {
     if (jeecs_file* texfile = jeecs_file_open(path))
@@ -277,7 +295,7 @@ jegl_resource* jegl_load_texture(const char* path)
         jeecs_file_read(fbuf, sizeof(unsigned char), texfile->m_file_length, texfile);
         int w, h, cdepth;
 
-        stbi_set_flip_vertically_on_load(true);
+        stbi_set_flip_vertically_on_load(false);
         texture->m_raw_texture_data->m_pixels = stbi_load_from_memory(
             fbuf,
             texfile->m_file_length,

@@ -18,6 +18,7 @@ const char* gui_api_src = R"(
 // JoyEngineECS GUI API for woo.
 
 import woo.std;
+import je;
 
 namespace je
     namespace gui
@@ -159,6 +160,8 @@ namespace je
     func IsItemClicked(): bool;
     extern("libjoyecs", "je_gui_is_itemtoggledopen")
     func IsItemToggledOpen(): bool;
+    extern("libjoyecs", "je_gui_is_itemhovered")
+    func IsItemHovered(): bool;
 
     extern("libjoyecs", "je_gui_beginpopup_contextitem")
     func BeginPopupContextItem(var label:string):bool;
@@ -251,6 +254,12 @@ namespace je
 
     extern("libjoyecs", "je_gui_separator")
     func Separator() : void;
+
+    extern("libjoyecs", "je_gui_image")
+    func Image(var tex: je::graphic::texture) : void;
+
+    extern("libjoyecs", "je_gui_image")
+    func Image(var tex: je::graphic::texture, var scale: real) : void;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -380,6 +389,11 @@ WO_API wo_api je_gui_is_itemclicked(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_bool(vm, ImGui::IsItemToggledOpen());
+}
+
+WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::IsItemHovered());
 }
 
 WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args, size_t argc)
@@ -529,6 +543,31 @@ WO_API wo_api je_gui_separator(wo_vm vm, wo_value args, size_t argc)
     ImGui::Separator();
     return wo_ret_void(vm);
 }
+
+WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::graphic::texture* texture = (jeecs::graphic::texture*)wo_pointer(args + 0);
+
+    jegl_using_resource(*texture);
+
+    if (argc == 1)
+        ImGui::Image((ImTextureID)(
+            (jegl_resource*)*texture)->m_uint1,
+            ImVec2(
+                ((jegl_resource*)*texture)->m_raw_texture_data->m_width,
+                ((jegl_resource*)*texture)->m_raw_texture_data->m_height
+            ));
+    else if (argc == 2)
+        ImGui::Image((ImTextureID)(
+            (jegl_resource*)*texture)->m_uint1,
+            ImVec2(
+                ((jegl_resource*)*texture)->m_raw_texture_data->m_width * wo_float(args + 1),
+                ((jegl_resource*)*texture)->m_raw_texture_data->m_height * wo_float(args + 1)
+            ));
+
+    return wo_ret_void(vm);
+}
+
 
 WO_API wo_api je_gui_create_text_buffer(wo_vm vm, wo_value args, size_t argc)
 {
