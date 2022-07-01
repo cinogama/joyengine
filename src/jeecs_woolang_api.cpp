@@ -570,6 +570,11 @@ namespace je
         {
             return a->editor::chunk_info() == b->editor::chunk_info();
         }
+        func operator != (var a: entity, var b: entity)
+        {
+            return a->editor::chunk_info() != b->editor::chunk_info();
+        }
+
         namespace editor
         {
             extern("libjoyecs", "wojeapi_get_entity_name")

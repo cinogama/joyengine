@@ -2,6 +2,8 @@ import woo.std;
 import je.gui;
 import je;
 
+import woo.debug;
+
 import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
 
