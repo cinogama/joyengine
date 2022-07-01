@@ -273,8 +273,21 @@ var je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
         // TODO: Enable modify them in raw data.
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        switch (resource->m_raw_texture_data->m_sampling)
+        {
+        case jegl_texture::texture_sampling::LINEAR:
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            break;
+        case jegl_texture::texture_sampling::NEAREST:
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            break;
+        default:
+            jeecs::debug::log_error("Unknown texture sampling method.");
+        }
+
 
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;

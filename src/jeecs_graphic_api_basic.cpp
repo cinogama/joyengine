@@ -277,6 +277,7 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::te
     texture->m_raw_texture_data->m_width = width;
     texture->m_raw_texture_data->m_height = height;
     texture->m_raw_texture_data->m_format = format;
+    texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::LINEAR;
 
     return texture;
 }
@@ -316,6 +317,7 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_raw_texture_data->m_width = (size_t)w;
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
+        texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::LINEAR;
 
         return texture;
     }

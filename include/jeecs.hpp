@@ -344,17 +344,24 @@ struct jegl_thread
 struct jegl_texture
 {
     using pixel_data_t = uint8_t;
-    enum texture_format
+    enum texture_format : uint8_t
     {
         MONO = 1,
         RGB = 3,
         RGBA = 4,
     };
+    enum texture_sampling : uint8_t
+    {
+        LINEAR,
+        NEAREST,
+    };
     // NOTE: Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
     pixel_data_t* m_pixels;
     size_t          m_width;
     size_t          m_height;
+
     texture_format  m_format;
+    texture_sampling m_sampling;
 };
 
 struct jegl_vertex
