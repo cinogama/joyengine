@@ -566,6 +566,10 @@ namespace je
     using entity = gchandle;
     namespace entity
     {
+        func operator == (var a: entity, var b: entity)
+        {
+            return a->editor::chunk_info() == b->editor::chunk_info();
+        }
         namespace editor
         {
             extern("libjoyecs", "wojeapi_get_entity_name")

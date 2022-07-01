@@ -67,7 +67,7 @@ namespace editor
                 match (get_current_entity())
                 {
                     option::value(selected_entity)?
-                        if (selected_entity->editor::chunk_info() == entity->editor::chunk_info())
+                        if (selected_entity == entity)
                             attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                     option::none?
                         ; // 没有选中的实体，啥也不干
