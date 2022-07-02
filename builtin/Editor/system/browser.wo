@@ -11,6 +11,17 @@ namespace editor
 			return image;
 		}
 
+		func button()
+		{
+			using je::gui;
+
+			BeginGroup();
+				ImageButtom(test_create_image(), 0.2);
+				SameLine();
+				Text("TEST.TXT");
+			EndGroup();
+		}
+
 		func show(ref open: bool)
 		{
 			using je::gui;
@@ -18,18 +29,10 @@ namespace editor
 			if (!open) return !open;
 
 			Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
-				TreeNode("SubItem");
-					Text("ZERO.TXT");
-				TreePop();
-				BeginGroup();
-					ImageButtom(test_create_image(), 0.2);
-					Text("TEST.TXT");
-				EndGroup();
+				button();
 				SameLine();
-				BeginGroup();
-					ImageButtom(test_create_image(), 0.2);
-					Text("TEST2.TXT");
-				EndGroup();
+				button();
+				
 			End();
 
 			return !open;

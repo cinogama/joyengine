@@ -930,7 +930,7 @@ namespace shader
 
     private extern func generate()
     {
-        var vertex_out = vert(vertex_in());
+        var vertex_out = vert(vertex_in()) as vertex_out;
         var fragment_out = frag(fragment_in(vertex_out)) as fragment_out;
 
         return _wraped_shader(vertex_out, fragment_out);

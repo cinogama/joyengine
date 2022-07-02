@@ -10,7 +10,7 @@ namespace editor
 {
 	namespace WorldList
 	{
-		private func menu_bar()
+		private func menu()
 		{
 			using je::gui;
 			if (BeginMenuBar())
@@ -38,7 +38,7 @@ namespace editor
 
 			Begin("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
 							+ WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
-				menu_bar();
+				menu();
 				if (BeginListBox("##", 200.0, 400.0))
 				{
 					var worlds = je::universe::current()->editor::worlds_list();
@@ -59,7 +59,7 @@ namespace editor
 												func(){ world->rend(); });
 							}
 						}
-						world_context_menu(world);
+						context_menu(world);
 					}
 					EndListBox();
 				}
@@ -68,7 +68,7 @@ namespace editor
 			return !open;
 		}
 
-		private func world_context_menu(var world: je::world)
+		private func context_menu(var world: je::world)
 		{
 			using je::gui;
 			if (BeginPopupContextItem())

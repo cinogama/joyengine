@@ -82,6 +82,13 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
 }
 
 // ECS ENTITY
+WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    entity->close();
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_get_entity_name(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -573,6 +580,14 @@ namespace je
         func operator != (var a: entity, var b: entity)
         {
             return a->editor::chunk_info() != b->editor::chunk_info();
+        }
+
+        func close(var self: entity)
+        {
+            extern("libjoyecs", "wojeapi_close_entity")
+            func _close(var self: entity): void;
+
+            _close(self);
         }
 
         namespace editor

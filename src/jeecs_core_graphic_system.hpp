@@ -44,10 +44,10 @@ namespace jeecs
             // GraphicSystem is a public system and not belong to any world.
             default_shape_quad =
                 new graphic::vertex(jegl_vertex::QUADS,
-                    { -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,
-                    0.5f, -0.5f, 0.0f,      1.0f, 0.0f,
-                    0.5f, 0.5f, 0.0f,       1.0f, 1.0f,
-                    -0.5f, 0.5f, 0.0f,      0.0f, 1.0f, },
+                    { -0.5f, -0.5f, 0.0f,     0.0f, 1.0f,
+                    0.5f, -0.5f, 0.0f,      1.0f, 1.0f,
+                    0.5f, 0.5f, 0.0f,       1.0f, 0.0f,
+                    -0.5f, 0.5f, 0.0f,      0.0f, 0.0f, },
                     { 3, 2 });
 
             default_shader = new graphic::shader("je/default.shader", R"(
@@ -56,7 +56,8 @@ import je.shader;
 
 func vert(var vdata:vertex_in)
 {
-    var ipos = vdata->in:<float3>(0);
+    var ipos    = vdata->in:<float3>(0);
+    var iuv     = vdata->in:<float2>(1);
 
     var opos = je_mvp * float4(ipos, 1);
     return vertex_out(opos);
