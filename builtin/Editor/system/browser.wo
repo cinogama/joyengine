@@ -1,25 +1,93 @@
 import woo.std;
 import je.gui;
+import je.filesys;
 
 namespace editor
 {
 	namespace Browser
 	{
-		func test_create_image()
+		optional filetype
 		{
-			static var image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/File.png")->val();
-			return image;
+			path(je::graphic::texture),
+			others(je::graphic::texture),
+		}
+		namespace filetype
+		{
+			func get_texture(var self: filetype)
+			{
+				match (self)
+				{
+					filetype::path(t)?
+						return t;
+					filetype::others(t)?
+						return t;
+				}
+			}
 		}
 
-		func button()
+		var FILE_TYPE_ICONS = {} : map<string, filetype>;
+
+		var current_work_path = "";
+
+		private func get_file_icon_by_extern_name(var _path: string) : filetype
+		{
+			static var default_path_icon 
+				= filetype::path(
+					je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/FilePath.png")->val());
+			static var default_file_icon 
+				= filetype::others(
+					je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/File.png")->val());
+
+			if (je::filesys::isdir(_path))
+				return default_path_icon;
+
+			return FILE_TYPE_ICONS->get_or_default(je::filesys::externname(_path), default_file_icon);
+		}
+
+		func button(var path: string)
 		{
 			using je::gui;
 
 			BeginGroup();
-				ImageButtom(test_create_image(), 0.2);
+				ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
 				SameLine();
-				Text("TEST.TXT");
+				Text(je::filesys::filename(path));
 			EndGroup();
+		}
+
+		func files_group()
+		{
+			using je::gui;
+
+			BeginChild("files_list");
+			for (var subpath : je::filesys::path(current_work_path))
+				button(subpath);
+			EndChild();
+		}
+
+		func path_tree()
+		{
+			using je::gui;
+
+			func _show_paths(var path: string)
+			{
+				var filename = je::filesys::filename(path);
+				var endtree = false;
+				if (filename != "" && TreeNode(filename))
+					endtree = true;
+
+				if (endtree || filename == "")
+					for (var subpath : je::filesys::path(path))
+						if (je::filesys::isdir(subpath))
+							_show_paths(subpath);
+
+				if (endtree)
+					TreePop();
+			}
+
+			BeginChild("path_tree", 200., 0.);
+				_show_paths(std::exepath());
+			EndChild();
 		}
 
 		func show(ref open: bool)
@@ -28,11 +96,13 @@ namespace editor
 
 			if (!open) return !open;
 
+			if (current_work_path == "")
+				current_work_path = std::exepath();
+
 			Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
-				button();
+				path_tree();
 				SameLine();
-				button();
-				
+				files_group();
 			End();
 
 			return !open;

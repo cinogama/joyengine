@@ -85,6 +85,14 @@ namespace je
     extern("libjoyecs", "je_gui_end")
     func End() : bool;
 
+    extern("libjoyecs", "je_gui_begin_child")
+    func BeginChild(var title:string) : bool;
+    extern("libjoyecs", "je_gui_begin_child")
+    func BeginChild(var title:string, var sizex: real, var sizey: real) : bool;
+
+    extern("libjoyecs", "je_gui_end_child")
+    func EndChild() : void;
+
     extern("libjoyecs", "je_gui_text")
     func Text(var msg:string) : void;
 
@@ -483,6 +491,21 @@ WO_API wo_api je_gui_end(wo_vm vm, wo_value args, size_t argc)
     ImGui::End();
     return wo_ret_void(vm);
 }
+WO_API wo_api je_gui_begin_child(wo_vm vm, wo_value args, size_t argc)
+{
+    if (argc == 3)
+    {
+        return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
+            ImVec2(wo_float(args + 1), wo_float(args + 2)), true));
+    }
+    return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0), ImVec2(0.f, 0.f), true));
+}
+WO_API wo_api je_gui_end_child(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::EndChild();
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api je_gui_text(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::Text(wo_string(args));
