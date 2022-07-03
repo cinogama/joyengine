@@ -28,14 +28,15 @@ namespace jeecs
         using Projection = Camera::Projection;
         using Viewport = Camera::Viewport;
 
-        using Material = Renderer::Material;
         using Shape = Renderer::Shape;
+        using Shaders = Renderer::Shaders;
+        using Textures = Renderer::Textures;
 
         jegl_thread* glthread = nullptr;
         game_universe current_universe = nullptr;
 
         basic::resource<graphic::vertex> default_shape_quad;
-        basic::resource<graphic::shader> default_shader;
+        jeecs::vector<basic::resource<graphic::shader>> default_shaders;
 
         DefaultGraphicPipelineSystem(game_universe universe)
             : game_system(nullptr)
@@ -50,18 +51,16 @@ namespace jeecs
                     -0.5f, 0.5f, 0.0f,      0.0f, 0.0f, },
                     { 3, 2 });
 
-            default_shader = new graphic::shader("je/default.shader", R"(
+            default_shaders.push_back(new graphic::shader("je/default.shader", R"(
 // Default shader
 import je.shader;
-
-var example = uniform:<float>("XX", float(1.));
 
 func vert(var vdata:vertex_in)
 {
     var ipos    = vdata->in:<float3>(0);
     var iuv     = vdata->in:<float2>(1);
 
-    var opos = je_mvp * float4(ipos, example);
+    var opos = je_mvp * float4(ipos, 1.);
     return vertex_out(opos);
 }
 func frag(var fdata:fragment_in)
@@ -70,7 +69,7 @@ func frag(var fdata:fragment_in)
     return fragment_out(float4(flashing_color, 0, flashing_color, 1));
 }
 
-)");
+)"));
 
             jegl_interface_config config = {};
             config.m_fps = 60;
@@ -97,6 +96,9 @@ func frag(var fdata:fragment_in)
             register_system_func(&DefaultGraphicPipelineSystem::SimpleRendObject,
                 {
                     before(&DefaultGraphicPipelineSystem::FlushPipeLine),
+                    any_of<Shaders>(),
+                    any_of<Textures>(),
+                    any_of<Shape>(),
                 });
             register_system_func(&DefaultGraphicPipelineSystem::FlushPipeLine);
         }
@@ -123,8 +125,9 @@ func frag(var fdata:fragment_in)
         {
             const Rendqueue* rendqueue;
             const Translation* translation;
-            const Material* material;
             const Shape* shape;
+            const Shaders* shaders;
+            const Textures* textures;
 
             bool operator < (const renderer_arch& another) const noexcept
             {
@@ -183,7 +186,7 @@ func frag(var fdata:fragment_in)
                         jegl_rend_to_framebuffer(nullptr, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     // If camera rend to texture, clear the frame buffer (if need)
-                    if(rend_aim_buffer)
+                    if (rend_aim_buffer)
                         jegl_clear_framebuffer(nullptr);
 
                     const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
@@ -196,7 +199,7 @@ func frag(var fdata:fragment_in)
                     {
                         /*jegl_using_texture();
                         jegl_draw_vertex_with_shader();*/
-                        assert(rendentity.material && rendentity.translation);
+                        assert(rendentity.translation);
 
                         const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
 
@@ -209,12 +212,27 @@ func frag(var fdata:fragment_in)
                             (rendentity.shape && rendentity.shape->vertex)
                             ? rendentity.shape->vertex
                             : default_shape_quad;
+                        auto& drawing_shaders =
+                            (rendentity.shaders && rendentity.shaders->shaders.size())
+                            ? rendentity.shaders->shaders
+                            : default_shaders;
 
-                        // TODO: Bind texture here
+                        // Bind texture here
+                        size_t passcount = 0;
+                        if (rendentity.textures)
+                            for (auto& texture : rendentity.textures->textures)
+                            {
+                                if (texture && texture->enabled())
+                                    jegl_using_texture(*texture, passcount);
 
-                        //for (auto& shader_pass : rendentity.material->shaders)
-                        auto& shader_pass = default_shader;
+                                passcount++;
+                            }
+
+                        for (auto& shader_pass : drawing_shaders)
                         {
+                            if (!shader_pass->enabled())
+                                continue;
+
                             auto* builtin_uniform = shader_pass->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, VALUE) \
 if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
@@ -286,14 +304,15 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
         void SimpleRendObject(
             const Translation* trans,
-            const Material* mat,
+            maynot<const Shaders*> shads,
+            maynot<const Textures*> texs,
             maynot<const Shape*> shape,
             maynot<const Rendqueue*> rendqueue)
         {
             // RendOb will be input to a chain and used for swap
             m_renderer_list.emplace(
                 renderer_arch{
-                    rendqueue, trans, mat, shape
+                    rendqueue, trans, shape, shads, texs
                 });
         }
 

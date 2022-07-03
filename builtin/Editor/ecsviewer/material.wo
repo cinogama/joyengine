@@ -1,0 +1,48 @@
+import woo.std;
+import je.gui;
+import je;
+
+import builtin.Editor.generic.InputBox;
+import builtin.Editor.generic.AskFor;
+
+namespace editor
+{
+	namespace Material
+	{
+		func show(var curentity : je::entity)
+		{
+			using je::gui;
+
+			BeginChild("material_editor", 0., -1.);
+				Text("材质编辑器");
+				Separator();
+
+				var height = 0.;
+				GetContentRegionAvail(0./* 不关心宽度 */, ref height);
+				height /= 2.;
+
+				BeginChild("Shaders", 0., height);
+					static var ShadersTypeID = je::typeinfo("Renderer::Shaders");
+					match (curentity->editor::get_component(ShadersTypeID))
+					{
+						option::value(shaders)?
+							;
+						option::none?
+							; // 没有这个组件 跳过
+					}
+				EndChild();
+				BeginChild("Textures", 0., height);
+					static var TexturesTypeID = je::typeinfo("Renderer::Textures");
+					match (curentity->editor::get_component(TexturesTypeID))
+					{
+						option::value(textures)?
+							;
+						option::none?
+							; // 没有这个组件 跳过
+					}
+				EndChild();
+
+			EndChild();
+		}
+	}
+}

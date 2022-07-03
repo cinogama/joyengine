@@ -2763,13 +2763,17 @@ namespace jeecs
 
             explicit shader(const std::string& name_path, const std::string& src)
                 : resouce_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
-                , m_builtin(&((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms)
+                , m_builtin(nullptr)
             {
+                if (enabled())
+                    m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
             }
             explicit shader(const std::string& src_path)
                 : resouce_basic(jegl_load_shader(src_path.c_str()))
-                , m_builtin(&((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms)
+                , m_builtin(nullptr)
             {
+                if (enabled())
+                    m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
             }
         };
 
@@ -3289,9 +3293,14 @@ namespace jeecs
             basic::resource<graphic::vertex> vertex;
         };
 
-        struct Material
+        struct Shaders
         {
             jeecs::vector<basic::resource<graphic::shader>> shaders;
+        };
+
+        struct Textures
+        {
+            jeecs::vector< basic::resource<graphic::texture>> textures;
         };
     }
     namespace Camera
@@ -3388,7 +3397,8 @@ namespace jeecs
 
             jeecs::typing::type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
             jeecs::typing::type_info::of<Renderer::Shape>("Renderer::Shape");
-            jeecs::typing::type_info::of<Renderer::Material>("Renderer::Material");
+            jeecs::typing::type_info::of<Renderer::Shaders>("Renderer::Shaders");
+            jeecs::typing::type_info::of<Renderer::Textures>("Renderer::Textures");
 
             jeecs::typing::type_info::of<Camera::Clip>("Camera::Clip");
             jeecs::typing::type_info::of<Camera::Projection>("Camera::Projection");

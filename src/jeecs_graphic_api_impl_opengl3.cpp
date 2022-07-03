@@ -288,18 +288,17 @@ var je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
             jeecs::debug::log_error("Unknown texture sampling method.");
         }
 
-
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
 
         switch (resource->m_raw_texture_data->m_format)
         {
         case jegl_texture::texture_format::MONO:
-            texture_src_format = GL_R; break;
+            texture_aim_format = texture_src_format = GL_LUMINANCE; break;
         case jegl_texture::texture_format::RGB:
-            texture_src_format = GL_RGB; break;
+            texture_aim_format = texture_src_format = GL_RGB; break;
         case jegl_texture::texture_format::RGBA:
-            texture_src_format = GL_RGBA; break;
+            texture_aim_format = texture_src_format = GL_RGBA; break;
         default:
             jeecs::debug::log_error("Unknown texture raw-data format.");
         }

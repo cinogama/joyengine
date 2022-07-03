@@ -6,6 +6,7 @@ import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
 
 import entitylist;
+import material;
 
 namespace editor
 {
@@ -168,6 +169,9 @@ namespace editor
 						}
 
 						waklthrow_and_display_components(current_component_types, current_entity);
+
+						// 接下来是材质编辑器部分
+						Material::show(current_entity);
 					}
 					option::none?
 						Text("<没有选中可编辑的实体>");

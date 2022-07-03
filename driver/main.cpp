@@ -49,13 +49,45 @@ int main(int argc, char** argv)
             Transform::LocalScale,
             Transform::LocalToParent,
             Transform::Translation,
-            Renderer::Material,
-            Renderer::Shape>();
+            Renderer::Shape,
+            Renderer::Shaders,
+            Renderer::Textures>();
 
         entity.get_component<Transform::LocalRotation>()->rot = jeecs::math::quat(0, 0, 0);
         entity2.get_component<Transform::LocalPosition>()->pos = jeecs::math::vec3(0, 0, 0);
         entity2.get_component<Transform::LocalToParent>()->parent_uid =
             entity.get_component<Transform::ChildAnchor>()->anchor_uid;
+
+        auto* tex = new graphic::texture(2, 2, jegl_texture::texture_format::RGBA);
+        tex->pix(0, 0).set(math::vec3(0, 0, 0));
+        tex->pix(1, 0).set(math::vec3(1, 0, 0));
+        tex->pix(0, 1).set(math::vec3(0, 1, 0));
+        tex->pix(1, 1).set(math::vec3(0, 0, 1));
+        entity2.get_component<Renderer::Textures>()->textures.push_back(tex);
+        entity2.get_component<Renderer::Shaders>()->shaders.push_back(
+            new graphic::shader("test.shader", R"(
+// Default shader
+import je.shader;
+
+var example_tex = uniform:<texture2d>("example_tex");
+
+func vert(var vdata:vertex_in)
+{
+    var ipos    = vdata->in:<float3>(0);
+    var iuv     = vdata->in:<float2>(1);
+
+    var opos = je_mvp * float4(ipos, 1.);
+    return vertex_out(opos, iuv);
+}
+func frag(var fdata:fragment_in)
+{
+    var iuv = fdata->in:<float2>(1);
+
+    var flashing_color = texture(example_tex, iuv);
+    return fragment_out(float4(flashing_color->xyz(), 1));
+}
+)")
+);
 
         auto entity3 = world.add_entity<
             Transform::LocalPosition,

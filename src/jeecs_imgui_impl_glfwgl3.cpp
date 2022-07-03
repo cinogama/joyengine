@@ -278,6 +278,9 @@ namespace je
     extern("libjoyecs", "je_gui_imagebuttom")
     func ImageButtom(var tex: je::graphic::texture, var scale: real) : bool;
 
+    extern("libjoyecs", "je_gui_content_region_avail")
+    func GetContentRegionAvail(ref x: real, ref y: real): void;
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     using job_handle_t = gchandle;
@@ -629,6 +632,15 @@ WO_API wo_api je_gui_imagebuttom(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, result);
 }
 
+WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args, size_t argc)
+{
+    auto&& sz = ImGui::GetContentRegionAvail();
+
+    wo_set_float(args + 0, sz.x);
+    wo_set_float(args + 1, sz.y);
+
+    return wo_ret_void(vm);
+}
 
 WO_API wo_api je_gui_create_text_buffer(wo_vm vm, wo_value args, size_t argc)
 {
