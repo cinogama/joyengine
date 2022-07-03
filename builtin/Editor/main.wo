@@ -115,10 +115,3 @@ je::gui::launch(TestForm);
 
 
 ///////////////////
-import woo.std;
-
-func foo(var n: int, ...)
-{
-    return ...[n];
-}
-std::println(foo(0, 233));

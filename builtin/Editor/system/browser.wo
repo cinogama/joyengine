@@ -41,7 +41,7 @@ namespace editor
 				PathType::dir(_)?
 					return default_path_icon;
 				PathType::file?
-					return FILE_TYPE_ICONS->get_or_default(je::filesys::externname(_path.path), default_file_icon);
+					return FILE_TYPE_ICONS->get_or_default(_path.externname, default_file_icon);
 			}
 		}
 
@@ -56,8 +56,10 @@ namespace editor
 			file,
 		}
 		using PathInfo = struct {
-			path	: string,			// 当前目录/文件的目录
-			type	: PathType,			// 类型，如果是目录，则还包含目录内的子项	
+			path		: string,			// 当前目录/文件的目录
+			name		: string,
+			externname	: string,
+			type		: PathType,			// 类型，如果是目录，则还包含目录内的子项	
 		};
 
 		static var current_work_path = "";		
@@ -69,7 +71,7 @@ namespace editor
 			BeginGroup();
 				ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
 				SameLine();
-				Text(je::filesys::filename(path.path));
+				Text(path.name);
 			EndGroup();
 		}
 
@@ -86,7 +88,9 @@ namespace editor
 				for (var subpath : je::filesys::path(current_work_path))
 					now_item_in_path->add(
 						PathInfo{ 
-							path = subpath, 
+							path = subpath,
+							name = je::filesys::filename(subpath),
+							externname = je::filesys::externname(subpath),
 							type =  func(){
 								if (je::filesys::isdir(subpath))
 									return PathType::dir(SubPath::notfetch);
@@ -109,6 +113,8 @@ namespace editor
 
 			static var _root = PathInfo {
 					path = std::exepath(),
+					name = je::filesys::filename(std::exepath()),
+					externname = je::filesys::externname(std::exepath()),
 					type = PathType::dir(SubPath::notfetch),
 				};
 
@@ -118,14 +124,13 @@ namespace editor
 				{
 					PathType::dir(subpath)?
 					{
-						var filename = je::filesys::filename(path.path);
 						var attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
 									  + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
 									  + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
 						if (current_work_path == path.path)
 							attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
 						
-						var show_child = TreeNodeEx(filename, attribute);
+						var show_child = TreeNodeEx(path.name, attribute);
 						if (IsItemClicked() && !IsItemToggledOpen())
 							current_work_path = path.path;
 
@@ -146,6 +151,8 @@ namespace editor
 										sublist->add(
 											PathInfo{
 												path = current_subpath, 
+												name = je::filesys::filename(current_subpath),
+												externname = je::filesys::externname(current_subpath),
 												type = func(){
 													if (je::filesys::isdir(current_subpath))
 														return PathType::dir(SubPath::notfetch);
