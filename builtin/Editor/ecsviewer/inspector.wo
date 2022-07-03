@@ -145,7 +145,6 @@ namespace editor
 								option::value(type)?
 								{
 									var member_count = 0;
-
 									match (entity->editor::get_component(type))
 									{
 										option::value(component_addr)?

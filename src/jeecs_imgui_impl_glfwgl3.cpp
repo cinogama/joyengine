@@ -88,6 +88,8 @@ namespace je
     extern("libjoyecs", "je_gui_begin_child")
     func BeginChild(var title:string) : bool;
     extern("libjoyecs", "je_gui_begin_child")
+    func BeginChild(var title:string, var attr: WindowsAttribute) : bool;
+    extern("libjoyecs", "je_gui_begin_child")
     func BeginChild(var title:string, var sizex: real, var sizey: real) : bool;
 
     extern("libjoyecs", "je_gui_end_child")
@@ -500,6 +502,11 @@ WO_API wo_api je_gui_begin_child(wo_vm vm, wo_value args, size_t argc)
     {
         return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
             ImVec2(wo_float(args + 1), wo_float(args + 2)), true));
+    }
+    else if (argc == 2)
+    {
+        return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
+            ImVec2(0.f, 0.f), true, (ImGuiWindowFlags)wo_int(args + 1)));
     }
     return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0), ImVec2(0.f, 0.f), true));
 }

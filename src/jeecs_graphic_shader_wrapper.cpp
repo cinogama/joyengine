@@ -1071,13 +1071,15 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             default:
                 jeecs::debug::log_error("Unsupport uniform variable type."); break;
             }
+            variable->m_updated = true;
         }
         else
         {
             variable->x = variable->y = variable->z = variable->w = 0.f;
             variable->n = 0;
+            variable->m_updated = false;
         }
-        variable->m_updated = true;
+        
 
         *last = variable;
         last = &variable->m_next;
