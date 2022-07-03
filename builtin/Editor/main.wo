@@ -104,11 +104,21 @@ func TestForm()
     using je::gui;
     var open = true;
     Begin("测试窗口", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
-        for (var path : je::filesys::path(std::exepath()))
+        /*for (var path : je::filesys::path(std::exepath()))
             if (je::filesys::isdir(path))
-                Text(je::filesys::filename(path));
+                Text(je::filesys::filename(path));*/
     End();
 
     return !open;
 }
 je::gui::launch(TestForm);
+
+
+///////////////////
+import woo.std;
+
+func foo(var n: int, ...)
+{
+    return ...[n];
+}
+std::println(foo(0, 233));
