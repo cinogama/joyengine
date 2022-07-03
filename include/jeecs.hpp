@@ -392,7 +392,8 @@ struct jegl_shader
         FLOAT2,
         FLOAT3,
         FLOAT4,
-        FLOAT4X4
+        FLOAT4X4,
+        TEXTURE2D,
     };
     struct builtin_uniform_location
     {
@@ -407,8 +408,29 @@ struct jegl_shader
         uint32_t m_builtin_uniform_mv = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_vp = jeecs::typing::INVALID_UINT32;
     };
+
+    struct unifrom_variables
+    {
+        const char* m_name;
+        uint32_t    m_index;
+        uniform_type m_uniform_type;
+        bool        m_updated;
+        union
+        {
+            struct
+            {
+                float x, y, z, w;
+            };
+            int n;
+        };
+
+        unifrom_variables* m_next;
+    };
+
     const char* m_vertex_glsl_src;
     const char* m_fragment_glsl_src;
+
+    unifrom_variables* m_custom_uniforms;
     builtin_uniform_location m_builtin_uniforms;
 };
 
@@ -531,6 +553,7 @@ JE_API jegl_resource* jegl_create_vertex(
     size_t                      format_length);
 
 JE_API void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
+JE_API void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src);
 JE_API jegl_resource* jegl_load_shader(const char* path);
 
@@ -548,6 +571,7 @@ JE_API void jegl_clear_framebuffer_depth(jegl_resource* framebuffer);
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 JE_API void jegl_update_shared_uniform(size_t offset, size_t datalen, const void* data);
 
+JE_API int jegl_uniform_location(jegl_resource* shader, const char* name);
 JE_API void jegl_uniform_int(jegl_resource* shader, int location, int value);
 JE_API void jegl_uniform_float(jegl_resource* shader, int location, float value);
 JE_API void jegl_uniform_float2(jegl_resource* shader, int location, float x, float y);

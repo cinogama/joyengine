@@ -229,6 +229,9 @@ namespace je
     extern("libjoyecs", "je_gui_input_text_box")
     func InputText(var label:string, var buffer:TextBuffer) : bool;
 
+    extern("libjoyecs", "je_gui_input_text_box_with_str")
+    func InputText(var label:string, ref buffer:string) : bool;
+
     extern("libjoyecs", "je_gui_input_float_box")
     func InputFloat(var label: string, ref value: real) : bool;
     extern("libjoyecs", "je_gui_input_float_box")
@@ -651,6 +654,18 @@ WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_bool(vm, ImGui::InputText(wo_string(args + 0), (std::string*)wo_pointer(args + 1)));
 }
+
+WO_API wo_api je_gui_input_text_box_with_str(wo_vm vm, wo_value args, size_t argc)
+{
+    std::string buf = wo_string(args + 1);
+    if (ImGui::InputText(wo_string(args + 0), &buf))
+    {
+        wo_set_string(args + 1, buf.c_str());
+        return wo_ret_bool(vm, true);
+    }
+    return wo_ret_bool(vm, false);
+}
+
 WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args, size_t argc)
 {
     wo_string_t label = wo_string(args + 0);

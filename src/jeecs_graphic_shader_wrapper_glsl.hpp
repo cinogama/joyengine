@@ -204,7 +204,33 @@ std::string _generate_code_for_glsl_impl(
 
     return varname;
 }
-std::string _generate_code_for_glsl_vertex(shader_value_outs* wrap)
+
+uniform_information get_uniform_info(const std::string& name, jegl_shader_value* value)
+{
+    jegl_shader::uniform_type uniform_type = jegl_shader::uniform_type::INT;
+    switch (value->get_type())
+    {
+    case jegl_shader_value::type::INTEGER:
+        uniform_type = jegl_shader::uniform_type::INT; break;
+    case jegl_shader_value::type::FLOAT:
+        uniform_type = jegl_shader::uniform_type::FLOAT; break;
+    case jegl_shader_value::type::FLOAT2:
+        uniform_type = jegl_shader::uniform_type::FLOAT2; break;
+    case jegl_shader_value::type::FLOAT3:
+        uniform_type = jegl_shader::uniform_type::FLOAT3; break;
+    case jegl_shader_value::type::FLOAT4:
+        uniform_type = jegl_shader::uniform_type::FLOAT4; break;
+    case jegl_shader_value::type::FLOAT4x4:
+        uniform_type = jegl_shader::uniform_type::FLOAT4X4; break;
+    case jegl_shader_value::type::TEXTURE2D:
+        uniform_type = jegl_shader::uniform_type::TEXTURE2D; break;
+    default:
+        jeecs::debug::log_error("Unsupport uniform variable type."); break;
+    }
+    return std::make_tuple(name, uniform_type, value->m_uniform_init_val_may_nil);
+}
+
+std::string _generate_code_for_glsl_vertex(shader_wrapper* wrap)
 {
     _glsl_wrapper_contex contex;
     std::string          body_result;
@@ -219,11 +245,14 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
 )";
 
     std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
-    for (auto* out_val : wrap->out_values)
+    for (auto* out_val : wrap->vertex_out->out_values)
         outvalue.push_back(std::make_pair(out_val, _generate_code_for_glsl_impl(&contex, body_result, out_val, false)));
 
     for (auto& uniformdecl : contex._uniform_value)
-        io_declear += "uniform " + _glsl_wrapper_contex::get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
+    {
+        io_declear += "uniform " + _glsl_wrapper_contex::get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";      
+        wrap->vertex_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));
+    }
     io_declear += "\n";
     for (auto& indecl : contex._in_value)
         io_declear += "layout(location = " + std::to_string(indecl.second.first) + ") in "
@@ -250,7 +279,7 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
     return std::move("// Vertex shader source\n#version 330\n" + unifrom_block + io_declear + body_result);
 }
 
-std::string _generate_code_for_glsl_fragment(shader_value_outs* wrap)
+std::string _generate_code_for_glsl_fragment(shader_wrapper* wrap)
 {
     _glsl_wrapper_contex contex;
     std::string          body_result;
@@ -264,11 +293,14 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
 
 )";
     std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
-    for (auto* out_val : wrap->out_values)
+    for (auto* out_val : wrap->fragment_out->out_values)
         outvalue.push_back(std::make_pair(out_val, _generate_code_for_glsl_impl(&contex, body_result, out_val, true)));
 
     for (auto& uniformdecl : contex._uniform_value)
-        io_declear += "uniform " + _glsl_wrapper_contex::get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
+    {
+        io_declear += "uniform " + _glsl_wrapper_contex::get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n"; 
+        wrap->vertex_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));
+    }
     io_declear += "\n";
     for (auto& indecl : contex._in_value)
         io_declear += "in "

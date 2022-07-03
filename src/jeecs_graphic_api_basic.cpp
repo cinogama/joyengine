@@ -221,6 +221,43 @@ void jegl_using_resource(jegl_resource* resource)
     if (need_init_resouce)
         _current_graphic_thread->m_apis->init_resource(_current_graphic_thread, resource);
     _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
+    if (resource->m_type == jegl_resource::SHADER)
+    {
+        auto uniform_vars = resource->m_raw_shader_data->m_custom_uniforms;
+        while (uniform_vars)
+        {
+            if (uniform_vars->m_index == jeecs::typing::INVALID_UINT32)
+                uniform_vars->m_index = jegl_uniform_location(resource, uniform_vars->m_name);
+
+            if (uniform_vars->m_updated)
+            {
+                uniform_vars->m_updated = false;
+                switch (uniform_vars->m_uniform_type)
+                {
+                case jegl_shader::uniform_type::FLOAT:
+                    jegl_uniform_float(resource, uniform_vars->m_index, uniform_vars->x);
+                    break;
+                case jegl_shader::uniform_type::FLOAT2:
+                    jegl_uniform_float2(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
+                    break;
+                case jegl_shader::uniform_type::FLOAT3:
+                    jegl_uniform_float3(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
+                    break;
+                case jegl_shader::uniform_type::FLOAT4:
+                    jegl_uniform_float4(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
+                    break;
+                case jegl_shader::uniform_type::INT:
+                    jegl_uniform_int(resource, uniform_vars->m_index, uniform_vars->n);
+                    break;
+                default:
+                    jeecs::debug::log_error("Unsupport uniform variable type."); break;
+                    break;
+                }
+            }
+
+            uniform_vars = uniform_vars->m_next;
+        }
+    }
 }
 
 void jegl_close_resource(jegl_resource* resource)
@@ -235,8 +272,7 @@ void jegl_close_resource(jegl_resource* resource)
         break;
     case jegl_resource::SHADER:
         // close resource's raw data, then send this resource to closing-queue
-        je_mem_free((void*)resource->m_raw_shader_data->m_vertex_glsl_src);
-        je_mem_free((void*)resource->m_raw_shader_data->m_fragment_glsl_src);
+        jegl_shader_free_generated_glsl(resource->m_raw_shader_data);
         jeecs::basic::destroy_free(resource->m_raw_shader_data);
         resource->m_raw_shader_data = nullptr;
         break;

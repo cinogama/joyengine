@@ -339,6 +339,15 @@ WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_native_value_je_string(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::string* value = (jeecs::string*)wo_pointer(args + 0);
+    if (wo_is_ref(args + 1))
+        wo_set_string(args + 1, value->c_str());
+    else
+        *value = wo_string(args + 1);
+    return wo_ret_void(vm);
+}
 
 WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t argc)
 {
@@ -738,6 +747,9 @@ namespace je
 
         extern("libjoyecs", "wojeapi_native_value_rot_euler3")
         func euler3(var self: native_value, ref x: real, ref y: real, ref z: real): void;
+
+        extern("libjoyecs", "wojeapi_native_value_je_string")
+        func string(var self: native_value, ref val: string): void;
 
     }
 

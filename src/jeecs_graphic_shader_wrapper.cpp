@@ -29,6 +29,7 @@ struct jegl_shader_value
         FLOAT4x4 = 0x0400,
 
         TEXTURE2D = 0x0800,
+        INTEGER = 0X1000,
 
     };
 
@@ -54,6 +55,7 @@ struct jegl_shader_value
         float m_float2x2[2][2];
         float m_float3x3[3][3];
         float m_float4x4[4][4];
+        int m_integer;
         struct
         {
             const char* m_opname;
@@ -67,6 +69,7 @@ struct jegl_shader_value
         struct
         {
             const char* m_unifrom_varname;
+            jegl_shader_value* m_uniform_init_val_may_nil;
         };
     };
 
@@ -177,11 +180,14 @@ struct jegl_shader_value
     {
     }
 
-    jegl_shader_value(type resulttype, const char* uniform_name, bool is_predef)
+    jegl_shader_value(type resulttype, const char* uniform_name, jegl_shader_value* init_val, bool is_predef)
         : m_type((type)(resulttype | type::CALC_VALUE | (is_predef ? type::UNIFORM_BLOCK_VARIABLE : type::UNIFORM_VARIABLE)))
         , m_unifrom_varname(jeecs::basic::make_new_string(uniform_name))
         , m_ref_count(0)
+        , m_uniform_init_val_may_nil(init_val)
     {
+        if (m_uniform_init_val_may_nil)
+            m_uniform_init_val_may_nil->add_useref_count();
     }
 
     inline bool is_init_value() const noexcept
@@ -235,6 +241,8 @@ void delete_shader_value(jegl_shader_value* shader_val)
         else if (shader_val->is_uniform_variable())
         {
             je_mem_free((void*)shader_val->m_unifrom_varname);
+            if (shader_val->m_uniform_init_val_may_nil)
+                delete_shader_value(shader_val->m_uniform_init_val_may_nil);
         }
         else
         {
@@ -405,9 +413,24 @@ calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argt
 WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_gchandle(vm,
-        new jegl_shader_value((jegl_shader_value::type)wo_int(args + 0), wo_string(args + 1), wo_bool(args + 2))
+        new jegl_shader_value((jegl_shader_value::type)wo_int(args + 0), wo_string(args + 1), (jegl_shader_value*)nullptr, wo_bool(args + 2))
         , nullptr, _free_shader_value);
 }
+
+WO_API wo_api jeecs_shader_create_uniform_variable_with_init_value(wo_vm vm, wo_value args, size_t argc)
+{
+    jegl_shader_value::type type = (jegl_shader_value::type)wo_int(args + 0);
+    jegl_shader_value* init_value = (jegl_shader_value*)wo_pointer(args + 2);
+    if (!init_value->is_init_value())
+        return wo_ret_halt(vm, "Cannot do this operations: uniform variable's init value must be immediately.");
+    if (init_value->get_type() != type)
+        return wo_ret_halt(vm, "Cannot do this operations: uniform variable's init value must have same type.");
+
+    return wo_ret_gchandle(vm,
+        new jegl_shader_value(type, wo_string(args + 1), init_value, false)
+        , nullptr, _free_shader_value);
+}
+
 WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
 {
     bool result_is_const = true;
@@ -528,9 +551,12 @@ WO_API wo_api jeecs_shader_set_vertex_out(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+using uniform_information = std::tuple<std::string, jegl_shader::uniform_type, jegl_shader_value*>;
+
 struct shader_value_outs
 {
     std::vector<jegl_shader_value*> out_values;
+    std::vector<uniform_information> uniform_variables;
     ~shader_value_outs()
     {
         for (auto* val : out_values)
@@ -597,12 +623,12 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
 
 std::string _generate_glsl_vertex_by_wrapper(shader_wrapper* wrap)
 {
-    return _generate_code_for_glsl_vertex(wrap->vertex_out);
+    return _generate_code_for_glsl_vertex(wrap);
 }
 
 std::string _generate_glsl_fragment_by_wrapper(shader_wrapper* wrap)
 {
-    return _generate_code_for_glsl_fragment(wrap->fragment_out);
+    return _generate_code_for_glsl_fragment(wrap);
 }
 
 WO_API wo_api jeecs_shader_wrap_glsl_vertex(wo_vm vm, wo_value args, size_t argc)
@@ -643,7 +669,7 @@ enum shader_value_type
     FLOAT4x4 = 0x0400,
 
     TEXTURE2D = 0x0800,
-
+    INTEGER = 0X1000,
 }
 
 using float = gchandle;
@@ -656,6 +682,7 @@ using float3x3 = gchandle;
 using float4x4 = gchandle;
 
 using texture2d = gchandle;
+using integer = gchandle;
 
 private func _type_is_same<AT, BT>() : bool
 {
@@ -682,6 +709,8 @@ private func _get_type_enum<ShaderValueT>() : shader_value_type
         return shader_value_type::FLOAT4x4;
     else if (_type_is_same:<ShaderValueT, texture2d>())
         return shader_value_type::TEXTURE2D;
+    else if (_type_is_same:<ShaderValueT, integer>())
+        return shader_value_type::INTEGER;
 
     std::halt("Unknown type, not shader type?");
 }
@@ -708,9 +737,21 @@ private func _uniform<ShaderResultT>(
     var is_uniform_block : bool
 ) : ShaderResultT;
 
+extern("libjoyecs", "jeecs_shader_create_uniform_variable_with_init_value")
+private func _uniform<ShaderResultT>(
+    var result_type : shader_value_type,
+    var uniform_name : string,
+    var init_value : ShaderResultT
+) : ShaderResultT;
+
 func uniform<ShaderResultT>(var uniform_name:string) : ShaderResultT
 {
     return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, false);
+}
+
+func uniform<ShaderResultT>(var uniform_name:string, var init_value: ShaderResultT) : ShaderResultT
+{
+    return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, init_value);
 }
 
 func shared_uniform<ShaderResultT>(var uniform_name:string) : ShaderResultT
@@ -972,11 +1013,90 @@ func texture(var tex:texture2d, var uv:float2):float4
 
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)
 {
+    shader_wrapper* shader_wrapper_ptr = (shader_wrapper*)shader_generator;
+
     write_to_shader->m_vertex_glsl_src
         = jeecs::basic::make_new_string(
-            _generate_glsl_vertex_by_wrapper((shader_wrapper*)shader_generator).c_str());
+            _generate_glsl_vertex_by_wrapper(shader_wrapper_ptr).c_str());
 
     write_to_shader->m_fragment_glsl_src
         = jeecs::basic::make_new_string(
-            _generate_glsl_fragment_by_wrapper((shader_wrapper*)shader_generator).c_str());
+            _generate_glsl_fragment_by_wrapper(shader_wrapper_ptr).c_str());
+
+    std::unordered_map<std::string, uniform_information*> _uniforms;
+    for (auto& uniform_info : shader_wrapper_ptr->fragment_out->uniform_variables)
+    {
+        auto& [name, type, init_val] = uniform_info;
+        _uniforms[name] = &uniform_info;
+    }
+    for (auto& uniform_info : shader_wrapper_ptr->vertex_out->uniform_variables)
+    {
+        auto& [name, type, init_val] = uniform_info;
+        _uniforms[name] = &uniform_info;
+    }
+
+    jegl_shader::unifrom_variables** last = &write_to_shader->m_custom_uniforms;
+    for (auto& [_/*useless*/, uniform_info] : _uniforms)
+    {
+        jegl_shader::unifrom_variables* variable = jeecs::basic::create_new<jegl_shader::unifrom_variables>();
+        variable->m_next = nullptr;
+
+        auto& [name, type, init_val] = *uniform_info;
+
+        variable->m_name = jeecs::basic::make_new_string(name.c_str());
+        variable->m_uniform_type = type;
+
+        variable->m_index = jeecs::typing::INVALID_UINT32;
+
+        if (init_val)
+        {
+            switch (init_val->get_type())
+            {
+            case jegl_shader_value::type::FLOAT:
+                variable->x = init_val->m_float; break;
+            case jegl_shader_value::type::FLOAT2:
+                variable->x = init_val->m_float2[0];
+                variable->y = init_val->m_float2[1]; break;
+            case jegl_shader_value::type::FLOAT3:
+                variable->x = init_val->m_float3[0];
+                variable->y = init_val->m_float3[1];
+                variable->z = init_val->m_float3[2]; break;
+            case jegl_shader_value::type::FLOAT4:
+                variable->x = init_val->m_float4[0];
+                variable->y = init_val->m_float4[1];
+                variable->z = init_val->m_float4[2];
+                variable->w = init_val->m_float4[3]; break;
+            case jegl_shader_value::type::INTEGER:
+                variable->n = init_val->m_integer; break;
+            default:
+                jeecs::debug::log_error("Unsupport uniform variable type."); break;
+            }
+        }
+        else
+        {
+            variable->x = variable->y = variable->z = variable->w = 0.f;
+            variable->n = 0;
+        }
+        variable->m_updated = true;
+
+        *last = variable;
+        last = &variable->m_next;
+    }
+}
+
+void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
+{
+    je_mem_free((void*)write_to_shader->m_vertex_glsl_src);
+    je_mem_free((void*)write_to_shader->m_fragment_glsl_src);
+
+    auto* uniform_variable_info = write_to_shader->m_custom_uniforms;
+    while (uniform_variable_info)
+    {
+        auto* current_uniform_variable = uniform_variable_info;
+        uniform_variable_info = uniform_variable_info->m_next;
+
+        je_mem_free((void*)current_uniform_variable->m_name);
+
+        jeecs::basic::destroy_free(current_uniform_variable);
+    }
 }

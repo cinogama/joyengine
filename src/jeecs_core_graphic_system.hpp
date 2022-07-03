@@ -54,12 +54,14 @@ namespace jeecs
 // Default shader
 import je.shader;
 
+var example = uniform:<float>("XX", float(1.));
+
 func vert(var vdata:vertex_in)
 {
     var ipos    = vdata->in:<float3>(0);
     var iuv     = vdata->in:<float2>(1);
 
-    var opos = je_mvp * float4(ipos, 1);
+    var opos = je_mvp * float4(ipos, example);
     return vertex_out(opos);
 }
 func frag(var fdata:fragment_in)

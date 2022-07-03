@@ -60,6 +60,15 @@ namespace editor
 					if (InputFloat3(name, ref x, ref y, ref z))
 						addr->euler3(x, y, z);
 				};
+			_type_widget_methods[je::typeinfo::string] = 
+				func(var name: string, var addr: je::native_value)
+				{
+					var x = "";
+					addr->string(ref x);
+
+					if (InputText(name, ref x))
+						addr->string(x);
+				};
 		}
 		_register_default_method();
 
@@ -136,15 +145,23 @@ namespace editor
 								option::value(type)?
 								{
 									var member_count = 0;
-									var component_addr = entity->editor::get_component(type)->val();
-									for (var name, type, addr : component_addr->editor::iter_member(type))
-									{
-										member_count += 1;
-										_show_edit_widget(name, type, addr);
-									}
 
-									if (0 == member_count)
-										Text("<此组件没有可编辑字段>");
+									match (entity->editor::get_component(type))
+									{
+										option::value(component_addr)?
+										{
+											for (var name, type, addr : component_addr->editor::iter_member(type))
+											{
+												member_count += 1;
+												_show_edit_widget(name, type, addr);
+											}
+
+											if (0 == member_count)
+												Text("<此组件没有可编辑字段>");
+										}
+										option::none?
+											; // 如果实体出现更新，这里会很麻烦
+									}
 								}
 								option::none?
 									; // 啥也不干
