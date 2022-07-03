@@ -69,24 +69,37 @@ namespace editor
 		{
 			using je::gui;
 
-			func _show_paths(var path: string)
+			func _show_paths(var path: string, var onlyshowchild :bool)
 			{
 				var filename = je::filesys::filename(path);
 				var endtree = false;
-				if (filename != "" && TreeNode(filename))
-					endtree = true;
+				if (!onlyshowchild)
+				{
+					var attribute = 
+					  TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+					+ TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+					+ TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
 
-				if (endtree || filename == "")
+					if (current_work_path == path)
+						attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
+					
+					endtree = TreeNodeEx(filename, attribute);
+					if (IsItemClicked() && !IsItemToggledOpen())
+						current_work_path = path;
+					
+				}
+
+				if (endtree || onlyshowchild)
 					for (var subpath : je::filesys::path(path))
 						if (je::filesys::isdir(subpath))
-							_show_paths(subpath);
+							_show_paths(subpath, false);
 
 				if (endtree)
 					TreePop();
 			}
 
 			BeginChild("path_tree", 200., 0.);
-				_show_paths(std::exepath());
+				_show_paths(std::exepath(), true);
 			EndChild();
 		}
 
