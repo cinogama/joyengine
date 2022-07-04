@@ -71,20 +71,30 @@ import je.shader;
 
 var example_tex = uniform:<texture2d>("example_tex");
 
-func vert(var vdata:vertex_in)
-{
-    var ipos    = vdata->in:<float3>(0);
-    var iuv     = vdata->in:<float2>(1);
+using VAO_STRUCT vin = struct {
+    vertex : float3,
+    uv     : float2,
+};
 
-    var opos = je_mvp * float4(ipos, 1.);
-    return vertex_out(opos, iuv);
+using v2f = struct {
+    pos : float4,
+    uv  : float2,
+};
+
+using fout = struct {
+    color : float4
+};
+
+func vert(var vdata: vin)
+{
+    var opos = je_mvp * float4(vdata.vertex, 1.);
+    return v2f{ pos = opos, uv  = vdata.uv };
 }
-func frag(var fdata:fragment_in)
-{
-    var iuv = fdata->in:<float2>(1);
 
-    var flashing_color = texture(example_tex, iuv);
-    return fragment_out(float4(flashing_color->xyz(), 1));
+func frag(var fdata: v2f)
+{
+    var flashing_color = texture(example_tex, fdata.uv);
+    return fout{ color = float4(flashing_color->xyz(), 1) };
 }
 )")
 );

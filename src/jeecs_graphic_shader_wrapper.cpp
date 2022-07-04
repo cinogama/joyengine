@@ -578,36 +578,43 @@ struct shader_wrapper
 
 WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size_t argc)
 {
+    wo_value voutstruct = args + 1;
+    uint16_t structsz = 0;
+
+    // is vertex out, check it
+    if (wo_valuetype(voutstruct) != WO_STRUCT_TYPE
+        || (structsz = wo_lengthof(voutstruct)) == 0
+        || (wo_bool(args + 0)
+            ? jegl_shader_value::type::FLOAT4 != ((jegl_shader_value*)wo_pointer(wo_struct_get(voutstruct, 0)))->get_type()
+            : false))
+        return wo_ret_halt(vm, "'vert' must return a struct with first member of 'float4'.");
+
     shader_value_outs* values = new shader_value_outs;
-    values->out_values.resize(argc);
-    for (size_t i = 0; i < argc; i++)
+    values->out_values.resize(structsz);
+    for (uint16_t i = 0; i < structsz; i++)
     {
-        values->out_values[i] = (jegl_shader_value*)wo_pointer(args + i);
+        values->out_values[i] = (jegl_shader_value*)wo_pointer(wo_struct_get(voutstruct, i));
         values->out_values[i]->add_useref_count();
     }
     return wo_ret_pointer(vm, values);
 }
 WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_val(vm, args + 0);
-}
-WO_API wo_api jeecs_shader_get_fragment_in(wo_vm vm, wo_value args, size_t argc)
-{
     shader_value_outs* values = (shader_value_outs*)wo_pointer(args + 0);
-    jegl_shader_value::type type = (jegl_shader_value::type)wo_int(args + 1);
-    size_t pos = (size_t)wo_int(args + 2);
+    wo_value out_struct = args + 1;
 
-    if (pos >= values->out_values.size())
-        return wo_ret_halt(vm, ("fragment_in[" + std::to_string(pos) + "] out of range.").c_str());
+    uint16_t fragmentin_size = (uint16_t)values->out_values.size();
+    wo_set_struct(out_struct, fragmentin_size);
+    for (uint16_t i = 0; i < fragmentin_size; i++)
+    {
+        auto* val = new jegl_shader_value(values->out_values[i]->get_type());
+        val->m_shader_in_index = i;
+        wo_set_gchandle(wo_struct_get(out_struct, i), val, nullptr, _free_shader_value);
+    }
 
-    auto* result = values->out_values[pos];
-    if (result->get_type() != type)
-        return wo_ret_halt(vm, ("fragment_in[" + std::to_string(pos) + "] type didn't match.").c_str());
-
-    auto* val = new jegl_shader_value(type);
-    val->m_shader_in_index = pos;
-    return wo_ret_gchandle(vm, val, nullptr, _free_shader_value);
+    return wo_ret_val(vm, out_struct);
 }
+
 WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_gchandle(vm, new shader_wrapper{
@@ -779,31 +786,38 @@ namespace vertex_in
 
 using vertex_out = handle; // nogc! will free by shader_wrapper
 namespace vertex_out
-{
-    extern("libjoyecs", "jeecs_shader_create_shader_value_out")
-    func create(var position : float4, ...) : vertex_out;
+{   
+    func create<VertexOutT>(var vout : VertexOutT) : vertex_out
+    {
+        extern("libjoyecs", "jeecs_shader_create_shader_value_out")
+        func _create_shader_out<VertexOutT>(var is_vertex: bool, var out_val: VertexOutT) : vertex_out;
+
+        return _create_shader_out(true, vout);
+    }
 }
 
 using fragment_in = handle;
 namespace fragment_in
 {
-    extern("libjoyecs", "jeecs_shader_create_fragment_in")
-    func create(var data_from_vert:vertex_out) : fragment_in;
-
-    extern("libjoyecs", "jeecs_shader_get_fragment_in")
-    private func _in<ValueT>(var self:fragment_in, var type:shader_value_type, var id:int) : ValueT;
-
-    func in<ValueT>(var self:fragment_in, var id:int) : ValueT
+    func create<VertexOutT>(var data_from_vert: vertex_out) : VertexOutT
     {
-        return self->_in:<ValueT>(_get_type_enum:<ValueT>(), id) as ValueT;
+        extern("libjoyecs", "jeecs_shader_create_fragment_in")
+        func _parse_vertex_out_to_struct<VertexOutT>(var vout: vertex_out, ref _out_struct: dynamic): VertexOutT;
+
+        return _parse_vertex_out_to_struct:<VertexOutT>(data_from_vert, nil);
     }
 }
 
 using fragment_out = handle; // nogc! will free by shader_wrapper
 namespace fragment_out
 {
-    extern("libjoyecs", "jeecs_shader_create_shader_value_out")
-    func create(...):fragment_out;
+    func create<FragementOutT>(var fout : FragementOutT) : fragment_out
+    {
+        extern("libjoyecs", "jeecs_shader_create_shader_value_out")
+        func _create_shader_out<FragementOutT>(var is_vertex: bool, var out_val: FragementOutT) : fragment_out;
+
+        return _create_shader_out(false, fout);
+    }
 }
 
 namespace float
@@ -971,10 +985,18 @@ namespace shader
 
     private extern func generate()
     {
-        var vertex_out = vert(vertex_in()) as vertex_out;
-        var fragment_out = frag(fragment_in(vertex_out)) as fragment_out;
+        // 'v_out' is a struct with member of shader variable as vertex outputs.
+        var v_out = vert(_JE_BUILT_VAO_STRUCT(vertex_in()));
+        
+        // 'vertex_out' will analyze struct, then 'fragment_in' will build a new struct
+        var vertext_out_result = vertex_out(v_out);
+        var f_in = fragment_in:<typeof(v_out)>(vertext_out_result);
+    
+        // 'f_out' is a struct with output shader variable.
+        var f_out = frag(f_in);
+        var fragment_out_result = fragment_out(f_out);
 
-        return _wraped_shader(vertex_out, fragment_out);
+        return _wraped_shader(vertext_out_result, fragment_out_result);
     }
 
     namespace debug
@@ -1008,6 +1030,81 @@ func texture(var tex:texture2d, var uv:float2):float4
 {
     return apply_operation:<float4>("texture", tex, uv);
 };
+)" R"(
+
+
+#macro VAO_STRUCT
+{
+    var eat_token = func(ref expect_name: string, var expect_type: std::token_type)
+                    {
+                        var out_result = "";
+                        if (lexer->next(ref out_result) != expect_type)
+                            lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
+                        return out_result;
+                    };
+    var try_eat_token = func(var expect_type: std::token_type)
+                    {
+                        var out_result = "";
+                        if (lexer->peek("") != expect_type)
+                            return option::none:<string>;
+                        assert(lexer->next(ref out_result) == expect_type);
+                        return option::value(out_result);
+                    };
+
+    // using VAO_STRUCT vin = struct { ...
+    // 0. Get struct name, then eat '=', 'struct', '{'
+    var vao_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
+    eat_token("=", std::token_type::l_assign);
+    eat_token("struct", std::token_type::l_struct);
+    eat_token("{", std::token_type::l_left_curly_braces);
+    
+    // 1. Get struct item name.
+    var struct_infos = []: array<array<string>>;
+    while (true)
+    {
+        if (try_eat_token(std::token_type::l_right_curly_braces)->has())
+            // Meet '}', end work!
+            break;
+
+        var struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        eat_token(":", std::token_type::l_typecast);
+
+        // Shader type only have a identifier and without template.
+        var struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+        struct_infos->add([struct_member, struct_shader_type]);
+
+        if (!try_eat_token(std::token_type::l_comma)->has())
+        {
+            eat_token("}", std::token_type::l_right_curly_braces);
+            break;
+        }
+    }
+    // End, need a ';' here.
+    eat_token(";", std::token_type::l_semicolon);
+
+    //  OK We have current vao struct info, built struct out
+    var out_struct_decl = F"{vao_struct_name} = struct {"{"}\n";
+    for(var name_type_pair : struct_infos)
+        out_struct_decl += F"{name_type_pair[0]} : {name_type_pair[1]}, \n";
+    out_struct_decl += "};\n";
+
+    // Last step, we generate "_JE_BUILT_VAO" function here.
+    out_struct_decl += 
+    @"
+    extern func _JE_BUILT_VAO_STRUCT(var vertex_data_in: vertex_in)
+    {
+        return "@ + vao_struct_name + " {\n";
+    var vinid = 0;
+    for(var name_type_pair : struct_infos)
+    {
+        out_struct_decl += F"{name_type_pair[0]} = vertex_data_in->in:<{name_type_pair[1]}>({vinid}), \n";
+        vinid += 1;
+    }
+    out_struct_decl += "};}\n";
+
+    lexer->lex(out_struct_decl);
+}
 
 )";
 
@@ -1079,7 +1176,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             variable->n = 0;
             variable->m_updated = false;
         }
-        
+
 
         *last = variable;
         last = &variable->m_next;

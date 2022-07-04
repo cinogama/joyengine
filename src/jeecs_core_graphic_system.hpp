@@ -55,18 +55,27 @@ namespace jeecs
 // Default shader
 import je.shader;
 
-func vert(var vdata:vertex_in)
-{
-    var ipos    = vdata->in:<float3>(0);
-    var iuv     = vdata->in:<float2>(1);
+using VAO_STRUCT vin = struct {
+    vertex : float3,
+};
 
-    var opos = je_mvp * float4(ipos, 1.);
-    return vertex_out(opos);
+using v2f = struct {
+    pos : float4,
+};
+
+using fout = struct {
+    color : float4
+};
+
+func vert(var vdata: vin)
+{
+    var opos = je_mvp * float4(vdata.vertex, 1.);
+    return v2f{ pos = opos };
 }
-func frag(var fdata:fragment_in)
+func frag(var fdata: v2f)
 {
     var flashing_color = je_time->y();
-    return fragment_out(float4(flashing_color, 0, flashing_color, 1));
+    return fout{ color = float4(flashing_color, 0, flashing_color, 1) };
 }
 
 )"));
