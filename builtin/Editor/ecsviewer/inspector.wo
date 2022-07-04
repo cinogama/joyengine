@@ -80,8 +80,6 @@ namespace editor
 			if (_type_widget_methods->contain(type))
 			{
 				var method = _type_widget_methods[type];
-				assert(method);
-
 				method(name, addr);
 			}
 			else

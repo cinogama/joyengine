@@ -694,31 +694,28 @@ namespace je
                             return true;
                         }
                     }
-                    if (self.m_not_top_entities)
+                continue_find_not_displayed_entity@
+                    while (self.m_not_top_entities->len() >= 0)
                     {
-                    continue_find_not_displayed_entity@
-                        while (self.m_not_top_entities->len())
+                        var top = self.m_not_top_entities[0];
+                        self.m_not_top_entities->remove(0);
+
+                        if (self.m_outed_entities->find(top) == -1)
                         {
-                            var top = self.m_not_top_entities[0];
-                            self.m_not_top_entities->remove(0);
-
-                            if (self.m_outed_entities->find(top) == -1)
+                            for (var entity: self.m_all_entity_list)
                             {
-                                for (var entity: self.m_all_entity_list)
-                                {
-                                    if (top != entity && top->is_child_of(entity))
-                                        // Parent finded, it's not a orphan entity.
-                                        continue continue_find_not_displayed_entity;
-                                }
-
-                                // Current entity have jeecs::Transform::LocalToParent,
-                                // but it's LocalToParent donot point to any other entity;
-                                self.m_current_entity = option::value(top);
-                                out_iter = self;
-                                out_entity = top;
-                                self.m_outed_entities->add(top);
-                                return true;
+                                if (top != entity && top->is_child_of(entity))
+                                    // Parent finded, it's not a orphan entity.
+                                    continue continue_find_not_displayed_entity;
                             }
+
+                            // Current entity have jeecs::Transform::LocalToParent,
+                            // but it's LocalToParent donot point to any other entity;
+                            self.m_current_entity = option::value(top);
+                            out_iter = self;
+                            out_entity = top;
+                            self.m_outed_entities->add(top);
+                            return true;
                         }
                     }
                     return false;

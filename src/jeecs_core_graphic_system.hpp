@@ -36,7 +36,8 @@ namespace jeecs
         game_universe current_universe = nullptr;
 
         basic::resource<graphic::vertex> default_shape_quad;
-        jeecs::vector<basic::resource<graphic::shader>> default_shaders;
+        basic::resource<graphic::shader> default_shader;
+        jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
 
         DefaultGraphicPipelineSystem(game_universe universe)
             : game_system(nullptr)
@@ -51,7 +52,7 @@ namespace jeecs
                     -0.5f, 0.5f, 0.0f,      0.0f, 0.0f, },
                     { 3, 2 });
 
-            default_shaders.push_back(new graphic::shader("je/default.shader", R"(
+            default_shader = new graphic::shader("je/builtin_default.shader", R"(
 // Default shader
 import je.shader;
 
@@ -78,7 +79,8 @@ func frag(var fdata: v2f)
     return fout{ color = float4(flashing_color, 0, flashing_color, 1) };
 }
 
-)"));
+)");
+            default_shaders_list.push_back(default_shader);
 
             jegl_interface_config config = {};
             config.m_fps = 60;
@@ -224,7 +226,7 @@ func frag(var fdata: v2f)
                         auto& drawing_shaders =
                             (rendentity.shaders && rendentity.shaders->shaders.size())
                             ? rendentity.shaders->shaders
-                            : default_shaders;
+                            : default_shaders_list;
 
                         // Bind texture here
                         size_t passcount = 0;
@@ -239,8 +241,9 @@ func frag(var fdata: v2f)
 
                         for (auto& shader_pass : drawing_shaders)
                         {
+                            auto* using_shader = &shader_pass;
                             if (!shader_pass->enabled())
-                                continue;
+                                using_shader = &default_shader;
 
                             auto* builtin_uniform = shader_pass->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, VALUE) \
@@ -255,7 +258,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
 #undef NEED_AND_SET_UNIFORM
-                            jegl_draw_vertex_with_shader(*drawing_shape, *shader_pass);
+                            jegl_draw_vertex_with_shader(*drawing_shape, **using_shader);
                         }
 
                     }

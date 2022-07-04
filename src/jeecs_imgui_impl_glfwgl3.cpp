@@ -99,7 +99,7 @@ namespace je
     func Text(var msg:string) : void;
 
     extern("libjoyecs", "je_gui_button")
-    func Button(var msg:string) : void;
+    func Button(var msg:string) : bool;
 
     extern("libjoyecs", "je_gui_begin_main_menu_bar")
     func BeginMainMenuBar() : bool;
