@@ -695,7 +695,7 @@ namespace je
                         }
                     }
                 continue_find_not_displayed_entity@
-                    while (self.m_not_top_entities->len() > 0)
+                    while (!self.m_not_top_entities->empty())
                     {
                         var top = self.m_not_top_entities[0];
                         self.m_not_top_entities->remove(0);
