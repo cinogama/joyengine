@@ -1059,7 +1059,7 @@ func texture(var tex:texture2d, var uv:float2):float4
     eat_token("{", std::token_type::l_left_curly_braces);
     
     // 1. Get struct item name.
-    var struct_infos = []: array<array<string>>;
+    var struct_infos = []: array<(string, string)>;
     while (true)
     {
         if (try_eat_token(std::token_type::l_right_curly_braces)->has())
@@ -1072,7 +1072,7 @@ func texture(var tex:texture2d, var uv:float2):float4
         // Shader type only have a identifier and without template.
         var struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
-        struct_infos->add([struct_member, struct_shader_type]);
+        struct_infos->add((struct_member, struct_shader_type));
 
         if (!try_eat_token(std::token_type::l_comma)->has())
         {
