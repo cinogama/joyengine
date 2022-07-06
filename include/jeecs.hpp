@@ -30,6 +30,7 @@
 #include <random>
 #include <thread>
 #include <type_traits>
+#include <optional>
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -133,9 +134,15 @@ struct NEWTYPE : je_type_def_base_impl<BASETYPE>\
     NEWTYPE& operator = (const NEWTYPE& t) = default;\
     NEWTYPE& operator = (const BASETYPE& t) { _m_data = t; return *this; };\
     operator const BASETYPE& () const { return _m_data; }\
+    operator BASETYPE& () { return _m_data; }\
     BASETYPE& operator*() { return _m_data; }\
     BASETYPE* operator->() { return &_m_data; }\
     BASETYPE* operator&() { return &_m_data; }\
+    const BASETYPE& operator*()const { return _m_data; }\
+    const BASETYPE* operator->()const { return &_m_data; }\
+    const BASETYPE* operator&()const { return &_m_data; }\
+    BASETYPE& get() { return _m_data; }\
+    const BASETYPE& get()const { return _m_data; }\
 }
 
     struct game_entity
@@ -1900,15 +1907,16 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::get_component()const noexcept
     {
-        auto* type = typing::type_info::of<T>();
+        static auto* type = typing::type_info::of<T>();
         assert(type->is_component());
+
         return (T*)je_ecs_world_entity_get_component(this, type);
     }
 
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
-        auto* type = typing::type_info::of<T>();
+        static auto* type = typing::type_info::of<T>();
         assert(type->is_component());
         return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, type);
     }
@@ -3207,7 +3215,7 @@ namespace jeecs
 
         je_def(LocalPosition, math::vec3);
         je_def(LocalRotation, math::quat);
-        je_def(LocalScale,    math::vec3);
+        je_def(LocalScale, math::vec3);
 
         struct ChildAnchor
         {
