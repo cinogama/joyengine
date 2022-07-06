@@ -5,7 +5,7 @@ build:
   # before_script:
   #   - apt update && apt -y install make autoconf
   script:
-    - git submodule update --init --recursive
+    - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - rm -f CMakeCache.txt
