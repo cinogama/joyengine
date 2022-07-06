@@ -112,6 +112,32 @@ namespace jeecs
     class game_system;
     class game_world;
 
+    struct je_type_def_base
+    {
+    };
+
+    template<typename BaseT>
+    struct je_type_def_base_impl : je_type_def_base
+    {
+        using base_t = BaseT;
+    };
+
+#define je_def(NEWTYPE, BASETYPE)\
+struct NEWTYPE : je_type_def_base_impl<BASETYPE>\
+{\
+    BASETYPE _m_data;\
+    NEWTYPE() = default;\
+    NEWTYPE(const BASETYPE& val)\
+        :_m_data(val) {}\
+    NEWTYPE(const NEWTYPE& val) = default;\
+    NEWTYPE& operator = (const NEWTYPE& t) = default;\
+    NEWTYPE& operator = (const BASETYPE& t) { _m_data = t; return *this; };\
+    operator const BASETYPE& () const { return _m_data; }\
+    BASETYPE& operator*() { return _m_data; }\
+    BASETYPE* operator->() { return &_m_data; }\
+    BASETYPE* operator&() { return &_m_data; }\
+}
+
     struct game_entity
     {
         enum class entity_stat
@@ -1068,6 +1094,11 @@ namespace jeecs
                         else
                             static_assert(sfinae_is_static_ref_register_function<T>::value,
                                 "T::JERefRegsiter must be static & callable with no arguments.");
+                    }
+                    if constexpr (std::is_base_of<je_type_def_base, T>::value)
+                    {
+                        // Is je_def components, register it's self!
+                        typing::register_member(&T::_m_data, "value");
                     }
                 }
                 return registed_typeid;
@@ -3174,31 +3205,9 @@ namespace jeecs
 
         */
 
-        struct LocalPosition
-        {
-            math::vec3 pos;
-            static void JERefRegsiter()
-            {
-                typing::register_member(&LocalPosition::pos, "pos");
-            }
-        };
-        struct LocalRotation
-        {
-            math::quat rot;
-            static void JERefRegsiter()
-            {
-                typing::register_member(&LocalRotation::rot, "rot");
-            }
-        };
-        struct LocalScale
-        {
-            math::vec3 scale = { 1.0f, 1.0f, 1.0f };
-
-            static void JERefRegsiter()
-            {
-                typing::register_member(&LocalScale::scale, "scale");
-            }
-        };
+        je_def(LocalPosition, math::vec3);
+        je_def(LocalRotation, math::quat);
+        je_def(LocalScale,    math::vec3);
 
         struct ChildAnchor
         {
@@ -3277,31 +3286,10 @@ namespace jeecs
         (Shape)-------/
 
         */
-        struct Rendqueue
-        {
-            int rend_queue = 0;
-            using a = decltype(&Rendqueue::rend_queue);
-
-            static void JERefRegsiter()
-            {
-                typing::register_member(&Rendqueue::rend_queue, "rend_queue");
-            }
-        };
-
-        struct Shape
-        {
-            basic::resource<graphic::vertex> vertex;
-        };
-
-        struct Shaders
-        {
-            jeecs::vector<basic::resource<graphic::shader>> shaders;
-        };
-
-        struct Textures
-        {
-            jeecs::vector< basic::resource<graphic::texture>> textures;
-        };
+        je_def(Rendqueue, int);
+        je_def(Shape, basic::resource<graphic::vertex>);
+        je_def(Shaders, jeecs::vector<basic::resource<graphic::shader>>);
+        je_def(Textures, jeecs::vector<basic::resource<graphic::texture>>);
     }
     namespace Camera
     {
@@ -3341,32 +3329,18 @@ namespace jeecs
             }
         };
 
-        struct Viewport
-        {
-            math::vec4 viewport = math::vec4(0, 0, 1, 1);
-            static void JERefRegsiter()
-            {
-                typing::register_member(&Viewport::viewport, "viewport");
-            }
-        };
+        je_def(Viewport, math::vec4);
     }
     namespace Editor
     {
-        struct Name
-        {
-            jeecs::string name;
-            static void JERefRegsiter()
-            {
-                typing::register_member(&Name::name, "name");
-            }
-        };
+        je_def(Name, jeecs::string);
     }
 
     inline std::string game_entity::name()
     {
         Editor::Name* c_name = get_component<Editor::Name>();
         if (c_name)
-            return c_name->name;
+            return **c_name;
         return "";
     }
 
@@ -3377,7 +3351,7 @@ namespace jeecs
             c_name = add_component<Editor::Name>();
 
         assert(c_name);
-        return c_name->name = _name;
+        return **c_name = _name;
     }
 
     namespace enrty

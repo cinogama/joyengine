@@ -53,8 +53,8 @@ int main(int argc, char** argv)
             Renderer::Shaders,
             Renderer::Textures>();
 
-        entity.get_component<Transform::LocalRotation>()->rot = jeecs::math::quat(0, 0, 0);
-        entity2.get_component<Transform::LocalPosition>()->pos = jeecs::math::vec3(0, 0, 0);
+        *entity.get_component<Transform::LocalRotation>() = jeecs::math::quat(0, 0, 0);
+        *entity2.get_component<Transform::LocalPosition>() = jeecs::math::vec3(0, 0, 0);
         entity2.get_component<Transform::LocalToParent>()->parent_uid =
             entity.get_component<Transform::ChildAnchor>()->anchor_uid;
 
@@ -109,8 +109,8 @@ func frag(var fdata: v2f)
             Camera::Projection,
             Camera::Viewport>();
 
-        entity3.get_component<Transform::LocalRotation>()->rot = math::quat(0, 0, 15);
-        entity3.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, -10);
+        *entity3.get_component<Transform::LocalRotation>() = math::quat(0, 0, 15);
+        *entity3.get_component<Transform::LocalPosition>() = math::vec3(0, 0, -10);
 
         universe.wait();
         game_universe::destroy_universe(universe);
