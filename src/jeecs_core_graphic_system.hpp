@@ -127,8 +127,8 @@ func frag(var fdata: v2f)
 
             bool operator < (const camera_arch& another) const noexcept
             {
-                int a_queue = rendqueue ? *rendqueue : 0;
-                int b_queue = another.rendqueue ? *another.rendqueue : 0;
+                int a_queue = rendqueue ? rendqueue->get() : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->get() : 0;
                 return a_queue < b_queue;
             }
         };
@@ -142,8 +142,8 @@ func frag(var fdata: v2f)
 
             bool operator < (const renderer_arch& another) const noexcept
             {
-                int a_queue = rendqueue ? *rendqueue : 0;
-                int b_queue = another.rendqueue ? *another.rendqueue : 0;
+                int a_queue = rendqueue ? rendqueue->get() : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->get() : 0;
                 return a_queue < b_queue;
             }
         };

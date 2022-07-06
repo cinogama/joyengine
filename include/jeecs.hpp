@@ -127,22 +127,22 @@ namespace jeecs
 struct NEWTYPE : je_type_def_base_impl<BASETYPE>\
 {\
     BASETYPE _m_data;\
-    NEWTYPE() = default;\
-    NEWTYPE(const BASETYPE& val)\
+    inline NEWTYPE() = default;\
+    inline NEWTYPE(const BASETYPE& val)\
         :_m_data(val) {}\
-    NEWTYPE(const NEWTYPE& val) = default;\
-    NEWTYPE& operator = (const NEWTYPE& t) = default;\
-    NEWTYPE& operator = (const BASETYPE& t) { _m_data = t; return *this; };\
-    operator const BASETYPE& () const { return _m_data; }\
-    operator BASETYPE& () { return _m_data; }\
-    BASETYPE& operator*() { return _m_data; }\
-    BASETYPE* operator->() { return &_m_data; }\
-    BASETYPE* operator&() { return &_m_data; }\
-    const BASETYPE& operator*()const { return _m_data; }\
-    const BASETYPE* operator->()const { return &_m_data; }\
-    const BASETYPE* operator&()const { return &_m_data; }\
-    BASETYPE& get() { return _m_data; }\
-    const BASETYPE& get()const { return _m_data; }\
+    inline NEWTYPE(const NEWTYPE& val) = default;\
+    inline NEWTYPE& operator = (const NEWTYPE& t) = default;\
+    inline NEWTYPE& operator = (const BASETYPE& t) { _m_data = t; return *this; };\
+    inline operator const BASETYPE& () const { return _m_data; }\
+    inline operator BASETYPE& () { return _m_data; }\
+    inline BASETYPE& operator*() { return _m_data; }\
+    inline BASETYPE* operator->() { return &_m_data; }\
+    inline BASETYPE* operator&() { return &_m_data; }\
+    inline const BASETYPE& operator*()const { return _m_data; }\
+    inline const BASETYPE* operator->()const { return &_m_data; }\
+    inline const BASETYPE* operator&()const { return &_m_data; }\
+    inline BASETYPE& get() { return _m_data; }\
+    inline const BASETYPE& get()const { return _m_data; }\
 }
 
     struct game_entity
@@ -1086,30 +1086,9 @@ namespace jeecs
             {
                 _type_guard.~_type_unregister_guard();
             }
+
             template<typename T>
-            inline static typeid_t id(const char* _typename = typeid(T).name())
-            {
-                assert(!_m_shutdown_flag);
-                bool first_init = false;
-                static typeid_t registed_typeid = _type_guard._register_or_get_type_id<T>(_typename, &first_init);
-                if (first_init)
-                {
-                    if constexpr (sfinae_has_ref_register<T>::value)
-                    {
-                        if constexpr (sfinae_is_static_ref_register_function<T>::value)
-                            T::JERefRegsiter();
-                        else
-                            static_assert(sfinae_is_static_ref_register_function<T>::value,
-                                "T::JERefRegsiter must be static & callable with no arguments.");
-                    }
-                    if constexpr (std::is_base_of<je_type_def_base, T>::value)
-                    {
-                        // Is je_def components, register it's self!
-                        typing::register_member(&T::_m_data, "value");
-                    }
-                }
-                return registed_typeid;
-            }
+            inline static typeid_t id(const char* _typename = typeid(T).name());
 
             template<typename T>
             inline static const type_info* of(const char* _typename = typeid(T).name())
@@ -1178,6 +1157,31 @@ namespace jeecs
 
             ptrdiff_t member_offset = reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
             je_register_member(type_info::id<ClassT>(), membt, membname, member_offset);
+        }
+
+        template<typename T>
+        inline typeid_t type_info::id(const char* _typename)
+        {
+            assert(!_m_shutdown_flag);
+            bool first_init = false;
+            static typeid_t registed_typeid = _type_guard._register_or_get_type_id<T>(_typename, &first_init);
+            if (first_init)
+            {
+                if constexpr (sfinae_has_ref_register<T>::value)
+                {
+                    if constexpr (sfinae_is_static_ref_register_function<T>::value)
+                        T::JERefRegsiter();
+                    else
+                        static_assert(sfinae_is_static_ref_register_function<T>::value,
+                            "T::JERefRegsiter must be static & callable with no arguments.");
+                }
+                if constexpr (std::is_base_of<je_type_def_base, T>::value)
+                {
+                    // Is je_def components, register it's self!
+                    typing::register_member(&T::_m_data, "value");
+                }
+            }
+            return registed_typeid;
         }
     }
 
