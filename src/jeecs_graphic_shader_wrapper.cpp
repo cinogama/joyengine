@@ -1085,20 +1085,25 @@ func texture(var tex:texture2d, var uv:float2):float4
 
     //  OK We have current vao struct info, built struct out
     var out_struct_decl = F"{vao_struct_name} = struct {"{"}\n";
-    for(var name_type_pair : struct_infos)
-        out_struct_decl += F"{name_type_pair[0]} : {name_type_pair[1]}, \n";
+
+    for(var (vao_member_name, vao_shader_type) : struct_infos)
+        out_struct_decl += F"{vao_member_name} : {vao_shader_type}, \n";
+
     out_struct_decl += "};\n";
 
     // Last step, we generate "_JE_BUILT_VAO" function here.
     out_struct_decl += 
-    @"
-    extern func _JE_BUILT_VAO_STRUCT(var vertex_data_in: vertex_in)
-    {
-        return "@ + vao_struct_name + " {\n";
+        @"
+        extern func _JE_BUILT_VAO_STRUCT(var vertex_data_in: vertex_in)
+        {
+            return "@ 
+        + vao_struct_name + " {\n";
+
     var vinid = 0;
-    for(var name_type_pair : struct_infos)
+
+    for(var (vao_member_name, vao_shader_type) : struct_infos)
     {
-        out_struct_decl += F"{name_type_pair[0]} = vertex_data_in->in:<{name_type_pair[1]}>({vinid}), \n";
+        out_struct_decl += F"{vao_member_name} = vertex_data_in->in:<{vao_shader_type}>({vinid}), \n";
         vinid += 1;
     }
     out_struct_decl += "};}\n";
