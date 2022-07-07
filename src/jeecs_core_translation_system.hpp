@@ -99,9 +99,9 @@ namespace jeecs
             maynot<const LocalScale*>    scale,
             LocalToWorld* l2w)
         {
-            l2w->pos = position ? position->pos : math::vec3();
-            l2w->rot = rotation ? rotation->rot : math::quat();
-            l2w->scale = scale ? scale->scale : math::vec3(1, 1, 1);
+            l2w->pos = position ? position->get() : math::vec3();
+            l2w->rot = rotation ? rotation->get() : math::quat();
+            l2w->scale = scale ? scale->get() : math::vec3(1, 1, 1);
         }
         void UpdateWorldToTranslation(const LocalToWorld* l2w, Translation* trans)
         {
@@ -118,9 +118,9 @@ namespace jeecs
             maynot<const LocalScale*>    scale,
             LocalToParent* l2P)
         {
-            l2P->pos = position ? position->pos : math::vec3();
-            l2P->rot = rotation ? rotation->rot : math::quat();
-            l2P->scale = scale ? scale->scale : math::vec3(1, 1, 1);
+            l2P->pos = position ? position->get() : math::vec3();
+            l2P->rot = rotation ? rotation->get() : math::quat();
+            l2P->scale = scale ? scale->get() : math::vec3(1, 1, 1);
         }
         void UpdateParentToTranslation(const LocalToParent* l2p, Translation* trans)
         {
