@@ -127,8 +127,8 @@ func frag(var fdata: v2f)
 
             bool operator < (const camera_arch& another) const noexcept
             {
-                int a_queue = rendqueue ? rendqueue->get() : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->get() : 0;
+                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
                 return a_queue < b_queue;
             }
         };
@@ -142,8 +142,8 @@ func frag(var fdata: v2f)
 
             bool operator < (const renderer_arch& another) const noexcept
             {
-                int a_queue = rendqueue ? rendqueue->get() : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->get() : 0;
+                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
                 return a_queue < b_queue;
             }
         };
@@ -189,10 +189,10 @@ func frag(var fdata: v2f)
 
                     if (current_camera.viewport)
                         jegl_rend_to_framebuffer(nullptr,
-                            (*current_camera.viewport)->x * (float)RENDAIMBUFFER_WIDTH,
-                            (*current_camera.viewport)->y * (float)RENDAIMBUFFER_HEIGHT,
-                            (*current_camera.viewport)->z * (float)RENDAIMBUFFER_WIDTH,
-                            (*current_camera.viewport)->w * (float)RENDAIMBUFFER_HEIGHT);
+                            current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
+                            current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT,
+                            current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH,
+                            current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT);
                     else
                         jegl_rend_to_framebuffer(nullptr, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
@@ -220,18 +220,18 @@ func frag(var fdata: v2f)
                         // float MAT4_MV[4][4]; math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL); ?
 
                         auto& drawing_shape =
-                            (rendentity.shape && (rendentity.shape->get()))
-                            ? rendentity.shape->get()
+                            (rendentity.shape && rendentity.shape->vertex)
+                            ? rendentity.shape->vertex
                             : default_shape_quad;
                         auto& drawing_shaders =
-                            (rendentity.shaders && (*rendentity.shaders)->size())
-                            ? rendentity.shaders->get()
+                            (rendentity.shaders && rendentity.shaders->shaders.size())
+                            ? rendentity.shaders->shaders
                             : default_shaders_list;
 
                         // Bind texture here
                         size_t passcount = 0;
                         if (rendentity.textures)
-                            for (auto& texture : rendentity.textures->get())
+                            for (auto& texture : rendentity.textures->textures)
                             {
                                 if (texture && texture->enabled())
                                     jegl_using_texture(*texture, passcount);
