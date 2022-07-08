@@ -1,0 +1,57 @@
+import woo.std;
+import je.gui;
+import je;
+
+import builtin.Editor.generic.InputBox;
+import builtin.Editor.generic.AskFor;
+
+namespace editor
+{
+	namespace Inspector
+	{
+		namespace Material
+		{
+			func show(var cur_entity : option<je::entity>, var max_height: real)
+			{
+				using je::gui;
+
+				BeginChild("material_editor", 0., max_height);
+					Text("材质编辑器");
+					Separator();
+					match (cur_entity)
+					{
+						option::value(current_entity)?
+						{
+							var halfheight = 0.;
+							GetContentRegionAvail(0./* 不关心宽度 */, ref halfheight);
+							halfheight /= 2.;
+
+							BeginChild("Shaders", 0., halfheight);
+								static var ShadersTypeID = je::typeinfo("Renderer::Shaders");
+								match (current_entity->editor::get_component(ShadersTypeID))
+								{
+									option::value(shaders)?
+										;
+									option::none?
+										Text("当前实体没有Renderer::Shaders组件");
+								}
+							EndChild();
+							BeginChild("Textures", 0., halfheight);
+								static var TexturesTypeID = je::typeinfo("Renderer::Textures");
+								match (current_entity->editor::get_component(TexturesTypeID))
+								{
+									option::value(textures)?
+										;
+									option::none?
+										Text("当前实体没有Renderer::Textures组件");
+								}
+							EndChild();
+						}
+						option::none?
+							Text("<没有选中可编辑的实体>");
+					} // end match
+				EndChild();
+			}
+		}
+    }
+}
