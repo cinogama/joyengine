@@ -357,6 +357,7 @@ struct jegl_texture
     };
     // NOTE: Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
     pixel_data_t* m_pixels;
+    const char* m_path;
     size_t          m_width;
     size_t          m_height;
 
@@ -377,6 +378,7 @@ struct jegl_vertex
     };
     float* m_vertex_datas;
     size_t* m_vertex_formats;
+    const char* m_path;
     size_t m_format_count;
     size_t m_point_count;
     size_t m_data_count_per_point;
@@ -429,7 +431,7 @@ struct jegl_shader
 
     const char* m_vertex_glsl_src;
     const char* m_fragment_glsl_src;
-
+    const char* m_path;
     unifrom_variables* m_custom_uniforms;
     builtin_uniform_location m_builtin_uniforms;
 };
@@ -896,6 +898,10 @@ namespace jeecs
             operator bool()const noexcept
             {
                 return ptr;
+            }
+            bool operator !()const noexcept
+            {
+                return !ptr;
             }
             T* operator -> ()const noexcept
             {
@@ -3295,12 +3301,14 @@ namespace jeecs
 
         struct Shaders
         {
+            // NOTE: shaders should not be nullptr!
             jeecs::vector<basic::resource<graphic::shader>> shaders;
         };
 
         struct Textures
         {
-            jeecs::vector< basic::resource<graphic::texture>> textures;
+            // NOTE: textures should not be nullptr!
+            jeecs::vector<basic::resource<graphic::texture>> textures;
         };
     }
     namespace Camera

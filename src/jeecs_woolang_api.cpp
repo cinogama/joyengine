@@ -441,6 +441,71 @@ WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args, size_t argc)
 
     return wo_ret_void(vm);
 }
+/////////////////////////////////////////////////////////////
+WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_shader = jeecs::basic::create_new<jeecs::graphic::shader>(wo_string(args + 0));
+    if (loaded_shader->enabled())
+    {
+        return wo_ret_gchandle(vm, loaded_shader, nullptr,
+            [](void* ptr) {
+                jeecs::basic::destroy_free((jeecs::graphic::shader*)ptr);
+            });
+    }
+    jeecs::basic::destroy_free(loaded_shader);
+    return wo_ret_option_none(vm);
+
+}
+
+WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_shader = jeecs::basic::create_new<jeecs::graphic::shader>(wo_string(args + 0), wo_string(args + 1));
+    if (loaded_shader->enabled())
+    {
+        return wo_ret_gchandle(vm, loaded_shader, nullptr,
+            [](void* ptr) {
+                jeecs::basic::destroy_free((jeecs::graphic::shader*)ptr);
+            });
+    }
+    jeecs::basic::destroy_free(loaded_shader);
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    wo_value out_array = args + 1;
+
+    if (entity->valid())
+    {
+        if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+        {
+            for (auto& shader : shaders->shaders)
+            {
+                if (!shader)
+                    return wo_ret_halt(vm, "Shader cannot be nulptr.");
+                wo_set_pointer(wo_arr_add(out_array, nullptr), shader.get());
+            }
+        }
+    }
+    return wo_ret_val(vm, out_array);
+}
+
+WO_API wo_api wojeapi_shader_is_valid(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* shader = (jeecs::graphic::shader*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, shader->enabled());
+}
+
+WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* shader = (jeecs::graphic::shader*)wo_pointer(args + 0);
+
+    if (auto str = shader->resouce()->m_raw_shader_data->m_path)
+        return wo_ret_string(vm, str);
+    return wo_ret_string(vm, "< Built-in shader >");
+}
+
 
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
@@ -470,6 +535,30 @@ namespace je
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
                 func color(var self: pixel, ref r: real, ref g: real, ref b: real, ref a: real): void;
             }
+        }
+
+        using shader = gchandle;
+        namespace shader
+        {
+            extern("libjoyecs", "wojeapi_shader_open")
+            func create(var path: string): option<shader>;
+            
+            extern("libjoyecs", "wojeapi_shader_create")
+            func create(var vpath: string, var src: string): option<shader>;
+
+            func shaders_of_entity(var e: entity): array<shader>
+            {
+                extern("libjoyecs", "wojeapi_shaders_of_entity")
+                func get_shaders_from_entity(var e: entity, var out_array: array<shader>): array<shader>;
+
+                return get_shaders_from_entity(e, []: array<shader>);
+            }
+
+            extern("libjoyecs", "wojeapi_shader_is_valid")
+            func isvalid(var self: shader): bool;
+
+            extern("libjoyecs", "wojeapi_shader_path")
+            func path(var self: shader): string;
         }
     }
 

@@ -233,7 +233,7 @@ func frag(var fdata: v2f)
                         if (rendentity.textures)
                             for (auto& texture : rendentity.textures->textures)
                             {
-                                if (texture && texture->enabled())
+                                if (texture->enabled())
                                     jegl_using_texture(*texture, passcount);
 
                                 passcount++;

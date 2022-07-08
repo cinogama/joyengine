@@ -12,83 +12,7 @@ namespace editor
 		namespace Component
 		{
 			var _type_widget_methods = {}: map<je::typeinfo, void(string, je::native_value)>;
-			private func _register_default_method()
-			{
-				using je::gui;
-
-				_type_widget_methods[je::typeinfo::float] = 
-					func(var name: string, var addr: je::native_value)
-					{
-						var value = 0.; addr->float(ref value);
-
-						if (InputFloat(name, ref value))
-							addr->float(value);
-					};
-				_type_widget_methods[je::typeinfo::float2] = 
-					func(var name: string, var addr: je::native_value)
-					{
-						var x = 0., y = 0.;
-						addr->float2(ref x, ref y);
-
-						if (InputFloat2(name, ref x, ref y))
-							addr->float2(x, y);
-					};
-				_type_widget_methods[je::typeinfo::float3] = 
-					func(var name: string, var addr: je::native_value)
-					{
-						var x = 0., y = 0., z = 0.;
-						addr->float3(ref x, ref y, ref z);
-
-						if (InputFloat3(name, ref x, ref y, ref z))
-							addr->float3(x, y, z);
-					};
-				_type_widget_methods[je::typeinfo::float4] = 
-					func(var name: string, var addr: je::native_value)
-					{
-						var x = 0., y = 0., z = 0., w = 0.;
-						addr->float4(ref x, ref y, ref z, ref w);
-
-						if (InputFloat4(name, ref x, ref y, ref z, ref w))
-							addr->float4(x, y, z, w);
-					};
-				_type_widget_methods[je::typeinfo::quat] = 
-					func(var name: string, var addr: je::native_value)
-					{
-						var x = 0., y = 0., z = 0.;
-						addr->euler3(ref x, ref y, ref z);
-
-						if (InputFloat3(name, ref x, ref y, ref z))
-							addr->euler3(x, y, z);
-					};
-				_type_widget_methods[je::typeinfo::string] = 
-					func(var name: string, var addr: je::native_value)
-					{
-						var x = "";
-						addr->string(ref x);
-
-						if (InputText(name, ref x))
-							addr->string(x);
-					};
-			}
-			_register_default_method(); // 此处注册常用默认操作
 			
-			private func _show_edit_widget(var name: string, var type: je::typeinfo, var addr: je::native_value)
-			{
-				using je::gui;
-
-				if (_type_widget_methods->contain(type))
-				{
-					var method = _type_widget_methods[type];
-					method(name, addr);
-				}
-				else
-				{
-					Text(name);
-					SameLine();
-					Text("<没有合适的控件以展示此值>");
-				}
-			}
-
 			using component_chain = struct{
 				m_map:				map<string, component_chain>,
 				m_component_type:	option<je::typeinfo>,
@@ -171,6 +95,84 @@ namespace editor
 					} // end match
 				EndChild();
 			}
-		}
+
+			private func _register_default_method()
+			{
+				using je::gui;
+
+				_type_widget_methods[je::typeinfo::float] = 
+					func(var name: string, var addr: je::native_value)
+					{
+						var value = 0.; addr->float(ref value);
+
+						if (InputFloat(name, ref value))
+							addr->float(value);
+					};
+				_type_widget_methods[je::typeinfo::float2] = 
+					func(var name: string, var addr: je::native_value)
+					{
+						var x = 0., y = 0.;
+						addr->float2(ref x, ref y);
+
+						if (InputFloat2(name, ref x, ref y))
+							addr->float2(x, y);
+					};
+				_type_widget_methods[je::typeinfo::float3] = 
+					func(var name: string, var addr: je::native_value)
+					{
+						var x = 0., y = 0., z = 0.;
+						addr->float3(ref x, ref y, ref z);
+
+						if (InputFloat3(name, ref x, ref y, ref z))
+							addr->float3(x, y, z);
+					};
+				_type_widget_methods[je::typeinfo::float4] = 
+					func(var name: string, var addr: je::native_value)
+					{
+						var x = 0., y = 0., z = 0., w = 0.;
+						addr->float4(ref x, ref y, ref z, ref w);
+
+						if (InputFloat4(name, ref x, ref y, ref z, ref w))
+							addr->float4(x, y, z, w);
+					};
+				_type_widget_methods[je::typeinfo::quat] = 
+					func(var name: string, var addr: je::native_value)
+					{
+						var x = 0., y = 0., z = 0.;
+						addr->euler3(ref x, ref y, ref z);
+
+						if (InputFloat3(name, ref x, ref y, ref z))
+							addr->euler3(x, y, z);
+					};
+				_type_widget_methods[je::typeinfo::string] = 
+					func(var name: string, var addr: je::native_value)
+					{
+						var x = "";
+						addr->string(ref x);
+
+						if (InputText(name, ref x))
+							addr->string(x);
+					};
+			}
+			_register_default_method(); // 此处注册常用默认操作
+			
+			private func _show_edit_widget(var name: string, var type: je::typeinfo, var addr: je::native_value)
+			{
+				using je::gui;
+
+				if (_type_widget_methods->contain(type))
+				{
+					var method = _type_widget_methods[type];
+					method(name, addr);
+				}
+				else
+				{
+					Text(name);
+					SameLine();
+					Text("<没有合适的控件以展示此值>");
+				}
+			}
+
+		} // end of namespace Component
 	}
 }

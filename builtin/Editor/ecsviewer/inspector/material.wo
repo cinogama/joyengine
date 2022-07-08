@@ -31,7 +31,14 @@ namespace editor
 								match (current_entity->editor::get_component(ShadersTypeID))
 								{
 									option::value(shaders)?
-										;
+									{
+										var shaders = je::graphic::shader::shaders_of_entity(current_entity);
+										for (var shader : shaders)
+										{
+											// TODO: 这里应该是一个ListBox
+											Text(shader->path());
+										}
+									}
 									option::none?
 										Text("当前实体没有Renderer::Shaders组件");
 								}
