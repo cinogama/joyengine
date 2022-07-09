@@ -230,7 +230,7 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
 {
     enum basic_type
     {
-        INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT
+        INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
     };
     basic_type type = (basic_type)wo_int(args + 0);
 
@@ -250,6 +250,8 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::string>(nullptr));
     case QUAT:
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::quat>(nullptr));
+    case TEXTURE:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::graphic::texture*>(nullptr));
     default:
         return wo_ret_panic(vm, "Unknown basic type.");
     }
@@ -497,6 +499,7 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
                         delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
                     });
             }
+            wo_pop_stack(vm);
         }
     }
     return wo_ret_val(vm, out_map);
@@ -555,6 +558,71 @@ WO_API wo_api wojeapi_shader_is_valid(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, (*shader)->enabled());
 }
 
+WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t argc)
+{
+    /*
+    extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
+                func _get_uniforms_from_shader(
+                    var shad: shader, 
+                    var out_datas: map<string, (typeinfo, uniform_value_data)>
+                ): map<string, (typeinfo, uniform_value_data)>;
+    */
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
+    wo_value out_map = args + 1;
+
+    if ((*shader)->enabled())
+    {
+        auto* uniforms = (*shader)->resouce()->m_raw_shader_data->m_custom_uniforms;
+        wo_value key = wo_push_empty(vm);
+        while (uniforms)
+        {
+            const jeecs::typing::type_info* type;
+            switch (uniforms->m_uniform_type)
+            {
+            case jegl_shader::uniform_type::FLOAT:
+                type = jeecs::typing::type_info::of<float>(nullptr); break;
+            case jegl_shader::uniform_type::FLOAT2:
+                type = jeecs::typing::type_info::of<jeecs::math::vec2>(nullptr); break;
+            case jegl_shader::uniform_type::FLOAT3:
+                type = jeecs::typing::type_info::of<jeecs::math::vec3>(nullptr); break;
+            case jegl_shader::uniform_type::FLOAT4:
+                type = jeecs::typing::type_info::of<jeecs::math::vec4>(nullptr); break;
+            case jegl_shader::uniform_type::INT:
+                type = jeecs::typing::type_info::of<int>(nullptr); break;
+            case jegl_shader::uniform_type::TEXTURE2D:
+                type = jeecs::typing::type_info::of<jeecs::graphic::texture*>(nullptr); break;
+            default:
+                // Unknown / Unsupport type, just give this things.
+                type = jeecs::typing::type_info::of<jeecs::typing::type_info*>(nullptr); break;
+                break;
+            }
+
+            wo_set_string(key, uniforms->m_name);
+
+            wo_value val_in_map = wo_map_set(out_map, key, nullptr);
+            wo_set_struct(val_in_map, 2);
+            wo_set_pointer(wo_struct_get(val_in_map, 0), (void*)type);
+
+            wo_value uniform_value_data = wo_struct_get(val_in_map, 1);
+            wo_set_struct(uniform_value_data, 5);
+
+            wo_set_int(wo_struct_get(uniform_value_data, 0), uniforms->n);
+            wo_set_float(wo_struct_get(uniform_value_data, 1), uniforms->x);
+            wo_set_float(wo_struct_get(uniform_value_data, 2), uniforms->y);
+            wo_set_float(wo_struct_get(uniform_value_data, 3), uniforms->z);
+            wo_set_float(wo_struct_get(uniform_value_data, 4), uniforms->w);
+
+            uniforms = uniforms->m_next;
+        }
+        wo_pop_stack(vm);
+    }
+    return wo_ret_val(vm, out_map);
+
+    if (auto str = (*shader)->resouce()->m_raw_shader_data->m_path)
+        return wo_ret_string(vm, str);
+    return wo_ret_string(vm, "< Built-in shader >");
+}
+
 WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
 {
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
@@ -578,6 +646,7 @@ WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args, size_t argc)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in texture >");
 }
+
 
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
@@ -604,7 +673,7 @@ namespace je
 
         enum basic_type
         {
-            INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT
+            INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
         }
         extern("libjoyecs", "wojeapi_type_basic_type")
         private func create(var tid: basic_type): typeinfo;
@@ -616,6 +685,8 @@ namespace je
         const var float4 = typeinfo(basic_type::FLOAT4);
         const var quat = typeinfo(basic_type::QUAT);
         const var string = typeinfo(basic_type::STRING);
+
+        const var texture = typeinfo(basic_type::TEXTURE);
     }
 
      namespace graphic
@@ -660,6 +731,60 @@ namespace je
 
             extern("libjoyecs", "wojeapi_shader_path")
             func path(var self: shader): string;
+
+            union uniform_variable
+            {
+                integer(int),
+                float(real),
+                float2((real, real)),
+                float3((real, real, real)),
+                float4((real, real, real, real)),
+                texture(int),
+                others,
+            }
+
+            using uniform_value_data = struct {
+                n : int,
+                x : real,
+                y : real,
+                z : real,
+                w : real
+            };
+
+            func get_uniforms(var self: shader): map<string, uniform_variable>
+            {
+                extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
+                func _get_uniforms_from_shader(
+                    var shad: shader, 
+                    var out_datas: map<string, (typeinfo, uniform_value_data)>
+                ): map<string, (typeinfo, uniform_value_data)>;
+                
+                var result = {}: map<string, uniform_variable>;
+
+                for(var name, (type, val) : _get_uniforms_from_shader(self, {}: map<string, (typeinfo, uniform_value_data)>))
+                {
+                    if (type == typeinfo::int)
+                        result[name] = uniform_variable::integer(val.n);
+                    else if (type == typeinfo::float)
+                        result[name] = uniform_variable::float(val.x);
+                    else if (type == typeinfo::float2)
+                        result[name] = uniform_variable::float2((val.x, val.y));
+                    else if (type == typeinfo::float3)
+                        result[name] = uniform_variable::float3((val.x, val.y, val.z));
+                    else if (type == typeinfo::float4)
+                        result[name] = uniform_variable::float4((val.x, val.y, val.z, val.w));
+                    else if (type == typeinfo::texture)
+                        result[name] = uniform_variable::texture(val.n);
+                    else
+                        result[name] = uniform_variable::others;
+                }
+
+                return result;
+            }
+            func set_uniform<T>(var self: shader, var name: string, var val: T)
+            {
+                
+            }
         }
     }
 
@@ -737,7 +862,8 @@ namespace je
             }
         }
     }
-
+)"
+R"(
     using entity = gchandle;
     namespace entity
     {

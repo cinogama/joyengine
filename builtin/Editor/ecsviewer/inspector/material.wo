@@ -27,7 +27,32 @@ namespace editor
                 }
 				if (show_uniforms)
 				{
-					Text("TODO, 此处展示uniform变量");
+					var uniforms = shader->get_uniforms();
+					for(var name, uniform_val : uniforms)
+					{
+						if (name->beginwith("JOYENGINE_"))
+							continue; // 引擎的内置shader-uniform变量，跳过显示
+
+						Text(name);
+						SameLine();
+						match (uniform_val)
+						{
+							integer(n)?
+								;
+							float(x)?
+								;
+							float2((x, y))?
+								;
+							float3((x, y, z))?
+								;
+							float4((x, y, z, w))?
+								;
+							texture(id)?
+								Text("<TODO: 这是一个Texture>");
+							others?
+								Text("<不受支持的uniform类型>");
+						}
+					}
 					TreePop();
 				}
 			}
