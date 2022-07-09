@@ -64,13 +64,13 @@ namespace editor
                 
                 match(je::world::rend())
                 {
-                    option::value(current_world)?
+                    value(current_world)?
                     {
                         var top_entity_walker = current_world->editor::top_entity_iter();
                         if (_display_entity_with_iter(top_entity_walker) == 0)
                             Text("当前世界没有实体");
                     } 
-                    option::none?
+                    none?
                         ; // do nothing
                 }  
                 
@@ -113,13 +113,13 @@ namespace editor
 
                 match (get_current_entity())
                 {
-                    option::value(selected_entity)?
+                    value(selected_entity)?
                         if (selected_entity == entity)
                         {
                             _has_selected_entity = true;
                             attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                         }
-                    option::none?
+                    none?
                         ; // 没有选中的实体，啥也不干
                 }
 

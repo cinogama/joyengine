@@ -4,6 +4,7 @@ import je;
 
 import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
+import builtin.Editor.generic.DragFile;
 
 namespace editor
 {
@@ -33,8 +34,6 @@ namespace editor
 						if (name->beginwith("JOYENGINE_"))
 							continue; // 引擎的内置shader-uniform变量，跳过显示
 
-						Text(name);
-						SameLine();
 						match (uniform_val)
 						{
 							integer(n)?
@@ -48,9 +47,9 @@ namespace editor
 							float4((x, y, z, w))?
 								;
 							texture(id)?
-								Text("<TODO: 这是一个Texture>");
+								generic::DragFile(name);
 							others?
-								Text("<不受支持的uniform类型>");
+								Text(F"<不受支持的uniform类型> {name}");
 						}
 					}
 					TreePop();
@@ -65,12 +64,12 @@ namespace editor
 					Separator();
 					match (cur_entity)
 					{
-						option::value(current_entity)?
+						value(current_entity)?
 						{
 							static var ShadersTypeID = je::typeinfo("Renderer::Shaders");
 							match (current_entity->editor::get_component(ShadersTypeID))
 							{
-								option::value(shaders)?
+								value(shaders)?
 								{
 									var shaders = current_entity->editor::graphic::get_shaders();
 									for (var shader : shaders)
@@ -79,7 +78,7 @@ namespace editor
 										show_shader(current_entity, shader);
 									}
 								}
-								option::none?
+								none?
 									Text("当前实体没有Renderer::Shaders组件");
 							}
 							/*
@@ -88,7 +87,7 @@ namespace editor
 								static var TexturesTypeID = je::typeinfo("Renderer::Textures");
 								match (current_entity->editor::get_component(TexturesTypeID))
 								{
-									option::value(textures)?
+									value(textures)?
 									{
 										var textures = current_entity->editor::graphic::get_textures();
 										for (var passid, texture : textures)
@@ -97,13 +96,13 @@ namespace editor
 											Text(F"{passid}=>{texture->path()}");
 										};
 									}
-									option::none?
+									none?
 										Text("当前实体没有Renderer::Textures组件");
 								}
 							EndChild();
 							*/ 
 						}
-						option::none?
+						none?
 							Text("<没有选中可编辑的实体>");
 					} // end match
 				EndChild();

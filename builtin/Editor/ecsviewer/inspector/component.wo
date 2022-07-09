@@ -25,7 +25,7 @@ namespace editor
 				BeginChild("component_editor", 0., max_height);
 					match (cur_entity)
 					{
-						option::value(current_entity)?
+						value(current_entity)?
 						{
 							// TODO: 在此处显示一下实体信息
 							var current_component_types = 
@@ -63,12 +63,12 @@ namespace editor
 								}
 								match (current_node.m_component_type)
 								{
-									option::value(type)?
+									value(type)?
 									{
 										var member_count = 0;
 										match (entity->editor::get_component(type))
 										{
-											option::value(component_addr)?
+											value(component_addr)?
 											{
 												for (var name, type, addr : component_addr->editor::iter_member(type))
 												{
@@ -79,17 +79,17 @@ namespace editor
 												if (0 == member_count)
 													Text("<此组件没有可编辑字段>");
 											}
-											option::none?
+											none?
 												; // 如果实体出现更新，这里会很麻烦
 										}
 									}
-									option::none?
+									none?
 										; // 啥也不干
 								}
 							}
 							waklthrow_and_display_components(current_component_types, current_entity);
 						}
-						option::none?
+						none?
 							Text("<没有选中可编辑的实体>");
 
 					} // end match
