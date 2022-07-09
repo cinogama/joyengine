@@ -4,6 +4,7 @@ import je;
 
 import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
+import builtin.Editor.generic.MsgBox;
 import builtin.Editor.generic.DragFile;
 
 namespace editor
@@ -20,6 +21,8 @@ namespace editor
 					  TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
 					+ TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
 					+ TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+
+				var textures = entity->editor::graphic::get_textures();
 
 				var show_uniforms = TreeNodeEx(shader->path(), attribute);
 				if (IsItemClicked() && !IsItemToggledOpen())
@@ -47,7 +50,30 @@ namespace editor
 							float4((x, y, z, w))?
 								;
 							texture(id)?
-								generic::DragFile(name);
+							{
+								var texture_path = 
+									textures->get(id)
+											->map(func(var tex: je::graphic::texture){return tex->path()})
+											->valor(F"<没有绑定到{id}的纹理>");
+								
+								match (generic::DragFile(name, texture_path))
+								{
+									Drag(path)?
+									{
+										// 拖动文件到这里，加载这个纹理，然后绑定
+										var new_texture = je::graphic::texture(path);
+										match (new_texture)
+										{
+											value(tex)?
+												entity->editor::graphic::bind_texture(id, tex);
+											none?
+												launch(generic::MsgBox, "加载纹理失败", F"无法加载纹理: {path}");
+										}
+									}
+									None?
+										; // 没任何变化，啥也不干
+								}
+							}
 							others?
 								Text(F"<不受支持的uniform类型> {name}");
 						}

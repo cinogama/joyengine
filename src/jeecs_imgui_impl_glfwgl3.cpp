@@ -209,6 +209,9 @@ namespace je
     extern("libjoyecs", "je_gui_push_id")
     func PushID(var id:int):void;
 
+    extern("libjoyecs", "je_gui_push_id_str")
+    func PushID(var id:string):void;
+
     extern("libjoyecs", "je_gui_pop_id")
     func PopID():void;
 
@@ -280,6 +283,49 @@ namespace je
 
     extern("libjoyecs", "je_gui_content_region_avail")
     func GetContentRegionAvail(ref x: real, ref y: real): void;
+)"
+R"(
+    enum DragAttribute
+    {
+        ImGuiDragDropFlags_None                         = 0,
+        // BeginDragDropSource() flags
+        ImGuiDragDropFlags_SourceNoPreviewTooltip       = 0x0001,   // By default, a successful call to BeginDragDropSource opens a tooltip so you can display a preview or description of the source contents. This flag disable this behavior.
+        ImGuiDragDropFlags_SourceNoDisableHover         = 0x0002,   // By default, when dragging we clear data so that IsItemHovered() will return false, to avoid subsequent user code submitting tooltips. This flag disable this behavior so you can still call IsItemHovered() on the source item.
+        ImGuiDragDropFlags_SourceNoHoldToOpenOthers     = 0x0004,   // Disable the behavior that allows to open tree nodes and collapsing header by holding over them while dragging a source item.
+        ImGuiDragDropFlags_SourceAllowNullID            = 0x0008,   // Allow items such as Text(), Image() that have no unique identifier to be used as drag source, by manufacturing a temporary identifier based on their window-relative position. This is extremely unusual within the dear imgui ecosystem and so we made it explicit.
+        ImGuiDragDropFlags_SourceExtern                 = 0x0010,   // External source (from outside of dear imgui), won't attempt to read current item/window info. Will always return true. Only one Extern source can be active simultaneously.
+        ImGuiDragDropFlags_SourceAutoExpirePayload      = 0x0020,   // Automatically expire the payload if the source cease to be submitted (otherwise payloads are persisting while being dragged)
+        // AcceptDragDropPayload() flags
+        ImGuiDragDropFlags_AcceptBeforeDelivery         = 0x0040,  // AcceptDragDropPayload() will returns true even before the mouse button is released. You can then call IsDelivery() to test if the payload needs to be delivered.
+        ImGuiDragDropFlags_AcceptNoDrawDefaultRect      = 0x0080,  // Do not draw the default highlight rectangle when hovering over target.
+        ImGuiDragDropFlags_AcceptNoPreviewTooltip       = 0x0100,  // Request hiding the BeginDragDropSource tooltip from the BeginDragDropTarget site.
+        // ImGuiDragDropFlags_AcceptPeekOnly               = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect  // For peeking ahead and inspecting the payload before delivery.
+    }
+
+    extern("libjoyecs", "je_gui_begin_drag_drop_source")
+    func BeginDragDropSource(): bool;
+
+    extern("libjoyecs", "je_gui_begin_drag_drop_source")
+    func BeginDragDropSource(var attrib: DragAttribute): bool;
+
+    
+    extern("libjoyecs", "je_gui_set_drag_drop_payload")
+    func SetDragDropPayload(var type: string, var data: string): bool;
+    
+
+    extern("libjoyecs", "je_gui_end_drag_drop_source")
+    func EndDragDropSource(): void;
+
+
+    extern("libjoyecs", "je_gui_begin_drag_drop_target")
+    func BeginDragDropTarget(): bool;
+
+    extern("libjoyecs", "je_gui_accept_drag_drop_payload")
+    func AcceptDragDropPayload(var type, ref data: string): bool;
+
+    extern("libjoyecs", "je_gui_end_accept_drop_source")
+    func EndDragDropTarget(): bool;
+
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -311,7 +357,54 @@ namespace je
 
 )";
 
+WO_API wo_api je_gui_begin_drag_drop_source(wo_vm vm, wo_value args, size_t argc)
+{
+    bool result;
+    if (argc == 0)
+        result = ImGui::BeginDragDropSource(ImGuiDragDropFlags_None);
+    else
+        result = ImGui::BeginDragDropSource((ImGuiDragDropFlags)wo_int(args + 0));
+    return wo_ret_bool(vm, result);
+}
+WO_API wo_api je_gui_set_drag_drop_payload(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t buf = wo_string(args + 1);
+
+    bool result = ImGui::SetDragDropPayload(wo_string(args + 0), buf, strlen(buf) + 1);
+    return wo_ret_bool(vm, result);
+}
+WO_API wo_api je_gui_end_drag_drop_source(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::EndDragDropSource();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_begin_drag_drop_target(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::BeginDragDropTarget());
+}
+WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args, size_t argc)
+{
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(wo_string(args + 0)))
+    {
+        wo_set_string(args+1, (const char*)payload->Data);
+        return wo_ret_bool(vm, true);
+    }
+    return wo_ret_bool(vm, false);
+}
+WO_API wo_api je_gui_end_accept_drop_source(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::EndDragDropTarget();
+    return wo_ret_void(vm);
+}
+
 //
+
+WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::PushID(wo_string(args + 0));
+    return wo_ret_void(vm);
+}
 WO_API wo_api je_gui_push_id(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::PushID(wo_int(args + 0));

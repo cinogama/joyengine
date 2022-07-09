@@ -69,7 +69,16 @@ namespace editor
 			using je::gui;
 
 			BeginGroup();
-				ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
+				PushID(path.path);
+					ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
+				PopID();
+				if (BeginDragDropSource())
+				{
+					SetDragDropPayload("JEDITOR_FILE_PATH", path.path);
+						Text(F"File: {path.path}");
+					EndDragDropSource();
+				}
+
 				SameLine();
 				Text(path.name);
 			EndGroup();

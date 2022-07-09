@@ -3322,8 +3322,9 @@ namespace jeecs
             };
             jeecs::vector<texture_with_passid> textures;
 
-            void set_texture(size_t passid, const basic::resource<graphic::texture>&& texture)
+            void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
             {
+                assert(texture);
                 for (auto& [pass, tex] : textures)
                 {
                     if (pass == passid)

@@ -505,6 +505,17 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_val(vm, out_map);
 }
 
+WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    if (entity->valid())
+        if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
+            textures->bind_texture(wo_int(args + 1), *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2));
+
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -563,7 +574,7 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
     /*
     extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
                 func _get_uniforms_from_shader(
-                    var shad: shader, 
+                    var shad: shader,
                     var out_datas: map<string, (typeinfo, uniform_value_data)>
                 ): map<string, (typeinfo, uniform_value_data)>;
     */
@@ -1031,6 +1042,9 @@ R"(
 
                     return get_textures_from_entity(self, {}: map<int, graphic::texture>);
                 }
+
+                extern("libjoyecs", "wojeapi_bind_texture_for_entity")
+                func bind_texture(var self: entity, var id: int, var tex: graphic::texture): void;
             }
         }// end of namespace editor
     } // end of namespace entity
