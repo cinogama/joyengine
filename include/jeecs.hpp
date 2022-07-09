@@ -3308,7 +3308,32 @@ namespace jeecs
         struct Textures
         {
             // NOTE: textures should not be nullptr!
-            jeecs::vector<basic::resource<graphic::texture>> textures;
+            struct texture_with_passid
+            {
+                size_t m_pass_id;
+                basic::resource<graphic::texture> m_texture;
+
+                texture_with_passid(size_t pass, const basic::resource<graphic::texture>& tex)
+                    : m_pass_id(pass)
+                    , m_texture(tex)
+                {
+
+                }
+            };
+            jeecs::vector<texture_with_passid> textures;
+
+            void set_texture(size_t passid, const basic::resource<graphic::texture>&& texture)
+            {
+                for (auto& [pass, tex] : textures)
+                {
+                    if (pass == passid)
+                    {
+                        tex = texture;
+                        return;
+                    }
+                }
+                textures.push_back(texture_with_passid(passid, texture));
+            }
         };
     }
     namespace Camera

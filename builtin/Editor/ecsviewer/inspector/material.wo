@@ -11,6 +11,26 @@ namespace editor
 	{
 		namespace Material
 		{
+			func show_shader(var entity: je::entity, var shader: je::graphic::shader)
+			{
+				using je::gui;
+
+				var attribute = 
+					  TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+					+ TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+					+ TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+
+				var show_uniforms = TreeNodeEx(shader->path(), attribute);
+				if (IsItemClicked() && !IsItemToggledOpen())
+                {
+                    // TODO: 总得放点什么在这儿
+                }
+				if (show_uniforms)
+				{
+					Text("TODO, 此处展示uniform变量");
+					TreePop();
+				}
+			}
 			func show(var cur_entity : option<je::entity>, var max_height: real)
 			{
 				using je::gui;
@@ -22,37 +42,41 @@ namespace editor
 					{
 						option::value(current_entity)?
 						{
-							var halfheight = 0.;
-							GetContentRegionAvail(0./* 不关心宽度 */, ref halfheight);
-							halfheight /= 2.;
-
-							BeginChild("Shaders", 0., halfheight);
-								static var ShadersTypeID = je::typeinfo("Renderer::Shaders");
-								match (current_entity->editor::get_component(ShadersTypeID))
+							static var ShadersTypeID = je::typeinfo("Renderer::Shaders");
+							match (current_entity->editor::get_component(ShadersTypeID))
+							{
+								option::value(shaders)?
 								{
-									option::value(shaders)?
+									var shaders = current_entity->editor::graphic::get_shaders();
+									for (var shader : shaders)
 									{
-										var shaders = je::graphic::shader::shaders_of_entity(current_entity);
-										for (var shader : shaders)
-										{
-											// TODO: 这里应该是一个ListBox
-											Text(shader->path());
-										}
+										// TODO: 这里应该是一个ListBox
+										show_shader(current_entity, shader);
 									}
-									option::none?
-										Text("当前实体没有Renderer::Shaders组件");
 								}
-							EndChild();
+								option::none?
+									Text("当前实体没有Renderer::Shaders组件");
+							}
+							/*
+							// 不在此处展示纹理
 							BeginChild("Textures", 0., halfheight);
 								static var TexturesTypeID = je::typeinfo("Renderer::Textures");
 								match (current_entity->editor::get_component(TexturesTypeID))
 								{
 									option::value(textures)?
-										;
+									{
+										var textures = current_entity->editor::graphic::get_textures();
+										for (var passid, texture : textures)
+										{
+											// TODO: 这里应该是一个ListBox
+											Text(F"{passid}=>{texture->path()}");
+										};
+									}
 									option::none?
 										Text("当前实体没有Renderer::Textures组件");
 								}
 							EndChild();
+							*/ 
 						}
 						option::none?
 							Text("<没有选中可编辑的实体>");

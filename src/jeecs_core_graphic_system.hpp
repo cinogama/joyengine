@@ -37,6 +37,7 @@ namespace jeecs
 
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
+        basic::resource<graphic::texture> default_texture;
         jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
 
         DefaultGraphicPipelineSystem(game_universe universe)
@@ -51,6 +52,12 @@ namespace jeecs
                     0.5f, 0.5f, 0.0f,       1.0f, 0.0f,
                     -0.5f, 0.5f, 0.0f,      0.0f, 0.0f, },
                     { 3, 2 });
+
+            default_texture = new graphic::texture(2,2, jegl_texture::texture_format::RGBA);
+            default_texture->pix(0, 0).set({ 1.f, 0.f, 1.f, 1.f });
+            default_texture->pix(1, 1).set({ 1.f, 0.f, 1.f, 1.f });
+            default_texture->pix(0, 1).set({ 0.f, 0.f, 0.f, 1.f });
+            default_texture->pix(1, 0).set({ 0.f, 0.f, 0.f, 1.f });
 
             default_shader = new graphic::shader("je/builtin_default.shader", R"(
 // Default shader
@@ -229,14 +236,14 @@ func frag(var fdata: v2f)
                             : default_shaders_list;
 
                         // Bind texture here
-                        size_t passcount = 0;
                         if (rendentity.textures)
                             for (auto& texture : rendentity.textures->textures)
                             {
-                                if (texture->enabled())
-                                    jegl_using_texture(*texture, passcount);
-
-                                passcount++;
+                                if (texture.m_texture->enabled())
+                                    jegl_using_texture(*texture.m_texture, texture.m_pass_id);
+                                else
+                                    // Current texture is missing, using default texture instead.
+                                    jegl_using_texture(*default_texture, texture.m_pass_id);
                             }
 
                         for (auto& shader_pass : drawing_shaders)

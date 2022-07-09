@@ -63,7 +63,7 @@ int main(int argc, char** argv)
         tex->pix(1, 0).set(math::vec3(1, 0, 0));
         tex->pix(0, 1).set(math::vec3(0, 1, 0));
         tex->pix(1, 1).set(math::vec3(0, 0, 1));
-        entity2.get_component<Renderer::Textures>()->textures.push_back(tex);
+        entity2.get_component<Renderer::Textures>()->set_texture(0, tex);
         entity2.get_component<Renderer::Shaders>()->shaders.push_back(
             new graphic::shader("test.shader", R"(
 // Default shader

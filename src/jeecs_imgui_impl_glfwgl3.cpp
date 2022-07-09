@@ -586,23 +586,21 @@ WO_API wo_api je_gui_separator(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::graphic::texture* texture = (jeecs::graphic::texture*)wo_pointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
-    jegl_using_resource(*texture);
+    jegl_using_resource((*texture)->resouce());
 
     if (argc == 1)
-        ImGui::Image((ImTextureID)(
-            (jegl_resource*)*texture)->m_uint1,
+        ImGui::Image((ImTextureID)((*texture)->resouce())->m_uint1,
             ImVec2(
-                ((jegl_resource*)*texture)->m_raw_texture_data->m_width,
-                ((jegl_resource*)*texture)->m_raw_texture_data->m_height
+                ((*texture)->resouce())->m_raw_texture_data->m_width,
+                ((*texture)->resouce())->m_raw_texture_data->m_height
             ));
     else if (argc == 2)
-        ImGui::Image((ImTextureID)(
-            (jegl_resource*)*texture)->m_uint1,
+        ImGui::Image((ImTextureID)((*texture)->resouce())->m_uint1,
             ImVec2(
-                ((jegl_resource*)*texture)->m_raw_texture_data->m_width * wo_float(args + 1),
-                ((jegl_resource*)*texture)->m_raw_texture_data->m_height * wo_float(args + 1)
+                ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
+                ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
             ));
 
     return wo_ret_void(vm);
@@ -610,23 +608,21 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_imagebuttom(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::graphic::texture* texture = (jeecs::graphic::texture*)wo_pointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
-    jegl_using_resource(*texture);
+    jegl_using_resource((*texture)->resouce());
     bool result = false;
     if (argc == 1)
-        result = ImGui::ImageButton((ImTextureID)(
-            (jegl_resource*)*texture)->m_uint1,
+        result = ImGui::ImageButton((ImTextureID)((*texture)->resouce())->m_uint1,
             ImVec2(
-                ((jegl_resource*)*texture)->m_raw_texture_data->m_width,
-                ((jegl_resource*)*texture)->m_raw_texture_data->m_height
+                ((*texture)->resouce())->m_raw_texture_data->m_width,
+                ((*texture)->resouce())->m_raw_texture_data->m_height
             ));
     else if (argc == 2)
-        result = ImGui::ImageButton((ImTextureID)(
-            (jegl_resource*)*texture)->m_uint1,
+        result = ImGui::ImageButton((ImTextureID)((*texture)->resouce())->m_uint1,
             ImVec2(
-                ((jegl_resource*)*texture)->m_raw_texture_data->m_width * wo_float(args + 1),
-                ((jegl_resource*)*texture)->m_raw_texture_data->m_height * wo_float(args + 1)
+                ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
+                ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
             ));
 
     return wo_ret_bool(vm, result);

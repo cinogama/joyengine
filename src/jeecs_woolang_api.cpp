@@ -379,36 +379,38 @@ WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t ar
 ///////////////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_texture = jeecs::basic::create_new<jeecs::graphic::texture>(wo_string(args + 0));
+    auto* loaded_texture = new jeecs::graphic::texture(wo_string(args + 0));
     if (loaded_texture->enabled())
     {
-        return wo_ret_option_gchandle(vm, loaded_texture, nullptr,
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
             [](void* ptr) {
-                jeecs::basic::destroy_free((jeecs::graphic::texture*)ptr);
+                delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
             });
     }
-    jeecs::basic::destroy_free(loaded_texture);
+    delete loaded_texture;
     return wo_ret_option_none(vm);
 }
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_texture = jeecs::basic::create_new<jeecs::graphic::texture>(
+    auto* loaded_texture = new jeecs::graphic::texture(
         wo_int(args + 0), wo_int(args + 1), jegl_texture::texture_format::RGBA);
 
-    return wo_ret_gchandle(vm, loaded_texture, nullptr,
+    return wo_ret_gchandle(vm,
+        new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
         [](void* ptr) {
-            jeecs::basic::destroy_free((jeecs::graphic::texture*)ptr);
+            delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
         });
 }
 
 WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_texture = (jeecs::graphic::texture*)wo_pointer(args + 0);
-    auto* pix = jeecs::basic::create_new<jeecs::graphic::texture::pixel>(*loaded_texture, wo_int(args + 1), wo_int(args + 2));
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(), wo_int(args + 1), wo_int(args + 2));
 
     return wo_ret_gchandle(vm, pix, args + 0, [](void* ptr)
         {
-            jeecs::basic::destroy_free((jeecs::graphic::texture::pixel*)ptr);
+            delete (jeecs::graphic::texture::pixel*)ptr;
         });
 }
 
@@ -444,15 +446,16 @@ WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args, size_t argc)
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_shader = jeecs::basic::create_new<jeecs::graphic::shader>(wo_string(args + 0));
+    auto* loaded_shader = new jeecs::graphic::shader(wo_string(args + 0));
     if (loaded_shader->enabled())
     {
-        return wo_ret_gchandle(vm, loaded_shader, nullptr,
+        return wo_ret_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
             [](void* ptr) {
-                jeecs::basic::destroy_free((jeecs::graphic::shader*)ptr);
+                delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
             });
     }
-    jeecs::basic::destroy_free(loaded_shader);
+    delete loaded_shader;
     return wo_ret_option_none(vm);
 
 }
@@ -462,13 +465,41 @@ WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
     auto* loaded_shader = jeecs::basic::create_new<jeecs::graphic::shader>(wo_string(args + 0), wo_string(args + 1));
     if (loaded_shader->enabled())
     {
-        return wo_ret_gchandle(vm, loaded_shader, nullptr,
+        return wo_ret_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
             [](void* ptr) {
-                jeecs::basic::destroy_free((jeecs::graphic::shader*)ptr);
+                delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
             });
     }
-    jeecs::basic::destroy_free(loaded_shader);
+    delete loaded_shader;
     return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    wo_value out_map = args + 1;
+
+    if (entity->valid())
+    {
+        if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
+        {
+            wo_value key = wo_push_empty(vm);
+
+            for (auto& texture : textures->textures)
+            {
+                if (!texture.m_texture)
+                    return wo_ret_halt(vm, "Texture cannot be nullptr.");
+                wo_set_int(key, (wo_integer_t)texture.m_pass_id);
+                wo_set_gchandle(wo_map_set(out_map, key, nullptr),
+                    new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
+                    [](void* ptr) {
+                        delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+                    });
+            }
+        }
+    }
+    return wo_ret_val(vm, out_map);
 }
 
 WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
@@ -483,29 +514,70 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
             for (auto& shader : shaders->shaders)
             {
                 if (!shader)
-                    return wo_ret_halt(vm, "Shader cannot be nulptr.");
-                wo_set_pointer(wo_arr_add(out_array, nullptr), shader.get());
+                    return wo_ret_halt(vm, "Shader cannot be nullptr.");
+                wo_set_gchandle(wo_arr_add(out_array, nullptr),
+                    new jeecs::basic::resource<jeecs::graphic::shader>(shader), nullptr,
+                    [](void* ptr) {
+                        delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+                    });
             }
         }
     }
     return wo_ret_val(vm, out_array);
 }
+WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    wo_value shader_array = args + 1;
+
+    if (entity->valid())
+    {
+        if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+        {
+            shaders->shaders.clear();
+            size_t arrsize = wo_lengthof(shader_array);
+            for (size_t i = 0; i < arrsize; ++i)
+            {
+                jeecs::basic::resource<jeecs::graphic::shader>* shader =
+                    (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(wo_arr_get(shader_array, i));
+                shaders->shaders.push_back(*shader);
+            }
+        }
+    }
+    return wo_ret_void(vm);
+}
+
+
 
 WO_API wo_api wojeapi_shader_is_valid(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* shader = (jeecs::graphic::shader*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, shader->enabled());
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, (*shader)->enabled());
 }
 
 WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* shader = (jeecs::graphic::shader*)wo_pointer(args + 0);
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
 
-    if (auto str = shader->resouce()->m_raw_shader_data->m_path)
+    if (auto str = (*shader)->resouce()->m_raw_shader_data->m_path)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in shader >");
 }
 
+WO_API wo_api wojeapi_texture_is_valid(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, (*shader)->enabled());
+}
+
+WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
+    if (auto str = (*shader)->resouce()->m_raw_texture_data->m_path)
+        return wo_ret_string(vm, str);
+    return wo_ret_string(vm, "< Built-in texture >");
+}
 
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
@@ -514,53 +586,6 @@ namespace je
 {
     extern("libjoyecs", "wojeapi_exit")
     func exit(): void;
-
-    namespace graphic
-    {
-        using texture = gchandle;
-        namespace texture
-        {
-            extern("libjoyecs", "wojeapi_texture_open")
-            func create(var path: string): option<texture>;
-
-            extern("libjoyecs", "wojeapi_texture_create")
-            func create(var width: int, var height: int): texture;
-
-            extern("libjoyecs", "wojeapi_texture_get_pixel")
-            func pix(var self: texture, var x: int, var y: int): pixel;
-
-            using pixel = gchandle;
-            namespace pixel
-            {
-                extern("libjoyecs", "wojeapi_texture_pixel_color")
-                func color(var self: pixel, ref r: real, ref g: real, ref b: real, ref a: real): void;
-            }
-        }
-
-        using shader = gchandle;
-        namespace shader
-        {
-            extern("libjoyecs", "wojeapi_shader_open")
-            func create(var path: string): option<shader>;
-            
-            extern("libjoyecs", "wojeapi_shader_create")
-            func create(var vpath: string, var src: string): option<shader>;
-
-            func shaders_of_entity(var e: entity): array<shader>
-            {
-                extern("libjoyecs", "wojeapi_shaders_of_entity")
-                func get_shaders_from_entity(var e: entity, var out_array: array<shader>): array<shader>;
-
-                return get_shaders_from_entity(e, []: array<shader>);
-            }
-
-            extern("libjoyecs", "wojeapi_shader_is_valid")
-            func isvalid(var self: shader): bool;
-
-            extern("libjoyecs", "wojeapi_shader_path")
-            func path(var self: shader): string;
-        }
-    }
 
     using typeinfo = handle;
     namespace typeinfo
@@ -591,6 +616,51 @@ namespace je
         const var float4 = typeinfo(basic_type::FLOAT4);
         const var quat = typeinfo(basic_type::QUAT);
         const var string = typeinfo(basic_type::STRING);
+    }
+
+     namespace graphic
+    {
+        using texture = gchandle;
+        namespace texture
+        {
+            extern("libjoyecs", "wojeapi_texture_open")
+            func create(var path: string): option<texture>;
+
+            extern("libjoyecs", "wojeapi_texture_create")
+            func create(var width: int, var height: int): texture;
+
+            extern("libjoyecs", "wojeapi_texture_path")
+            func path(var self: texture): string;
+
+            extern("libjoyecs", "wojeapi_texture_is_valid")
+            func isvalid(var self: shader): bool;
+
+            extern("libjoyecs", "wojeapi_texture_get_pixel")
+            func pix(var self: texture, var x: int, var y: int): pixel;
+
+            using pixel = gchandle;
+            namespace pixel
+            {
+                extern("libjoyecs", "wojeapi_texture_pixel_color")
+                func color(var self: pixel, ref r: real, ref g: real, ref b: real, ref a: real): void;
+            }
+        }
+
+        using shader = gchandle;
+        namespace shader
+        {
+            extern("libjoyecs", "wojeapi_shader_open")
+            func create(var path: string): option<shader>;
+            
+            extern("libjoyecs", "wojeapi_shader_create")
+            func create(var vpath: string, var src: string): option<shader>;
+
+            extern("libjoyecs", "wojeapi_shader_is_valid")
+            func isvalid(var self: shader): bool;
+
+            extern("libjoyecs", "wojeapi_shader_path")
+            func path(var self: shader): string;
+        }
     }
 
     using universe = handle;
@@ -810,7 +880,33 @@ namespace je
                     return false;
                 }
             } // end of namespace entity_iter
-        }
+
+            namespace graphic
+            {
+                func get_shaders(var self: entity): array<graphic::shader>
+                {
+                    extern("libjoyecs", "wojeapi_shaders_of_entity")
+                    func get_shaders_from_entity(var e: entity, var out_array: array<graphic::shader>): array<graphic::shader>;
+
+                    return get_shaders_from_entity(self, []: array<graphic::shader>);
+                }
+                func set_shaders(var self: entity, var shaders: array<graphic::shader>)
+                {
+                    extern("libjoyecs", "wojeapi_set_shaders_of_entity")
+                    func set_entity_shaders(var e: entity, var shader_list: array<graphic::shader>): array<graphic::shader>;
+
+                    return set_entity_shaders(self, shaders);
+                }
+
+                func get_textures(var self: entity): map<int, graphic::texture>
+                {
+                    extern("libjoyecs", "wojeapi_textures_of_entity")
+                    func get_textures_from_entity(var e: entity, var textures: map<int, graphic::texture>): map<int, graphic::texture>;
+
+                    return get_textures_from_entity(self, {}: map<int, graphic::texture>);
+                }
+            }
+        }// end of namespace editor
     } // end of namespace entity
 
     using native_value = handle;
