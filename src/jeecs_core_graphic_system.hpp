@@ -136,7 +136,7 @@ func frag(var fdata: v2f)
             {
                 int a_queue = rendqueue ? rendqueue->rend_queue : 0;
                 int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue < b_queue;
+                return a_queue > b_queue;
             }
         };
         struct renderer_arch
@@ -151,7 +151,7 @@ func frag(var fdata: v2f)
             {
                 int a_queue = rendqueue ? rendqueue->rend_queue : 0;
                 int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue < b_queue;
+                return a_queue > b_queue;
             }
         };
 
@@ -249,10 +249,12 @@ func frag(var fdata: v2f)
                         for (auto& shader_pass : drawing_shaders)
                         {
                             auto* using_shader = &shader_pass;
-                            if (!shader_pass->enabled())
+                            if (!shader_pass->enabled() || !shader_pass->m_builtin)
                                 using_shader = &default_shader;
 
-                            auto* builtin_uniform = shader_pass->m_builtin;
+                            jegl_using_resource((*using_shader)->resouce());
+
+                            auto* builtin_uniform = (*using_shader)->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, VALUE) \
 if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
  jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, VALUE)
@@ -265,7 +267,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
 #undef NEED_AND_SET_UNIFORM
-                            jegl_draw_vertex_with_shader(*drawing_shape, **using_shader);
+                            jegl_draw_vertex(*drawing_shape);
                         }
 
                     }

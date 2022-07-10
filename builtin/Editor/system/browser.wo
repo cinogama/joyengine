@@ -77,13 +77,13 @@ namespace editor
 
 		static var current_work_path = "";		
 
-		func button(var path: PathInfo)
+		func FileIcon(var path: PathInfo)
 		{
 			using je::gui;
-
+			
 			BeginGroup();
 				PushID(path.path);
-					ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
+					var clicked = ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
 				PopID();
 				if (BeginDragDropSource())
 				{
@@ -95,6 +95,8 @@ namespace editor
 				SameLine();
 				Text(path.name);
 			EndGroup();
+
+			return clicked;
 		}
 
 		func files_group()
@@ -122,7 +124,7 @@ namespace editor
 
 			BeginChild("files_list");
 				for (var subpath : now_item_in_path)
-					button(subpath);
+					FileIcon(subpath);
 			EndChild();
 		}
 

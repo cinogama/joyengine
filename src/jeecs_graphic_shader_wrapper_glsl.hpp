@@ -1,11 +1,12 @@
 class _glsl_wrapper_contex
 {
 public:
-
     std::unordered_map<jegl_shader_value*, std::string> _calced_value;
     std::unordered_map<jegl_shader_value*, std::pair<size_t, std::string>> _in_value;
     std::unordered_map<jegl_shader_value*, std::string> _uniform_value;
     int _variable_count = 0;
+
+    std::unordered_set<std::string> _used_builtin_func;
 
     static std::string get_type_name(jegl_shader_value* val)
     {
@@ -129,6 +130,9 @@ std::string _generate_code_for_glsl_impl(
                     else if (funcname == "float4x4")
                         funcname = "mat4";
 
+                    if (funcname.find("JEBUILTIN_") == 0)
+                        contex->_used_builtin_func.insert(funcname);
+
                     apply += funcname + "("s;
                     for (size_t i = 0; i < variables.size(); i++)
                     {
@@ -248,9 +252,16 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
     for (auto* out_val : wrap->vertex_out->out_values)
         outvalue.push_back(std::make_pair(out_val, _generate_code_for_glsl_impl(&contex, body_result, out_val, false)));
 
+    // Generate built function src here.
+    std::string built_in_srcs;
+    for (auto& builtin_func_name : contex._used_builtin_func)
+    {
+    }
+
+
     for (auto& uniformdecl : contex._uniform_value)
     {
-        io_declear += "uniform " + _glsl_wrapper_contex::get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";      
+        io_declear += "uniform " + _glsl_wrapper_contex::get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
         wrap->vertex_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));
     }
     io_declear += "\n";
@@ -276,7 +287,12 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
 
     body_result += "\n}";
 
-    return std::move("// Vertex shader source\n#version 330\n" + unifrom_block + io_declear + body_result);
+    return std::move(
+        "// Vertex shader source\n#version 330\n" 
+        + unifrom_block 
+        + built_in_srcs 
+        + io_declear 
+        + body_result);
 }
 
 std::string _generate_code_for_glsl_fragment(shader_wrapper* wrap)
@@ -292,13 +308,33 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
 };
 
 )";
+
+
     std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
     for (auto* out_val : wrap->fragment_out->out_values)
         outvalue.push_back(std::make_pair(out_val, _generate_code_for_glsl_impl(&contex, body_result, out_val, true)));
 
+    // Generate built function src here.
+    std::string built_in_srcs;
+    for (auto& builtin_func_name : contex._used_builtin_func)
+    {
+        if (builtin_func_name == "JEBUILTIN_AlphaTest")
+        {
+            const std::string unifrom_block = R"(
+vec4 JEBUILTIN_AlphaTest(vec4 color)
+{
+    if (color.a <= 0.0)
+        discard;
+    return color;
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
+    }
+
     for (auto& uniformdecl : contex._uniform_value)
     {
-        io_declear += "uniform " + _glsl_wrapper_contex::get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n"; 
+        io_declear += "uniform " + _glsl_wrapper_contex::get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
         wrap->vertex_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));
     }
     io_declear += "\n";
@@ -325,5 +361,10 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
 
     body_result += "\n}";
 
-    return std::move("// Fragment shader source\n#version 330\n" + unifrom_block + io_declear + body_result);
+    return std::move(
+        "// Fragment shader source\n#version 330\n" 
+        + unifrom_block 
+        + built_in_srcs 
+        + io_declear 
+        + body_result);
 }

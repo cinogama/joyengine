@@ -86,6 +86,8 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
+    glDisable(GL_ALPHA_TEST);
+    glAlphaFunc(GL_GREATER, 0.0f);
 
     GLuint ubo;
     glGenBuffers(1, &ubo);
@@ -345,8 +347,164 @@ var je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
         jeecs::debug::log_error("Unknown resource type when initing resource %p, please check.", resource);
 }
 
+thread_local static jegl_shader::depth_test_method  ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
+thread_local static jegl_shader::depth_mask_method  ACTIVE_MASK_MODE = jegl_shader::depth_mask_method::INVALID;
+thread_local static jegl_shader::alpha_test_method  ACTIVE_ALPHA_MODE = jegl_shader::alpha_test_method::INVALID;
+thread_local static jegl_shader::blend_method       ACTIVE_BLEND_SRC_MODE = jegl_shader::blend_method::INVALID;
+thread_local static jegl_shader::blend_method       ACTIVE_BLEND_DST_MODE = jegl_shader::blend_method::INVALID;
+thread_local static jegl_shader::cull_mode          ACTIVE_CULL_MODE = jegl_shader::cull_mode::INVALID;
+
+inline void _gl_update_depth_test_method(jegl_shader::depth_test_method mode)
+{
+    assert(mode != jegl_shader::depth_test_method::INVALID);
+    if (ACTIVE_DEPTH_MODE != mode)
+    {
+        ACTIVE_DEPTH_MODE = mode;
+
+        if (mode == jegl_shader::depth_test_method::OFF)
+            glDisable(GL_DEPTH_TEST);
+        else
+        {
+            glEnable(GL_DEPTH_TEST);
+            switch (mode)
+            {
+            case jegl_shader::depth_test_method::NEVER:    glDepthFunc(GL_NEVER); break;
+            case jegl_shader::depth_test_method::LESS:     glDepthFunc(GL_LESS); break;
+            case jegl_shader::depth_test_method::EQUAL:    glDepthFunc(GL_EQUAL); break;
+            case jegl_shader::depth_test_method::LESS_EQUAL: glDepthFunc(GL_LEQUAL); break;
+            case jegl_shader::depth_test_method::GREATER:  glDepthFunc(GL_GREATER); break;
+            case jegl_shader::depth_test_method::NOT_EQUAL: glDepthFunc(GL_NOTEQUAL); break;
+            case jegl_shader::depth_test_method::GREATER_EQUAL: glDepthFunc(GL_GEQUAL); break;
+            case jegl_shader::depth_test_method::ALWAYS:   glDepthFunc(GL_ALWAYS); break;
+            default:
+                jeecs::debug::log_error("Invalid depth test method.");
+                break;
+            }
+        }// end else
+    }
+}
+inline void _gl_update_depth_mask_method(jegl_shader::depth_mask_method mode)
+{
+    assert(mode != jegl_shader::depth_mask_method::INVALID);
+    if (ACTIVE_MASK_MODE != mode)
+    {
+        ACTIVE_MASK_MODE = mode;
+
+        if (mode == jegl_shader::depth_mask_method::ENABLE)
+            glDepthMask(GL_TRUE);
+        else
+            glDepthMask(GL_FALSE);
+    }
+}
+inline void _gl_update_alpha_test_method(jegl_shader::alpha_test_method mode)
+{
+    assert(mode != jegl_shader::alpha_test_method::INVALID);
+    if (ACTIVE_ALPHA_MODE != mode)
+    {
+        ACTIVE_ALPHA_MODE = mode;
+
+        if (mode == jegl_shader::alpha_test_method::ENABLE)
+            glEnable(GL_ALPHA_TEST);
+        else
+            glDisable(GL_ALPHA_TEST);
+    }
+}
+
+inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
+{
+    assert(src_mode != jegl_shader::blend_method::INVALID && dst_mode != jegl_shader::blend_method::INVALID);
+    if (ACTIVE_BLEND_SRC_MODE != src_mode || ACTIVE_BLEND_DST_MODE != dst_mode)
+    {
+        ACTIVE_BLEND_SRC_MODE = src_mode;
+        ACTIVE_BLEND_DST_MODE = dst_mode;
+
+        if (src_mode == jegl_shader::blend_method::ONE && dst_mode == jegl_shader::blend_method::ZERO)
+            glDisable(GL_BLEND);
+        else
+        {
+            GLenum src_factor, dst_factor;
+            switch (src_mode)
+            {
+            case jegl_shader::blend_method::ZERO: src_factor = GL_ZERO; break;
+            case jegl_shader::blend_method::ONE: src_factor = GL_ONE; break;
+            case jegl_shader::blend_method::SRC_COLOR: src_factor = GL_SRC_COLOR; break;
+            case jegl_shader::blend_method::SRC_ALPHA: src_factor = GL_SRC_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA: src_factor = GL_ONE_MINUS_SRC_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR: src_factor = GL_ONE_MINUS_SRC_COLOR; break;
+            case jegl_shader::blend_method::DST_COLOR: src_factor = GL_DST_COLOR; break;
+            case jegl_shader::blend_method::DST_ALPHA: src_factor = GL_DST_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: src_factor = GL_ONE_MINUS_DST_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: src_factor = GL_ONE_MINUS_DST_COLOR; break;
+            case jegl_shader::blend_method::CONST_COLOR: src_factor = GL_CONSTANT_COLOR; break;
+            case jegl_shader::blend_method::CONST_ALPHA: src_factor = GL_CONSTANT_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_CONST_COLOR: src_factor = GL_ONE_MINUS_CONSTANT_COLOR; break;
+            case jegl_shader::blend_method::ONE_MINUS_CONST_ALPHA: src_factor = GL_ONE_MINUS_CONSTANT_ALPHA; break;
+            default: jeecs::debug::log_error("Invalid blend src method."); break;
+            }
+            switch (dst_mode)
+            {
+            case jegl_shader::blend_method::ZERO: dst_factor = GL_ZERO; break;
+            case jegl_shader::blend_method::ONE: dst_factor = GL_ONE; break;
+            case jegl_shader::blend_method::SRC_COLOR: dst_factor = GL_SRC_COLOR; break;
+            case jegl_shader::blend_method::SRC_ALPHA: dst_factor = GL_SRC_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA: dst_factor = GL_ONE_MINUS_SRC_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR: dst_factor = GL_ONE_MINUS_SRC_COLOR; break;
+            case jegl_shader::blend_method::DST_COLOR: dst_factor = GL_DST_COLOR; break;
+            case jegl_shader::blend_method::DST_ALPHA: dst_factor = GL_DST_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: dst_factor = GL_ONE_MINUS_DST_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: dst_factor = GL_ONE_MINUS_DST_COLOR; break;
+            case jegl_shader::blend_method::CONST_COLOR: dst_factor = GL_CONSTANT_COLOR; break;
+            case jegl_shader::blend_method::CONST_ALPHA: dst_factor = GL_CONSTANT_ALPHA; break;
+            case jegl_shader::blend_method::ONE_MINUS_CONST_COLOR: dst_factor = GL_ONE_MINUS_CONSTANT_COLOR; break;
+            case jegl_shader::blend_method::ONE_MINUS_CONST_ALPHA: dst_factor = GL_ONE_MINUS_CONSTANT_ALPHA; break;
+            default: jeecs::debug::log_error("Invalid blend src method."); break;
+            }
+            glEnable(GL_BLEND);
+            glBlendFunc(src_factor, dst_factor);
+        }
+
+    }
+}
+inline void _gl_update_cull_mode_method(jegl_shader::cull_mode mode)
+{
+    assert(mode != jegl_shader::cull_mode::INVALID);
+    if (ACTIVE_CULL_MODE != mode)
+    {
+        ACTIVE_CULL_MODE = mode;
+
+        if (mode == jegl_shader::cull_mode::NONE)
+            glDisable(GL_CULL_FACE);
+        else
+        {
+            glEnable(GL_ALPHA_TEST);
+            switch (mode)
+            {
+            case jegl_shader::cull_mode::ALL:
+                glCullFace(GL_FRONT_AND_BACK); break;
+            case jegl_shader::cull_mode::FRONT:
+                glCullFace(GL_FRONT_AND_BACK); break;
+            case jegl_shader::cull_mode::BACK:
+                glCullFace(GL_FRONT_AND_BACK); break;
+            default:
+                jeecs::debug::log_error("Invalid culling mode.");
+                break;
+            }
+        }
+
+    }
+}
+inline void _gl_update_shader_state(jegl_shader* shader)
+{
+    _gl_update_depth_test_method(shader->m_depth_test);
+    _gl_update_depth_mask_method(shader->m_depth_mask);
+    _gl_update_alpha_test_method(shader->m_alpha_test);
+    _gl_update_blend_mode_method(shader->m_blend_src_mode, shader->m_blend_dst_mode);
+    _gl_update_cull_mode_method(shader->m_cull_mode);
+}
+
 inline void _gl_using_shader_program(jegl_resource* resource)
 {
+    _gl_update_shader_state(resource->m_raw_shader_data);
     glUseProgram(resource->m_uint1);
 }
 
@@ -391,7 +549,7 @@ void gl_bind_texture(jegl_resource* texture, size_t pass)
     jegl_using_resource(texture);
 }
 
-void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shader)
+void gl_draw_vertex_with_shader(jegl_resource* vert)
 {
     const static GLenum DRAW_METHODS[] = {
         GL_LINES,
@@ -401,7 +559,6 @@ void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shader)
         GL_TRIANGLE_STRIP,
         GL_QUADS };
 
-    jegl_using_resource(shader);
     jegl_using_resource(vert);
     glDrawArrays(DRAW_METHODS[vert->m_raw_vertex_data->m_type], 0, vert->m_raw_vertex_data->m_point_count);
 }

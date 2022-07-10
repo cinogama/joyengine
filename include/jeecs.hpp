@@ -429,11 +429,84 @@ struct jegl_shader
         unifrom_variables* m_next;
     };
 
+    enum class depth_test_method : int8_t
+    {
+        INVALID = -1,
+
+        OFF,
+        NEVER,
+        LESS,       /* DEFAULT */
+        EQUAL,
+        LESS_EQUAL,
+        GREATER,
+        NOT_EQUAL,
+        GREATER_EQUAL,
+        ALWAYS,
+    };
+
+    enum class depth_mask_method : int8_t
+    {
+        INVALID = -1,
+
+        DISABLE,    
+        ENABLE,     /* DEFAULT */
+    };
+
+    enum class alpha_test_method : int8_t
+    {
+        INVALID = -1,
+
+        DISABLE,    /* DEFAULT */
+        ENABLE,
+    };
+
+    enum class blend_method : int8_t
+    {
+        INVALID = -1,
+
+        ZERO,       /* DEFAULT SRC = ONE, DST = ZERO (DISABLE BLEND.) */
+        ONE,
+
+        SRC_COLOR,
+        SRC_ALPHA,
+
+        ONE_MINUS_SRC_ALPHA,
+        ONE_MINUS_SRC_COLOR,
+
+        DST_COLOR,
+        DST_ALPHA,
+
+        ONE_MINUS_DST_ALPHA,
+        ONE_MINUS_DST_COLOR,
+
+        CONST_COLOR,
+        ONE_MINUS_CONST_COLOR,
+
+        CONST_ALPHA,
+        ONE_MINUS_CONST_ALPHA,
+    };
+
+    enum class cull_mode : int8_t
+    {
+        INVALID = -1,
+
+        NONE,       /* DEFAULT */
+        FRONT,
+        BACK,
+        ALL,
+    };
+
     const char* m_vertex_glsl_src;
     const char* m_fragment_glsl_src;
     const char* m_path;
     unifrom_variables* m_custom_uniforms;
     builtin_uniform_location m_builtin_uniforms;
+
+    depth_test_method   m_depth_test;
+    depth_mask_method   m_depth_mask;
+    alpha_test_method   m_alpha_test;
+    blend_method        m_blend_src_mode, m_blend_dst_mode;
+    cull_mode           m_cull_mode;
 };
 
 struct jegl_resource
@@ -489,7 +562,7 @@ struct jegl_graphic_api
     using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
 
-    using draw_vertex_func_t = void(*)(jegl_resource*, jegl_resource*);
+    using draw_vertex_func_t = void(*)(jegl_resource*);
     using bind_texture_func_t = void(*)(jegl_resource*, size_t);
 
     using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h);
@@ -565,7 +638,7 @@ JE_API void jegl_using_resource(jegl_resource* resource);
 JE_API void jegl_close_resource(jegl_resource* resource);
 
 JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
-JE_API void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad);
+JE_API void jegl_draw_vertex(jegl_resource* vert);
 
 JE_API void jegl_clear_framebuffer(jegl_resource* framebuffer);
 JE_API void jegl_clear_framebuffer_color(jegl_resource* framebuffer);
@@ -3286,7 +3359,6 @@ namespace jeecs
         struct Rendqueue
         {
             int rend_queue = 0;
-            using a = decltype(&Rendqueue::rend_queue);
 
             static void JERefRegsiter()
             {

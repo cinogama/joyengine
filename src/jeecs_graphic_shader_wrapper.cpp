@@ -564,10 +564,20 @@ struct shader_value_outs
     }
 };
 
+struct shader_config
+{
+    jegl_shader::depth_test_method m_depth_test;
+    jegl_shader::depth_mask_method m_depth_mask;
+    jegl_shader::alpha_test_method m_alpha_test;
+    jegl_shader::blend_method m_blend_src, m_blend_dst;
+    jegl_shader::cull_mode m_cull_mode;
+};
+
 struct shader_wrapper
 {
     shader_value_outs* vertex_out;
     shader_value_outs* fragment_out;
+    shader_config shader_config;
 
     ~shader_wrapper()
     {
@@ -617,9 +627,21 @@ WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t ar
 
 WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_gchandle(vm, new shader_wrapper{
-        (shader_value_outs*)wo_pointer(args + 0),
-        (shader_value_outs*)wo_pointer(args + 1)
+    shader_config config;
+
+    config.m_depth_test = (jegl_shader::depth_test_method)wo_int(wo_struct_get(args + 2, 0));
+    config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(wo_struct_get(args + 2, 1));
+    config.m_alpha_test = (jegl_shader::alpha_test_method)wo_int(wo_struct_get(args + 2, 2));
+    config.m_blend_src = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 3));
+    config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 4));
+    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 5));
+
+    return wo_ret_gchandle(vm,
+        new shader_wrapper
+        {
+            (shader_value_outs*)wo_pointer(args + 0),
+            (shader_value_outs*)wo_pointer(args + 1),
+            config
         }, nullptr,
         [](void* ptr) {
             delete (shader_wrapper*)ptr;
@@ -855,6 +877,15 @@ namespace float2
     func y(var self:float2) : float{return apply_operation:<float>(".y", self);}
     func xy(var self:float2) : float2{return apply_operation:<float2>(".xy", self);}
     func yx(var self:float2) : float2{return apply_operation:<float2>(".yx", self);}
+
+    func operator + (var a:float2, var b:float2) : float2
+    {
+        return apply_operation:<float2>("+", a, b);
+    }
+    func operator - (var a:float2, var b:float2) : float2
+    {
+        return apply_operation:<float2>("-", a, b);
+    }
 }
 namespace float3
 {
@@ -878,6 +909,15 @@ namespace float3
     func yzx(var self:float3) : float3{return apply_operation:<float3>(".yzx", self);}
     func zxy(var self:float3) : float3{return apply_operation:<float3>(".zxy", self);}
     func zyx(var self:float3) : float3{return apply_operation:<float3>(".zyx", self);}
+
+    func operator + (var a:float3, var b:float3) : float3
+    {
+        return apply_operation:<float3>("+", a, b);
+    }
+    func operator - (var a:float3, var b:float3) : float3
+    {
+        return apply_operation:<float3>("-", a, b);
+    }
 }
 namespace float4
 {
@@ -953,7 +993,17 @@ namespace float4
     func ywxz(var self:float4) : float4{return apply_operation:<float4>(".ywxz", self);}
     func wxyz(var self:float4) : float4{return apply_operation:<float4>(".wxyz", self);}
     func wyxz(var self:float4) : float4{return apply_operation:<float4>(".wyxz", self);}
-    
+
+    func operator + (var a:float4, var b:float4) : float4
+    {
+        return apply_operation:<float4>("+", a, b);
+    }
+    func operator - (var a:float4, var b:float4) : float4
+    {
+        return apply_operation:<float4>("-", a, b);
+    }
+
+    )" R"(
 }
 namespace float4x4
 {
@@ -980,8 +1030,29 @@ namespace shader
 {
     using shader_wrapper = gchandle;
 
+    using ShaderConfig = struct {
+        ztest     : ZConfig,
+        zwrite    : GConfig,
+        alpha     : GConfig,
+        blend_src : BlendConfig,
+        blend_dst : BlendConfig,
+        cull      : CullConfig
+    };
+    var configs = ShaderConfig
+    {
+        ztest = LESS,
+        zwrite = ENABLE,
+        alpha = DISABLE,
+        blend_src = ONE,
+        blend_dst = ZERO,
+        cull = NONE,
+    };
+
     extern("libjoyecs", "jeecs_shader_wrap_result_pack")
-    private func _wraped_shader(var vertout, var fragout) : shader_wrapper;
+    private func _wraped_shader(
+        var vertout: vertex_out, 
+        var fragout: fragment_out, 
+        var shader_config: ShaderConfig) : shader_wrapper;
 
     private extern func generate()
     {
@@ -996,7 +1067,7 @@ namespace shader
         var f_out = frag(f_in);
         var fragment_out_result = fragment_out(f_out);
 
-        return _wraped_shader(vertext_out_result, fragment_out_result);
+        return _wraped_shader(vertext_out_result, fragment_out_result, configs);
     }
 
     namespace debug
@@ -1030,8 +1101,89 @@ func texture(var tex:texture2d, var uv:float2):float4
 {
     return apply_operation:<float4>("texture", tex, uv);
 };
-)" R"(
 
+func alphatest(var colf4: float4):float4
+{
+    return apply_operation:<float4>("JEBUILTIN_AlphaTest", colf4);
+};
+
+enum ZConfig
+{
+    OFF = 0,
+    NEVER,
+    LESS,       /* DEFAULT */
+    EQUAL,
+    LESS_EQUAL,
+    GREATER,
+    NOT_EQUAL,
+    GREATER_EQUAL,
+    ALWAYS,
+}
+using ZConfig;
+func ZTEST(var zconfig: ZConfig)
+{
+    shader::configs.ztest = zconfig;
+}
+
+enum GConfig
+{
+    DISABLE = 0,
+    ENABLE
+}
+using GConfig;
+func ZWRITE(var zwrite: GConfig)
+{
+    shader::configs.zwrite = zwrite;
+}
+
+func ALPHA(var aenable: GConfig)
+{
+    shader::configs.alpha = aenable;
+    std::println("'ALPHA' option for alpha-test is obsoleted, please use 'alphatest' function instead.");
+}
+
+enum BlendConfig
+{
+    ZERO = 0,       /* DEFAULT SRC = ONE, DST = ZERO (DISABLE BLEND.) */
+    ONE,
+
+    SRC_COLOR,
+    SRC_ALPHA,
+
+    ONE_MINUS_SRC_ALPHA,
+    ONE_MINUS_SRC_COLOR,
+
+    DST_COLOR,
+    DST_ALPHA,
+
+    ONE_MINUS_DST_ALPHA,
+    ONE_MINUS_DST_COLOR,
+
+    CONST_COLOR,
+    ONE_MINUS_CONST_COLOR,
+
+    CONST_ALPHA,
+    ONE_MINUS_CONST_ALPHA,
+}
+using BlendConfig;
+func BLEND(var src: BlendConfig, var dst: BlendConfig)
+{
+    shader::configs.blend_src = src;
+    shader::configs.blend_dst = dst;
+}
+
+enum CullConfig
+{
+    NONE = 0,       /* DEFAULT */
+    FRONT,
+    BACK,
+    ALL,
+}
+using CullConfig;
+func CULL(var cull: CullConfig)
+{
+    shader::configs.cull = cull;
+}
 
 #macro VAO_STRUCT
 {
@@ -1116,6 +1268,13 @@ func texture(var tex:texture2d, var uv:float2):float4
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)
 {
     shader_wrapper* shader_wrapper_ptr = (shader_wrapper*)shader_generator;
+
+    write_to_shader->m_depth_test = shader_wrapper_ptr->shader_config.m_depth_test;
+    write_to_shader->m_depth_mask = shader_wrapper_ptr->shader_config.m_depth_mask;
+    write_to_shader->m_alpha_test = shader_wrapper_ptr->shader_config.m_alpha_test;
+    write_to_shader->m_blend_src_mode = shader_wrapper_ptr->shader_config.m_blend_src;
+    write_to_shader->m_blend_dst_mode = shader_wrapper_ptr->shader_config.m_blend_dst;
+    write_to_shader->m_cull_mode = shader_wrapper_ptr->shader_config.m_cull_mode;
 
     write_to_shader->m_vertex_glsl_src
         = jeecs::basic::make_new_string(

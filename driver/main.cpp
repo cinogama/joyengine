@@ -49,6 +49,7 @@ int main(int argc, char** argv)
             Transform::LocalScale,
             Transform::LocalToParent,
             Transform::Translation,
+            Renderer::Rendqueue,
             Renderer::Shape,
             Renderer::Shaders,
             Renderer::Textures>();
@@ -57,19 +58,18 @@ int main(int argc, char** argv)
         entity2.get_component<Transform::LocalPosition>()->pos = jeecs::math::vec3(0, 0, 0);
         entity2.get_component<Transform::LocalToParent>()->parent_uid =
             entity.get_component<Transform::ChildAnchor>()->anchor_uid;
+        entity2.get_component<Renderer::Rendqueue>()->rend_queue = 3000;
 
-        //auto* tex = new graphic::texture(2, 2, jegl_texture::texture_format::RGBA);
-        //tex->pix(0, 0).set(math::vec3(0, 0, 0));
-        //tex->pix(1, 0).set(math::vec3(1, 0, 0));
-        //tex->pix(0, 1).set(math::vec3(0, 1, 0));
-        //tex->pix(1, 1).set(math::vec3(0, 0, 1));
-        //entity2.get_component<Renderer::Textures>()->bind_texture(0, tex);
+        jeecs::basic::resource<jeecs::graphic::texture> tex = new graphic::texture(2, 2, jegl_texture::texture_format::RGBA);
+        tex->pix(0, 0).set(math::vec4(0, 0, 0, 1));
+        tex->pix(1, 0).set(math::vec4(1, 0, 0, 1));
+        tex->pix(0, 1).set(math::vec4(0, 1, 0, 1));
+        tex->pix(1, 1).set(math::vec4(0, 0, 1, 1));
+        entity2.get_component<Renderer::Textures>()->bind_texture(0, tex);
         entity2.get_component<Renderer::Shaders>()->shaders.push_back(
             new graphic::shader("test.shader", R"(
 // Default shader
 import je.shader;
-
-var example_tex = uniform:<texture2d>("example_tex");
 
 using VAO_STRUCT vin = struct {
     vertex : float3,
@@ -85,10 +85,12 @@ using fout = struct {
     color : float4
 };
 
+var example_tex = uniform:<texture2d>("example_tex");
+
 func vert(var vdata: vin)
 {
     return v2f{
-        pos = je_mvp * float4(vdata.vertex, 1.), 
+        pos = je_vp * je_m * float4(vdata.vertex, 1.), 
         uv  = vdata.uv 
     };
 }
@@ -96,11 +98,64 @@ func vert(var vdata: vin)
 func frag(var fdata: v2f)
 {
     return fout{ 
-        color = texture(example_tex, fdata.uv) 
+        color = alphatest(texture(example_tex, fdata.uv))
     };
 }
 )")
 );
+        auto entity2_1 = world.add_entity<
+            Transform::LocalPosition,
+            Transform::LocalRotation,
+            Transform::LocalScale,
+            Transform::LocalToParent,
+            Transform::Translation,
+            Renderer::Rendqueue,
+            Renderer::Shape,
+            Renderer::Shaders,
+            Renderer::Textures>();
+        entity2_1.get_component<Transform::LocalToParent>()->parent_uid =
+            entity.get_component<Transform::ChildAnchor>()->anchor_uid;
+        entity2_1.get_component<Renderer::Rendqueue>()->rend_queue = 1000;
+        entity2_1.get_component<Transform::LocalPosition>()->pos = jeecs::math::vec3(0.5, 0, 1);
+        entity2_1.get_component<Renderer::Textures>()->bind_texture(0, tex);
+        entity2_1.get_component<Renderer::Shaders>()->shaders.push_back(
+            new graphic::shader("test2.shader", R"(
+// Default shader
+import je.shader;
+
+using VAO_STRUCT vin = struct {
+    vertex : float3,
+    uv     : float2,
+};
+
+using v2f = struct {
+    pos : float4,
+    uv  : float2,
+};
+
+using fout = struct {
+    color : float4
+};
+
+var example_tex = uniform:<texture2d>("example_tex");
+
+func vert(var vdata: vin)
+{
+    return v2f{
+        pos = je_vp * je_m * float4(vdata.vertex, 1.), 
+        uv  = vdata.uv 
+    };
+}
+
+func frag(var fdata: v2f)
+{
+    return fout{ 
+        color = alphatest(texture(example_tex, fdata.uv))
+    };
+}
+)")
+);
+
         auto entity3 = world.add_entity<
             Transform::LocalPosition,
             Transform::LocalRotation,

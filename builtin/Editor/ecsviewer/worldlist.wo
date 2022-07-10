@@ -48,12 +48,12 @@ namespace editor
 						{
 							match (je::world::rend())
 							{
-								option::value(rend_world)?
+								value(rend_world)?
 									if (rend_world != world)
 										launch(generic::AskFor, "切换渲染世界",
 													F"即将切换到{world->editor::name()}，是否继续？",
 													func(){ world->rend(); });
-								option::none?
+								none?
 									launch(generic::AskFor, "切换渲染世界",
 												F"即将切换到{world->editor::name()}，是否继续？",
 												func(){ world->rend(); });

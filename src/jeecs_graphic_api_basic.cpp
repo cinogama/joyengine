@@ -488,9 +488,9 @@ jegl_thread* jegl_current_thread()
     return _current_graphic_thread;
 }
 
-void jegl_draw_vertex_with_shader(jegl_resource* vert, jegl_resource* shad)
+void jegl_draw_vertex(jegl_resource* vert)
 {
-    _current_graphic_thread->m_apis->draw_vertex(vert, shad);
+    _current_graphic_thread->m_apis->draw_vertex(vert);
 }
 
 void jegl_clear_framebuffer(jegl_resource* framebuffer)

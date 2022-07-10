@@ -108,6 +108,14 @@ namespace editor
 						if (InputFloat(name, ref value))
 							addr->float(value);
 					};
+				_type_widget_methods[je::typeinfo::int] = 
+					func(var name: string, var addr: je::native_value)
+					{
+						var value = 0; addr->int(ref value);
+
+						if (InputInt(name, ref value))
+							addr->int(value);
+					};
 				_type_widget_methods[je::typeinfo::float2] = 
 					func(var name: string, var addr: je::native_value)
 					{
