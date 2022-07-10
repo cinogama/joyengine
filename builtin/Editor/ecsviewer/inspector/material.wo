@@ -54,7 +54,7 @@ namespace editor
 								var texture_path = 
 									textures->get(id)
 											->map(func(var tex: je::graphic::texture){return tex->path()})
-											->valor(F"<没有绑定到{id}的纹理>");
+											->valor(F"<没有绑定到通道{id}的纹理>");
 								
 								match (generic::DragFile(name, texture_path))
 								{

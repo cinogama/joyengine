@@ -9,6 +9,7 @@ namespace editor
 		union FileType
 		{
 			path(je::graphic::texture),
+			image(je::graphic::texture),
 			others(je::graphic::texture),
 		}
 		namespace FileType
@@ -19,6 +20,8 @@ namespace editor
 				{
 					FileType::path(t)?
 						return t;
+					FileType::image(t)?
+						return t;
 					FileType::others(t)?
 						return t;
 				}
@@ -26,6 +29,16 @@ namespace editor
 		}
 
 		var FILE_TYPE_ICONS = {} : map<string, FileType>;
+
+		func _load_default_icons()
+		{
+			FILE_TYPE_ICONS["png"] = 
+			FILE_TYPE_ICONS["jpg"] = 
+			FILE_TYPE_ICONS["bmp"] = 
+			FILE_TYPE_ICONS["psd"] = 
+				FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val());
+		}
+		_load_default_icons();
 
 		private func get_file_icon_by_extern_name(var _path: PathInfo) : FileType
 		{
@@ -38,9 +51,9 @@ namespace editor
 
 			match (_path.type)
 			{
-				PathType::dir(_)?
+				dir(_)?
 					return default_path_icon;
-				PathType::file?
+				file?
 					return FILE_TYPE_ICONS->get_or_default(_path.externname, default_file_icon);
 			}
 		}
