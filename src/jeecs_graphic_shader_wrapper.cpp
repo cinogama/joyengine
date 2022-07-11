@@ -564,7 +564,7 @@ struct shader_value_outs
     }
 };
 
-struct shader_config
+struct shader_configs
 {
     jegl_shader::depth_test_method m_depth_test;
     jegl_shader::depth_mask_method m_depth_mask;
@@ -577,7 +577,7 @@ struct shader_wrapper
 {
     shader_value_outs* vertex_out;
     shader_value_outs* fragment_out;
-    shader_config shader_config;
+    shader_configs shader_config;
 
     ~shader_wrapper()
     {
@@ -627,7 +627,7 @@ WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t ar
 
 WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc)
 {
-    shader_config config;
+    shader_configs config;
 
     config.m_depth_test = (jegl_shader::depth_test_method)wo_int(wo_struct_get(args + 2, 0));
     config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(wo_struct_get(args + 2, 1));
