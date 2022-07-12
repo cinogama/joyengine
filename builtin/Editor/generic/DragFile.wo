@@ -1,0 +1,38 @@
+import woo.std;
+import je.gui;
+
+namespace generic
+{
+    union DragFileAction
+    {
+        Drag(string),
+        None
+    }
+    func DragFile(var name: string, var path: string)
+    {
+        using je::gui;
+
+        if (path->len() > 30)
+            path = "..." + path->sub(path->len() - 25);
+      
+        if (Button(path))
+        {
+            // Open File dialog?
+        }
+
+        var data = "", some_data_drag = false;
+        if(BeginDragDropTarget())
+        {
+            some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH", ref data);
+            EndDragDropTarget();
+        }
+
+        SameLine();
+        Text(name);
+
+        if (some_data_drag)
+            return DragFileAction::Drag(data);
+        else
+            return DragFileAction::None;
+    }
+}

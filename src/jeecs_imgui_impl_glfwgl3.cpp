@@ -321,7 +321,7 @@ R"(
     func BeginDragDropTarget(): bool;
 
     extern("libjoyecs", "je_gui_accept_drag_drop_payload")
-    func AcceptDragDropPayload(var type, ref data: string): bool;
+    func AcceptDragDropPayload(var type: string, ref data: string): bool;
 
     extern("libjoyecs", "je_gui_end_accept_drop_source")
     func EndDragDropTarget(): bool;

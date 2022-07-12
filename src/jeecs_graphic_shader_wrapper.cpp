@@ -826,7 +826,7 @@ namespace fragment_in
         extern("libjoyecs", "jeecs_shader_create_fragment_in")
         func _parse_vertex_out_to_struct<VertexOutT>(var vout: vertex_out, ref _out_struct: dynamic): VertexOutT;
 
-        return _parse_vertex_out_to_struct:<VertexOutT>(data_from_vert, nil);
+        return _parse_vertex_out_to_struct:<VertexOutT>(data_from_vert, nil: dynamic);
     }
 }
 
@@ -1194,11 +1194,11 @@ func CULL(var cull: CullConfig)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
-    var try_eat_token = func(var expect_type: std::token_type)
+    var try_eat_token = func(var expect_type: std::token_type): option<string>
                     {
                         var out_result = "";
                         if (lexer->peek("") != expect_type)
-                            return option::none:<string>;
+                            return option::none;
                         assert(lexer->next(ref out_result) == expect_type);
                         return option::value(out_result);
                     };
