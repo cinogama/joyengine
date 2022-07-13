@@ -9,116 +9,116 @@ import builtin.Editor.generic.DragFile;
 
 namespace editor
 {
-	namespace Inspector
-	{
-		namespace Material
-		{
-			func show_shader(var entity: je::entity, var shader: je::graphic::shader)
-			{
-				using je::gui;
+    namespace Inspector
+    {
+        namespace Material
+        {
+            func show_shader(var entity: je::entity, var shader: je::graphic::shader)
+            {
+                using je::gui;
 
-				var attribute = 
-					  TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
-					+ TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
-					+ TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                var attribute = 
+                      TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
 
-				var textures = entity->editor::graphic::get_textures();
+                var textures = entity->editor::graphic::get_textures();
 
-				var show_uniforms = TreeNodeEx(shader->path(), attribute);
-				if (IsItemClicked() && !IsItemToggledOpen())
+                var show_uniforms = TreeNodeEx(shader->path(), attribute);
+                if (IsItemClicked() && !IsItemToggledOpen())
                 {
                     // TODO: 总得放点什么在这儿
                 }
-				if (show_uniforms)
-				{
-					var uniforms = shader->get_uniforms();
-					for(var name, uniform_val : uniforms)
-					{
-						if (name->beginwith("JOYENGINE_"))
-							continue; // 引擎的内置shader-uniform变量，跳过显示
+                if (show_uniforms)
+                {
+                    var uniforms = shader->get_uniforms();
+                    for(var name, uniform_val : uniforms)
+                    {
+                        if (name->beginwith("JOYENGINE_"))
+                            continue; // 引擎的内置shader-uniform变量，跳过显示
 
-						match (uniform_val)
-						{
-							integer(n)?
-								;
-							float(x)?
-								;
-							float2((x, y))?
-								;
-							float3((x, y, z))?
-								;
-							float4((x, y, z, w))?
-								;
-							texture(id)?
-							{
-								var texture_path = 
-									textures->get(id)
-											->map(func(var tex: je::graphic::texture){return tex->path()})
-											->valor(F"<没有绑定到通道{id}的纹理>");
-								
-								match (generic::DragFile(name, texture_path))
-								{
-									Drag(path)?
-									{
-										// 拖动文件到这里，加载这个纹理，然后绑定
-										var new_texture = je::graphic::texture(path);
-										match (new_texture)
-										{
-											value(tex)?
-												entity->editor::graphic::bind_texture(id, tex);
-											none?
-												launch(generic::MsgBox, "加载纹理失败", F"无法加载纹理: {path}");
-										}
-									}
-									None?
-										; // 没任何变化，啥也不干
-								}
-							}
-							others?
-								Text(F"<不受支持的uniform类型> {name}");
-						}
-					}
-					TreePop();
-				}
-			}
-			func show(var cur_entity : option<je::entity>, var max_height: real)
-			{
-				using je::gui;
+                        match (uniform_val)
+                        {
+                            integer(n)?
+                                ;
+                            float(x)?
+                                ;
+                            float2((x, y))?
+                                ;
+                            float3((x, y, z))?
+                                ;
+                            float4((x, y, z, w))?
+                                ;
+                            texture(id)?
+                            {
+                                var texture_path = 
+                                    textures->get(id)
+                                            ->map(func(var tex: je::graphic::texture){return tex->path()})
+                                            ->valor(F"<没有绑定到通道{id}的纹理>");
+                                
+                                match (generic::DragFile(name, texture_path))
+                                {
+                                    Drag(path)?
+                                    {
+                                        // 拖动文件到这里，加载这个纹理，然后绑定
+                                        var new_texture = je::graphic::texture(path);
+                                        match (new_texture)
+                                        {
+                                            value(tex)?
+                                                entity->editor::graphic::bind_texture(id, tex);
+                                            none?
+                                                launch(generic::MsgBox, "加载纹理失败", F"无法加载纹理: {path}");
+                                        }
+                                    }
+                                    None?
+                                        ; // 没任何变化，啥也不干
+                                }
+                            }
+                            others?
+                                Text(F"<不受支持的uniform类型> {name}");
+                        }
+                    }
+                    TreePop();
+                }
+            }
+            func show(var cur_entity : option<je::entity>, var max_height: real)
+            {
+                using je::gui;
 
-				BeginChild("material_editor", 0., max_height);
-					Text("材质编辑器");
-					Separator();
-					match (cur_entity)
-					{
-						value(current_entity)?
-						{
-							static var ShadersTypeID = je::typeinfo("Renderer::Shaders");
-							match (current_entity->editor::get_component(ShadersTypeID))
-							{
-								value(shaders)?
-								{
-									// TODO: 此处接受拖进来的shader文件，整个框应该都能接受，这里位置不对需要调整
-									match (generic::AcceptFileForCurrentWidget())
-									{
-										Drag(shader_path)?
-											;
-										None?
-											;
-									}
+                BeginChild("material_editor", 0., max_height);
+                    Text("材质编辑器");
+                    Separator();
+                    match (cur_entity)
+                    {
+                        value(current_entity)?
+                        {
+                            static var ShadersTypeID = je::typeinfo("Renderer::Shaders");
+                            match (current_entity->editor::get_component(ShadersTypeID))
+                            {
+                                value(shaders)?
+                                {
+                                    // TODO: 此处接受拖进来的shader文件，整个框应该都能接受，这里位置不对需要调整
+                                    match (generic::AcceptFileForCurrentWidget())
+                                    {
+                                        Drag(shader_path)?
+                                            ;
+                                        None?
+                                            ;
+                                    }
 
-									var shaders = current_entity->editor::graphic::get_shaders();
-									for (var shader : shaders)
-										show_shader(current_entity, shader);
-								}
-								none?
-									Text("当前实体没有Renderer::Shaders组件");
-							}
-						}
-						none?
-							Text("<没有选中可编辑的实体>");
-					} // end match
-				EndChild();
-			}
-		}
+                                    var shaders = current_entity->editor::graphic::get_shaders();
+                                    for (var shader : shaders)
+                                        show_shader(current_entity, shader);
+                                }
+                                none?
+                                    Text("当前实体没有Renderer::Shaders组件");
+                            }
+                        }
+                        none?
+                            Text("<没有选中可编辑的实体>");
+                    } // end match
+                EndChild();
+            }
+        }
     }
 }

@@ -7,57 +7,57 @@ import builtin.Editor.generic.AskFor;
 
 namespace editor
 {
-	namespace EntityList
-	{
+    namespace EntityList
+    {
         // 当前世界列表是否显示有当前选中的实体，如果没有就重设当前实体，防止错误的显示
         private var _has_selected_entity = false;
 
         private func menu()
         {
             using je::gui;
-			if (BeginMenuBar())
-			{
-				if (MenuItem("创建新实体"))
-				{
-					// 注意，实体至少带有一个组件，否则这个实体就是不存在的
+            if (BeginMenuBar())
+            {
+                if (MenuItem("创建新实体"))
+                {
+                    // 注意，实体至少带有一个组件，否则这个实体就是不存在的
                     // TODO;
-				}
+                }
 
-				EndMenuBar();
-			}
+                EndMenuBar();
+            }
         }
 
         private func context_menu(var entity: je::entity)
-		{
-			using je::gui;
-			if (BeginPopupContextItem())
-			{
-				MenuItem(F"实体 {entity->editor::chunk_info()}", false);
-				Separator();
-				if (MenuItem(F"删除 {entity->editor::name()}"))
-				{
-					launch(generic::AskFor, "删除实体",
-											F"确认要删除实体{entity->editor::name()}吗？",
-											func(){ entity->close(); });
-				}
-				if (MenuItem("重命名"))
-				{
-					launch(generic::InputBox, "重命名实体",
-											F"请输入新名称",
+        {
+            using je::gui;
+            if (BeginPopupContextItem())
+            {
+                MenuItem(F"实体 {entity->editor::chunk_info()}", false);
+                Separator();
+                if (MenuItem(F"删除 {entity->editor::name()}"))
+                {
+                    launch(generic::AskFor, "删除实体",
+                                            F"确认要删除实体{entity->editor::name()}吗？",
+                                            func(){ entity->close(); });
+                }
+                if (MenuItem("重命名"))
+                {
+                    launch(generic::InputBox, "重命名实体",
+                                            F"请输入新名称",
                                             entity->editor::name(),
-											func(var text: string){ entity->editor::name(text); });
-				}
-				EndPopup();
-			}
+                                            func(var text: string){ entity->editor::name(text); });
+                }
+                EndPopup();
+            }
         }
 
-		func show(ref open: bool)
-		{
+        func show(ref open: bool)
+        {
             using je::gui;
             if(!open) return !open;
 
             _has_selected_entity = false;
-			Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
+            Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
                             + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                         , ref open);
                 menu();
@@ -79,7 +79,7 @@ namespace editor
                 set_current_entity(option::none:<je::entity>);
                 
             return !open;
-		}
+        }
 
         private var _current_entity = option::none as option<je::entity>;
 
@@ -139,5 +139,5 @@ namespace editor
             }
             return display_count;
         }
-	}
+    }
 }
