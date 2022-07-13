@@ -8,6 +8,21 @@ namespace generic
         Drag(string),
         None
     }
+    func AcceptFileForCurrentWidget() : DragFileAction
+    {
+        using je::gui;
+
+        var data = "", some_data_drag = false;
+        if(BeginDragDropTarget())
+        {
+            some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH", ref data);
+            EndDragDropTarget();
+        }
+        if (some_data_drag)
+            return DragFileAction::Drag(data);
+        else
+            return DragFileAction::None;
+    }
     func DragFile(var name: string, var path: string)
     {
         using je::gui;
@@ -20,19 +35,11 @@ namespace generic
             // Open File dialog?
         }
 
-        var data = "", some_data_drag = false;
-        if(BeginDragDropTarget())
-        {
-            some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH", ref data);
-            EndDragDropTarget();
-        }
+        var drag_result = AcceptFileForCurrentWidget();
 
         SameLine();
         Text(name);
 
-        if (some_data_drag)
-            return DragFileAction::Drag(data);
-        else
-            return DragFileAction::None;
+        return drag_result;
     }
 }

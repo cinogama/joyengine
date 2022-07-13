@@ -10,6 +10,7 @@ namespace editor
 		{
 			path(je::graphic::texture),
 			image(je::graphic::texture),
+			shader(je::graphic::texture),
 			others(je::graphic::texture),
 		}
 		namespace FileType
@@ -18,11 +19,13 @@ namespace editor
 			{
 				match (self)
 				{
-					FileType::path(t)?
+					path(t)?
 						return t;
-					FileType::image(t)?
+					image(t)?
 						return t;
-					FileType::others(t)?
+					shader(t)?
+						return t;
+					others(t)?
 						return t;
 				}
 			}
@@ -37,6 +40,9 @@ namespace editor
 			FILE_TYPE_ICONS["bmp"] = 
 			FILE_TYPE_ICONS["psd"] = 
 				FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val());
+
+			FILE_TYPE_ICONS["shader"] = 
+				FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")->val());
 		}
 		_load_default_icons();
 

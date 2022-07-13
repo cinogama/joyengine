@@ -97,36 +97,22 @@ namespace editor
 							{
 								value(shaders)?
 								{
+									// TODO: 此处接受拖进来的shader文件，整个框应该都能接受，这里位置不对需要调整
+									match (generic::AcceptFileForCurrentWidget())
+									{
+										Drag(shader_path)?
+											;
+										None?
+											;
+									}
+
 									var shaders = current_entity->editor::graphic::get_shaders();
 									for (var shader : shaders)
-									{
-										// TODO: 这里应该是一个ListBox
 										show_shader(current_entity, shader);
-									}
 								}
 								none?
 									Text("当前实体没有Renderer::Shaders组件");
 							}
-							/*
-							// 不在此处展示纹理
-							BeginChild("Textures", 0., halfheight);
-								static var TexturesTypeID = je::typeinfo("Renderer::Textures");
-								match (current_entity->editor::get_component(TexturesTypeID))
-								{
-									value(textures)?
-									{
-										var textures = current_entity->editor::graphic::get_textures();
-										for (var passid, texture : textures)
-										{
-											// TODO: 这里应该是一个ListBox
-											Text(F"{passid}=>{texture->path()}");
-										};
-									}
-									none?
-										Text("当前实体没有Renderer::Textures组件");
-								}
-							EndChild();
-							*/ 
 						}
 						none?
 							Text("<没有选中可编辑的实体>");
