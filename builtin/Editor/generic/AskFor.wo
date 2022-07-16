@@ -9,8 +9,7 @@ namespace generic
 
         let open = true;
 
-        Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_NoResize
-                    + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+        Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
         {
             Text(shown);
             if (Button("确定"))

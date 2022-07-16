@@ -47,9 +47,16 @@ namespace filesys
         {
             return self;
         }
+        
+        func next(self: path, ref out_path: string)
+        {
+            extern("libjoyecs", "wojeapi_filesys_path_next")
+            func _next(self: path, ref out_path: string): bool;
 
-        extern("libjoyecs", "wojeapi_filesys_path_next")
-        func next(self: path, ref out_path: string): bool;
+            let result = _next(self, ref out_path);
+            out_path = out_path->replace("\\", "/");
+            return result;
+        }
     }
 
     func filename(_path: string)

@@ -13,7 +13,30 @@ namespace editor
     {
         namespace Material
         {
-            func show_shader(entity: je::entity, shader: je::graphic::shader)
+            union shader_option
+            {
+                AddShader(je::graphic::shader),
+                DelShader,
+                DoNothing,
+            }
+            
+            func show_shader_menu()
+            {
+                using je::gui;
+
+                let menu_option = shader_option::DoNothing;
+                if (BeginPopupContextItem())
+                {
+                    if (MenuItem("移除"))
+                        menu_option = shader_option::DelShader;
+
+                    EndPopup();
+                }
+
+                return menu_option;
+            }
+
+            func show_shader(entity: je::entity, shader: je::graphic::shader, index: int) : shader_option
             {
                 using je::gui;
 
@@ -24,7 +47,21 @@ namespace editor
 
                 let textures = entity->editor::graphic::get_textures();
 
-                let show_uniforms = TreeNodeEx(shader->path(), attribute);
+                let show_uniforms = TreeNodeEx(shader->path() + "##" + index:string, attribute);
+                let shader_operation = show_shader_menu();
+
+                match (generic::AcceptFileForCurrentWidget())
+                {
+                    Drag(shader_path)?
+                    {
+                        let drag_append_new_shader = je::graphic::shader(shader_path);
+                        if (!drag_append_new_shader->has())
+                            launch(generic::MsgBox, "加载着色器失败", F"无法加载着色器: {shader_path}");
+                        else
+                            shader_operation = shader_option::AddShader(drag_append_new_shader->val());
+                    }
+                    None? /* 没有文件拖入，不干任何事情 */;
+                }
                 if (IsItemClicked() && !IsItemToggledOpen())
                 {
                     // TODO: 总得放点什么在这儿
@@ -80,6 +117,7 @@ namespace editor
                     }
                     TreePop();
                 }
+                return shader_operation;
             }
             func show(cur_entity : option<je::entity>, max_height: real)
             {
@@ -97,18 +135,47 @@ namespace editor
                             {
                                 value(shaders)?
                                 {
-                                    // TODO: 此处接受拖进来的shader文件，整个框应该都能接受，这里位置不对需要调整
+                                    let shaders = current_entity->editor::graphic::get_shaders();
+
+                                    let index = 0, shaders_has_updated = false;
+                                    for (let shader : shaders->dup())
+                                    {
+                                        match (show_shader(current_entity, shader, index))
+                                        {
+                                            AddShader(shad)?
+                                            {
+                                                shaders->insert(index, shad);
+                                                shaders_has_updated = true;
+                                            }
+                                            DelShader?
+                                            {
+                                                shaders->remove(index);
+                                                shaders_has_updated = true;
+                                            }
+                                            DoNothing? /* 没有动作 */;
+                                        }
+                                        index += 1;
+                                    } // end show shader.
+
+                                    Text("[拖动shader文件到此处添加新的pass]");
                                     match (generic::AcceptFileForCurrentWidget())
                                     {
                                         Drag(shader_path)?
-                                            ;
-                                        None?
-                                            ;
+                                        {
+                                            let drag_append_new_shader = je::graphic::shader(shader_path);
+                                            if (!drag_append_new_shader->has())
+                                                launch(generic::MsgBox, "加载着色器失败", F"无法加载着色器: {shader_path}");
+                                            else
+                                            {
+                                                shaders->add(drag_append_new_shader->val());
+                                                shaders_has_updated = true;
+                                            }
+                                        }
+                                        None? /* 没有文件拖入，不干任何事情 */;
                                     }
 
-                                    let shaders = current_entity->editor::graphic::get_shaders();
-                                    for (let shader : shaders)
-                                        show_shader(current_entity, shader);
+                                    if (shaders_has_updated)
+                                        current_entity->editor::graphic::set_shaders(shaders);
                                 }
                                 none?
                                     Text("当前实体没有Renderer::Shaders组件");

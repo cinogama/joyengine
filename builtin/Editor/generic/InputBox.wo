@@ -12,8 +12,7 @@ namespace generic
         let text_buffer = TextBuffer(default_value);
         while (open)
         {
-            Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_NoResize
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+            Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
             {
                 Text(shown);
                 InputText("##", text_buffer);

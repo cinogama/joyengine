@@ -886,6 +886,10 @@ namespace float2
     {
         return apply_operation:<float2>("-", a, b);
     }
+    func operator * (a:float2, b:float2) : float2
+    {
+        return apply_operation:<float2>("*", a, b);
+    }
 }
 namespace float3
 {
@@ -917,6 +921,10 @@ namespace float3
     func operator - (a:float3, b:float3) : float3
     {
         return apply_operation:<float3>("-", a, b);
+    }
+    func operator * (a:float3, b:float3) : float3
+    {
+        return apply_operation:<float3>("*", a, b);
     }
 }
 namespace float4
@@ -1001,6 +1009,10 @@ namespace float4
     func operator - (a:float4, b:float4) : float4
     {
         return apply_operation:<float4>("-", a, b);
+    }
+    func operator * (a:float4, b:float4) : float4
+    {
+        return apply_operation:<float4>("*", a, b);
     }
 
     )" R"(

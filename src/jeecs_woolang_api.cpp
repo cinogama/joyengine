@@ -451,7 +451,7 @@ WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
     auto* loaded_shader = new jeecs::graphic::shader(wo_string(args + 0));
     if (loaded_shader->enabled())
     {
-        return wo_ret_gchandle(vm,
+        return wo_ret_option_gchandle(vm,
             new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
             [](void* ptr) {
                 delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
@@ -1027,13 +1027,9 @@ R"(
 
                     return get_shaders_from_entity(self, []: array<graphic::shader>);
                 }
-                func set_shaders(self: entity, shaders: array<graphic::shader>)
-                {
-                    extern("libjoyecs", "wojeapi_set_shaders_of_entity")
-                    func set_entity_shaders(e: entity, shader_list: array<graphic::shader>): array<graphic::shader>;
 
-                    return set_entity_shaders(self, shaders);
-                }
+                extern("libjoyecs", "wojeapi_set_shaders_of_entity")
+                func set_shaders(self: entity, shaders: array<graphic::shader>): void;
 
                 func get_textures(self: entity): map<int, graphic::texture>
                 {
