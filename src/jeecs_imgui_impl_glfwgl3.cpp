@@ -20,8 +20,7 @@ const char* gui_api_src = R"(
 import woo.std;
 import je;
 
-namespace je
-    namespace gui
+namespace je::gui
 {
     enum WindowsAttribute
     {

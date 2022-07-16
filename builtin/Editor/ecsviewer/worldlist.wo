@@ -6,101 +6,98 @@ import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
 import builtin.Editor.generic.MsgBox;
 
-namespace editor
+namespace editor::WorldList
 {
-    namespace WorldList
+    private func menu()
     {
-        private func menu()
+        using je::gui;
+        if (BeginMenuBar())
         {
-            using je::gui;
-            if (BeginMenuBar())
+            if (MenuItem("创建新世界"))
             {
-                if (MenuItem("创建新世界"))
-                {
-                    launch(generic::InputBox, "创建新世界", F"请输入世界的名称","New world",
-                                            func(new_world_name: string){
-                                                if (new_world_name == "")
-                                                    return; // 没有给定名称，跳过创建
+                launch(generic::InputBox, "创建新世界", F"请输入世界的名称","New world",
+                                        func(new_world_name: string){
+                                            if (new_world_name == "")
+                                                return; // 没有给定名称，跳过创建
 
-                                                let nworld = je::universe::current()->create_world();
-                                                nworld->editor::name(new_world_name);
-                                            });
-                }
-
-                EndMenuBar();
+                                            let nworld = je::universe::current()->create_world();
+                                            nworld->editor::name(new_world_name);
+                                        });
             }
+
+            EndMenuBar();
         }
+    }
 
-        func show(ref open: bool)
-        {
-            using je::gui;
-            if(!open) return !open;
+    func show(ref open: bool)
+    {
+        using je::gui;
+        if(!open) return !open;
 
-            Begin("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
-                menu();
-                if (BeginListBox("##", 200.0, 400.0))
+        Begin("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+            menu();
+            if (BeginListBox("##", 200.0, 400.0))
+            {
+                let worlds = je::universe::current()->editor::worlds_list();
+                for (let world : worlds)
                 {
-                    let worlds = je::universe::current()->editor::worlds_list();
-                    for (let world : worlds)
+                    if (Selectable(world->editor::name() + "##" + world: string))
                     {
-                        if (Selectable(world->editor::name() + "##" + world: string))
+                        match (je::world::rend())
                         {
-                            match (je::world::rend())
-                            {
-                                value(rend_world)?
-                                    if (rend_world != world)
-                                        launch(generic::AskFor, "切换渲染世界",
-                                                    F"即将切换到{world->editor::name()}，是否继续？",
-                                                    func(){ world->rend(); });
-                                none?
+                            value(rend_world)?
+                                if (rend_world != world)
                                     launch(generic::AskFor, "切换渲染世界",
                                                 F"即将切换到{world->editor::name()}，是否继续？",
                                                 func(){ world->rend(); });
-                            }
+                            none?
+                                launch(generic::AskFor, "切换渲染世界",
+                                            F"即将切换到{world->editor::name()}，是否继续？",
+                                            func(){ world->rend(); });
                         }
-                        context_menu(world);
                     }
-                    EndListBox();
+                    context_menu(world);
                 }
-            End();
-
-            return !open;
-        }
-
-        private func context_menu(world: je::world)
-        {
-            using je::gui;
-            if (BeginPopupContextItem())
-            {
-                MenuItem(F"世界 {world->editor::name()}", false);
-                Separator();
-                if (MenuItem(F"删除 {world->editor::name()}"))
-                {
-                    if (je::world::rend()->val() == world)
-                        // 不允许删除渲染中的世界
-                        launch(generic::MsgBox, "删除世界失败",
-                                                "不能删除正在渲染的世界");
-                    else
-                        launch(generic::AskFor, "确认删除世界",
-                                                F"确定要删除世界{world->editor::name()}吗？未保存的世界将永久丢失！",
-                                                func(){
-                                                    EntityList::set_current_entity(option::none:<je::entity>);
-                                                    world->close();
-                                                });
-                }
-                if (MenuItem("重命名世界"))
-                {
-                    launch(generic::InputBox, "重命名世界",
-                                            F"请输入世界的新名称", "",
-                                            func(new_name: string){
-                                                if (new_name == "")
-                                                    return; // 输入为空，直接跳过
-                                                world->editor::name(new_name);
-                                            });
-                }
-                EndPopup();
+                EndListBox();
             }
+        End();
+
+        return !open;
+    }
+
+    private func context_menu(world: je::world)
+    {
+        using je::gui;
+        if (BeginPopupContextItem())
+        {
+            MenuItem(F"世界 {world->editor::name()}", false);
+            Separator();
+            if (MenuItem(F"删除 {world->editor::name()}"))
+            {
+                if (je::world::rend()->val() == world)
+                    // 不允许删除渲染中的世界
+                    launch(generic::MsgBox, "删除世界失败",
+                                            "不能删除正在渲染的世界");
+                else
+                    launch(generic::AskFor, "确认删除世界",
+                                            F"确定要删除世界{world->editor::name()}吗？未保存的世界将永久丢失！",
+                                            func(){
+                                                EntityList::set_current_entity(option::none:<je::entity>);
+                                                world->close();
+                                            });
+            }
+            if (MenuItem("重命名世界"))
+            {
+                launch(generic::InputBox, "重命名世界",
+                                        F"请输入世界的新名称", "",
+                                        func(new_name: string){
+                                            if (new_name == "")
+                                                return; // 输入为空，直接跳过
+                                            world->editor::name(new_name);
+                                        });
+            }
+            EndPopup();
         }
     }
 }

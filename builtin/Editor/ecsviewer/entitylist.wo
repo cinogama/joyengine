@@ -5,139 +5,136 @@ import je;
 import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
 
-namespace editor
+namespace editor::EntityList
 {
-    namespace EntityList
+    // 当前世界列表是否显示有当前选中的实体，如果没有就重设当前实体，防止错误的显示
+    private let _has_selected_entity = false;
+
+    private func menu()
     {
-        // 当前世界列表是否显示有当前选中的实体，如果没有就重设当前实体，防止错误的显示
-        private let _has_selected_entity = false;
-
-        private func menu()
+        using je::gui;
+        if (BeginMenuBar())
         {
-            using je::gui;
-            if (BeginMenuBar())
+            if (MenuItem("创建新实体"))
             {
-                if (MenuItem("创建新实体"))
-                {
-                    // 注意，实体至少带有一个组件，否则这个实体就是不存在的
-                    // TODO;
-                }
-
-                EndMenuBar();
+                // 注意，实体至少带有一个组件，否则这个实体就是不存在的
+                // TODO;
             }
-        }
 
-        private func context_menu(entity: je::entity)
+            EndMenuBar();
+        }
+    }
+
+    private func context_menu(entity: je::entity)
+    {
+        using je::gui;
+        if (BeginPopupContextItem())
         {
-            using je::gui;
-            if (BeginPopupContextItem())
+            MenuItem(F"实体 {entity->editor::chunk_info()}", false);
+            Separator();
+            if (MenuItem(F"删除 {entity->editor::name()}"))
             {
-                MenuItem(F"实体 {entity->editor::chunk_info()}", false);
-                Separator();
-                if (MenuItem(F"删除 {entity->editor::name()}"))
-                {
-                    launch(generic::AskFor, "删除实体",
-                                            F"确认要删除实体{entity->editor::name()}吗？",
-                                            func(){ entity->close(); });
-                }
-                if (MenuItem("重命名"))
-                {
-                    launch(generic::InputBox, "重命名实体",
-                                            F"请输入新名称",
-                                            entity->editor::name(),
-                                            func(text: string){ entity->editor::name(text); });
-                }
-                EndPopup();
+                launch(generic::AskFor, "删除实体",
+                                        F"确认要删除实体{entity->editor::name()}吗？",
+                                        func(){ entity->close(); });
             }
+            if (MenuItem("重命名"))
+            {
+                launch(generic::InputBox, "重命名实体",
+                                        F"请输入新名称",
+                                        entity->editor::name(),
+                                        func(text: string){ entity->editor::name(text); });
+            }
+            EndPopup();
         }
+    }
 
-        func show(ref open: bool)
-        {
-            using je::gui;
-            if(!open) return !open;
+    func show(ref open: bool)
+    {
+        using je::gui;
+        if(!open) return !open;
 
-            _has_selected_entity = false;
-            Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                        , ref open);
-                menu();
+        _has_selected_entity = false;
+        Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                    , ref open);
+            menu();
                 
-                match(je::world::rend())
+            match(je::world::rend())
+            {
+                value(current_world)?
                 {
-                    value(current_world)?
+                    let top_entity_walker = current_world->editor::top_entity_iter();
+                    if (_display_entity_with_iter(top_entity_walker) == 0)
+                        Text("当前世界没有实体");
+                } 
+                none?
+                    ; // do nothing
+            }  
+                
+        End();
+        if (!_has_selected_entity)
+            set_current_entity(option::none:<je::entity>);
+                
+        return !open;
+    }
+
+    private let _current_entity = option::none as option<je::entity>;
+
+    func set_current_entity(current_entity: option<je::entity>)
+    {
+        _current_entity = current_entity;
+    }
+
+    func get_current_entity()
+    {
+        return _current_entity;
+    }
+
+    private func _display_entity_with_iter(entity_iter: je::entity::editor::entity_iter): int
+    {
+        using je::gui;
+
+        let display_count = 0;
+        for (let entity : entity_iter)
+        {
+            display_count += 1;
+
+            let entity_name = entity->editor::name();
+            if (entity_name == "")
+                entity_name = "<匿名实体>";
+
+            let attribute = 
+                TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+
+            match (get_current_entity())
+            {
+                value(selected_entity)?
+                    if (selected_entity == entity)
                     {
-                        let top_entity_walker = current_world->editor::top_entity_iter();
-                        if (_display_entity_with_iter(top_entity_walker) == 0)
-                            Text("当前世界没有实体");
-                    } 
-                    none?
-                        ; // do nothing
-                }  
-                
-            End();
-            if (!_has_selected_entity)
-                set_current_entity(option::none:<je::entity>);
-                
-            return !open;
-        }
-
-        private let _current_entity = option::none as option<je::entity>;
-
-        func set_current_entity(current_entity: option<je::entity>)
-        {
-            _current_entity = current_entity;
-        }
-
-        func get_current_entity()
-        {
-            return _current_entity;
-        }
-
-        private func _display_entity_with_iter(entity_iter: je::entity::editor::entity_iter): int
-        {
-            using je::gui;
-
-            let display_count = 0;
-            for (let entity : entity_iter)
-            {
-                display_count += 1;
-
-                let entity_name = entity->editor::name();
-                if (entity_name == "")
-                    entity_name = "<匿名实体>";
-
-                let attribute = 
-                  TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
-                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
-                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
-
-                match (get_current_entity())
-                {
-                    value(selected_entity)?
-                        if (selected_entity == entity)
-                        {
-                            _has_selected_entity = true;
-                            attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
-                        }
-                    none?
-                        ; // 没有选中的实体，啥也不干
-                }
-
-                let shown_child = TreeNodeEx(F"{entity_name}##{entity->editor::chunk_info()}", attribute);
-                context_menu(entity);
-                if (IsItemClicked() && !IsItemToggledOpen())
-                {
-                    _has_selected_entity = true; // 也在这里设置一下
-                    set_current_entity(option::value(entity));
-                }
-
-                if(shown_child)
-                {
-                    _display_entity_with_iter(entity_iter->childs());
-                    TreePop();
-                }
+                        _has_selected_entity = true;
+                        attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
+                    }
+                none?
+                    ; // 没有选中的实体，啥也不干
             }
-            return display_count;
+
+            let shown_child = TreeNodeEx(F"{entity_name}##{entity->editor::chunk_info()}", attribute);
+            context_menu(entity);
+            if (IsItemClicked() && !IsItemToggledOpen())
+            {
+                _has_selected_entity = true; // 也在这里设置一下
+                set_current_entity(option::value(entity));
+            }
+
+            if(shown_child)
+            {
+                _display_entity_with_iter(entity_iter->childs());
+                TreePop();
+            }
         }
+        return display_count;
     }
 }

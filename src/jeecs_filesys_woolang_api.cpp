@@ -34,8 +34,7 @@ const char* jeecs_filesys_woolang_api_path = "je/filesys.wo";
 const char* jeecs_filesys_woolang_api_src = R"(
 import woo.std;
 
-namespace je
-namespace filesys
+namespace je::filesys
 {
     using path = gchandle;
     namespace path

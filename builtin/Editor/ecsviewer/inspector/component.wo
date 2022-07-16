@@ -5,182 +5,176 @@ import je;
 import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
 
-namespace editor
+namespace editor::Inspector::Component
 {
-    namespace Inspector
-    {
-        namespace Component
-        {
-            let _type_widget_methods = {}: map<je::typeinfo, void(string, je::native_value)>;
+    let _type_widget_methods = {}: map<je::typeinfo, void(string, je::native_value)>;
             
-            using component_chain = struct{
-                m_map:                map<string, component_chain>,
-                m_component_type:    option<je::typeinfo>,
-            };
+    using component_chain = struct{
+        m_map:                map<string, component_chain>,
+        m_component_type:    option<je::typeinfo>,
+    };
 
-            func show(cur_entity: option<je::entity>, max_height: real)
+    func show(cur_entity: option<je::entity>, max_height: real)
+    {
+        using je::gui;
+
+        BeginChild("component_editor", 0., max_height);
+            match (cur_entity)
             {
-                using je::gui;
-
-                BeginChild("component_editor", 0., max_height);
-                    match (cur_entity)
+                value(current_entity)?
+                {
+                    // TODO: 在此处显示一下实体信息
+                    let current_component_types = 
+                        component_chain{ 
+                            m_map = {}: map<string, component_chain>, 
+                            m_component_type = option::none:<je::typeinfo> 
+                        };
+                    for (let component_type : current_entity->editor::get_components_types())
                     {
-                        value(current_entity)?
+                        let component_type_name = component_type->name();
+                        let current_types = current_component_types;
+                        let scope_names = component_type_name->split("::");
+
+                        // 从根开始，找到最终组件所在的节点
+                        for (let name: scope_names)
                         {
-                            // TODO: 在此处显示一下实体信息
-                            let current_component_types = 
-                                component_chain{ 
-                                    m_map = {}: map<string, component_chain>, 
-                                    m_component_type = option::none:<je::typeinfo> 
-                                };
-                            for (let component_type : current_entity->editor::get_components_types())
+                            current_types = current_types.m_map->get(name, 
+                                component_chain{
+                                    m_map = {}: map<string, component_chain>,
+                                    m_component_type = option::none:<je::typeinfo>
+                                });
+                        }
+
+                        current_types.m_component_type = option::value(component_type);
+                    }
+                    func waklthrow_and_display_components(current_node: component_chain, entity: je::entity): void
+                    {
+                        for (let name, chain: current_node.m_map)
+                        {
+                            if (TreeNode(name))
                             {
-                                let component_type_name = component_type->name();
-                                let current_types = current_component_types;
-                                let scope_names = component_type_name->split("::");
-
-                                // 从根开始，找到最终组件所在的节点
-                                for (let name: scope_names)
-                                {
-                                    current_types = current_types.m_map->get(name, 
-                                        component_chain{
-                                            m_map = {}: map<string, component_chain>,
-                                            m_component_type = option::none:<je::typeinfo>
-                                        });
-                                }
-
-                                current_types.m_component_type = option::value(component_type);
+                                waklthrow_and_display_components(chain, entity);
+                                TreePop();
                             }
-                            func waklthrow_and_display_components(current_node: component_chain, entity: je::entity): void
+                        }
+                        match (current_node.m_component_type)
+                        {
+                            value(type)?
                             {
-                                for (let name, chain: current_node.m_map)
+                                let member_count = 0;
+                                match (entity->editor::get_component(type))
                                 {
-                                    if (TreeNode(name))
+                                    value(component_addr)?
                                     {
-                                        waklthrow_and_display_components(chain, entity);
-                                        TreePop();
-                                    }
-                                }
-                                match (current_node.m_component_type)
-                                {
-                                    value(type)?
-                                    {
-                                        let member_count = 0;
-                                        match (entity->editor::get_component(type))
+                                        for (let name, type, addr : component_addr->editor::iter_member(type))
                                         {
-                                            value(component_addr)?
-                                            {
-                                                for (let name, type, addr : component_addr->editor::iter_member(type))
-                                                {
-                                                    member_count += 1;
-                                                    _show_edit_widget(name, type, addr);
-                                                }
-
-                                                if (0 == member_count)
-                                                    Text("<此组件没有可编辑字段>");
-                                            }
-                                            none?
-                                                ; // 如果实体出现更新，这里会很麻烦
+                                            member_count += 1;
+                                            _show_edit_widget(name, type, addr);
                                         }
+
+                                        if (0 == member_count)
+                                            Text("<此组件没有可编辑字段>");
                                     }
                                     none?
-                                        ; // 啥也不干
+                                        ; // 如果实体出现更新，这里会很麻烦
                                 }
                             }
-                            waklthrow_and_display_components(current_component_types, current_entity);
+                            none?
+                                ; // 啥也不干
                         }
-                        none?
-                            Text("<没有选中可编辑的实体>");
-
-                    } // end match
-                EndChild();
-            }
-
-            private func _register_default_method()
-            {
-                using je::gui;
-
-                _type_widget_methods[je::typeinfo::float] = 
-                    func(name: string, addr: je::native_value)
-                    {
-                        let value = 0.; addr->float(ref value);
-
-                        if (InputFloat(name, ref value))
-                            addr->float(value);
-                    };
-                _type_widget_methods[je::typeinfo::int] = 
-                    func(name: string, addr: je::native_value)
-                    {
-                        let value = 0; addr->int(ref value);
-
-                        if (InputInt(name, ref value))
-                            addr->int(value);
-                    };
-                _type_widget_methods[je::typeinfo::float2] = 
-                    func(name: string, addr: je::native_value)
-                    {
-                        let x = 0., y = 0.;
-                        addr->float2(ref x, ref y);
-
-                        if (InputFloat2(name, ref x, ref y))
-                            addr->float2(x, y);
-                    };
-                _type_widget_methods[je::typeinfo::float3] = 
-                    func(name: string, addr: je::native_value)
-                    {
-                        let x = 0., y = 0., z = 0.;
-                        addr->float3(ref x, ref y, ref z);
-
-                        if (InputFloat3(name, ref x, ref y, ref z))
-                            addr->float3(x, y, z);
-                    };
-                _type_widget_methods[je::typeinfo::float4] = 
-                    func(name: string, addr: je::native_value)
-                    {
-                        let x = 0., y = 0., z = 0., w = 0.;
-                        addr->float4(ref x, ref y, ref z, ref w);
-
-                        if (InputFloat4(name, ref x, ref y, ref z, ref w))
-                            addr->float4(x, y, z, w);
-                    };
-                _type_widget_methods[je::typeinfo::quat] = 
-                    func(name: string, addr: je::native_value)
-                    {
-                        let x = 0., y = 0., z = 0.;
-                        addr->euler3(ref x, ref y, ref z);
-
-                        if (InputFloat3(name, ref x, ref y, ref z))
-                            addr->euler3(x, y, z);
-                    };
-                _type_widget_methods[je::typeinfo::string] = 
-                    func(name: string, addr: je::native_value)
-                    {
-                        let x = "";
-                        addr->string(ref x);
-
-                        if (InputText(name, ref x))
-                            addr->string(x);
-                    };
-            }
-            _register_default_method(); // 此处注册常用默认操作
-            
-            private func _show_edit_widget(name: string, type: je::typeinfo, addr: je::native_value)
-            {
-                using je::gui;
-
-                if (_type_widget_methods->contain(type))
-                {
-                    let method = _type_widget_methods[type];
-                    method(name, addr);
+                    }
+                    waklthrow_and_display_components(current_component_types, current_entity);
                 }
-                else
-                {
-                    Text(name);
-                    SameLine();
-                    Text("<没有合适的控件以展示此值>");
-                }
-            }
+                none?
+                    Text("<没有选中可编辑的实体>");
 
-        } // end of namespace Component
+            } // end match
+        EndChild();
     }
+
+    private func _register_default_method()
+    {
+        using je::gui;
+
+        _type_widget_methods[je::typeinfo::float] = 
+            func(name: string, addr: je::native_value)
+            {
+                let value = 0.; addr->float(ref value);
+
+                if (InputFloat(name, ref value))
+                    addr->float(value);
+            };
+        _type_widget_methods[je::typeinfo::int] = 
+            func(name: string, addr: je::native_value)
+            {
+                let value = 0; addr->int(ref value);
+
+                if (InputInt(name, ref value))
+                    addr->int(value);
+            };
+        _type_widget_methods[je::typeinfo::float2] = 
+            func(name: string, addr: je::native_value)
+            {
+                let x = 0., y = 0.;
+                addr->float2(ref x, ref y);
+
+                if (InputFloat2(name, ref x, ref y))
+                    addr->float2(x, y);
+            };
+        _type_widget_methods[je::typeinfo::float3] = 
+            func(name: string, addr: je::native_value)
+            {
+                let x = 0., y = 0., z = 0.;
+                addr->float3(ref x, ref y, ref z);
+
+                if (InputFloat3(name, ref x, ref y, ref z))
+                    addr->float3(x, y, z);
+            };
+        _type_widget_methods[je::typeinfo::float4] = 
+            func(name: string, addr: je::native_value)
+            {
+                let x = 0., y = 0., z = 0., w = 0.;
+                addr->float4(ref x, ref y, ref z, ref w);
+
+                if (InputFloat4(name, ref x, ref y, ref z, ref w))
+                    addr->float4(x, y, z, w);
+            };
+        _type_widget_methods[je::typeinfo::quat] = 
+            func(name: string, addr: je::native_value)
+            {
+                let x = 0., y = 0., z = 0.;
+                addr->euler3(ref x, ref y, ref z);
+
+                if (InputFloat3(name, ref x, ref y, ref z))
+                    addr->euler3(x, y, z);
+            };
+        _type_widget_methods[je::typeinfo::string] = 
+            func(name: string, addr: je::native_value)
+            {
+                let x = "";
+                addr->string(ref x);
+
+                if (InputText(name, ref x))
+                    addr->string(x);
+            };
+    }
+    _register_default_method(); // 此处注册常用默认操作
+            
+    private func _show_edit_widget(name: string, type: je::typeinfo, addr: je::native_value)
+    {
+        using je::gui;
+
+        if (_type_widget_methods->contain(type))
+        {
+            let method = _type_widget_methods[type];
+            method(name, addr);
+        }
+        else
+        {
+            Text(name);
+            SameLine();
+            Text("<没有合适的控件以展示此值>");
+        }
+    }
+
 }
