@@ -11,14 +11,14 @@ namespace editor
     {
         namespace Component
         {
-            var _type_widget_methods = {}: map<je::typeinfo, void(string, je::native_value)>;
+            let _type_widget_methods = {}: map<je::typeinfo, void(string, je::native_value)>;
             
             using component_chain = struct{
                 m_map:                map<string, component_chain>,
                 m_component_type:    option<je::typeinfo>,
             };
 
-            func show(var cur_entity: option<je::entity>, var max_height: real)
+            func show(cur_entity: option<je::entity>, max_height: real)
             {
                 using je::gui;
 
@@ -28,19 +28,19 @@ namespace editor
                         value(current_entity)?
                         {
                             // TODO: 在此处显示一下实体信息
-                            var current_component_types = 
+                            let current_component_types = 
                                 component_chain{ 
                                     m_map = {}: map<string, component_chain>, 
                                     m_component_type = option::none:<je::typeinfo> 
                                 };
-                            for (var component_type : current_entity->editor::get_components_types())
+                            for (let component_type : current_entity->editor::get_components_types())
                             {
-                                var component_type_name = component_type->name();
-                                var current_types = current_component_types;
-                                var scope_names = component_type_name->split("::");
+                                let component_type_name = component_type->name();
+                                let current_types = current_component_types;
+                                let scope_names = component_type_name->split("::");
 
                                 // 从根开始，找到最终组件所在的节点
-                                for (var name: scope_names)
+                                for (let name: scope_names)
                                 {
                                     current_types = current_types.m_map->get(name, 
                                         component_chain{
@@ -51,9 +51,9 @@ namespace editor
 
                                 current_types.m_component_type = option::value(component_type);
                             }
-                            func waklthrow_and_display_components(var current_node: component_chain, var entity: je::entity): void
+                            func waklthrow_and_display_components(current_node: component_chain, entity: je::entity): void
                             {
-                                for (var name, chain: current_node.m_map)
+                                for (let name, chain: current_node.m_map)
                                 {
                                     if (TreeNode(name))
                                     {
@@ -65,12 +65,12 @@ namespace editor
                                 {
                                     value(type)?
                                     {
-                                        var member_count = 0;
+                                        let member_count = 0;
                                         match (entity->editor::get_component(type))
                                         {
                                             value(component_addr)?
                                             {
-                                                for (var name, type, addr : component_addr->editor::iter_member(type))
+                                                for (let name, type, addr : component_addr->editor::iter_member(type))
                                                 {
                                                     member_count += 1;
                                                     _show_edit_widget(name, type, addr);
@@ -101,61 +101,61 @@ namespace editor
                 using je::gui;
 
                 _type_widget_methods[je::typeinfo::float] = 
-                    func(var name: string, var addr: je::native_value)
+                    func(name: string, addr: je::native_value)
                     {
-                        var value = 0.; addr->float(ref value);
+                        let value = 0.; addr->float(ref value);
 
                         if (InputFloat(name, ref value))
                             addr->float(value);
                     };
                 _type_widget_methods[je::typeinfo::int] = 
-                    func(var name: string, var addr: je::native_value)
+                    func(name: string, addr: je::native_value)
                     {
-                        var value = 0; addr->int(ref value);
+                        let value = 0; addr->int(ref value);
 
                         if (InputInt(name, ref value))
                             addr->int(value);
                     };
                 _type_widget_methods[je::typeinfo::float2] = 
-                    func(var name: string, var addr: je::native_value)
+                    func(name: string, addr: je::native_value)
                     {
-                        var x = 0., y = 0.;
+                        let x = 0., y = 0.;
                         addr->float2(ref x, ref y);
 
                         if (InputFloat2(name, ref x, ref y))
                             addr->float2(x, y);
                     };
                 _type_widget_methods[je::typeinfo::float3] = 
-                    func(var name: string, var addr: je::native_value)
+                    func(name: string, addr: je::native_value)
                     {
-                        var x = 0., y = 0., z = 0.;
+                        let x = 0., y = 0., z = 0.;
                         addr->float3(ref x, ref y, ref z);
 
                         if (InputFloat3(name, ref x, ref y, ref z))
                             addr->float3(x, y, z);
                     };
                 _type_widget_methods[je::typeinfo::float4] = 
-                    func(var name: string, var addr: je::native_value)
+                    func(name: string, addr: je::native_value)
                     {
-                        var x = 0., y = 0., z = 0., w = 0.;
+                        let x = 0., y = 0., z = 0., w = 0.;
                         addr->float4(ref x, ref y, ref z, ref w);
 
                         if (InputFloat4(name, ref x, ref y, ref z, ref w))
                             addr->float4(x, y, z, w);
                     };
                 _type_widget_methods[je::typeinfo::quat] = 
-                    func(var name: string, var addr: je::native_value)
+                    func(name: string, addr: je::native_value)
                     {
-                        var x = 0., y = 0., z = 0.;
+                        let x = 0., y = 0., z = 0.;
                         addr->euler3(ref x, ref y, ref z);
 
                         if (InputFloat3(name, ref x, ref y, ref z))
                             addr->euler3(x, y, z);
                     };
                 _type_widget_methods[je::typeinfo::string] = 
-                    func(var name: string, var addr: je::native_value)
+                    func(name: string, addr: je::native_value)
                     {
-                        var x = "";
+                        let x = "";
                         addr->string(ref x);
 
                         if (InputText(name, ref x))
@@ -164,13 +164,13 @@ namespace editor
             }
             _register_default_method(); // 此处注册常用默认操作
             
-            private func _show_edit_widget(var name: string, var type: je::typeinfo, var addr: je::native_value)
+            private func _show_edit_widget(name: string, type: je::typeinfo, addr: je::native_value)
             {
                 using je::gui;
 
                 if (_type_widget_methods->contain(type))
                 {
-                    var method = _type_widget_methods[type];
+                    let method = _type_widget_methods[type];
                     method(name, addr);
                 }
                 else

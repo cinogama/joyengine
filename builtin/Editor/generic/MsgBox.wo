@@ -3,11 +3,11 @@ import je.gui;
 
 namespace generic
 {
-    func MsgBox(var title:string, var shown:string)
+    func MsgBox(title:string, shown:string)
     {
         using je::gui;
 
-        var open = true;
+        let open = true;
 
         Begin(F"{title}##{JobID()}"
                     , WindowsAttribute::ImGuiWindowFlags_NoResize

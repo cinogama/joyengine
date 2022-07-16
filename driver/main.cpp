@@ -85,9 +85,9 @@ using fout = struct {
     color : float4
 };
 
-var example_tex = uniform:<texture2d>("example_tex");
+let example_tex = uniform:<texture2d>("example_tex");
 
-func vert(var vdata: vin)
+func vert(vdata: vin)
 {
     return v2f{
         pos = je_vp * je_m * float4(vdata.vertex, 1.), 
@@ -95,7 +95,7 @@ func vert(var vdata: vin)
     };
 }
 
-func frag(var fdata: v2f)
+func frag(fdata: v2f)
 {
     return fout{ 
         color = alphatest(texture(example_tex, fdata.uv))
@@ -137,9 +137,9 @@ using fout = struct {
     color : float4
 };
 
-var example_tex = uniform:<texture2d>("example_tex");
+let example_tex = uniform:<texture2d>("example_tex");
 
-func vert(var vdata: vin)
+func vert(vdata: vin)
 {
     return v2f{
         pos = je_vp * je_m * float4(vdata.vertex, 1.), 
@@ -147,7 +147,7 @@ func vert(var vdata: vin)
     };
 }
 
-func frag(var fdata: v2f)
+func frag(fdata: v2f)
 {
     return fout{ 
         color = alphatest(texture(example_tex, fdata.uv))

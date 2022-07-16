@@ -180,7 +180,7 @@ WO_API wo_api wojeapi_iter_components_member(wo_vm vm, wo_value args, size_t arg
 }
 WO_API wo_api wojeapi_member_iterator_next(wo_vm vm, wo_value args, size_t argc)
 {
-    //func next(var self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value): bool;
+    //func next(self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value): bool;
     component_member_iter* iter = (component_member_iter*)wo_pointer(args + 0);
     wo_value out_name = args + 1;
     wo_value out_type = args + 2;
@@ -574,8 +574,8 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
     /*
     extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
                 func _get_uniforms_from_shader(
-                    var shad: shader,
-                    var out_datas: map<string, (typeinfo, uniform_value_data)>
+                    shad: shader,
+                    out_datas: map<string, (typeinfo, uniform_value_data)>
                 ): map<string, (typeinfo, uniform_value_data)>;
     */
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
@@ -671,60 +671,60 @@ namespace je
     namespace typeinfo
     {
         extern("libjoyecs", "wojeapi_type_of")
-        func create(var name: string): typeinfo;
+        func create(name: string): typeinfo;
 
         extern("libjoyecs", "wojeapi_type_of")
-        func create(var id: int): typeinfo;
+        func create(id: int): typeinfo;
 
         extern("libjoyecs", "wojeapi_type_id")
-        func id(var self: typeinfo): int;
+        func id(self: typeinfo): int;
 
         extern("libjoyecs", "wojeapi_type_name")
-        func name(var self: typeinfo): string;
+        func name(self: typeinfo): string;
 
         enum basic_type
         {
             INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
         }
         extern("libjoyecs", "wojeapi_type_basic_type")
-        private func create(var tid: basic_type): typeinfo;
+        private func create(tid: basic_type): typeinfo;
 
-        const var int = typeinfo(basic_type::INT);
-        const var float = typeinfo(basic_type::FLOAT);
-        const var float2 = typeinfo(basic_type::FLOAT2);
-        const var float3 = typeinfo(basic_type::FLOAT3);
-        const var float4 = typeinfo(basic_type::FLOAT4);
-        const var quat = typeinfo(basic_type::QUAT);
-        const var string = typeinfo(basic_type::STRING);
+        let const int = typeinfo(basic_type::INT);
+        let const float = typeinfo(basic_type::FLOAT);
+        let const float2 = typeinfo(basic_type::FLOAT2);
+        let const float3 = typeinfo(basic_type::FLOAT3);
+        let const float4 = typeinfo(basic_type::FLOAT4);
+        let const quat = typeinfo(basic_type::QUAT);
+        let const string = typeinfo(basic_type::STRING);
 
-        const var texture = typeinfo(basic_type::TEXTURE);
+        let const texture = typeinfo(basic_type::TEXTURE);
     }
 
-     namespace graphic
+    namespace graphic
     {
         using texture = gchandle;
         namespace texture
         {
             extern("libjoyecs", "wojeapi_texture_open")
-            func create(var path: string): option<texture>;
+            func create(path: string): option<texture>;
 
             extern("libjoyecs", "wojeapi_texture_create")
-            func create(var width: int, var height: int): texture;
+            func create(width: int, height: int): texture;
 
             extern("libjoyecs", "wojeapi_texture_path")
-            func path(var self: texture): string;
+            func path(self: texture): string;
 
             extern("libjoyecs", "wojeapi_texture_is_valid")
-            func isvalid(var self: shader): bool;
+            func isvalid(self: shader): bool;
 
             extern("libjoyecs", "wojeapi_texture_get_pixel")
-            func pix(var self: texture, var x: int, var y: int): pixel;
+            func pix(self: texture, x: int, y: int): pixel;
 
             using pixel = gchandle;
             namespace pixel
             {
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
-                func color(var self: pixel, ref r: real, ref g: real, ref b: real, ref a: real): void;
+                func color(self: pixel, ref r: real, ref g: real, ref b: real, ref a: real): void;
             }
         }
 
@@ -732,16 +732,16 @@ namespace je
         namespace shader
         {
             extern("libjoyecs", "wojeapi_shader_open")
-            func create(var path: string): option<shader>;
+            func create(path: string): option<shader>;
             
             extern("libjoyecs", "wojeapi_shader_create")
-            func create(var vpath: string, var src: string): option<shader>;
+            func create(vpath: string, src: string): option<shader>;
 
             extern("libjoyecs", "wojeapi_shader_is_valid")
-            func isvalid(var self: shader): bool;
+            func isvalid(self: shader): bool;
 
             extern("libjoyecs", "wojeapi_shader_path")
-            func path(var self: shader): string;
+            func path(self: shader): string;
 
             union uniform_variable
             {
@@ -762,17 +762,17 @@ namespace je
                 w : real
             };
 
-            func get_uniforms(var self: shader): map<string, uniform_variable>
+            func get_uniforms(self: shader): map<string, uniform_variable>
             {
                 extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
                 func _get_uniforms_from_shader(
-                    var shad: shader, 
-                    var out_datas: map<string, (typeinfo, uniform_value_data)>
+                    shad: shader, 
+                    out_datas: map<string, (typeinfo, uniform_value_data)>
                 ): map<string, (typeinfo, uniform_value_data)>;
                 
-                var result = {}: map<string, uniform_variable>;
+                let result = {}: map<string, uniform_variable>;
 
-                for(var name, (type, val) : _get_uniforms_from_shader(self, {}: map<string, (typeinfo, uniform_value_data)>))
+                for(let name, (type, val) : _get_uniforms_from_shader(self, {}: map<string, (typeinfo, uniform_value_data)>))
                 {
                     if (type == typeinfo::int)
                         result[name] = uniform_variable::integer(val.n);
@@ -792,7 +792,7 @@ namespace je
 
                 return result;
             }
-            func set_uniform<T>(var self: shader, var name: string, var val: T)
+            func set_uniform<T>(self: shader, name: string, val: T)
             {
                 
             }
@@ -806,23 +806,23 @@ namespace je
         func current(): universe;
 
         extern("libjoyecs", "wojeapi_create_world_in_universe")
-        func create_world(var self: universe): world;
+        func create_world(self: universe): world;
 
         namespace editor
         {
-            func worlds_list(var self: universe)
+            func worlds_list(self: universe)
             {
                 extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
-                func _get_all_worlds(var universe:universe, var out_arrs:array<world>) : void;
+                func _get_all_worlds(universe:universe, out_arrs:array<world>) : void;
 
-                var result = []:array<world>;
+                let result = []:array<world>;
                 _get_all_worlds(self, result);
 
                 return result;
             }
 
             extern("libjoyecs", "wojeapi_get_shared_system_attached_world")
-            func get_shared_system_attached_world(var self:universe, var systype:typeinfo): option<world>;
+            func get_shared_system_attached_world(self:universe, systype:typeinfo): option<world>;
         }
     }
 
@@ -830,44 +830,44 @@ namespace je
     namespace world
     {
         extern("libjoyecs", "wojeapi_close_world")
-        func close(var self: world) : void;
+        func close(self: world) : void;
 
         extern("libjoyecs", "wojeapi_attach_shared_system_to_world")
-        func attach_shared_system(var self: world, var systype: typeinfo): void;
+        func attach_shared_system(self: world, systype: typeinfo): void;
 
-        func rend(var self: world)
+        func rend(self: world)
         {
             // ATTENTION: Built-in components or systems's typeinfo will not unregister
             //            so I can let them static here, but you should pay attention to
             //            the life-cycle of custom type / woolang vm.
-            const static var graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
+            static let const graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
             return self->attach_shared_system(graphic_typeinfo);
         } 
 
         func rend(): option<world>
         {
-            const static var graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
+            static let const graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
             return universe::current()->editor::get_shared_system_attached_world(graphic_typeinfo);
         }
 
         namespace editor
         {
             extern("libjoyecs", "wojeapi_get_world_name")
-            func name(var self: world): string;
+            func name(self: world): string;
 
             extern("libjoyecs", "wojeapi_set_world_name")
-            func name(var self: world, var _name: string): void;
+            func name(self: world, _name: string): void;
 
-            func get_all_entities(var self: world): array<entity>
+            func get_all_entities(self: world): array<entity>
             {
                 extern("libjoyecs", "wojeapi_get_all_entities_from_world")
-                func _get_all_entities_from_world(var world: world, var out_result: array<entity>): array<entity>;
+                func _get_all_entities_from_world(world: world, out_result: array<entity>): array<entity>;
 
-                var result = []: array<entity>;
+                let result = []: array<entity>;
                 return _get_all_entities_from_world(self, result);
             }
 
-            func top_entity_iter(var self: world): entity::editor::entity_iter
+            func top_entity_iter(self: world): entity::editor::entity_iter
             {
                 return entity::editor::entity_iter(self->get_all_entities());
             }
@@ -878,19 +878,19 @@ R"(
     using entity = gchandle;
     namespace entity
     {
-        func operator == (var a: entity, var b: entity)
+        func operator == (a: entity, b: entity)
         {
             return a->editor::chunk_info() == b->editor::chunk_info();
         }
-        func operator != (var a: entity, var b: entity)
+        func operator != (a: entity, b: entity)
         {
             return a->editor::chunk_info() != b->editor::chunk_info();
         }
 
-        func close(var self: entity)
+        func close(self: entity)
         {
             extern("libjoyecs", "wojeapi_close_entity")
-            func _close(var self: entity): void;
+            func _close(self: entity): void;
 
             _close(self);
         }
@@ -898,34 +898,34 @@ R"(
         namespace editor
         {
             extern("libjoyecs", "wojeapi_get_entity_name")
-            func name(var self: entity): string;
+            func name(self: entity): string;
 
             extern("libjoyecs", "wojeapi_set_entity_name")
-            func name(var self: entity, var name: string): string;
+            func name(self: entity, name: string): string;
 
             extern("libjoyecs", "wojeapi_get_entity_chunk_info")
-            func chunk_info(var self: entity): string;
+            func chunk_info(self: entity): string;
 
             extern("libjoyecs", "wojeapi_is_entity_valid")
-            func valid(var self: entity): bool;
+            func valid(self: entity): bool;
 
-            func get_components_types(var self: entity): array<typeinfo>
+            func get_components_types(self: entity): array<typeinfo>
             {
                 extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")
                 func _get_components_types_from_entity(
-                    var entity: entity, var out_result: array<typeinfo>): array<typeinfo>;
+                    entity: entity, out_result: array<typeinfo>): array<typeinfo>;
 
                 return _get_components_types_from_entity(self, []: array<typeinfo>);
             }
 
             extern("libjoyecs", "wojeapi_get_component_from_entity")
-            func get_component(var self: entity, var type: typeinfo): option<component>;
+            func get_component(self: entity, type: typeinfo): option<component>;
 
             extern("libjoyecs", "wojeapi_is_top_entity")
-            func is_top(var self: entity): bool;
+            func is_top(self: entity): bool;
 
             extern("libjoyecs", "wojeapi_is_child_of_entity")
-            func is_child_of(var self: entity, var parent: entity): bool;
+            func is_child_of(self: entity, parent: entity): bool;
 
             using entity_iter = struct {
                 m_cur_iter          : array::iterator<entity>,
@@ -938,14 +938,14 @@ R"(
             };
             namespace entity_iter
             {
-                private func create(var entitys: array<entity>)
+                private func create(entitys: array<entity>)
                 {
-                    var not_top_entities = []: array<entity>;
+                    let not_top_entities = []: array<entity>;
                     return entity_iter{
                         m_cur_iter = entitys->iter(),
-                        m_judge_func = func(var e: entity)
+                        m_judge_func = func(e: entity)
                                        {
-                                            var result = e->editor::is_top();
+                                            let result = e->editor::is_top();
                                             if (!result)
                                                 not_top_entities->add(e);
                                             return result
@@ -957,12 +957,12 @@ R"(
                     };
                 }
 
-                func childs(var self: entity_iter)
+                func childs(self: entity_iter)
                 {
-                    var parent_entity = self.m_current_entity->val();
+                    let parent_entity = self.m_current_entity->val();
                     return entity_iter{
                         m_cur_iter = self.m_all_entity_list->iter(),
-                        m_judge_func = func(var e: entity)
+                        m_judge_func = func(e: entity)
                                        {
                                             return e->is_child_of(parent_entity);
                                        },
@@ -973,13 +973,13 @@ R"(
                     };
                 }
     
-                func iter(var self: entity_iter)
+                func iter(self: entity_iter)
                 {
                     return self;
                 }
-                func next(var self: entity_iter, ref out_iter: entity_iter,ref out_entity: entity): bool
+                func next(self: entity_iter, ref out_iter: entity_iter,ref out_entity: entity): bool
                 {
-                    var current_iter = self.m_cur_iter;
+                    let current_iter = self.m_cur_iter;
                     while (current_iter->next(0, ref out_entity))
                     {
                         if (self.m_judge_func(out_entity))
@@ -993,12 +993,12 @@ R"(
                 continue_find_not_displayed_entity@
                     while (!self.m_not_top_entities->empty())
                     {
-                        var top = self.m_not_top_entities[0];
+                        let top = self.m_not_top_entities[0];
                         self.m_not_top_entities->remove(0);
 
                         if (self.m_outed_entities->find(top) == -1)
                         {
-                            for (var entity: self.m_all_entity_list)
+                            for (let entity: self.m_all_entity_list)
                             {
                                 if (top != entity && top->is_child_of(entity))
                                     // Parent finded, it's not a orphan entity.
@@ -1020,31 +1020,31 @@ R"(
 
             namespace graphic
             {
-                func get_shaders(var self: entity): array<graphic::shader>
+                func get_shaders(self: entity): array<graphic::shader>
                 {
                     extern("libjoyecs", "wojeapi_shaders_of_entity")
-                    func get_shaders_from_entity(var e: entity, var out_array: array<graphic::shader>): array<graphic::shader>;
+                    func get_shaders_from_entity(e: entity, out_array: array<graphic::shader>): array<graphic::shader>;
 
                     return get_shaders_from_entity(self, []: array<graphic::shader>);
                 }
-                func set_shaders(var self: entity, var shaders: array<graphic::shader>)
+                func set_shaders(self: entity, shaders: array<graphic::shader>)
                 {
                     extern("libjoyecs", "wojeapi_set_shaders_of_entity")
-                    func set_entity_shaders(var e: entity, var shader_list: array<graphic::shader>): array<graphic::shader>;
+                    func set_entity_shaders(e: entity, shader_list: array<graphic::shader>): array<graphic::shader>;
 
                     return set_entity_shaders(self, shaders);
                 }
 
-                func get_textures(var self: entity): map<int, graphic::texture>
+                func get_textures(self: entity): map<int, graphic::texture>
                 {
                     extern("libjoyecs", "wojeapi_textures_of_entity")
-                    func get_textures_from_entity(var e: entity, var textures: map<int, graphic::texture>): map<int, graphic::texture>;
+                    func get_textures_from_entity(e: entity, textures: map<int, graphic::texture>): map<int, graphic::texture>;
 
                     return get_textures_from_entity(self, {}: map<int, graphic::texture>);
                 }
 
                 extern("libjoyecs", "wojeapi_bind_texture_for_entity")
-                func bind_texture(var self: entity, var id: int, var tex: graphic::texture): void;
+                func bind_texture(self: entity, id: int, tex: graphic::texture): void;
             }
         }// end of namespace editor
     } // end of namespace entity
@@ -1053,25 +1053,25 @@ R"(
     namespace native_value
     {
         extern("libjoyecs", "wojeapi_native_value_int")
-        func int(var self: native_value, ref value: int): void;
+        func int(self: native_value, ref value: int): void;
 
         extern("libjoyecs", "wojeapi_native_value_float")
-        func float(var self: native_value, ref value: real): void;
+        func float(self: native_value, ref value: real): void;
 
         extern("libjoyecs", "wojeapi_native_value_float2")
-        func float2(var self: native_value, ref x: real, ref y: real): void;
+        func float2(self: native_value, ref x: real, ref y: real): void;
 
         extern("libjoyecs", "wojeapi_native_value_float3")
-        func float3(var self: native_value, ref x: real, ref y: real, ref z: real): void;
+        func float3(self: native_value, ref x: real, ref y: real, ref z: real): void;
 
         extern("libjoyecs", "wojeapi_native_value_float4")
-        func float4(var self: native_value, ref x: real, ref y: real, ref z: real, ref w: real): void;
+        func float4(self: native_value, ref x: real, ref y: real, ref z: real, ref w: real): void;
 
         extern("libjoyecs", "wojeapi_native_value_rot_euler3")
-        func euler3(var self: native_value, ref x: real, ref y: real, ref z: real): void;
+        func euler3(self: native_value, ref x: real, ref y: real, ref z: real): void;
 
         extern("libjoyecs", "wojeapi_native_value_je_string")
-        func string(var self: native_value, ref val: string): void;
+        func string(self: native_value, ref val: string): void;
 
     }
 
@@ -1083,17 +1083,17 @@ R"(
             using member_iterator = gchandle;
             namespace member_iterator
             {
-                func iter(var self: member_iterator)
+                func iter(self: member_iterator)
                 {
                     return self;
                 }
 
                 extern("libjoyecs", "wojeapi_member_iterator_next")
-                func next(var self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value): bool;
+                func next(self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value): bool;
             }
 
             extern("libjoyecs", "wojeapi_iter_components_member")
-            func iter_member(var self: component, var type: typeinfo) : member_iterator;
+            func iter_member(self: component, type: typeinfo) : member_iterator;
         }
     }
 }

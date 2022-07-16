@@ -15,7 +15,7 @@ namespace editor
         }
         namespace FileType
         {
-            func get_texture(var self: FileType)
+            func get_texture(self: FileType)
             {
                 match (self)
                 {
@@ -31,7 +31,7 @@ namespace editor
             }
         }
 
-        var FILE_TYPE_ICONS = {} : map<string, FileType>;
+        let FILE_TYPE_ICONS = {} : map<string, FileType>;
 
         func _load_default_icons()
         {
@@ -46,12 +46,12 @@ namespace editor
         }
         _load_default_icons();
 
-        private func get_file_icon_by_extern_name(var _path: PathInfo) : FileType
+        private func get_file_icon_by_extern_name(_path: PathInfo) : FileType
         {
-            static var default_path_icon 
+            static let default_path_icon 
                 = FileType::path(
                     je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/FilePath.png")->val());
-            static var default_file_icon 
+            static let default_file_icon 
                 = FileType::others(
                     je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/File.png")->val());
 
@@ -81,15 +81,15 @@ namespace editor
             type        : PathType,            // 类型，如果是目录，则还包含目录内的子项    
         };
 
-        static var current_work_path = "";        
+        static let current_work_path = "";        
 
-        func FileIcon(var path: PathInfo)
+        func FileIcon(path: PathInfo)
         {
             using je::gui;
             
             BeginGroup();
                 PushID(path.path);
-                    var clicked = ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
+                    let clicked = ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
                 PopID();
                 if (BeginDragDropSource())
                 {
@@ -109,13 +109,13 @@ namespace editor
         {
             using je::gui;
 
-            static var new_showing_path = "";
-            static var now_item_in_path = []: array<PathInfo>;
+            static let new_showing_path = "";
+            static let now_item_in_path = []: array<PathInfo>;
             if (new_showing_path != current_work_path)
             {
                 new_showing_path = current_work_path;
                 now_item_in_path->clear();
-                for (var subpath : je::filesys::path(current_work_path))
+                for (let subpath : je::filesys::path(current_work_path))
                     now_item_in_path->add(
                         PathInfo{ 
                             path = subpath,
@@ -129,7 +129,7 @@ namespace editor
             }
 
             BeginChild("files_list");
-                for (var subpath : now_item_in_path)
+                for (let subpath : now_item_in_path)
                     FileIcon(subpath);
             EndChild();
         }
@@ -141,26 +141,26 @@ namespace editor
             if (current_work_path == "")
                 current_work_path = std::exepath();
 
-            static var _root = PathInfo {
+            static let _root = PathInfo {
                     path = std::exepath(),
                     name = je::filesys::filename(std::exepath()),
                     externname = je::filesys::externname(std::exepath()),
                     type = PathType::dir(SubPath::notfetch),
                 };
 
-            func _show_paths(var path: PathInfo, var noself :bool)
+            func _show_paths(path: PathInfo, noself :bool)
             {
                 match (path.type)
                 {
                     PathType::dir(subpath)?
                     {
-                        var attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                        let attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
                                       + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
                                       + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
                         if (current_work_path == path.path)
                             attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                         
-                        var show_child = TreeNodeEx(path.name, attribute);
+                        let show_child = TreeNodeEx(path.name, attribute);
                         if (IsItemClicked() && !IsItemToggledOpen())
                             current_work_path = path.path;
 
@@ -170,14 +170,14 @@ namespace editor
                             {
                                 SubPath::subpath(itemlist)?
                                 {
-                                    for (var subpath : itemlist)
+                                    for (let subpath : itemlist)
                                         _show_paths(subpath, false);
                                 }    
                                 SubPath::notfetch?
                                 {
                                     // 当前目录的子项目尚未获取，在这里获取一下塞进去
-                                    var sublist = []: array<PathInfo>;
-                                    for (var current_subpath : je::filesys::path(path.path))
+                                    let sublist = []: array<PathInfo>;
+                                    for (let current_subpath : je::filesys::path(path.path))
                                         sublist->add(
                                             PathInfo{
                                                 path = current_subpath, 

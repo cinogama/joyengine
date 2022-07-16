@@ -38,10 +38,10 @@ func Editor_MainMenuBar()
     }
     if (BeginMenu("视图"))
     {
-        static var active_worlds_shown = false;
-        static var active_world_entities_shown = false;
-        static var active_inspector_shown = false;
-        static var active_browser_shown = false;
+        static let active_worlds_shown = false;
+        static let active_world_entities_shown = false;
+        static let active_inspector_shown = false;
+        static let active_browser_shown = false;
 
         if (MenuItem("世界列表", ref active_worlds_shown, true) && active_worlds_shown)
             launch(editor::WorldList::show, ref active_worlds_shown);
@@ -58,7 +58,7 @@ func Editor_MainMenuBar()
     }
      if (BeginMenu("脚本"))
     {
-        static var editor_opened = false;
+        static let editor_opened = false;
 
         if (MenuItem("打开快捷编辑器", ref editor_opened, true) && editor_opened)
             launch(Editor_ScriptEditor, ref editor_opened);
@@ -67,7 +67,7 @@ func Editor_MainMenuBar()
     }
     if (BeginMenu("帮助"))
     {
-        static var about_shown = false;
+        static let about_shown = false;
         if (MenuItem("关于", ref about_shown, true) && about_shown)
             je::gui::launch(Editor_Welcome, ref about_shown);
 

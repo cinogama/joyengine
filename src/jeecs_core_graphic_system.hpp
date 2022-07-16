@@ -75,14 +75,14 @@ using fout = struct {
     color : float4
 };
 
-func vert(var vdata: vin)
+func vert(vdata: vin)
 {
-    var opos = je_mvp * float4(vdata.vertex, 1.);
+    let opos = je_mvp * float4(vdata.vertex, 1.);
     return v2f{ pos = opos };
 }
-func frag(var fdata: v2f)
+func frag(fdata: v2f)
 {
-    var flashing_color = je_time->y();
+    let flashing_color = je_time->y();
     return fout{ color = float4(flashing_color, 0, flashing_color, 1) };
 }
 

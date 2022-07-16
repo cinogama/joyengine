@@ -11,7 +11,7 @@ using v2f = struct {
     uv      : float2,
 };
 
-func vert(var vdata : vin)
+func vert(vdata : vin)
 {
     return v2f{
         pos = je_mvp * float4(vdata.vertex, 1.),
@@ -23,9 +23,9 @@ using fout = struct {
     color : float4
 };
 
-var main_tex = uniform:<texture2d>("main");
+let main_tex = uniform:<texture2d>("main");
 
-func frag(var v2f : v2f)
+func frag(v2f : v2f)
 {
     return fout{
         color = texture(main_tex, v2f.uv),    

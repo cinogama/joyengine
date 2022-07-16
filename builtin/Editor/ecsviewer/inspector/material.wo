@@ -13,26 +13,26 @@ namespace editor
     {
         namespace Material
         {
-            func show_shader(var entity: je::entity, var shader: je::graphic::shader)
+            func show_shader(entity: je::entity, shader: je::graphic::shader)
             {
                 using je::gui;
 
-                var attribute = 
+                let attribute = 
                       TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
 
-                var textures = entity->editor::graphic::get_textures();
+                let textures = entity->editor::graphic::get_textures();
 
-                var show_uniforms = TreeNodeEx(shader->path(), attribute);
+                let show_uniforms = TreeNodeEx(shader->path(), attribute);
                 if (IsItemClicked() && !IsItemToggledOpen())
                 {
                     // TODO: 总得放点什么在这儿
                 }
                 if (show_uniforms)
                 {
-                    var uniforms = shader->get_uniforms();
-                    for(var name, uniform_val : uniforms)
+                    let uniforms = shader->get_uniforms();
+                    for(let name, uniform_val : uniforms)
                     {
                         if (name->beginwith("JOYENGINE_"))
                             continue; // 引擎的内置shader-uniform变量，跳过显示
@@ -51,9 +51,9 @@ namespace editor
                                 ;
                             texture(id)?
                             {
-                                var texture_path = 
+                                let texture_path = 
                                     textures->get(id)
-                                            ->map(func(var tex: je::graphic::texture){return tex->path()})
+                                            ->map(func(tex: je::graphic::texture){return tex->path()})
                                             ->valor(F"<没有绑定到通道{id}的纹理>");
                                 
                                 match (generic::DragFile(name, texture_path))
@@ -61,7 +61,7 @@ namespace editor
                                     Drag(path)?
                                     {
                                         // 拖动文件到这里，加载这个纹理，然后绑定
-                                        var new_texture = je::graphic::texture(path);
+                                        let new_texture = je::graphic::texture(path);
                                         match (new_texture)
                                         {
                                             value(tex)?
@@ -81,7 +81,7 @@ namespace editor
                     TreePop();
                 }
             }
-            func show(var cur_entity : option<je::entity>, var max_height: real)
+            func show(cur_entity : option<je::entity>, max_height: real)
             {
                 using je::gui;
 
@@ -92,7 +92,7 @@ namespace editor
                     {
                         value(current_entity)?
                         {
-                            static var ShadersTypeID = je::typeinfo("Renderer::Shaders");
+                            static let ShadersTypeID = je::typeinfo("Renderer::Shaders");
                             match (current_entity->editor::get_component(ShadersTypeID))
                             {
                                 value(shaders)?
@@ -106,8 +106,8 @@ namespace editor
                                             ;
                                     }
 
-                                    var shaders = current_entity->editor::graphic::get_shaders();
-                                    for (var shader : shaders)
+                                    let shaders = current_entity->editor::graphic::get_shaders();
+                                    for (let shader : shaders)
                                         show_shader(current_entity, shader);
                                 }
                                 none?

@@ -3,13 +3,13 @@ import je.gui;
 
 namespace generic
 {
-    func InputBox(var title:string, var shown:string, var default_value: string, var trigger:void(string))
+    func InputBox(title:string, shown:string, default_value: string, trigger:void(string))
     {
         using je::gui;
 
-        var open = true;
+        let open = true;
 
-        var text_buffer = TextBuffer(default_value);
+        let text_buffer = TextBuffer(default_value);
         while (open)
         {
             Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_NoResize

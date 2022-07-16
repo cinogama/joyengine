@@ -12,7 +12,7 @@ namespace generic
     {
         using je::gui;
 
-        var data = "", some_data_drag = false;
+        let data = "", some_data_drag = false;
         if(BeginDragDropTarget())
         {
             some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH", ref data);
@@ -23,7 +23,7 @@ namespace generic
         else
             return DragFileAction::None;
     }
-    func DragFile(var name: string, var path: string)
+    func DragFile(name: string, path: string)
     {
         using je::gui;
 
@@ -35,7 +35,7 @@ namespace generic
             // Open File dialog?
         }
 
-        var drag_result = AcceptFileForCurrentWidget();
+        let drag_result = AcceptFileForCurrentWidget();
 
         SameLine();
         Text(name);

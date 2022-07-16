@@ -10,7 +10,7 @@ namespace editor
     namespace EntityList
     {
         // 当前世界列表是否显示有当前选中的实体，如果没有就重设当前实体，防止错误的显示
-        private var _has_selected_entity = false;
+        private let _has_selected_entity = false;
 
         private func menu()
         {
@@ -27,7 +27,7 @@ namespace editor
             }
         }
 
-        private func context_menu(var entity: je::entity)
+        private func context_menu(entity: je::entity)
         {
             using je::gui;
             if (BeginPopupContextItem())
@@ -45,7 +45,7 @@ namespace editor
                     launch(generic::InputBox, "重命名实体",
                                             F"请输入新名称",
                                             entity->editor::name(),
-                                            func(var text: string){ entity->editor::name(text); });
+                                            func(text: string){ entity->editor::name(text); });
                 }
                 EndPopup();
             }
@@ -66,7 +66,7 @@ namespace editor
                 {
                     value(current_world)?
                     {
-                        var top_entity_walker = current_world->editor::top_entity_iter();
+                        let top_entity_walker = current_world->editor::top_entity_iter();
                         if (_display_entity_with_iter(top_entity_walker) == 0)
                             Text("当前世界没有实体");
                     } 
@@ -81,9 +81,9 @@ namespace editor
             return !open;
         }
 
-        private var _current_entity = option::none as option<je::entity>;
+        private let _current_entity = option::none as option<je::entity>;
 
-        func set_current_entity(var current_entity: option<je::entity>)
+        func set_current_entity(current_entity: option<je::entity>)
         {
             _current_entity = current_entity;
         }
@@ -93,20 +93,20 @@ namespace editor
             return _current_entity;
         }
 
-        private func _display_entity_with_iter(var entity_iter: je::entity::editor::entity_iter): int
+        private func _display_entity_with_iter(entity_iter: je::entity::editor::entity_iter): int
         {
             using je::gui;
 
-            var display_count = 0;
-            for (var entity : entity_iter)
+            let display_count = 0;
+            for (let entity : entity_iter)
             {
                 display_count += 1;
 
-                var entity_name = entity->editor::name();
+                let entity_name = entity->editor::name();
                 if (entity_name == "")
                     entity_name = "<匿名实体>";
 
-                var attribute = 
+                let attribute = 
                   TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -123,7 +123,7 @@ namespace editor
                         ; // 没有选中的实体，啥也不干
                 }
 
-                var shown_child = TreeNodeEx(F"{entity_name}##{entity->editor::chunk_info()}", attribute);
+                let shown_child = TreeNodeEx(F"{entity_name}##{entity->editor::chunk_info()}", attribute);
                 context_menu(entity);
                 if (IsItemClicked() && !IsItemToggledOpen())
                 {

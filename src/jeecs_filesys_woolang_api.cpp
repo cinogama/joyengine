@@ -41,37 +41,37 @@ namespace filesys
     namespace path
     {
         extern("libjoyecs", "wojeapi_filesys_path")
-        func create(var _path: string): path;
+        func create(_path: string): path;
 
-        func iter(var self: path)
+        func iter(self: path)
         {
             return self;
         }
 
         extern("libjoyecs", "wojeapi_filesys_path_next")
-        func next(var self: path, ref out_path: string): bool;
+        func next(self: path, ref out_path: string): bool;
     }
 
-    func filename(var _path: string)
+    func filename(_path: string)
     {
         _path = _path->replace("\\", "/");
         while (_path!= "" && _path->endwith("/"))
             _path = _path->sub(0, _path->len() - 1);
 
-        var find_place = _path->rfind("/");
+        let find_place = _path->rfind("/");
         return _path->sub(find_place + 1);
     }
 
-    func externname(var _path: string)
+    func externname(_path: string)
     {
-        var fname = filename(_path);
-        var fndplace = fname->rfind(".");
+        let fname = filename(_path);
+        let fndplace = fname->rfind(".");
         if (fndplace == -1)
             return "";
         return fname->sub(fname->rfind(".") + 1);
     }
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
-    func isdir(var _path: string): bool;
+    func isdir(_path: string): bool;
 }
 )";

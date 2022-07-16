@@ -3,11 +3,11 @@ import je.gui;
 
 namespace generic
 {
-    func AskFor(var title:string, var shown:string, var trigger:void())
+    func AskFor(title:string, shown:string, trigger:void())
     {
         using je::gui;
 
-        var open = true;
+        let open = true;
 
         Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_NoResize
                     + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);

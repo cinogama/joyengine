@@ -18,11 +18,11 @@ namespace editor
                 if (MenuItem("创建新世界"))
                 {
                     launch(generic::InputBox, "创建新世界", F"请输入世界的名称","New world",
-                                            func(var new_world_name: string){
+                                            func(new_world_name: string){
                                                 if (new_world_name == "")
                                                     return; // 没有给定名称，跳过创建
 
-                                                var nworld = je::universe::current()->create_world();
+                                                let nworld = je::universe::current()->create_world();
                                                 nworld->editor::name(new_world_name);
                                             });
                 }
@@ -41,8 +41,8 @@ namespace editor
                 menu();
                 if (BeginListBox("##", 200.0, 400.0))
                 {
-                    var worlds = je::universe::current()->editor::worlds_list();
-                    for (var world : worlds)
+                    let worlds = je::universe::current()->editor::worlds_list();
+                    for (let world : worlds)
                     {
                         if (Selectable(world->editor::name() + "##" + world: string))
                         {
@@ -68,7 +68,7 @@ namespace editor
             return !open;
         }
 
-        private func context_menu(var world: je::world)
+        private func context_menu(world: je::world)
         {
             using je::gui;
             if (BeginPopupContextItem())
@@ -93,7 +93,7 @@ namespace editor
                 {
                     launch(generic::InputBox, "重命名世界",
                                             F"请输入世界的新名称", "",
-                                            func(var new_name: string){
+                                            func(new_name: string){
                                                 if (new_name == "")
                                                     return; // 输入为空，直接跳过
                                                 world->editor::name(new_name);
