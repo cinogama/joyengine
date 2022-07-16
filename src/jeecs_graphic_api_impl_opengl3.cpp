@@ -573,10 +573,12 @@ void gl_clear_framebuffer_color(jegl_thread*, jegl_resource*)
 }
 void gl_clear_framebuffer(jegl_thread*, jegl_resource*)
 {
+    _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 void gl_clear_framebuffer_depth(jegl_thread*, jegl_resource*)
 {
+    _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 

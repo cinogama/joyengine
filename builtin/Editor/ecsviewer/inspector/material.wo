@@ -2,10 +2,13 @@ import woo.std;
 import je.gui;
 import je;
 
+import builtin.Editor.generic.functions;
+
 import builtin.Editor.generic.InputBox;
 import builtin.Editor.generic.AskFor;
 import builtin.Editor.generic.MsgBox;
 import builtin.Editor.generic.DragFile;
+
 
 namespace editor
 {
@@ -47,7 +50,7 @@ namespace editor
 
                 let textures = entity->editor::graphic::get_textures();
 
-                let show_uniforms = TreeNodeEx(shader->path() + "##" + index:string, attribute);
+                let show_uniforms = TreeNodeEx(utils::ShortString(shader->path(), 25) + "##" + index:string, attribute);
                 let shader_operation = show_shader_menu();
 
                 match (generic::AcceptFileForCurrentWidget())

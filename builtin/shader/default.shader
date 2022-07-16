@@ -2,7 +2,7 @@
 import je.shader;
 
 ZTEST   (OFF);
-ZWRITE(DISABLE);
+ZWRITE  (DISABLE);
 
 using VAO_STRUCT vin = struct {
     vertex  : float3,

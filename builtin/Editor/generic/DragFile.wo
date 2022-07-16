@@ -1,6 +1,8 @@
 import woo.std;
 import je.gui;
 
+import functions;
+
 namespace generic
 {
     union DragFileAction
@@ -26,10 +28,9 @@ namespace generic
     func DragFile(name: string, path: string)
     {
         using je::gui;
-
-        if (path->len() > 30)
-            path = "..." + path->sub(path->len() - 25);
       
+        path = utils::ShortString(path, 25);
+
         if (Button(path))
         {
             // Open File dialog?

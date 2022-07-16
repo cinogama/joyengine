@@ -18,6 +18,8 @@ func Editor_MainMenuBar()
 {
     using je::gui;
 
+    let show_main_menu = true;
+
     BeginMainMenuBar();
     if (BeginMenu("JoyEngine"))
     {
@@ -71,9 +73,14 @@ func Editor_MainMenuBar()
         if (MenuItem("关于", ref about_shown, true) && about_shown)
             je::gui::launch(Editor_Welcome, ref about_shown);
 
+        if (MenuItem("(DEBUG) 关闭主菜单栏"))
+            show_main_menu = false;
+
         EndMenu();
     }
     EndMainMenuBar();
+
+    return !show_main_menu;
 }
 
 // 关于信息窗口
