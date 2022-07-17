@@ -129,7 +129,9 @@ namespace jeecs_impl
         void register_member_by_id(jeecs::typing::typeid_t classid,
             const jeecs::typing::type_info* _membertype,
             const char* _member_name,
-            ptrdiff_t _member_offset)
+            ptrdiff_t _member_offset,
+            const char* (*_to_string)(const void*),
+            void (*_parse)(void*, const char*))
         {
             jeecs::typing::member_info* meminfo = jeecs::basic::create_new<jeecs::typing::member_info>();
 
@@ -139,6 +141,8 @@ namespace jeecs_impl
             meminfo->m_member_type = _membertype;
             meminfo->m_member_name = jeecs::basic::make_new_string(_member_name);
             meminfo->m_member_offset = _member_offset;
+            meminfo->m_to_string_func = _to_string;
+            meminfo->m_parse_func = _parse;
             meminfo->m_next_member = nullptr;
 
             auto** m_new_member_ptr = const_cast<jeecs::typing::member_info**>(&classtype->m_member_types);
@@ -230,9 +234,11 @@ void je_typing_unregister(
 void je_register_member(
     jeecs::typing::typeid_t         _classid,
     const jeecs::typing::type_info* _membertype,
-    const char* _member_name,
-    ptrdiff_t                       _member_offset)
+    const char*                     _member_name,
+    ptrdiff_t                       _member_offset,
+    const char* (*                  _to_string)(const void*),
+    void (*                         _parse)(void*, const char*))
 {
     jeecs_impl::type_info_holder::holder()
-        ->register_member_by_id(_classid, _membertype, _member_name, _member_offset);
+        ->register_member_by_id(_classid, _membertype, _member_name, _member_offset, _to_string, _parse);
 }

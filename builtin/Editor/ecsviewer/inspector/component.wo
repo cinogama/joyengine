@@ -10,8 +10,8 @@ namespace editor::Inspector::Component
     let _type_widget_methods = {}: map<je::typeinfo, void(string, je::native_value)>;
             
     using component_chain = struct{
-        m_map:                map<string, component_chain>,
-        m_component_type:    option<je::typeinfo>,
+        m_map:              map<string, component_chain>,
+        m_component_type:   option<je::typeinfo>,
     };
 
     func show(cur_entity: option<je::entity>, max_height: real)
@@ -165,12 +165,10 @@ namespace editor::Inspector::Component
         using je::gui;
 
         if (_type_widget_methods->contain(type))
-        {
-            let method = _type_widget_methods[type];
-            method(name, addr);
-        }
+            _type_widget_methods[type](name, addr);
         else
         {
+            // TODO: 使用默认的 to_string 方法？
             Text(name);
             SameLine();
             Text("<没有合适的控件以展示此值>");

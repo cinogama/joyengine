@@ -221,8 +221,10 @@ JE_API void je_typing_unregister(
 JE_API void je_register_member(
     jeecs::typing::typeid_t         _classid,
     const jeecs::typing::type_info* _membertype,
-    const char* _member_name,
-    ptrdiff_t                       _member_offset);
+    const char*                     _member_name,
+    ptrdiff_t                       _member_offset,
+    const char* (*                  _to_string)(const void*),
+    void (*                         _parse)(void*, const char*));
 
 ////////////////////// ARCH //////////////////////
 
@@ -720,45 +722,6 @@ namespace jeecs
         {
             je_log(JE_LOG_FATAL, format, args...);
         }
-
-        static std::string dump_entity_editor_information(const jeecs::game_entity& e)
-        {
-#ifdef JE_ENABLE_DEBUG_API
-            if (e.valid())
-            {
-                // Get all components.
-                const typing::type_info** component_types = jedbg_get_all_components_from_entity(&e);
-
-                std::string result = "{";
-                bool first_component = true;
-                for (auto** cur_component = component_types; *cur_component; ++cur_component)
-                {
-                    if (first_component)
-                    {
-                        first_component = false;
-                        result += ",";
-                    }
-
-                    const typing::type_info* type = *cur_component;
-                    result += std::string("\"") + type->m_typename + "\":{";
-
-                    type->m_member_types->to_string;
-                        // TODO: Store all member datas.
-
-                    result += "}";
-                }
-                result += "}";
-                je_mem_free(component_types);
-
-                return result;
-            }
-            else
-                debug::log_error("Current entity is invalid when dumping editor informations.");
-#else
-            debug::log_error("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
-#endif
-            return "";
-        }
     }
 
     namespace basic
@@ -811,6 +774,13 @@ namespace jeecs
             char* str = (char*)je_mem_alloc(str_length + 1);
             memcpy(str, _str, str_length + 1);
 
+            return str;
+        }
+
+        inline std::string make_cpp_string(const char* _str)
+        {
+            std::string str = _str;
+            je_mem_free((void*)_str);
             return str;
         }
 
@@ -883,6 +853,15 @@ namespace jeecs
                     new(_ptr)T(std::move(*(T*)_be_moved_ptr));
                 else
                     debug::log_fatal("This type: '%s' is not move-constructible but you try to do it.");
+            }
+            static const char* to_string(const void* _ptr)
+            {
+                debug::log_fatal("This type: '%s' have no function named 'to_string'.");
+                return basic::make_new_string("");
+            }
+            static void parse(void* _ptr, const char* _memb)
+            {
+                debug::log_fatal("This type: '%s' have no function named 'parse'.");
             }
         };
 
@@ -1246,6 +1225,9 @@ namespace jeecs
             const type_info* m_member_type;
             ptrdiff_t m_member_offset;
 
+            const char* (*m_to_string_func)(const void*);
+            void (*m_parse_func)(void*, const char*);
+
             member_info* m_next_member;
         };
 
@@ -1255,9 +1237,14 @@ namespace jeecs
             const type_info* membt = type_info::of<MemberT>(nullptr);
             assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
 
-
             ptrdiff_t member_offset = reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
-            je_register_member(type_info::id<ClassT>(), membt, membname, member_offset);
+            je_register_member(
+                type_info::id<ClassT>(), 
+                membt,
+                membname,
+                member_offset,
+                basic::default_functions<MemberT>::to_string,
+                basic::default_functions<MemberT>::parse);
         }
     }
 
@@ -1983,6 +1970,48 @@ namespace jeecs
             return je_ecs_universe_destroy(universe.handle());
         }
     };
+
+    namespace editor
+    {
+        static std::string dump_entity_editor_information(const jeecs::game_entity& e)
+        {
+#ifdef JE_ENABLE_DEBUG_API
+            if (e.valid())
+            {
+                // Get all components.
+                const typing::type_info** component_types = jedbg_get_all_components_from_entity(&e);
+
+                std::string result = "{";
+                bool first_component = true;
+                for (auto** cur_component = component_types; *cur_component; ++cur_component)
+                {
+                    if (first_component)
+                    {
+                        first_component = false;
+                        result += ",";
+                    }
+
+                    const typing::type_info* type = *cur_component;
+                    result += std::string("\"") + type->m_typename + "\":{\"";
+
+                    result += basic::make_cpp_string(type->m_member_types->m_member_name) + "\":\"";
+                    // TODO: Store all member datas.
+
+                    result += "}";
+                }
+                result += "}";
+                je_mem_free(component_types);
+
+                return result;
+            }
+            else
+                debug::log_error("Current entity is invalid when dumping editor informations.");
+#else
+            debug::log_error("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
+#endif
+            return "";
+        }
+    }
 
     template<typename T>
     inline T* game_entity::get_component()const noexcept
