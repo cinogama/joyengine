@@ -691,6 +691,9 @@ JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
 JE_API jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
+JE_API const jeecs::typing::type_info** jedbg_get_attached_system_types_in_world(void* _world);
+
+// NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
 
 JE_API void jedbg_set_editor_universe(void* universe_handle);
@@ -707,6 +710,292 @@ namespace jeecs
     TYPE(TYPE &&)       = delete;\
     TYPE& operator = (const TYPE &) = delete;\
     TYPE& operator = (TYPE &&) = delete;
+
+    template<typename ElemT>
+    class vector
+    {
+        ElemT* _elems_ptr_begin = nullptr;
+        ElemT* _elems_ptr_end = nullptr;
+        ElemT* _elems_buffer_end = nullptr;
+
+        static constexpr size_t _single_elem_size = sizeof(ElemT);
+
+        inline static size_t _move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
+        {
+            for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
+            {
+                new(to_begin++)ElemT(std::move(*(origin_elem++)));
+            }
+
+            return (size_t)(from_end - from_begin);
+        }
+
+        inline static size_t _copy(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
+        {
+            for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
+            {
+                new(to_begin++)ElemT(*(origin_elem++));
+            }
+
+            return (size_t)(from_end - from_begin);
+        }
+
+        inline static size_t _erase(ElemT* from_begin, ElemT* from_end)noexcept
+        {
+            if constexpr (!std::is_trivial<ElemT>::value)
+            {
+                for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
+                {
+                    (origin_elem++)->~ElemT();
+                }
+            }
+
+            return (size_t)(from_end - from_begin);
+        }
+
+        inline void _reserve(size_t elem_reserving_count)
+        {
+            const size_t _pre_reserved_count = (size_t)(_elems_buffer_end - _elems_ptr_begin);
+            if (elem_reserving_count > _pre_reserved_count)
+            {
+                ElemT* new_reserved_begin = (ElemT*)je_mem_alloc(elem_reserving_count * _single_elem_size);
+                _elems_buffer_end = new_reserved_begin + elem_reserving_count;
+
+                _elems_ptr_end = new_reserved_begin + _move(new_reserved_begin, _elems_ptr_begin, _elems_ptr_end);
+                je_mem_free(_elems_ptr_begin);
+                _elems_ptr_begin = new_reserved_begin;
+            }
+        }
+
+        inline void _assure(size_t assure_sz)
+        {
+            if (assure_sz > reserved_size())
+                _reserve(2 * assure_sz);
+        }
+
+    public:
+        vector()noexcept
+        {
+        }
+
+        ~vector()
+        {
+            clear();
+            je_mem_free(_elems_ptr_begin);
+        }
+
+        vector(const vector& another_list)
+        {
+            _reserve(another_list.size());
+            _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
+        }
+
+        vector(ElemT* ptr, size_t length)
+        {
+            _elems_ptr_begin = ptr;
+            _elems_ptr_end = _elems_buffer_end = _elems_ptr_begin + length;
+        }
+
+        vector(vector&& another_list)
+        {
+            _elems_ptr_begin = another_list._elems_ptr_begin;
+            _elems_ptr_end = another_list._elems_ptr_end;
+            _elems_buffer_end = another_list._elems_buffer_end;
+
+            another_list._elems_ptr_begin =
+                another_list._elems_ptr_end =
+                another_list._elems_buffer_end = nullptr;
+        }
+
+        inline vector& operator = (const vector& another_list)
+        {
+            _reserve(another_list.size());
+            _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
+
+            return *this;
+        }
+
+        inline vector& operator = (vector&& another_list)
+        {
+            clear();
+            je_mem_free(_elems_ptr_begin);
+
+            _elems_ptr_begin = another_list._elems_ptr_begin;
+            _elems_ptr_end = another_list._elems_ptr_end;
+            _elems_buffer_end = another_list._elems_buffer_end;
+
+            another_list._elems_ptr_begin =
+                another_list._elems_ptr_end =
+                another_list._elems_buffer_end = nullptr;
+
+            return *this;
+        }
+
+        inline size_t size() const noexcept
+        {
+            return _elems_ptr_end - _elems_ptr_begin;
+        }
+        inline size_t reserved_size() const noexcept
+        {
+            return _elems_buffer_end - _elems_ptr_begin;
+        }
+        inline void clear()noexcept
+        {
+            _erase(_elems_ptr_begin, _elems_ptr_end);
+            _elems_ptr_end = _elems_ptr_begin;
+        }
+        inline void push_back(const ElemT& _e)
+        {
+            _assure(size() + 1);
+            new (_elems_ptr_end++) ElemT(_e);
+        }
+        inline void pop_back()noexcept
+        {
+            if constexpr (!std::is_trivial<ElemT>::value)
+                (_elems_ptr_end--)->~ElemT();
+            else
+                _elems_ptr_end--;
+        }
+
+        inline auto begin() const noexcept->ElemT*
+        {
+            return _elems_ptr_begin;
+        }
+
+        inline auto end() const noexcept->ElemT*
+        {
+            return _elems_ptr_end;
+        }
+
+        inline void erase(size_t index)
+        {
+            _elems_ptr_begin[index].~ElemT();
+            _move(_elems_ptr_begin + index, _elems_ptr_begin + index + 1, _elems_ptr_end--);
+        }
+
+        inline void erase_data(const ElemT& data)
+        {
+            auto fnd_place = std::find(begin(), end(), data);
+            if (fnd_place != end())
+                erase(fnd_place - begin());
+        }
+
+        ElemT* data()const noexcept
+        {
+            return _elems_ptr_begin;
+        }
+
+        ElemT& operator[](size_t index)const noexcept
+        {
+            return _elems_ptr_begin[index];
+        }
+    };
+
+    class string
+    {
+        char* _c_str = nullptr;
+        size_t _str_len = 0;
+        size_t _buf_len = 0;
+
+        inline void _reserve(size_t buf_sz)
+        {
+            if (buf_sz > _buf_len)
+            {
+                _buf_len = buf_sz + 1;
+                _c_str = (char*)je_mem_realloc(_c_str, _buf_len);
+            }
+        }
+
+    public:
+
+        ~string()
+        {
+            je_mem_free(_c_str);
+        }
+
+        string()noexcept
+        {
+            _reserve(1);
+        }
+
+        string(const string& str)noexcept
+            :string(str.c_str())
+        {
+        }
+
+        string(const std::string& str)noexcept
+            :string(str.c_str())
+        {
+        }
+
+        string(string&& str)noexcept
+            :_c_str(str._c_str)
+            , _buf_len(str._buf_len)
+            , _str_len(str._str_len)
+        {
+            str._c_str = 0;
+            str._buf_len = 0;
+            str._str_len = 0;
+        }
+
+        string(const char* str) noexcept
+            : _str_len(strlen(str))
+        {
+            _reserve(_str_len + 1);
+            memcpy(_c_str, str, _str_len);
+        }
+
+        inline string& operator=(const string& str) noexcept
+        {
+            return *this = str.c_str();
+        }
+
+        inline string& operator=(string&& str) noexcept
+        {
+            je_mem_free(_c_str);
+
+            _c_str = str._c_str;
+            _buf_len = str._buf_len;
+            _str_len = str._str_len;
+
+            str._c_str = 0;
+            str._buf_len = 0;
+            str._str_len = 0;
+
+            return *this;
+        }
+
+        inline string& operator=(const std::string& str)
+        {
+            return *this = str.c_str();
+        }
+
+        inline string& operator=(const char* str)
+        {
+            _reserve((_str_len = strlen(str)) + 1);
+            memcpy(_c_str, str, _str_len);
+            return *this;
+        }
+
+        operator std::string()const
+        {
+            return c_str();
+        }
+
+        /*string substr(size_t from, size_t count = (size_t)(-1))const
+        {
+            return  std::string(c_str()).substr(from, count);
+        }*/
+        size_t size()const
+        {
+            return _str_len;
+        }
+        const char* c_str()const
+        {
+            _c_str[_str_len] = 0;
+            return _c_str;
+        }
+    };
 
     namespace debug
     {
@@ -816,6 +1105,10 @@ namespace jeecs
         {
             return make_new_string(_str.c_str());
         }
+        inline char* make_new_string(const jeecs::string& _str)
+        {
+            return make_new_string(_str.c_str());
+        }
 
         inline std::string make_cpp_string(const char* _str)
         {
@@ -898,7 +1191,9 @@ namespace jeecs
             }
             static const char* to_string(const void* _ptr)
             {
-                if constexpr (typing::sfinae_has_to_string<T>::value)
+                if constexpr (std::is_convertible<T, std::string>::value)
+                    return basic::make_new_string(*(const T*)_ptr);
+                else if constexpr (typing::sfinae_has_to_string<T>::value)
                     return basic::make_new_string(((const T*)_ptr)->to_string());
                 else if constexpr (std::is_fundamental<T>::value)
                 {
@@ -918,7 +1213,9 @@ namespace jeecs
             }
             static void parse(void* _ptr, const char* _memb)
             {
-                if constexpr (typing::sfinae_has_parse<T>::value)
+                if constexpr (std::is_convertible<const char*, T>::value)
+                    *(T*)_ptr = _memb;
+                else if constexpr (typing::sfinae_has_parse<T>::value)
                     ((T*)_ptr)->parse(_memb);
                 else if constexpr (std::is_fundamental<T>::value)
                 {
@@ -2311,6 +2608,19 @@ namespace jeecs
 
             }*/
 
+            inline std::string to_string()const
+            {
+                std::string result;
+                std::stringstream ss;
+                ss << "(" << x << "," << y << ")";
+                ss >> result;
+
+                return result;
+            }
+            inline void parse(const std::string& str)
+            {
+                sscanf(str.c_str(), "(%f,%f)", &x, &y);
+            }
         };
         inline static constexpr vec2 operator * (float _f, const vec2& _v2) noexcept
         {
@@ -2447,6 +2757,19 @@ namespace jeecs
                     x * _v3.y - y * _v3.x);
             }
 
+            inline std::string to_string()const
+            {
+                std::string result;
+                std::stringstream ss;
+                ss << "(" << x << "," << y << "," << z << ")";
+                ss >> result;
+
+                return result;
+            }
+            inline void parse(const std::string& str)
+            {
+                sscanf(str.c_str(), "(%f,%f,%f)", &x, &y, &z);
+            }
         };
         inline static constexpr vec3 operator * (float _f, const vec3& _v3) noexcept
         {
@@ -2585,7 +2908,19 @@ namespace jeecs
             /*inline constexpr vec4 cross(const vec4& _v4) const noexcept
             {
             }*/
+            inline std::string to_string()const
+            {
+                std::string result;
+                std::stringstream ss;
+                ss << "(" << x << "," << y << "," << z << "," << w << ")";
+                ss >> result;
 
+                return result;
+            }
+            inline void parse(const std::string& str)
+            {
+                sscanf(str.c_str(), "(%f,%f,%f,%f)", &x, &y, &z,&w);
+            }
         };
         inline static constexpr vec4 operator * (float _f, const vec4& _v4) noexcept
         {
@@ -2846,6 +3181,19 @@ namespace jeecs
                     + (w * w - u.dot(u)) * _v3
                     + 2.0f * w * u.cross(_v3);
             }
+            inline std::string to_string()const
+            {
+                std::string result;
+                std::stringstream ss;
+                ss << "(" << x << "," << y << "," << z << "," << w << ")";
+                ss >> result;
+
+                return result;
+            }
+            inline void parse(const std::string& str)
+            {
+                sscanf(str.c_str(), "(%f,%f,%f,%f)", &x, &y, &z, &w);
+            }
         };
     }
 
@@ -3079,292 +3427,6 @@ namespace jeecs
             m[3][3] = 0;
         }
     }
-
-    template<typename ElemT>
-    class vector
-    {
-        ElemT* _elems_ptr_begin = nullptr;
-        ElemT* _elems_ptr_end = nullptr;
-        ElemT* _elems_buffer_end = nullptr;
-
-        static constexpr size_t _single_elem_size = sizeof(ElemT);
-
-        inline static size_t _move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
-        {
-            for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
-            {
-                new(to_begin++)ElemT(std::move(*(origin_elem++)));
-            }
-
-            return (size_t)(from_end - from_begin);
-        }
-
-        inline static size_t _copy(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
-        {
-            for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
-            {
-                new(to_begin++)ElemT(*(origin_elem++));
-            }
-
-            return (size_t)(from_end - from_begin);
-        }
-
-        inline static size_t _erase(ElemT* from_begin, ElemT* from_end)noexcept
-        {
-            if constexpr (!std::is_trivial<ElemT>::value)
-            {
-                for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
-                {
-                    (origin_elem++)->~ElemT();
-                }
-            }
-
-            return (size_t)(from_end - from_begin);
-        }
-
-        inline void _reserve(size_t elem_reserving_count)
-        {
-            const size_t _pre_reserved_count = (size_t)(_elems_buffer_end - _elems_ptr_begin);
-            if (elem_reserving_count > _pre_reserved_count)
-            {
-                ElemT* new_reserved_begin = (ElemT*)je_mem_alloc(elem_reserving_count * _single_elem_size);
-                _elems_buffer_end = new_reserved_begin + elem_reserving_count;
-
-                _elems_ptr_end = new_reserved_begin + _move(new_reserved_begin, _elems_ptr_begin, _elems_ptr_end);
-                je_mem_free(_elems_ptr_begin);
-                _elems_ptr_begin = new_reserved_begin;
-            }
-        }
-
-        inline void _assure(size_t assure_sz)
-        {
-            if (assure_sz > reserved_size())
-                _reserve(2 * assure_sz);
-        }
-
-    public:
-        vector()noexcept
-        {
-        }
-
-        ~vector()
-        {
-            clear();
-            je_mem_free(_elems_ptr_begin);
-        }
-
-        vector(const vector& another_list)
-        {
-            _reserve(another_list.size());
-            _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
-        }
-
-        vector(ElemT* ptr, size_t length)
-        {
-            _elems_ptr_begin = ptr;
-            _elems_ptr_end = _elems_buffer_end = _elems_ptr_begin + length;
-        }
-
-        vector(vector&& another_list)
-        {
-            _elems_ptr_begin = another_list._elems_ptr_begin;
-            _elems_ptr_end = another_list._elems_ptr_end;
-            _elems_buffer_end = another_list._elems_buffer_end;
-
-            another_list._elems_ptr_begin =
-                another_list._elems_ptr_end =
-                another_list._elems_buffer_end = nullptr;
-        }
-
-        inline vector& operator = (const vector& another_list)
-        {
-            _reserve(another_list.size());
-            _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
-
-            return *this;
-        }
-
-        inline vector& operator = (vector&& another_list)
-        {
-            clear();
-            je_mem_free(_elems_ptr_begin);
-
-            _elems_ptr_begin = another_list._elems_ptr_begin;
-            _elems_ptr_end = another_list._elems_ptr_end;
-            _elems_buffer_end = another_list._elems_buffer_end;
-
-            another_list._elems_ptr_begin =
-                another_list._elems_ptr_end =
-                another_list._elems_buffer_end = nullptr;
-
-            return *this;
-        }
-
-        inline size_t size() const noexcept
-        {
-            return _elems_ptr_end - _elems_ptr_begin;
-        }
-        inline size_t reserved_size() const noexcept
-        {
-            return _elems_buffer_end - _elems_ptr_begin;
-        }
-        inline void clear()noexcept
-        {
-            _erase(_elems_ptr_begin, _elems_ptr_end);
-            _elems_ptr_end = _elems_ptr_begin;
-        }
-        inline void push_back(const ElemT& _e)
-        {
-            _assure(size() + 1);
-            new (_elems_ptr_end++) ElemT(_e);
-        }
-        inline void pop_back()noexcept
-        {
-            if constexpr (!std::is_trivial<ElemT>::value)
-                (_elems_ptr_end--)->~ElemT();
-            else
-                _elems_ptr_end--;
-        }
-
-        inline auto begin() const noexcept->ElemT*
-        {
-            return _elems_ptr_begin;
-        }
-
-        inline auto end() const noexcept->ElemT*
-        {
-            return _elems_ptr_end;
-        }
-
-        inline void erase(size_t index)
-        {
-            _elems_ptr_begin[index].~ElemT();
-            _move(_elems_ptr_begin + index, _elems_ptr_begin + index + 1, _elems_ptr_end--);
-        }
-
-        inline void erase_data(const ElemT& data)
-        {
-            auto fnd_place = std::find(begin(), end(), data);
-            if (fnd_place != end())
-                erase(fnd_place - begin());
-        }
-
-        ElemT* data()const noexcept
-        {
-            return _elems_ptr_begin;
-        }
-
-        ElemT& operator[](size_t index)const noexcept
-        {
-            return _elems_ptr_begin[index];
-        }
-    };
-
-    class string
-    {
-        char* _c_str = nullptr;
-        size_t _str_len = 0;
-        size_t _buf_len = 0;
-
-        inline void _reserve(size_t buf_sz)
-        {
-            if (buf_sz > _buf_len)
-            {
-                _buf_len = buf_sz + 1;
-                _c_str = (char*)je_mem_realloc(_c_str, _buf_len);
-            }
-        }
-
-    public:
-
-        ~string()
-        {
-            je_mem_free(_c_str);
-        }
-
-        string()noexcept
-        {
-            _reserve(1);
-        }
-
-        string(const string& str)noexcept
-            :string(str.c_str())
-        {
-        }
-
-        string(const std::string& str)noexcept
-            :string(str.c_str())
-        {
-        }
-
-        string(string&& str)noexcept
-            :_c_str(str._c_str)
-            , _buf_len(str._buf_len)
-            , _str_len(str._str_len)
-        {
-            str._c_str = 0;
-            str._buf_len = 0;
-            str._str_len = 0;
-        }
-
-        string(const char* str) noexcept
-            : _str_len(strlen(str))
-        {
-            _reserve(_str_len + 1);
-            memcpy(_c_str, str, _str_len);
-        }
-
-        inline string& operator=(const string& str) noexcept
-        {
-            return *this = str.c_str();
-        }
-
-        inline string& operator=(string&& str) noexcept
-        {
-            je_mem_free(_c_str);
-
-            _c_str = str._c_str;
-            _buf_len = str._buf_len;
-            _str_len = str._str_len;
-
-            str._c_str = 0;
-            str._buf_len = 0;
-            str._str_len = 0;
-
-            return *this;
-        }
-
-        inline string& operator=(const std::string& str)
-        {
-            return *this = str.c_str();
-        }
-
-        inline string& operator=(const char* str)
-        {
-            _reserve((_str_len = strlen(str)) + 1);
-            memcpy(_c_str, str, _str_len);
-            return *this;
-        }
-
-        operator std::string()const
-        {
-            return c_str();
-        }
-
-        /*string substr(size_t from, size_t count = (size_t)(-1))const
-        {
-            return  std::string(c_str()).substr(from, count);
-        }*/
-        size_t size()const
-        {
-            return _str_len;
-        }
-        const char* c_str()const
-        {
-            _c_str[_str_len] = 0;
-            return _c_str;
-        }
-    };
 
     namespace Transform
     {

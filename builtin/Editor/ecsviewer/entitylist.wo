@@ -2,8 +2,8 @@ import woo.std;
 import je.gui;
 import je;
 
-import builtin.Editor.generic.InputBox;
-import builtin.Editor.generic.AskFor;
+import builtin.Editor.generic.form.inputbox;
+import builtin.Editor.generic.form.askfor;
 
 namespace editor::EntityList
 {

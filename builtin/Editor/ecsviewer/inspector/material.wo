@@ -4,10 +4,10 @@ import je;
 
 import builtin.Editor.generic.functions;
 
-import builtin.Editor.generic.InputBox;
-import builtin.Editor.generic.AskFor;
-import builtin.Editor.generic.MsgBox;
-import builtin.Editor.generic.DragFile;
+import builtin.Editor.generic.form.inputbox;
+import builtin.Editor.generic.form.askfor;
+import builtin.Editor.generic.form.msgbox;
+import builtin.Editor.generic.widget.dragfile;
 
 
 namespace editor::Inspector::Material

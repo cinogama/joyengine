@@ -11,8 +11,9 @@ import system.browser;
 
 import script_editor;
 
-import generic.AskFor;
-
+import generic.form.askfor;
+import generic.serialize;
+                    
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
 {
@@ -73,8 +74,21 @@ func Editor_MainMenuBar()
         if (MenuItem("关于", ref about_shown, true) && about_shown)
             je::gui::launch(Editor_Welcome, ref about_shown);
 
-        if (MenuItem("(DEBUG) 关闭主菜单栏"))
+        EndMenu();
+    }
+    if (BeginMenu("DEBUG"))
+    {
+        if (MenuItem("关闭主菜单栏"))
             show_main_menu = false;
+
+        if (MenuItem("序列化当前世界"))
+            match (je::world::rend())
+            {
+                value(w)?
+                    std::println(utils::serialize(w));
+                none?
+                    std::println("序列化个锤子！没有世界！");
+            }
 
         EndMenu();
     }

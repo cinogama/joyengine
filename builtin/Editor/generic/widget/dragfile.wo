@@ -1,7 +1,7 @@
 import woo.std;
 import je.gui;
 
-import functions;
+import builtin.Editor.generic.functions;
 
 namespace generic
 {

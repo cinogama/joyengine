@@ -35,7 +35,7 @@ WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t
             wo_set_pointer(wo_arr_add(out_array, nullptr), *(worldlist++));
     }
     je_mem_free(result);
-    return wo_ret_void(vm);
+    return wo_ret_val(vm, out_array);
 }
 
 // ECS WORLD
@@ -77,6 +77,20 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
             });
     }
     je_mem_free(entities);
+
+    return wo_ret_val(vm, out_arr);
+}
+
+WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value out_arr = args + 1;
+
+    auto systems = jedbg_get_attached_system_types_in_world(wo_pointer(args + 0));
+    auto system_iter = systems;
+    while (*system_iter)
+        wo_set_pointer(wo_arr_add(out_arr, nullptr), (void*)*(system_iter++));
+
+    je_mem_free(systems);
 
     return wo_ret_val(vm, out_arr);
 }
@@ -832,12 +846,9 @@ namespace je
             func worlds_list(self: universe)
             {
                 extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
-                func _get_all_worlds(universe:universe, out_arrs:array<world>) : void;
+                func _get_all_worlds(universe:universe, out_arrs:array<world>) : array<world>;
 
-                let result = []:array<world>;
-                _get_all_worlds(self, result);
-
-                return result;
+                return _get_all_worlds(self, []:array<world>);
             }
 
             extern("libjoyecs", "wojeapi_get_shared_system_attached_world")
@@ -884,6 +895,19 @@ namespace je
 
                 let result = []: array<entity>;
                 return _get_all_entities_from_world(self, result);
+            }
+
+            extern("libjoyecs", "wojeapi_get_all_systems_from_world")
+                private func _get_systems_from_world(self: world, out_result: array<typeinfo>): array<typeinfo>;
+
+            func get_systems_types(self: world): array<typeinfo>
+            {
+                return _get_systems_from_world(self, []: array<typeinfo>);
+            }
+
+            func get_shared_systems_types(): array<typeinfo>
+            {
+                return _get_systems_from_world(0x0000H: world, []: array<typeinfo>);
             }
 
             func top_entity_iter(self: world): entity::editor::entity_iter

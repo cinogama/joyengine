@@ -1772,6 +1772,18 @@ namespace jeecs_impl
             _m_stored_systems[world].push_back(stored_system_instance{ system_instacne,system_type, world });
         }
 
+        std::vector<const jeecs::typing::type_info*> get_stored_system_of_world(ecs_world* world)
+        {
+            std::lock_guard g1(_m_stored_systems_mx);
+            auto& stored_systems = _m_stored_systems[world];
+
+            std::vector<const jeecs::typing::type_info*> result(stored_systems.size());
+            for (size_t i = 0; i < result.size(); ++i)
+                result[i] = stored_systems[i].m_system_typeinfo;
+
+            return result;
+        }
+
         void attach_shared_system_to_world(ecs_world* world, const jeecs::typing::type_info* system_type)
         {
             std::lock_guard g1(_m_stored_systems_mx);
@@ -2109,6 +2121,25 @@ jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world)
     return out_result;
 }
 
+// NOTE: need free the return result by 'je_mem_free'
+const jeecs::typing::type_info** jedbg_get_attached_system_types_in_world(void* _world)
+{
+    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)_world;
+
+    auto&& stored_systems = world 
+        ? world->get_universe()->get_stored_system_of_world(world)
+        : ((jeecs_impl::ecs_universe*)jedbg_get_editor_universe())
+        ->get_stored_system_of_world(world);
+
+    const jeecs::typing::type_info** outresult = (const jeecs::typing::type_info**)je_mem_alloc(
+        sizeof(const jeecs::typing::type_info*) * (stored_systems.size() + 1));
+
+    memcpy(outresult, stored_systems.data(), sizeof(const jeecs::typing::type_info*) * stored_systems.size());
+    outresult[stored_systems.size()] = nullptr;
+
+    return outresult;
+}
+
 const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity)
 {
     auto* cur_chunk = (const jeecs_impl::arch_type::arch_chunk*)_entity->_m_in_chunk;
@@ -2116,7 +2147,7 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeec
 
     const jeecs::typing::type_info** outresult = (const jeecs::typing::type_info**)je_mem_alloc(
         sizeof(const jeecs::typing::type_info*) * (cur_arch_type_infos.size() + 1));
-    
+
     auto write_result = outresult;
     for (auto* typeinfo : cur_arch_type_infos)
     {
@@ -2125,8 +2156,8 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeec
     *write_result = nullptr;
 
     // Sort by id.
-    std::sort(outresult, write_result, 
-        [](const jeecs::typing::type_info* a, const jeecs::typing::type_info*b) {
+    std::sort(outresult, write_result,
+        [](const jeecs::typing::type_info* a, const jeecs::typing::type_info* b) {
             return a->m_id < b->m_id;
         });
 
