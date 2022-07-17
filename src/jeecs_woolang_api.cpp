@@ -378,6 +378,26 @@ WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t ar
 
     return wo_ret_void(vm);
 }
+
+WO_API wo_api wojeapi_native_value_je_to_string(wo_vm vm, wo_value args, size_t argc)
+{
+    void* native_val = wo_pointer(args + 0);
+    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+
+    return wo_ret_string(vm, jeecs::basic::make_cpp_string(component_type->m_to_string(native_val)).c_str());
+}
+
+WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc)
+{
+    void* native_val = wo_pointer(args + 0);
+    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+    wo_string_t str = wo_string(args + 2);
+
+    component_type->m_parse(native_val, str);
+
+    return wo_ret_void(vm);
+}
+
 ///////////////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
@@ -657,7 +677,6 @@ WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args, size_t argc)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in texture >");
 }
-
 
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
@@ -1069,6 +1088,12 @@ R"(
         extern("libjoyecs", "wojeapi_native_value_je_string")
         func string(self: native_value, ref val: string): void;
 
+
+        extern("libjoyecs", "wojeapi_native_value_je_to_string")
+        func to_string(self: native_value, types: typeinfo): string; 
+
+        extern("libjoyecs", "wojeapi_native_value_je_parse")
+        func parse(self: native_value, types: typeinfo, str: string): void; 
     }
 
     using component = handle;

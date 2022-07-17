@@ -169,9 +169,10 @@ namespace editor::Inspector::Component
         else
         {
             // TODO: 使用默认的 to_string 方法？
-            Text(name);
-            SameLine();
-            Text("<没有合适的控件以展示此值>");
+
+            let data_str = addr->to_string(type);
+            if (InputText(name, ref data_str))
+                addr->parse(type, data_str);
         }
     }
 

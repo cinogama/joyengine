@@ -30,6 +30,7 @@
 #include <random>
 #include <thread>
 #include <type_traits>
+#include <sstream>
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -71,8 +72,9 @@ namespace jeecs
         using destruct_func_t = void(*)(void*);
         using copy_func_t = void(*)(void*, const void*);
         using move_func_t = void(*)(void*, void*);
-        using to_string_func_t = const char* (*)(void*);
+        using to_string_func_t = const char* (*)(const void*);
         using parse_func_t = void(*)(void*, const char*);
+
 
         using entity_id_in_chunk_t = size_t;
         using version_t = size_t;
@@ -101,6 +103,17 @@ namespace jeecs
             inline bool operator == (const uuid& uid) const noexcept
             {
                 return a == uid.a && b == uid.b;
+            }
+
+            inline std::string to_string() const
+            {
+                char buf[sizeof(a) * 2 + sizeof(b) * 2 + 2];
+                snprintf(buf, sizeof(buf), "%016llX-%016llX", a, b);
+                return buf;
+            }
+            inline void parse(const std::string& buf)
+            {
+                sscanf(buf.c_str(), "%llX-%llX", &a, &b);
             }
         };
 
@@ -207,6 +220,8 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::destruct_func_t  _destructor,
     jeecs::typing::copy_func_t      _copier,
     jeecs::typing::move_func_t      _mover,
+    jeecs::typing::to_string_func_t _to_string,
+    jeecs::typing::parse_func_t     _parse,
     je_typing_class                 _typecls);
 
 JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
@@ -221,10 +236,8 @@ JE_API void je_typing_unregister(
 JE_API void je_register_member(
     jeecs::typing::typeid_t         _classid,
     const jeecs::typing::type_info* _membertype,
-    const char*                     _member_name,
-    ptrdiff_t                       _member_offset,
-    const char* (*                  _to_string)(const void*),
-    void (*                         _parse)(void*, const char*));
+    const char* _member_name,
+    ptrdiff_t                       _member_offset);
 
 ////////////////////// ARCH //////////////////////
 
@@ -724,6 +737,29 @@ namespace jeecs
         }
     }
 
+    namespace typing
+    {
+        template<typename T, typename VoidT = void>
+        struct sfinae_has_to_string : std::false_type
+        {
+            static_assert(std::is_void<VoidT>::value);
+        };
+        template<typename T>
+        struct sfinae_has_to_string<T, std::void_t<decltype(&T::to_string)>> : std::true_type
+        {
+        };
+
+        template<typename T, typename VoidT = void>
+        struct sfinae_has_parse : std::false_type
+        {
+            static_assert(std::is_void<VoidT>::value);
+        };
+        template<typename T>
+        struct sfinae_has_parse<T, std::void_t<decltype(&T::parse)>> : std::true_type
+        {
+        };
+    }
+
     namespace basic
     {
         constexpr static size_t allign_size(size_t _origin_sz, size_t _allign_base)
@@ -775,6 +811,10 @@ namespace jeecs
             memcpy(str, _str, str_length + 1);
 
             return str;
+        }
+        inline char* make_new_string(const std::string& _str)
+        {
+            return make_new_string(_str.c_str());
         }
 
         inline std::string make_cpp_string(const char* _str)
@@ -845,23 +885,55 @@ namespace jeecs
                 if constexpr (std::is_copy_constructible<T>::value)
                     new(_ptr)T(*(const T*)_be_copy_ptr);
                 else
-                    debug::log_fatal("This type: '%s' is not copy-constructible but you try to do it.");
+                    debug::log_fatal("This type: '%s' is not copy-constructible but you try to do it."
+                        , typeid(T).name());
             }
             static void mover(void* _ptr, void* _be_moved_ptr)
             {
                 if constexpr (std::is_move_constructible<T>::value)
                     new(_ptr)T(std::move(*(T*)_be_moved_ptr));
                 else
-                    debug::log_fatal("This type: '%s' is not move-constructible but you try to do it.");
+                    debug::log_fatal("This type: '%s' is not move-constructible but you try to do it."
+                        , typeid(T).name());
             }
             static const char* to_string(const void* _ptr)
             {
-                debug::log_fatal("This type: '%s' have no function named 'to_string'.");
+                if constexpr (typing::sfinae_has_to_string<T>::value)
+                    return basic::make_new_string(((const T*)_ptr)->to_string());
+                else if constexpr (std::is_fundamental<T>::value)
+                {
+                    std::stringstream b;
+                    std::string str;
+                    b << *(const T*)_ptr;
+                    b >> str;
+                    return basic::make_new_string(str.c_str());
+                }
+
+                static auto call_once = []() {
+                    debug::log_fatal("This type: '%s' have no function named 'to_string'."
+                        , typeid(T).name());
+                    return 0;
+                }();
                 return basic::make_new_string("");
             }
             static void parse(void* _ptr, const char* _memb)
             {
-                debug::log_fatal("This type: '%s' have no function named 'parse'.");
+                if constexpr (typing::sfinae_has_parse<T>::value)
+                    ((T*)_ptr)->parse(_memb);
+                else if constexpr (std::is_fundamental<T>::value)
+                {
+                    std::stringstream b;
+                    b << _memb;
+                    b >> *(T*)_ptr;
+                }
+                else
+                {
+                    static auto call_once = []() {
+                        debug::log_fatal("This type: '%s' have no function named 'parse'."
+                            , typeid(T).name());
+                        return 0;
+                    }();
+                }
             }
         };
 
@@ -1049,10 +1121,6 @@ namespace jeecs
         struct sfinae_has_ref_register<T, std::void_t<decltype(&T::JERefRegsiter)>> : std::true_type
         {
         };
-        template<typename T>
-        struct sfinae_has_ref_register<T, std::void_t<typename T::JERefRegsiter>> : std::true_type
-        {
-        };
 
         template<typename T, typename VoidT = void>
         struct sfinae_is_static_ref_register_function : std::false_type
@@ -1079,6 +1147,8 @@ namespace jeecs
             destruct_func_t     m_destructor;
             copy_func_t         m_copier;
             move_func_t         m_mover;
+            to_string_func_t    m_to_string;
+            parse_func_t        m_parse;
 
             je_typing_class     m_type_class;
 
@@ -1131,6 +1201,8 @@ namespace jeecs
                         basic::default_functions<T>::destructor,
                         basic::default_functions<T>::copier,
                         basic::default_functions<T>::mover,
+                        basic::default_functions<T>::to_string,
+                        basic::default_functions<T>::parse,
                         current_type))
                     {
                         *first_init = true;
@@ -1225,9 +1297,6 @@ namespace jeecs
             const type_info* m_member_type;
             ptrdiff_t m_member_offset;
 
-            const char* (*m_to_string_func)(const void*);
-            void (*m_parse_func)(void*, const char*);
-
             member_info* m_next_member;
         };
 
@@ -1239,12 +1308,10 @@ namespace jeecs
 
             ptrdiff_t member_offset = reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
             je_register_member(
-                type_info::id<ClassT>(), 
+                type_info::id<ClassT>(),
                 membt,
                 membname,
-                member_offset,
-                basic::default_functions<MemberT>::to_string,
-                basic::default_functions<MemberT>::parse);
+                member_offset);
         }
     }
 
