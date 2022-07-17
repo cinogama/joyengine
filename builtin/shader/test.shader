@@ -1,4 +1,4 @@
-// Default shader, only for test.
+// test shader, only for test.
 import je.shader;
 
 ZTEST   (OFF);

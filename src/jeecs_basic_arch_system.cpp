@@ -2109,9 +2109,9 @@ jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world)
     return out_result;
 }
 
-const jeecs::typing::type_info** jedbg_get_all_components_from_entity(jeecs::game_entity* _entity)
+const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity)
 {
-    auto* cur_chunk = (jeecs_impl::arch_type::arch_chunk*)_entity->_m_in_chunk;
+    auto* cur_chunk = (const jeecs_impl::arch_type::arch_chunk*)_entity->_m_in_chunk;
     auto& cur_arch_type_infos = cur_chunk->get_arch_type()->get_type_infos();
 
     const jeecs::typing::type_info** outresult = (const jeecs::typing::type_info**)je_mem_alloc(

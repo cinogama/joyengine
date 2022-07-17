@@ -448,7 +448,7 @@ struct jegl_shader
     {
         INVALID = -1,
 
-        DISABLE,    
+        DISABLE,
         ENABLE,     /* DEFAULT */
     };
 
@@ -676,7 +676,7 @@ JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
 JE_API jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(jeecs::game_entity* _entity);
+JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
 
 JE_API void jedbg_set_editor_universe(void* universe_handle);
 
@@ -719,6 +719,45 @@ namespace jeecs
         inline void log_fatal(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_FATAL, format, args...);
+        }
+
+        static std::string dump_entity_editor_information(const jeecs::game_entity& e)
+        {
+#ifdef JE_ENABLE_DEBUG_API
+            if (e.valid())
+            {
+                // Get all components.
+                const typing::type_info** component_types = jedbg_get_all_components_from_entity(&e);
+
+                std::string result = "{";
+                bool first_component = true;
+                for (auto** cur_component = component_types; *cur_component; ++cur_component)
+                {
+                    if (first_component)
+                    {
+                        first_component = false;
+                        result += ",";
+                    }
+
+                    const typing::type_info* type = *cur_component;
+                    result += std::string("\"") + type->m_typename + "\":{";
+
+                    type->m_member_types->to_string;
+                        // TODO: Store all member datas.
+
+                    result += "}";
+                }
+                result += "}";
+                je_mem_free(component_types);
+
+                return result;
+            }
+            else
+                debug::log_error("Current entity is invalid when dumping editor informations.");
+#else
+            debug::log_error("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
+#endif
+            return "";
         }
     }
 
