@@ -35,7 +35,7 @@ namespace editor::Inspector::Material
         return menu_option;
     }
 
-    func show_shader(entity: je::entity, shader: je::graphic::shader, index: int) : shader_option
+    func show_shader(entity: je::entity, shader: je::graphic::shader, index: int)=> shader_option
     {
         using je::gui;
 

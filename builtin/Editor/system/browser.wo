@@ -44,7 +44,7 @@ namespace editor::Browser
     }
     _load_default_icons();
 
-    private func get_file_icon_by_extern_name(_path: PathInfo) : FileType
+    private func get_file_icon_by_extern_name(_path: PathInfo)=> FileType
     {
         static let default_path_icon 
             = FileType::path(

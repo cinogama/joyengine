@@ -3,7 +3,7 @@ import je.gui;
 
 namespace generic
 {
-    func AskFor(title:string, shown:string, trigger:void())
+    func AskFor(title:string, shown:string, trigger:()=>void)
     {
         using je::gui;
 

@@ -10,7 +10,7 @@ namespace generic
         Drag(string),
         None
     }
-    func AcceptFileForCurrentWidget() : DragFileAction
+    func AcceptFileForCurrentWidget()=> DragFileAction
     {
         using je::gui;
 

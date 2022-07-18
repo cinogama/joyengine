@@ -40,7 +40,7 @@ namespace je::filesys
     namespace path
     {
         extern("libjoyecs", "wojeapi_filesys_path")
-        func create(_path: string): path;
+        func create(_path: string)=> path;
 
         func iter(self: path)
         {
@@ -50,7 +50,7 @@ namespace je::filesys
         func next(self: path, ref out_path: string)
         {
             extern("libjoyecs", "wojeapi_filesys_path_next")
-            func _next(self: path, ref out_path: string): bool;
+            func _next(self: path, ref out_path: string)=> bool;
 
             let result = _next(self, ref out_path);
             out_path = out_path->replace("\\", "/");
@@ -78,6 +78,6 @@ namespace je::filesys
     }
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
-    func isdir(_path: string): bool;
+    func isdir(_path: string)=> bool;
 }
 )";

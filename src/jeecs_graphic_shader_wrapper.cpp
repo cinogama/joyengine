@@ -713,14 +713,14 @@ using float4x4 = gchandle;
 using texture2d = gchandle;
 using integer = gchandle;
 
-private func _type_is_same<AT, BT>() : bool
+private func _type_is_same<AT, BT>()=> bool
 {
-    if (func():AT{}() is BT)
+    if (func()=>AT{}() is BT)
         return true;
     return false;
 }
 
-private func _get_type_enum<ShaderValueT>() : shader_value_type
+private func _get_type_enum<ShaderValueT>()=> shader_value_type
 {
     if (_type_is_same:<ShaderValueT, float>())
         return shader_value_type::FLOAT;
@@ -749,10 +749,10 @@ private func _apply_operation<ShaderResultT>(
     result_type : shader_value_type,
     operation_name : string,
     ...
-) : ShaderResultT;
+)=> ShaderResultT;
 
 private func apply_operation<ShaderResultT>(operation_name:string, ...) 
-    : ShaderResultT
+    => ShaderResultT
 {
     return _apply_operation:<ShaderResultT>(
                 _get_type_enum:<ShaderResultT>(), 
@@ -764,43 +764,43 @@ private func _uniform<ShaderResultT>(
     result_type : shader_value_type,
     uniform_name : string,
     is_uniform_block : bool
-) : ShaderResultT;
+)=> ShaderResultT;
 
 extern("libjoyecs", "jeecs_shader_create_uniform_variable_with_init_value")
 private func _uniform<ShaderResultT>(
     result_type : shader_value_type,
     uniform_name : string,
     init_value : ShaderResultT
-) : ShaderResultT;
+)=> ShaderResultT;
 
-func uniform<ShaderResultT>(uniform_name:string) : ShaderResultT
+func uniform<ShaderResultT>(uniform_name:string)=> ShaderResultT
 {
     return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, false);
 }
 
-func uniform<ShaderResultT>(uniform_name:string, init_value: ShaderResultT) : ShaderResultT
+func uniform<ShaderResultT>(uniform_name:string, init_value: ShaderResultT)=> ShaderResultT
 {
     return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, init_value);
 }
 
-func shared_uniform<ShaderResultT>(uniform_name:string) : ShaderResultT
+func shared_uniform<ShaderResultT>(uniform_name:string)=> ShaderResultT
 {
     return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, true);
 }
 
 extern("libjoyecs", "jeecs_shader_create_rot_mat4x4")
-func rotation(x:real, y:real, z:real) : float4x4;
+func rotation(x:real, y:real, z:real)=> float4x4;
 
 using vertex_in = handle;
 namespace vertex_in
 {
     extern("libjoyecs", "jeecs_shader_create_vertex_in")
-    func create() : vertex_in;
+    func create()=> vertex_in;
 
     extern("libjoyecs", "jeecs_shader_get_vertex_in")
-    private func _in<ValueT>(self:vertex_in, type:shader_value_type, id:int) : ValueT;
+    private func _in<ValueT>(self:vertex_in, type:shader_value_type, id:int)=> ValueT;
 
-    func in<ValueT>(self:vertex_in, id:int) : ValueT
+    func in<ValueT>(self:vertex_in, id:int)=> ValueT
     {
         return self->_in:<ValueT>(_get_type_enum:<ValueT>(), id) as ValueT;
     }
@@ -809,10 +809,10 @@ namespace vertex_in
 using vertex_out = handle; // nogc! will free by shader_wrapper
 namespace vertex_out
 {   
-    func create<VertexOutT>(vout : VertexOutT) : vertex_out
+    func create<VertexOutT>(vout : VertexOutT)=> vertex_out
     {
         extern("libjoyecs", "jeecs_shader_create_shader_value_out")
-        func _create_shader_out<VertexOutT>(is_vertex: bool, out_val: VertexOutT) : vertex_out;
+        func _create_shader_out<VertexOutT>(is_vertex: bool, out_val: VertexOutT)=> vertex_out;
 
         return _create_shader_out(true, vout);
     }
@@ -821,10 +821,10 @@ namespace vertex_out
 using fragment_in = handle;
 namespace fragment_in
 {
-    func create<VertexOutT>(data_from_vert: vertex_out) : VertexOutT
+    func create<VertexOutT>(data_from_vert: vertex_out)=> VertexOutT
     {
         extern("libjoyecs", "jeecs_shader_create_fragment_in")
-        func _parse_vertex_out_to_struct<VertexOutT>(vout: vertex_out, ref _out_struct: dynamic): VertexOutT;
+        func _parse_vertex_out_to_struct<VertexOutT>(vout: vertex_out, ref _out_struct: dynamic)=> VertexOutT;
 
         return _parse_vertex_out_to_struct:<VertexOutT>(data_from_vert, nil: dynamic);
     }
@@ -833,10 +833,10 @@ namespace fragment_in
 using fragment_out = handle; // nogc! will free by shader_wrapper
 namespace fragment_out
 {
-    func create<FragementOutT>(fout : FragementOutT) : fragment_out
+    func create<FragementOutT>(fout : FragementOutT)=> fragment_out
     {
         extern("libjoyecs", "jeecs_shader_create_shader_value_out")
-        func _create_shader_out<FragementOutT>(is_vertex: bool, out_val: FragementOutT) : fragment_out;
+        func _create_shader_out<FragementOutT>(is_vertex: bool, out_val: FragementOutT)=> fragment_out;
 
         return _create_shader_out(false, fout);
     }
@@ -845,23 +845,23 @@ namespace fragment_out
 namespace float
 {
     extern("libjoyecs", "jeecs_shader_float_create")
-    func create(init_val:real) : float;
+    func create(init_val:real)=> float;
 
-    func create(...) : float{return apply_operation:<float>("float", ......);}
+    func create(...)=> float{return apply_operation:<float>("float", ......);}
 
-    func operator + (a:float, b:float) : float
+    func operator + (a:float, b:float)=> float
     {
         return apply_operation:<float>("+", a, b);
     }
-    func operator - (a:float, b:float) : float
+    func operator - (a:float, b:float)=> float
     {
         return apply_operation:<float>("-", a, b);
     }
-    func operator * (a:float, b:float) : float
+    func operator * (a:float, b:float)=> float
     {
         return apply_operation:<float>("*", a, b);
     }
-    func operator / (a:float, b:float) : float
+    func operator / (a:float, b:float)=> float
     {
         return apply_operation:<float>("/", a, b);
     }
@@ -869,24 +869,24 @@ namespace float
 namespace float2
 {
     extern("libjoyecs", "jeecs_shader_float2_create")
-    func create(x:real, y:real) : float2;
+    func create(x:real, y:real)=> float2;
 
-    func create(...) : float2{return apply_operation:<float2>("float2", ......);}
+    func create(...)=> float2{return apply_operation:<float2>("float2", ......);}
 
-    func x(self:float2) : float{return apply_operation:<float>(".x", self);}
-    func y(self:float2) : float{return apply_operation:<float>(".y", self);}
-    func xy(self:float2) : float2{return apply_operation:<float2>(".xy", self);}
-    func yx(self:float2) : float2{return apply_operation:<float2>(".yx", self);}
+    func x(self:float2)=> float{return apply_operation:<float>(".x", self);}
+    func y(self:float2)=> float{return apply_operation:<float>(".y", self);}
+    func xy(self:float2)=> float2{return apply_operation:<float2>(".xy", self);}
+    func yx(self:float2)=> float2{return apply_operation:<float2>(".yx", self);}
 
-    func operator + (a:float2, b:float2) : float2
+    func operator + (a:float2, b:float2)=> float2
     {
         return apply_operation:<float2>("+", a, b);
     }
-    func operator - (a:float2, b:float2) : float2
+    func operator - (a:float2, b:float2)=> float2
     {
         return apply_operation:<float2>("-", a, b);
     }
-    func operator * (a:float2, b:float2) : float2
+    func operator * (a:float2, b:float2)=> float2
     {
         return apply_operation:<float2>("*", a, b);
     }
@@ -894,35 +894,35 @@ namespace float2
 namespace float3
 {
     extern("libjoyecs", "jeecs_shader_float3_create")
-    func create(x:real, y:real, z:real) : float3;
+    func create(x:real, y:real, z:real)=> float3;
 
-    func create(...) : float3{return apply_operation:<float3>("float3", ......);}
+    func create(...)=> float3{return apply_operation:<float3>("float3", ......);}
 
-    func x(self:float3) : float{return apply_operation:<float>(".x", self);}
-    func y(self:float3) : float{return apply_operation:<float>(".y", self);}
-    func z(self:float3) : float{return apply_operation:<float>(".z", self);}
-    func xy(self:float3) : float2{return apply_operation:<float2>(".xy", self);}
-    func yz(self:float3) : float2{return apply_operation:<float2>(".yz", self);}
-    func xz(self:float3) : float2{return apply_operation:<float2>(".xz", self);}
-    func yx(self:float3) : float2{return apply_operation:<float2>(".yx", self);}
-    func zy(self:float3) : float2{return apply_operation:<float2>(".zy", self);}
-    func zx(self:float3) : float2{return apply_operation:<float2>(".zx", self);}
-    func xyz(self:float3) : float3{return apply_operation:<float3>(".xyz", self);}
-    func xzy(self:float3) : float3{return apply_operation:<float3>(".xzy", self);}
-    func yxz(self:float3) : float3{return apply_operation:<float3>(".yxz", self);}
-    func yzx(self:float3) : float3{return apply_operation:<float3>(".yzx", self);}
-    func zxy(self:float3) : float3{return apply_operation:<float3>(".zxy", self);}
-    func zyx(self:float3) : float3{return apply_operation:<float3>(".zyx", self);}
+    func x(self:float3)=> float{return apply_operation:<float>(".x", self);}
+    func y(self:float3)=> float{return apply_operation:<float>(".y", self);}
+    func z(self:float3)=> float{return apply_operation:<float>(".z", self);}
+    func xy(self:float3)=> float2{return apply_operation:<float2>(".xy", self);}
+    func yz(self:float3)=> float2{return apply_operation:<float2>(".yz", self);}
+    func xz(self:float3)=> float2{return apply_operation:<float2>(".xz", self);}
+    func yx(self:float3)=> float2{return apply_operation:<float2>(".yx", self);}
+    func zy(self:float3)=> float2{return apply_operation:<float2>(".zy", self);}
+    func zx(self:float3)=> float2{return apply_operation:<float2>(".zx", self);}
+    func xyz(self:float3)=> float3{return apply_operation:<float3>(".xyz", self);}
+    func xzy(self:float3)=> float3{return apply_operation:<float3>(".xzy", self);}
+    func yxz(self:float3)=> float3{return apply_operation:<float3>(".yxz", self);}
+    func yzx(self:float3)=> float3{return apply_operation:<float3>(".yzx", self);}
+    func zxy(self:float3)=> float3{return apply_operation:<float3>(".zxy", self);}
+    func zyx(self:float3)=> float3{return apply_operation:<float3>(".zyx", self);}
 
-    func operator + (a:float3, b:float3) : float3
+    func operator + (a:float3, b:float3)=> float3
     {
         return apply_operation:<float3>("+", a, b);
     }
-    func operator - (a:float3, b:float3) : float3
+    func operator - (a:float3, b:float3)=> float3
     {
         return apply_operation:<float3>("-", a, b);
     }
-    func operator * (a:float3, b:float3) : float3
+    func operator * (a:float3, b:float3)=> float3
     {
         return apply_operation:<float3>("*", a, b);
     }
@@ -930,87 +930,87 @@ namespace float3
 namespace float4
 {
     extern("libjoyecs", "jeecs_shader_float4_create")
-    func create(x:real, y:real, z:real, w:real) : float4;
+    func create(x:real, y:real, z:real, w:real)=> float4;
 
-    func create(...) : float4{return apply_operation:<float4>("float4", ......);}
+    func create(...)=> float4{return apply_operation:<float4>("float4", ......);}
 
-    func x(self:float4) : float{return apply_operation:<float>(".x", self);}
-    func y(self:float4) : float{return apply_operation:<float>(".y", self);}
-    func z(self:float4) : float{return apply_operation:<float>(".z", self);}
-    func w(self:float4) : float{return apply_operation:<float>(".w", self);}
+    func x(self:float4)=> float{return apply_operation:<float>(".x", self);}
+    func y(self:float4)=> float{return apply_operation:<float>(".y", self);}
+    func z(self:float4)=> float{return apply_operation:<float>(".z", self);}
+    func w(self:float4)=> float{return apply_operation:<float>(".w", self);}
 
-    func xy(self:float4) : float2{return apply_operation:<float2>(".xy", self);}
-    func yz(self:float4) : float2{return apply_operation:<float2>(".yz", self);}
-    func xz(self:float4) : float2{return apply_operation:<float2>(".xz", self);}
-    func yx(self:float4) : float2{return apply_operation:<float2>(".yx", self);}
-    func zy(self:float4) : float2{return apply_operation:<float2>(".zy", self);}
-    func zx(self:float4) : float2{return apply_operation:<float2>(".zx", self);}
-    func xw(self:float4) : float2{return apply_operation:<float2>(".xw", self);}
-    func wx(self:float4) : float2{return apply_operation:<float2>(".wx", self);}
-    func yw(self:float4) : float2{return apply_operation:<float2>(".yw", self);}
-    func wy(self:float4) : float2{return apply_operation:<float2>(".wy", self);}
-    func zw(self:float4) : float2{return apply_operation:<float2>(".zw", self);}
-    func wz(self:float4) : float2{return apply_operation:<float2>(".wz", self);}
+    func xy(self:float4)=> float2{return apply_operation:<float2>(".xy", self);}
+    func yz(self:float4)=> float2{return apply_operation:<float2>(".yz", self);}
+    func xz(self:float4)=> float2{return apply_operation:<float2>(".xz", self);}
+    func yx(self:float4)=> float2{return apply_operation:<float2>(".yx", self);}
+    func zy(self:float4)=> float2{return apply_operation:<float2>(".zy", self);}
+    func zx(self:float4)=> float2{return apply_operation:<float2>(".zx", self);}
+    func xw(self:float4)=> float2{return apply_operation:<float2>(".xw", self);}
+    func wx(self:float4)=> float2{return apply_operation:<float2>(".wx", self);}
+    func yw(self:float4)=> float2{return apply_operation:<float2>(".yw", self);}
+    func wy(self:float4)=> float2{return apply_operation:<float2>(".wy", self);}
+    func zw(self:float4)=> float2{return apply_operation:<float2>(".zw", self);}
+    func wz(self:float4)=> float2{return apply_operation:<float2>(".wz", self);}
 
-    func xyz(self:float4) : float3{return apply_operation:<float3>(".xyz", self);}
-    func xzy(self:float4) : float3{return apply_operation:<float3>(".xzy", self);}
-    func yxz(self:float4) : float3{return apply_operation:<float3>(".yxz", self);}
-    func yzx(self:float4) : float3{return apply_operation:<float3>(".yzx", self);}
-    func zxy(self:float4) : float3{return apply_operation:<float3>(".zxy", self);}
-    func zyx(self:float4) : float3{return apply_operation:<float3>(".zyx", self);}
-    func wyz(self:float4) : float3{return apply_operation:<float3>(".wyz", self);}
-    func wzy(self:float4) : float3{return apply_operation:<float3>(".wzy", self);}
-    func ywz(self:float4) : float3{return apply_operation:<float3>(".ywz", self);}
-    func yzw(self:float4) : float3{return apply_operation:<float3>(".yzw", self);}
-    func zwy(self:float4) : float3{return apply_operation:<float3>(".zwy", self);}
-    func zyw(self:float4) : float3{return apply_operation:<float3>(".zyw", self);}
-    func xwz(self:float4) : float3{return apply_operation:<float3>(".xwz", self);}
-    func xzw(self:float4) : float3{return apply_operation:<float3>(".xzw", self);}
-    func wxz(self:float4) : float3{return apply_operation:<float3>(".wxz", self);}
-    func wzx(self:float4) : float3{return apply_operation:<float3>(".wzx", self);}
-    func zxw(self:float4) : float3{return apply_operation:<float3>(".zxw", self);}
-    func zwx(self:float4) : float3{return apply_operation:<float3>(".zwx", self);}
-    func xyw(self:float4) : float3{return apply_operation:<float3>(".xyw", self);}
-    func xwy(self:float4) : float3{return apply_operation:<float3>(".xwy", self);}
-    func yxw(self:float4) : float3{return apply_operation:<float3>(".yxw", self);}
-    func ywx(self:float4) : float3{return apply_operation:<float3>(".ywx", self);}
-    func wxy(self:float4) : float3{return apply_operation:<float3>(".wxy", self);}
-    func wyx(self:float4) : float3{return apply_operation:<float3>(".wyx", self);}
+    func xyz(self:float4)=> float3{return apply_operation:<float3>(".xyz", self);}
+    func xzy(self:float4)=> float3{return apply_operation:<float3>(".xzy", self);}
+    func yxz(self:float4)=> float3{return apply_operation:<float3>(".yxz", self);}
+    func yzx(self:float4)=> float3{return apply_operation:<float3>(".yzx", self);}
+    func zxy(self:float4)=> float3{return apply_operation:<float3>(".zxy", self);}
+    func zyx(self:float4)=> float3{return apply_operation:<float3>(".zyx", self);}
+    func wyz(self:float4)=> float3{return apply_operation:<float3>(".wyz", self);}
+    func wzy(self:float4)=> float3{return apply_operation:<float3>(".wzy", self);}
+    func ywz(self:float4)=> float3{return apply_operation:<float3>(".ywz", self);}
+    func yzw(self:float4)=> float3{return apply_operation:<float3>(".yzw", self);}
+    func zwy(self:float4)=> float3{return apply_operation:<float3>(".zwy", self);}
+    func zyw(self:float4)=> float3{return apply_operation:<float3>(".zyw", self);}
+    func xwz(self:float4)=> float3{return apply_operation:<float3>(".xwz", self);}
+    func xzw(self:float4)=> float3{return apply_operation:<float3>(".xzw", self);}
+    func wxz(self:float4)=> float3{return apply_operation:<float3>(".wxz", self);}
+    func wzx(self:float4)=> float3{return apply_operation:<float3>(".wzx", self);}
+    func zxw(self:float4)=> float3{return apply_operation:<float3>(".zxw", self);}
+    func zwx(self:float4)=> float3{return apply_operation:<float3>(".zwx", self);}
+    func xyw(self:float4)=> float3{return apply_operation:<float3>(".xyw", self);}
+    func xwy(self:float4)=> float3{return apply_operation:<float3>(".xwy", self);}
+    func yxw(self:float4)=> float3{return apply_operation:<float3>(".yxw", self);}
+    func ywx(self:float4)=> float3{return apply_operation:<float3>(".ywx", self);}
+    func wxy(self:float4)=> float3{return apply_operation:<float3>(".wxy", self);}
+    func wyx(self:float4)=> float3{return apply_operation:<float3>(".wyx", self);}
 
-    func xyzw(self:float4) : float4{return apply_operation:<float4>(".xyzw", self);}
-    func xzyw(self:float4) : float4{return apply_operation:<float4>(".xzyw", self);}
-    func yxzw(self:float4) : float4{return apply_operation:<float4>(".yxzw", self);}
-    func yzxw(self:float4) : float4{return apply_operation:<float4>(".yzxw", self);}
-    func zxyw(self:float4) : float4{return apply_operation:<float4>(".zxyw", self);}
-    func zyxw(self:float4) : float4{return apply_operation:<float4>(".zyxw", self);}
-    func wyzx(self:float4) : float4{return apply_operation:<float4>(".wyzx", self);}
-    func wzyx(self:float4) : float4{return apply_operation:<float4>(".wzyx", self);}
-    func ywzx(self:float4) : float4{return apply_operation:<float4>(".ywzx", self);}
-    func yzwx(self:float4) : float4{return apply_operation:<float4>(".yzwx", self);}
-    func zwyx(self:float4) : float4{return apply_operation:<float4>(".zwyx", self);}
-    func zywx(self:float4) : float4{return apply_operation:<float4>(".zywx", self);}
-    func xwzy(self:float4) : float4{return apply_operation:<float4>(".xwzy", self);}
-    func xzwy(self:float4) : float4{return apply_operation:<float4>(".xzwy", self);}
-    func wxzy(self:float4) : float4{return apply_operation:<float4>(".wxzy", self);}
-    func wzxy(self:float4) : float4{return apply_operation:<float4>(".wzxy", self);}
-    func zxwy(self:float4) : float4{return apply_operation:<float4>(".zxwy", self);}
-    func zwxy(self:float4) : float4{return apply_operation:<float4>(".zwxy", self);}
-    func xywz(self:float4) : float4{return apply_operation:<float4>(".xywz", self);}
-    func xwyz(self:float4) : float4{return apply_operation:<float4>(".xwyz", self);}
-    func yxwz(self:float4) : float4{return apply_operation:<float4>(".yxwz", self);}
-    func ywxz(self:float4) : float4{return apply_operation:<float4>(".ywxz", self);}
-    func wxyz(self:float4) : float4{return apply_operation:<float4>(".wxyz", self);}
-    func wyxz(self:float4) : float4{return apply_operation:<float4>(".wyxz", self);}
+    func xyzw(self:float4)=> float4{return apply_operation:<float4>(".xyzw", self);}
+    func xzyw(self:float4)=> float4{return apply_operation:<float4>(".xzyw", self);}
+    func yxzw(self:float4)=> float4{return apply_operation:<float4>(".yxzw", self);}
+    func yzxw(self:float4)=> float4{return apply_operation:<float4>(".yzxw", self);}
+    func zxyw(self:float4)=> float4{return apply_operation:<float4>(".zxyw", self);}
+    func zyxw(self:float4)=> float4{return apply_operation:<float4>(".zyxw", self);}
+    func wyzx(self:float4)=> float4{return apply_operation:<float4>(".wyzx", self);}
+    func wzyx(self:float4)=> float4{return apply_operation:<float4>(".wzyx", self);}
+    func ywzx(self:float4)=> float4{return apply_operation:<float4>(".ywzx", self);}
+    func yzwx(self:float4)=> float4{return apply_operation:<float4>(".yzwx", self);}
+    func zwyx(self:float4)=> float4{return apply_operation:<float4>(".zwyx", self);}
+    func zywx(self:float4)=> float4{return apply_operation:<float4>(".zywx", self);}
+    func xwzy(self:float4)=> float4{return apply_operation:<float4>(".xwzy", self);}
+    func xzwy(self:float4)=> float4{return apply_operation:<float4>(".xzwy", self);}
+    func wxzy(self:float4)=> float4{return apply_operation:<float4>(".wxzy", self);}
+    func wzxy(self:float4)=> float4{return apply_operation:<float4>(".wzxy", self);}
+    func zxwy(self:float4)=> float4{return apply_operation:<float4>(".zxwy", self);}
+    func zwxy(self:float4)=> float4{return apply_operation:<float4>(".zwxy", self);}
+    func xywz(self:float4)=> float4{return apply_operation:<float4>(".xywz", self);}
+    func xwyz(self:float4)=> float4{return apply_operation:<float4>(".xwyz", self);}
+    func yxwz(self:float4)=> float4{return apply_operation:<float4>(".yxwz", self);}
+    func ywxz(self:float4)=> float4{return apply_operation:<float4>(".ywxz", self);}
+    func wxyz(self:float4)=> float4{return apply_operation:<float4>(".wxyz", self);}
+    func wyxz(self:float4)=> float4{return apply_operation:<float4>(".wyxz", self);}
 
-    func operator + (a:float4, b:float4) : float4
+    func operator + (a:float4, b:float4)=> float4
     {
         return apply_operation:<float4>("+", a, b);
     }
-    func operator - (a:float4, b:float4) : float4
+    func operator - (a:float4, b:float4)=> float4
     {
         return apply_operation:<float4>("-", a, b);
     }
-    func operator * (a:float4, b:float4) : float4
+    func operator * (a:float4, b:float4)=> float4
     {
         return apply_operation:<float4>("*", a, b);
     }
@@ -1023,16 +1023,16 @@ namespace float4x4
     func create(p00:real, p01:real, p02:real, p03:real,
                 p10:real, p11:real, p12:real, p13:real,
                 p20:real, p21:real, p22:real, p23:real,
-                p30:real, p31:real, p32:real, p33:real): float4x4;
+                p30:real, p31:real, p32:real, p33:real)=> float4x4;
 
-    func create(...) : float4x4{return apply_operation:<float4x4>("float4x4", ......);}
+    func create(...)=> float4x4{return apply_operation:<float4x4>("float4x4", ......);}
 
-    func operator * (a:float4x4, b:float4x4) : float4x4
+    func operator * (a:float4x4, b:float4x4)=> float4x4
     {
         return apply_operation:<float4x4>("*", a, b);
     }
 
-    func operator * (a:float4x4, b:float4) : float4
+    func operator * (a:float4x4, b:float4)=> float4
     {
         return apply_operation:<float4>("*", a, b);
     }
@@ -1064,7 +1064,7 @@ namespace shader
     private func _wraped_shader(
         vertout: vertex_out, 
         fragout: fragment_out, 
-        shader_config: ShaderConfig) : shader_wrapper;
+        shader_config: ShaderConfig)=> shader_wrapper;
 
     private extern func generate()
     {
@@ -1085,10 +1085,10 @@ namespace shader
     namespace debug
     {
         extern("libjoyecs", "jeecs_shader_wrap_glsl_vertex")
-        func generate_glsl_vertex(wrapper:shader_wrapper) : string;
+        func generate_glsl_vertex(wrapper:shader_wrapper)=> string;
 
         extern("libjoyecs", "jeecs_shader_wrap_glsl_fragment")
-        func generate_glsl_fragment(wrapper:shader_wrapper) : string;
+        func generate_glsl_fragment(wrapper:shader_wrapper)=> string;
     }
 }
 
@@ -1109,12 +1109,12 @@ let je_mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
 let je_mv = uniform:<float4x4>("JOYENGINE_TRANS_MV");
 let je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
 
-func texture(tex:texture2d, uv:float2):float4
+func texture(tex:texture2d, uv:float2)=> float4
 {
     return apply_operation:<float4>("texture", tex, uv);
 };
 
-func alphatest(colf4: float4):float4
+func alphatest(colf4: float4)=> float4
 {
     return apply_operation:<float4>("JEBUILTIN_AlphaTest", colf4);
 };
@@ -1206,7 +1206,7 @@ func CULL(cull: CullConfig)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
-    let try_eat_token = func(expect_type: std::token_type): option<string>
+    let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
                         let out_result = "";
                         if (lexer->peek("") != expect_type)

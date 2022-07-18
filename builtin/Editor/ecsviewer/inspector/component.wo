@@ -7,7 +7,7 @@ import builtin.Editor.generic.form.askfor;
 
 namespace editor::Inspector::Component
 {
-    let _type_widget_methods = {}: map<je::typeinfo, void(string, je::native_value)>;
+    let _type_widget_methods = {}: map<je::typeinfo, (string, je::native_value)=>void>;
             
     using component_chain = struct{
         m_map:              map<string, component_chain>,
@@ -47,7 +47,7 @@ namespace editor::Inspector::Component
 
                         current_types.m_component_type = option::value(component_type);
                     }
-                    func waklthrow_and_display_components(current_node: component_chain, entity: je::entity): void
+                    func waklthrow_and_display_components(current_node: component_chain, entity: je::entity)=> void
                     {
                         for (let name, chain: current_node.m_map)
                         {
