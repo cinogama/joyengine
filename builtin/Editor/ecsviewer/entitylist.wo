@@ -18,7 +18,7 @@ namespace editor::EntityList
         if (BeginMenuBar())
         {
             if (MenuItem("创建新实体"))
-                launch(EntityCreator::show, ());
+                launch(EntityCreator::show, (EntityCreator::create_context(),));
 
             EndMenuBar();
         }

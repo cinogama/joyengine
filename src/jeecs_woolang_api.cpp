@@ -228,6 +228,31 @@ WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args, size_t argc)
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of(wo_string(args + 0)));
 }
 
+WO_API wo_api wojeapi_get_all_registed_types(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value out_array = args + 0;
+    auto** types = jedbg_get_all_registed_types();
+
+    auto** cur_type = types;
+    while (*cur_type)
+        wo_set_pointer(wo_arr_add(out_array, nullptr), (void*)*(cur_type++));
+
+    je_mem_free(types);
+    return wo_ret_val(vm, out_array);
+}
+
+WO_API wo_api wojeapi_type_is_component(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, type->m_type_class == je_typing_class::JE_COMPONENT);
+}
+
+WO_API wo_api wojeapi_type_is_system(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, type->m_type_class == je_typing_class::JE_SYSTEM);
+}
+
 WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args, size_t argc)
 {
     const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
@@ -703,6 +728,40 @@ namespace je
     using typeinfo = handle;
     namespace typeinfo
     {
+        extern("libjoyecs", "wojeapi_type_is_component")
+        func is_component(self: typeinfo)=> bool;
+
+        extern("libjoyecs", "wojeapi_type_is_system")
+        func is_system(self: typeinfo)=> bool;
+
+        namespace editor
+        {
+            func get_all_registed_types()
+            {
+                extern("libjoyecs", "wojeapi_get_all_registed_types")
+                func _get_all_registed_types(out_result: array<typeinfo>)=> array<typeinfo>;
+
+                return _get_all_registed_types([]);
+            }
+
+            func get_all_components_types()
+            {
+                let result = []: array<typeinfo>;
+                for (let type : get_all_registed_types())
+                    if (type->is_component())
+                        result->add(type);
+                return result;
+            }
+
+            func get_all_systems_types()
+            {
+                let result = []: array<typeinfo>;
+                for (let type : get_all_registed_types())
+                    if (type->is_system())
+                        result->add(type);
+                return result;
+            }
+        }
         extern("libjoyecs", "wojeapi_type_of")
         func create(name: string)=> typeinfo;
 

@@ -28,7 +28,7 @@ namespace jeecs_impl
 
         }
 
-        inline static type_info_holder* holder()
+        inline static type_info_holder* holder() noexcept
         {
             static type_info_holder holder;
             return &holder;
@@ -45,7 +45,7 @@ namespace jeecs_impl
             jeecs::typing::move_func_t      _mover,
             jeecs::typing::to_string_func_t _to_string,
             jeecs::typing::parse_func_t     _parse,
-            je_typing_class                 _typecls)
+            je_typing_class                 _typecls) noexcept
         {
             std::lock_guard g1(_m_type_holder_mx);
 
@@ -106,7 +106,7 @@ namespace jeecs_impl
             return true;
         }
 
-        jeecs::typing::type_info* get_info_by_id(jeecs::typing::typeid_t id)
+        jeecs::typing::type_info* get_info_by_id(jeecs::typing::typeid_t id) noexcept
         {
             if (id && id != jeecs::typing::INVALID_TYPE_ID)
             {
@@ -117,7 +117,7 @@ namespace jeecs_impl
             return nullptr;
         }
 
-        jeecs::typing::type_info* get_info_by_name(const char* name)
+        jeecs::typing::type_info* get_info_by_name(const char* name) noexcept
         {
             if (name)
             {
@@ -129,11 +129,17 @@ namespace jeecs_impl
             return nullptr;
         }
 
+        std::vector<jeecs::typing::type_info*> get_all_registed_types() noexcept
+        {
+            std::lock_guard g1(_m_type_holder_mx);
+            return _m_type_holder_list;
+        }
+
         // ATTENTION: This function do not promise for thread safe.
         void register_member_by_id(jeecs::typing::typeid_t classid,
             const jeecs::typing::type_info* _membertype,
             const char* _member_name,
-            ptrdiff_t _member_offset)
+            ptrdiff_t _member_offset) noexcept
         {
             jeecs::typing::member_info* meminfo = jeecs::basic::create_new<jeecs::typing::member_info>();
 
@@ -152,7 +158,7 @@ namespace jeecs_impl
             *m_new_member_ptr = meminfo;
         }
 
-        void unregister_member_info(jeecs::typing::type_info* classtype)
+        void unregister_member_info(jeecs::typing::type_info* classtype) noexcept
         {
             auto* meminfo = classtype->m_member_types;
             while (meminfo)
@@ -166,7 +172,7 @@ namespace jeecs_impl
             }
         }
 
-        void unregister_by_id(jeecs::typing::typeid_t id)
+        void unregister_by_id(jeecs::typing::typeid_t id) noexcept
         {
             if (id && id != jeecs::typing::INVALID_TYPE_ID)
             {
@@ -243,4 +249,19 @@ void je_register_member(
 {
     jeecs_impl::type_info_holder::holder()
         ->register_member_by_id(_classid, _membertype, _member_name, _member_offset);
+}
+
+///////////////////////////////////////////////////////////////////////////
+
+// NOTE: need free the return result by 'je_mem_free'
+extern "C" // FUCKYOU MSVC!
+const jeecs::typing::type_info** jedbg_get_all_registed_types()
+{
+    auto&& types = jeecs_impl::type_info_holder::holder()->get_all_registed_types();
+    auto result = (const jeecs::typing::type_info**)je_mem_alloc(sizeof(const jeecs::typing::type_info*) * (types.size() + 1));
+    result[types.size()] = nullptr;
+
+    memcpy(result, types.data(), types.size());
+
+    return result;
 }

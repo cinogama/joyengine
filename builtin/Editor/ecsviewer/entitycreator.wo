@@ -1,0 +1,38 @@
+import woo.std;
+import je.gui;
+import je;
+
+import builtin.Editor.generic.form.inputbox;
+import builtin.Editor.generic.form.askfor;
+
+namespace editor::EntityCreator
+{
+	using CreatorContext = struct {
+		has_append_components : array<je::typeinfo>,
+		not_append_components : array<je::typeinfo>,
+	};
+
+	func create_context()=> CreatorContext
+	{
+		return CreatorContext{
+			has_append_components = [],
+			not_append_components = je::typeinfo::editor::get_all_components_types(),
+		};
+	}
+	
+	func show(context: CreatorContext)
+	{
+		using je::gui;
+
+		let open = true;
+		Begin("创建新实体", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+			
+			SameLine();
+
+        End();
+
+		if (!open)
+			return FormAction::Close;
+		return FormAction::Nothing;
+	}
+}

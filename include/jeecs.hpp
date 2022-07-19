@@ -696,9 +696,13 @@ JE_API const jeecs::typing::type_info** jedbg_get_attached_system_types_in_world
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
 
+// NOTE: need free the return result by 'je_mem_free'
+JE_API const jeecs::typing::type_info** jedbg_get_all_registed_types();
+
 JE_API void jedbg_set_editor_universe(void* universe_handle);
 
 JE_API void* jedbg_get_editor_universe();
+
 #endif
 
 WO_FORCE_CAPI_END
