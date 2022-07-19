@@ -244,7 +244,7 @@ void je_typing_unregister(
 void je_register_member(
     jeecs::typing::typeid_t         _classid,
     const jeecs::typing::type_info* _membertype,
-    const char*                     _member_name,
+    const char* _member_name,
     ptrdiff_t                       _member_offset)
 {
     jeecs_impl::type_info_holder::holder()
@@ -255,13 +255,13 @@ void je_register_member(
 
 // NOTE: need free the return result by 'je_mem_free'
 extern "C" // FUCKYOU MSVC!
-const jeecs::typing::type_info** jedbg_get_all_registed_types()
+const jeecs::typing::type_info * *jedbg_get_all_registed_types()
 {
     auto&& types = jeecs_impl::type_info_holder::holder()->get_all_registed_types();
     auto result = (const jeecs::typing::type_info**)je_mem_alloc(sizeof(const jeecs::typing::type_info*) * (types.size() + 1));
     result[types.size()] = nullptr;
 
-    memcpy(result, types.data(), types.size());
+    memcpy(result, types.data(), types.size() * sizeof(const jeecs::typing::type_info**));
 
     return result;
 }
