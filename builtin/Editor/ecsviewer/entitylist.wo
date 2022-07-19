@@ -5,6 +5,8 @@ import je;
 import builtin.Editor.generic.form.inputbox;
 import builtin.Editor.generic.form.askfor;
 
+import entitycreator;
+
 namespace editor::EntityList
 {
     // 当前世界列表是否显示有当前选中的实体，如果没有就重设当前实体，防止错误的显示
@@ -16,10 +18,7 @@ namespace editor::EntityList
         if (BeginMenuBar())
         {
             if (MenuItem("创建新实体"))
-            {
-                // 注意，实体至少带有一个组件，否则这个实体就是不存在的
-                // TODO;
-            }
+                launch(EntityCreator::show, ());
 
             EndMenuBar();
         }
@@ -34,16 +33,16 @@ namespace editor::EntityList
             Separator();
             if (MenuItem(F"删除 {entity->editor::name()}"))
             {
-                launch(generic::AskFor, "删除实体",
+                launch(generic::AskFor, ("删除实体",
                                         F"确认要删除实体{entity->editor::name()}吗？",
-                                        func(){ entity->close(); });
+                                        func(){ entity->close(); }));
             }
             if (MenuItem("重命名"))
             {
-                launch(generic::InputBox, "重命名实体",
+                launch(generic::InputBox, ("重命名实体",
                                         F"请输入新名称",
                                         entity->editor::name(),
-                                        func(text: string){ entity->editor::name(text); });
+                                        func(text: string){ entity->editor::name(text); }));
             }
             EndPopup();
         }
@@ -52,7 +51,7 @@ namespace editor::EntityList
     func show(ref open: bool)
     {
         using je::gui;
-        if(!open) return !open;
+        if(!open) return FormAction::Close;
 
         _has_selected_entity = false;
         Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
@@ -76,7 +75,9 @@ namespace editor::EntityList
         if (!_has_selected_entity)
             set_current_entity(option::none:<je::entity>);
                 
-        return !open;
+        if (!open)
+			return FormAction::Close;
+		return FormAction::Nothing;
     }
 
     private let _current_entity = option::none as option<je::entity>;

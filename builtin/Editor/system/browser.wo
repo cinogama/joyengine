@@ -211,7 +211,7 @@ namespace editor::Browser
     {
         using je::gui;
 
-        if (!open) return !open;
+        if (!open) return FormAction::Close;
 
         Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
             path_tree();
@@ -219,6 +219,8 @@ namespace editor::Browser
             files_group();
         End();
 
-        return !open;
+        if (!open)
+            return FormAction::Close;
+        return FormAction::Nothing;
     }
 }

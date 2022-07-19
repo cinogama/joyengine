@@ -331,26 +331,32 @@ R"(
     using job_handle_t = gchandle;
 
     extern("libjoyecs", "je_gui_launch")
-    private func _launch<LT, FT>(coloop:LT, job_func:FT, ...)=> job_handle_t;
+    private func _launch<LT, FT, ATs>(coloop:LT, job_func:FT, argts: ATs)=> job_handle_t;
 
-    private func dialog(job_func:dynamic, ...)=> job_handle_t
+    union FormAction
     {
-        let result = nil:dynamic;
-        while (!result)
+        Nothing,
+        Close,
+    }
+
+    private func dialog<FT, ATs>(job_func:FT, args: ATs)=> job_handle_t
+    {
+        while (true)
         {
-            result = (job_func:(...)=>dynamic)(......);
-            if (result)
+            match (job_func(args...) as FormAction)
             {
-                // If function return something, handle them here
-                /* Do something... */
+                Nothing?
+                    /* do nothing */;
+                Close?
+                    break;
             }
             std::break_yield();
         }
     }
 
-    func launch<FT>(job_func:FT, ...)=> job_handle_t
+    func launch<FT, ATs>(job_func: FT, args: ATs)=> job_handle_t
     {
-        return _launch(dialog, job_func, ......);
+        return _launch(dialog:<FT, ATs>, job_func, args);
     }
 }
 
@@ -877,14 +883,14 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
 {
     wo_integer_t loopfunc = wo_int(args + 0);
     wo_integer_t jobfunc = wo_int(args + 1);
+    wo_value argpacks = args + 2;
 
     wo_vm vmm = wo_sub_vm(vm, 1024);
 
-    for (size_t i = argc - 1; i > 1; --i)
-        wo_push_valref(vmm, args + i);
+    wo_push_val(vmm, argpacks);
     wo_push_int(vmm, jobfunc);
 
-    wo_dispatch_rsfunc(vmm, loopfunc, argc - 1);
+    wo_dispatch_rsfunc(vmm, loopfunc, 2);
 
     gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
     guico->work_vm = vmm;

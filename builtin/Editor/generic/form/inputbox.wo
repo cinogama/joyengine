@@ -32,6 +32,6 @@ namespace generic
 
             std::break_yield();
         }
-        return true;
+        return FormAction::Close;
     }
 }

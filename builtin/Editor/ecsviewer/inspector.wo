@@ -14,7 +14,7 @@ namespace editor::Inspector
     func show(ref open: bool)
     {
         using je::gui;
-        if(!open) return !open;
+        if(!open) return FormAction::Close;
 
         Begin("检视面板", WindowsAttribute::ImGuiWindowFlags_None, ref open);
             let _1_3_height = 0.;
@@ -30,7 +30,9 @@ namespace editor::Inspector
             Material::show(cur_entity, _1_3_height);
         End();
 
-        return !open;
+        if (!open)
+            return FormAction::Close;
+        return FormAction::Nothing;
     }
 }
 

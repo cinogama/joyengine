@@ -27,11 +27,11 @@ func Editor_MainMenuBar()
         MenuItem("打开");
         Separator();
         if (MenuItem("退出"))
-            launch(generic::AskFor, "确认退出", "即将关闭JoyEngine，是否继续？", 
+            launch(generic::AskFor, ("确认退出", "即将关闭JoyEngine，是否继续？", 
                         func()
                         {
                             je::exit();
-                        });
+                        }));
 
         EndMenu();
     }
@@ -47,14 +47,14 @@ func Editor_MainMenuBar()
         static let active_browser_shown = false;
 
         if (MenuItem("世界列表", ref active_worlds_shown, true) && active_worlds_shown)
-            launch(editor::WorldList::show, ref active_worlds_shown);
+            launch(editor::WorldList::show, (ref active_worlds_shown,));
         if (MenuItem("层级面板", ref active_world_entities_shown, true) && active_world_entities_shown)
-            launch(editor::EntityList::show, ref active_world_entities_shown);
+            launch(editor::EntityList::show, (ref active_world_entities_shown,));
         if (MenuItem("检视面板", ref active_inspector_shown, true) && active_inspector_shown)
-            launch(editor::Inspector::show, ref active_inspector_shown);
+            launch(editor::Inspector::show, (ref active_inspector_shown,));
         Separator();
         if (MenuItem("文件管理器", ref active_browser_shown, true) && active_browser_shown)
-            launch(editor::Browser::show, ref active_browser_shown);
+            launch(editor::Browser::show, (ref active_browser_shown,));
 
 
         EndMenu();
@@ -64,7 +64,7 @@ func Editor_MainMenuBar()
         static let editor_opened = false;
 
         if (MenuItem("打开快捷编辑器", ref editor_opened, true) && editor_opened)
-            launch(Editor_ScriptEditor, ref editor_opened);
+            launch(Editor_ScriptEditor, (ref editor_opened,));
 
         EndMenu();
     }
@@ -72,7 +72,7 @@ func Editor_MainMenuBar()
     {
         static let about_shown = false;
         if (MenuItem("关于", ref about_shown, true) && about_shown)
-            je::gui::launch(Editor_Welcome, ref about_shown);
+            je::gui::launch(Editor_Welcome, (ref about_shown,));
 
         EndMenu();
     }
@@ -94,7 +94,9 @@ func Editor_MainMenuBar()
     }
     EndMainMenuBar();
 
-    return !show_main_menu;
+    if (!show_main_menu)
+        return FormAction::Close;
+    return FormAction::Nothing;
 }
 
 // 关于信息窗口
@@ -103,7 +105,7 @@ func Editor_Welcome(ref open: bool)
     using je::gui;
 
     if (!open)
-        return !open;
+        return FormAction::Close;
 
     Begin("欢迎", WindowsAttribute::ImGuiWindowFlags_NoResize);
     Text("欢迎使用JoyEngineECS.");
@@ -115,7 +117,9 @@ func Editor_Welcome(ref open: bool)
         open = false;
     End();
 
-    return !open;
+    if (!open)
+        return FormAction::Close;
+    return FormAction::Nothing;
 }
 
-je::gui::launch(Editor_MainMenuBar);
+je::gui::launch(Editor_MainMenuBar, ());

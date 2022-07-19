@@ -23,6 +23,8 @@ namespace generic
         }
         End();
 
-        return !open;
+        if (!open)
+            return FormAction::Close;
+        return FormAction::Nothing;
     }
 }

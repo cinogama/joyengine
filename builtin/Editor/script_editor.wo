@@ -4,7 +4,7 @@ import je.gui;
 func Editor_ScriptEditor(ref open:bool)
 {
     using je::gui;
-    if(!open) return !open;
+    if(!open) return FormAction::Close;
 
     Begin("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
 
@@ -15,5 +15,8 @@ func Editor_ScriptEditor(ref open:bool)
     }
 
     End();
-    return !open;
+
+    if (!open)
+        return FormAction::Close;
+    return FormAction::Nothing;
 }
