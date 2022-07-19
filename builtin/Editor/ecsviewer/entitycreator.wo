@@ -4,31 +4,231 @@ import je;
 
 import builtin.Editor.generic.form.inputbox;
 import builtin.Editor.generic.form.askfor;
+import builtin.Editor.generic.form.msgbox;
 
 namespace editor::EntityCreator
 {
 	using CreatorContext = struct {
+		new_entity_name       : string,
 		has_append_components : array<je::typeinfo>,
 		not_append_components : array<je::typeinfo>,
 	};
 
+	private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png")->val();
+
 	func create_context()=> CreatorContext
 	{
-		return CreatorContext{
+		let context = CreatorContext{
+			new_entity_name = "New entity",
 			has_append_components = [],
 			not_append_components = je::typeinfo::editor::get_all_components_types(),
 		};
+
+		let comps = context.not_append_components;
+		context.not_append_components = [];
+
+		// 不显示所有编辑器组件
+		for (let comp : comps)
+			if (!comp->name()->beginwith("Editor::"))
+				context.not_append_components->add(comp);
+
+		return context;
 	}
 	
+	func show_component(typename: string)
+	{
+		using je::gui;
+
+		BeginGroup();
+            PushID(typename);
+                ImageButtom(icon_image, 0.075);
+            PopID();
+            if (BeginDragDropSource())
+            {
+                SetDragDropPayload("JEDITOR_COMPONENT_TYPE", typename);
+                    Text(F"Component: {typename}");
+                EndDragDropSource();
+            }
+
+            SameLine();
+            Text(typename);
+        EndGroup();
+	}
+
+	func show_append_components(context: CreatorContext, width: real)
+	{
+		using je::gui;
+		BeginChild("append_components", width, 0.);
+			Text("新实体组件");
+			for(let component_type : context.has_append_components)
+				show_component(component_type->name());
+		EndChild();
+
+		if(BeginDragDropTarget())
+		{
+			let data = "";
+			if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
+			{
+				// 有组件被拖动至此
+				add_components(context, je::typeinfo(data));
+			}
+			EndDragDropTarget();
+		}
+	}
+
+	func show_usable_components(context: CreatorContext, width: real)
+	{
+		using je::gui;
+		BeginChild("usable_components", width, 0.);
+			Text("可用组件");
+			for(let component_type : context.not_append_components)
+				show_component(component_type->name());
+		EndChild();
+
+		if(BeginDragDropTarget())
+		{
+			let data = "";
+			if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
+			{
+				// 有组件被拖动至此
+				remove_components(context, je::typeinfo(data));
+			}
+			EndDragDropTarget();
+		}
+	}
+
+	func reset_context_cur_components(context: CreatorContext)
+	{
+		for (let append_component : context.has_append_components)
+			context.not_append_components->add(append_component);
+		context.has_append_components->clear();
+	}
+	func remove_components(context: CreatorContext, type: je::typeinfo)
+	{
+		if (context.not_append_components->find(type) == -1)
+		{
+			context.not_append_components->add(type);
+			context.has_append_components->remove(context.has_append_components->find(type));
+		}
+	}
+	func add_components(context: CreatorContext, type: je::typeinfo)
+	{
+		if (context.has_append_components->find(type) == -1)
+		{
+			context.has_append_components->add(type);
+			context.not_append_components->remove(context.not_append_components->find(type));
+		}
+	}
+
+	func menu_bar(context: CreatorContext)=> bool
+	{
+		using je::gui;
+		let create_entity = false;
+
+        if (BeginMenuBar())
+        {
+            if (MenuItem("创建", !context.has_append_components->empty()))
+            {
+				// TODO: 实例化实体，至少要有一个组件
+				create_entity = true;
+            }
+			if (BeginMenu("常用实体"))
+            {
+				if (MenuItem("重置列表"))
+					reset_context_cur_components(context);
+
+				Separator();
+
+				if (MenuItem("带有Transform的空实体"))
+				{
+					reset_context_cur_components(context);
+					add_components(context, je::typeinfo("Transform::LocalPosition"));
+					add_components(context, je::typeinfo("Transform::LocalRotation"));
+					add_components(context, je::typeinfo("Transform::LocalScale"));
+					add_components(context, je::typeinfo("Transform::LocalToWorld"));
+					add_components(context, je::typeinfo("Transform::Translation"));
+				}
+
+				if (MenuItem("完整渲染实体"))
+				{
+					reset_context_cur_components(context);
+					add_components(context, je::typeinfo("Transform::LocalPosition"));
+					add_components(context, je::typeinfo("Transform::LocalRotation"));
+					add_components(context, je::typeinfo("Transform::LocalScale"));
+					add_components(context, je::typeinfo("Transform::LocalToWorld"));
+					add_components(context, je::typeinfo("Transform::Translation"));
+					add_components(context, je::typeinfo("Renderer::Shape"));
+					add_components(context, je::typeinfo("Renderer::Shaders"));
+					add_components(context, je::typeinfo("Renderer::Textures"));
+				}
+
+				if (MenuItem("摄像机（透视）"))
+				{
+					reset_context_cur_components(context);
+					add_components(context, je::typeinfo("Transform::LocalPosition"));
+					add_components(context, je::typeinfo("Transform::LocalRotation"));
+					add_components(context, je::typeinfo("Transform::LocalScale"));
+					add_components(context, je::typeinfo("Transform::LocalToWorld"));
+					add_components(context, je::typeinfo("Transform::Translation"));
+					add_components(context, je::typeinfo("Camera::Clip"));
+					add_components(context, je::typeinfo("Camera::Projection"));
+					add_components(context, je::typeinfo("Camera::PerspectiveProjection"));
+					add_components(context, je::typeinfo("Camera::Viewport"));
+				}
+
+				if (MenuItem("摄像机（平行）"))
+				{
+					reset_context_cur_components(context);
+					add_components(context, je::typeinfo("Transform::LocalPosition"));
+					add_components(context, je::typeinfo("Transform::LocalRotation"));
+					add_components(context, je::typeinfo("Transform::LocalScale"));
+					add_components(context, je::typeinfo("Transform::LocalToWorld"));
+					add_components(context, je::typeinfo("Transform::Translation"));
+					add_components(context, je::typeinfo("Camera::Clip"));
+					add_components(context, je::typeinfo("Camera::Projection"));
+					add_components(context, je::typeinfo("Camera::OrthoProjection"));
+					add_components(context, je::typeinfo("Camera::Viewport"));
+				}
+
+				EndMenu();
+            }
+
+            EndMenuBar();
+        }
+
+		return create_entity;
+	}
+
 	func show(context: CreatorContext)
 	{
 		using je::gui;
 
 		let open = true;
-		Begin("创建新实体", WindowsAttribute::ImGuiWindowFlags_None, ref open);
-			
-			SameLine();
+		Begin(F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+			if (menu_bar(context))
+			{
+				// 选择创建实体，开始实例化！
+				match(je::world::rend())
+				{
+					value(rworld)?
+					{
+						let added = rworld->add_entity(context.has_append_components);
+						added->editor::name(context.new_entity_name);
+					}
+					none?
+						launch(generic::MsgBox, ("创建实体失败", "没有找到渲染中的世界",));
+				}
+				open = false;
+			}
 
+			InputText("名称", ref context.new_entity_name);
+
+			let available_width = 0.;
+			GetContentRegionAvail(ref available_width, 0./* 不关心高度 */);
+
+			show_append_components(context, available_width / 2.);
+			SameLine();
+			show_usable_components(context, available_width / 2.);
         End();
 
 		if (!open)

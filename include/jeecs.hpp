@@ -1802,6 +1802,18 @@ namespace jeecs
             return gentity;
         }
 
+        // This function only used for editor.
+        inline game_entity _add_entity(std::vector<typing::typeid_t> components)
+        {
+            components.push_back(typing::INVALID_TYPE_ID);
+
+            game_entity gentity;
+            je_ecs_world_create_entity_with_components(
+                handle(), &gentity, components.data());
+
+            return gentity;
+        }
+
         inline void remove_entity(const game_entity& entity)
         {
             je_ecs_world_destroy_entity(handle(), &entity);

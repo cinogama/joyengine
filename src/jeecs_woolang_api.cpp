@@ -63,6 +63,19 @@ WO_API wo_api wojeapi_attach_shared_system_to_world(wo_vm vm, wo_value args, siz
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world gworld = wo_pointer(args + 0);
+    wo_value components_list = args + 1;
+
+    std::vector<jeecs::typing::typeid_t> components;
+    for (wo_integer_t i = 0; i < wo_lengthof(components_list); ++i)
+        components.push_back(((const jeecs::typing::type_info*)wo_pointer(wo_arr_get(components_list, i)))->m_id);
+
+    return wo_ret_gchandle(vm, new jeecs::game_entity(gworld._add_entity(components)),
+        nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
+}
+
 WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_t argc)
 {
     wo_value out_arr = args + 1;
@@ -931,13 +944,16 @@ namespace je
             //            the life-cycle of custom type / woolang vm.
             static let const graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
             return self->attach_shared_system(graphic_typeinfo);
-        } 
+        }
 
         func rend()=> option<world>
         {
             static let const graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
             return universe::current()->editor::get_shared_system_attached_world(graphic_typeinfo);
         }
+
+        extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
+        func add_entity(self: world, components: array<typeinfo>)=> entity;
 
         namespace editor
         {
