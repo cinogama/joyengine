@@ -73,10 +73,10 @@ namespace editor::Browser
         file,
     }
     using PathInfo = struct {
-        path        : string,            // 当前目录/文件的目录
+        path        : string,   // 当前目录/文件的目录
         name        : string,
-        externname    : string,
-        type        : PathType,            // 类型，如果是目录，则还包含目录内的子项    
+        externname  : string,
+        type        : PathType, // 类型，如果是目录，则还包含目录内的子项    
     };
 
     static let current_work_path = "";        
