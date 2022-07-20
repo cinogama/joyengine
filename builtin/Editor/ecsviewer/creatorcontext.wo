@@ -1,0 +1,61 @@
+import woo.std;
+import je.gui;
+import je;
+
+namespace editor
+{
+	using EntityContext = struct {
+		name  : string,
+		has_append_types : array<je::typeinfo>,
+		not_append_types : array<je::typeinfo>,
+	};
+	using WorldContext  = struct {
+		name  : string,
+		has_append_types : array<je::typeinfo>,
+		has_active_types : array<je::typeinfo>,
+		not_append_types : array<je::typeinfo>,
+	};
+
+	func create_entity_context()=> EntityContext
+	{
+		let context = EntityContext{
+			name = "New entity",
+			has_append_types = [],
+			not_append_types = je::typeinfo::editor::get_all_components_types(),
+		};
+
+		let comps = context.not_append_types;
+		context.not_append_types = [];
+
+		// 不显示所有编辑器组件
+		for (let comp : comps)
+			if (!comp->name()->beginwith("Editor::"))
+				context.not_append_types->add(comp);
+
+		return context;
+	}
+
+	func create_world_context()=> WorldContext
+	{
+		let context = WorldContext{
+			name = "New world",
+			has_append_types = [],
+			has_active_types = [],
+			not_append_types = je::typeinfo::editor::get_all_systems_types(),
+		};
+
+		let comps = context.not_append_types;
+		context.not_append_types = [];
+	
+		for (let comp : comps)
+			// 不显示所有编辑器系统
+			if (!comp->name()->beginwith("Editor::"))
+				if (comp->name()->beginwith("Translation::"))
+					// 默认添加Translation相关系统
+					context.has_active_types->add(comp);
+				else
+					context.not_append_types->add(comp);
+
+		return context;
+	}
+}

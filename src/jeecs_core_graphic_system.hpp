@@ -16,7 +16,7 @@
 
 namespace jeecs
 {
-    struct DefaultGraphicPipelineSystem : public game_system
+    struct DefaultGraphicPipelineSystem : public game_shared_system
     {
         using Translation = Transform::Translation;
 
@@ -33,7 +33,6 @@ namespace jeecs
         using Textures = Renderer::Textures;
 
         jegl_thread* glthread = nullptr;
-        game_universe current_universe = nullptr;
 
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
@@ -41,8 +40,7 @@ namespace jeecs
         jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
 
         DefaultGraphicPipelineSystem(game_universe universe)
-            : game_system(nullptr)
-            , current_universe(universe)
+            : game_shared_system(universe)
         {
             // GraphicSystem is a public system and not belong to any world.
             default_shape_quad =
@@ -53,7 +51,7 @@ namespace jeecs
                     -0.5f, 0.5f, 0.0f,      0.0f, 0.0f, },
                     { 3, 2 });
 
-            default_texture = new graphic::texture(2,2, jegl_texture::texture_format::RGBA);
+            default_texture = new graphic::texture(2, 2, jegl_texture::texture_format::RGBA);
             default_texture->pix(0, 0).set({ 1.f, 0.f, 1.f, 1.f });
             default_texture->pix(1, 1).set({ 1.f, 0.f, 1.f, 1.f });
             default_texture->pix(0, 1).set({ 0.f, 0.f, 0.f, 1.f });
@@ -345,8 +343,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     // update is not work now, means graphic thread want to exit..
                     // ready to shutdown current universe
 
-                    if (current_universe)
-                        current_universe.stop();
+                    if (game_universe universe = get_universe())
+                        universe.stop();
                 }
         }
     };

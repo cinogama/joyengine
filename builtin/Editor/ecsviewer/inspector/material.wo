@@ -129,7 +129,7 @@ namespace editor::Inspector::Material
             {
                 value(current_entity)?
                 {
-                    static let ShadersTypeID = je::typeinfo("Renderer::Shaders");
+                    static let ShadersTypeID = je::typeinfo("Renderer::Shaders")->val();
                     match (current_entity->editor::get_component(ShadersTypeID))
                     {
                         value(shaders)?

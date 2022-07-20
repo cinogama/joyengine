@@ -6,6 +6,6 @@
 
 void jeecs_entry_register_core_systems()
 {
-    jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("jeecs::TranslationUpdatingSystem");
-    jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("jeecs::DefaultGraphicPipelineSystem");
+    jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
+    jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
 }

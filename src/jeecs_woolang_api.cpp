@@ -232,13 +232,69 @@ WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_log(wo_vm vm, wo_value args, size_t argc)
+{
+    std::string disp;
+
+    for (size_t i = 0; i < argc; i++)
+        disp += wo_cast_string(args + i);
+
+    jeecs::debug::log("%s", disp.c_str());
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_loginfo(wo_vm vm, wo_value args, size_t argc)
+{
+    std::string disp;
+
+    for (size_t i = 0; i < argc; i++)
+        disp += wo_cast_string(args + i);
+
+    jeecs::debug::log_info("%s", disp.c_str());
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_logwarn(wo_vm vm, wo_value args, size_t argc)
+{
+    std::string disp;
+
+    for (size_t i = 0; i < argc; i++)
+        disp += wo_cast_string(args + i);
+
+    jeecs::debug::log_warn("%s", disp.c_str());
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_logerr(wo_vm vm, wo_value args, size_t argc)
+{
+    std::string disp;
+
+    for (size_t i = 0; i < argc; i++)
+        disp += wo_cast_string(args + i);
+
+    jeecs::debug::log_error("%s", disp.c_str());
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_logfatal(wo_vm vm, wo_value args, size_t argc)
+{
+    std::string disp;
+
+    for (size_t i = 0; i < argc; i++)
+        disp += wo_cast_string(args + i);
+
+    jeecs::debug::log_fatal("%s", disp.c_str());
+    return wo_ret_void(vm);
+}
+
+
 // ECS TYPEINFO
 WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args, size_t argc)
 {
     if (wo_valuetype(args + 0) == WO_INTEGER_TYPE)
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of((jeecs::typing::typeid_t)wo_int(args + 0)));
+        return wo_ret_option_ptr(vm, (void*)jeecs::typing::type_info::of((jeecs::typing::typeid_t)wo_int(args + 0)));
     else //if (wo_valuetype(args + 0) == WO_STRING_TYPE)
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of(wo_string(args + 0)));
+        return wo_ret_option_ptr(vm, (void*)jeecs::typing::type_info::of(wo_string(args + 0)));
 }
 
 WO_API wo_api wojeapi_get_all_registed_types(wo_vm vm, wo_value args, size_t argc)
@@ -263,8 +319,15 @@ WO_API wo_api wojeapi_type_is_component(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_type_is_system(wo_vm vm, wo_value args, size_t argc)
 {
     const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, type->m_type_class == je_typing_class::JE_SYSTEM);
+    return wo_ret_bool(vm, type->is_system());
 }
+
+WO_API wo_api wojeapi_type_is_shared_system(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, type->is_shared_system());
+}
+
 
 WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args, size_t argc)
 {
@@ -735,6 +798,17 @@ const char* jeecs_woolang_api_src = R"(
 import woo.std;
 namespace je
 {
+    extern("libjoyecs", "wojeapi_log")
+    func log(...)=> void;
+    extern("libjoyecs", "wojeapi_loginfo")
+    func loginfo(...)=> void;
+    extern("libjoyecs", "wojeapi_logerr")
+    func logerr(...)=> void;
+    extern("libjoyecs", "wojeapi_logwarn")
+    func logwarn(...)=> void;
+    extern("libjoyecs", "wojeapi_logfatal")
+    func logfatal(...)=> void;
+
     extern("libjoyecs", "wojeapi_exit")
     func exit()=> void;
 
@@ -746,6 +820,9 @@ namespace je
 
         extern("libjoyecs", "wojeapi_type_is_system")
         func is_system(self: typeinfo)=> bool;
+
+        extern("libjoyecs", "wojeapi_type_is_shared_system")
+        func is_shared_system(self: typeinfo)=> bool;
 
         namespace editor
         {
@@ -776,10 +853,10 @@ namespace je
             }
         }
         extern("libjoyecs", "wojeapi_type_of")
-        func create(name: string)=> typeinfo;
+        func create(name: string)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_of")
-        func create(id: int)=> typeinfo;
+        func create(id: int)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_id")
         func id(self: typeinfo)=> int;
@@ -942,13 +1019,13 @@ namespace je
             // ATTENTION: Built-in components or systems's typeinfo will not unregister
             //            so I can let them static here, but you should pay attention to
             //            the life-cycle of custom type / woolang vm.
-            static let const graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
+            static let const graphic_typeinfo = typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
             return self->attach_shared_system(graphic_typeinfo);
         }
 
         func rend()=> option<world>
         {
-            static let const graphic_typeinfo = typeinfo("jeecs::DefaultGraphicPipelineSystem");
+            static let const graphic_typeinfo = typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
             return universe::current()->editor::get_shared_system_attached_world(graphic_typeinfo);
         }
 

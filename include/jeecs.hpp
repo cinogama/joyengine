@@ -209,6 +209,7 @@ typedef enum je_typing_class
     JE_BASIC_TYPE,
     JE_COMPONENT,
     JE_SYSTEM,
+    JE_SHARED_SYSTEM,
 } je_typing_class;
 // You should promise: different type should have different name.
 JE_API bool je_typing_find_or_register(
@@ -1485,11 +1486,14 @@ namespace jeecs
                         is_basic_type = true;
                     }
 
-                    je_typing_class current_type = is_basic_type
+                    je_typing_class current_type =
+                        is_basic_type
                         ? je_typing_class::JE_BASIC_TYPE
-                        : (std::is_base_of<game_system, T>::value
-                            ? je_typing_class::JE_SYSTEM
-                            : je_typing_class::JE_COMPONENT);
+                        : (std::is_base_of<game_shared_system, T>::value
+                            ? je_typing_class::JE_SHARED_SYSTEM
+                            : (std::is_base_of<game_system, T>::value
+                                ? je_typing_class::JE_SYSTEM
+                                : je_typing_class::JE_COMPONENT));
 
                     typeid_t id = INVALID_TYPE_ID;
 
@@ -1583,6 +1587,10 @@ namespace jeecs
             inline bool is_system() const noexcept
             {
                 return m_type_class == je_typing_class::JE_SYSTEM;
+            }
+            inline bool is_shared_system() const noexcept
+            {
+                return m_type_class == je_typing_class::JE_SHARED_SYSTEM;
             }
             inline bool is_component() const noexcept
             {
@@ -1774,12 +1782,15 @@ namespace jeecs
 
         inline void* add_system(const typing::type_info* sys_type)
         {
-            assert(sys_type->is_system());
-            return je_ecs_universe_instance_system(
-                je_ecs_world_in_universe(handle()),
-                handle(),
-                sys_type
-            );
+            if (sys_type->is_system())
+                return je_ecs_universe_instance_system(
+                    je_ecs_world_in_universe(handle()),
+                    handle(),
+                    sys_type
+                );
+            else
+                debug::log_fatal("Cannot add '%s' to world, it is not a system.", sys_type->m_typename);
+            return nullptr;
         }
 
         template<typename T>
@@ -1819,13 +1830,16 @@ namespace jeecs
             je_ecs_world_destroy_entity(handle(), &entity);
         }
 
-        inline void attach_shared_system(const typing::type_info* system_id)
+        inline void attach_shared_system(const typing::type_info* sys_type)
         {
-            je_ecs_universe_attach_shared_system_to(
-                je_ecs_world_in_universe(handle()),
-                handle(),
-                system_id
-            );
+            if (sys_type->is_shared_system())
+                je_ecs_universe_attach_shared_system_to(
+                    je_ecs_world_in_universe(handle()),
+                    handle(),
+                    sys_type
+                );
+            else
+                debug::log_fatal("Cannot attach '%s' to world, it is not a shared-system.", sys_type->m_typename);
         }
 
         inline operator bool()const noexcept
@@ -2310,14 +2324,17 @@ namespace jeecs
             return je_ecs_world_create(_m_universe_addr);
         }
 
-        inline void* add_shared_system(const typing::type_info* typeinfo)
+        inline void* add_shared_system(const typing::type_info* sys_type)
         {
-            assert(typeinfo->is_system());
-            return je_ecs_universe_instance_system(
-                handle(),
-                nullptr,
-                typeinfo
-            );
+            if (sys_type->is_shared_system())
+                return je_ecs_universe_instance_system(
+                    handle(),
+                    nullptr,
+                    sys_type
+                );
+            else
+                debug::log_fatal("Cannot add '%s' to universe, it is not a shared-system.", sys_type->m_typename);
+            return nullptr;
         }
 
         inline void attach_shared_system_to(const typing::type_info* typeinfo, game_world world)
@@ -2348,6 +2365,23 @@ namespace jeecs
         static void destroy_universe(game_universe universe)
         {
             return je_ecs_universe_destroy(universe.handle());
+        }
+    };
+
+    class game_shared_system : public game_system
+    {
+    private:
+        game_universe _m_current_universe = nullptr;
+    public:
+        game_universe get_universe() const noexcept
+        {
+            return _m_current_universe;
+        }
+
+        game_shared_system(game_universe universe)
+            : game_system(nullptr)
+            , _m_current_universe(universe)
+        {
         }
     };
 
@@ -2935,7 +2969,7 @@ namespace jeecs
             }
             inline void parse(const std::string& str)
             {
-                sscanf(str.c_str(), "(%f,%f,%f,%f)", &x, &y, &z,&w);
+                sscanf(str.c_str(), "(%f,%f,%f,%f)", &x, &y, &z, &w);
             }
         };
         inline static constexpr vec4 operator * (float _f, const vec4& _v4) noexcept

@@ -28,12 +28,12 @@ int main(int argc, char** argv)
         game_universe universe = game_universe::create_universe();
         jedbg_set_editor_universe(universe.handle());
 
-        universe.add_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
+        universe.add_shared_system(typing::type_info::of("Graphic::DefaultGraphicPipelineSystem"));
 
         game_world world = universe.create_world();
-        world.add_system(typing::type_info::of("jeecs::TranslationUpdatingSystem"));
+        world.add_system(typing::type_info::of("Translation::TranslationUpdatingSystem"));
 
-        world.attach_shared_system(typing::type_info::of("jeecs::DefaultGraphicPipelineSystem"));
+        world.attach_shared_system(typing::type_info::of("Graphic::DefaultGraphicPipelineSystem"));
 
         auto entity = world.add_entity<
             Transform::LocalPosition,
