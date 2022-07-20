@@ -32,6 +32,11 @@ namespace editor::Inspector::Component
                     for (let component_type : current_entity->editor::get_components_types())
                     {
                         let component_type_name = component_type->name();
+
+                        if (component_type_name->beginwith("Editor::"))
+                            // 跳过编辑器组件显示
+                            continue;
+
                         let current_types = current_component_types;
                         let scope_names = component_type_name->split("::");
 

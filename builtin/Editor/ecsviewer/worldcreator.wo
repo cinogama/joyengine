@@ -1,0 +1,29 @@
+import woo.std;
+import je.gui;
+import je;
+
+import builtin.Editor.generic.form.inputbox;
+import builtin.Editor.generic.form.askfor;
+import builtin.Editor.generic.form.msgbox;
+
+namespace editor::WorldCreator
+{
+	using CreatorContext = struct {
+		new_world_name : string,
+
+	};
+	func show()
+	{
+		using je::gui;
+
+		let open = true;
+		Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+			
+
+		End();
+
+		if (!open)
+			return FormAction::Close;
+		return FormAction::Nothing;
+	}
+}

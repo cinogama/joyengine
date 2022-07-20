@@ -6,6 +6,8 @@ import builtin.Editor.generic.form.inputbox;
 import builtin.Editor.generic.form.askfor;
 import builtin.Editor.generic.form.msgbox;
 
+import worldcreator;
+
 namespace editor::WorldList
 {
     private func menu()
@@ -15,14 +17,16 @@ namespace editor::WorldList
         {
             if (MenuItem("创建新世界"))
             {
-                launch(generic::InputBox, ("创建新世界", F"请输入世界的名称","New world",
+                /* launch(generic::InputBox, ("创建新世界", F"请输入世界的名称","New world",
                                         func(new_world_name: string){
                                             if (new_world_name == "")
                                                 return; // 没有给定名称，跳过创建
 
                                             let nworld = je::universe::current()->create_world();
                                             nworld->editor::name(new_world_name);
-                                        }));
+                                        })); */
+
+                launch(WorldCreator::show, ());
             }
 
             EndMenuBar();
