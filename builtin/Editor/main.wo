@@ -127,7 +127,6 @@ je::gui::launch(Editor_MainMenuBar, ());
 
 /////////////////////
 
-/*
 // 哇哦 好像是什么不得了的代码~
 
 let const Invokable<FT, AT> = !((nil: dynamic: FT)(nil: dynamic: AT) is pending);
@@ -144,4 +143,3 @@ foo(func(x: int){return x*2}, 2333);
 std::println("OK");
 
 while(true);
-*/
