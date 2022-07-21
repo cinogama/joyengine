@@ -1,4 +1,5 @@
 #define JE_IMPL
+#define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
 extern const char* shader_wrapper_path;
@@ -20,7 +21,10 @@ void je_init(int argc, char** argv)
     wo_virtual_source(shader_wrapper_path, shader_wrapper_src, false);
     wo_virtual_source(gui_api_path, gui_api_src, false);
     wo_virtual_source(jeecs_filesys_woolang_api_path, jeecs_filesys_woolang_api_src, false);
+}
 
+bool jedbg_editor(void)
+{
     bool failed_in_start_editor = false;
 
     wo_vm vmm = wo_create_vm();
@@ -35,11 +39,7 @@ void je_init(int argc, char** argv)
     }
     wo_close_vm(vmm);
 
-    if (failed_in_start_editor)
-    {
-        wo_finish();
-        exit(-1);
-    }
+    return !failed_in_start_editor;
 }
 
 void je_finish()

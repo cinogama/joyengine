@@ -1,5 +1,4 @@
 import woo.std;
-import je.gui;
 import je;
 
 namespace editor

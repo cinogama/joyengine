@@ -3,6 +3,7 @@
 // Here will store the typing & factory informations
 
 #define JE_IMPL
+#define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
 #include <shared_mutex>
@@ -254,8 +255,7 @@ void je_register_member(
 ///////////////////////////////////////////////////////////////////////////
 
 // NOTE: need free the return result by 'je_mem_free'
-extern "C" // FUCKYOU MSVC!
-const jeecs::typing::type_info * *jedbg_get_all_registed_types()
+const jeecs::typing::type_info * *jedbg_get_all_registed_types(void)
 {
     auto&& types = jeecs_impl::type_info_holder::holder()->get_all_registed_types();
     auto result = (const jeecs::typing::type_info**)je_mem_alloc(sizeof(const jeecs::typing::type_info*) * (types.size() + 1));

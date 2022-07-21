@@ -2171,7 +2171,7 @@ void jedbg_set_editor_universe(void* universe_handle)
     _editor_universe = universe_handle;
 }
 
-void* jedbg_get_editor_universe()
+void* jedbg_get_editor_universe(void)
 {
     return _editor_universe;
 }

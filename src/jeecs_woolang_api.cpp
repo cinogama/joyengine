@@ -11,10 +11,52 @@ WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_pointer(vm, universe);
 }
 
+WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args, size_t argc)
+{
+    void* universe = je_ecs_universe_create();
+    return wo_ret_pointer(vm, universe);
+}
+
+WO_API wo_api wojeapi_set_current_universe(wo_vm vm, wo_value args, size_t argc)
+{
+    void* universe = wo_pointer(args + 0);
+
+    jedbg_set_editor_universe(universe);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_universe(wo_pointer(args + 0)).stop();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_wait_universe(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_universe(wo_pointer(args + 0)).wait();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_close_universe(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_universe::destroy_universe(jeecs::game_universe(wo_pointer(args + 0)));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_pointer(vm,
         jeecs::game_universe(wo_pointer(args + 0)).create_world().handle());
+}
+
+
+WO_API wo_api wojeapi_add_shared_system_to_universe(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+
+    return wo_ret_bool(vm,
+        nullptr != jeecs::game_universe(wo_pointer(args + 0)).add_shared_system(type));
 }
 
 WO_API wo_api wojeapi_get_shared_system_attached_world(wo_vm vm, wo_value args, size_t argc)
@@ -997,8 +1039,26 @@ namespace je
         extern("libjoyecs", "wojeapi_create_world_in_universe")
         func create_world(self: universe)=> world;
 
+        extern("libjoyecs", "wojeapi_add_shared_system_to_universe")
+        func add_shared_system(self:universe, systype:typeinfo)=> bool;
+
         namespace editor
         {
+            extern("libjoyecs", "wojeapi_create_universe")
+            func create()=> universe;
+
+            extern("libjoyecs", "wojeapi_set_current_universe")
+            func set_current_universe(self: universe)=> void;
+
+            extern("libjoyecs", "wojeapi_stop_universe")
+            func stop(self: universe)=> void;
+
+            extern("libjoyecs", "wojeapi_wait_universe")
+            func wait(self: universe)=> void;
+
+            extern("libjoyecs", "wojeapi_close_universe")
+            func close(self: universe)=> void;
+        
             func worlds_list(self: universe)
             {
                 extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")

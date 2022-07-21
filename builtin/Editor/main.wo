@@ -15,6 +15,7 @@ import generic.form.askfor;
 import generic.serialize;
 
 import project.config;
+import project.init;
                     
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
@@ -124,7 +125,6 @@ func Editor_Welcome(ref open: bool)
     return FormAction::Nothing;
 }
 
-je::gui::launch(Editor_MainMenuBar, ());
-
+editor::Project::Start(Editor_MainMenuBar, ());
 
 /////////////////////
