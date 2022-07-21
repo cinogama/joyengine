@@ -11,6 +11,7 @@ namespace editor::Project
 
 		// 0. 准备需要用到的常量
 		let default_graphic_pipeline_type = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
+		let default_translation_sys_type  = je::typeinfo("Translation::TranslationUpdatingSystem")->val();
 
 		// 1. 创建引擎的基本上下文
 		let universe = je::universe::editor::create();
@@ -24,6 +25,7 @@ namespace editor::Project
 		let default_world = universe->create_world();
 		default_world->editor::name("Default");
 		default_world->attach_shared_system(default_graphic_pipeline_type);
+		default_world->add_system(default_translation_sys_type);
 	}
 
 	func Start<FT, ArgTs>(form: FT, args: ArgTs)
