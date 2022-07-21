@@ -63,6 +63,13 @@ WO_API wo_api wojeapi_attach_shared_system_to_world(wo_vm vm, wo_value args, siz
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world gworld = wo_pointer(args + 0);
+    return wo_ret_bool(vm
+        , nullptr != gworld.add_system((const jeecs::typing::type_info*)wo_pointer(args + 1)));
+}
+
 WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_world gworld = wo_pointer(args + 0);
@@ -1013,6 +1020,9 @@ namespace je
 
         extern("libjoyecs", "wojeapi_attach_shared_system_to_world")
         func attach_shared_system(self: world, systype: typeinfo)=> void;
+
+        extern("libjoyecs", "wojeapi_add_system_to_world")
+        func add_system(self: world, systype: typeinfo)=> bool;
 
         func rend(self: world)
         {

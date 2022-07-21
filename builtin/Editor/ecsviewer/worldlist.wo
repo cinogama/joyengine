@@ -7,7 +7,6 @@ import builtin.Editor.generic.form.askfor;
 import builtin.Editor.generic.form.msgbox;
 
 import worldcreator;
-import creatorcontext;
 
 namespace editor::WorldList
 {
@@ -17,9 +16,7 @@ namespace editor::WorldList
         if (BeginMenuBar())
         {
             if (MenuItem("创建新世界"))
-            {
-                launch(WorldCreator::show, (create_world_context(),));
-            }
+                launch(WorldCreator::show, (WorldCreator::create_context(),));
 
             EndMenuBar();
         }

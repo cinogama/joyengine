@@ -12,6 +12,37 @@ namespace editor::WorldCreator
 {
 	private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/System.png")->val();
 
+	using WorldContext  = struct {
+		name  : string,
+		has_append_types : array<je::typeinfo>,
+		has_active_types : array<je::typeinfo>,
+		not_append_types : array<je::typeinfo>,
+	};
+
+	func create_context()=> WorldContext
+	{
+		let context = WorldContext{
+			name = "New world",
+			has_append_types = [],
+			has_active_types = [],
+			not_append_types = je::typeinfo::editor::get_all_systems_types(),
+		};
+
+		let comps = context.not_append_types;
+		context.not_append_types = [];
+	
+		for (let comp : comps)
+			// 不显示所有编辑器系统
+			if (!comp->name()->beginwith("Editor::"))
+				if (comp->name()->beginwith("Translation::"))
+					// 默认添加Translation相关系统
+					context.has_active_types->add(comp);
+				else
+					context.not_append_types->add(comp);
+
+		return context;
+	}
+
 	func show_system(typename: string)
 	{
 		using je::gui;
@@ -142,12 +173,40 @@ namespace editor::WorldCreator
 		}
 	}
 
+	func menu_bar(context: WorldContext)
+	{
+		using je::gui;
+
+		let create_world = false;
+
+		if (BeginMenuBar())
+        {
+			if (MenuItem("创建", context.name != ""))
+				create_world = true;
+			
+			EndMenuBar();
+		}
+
+		return create_world;
+	}
+
 	func show(context: WorldContext)
 	{
 		using je::gui;
 
 		let open = true;
 		Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+			if (menu_bar(context))
+			{
+				let created_world = je::universe::current()->create_world();
+				created_world->editor::name(context.name);
+
+				for (let active_sys : context.has_active_types)
+					created_world->add_system(active_sys);
+
+				open = false;
+			}
+
 			InputText("名称", ref context.name);
 
 			let available_width = 0., available_height = 0.;

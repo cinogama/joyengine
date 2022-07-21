@@ -1,0 +1,62 @@
+import woo.std;
+import je.gui;
+import je;
+
+namespace editor
+{
+	using Project = struct {
+		config : Project::Config,
+		worlds : array<Project::World>,
+	};
+}
+
+namespace editor::Project
+{
+	// 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
+	using World = struct {
+		name : string,
+		path : option<string>,
+		instance : option<je::world>,
+		runtime_system : array<je::typeinfo>,
+	};
+
+	// 用于储存项目的配置信息
+	using Config = struct {
+		name : string,					// 项目的名称
+		graphic_system : je::typeinfo,	// 默认使用的图形系统类型
+	};
+
+	private let _current_project = option::none : option<Project>;
+
+	func SetCurrentProject(self: Project)
+	{
+		_current_project = option::value(self);
+		return self;
+	}
+
+	func GetCurrentProject(self: Project)=> result<Project, string>
+	{
+		match(_current_project)
+		{
+			value(proj)?
+				return result::ok(proj);
+			none?
+				return result::err("没有正在编辑中的工程文件");
+		}
+	}
+
+	func CreateDefaultProject()
+	{
+		return SetCurrentProject(Project{
+			config = Config {
+				name = "Empty project",
+
+				// 默认图形系统应该内置在引擎里，如果获取不到这里直接爆炸
+				graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
+			},
+			worlds = [],
+		});
+	}
+
+	
+}

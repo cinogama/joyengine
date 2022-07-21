@@ -6,7 +6,6 @@ import builtin.Editor.generic.form.inputbox;
 import builtin.Editor.generic.form.askfor;
 
 import entitycreator;
-import creatorcontext;
 
 namespace editor::EntityList
 {
@@ -19,7 +18,7 @@ namespace editor::EntityList
         if (BeginMenuBar())
         {
             if (MenuItem("创建新实体"))
-                launch(EntityCreator::show, (create_entity_context(),));
+                launch(EntityCreator::show, (EntityCreator::create_context(),));
 
             EndMenuBar();
         }

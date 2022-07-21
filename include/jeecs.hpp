@@ -108,12 +108,12 @@ namespace jeecs
             inline std::string to_string() const
             {
                 char buf[sizeof(a) * 2 + sizeof(b) * 2 + 2];
-                snprintf(buf, sizeof(buf), "%016ullX-%016ullX", a, b);
+                snprintf(buf, sizeof(buf), "%016llX-%016llX", a, b);
                 return buf;
             }
             inline void parse(const std::string& buf)
             {
-                sscanf(buf.c_str(), "%ullX-%ullX", &a, &b);
+                sscanf(buf.c_str(), "%llX-%llX", &a, &b);
             }
         };
 

@@ -13,6 +13,8 @@ import script_editor;
 
 import generic.form.askfor;
 import generic.serialize;
+
+import project.config;
                     
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
@@ -126,20 +128,3 @@ je::gui::launch(Editor_MainMenuBar, ());
 
 
 /////////////////////
-
-// 哇哦 好像是什么不得了的代码~
-
-let const Invokable<FT, AT> = !((nil: dynamic: FT)(nil: dynamic: AT) is pending);
-let const Same<A, B> = (nil: dynamic: A) is B;
-
-func foo<FT, AT>(x: FT, y: AT)
-    where Invokable:<FT, AT>,  
-               Same:<AT, int>;
-{
-}
-
-foo(func(x: int){return x*2}, 2333);
-
-std::println("OK");
-
-while(true);

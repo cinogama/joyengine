@@ -12,6 +12,31 @@ namespace editor::EntityCreator
 {
 	private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png")->val();
 
+		using EntityContext = struct {
+		name  : string,
+		has_append_types : array<je::typeinfo>,
+		not_append_types : array<je::typeinfo>,
+	};
+	
+	func create_context()=> EntityContext
+	{
+		let context = EntityContext{
+			name = "New entity",
+			has_append_types = [],
+			not_append_types = je::typeinfo::editor::get_all_components_types(),
+		};
+
+		let comps = context.not_append_types;
+		context.not_append_types = [];
+
+		// 不显示所有编辑器组件
+		for (let comp : comps)
+			if (!comp->name()->beginwith("Editor::"))
+				context.not_append_types->add(comp);
+
+		return context;
+	}
+
 	func show_component(typename: string)
 	{
 		using je::gui;
@@ -117,7 +142,7 @@ namespace editor::EntityCreator
 
         if (BeginMenuBar())
         {
-            if (MenuItem("创建", context.name == "" 
+            if (MenuItem("创建", context.name != "" 
 							&& !context.has_append_types->empty()))
             {
 				// TODO: 实例化实体，至少要有一个组件
