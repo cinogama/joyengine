@@ -17,7 +17,7 @@ namespace editor::Inspector
         if(!open) return FormAction::Close;
 
         Begin("检视面板", WindowsAttribute::ImGuiWindowFlags_None, ref open);
-            let _1_3_height = 0.;
+            let mut _1_3_height = 0.;
             GetContentRegionAvail(0./* 不关心宽度 */, ref _1_3_height);
             _1_3_height /= 3.;
             _1_3_height -= 5.;

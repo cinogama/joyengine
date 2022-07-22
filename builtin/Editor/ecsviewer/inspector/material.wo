@@ -23,7 +23,7 @@ namespace editor::Inspector::Material
     {
         using je::gui;
 
-        let menu_option = shader_option::DoNothing;
+        let mut menu_option = shader_option::DoNothing;
         if (BeginPopupContextItem())
         {
             if (MenuItem("移除"))
@@ -47,7 +47,7 @@ namespace editor::Inspector::Material
         let textures = entity->editor::graphic::get_textures();
 
         let show_uniforms = TreeNodeEx(utils::ShortString(shader->path(), 25) + "##" + index:string, attribute);
-        let shader_operation = show_shader_menu();
+        let mut shader_operation = show_shader_menu();
 
         match (generic::AcceptFileForCurrentWidget())
         {
@@ -136,7 +136,7 @@ namespace editor::Inspector::Material
                         {
                             let shaders = current_entity->editor::graphic::get_shaders();
 
-                            let index = 0, shaders_has_updated = false;
+                            let mut index = 0, mut shaders_has_updated = false;
                             for (let shader : shaders->dup())
                             {
                                 match (show_shader(current_entity, shader, index))

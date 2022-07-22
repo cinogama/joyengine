@@ -7,7 +7,7 @@ namespace generic
     {
         using je::gui;
 
-        let open = true;
+        let mut open = true;
 
         Begin(F"{title}##{JobID()}"
                     , WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);

@@ -37,7 +37,7 @@ namespace editor::Inspector::Component
                             // 跳过编辑器组件显示
                             continue;
 
-                        let current_types = current_component_types;
+                        let mut current_types = current_component_types;
                         let scope_names = component_type_name->split("::");
 
                         // 从根开始，找到最终组件所在的节点
@@ -66,7 +66,7 @@ namespace editor::Inspector::Component
                         {
                             value(type)?
                             {
-                                let member_count = 0;
+                                let mut member_count = 0;
                                 match (entity->editor::get_component(type))
                                 {
                                     value(component_addr)?
@@ -104,7 +104,7 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::float] = 
             func(name: string, addr: je::native_value)
             {
-                let value = 0.; addr->float(ref value);
+                let mut value = 0.; addr->float(ref value);
 
                 if (InputFloat(name, ref value))
                     addr->float(value);
@@ -112,7 +112,7 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::int] = 
             func(name: string, addr: je::native_value)
             {
-                let value = 0; addr->int(ref value);
+                let mut value = 0; addr->int(ref value);
 
                 if (InputInt(name, ref value))
                     addr->int(value);
@@ -120,7 +120,7 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::float2] = 
             func(name: string, addr: je::native_value)
             {
-                let x = 0., y = 0.;
+                let mut x = 0., mut y = 0.;
                 addr->float2(ref x, ref y);
 
                 if (InputFloat2(name, ref x, ref y))
@@ -129,7 +129,7 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::float3] = 
             func(name: string, addr: je::native_value)
             {
-                let x = 0., y = 0., z = 0.;
+                let mut x = 0., mut y = 0., mut z = 0.;
                 addr->float3(ref x, ref y, ref z);
 
                 if (InputFloat3(name, ref x, ref y, ref z))
@@ -138,7 +138,7 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::float4] = 
             func(name: string, addr: je::native_value)
             {
-                let x = 0., y = 0., z = 0., w = 0.;
+                let mut x = 0., mut y = 0., mut z = 0., mut w = 0.;
                 addr->float4(ref x, ref y, ref z, ref w);
 
                 if (InputFloat4(name, ref x, ref y, ref z, ref w))
@@ -147,7 +147,7 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::quat] = 
             func(name: string, addr: je::native_value)
             {
-                let x = 0., y = 0., z = 0.;
+                let mut x = 0., mut y = 0., mut z = 0.;
                 addr->euler3(ref x, ref y, ref z);
 
                 if (InputFloat3(name, ref x, ref y, ref z))
@@ -156,7 +156,7 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::string] = 
             func(name: string, addr: je::native_value)
             {
-                let x = "";
+                let mut x = "";
                 addr->string(ref x);
 
                 if (InputText(name, ref x))
@@ -175,7 +175,7 @@ namespace editor::Inspector::Component
         {
             // TODO: 使用默认的 to_string 方法？
 
-            let data_str = addr->to_string(type);
+            let mut data_str = addr->to_string(type);
             if (InputText(name, ref data_str))
                 addr->parse(type, data_str);
         }

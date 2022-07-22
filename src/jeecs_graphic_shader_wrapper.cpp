@@ -1201,14 +1201,14 @@ func CULL(cull: CullConfig)
 {
     let eat_token = func(ref expect_name: string, expect_type: std::token_type)
                     {
-                        let out_result = "";
+                        let mut out_result = "";
                         if (lexer->next(ref out_result) != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
     let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
-                        let out_result = "";
+                        let mut out_result = "";
                         if (lexer->peek("") != expect_type)
                             return option::none;
                         assert(lexer->next(ref out_result) == expect_type);
@@ -1248,7 +1248,7 @@ func CULL(cull: CullConfig)
     eat_token(";", std::token_type::l_semicolon);
 
     //  OK We have current vao struct info, built struct out
-    let out_struct_decl = F"{vao_struct_name} = struct {"{"}\n";
+    let mut out_struct_decl = F"{vao_struct_name} = struct {"{"}\n";
 
     for(let (vao_member_name, vao_shader_type) : struct_infos)
         out_struct_decl += F"{vao_member_name} : {vao_shader_type}, \n";
@@ -1263,7 +1263,7 @@ func CULL(cull: CullConfig)
             return "@ 
         + vao_struct_name + " {\n";
 
-    let vinid = 0;
+    let mut vinid = 0;
 
     for(let (vao_member_name, vao_shader_type) : struct_infos)
     {

@@ -68,7 +68,7 @@ namespace editor::EntityCreator
 
 		if(BeginDragDropTarget())
 		{
-			let data = "";
+			let mut data = "";
 			if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
 			{
 				// 有组件被拖动至此
@@ -89,7 +89,7 @@ namespace editor::EntityCreator
 
 		if(BeginDragDropTarget())
 		{
-			let data = "";
+			let mut data = "";
 			if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
 			{
 				// 有组件被拖动至此
@@ -138,7 +138,7 @@ namespace editor::EntityCreator
 	func menu_bar(context: EntityContext)=> bool
 	{
 		using je::gui;
-		let create_entity = false;
+		let mut create_entity = false;
 
         if (BeginMenuBar())
         {
@@ -219,7 +219,7 @@ namespace editor::EntityCreator
 	{
 		using je::gui;
 
-		let open = true;
+		let mut open = true;
 		Begin(F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
 			if (menu_bar(context))
 			{
@@ -239,7 +239,7 @@ namespace editor::EntityCreator
 
 			InputText("名称", ref context.name);
 
-			let available_width = 0.;
+			let mut available_width = 0.;
 			GetContentRegionAvail(ref available_width, 0./* 不关心高度 */);
 
 			show_append_components(context, available_width / 2.);

@@ -79,7 +79,7 @@ namespace editor::Browser
         type        : PathType, // 类型，如果是目录，则还包含目录内的子项    
     };
 
-    static let current_work_path = "";        
+    static let mut current_work_path = "";        
 
     func FileIcon(path: PathInfo)
     {
@@ -107,7 +107,7 @@ namespace editor::Browser
     {
         using je::gui;
 
-        static let new_showing_path = "";
+        static let mut new_showing_path = "";
         static let now_item_in_path = []: array<PathInfo>;
         if (new_showing_path != current_work_path)
         {
@@ -152,7 +152,7 @@ namespace editor::Browser
             {
                 PathType::dir(subpath)?
                 {
-                    let attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                    let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
                                     + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
                                     + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
                     if (current_work_path == path.path)

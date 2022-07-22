@@ -7,7 +7,7 @@ namespace generic
     {
         using je::gui;
 
-        let open = true;
+        let mut open = true;
 
         let text_buffer = TextBuffer(default_value);
         while (open)

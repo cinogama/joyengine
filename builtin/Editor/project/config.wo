@@ -25,7 +25,7 @@ namespace editor::Project
 		graphic_system : je::typeinfo,	// 默认使用的图形系统类型
 	};
 
-	private let _current_project = option::none : option<Project>;
+	private let mut _current_project = option::none : option<Project>;
 
 	func SetCurrentProject(self: Project)
 	{

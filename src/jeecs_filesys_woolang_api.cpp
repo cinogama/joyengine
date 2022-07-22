@@ -58,7 +58,7 @@ namespace je::filesys
         }
     }
 
-    func filename(_path: string)
+    func filename(mut _path: string)
     {
         _path = _path->replace("\\", "/");
         while (_path!= "" && _path->endwith("/"))

@@ -121,7 +121,7 @@ namespace editor::WorldCreator
 
 		if(BeginDragDropTarget())
 		{
-			let data = "";
+			let mut data = "";
 			if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
 			{
 				// 有组件被拖动至此
@@ -142,7 +142,7 @@ namespace editor::WorldCreator
 
 		if(BeginDragDropTarget())
 		{
-			let data = "";
+			let mut data = "";
 			if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
 			{
 				// 有组件被拖动至此
@@ -163,7 +163,7 @@ namespace editor::WorldCreator
 
 		if(BeginDragDropTarget())
 		{
-			let data = "";
+			let mut data = "";
 			if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
 			{
 				// 有组件被拖动至此
@@ -177,7 +177,7 @@ namespace editor::WorldCreator
 	{
 		using je::gui;
 
-		let create_world = false;
+		let mut create_world = false;
 
 		if (BeginMenuBar())
         {
@@ -194,7 +194,7 @@ namespace editor::WorldCreator
 	{
 		using je::gui;
 
-		let open = true;
+		let mut open = true;
 		Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
 			if (menu_bar(context))
 			{
@@ -209,7 +209,7 @@ namespace editor::WorldCreator
 
 			InputText("名称", ref context.name);
 
-			let available_width = 0., available_height = 0.;
+			let mut available_width = 0., mut available_height = 0.;
 			GetContentRegionAvail(ref available_width, ref available_height);
 
 			BeginGroup();

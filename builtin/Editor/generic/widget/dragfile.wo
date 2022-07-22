@@ -14,7 +14,7 @@ namespace generic
     {
         using je::gui;
 
-        let data = "", some_data_drag = false;
+        let mut data = "", mut some_data_drag = false;
         if(BeginDragDropTarget())
         {
             some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH", ref data);
@@ -25,7 +25,7 @@ namespace generic
         else
             return DragFileAction::None;
     }
-    func DragFile(name: string, path: string)
+    func DragFile(name: string, mut path: string)
     {
         using je::gui;
       
