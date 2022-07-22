@@ -19,10 +19,10 @@ namespace editor::Project
 		universe->add_shared_system(default_graphic_pipeline_type);
 
 		// 2. 创建项目上下文
-		CreateDefaultProject();
+		let proj = CreateDefaultProject();
 
 		// 3. 创建默认的世界
-		let default_world = universe->create_world();
+		let default_world = proj->CreateWorld().instance->val();
 		default_world->editor::name("Default");
 		default_world->attach_shared_system(default_graphic_pipeline_type);
 		default_world->add_system(default_translation_sys_type);

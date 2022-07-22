@@ -213,6 +213,23 @@ WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args, size_t 
         (const jeecs::typing::type_info*)wo_pointer(args + 1)));
 }
 
+WO_API wo_api wojeapi_add_component_from_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    return wo_ret_pointer(vm, je_ecs_world_entity_add_component(
+        je_ecs_world_of_entity(entity), entity,
+        (const jeecs::typing::type_info*)wo_pointer(args + 1)));
+}
+
+WO_API wo_api wojeapi_remove_component_from_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    je_ecs_world_entity_remove_component(je_ecs_world_of_entity(entity), entity, (const jeecs::typing::type_info*)wo_pointer(args + 1));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_is_top_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -1185,6 +1202,12 @@ R"(
 
             extern("libjoyecs", "wojeapi_get_component_from_entity")
             func get_component(self: entity, type: typeinfo)=> option<component>;
+
+            extern("libjoyecs", "wojeapi_add_component_from_entity")
+            func add_component(self: entity, type: typeinfo)=> option<component>;
+
+            extern("libjoyecs", "wojeapi_remove_component_from_entity")
+            func remove_component(self: entity, type: typeinfo)=> void;
 
             extern("libjoyecs", "wojeapi_is_top_entity")
             func is_top(self: entity)=> bool;

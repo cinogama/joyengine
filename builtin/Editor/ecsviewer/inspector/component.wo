@@ -14,6 +14,19 @@ namespace editor::Inspector::Component
         m_component_type:   option<je::typeinfo>,
     };
 
+    func show_component_menu(entity: je::entity, component_type: je::typeinfo)
+    {
+        using je::gui;
+
+        if (BeginPopupContextItem())
+        {
+            if (MenuItem(F"移除组件: {component_type->name()}"))
+                entity->editor::remove_component(component_type);
+
+            EndPopup();
+        }
+    }
+
     func show(cur_entity: option<je::entity>, max_height: real)
     {
         using je::gui;
@@ -56,12 +69,21 @@ namespace editor::Inspector::Component
                     {
                         for (let name, chain: current_node.m_map)
                         {
-                            if (TreeNode(name))
+                            let show_child_nodes = TreeNode(name);
+                            chain.m_component_type->map(
+                                func(type: je::typeinfo)
+                                {
+                                    show_component_menu(entity, type) 
+                                });
+
+                            if (show_child_nodes)
                             {
                                 waklthrow_and_display_components(chain, entity);
                                 TreePop();
                             }
                         }
+
+                        // 显示组件内的数据信息
                         match (current_node.m_component_type)
                         {
                             value(type)?

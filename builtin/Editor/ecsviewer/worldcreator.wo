@@ -198,7 +198,7 @@ namespace editor::WorldCreator
 		Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
 			if (menu_bar(context))
 			{
-				let created_world = je::universe::current()->create_world();
+				let created_world = Project::GetCurrentProject()->CreateWorld().instance->val();
 				created_world->editor::name(context.name);
 
 				for (let active_sys : context.has_active_types)
