@@ -64,7 +64,7 @@ namespace utils
 					if (w == attached_world)
 						shared_systems_list->add(shared_system_type->name());
 				none?
-					/* 这个共享系统没有附加到任何世界，跳过 */;
+					; /* 这个共享系统没有附加到任何世界，一样跳过 */
 			}
 			
 

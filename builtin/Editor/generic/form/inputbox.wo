@@ -13,7 +13,6 @@ namespace generic
         while (open)
         {
             Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
-            {
                 Text(shown);
                 InputText("##", text_buffer);
                 if (Button("确定"))
@@ -27,7 +26,6 @@ namespace generic
                 SameLine();
                 if (Button("取消"))
                     open = false;
-            }
             End();
 
             std::break_yield();
