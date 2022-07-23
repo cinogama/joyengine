@@ -1,0 +1,121 @@
+import woo.std;
+import je.gui;
+import je;
+
+namespace test::memory_leak::WorldLifecycle
+{
+	using test_context = struct {
+		count : int,
+		worlds : array<je::world>,
+	};
+	func _test_co(context: test_context, ref run: bool)
+	{
+		if (run)
+		{
+			// 0. 创建世界
+			let world = je::universe::current()->create_world();
+			world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
+
+			// 1. 在世界中创建不同的实体
+			world->add_entity([je::typeinfo("Editor::Name")->val(),
+							je::typeinfo("Transform::LocalPosition")->val(),
+							je::typeinfo("Transform::LocalRotation")->val(),
+							je::typeinfo("Transform::LocalToWorld")->val(),
+							je::typeinfo("Transform::LocalToParent")->val(),
+							je::typeinfo("Transform::Translation")->val(),
+							je::typeinfo("Camera::Clip")->val(),
+							je::typeinfo("Camera::Projection")->val(),
+							je::typeinfo("Camera::OrthoProjection")->val(),
+							je::typeinfo("Camera::PerspectiveProjection")->val(),
+							je::typeinfo("Camera::Viewport")->val(),]);
+			world->add_entity([je::typeinfo("Editor::Name")->val(),
+							je::typeinfo("Transform::LocalPosition")->val(),
+							je::typeinfo("Transform::LocalRotation")->val(),
+							je::typeinfo("Transform::LocalScale")->val(),
+							je::typeinfo("Transform::ChildAnchor")->val(),
+							je::typeinfo("Transform::LocalToWorld")->val(),
+							je::typeinfo("Transform::LocalToParent")->val(),
+							je::typeinfo("Transform::Translation")->val(),
+							je::typeinfo("Renderer::Rendqueue")->val(),
+							je::typeinfo("Renderer::Shape")->val(),
+							je::typeinfo("Renderer::Shaders")->val(),
+							je::typeinfo("Renderer::Textures")->val(),]);
+			world->add_entity([je::typeinfo("Editor::Name")->val(),
+							je::typeinfo("Transform::LocalPosition")->val(),
+							je::typeinfo("Transform::LocalRotation")->val(),
+							je::typeinfo("Transform::LocalScale")->val(),
+							je::typeinfo("Transform::ChildAnchor")->val(),
+							je::typeinfo("Transform::LocalToWorld")->val(),
+							je::typeinfo("Transform::LocalToParent")->val(),
+							je::typeinfo("Transform::Translation")->val(),
+							je::typeinfo("Renderer::Rendqueue")->val(),
+							je::typeinfo("Renderer::Shape")->val(),
+							je::typeinfo("Renderer::Shaders")->val(),
+							je::typeinfo("Renderer::Textures")->val(),
+							je::typeinfo("Camera::Clip")->val(),
+							je::typeinfo("Camera::Projection")->val(),
+							je::typeinfo("Camera::OrthoProjection")->val(),
+							je::typeinfo("Camera::PerspectiveProjection")->val(),
+							je::typeinfo("Camera::Viewport")->val(),]);
+			world->add_entity([je::typeinfo("Editor::Name")->val(),
+							je::typeinfo("Transform::LocalPosition")->val(),
+							je::typeinfo("Transform::LocalRotation")->val(),
+							je::typeinfo("Camera::OrthoProjection")->val(),
+							je::typeinfo("Camera::PerspectiveProjection")->val(),
+							je::typeinfo("Camera::Viewport")->val(),]);
+			world->add_entity([je::typeinfo("Editor::Name")->val(),
+							je::typeinfo("Transform::LocalPosition")->val(),
+							je::typeinfo("Transform::LocalRotation")->val(),
+							je::typeinfo("Transform::LocalScale")->val(),
+							je::typeinfo("Transform::ChildAnchor")->val(),
+							je::typeinfo("Transform::LocalToWorld")->val(),
+							je::typeinfo("Camera::OrthoProjection")->val(),
+							je::typeinfo("Camera::PerspectiveProjection")->val(),
+							je::typeinfo("Camera::Viewport")->val(),]);
+
+			// 2. 添加进上下文中
+			context.worlds->add(world);
+			// 3. 决定是否清除全部测试世界
+			context.count += 1;
+			if (context.count % 100 == 0)
+			{
+				for (let w : context.worlds)
+					w->close();
+				context.worlds->clear();
+			}
+
+			return je::gui::FormAction::Nothing;
+		}
+
+		for (let w : context.worlds)
+					w->close();
+				context.worlds->clear();
+		return je::gui::FormAction::Close;
+	}
+
+	func show()
+	{
+		using je::gui;
+
+		static let mut testing = false;
+
+		let mut open = true;
+		Begin("内存泄漏检查（世界生命周期）", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+			Text("这个窗口被用于世界的生命周期循循环是否造成内存泄漏");
+			Text("关闭窗口即停止测试，不要重复开启窗口");
+		End();
+
+		if (!testing)
+		{
+			testing = true;
+			launch(_test_co, (test_context{count = 0, worlds = []}, ref testing));
+		}
+
+		if (!open)
+		{
+			testing = false;
+			return FormAction::Close;
+		}
+		return FormAction::Nothing;
+	}
+}

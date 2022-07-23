@@ -3,98 +3,98 @@ import je;
 
 namespace editor
 {
-	using Project = struct {
-		config : Project::Config,
-		worlds : array<Project::World>,
-	};
+    using Project = struct {
+        config : Project::Config,
+        worlds : array<Project::World>,
+    };
 }
 
 namespace editor::Project
 {
-	// 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
-	using World = struct {
-		name : option<string>, // 世界名称，保存项目/加载项目才有，新建世界没有这个值
-		path : option<string>,	// 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
-		instance : option<je::world>, // 世界实例，只有正在编辑器里的世界会有这个值
-		runtime_system : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
-	};
+    // 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
+    using World = struct {
+        name : option<string>, // 世界名称，保存项目/加载项目才有，新建世界没有这个值
+        path : option<string>,    // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
+        instance : option<je::world>, // 世界实例，只有正在编辑器里的世界会有这个值
+        runtime_system : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
+    };
 
-	namespace World
-	{
-		func get_instance(self: World)
-		{
-			match(self.instance)
-			{
-				value(ins)? return ins;
-				none? std::panic("Not impl now!"); // TODO: 当前World还没有实例，从path对应的文件加载出来
-			}
-		}
-	}
+    namespace World
+    {
+        func get_instance(self: World)
+        {
+            match(self.instance)
+            {
+                value(ins)? return ins;
+                none? std::panic("Not impl now!"); // TODO: 当前World还没有实例，从path对应的文件加载出来
+            }
+        }
+    }
 
-	// 用于储存项目的配置信息
-	using Config = struct {
-		name : string,					// 项目的名称
-		graphic_system : je::typeinfo,	// 默认使用的图形系统类型
-	};
+    // 用于储存项目的配置信息
+    using Config = struct {
+        name : string,                    // 项目的名称
+        graphic_system : je::typeinfo,    // 默认使用的图形系统类型
+    };
 
-	// 在当前项目中创建一个世界，世界会被保存进项目的世界列表中
-	func CreateWorld(self: Project)
-	{
-		let world = World{
-			name = option::none,
-			path = option::none,
-			instance = option::value(je::universe::current()->create_world()),
-			runtime_system = [],
-		};
+    // 在当前项目中创建一个世界，世界会被保存进项目的世界列表中
+    func CreateWorld(self: Project)
+    {
+        let world = World{
+            name = option::none,
+            path = option::none,
+            instance = option::value(je::universe::current()->create_world()),
+            runtime_system = [],
+        };
 
-		self.worlds->add(world);
-		return world;
-	}
+        self.worlds->add(world);
+        return world;
+    }
 
-	func FindWorld(self: Project, world: je::world)=> option<World>
-	{
-		for (let project_world : self.worlds)
-			match(project_world.instance)
-			{
-				value(w)?
-					if (w == world)
-						return option::value(project_world);
-				none?;
-			}
-		return option::none;
-	}
+    func FindWorld(self: Project, world: je::world)=> option<World>
+    {
+        for (let project_world : self.worlds)
+            match(project_world.instance)
+            {
+                value(w)?
+                    if (w == world)
+                        return option::value(project_world);
+                none?;
+            }
+        return option::none;
+    }
 
-	private let mut _current_project = option::none : option<Project>;
+    private let mut _current_project = option::none : option<Project>;
 
-	func SetCurrentProject(self: Project)
-	{
-		_current_project = option::value(self);
-		return self;
-	}
+    func SetCurrentProject(self: Project)
+    {
+        _current_project = option::value(self);
+        return self;
+    }
 
-	func CreateDefaultProject()
-	{
-		return SetCurrentProject(Project{
-			config = Config {
-				name = "Empty project",
-				// NOTE: 默认图形系统应该内置在引擎里，如果获取不到这里直接爆炸
-				graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
-			},
-			worlds = [],
-		});
-	}
+    func CreateDefaultProject()
+    {
+        return SetCurrentProject(Project{
+            config = Config {
+                name = "Empty project",
+                // NOTE: 默认图形系统应该内置在引擎里，如果获取不到这里直接爆炸
+                graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
+            },
+            worlds = [],
+        });
+    }
 
-	func GetCurrentProject()=> Project
-	{
-		match(_current_project)
-		{
-			value(proj)?
-				return proj;
-			none?
-			{
-				je::logwarn("没有正在编辑中的项目，将创建默认的项目上下文");
-				return CreateDefaultProject();
-			}
-		}
-	}
+    func GetCurrentProject()=> Project
+    {
+        match(_current_project)
+        {
+            value(proj)?
+                return proj;
+            none?
+            {
+                je::logwarn("没有正在编辑中的项目，将创建默认的项目上下文");
+                return CreateDefaultProject();
+            }
+        }
+    }
 }

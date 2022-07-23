@@ -1,0 +1,86 @@
+import woo.std;
+import je.gui;
+import je;
+
+namespace test::memory_leak::GraphicResource
+{
+	using test_context = struct {
+		count : int,
+	};
+	func _test_co(context: test_context, ref run: bool)
+	{
+		if (run)
+		{
+			let tex    = je::graphic::texture(100, 100),
+				shader = je::graphic::shader("vshader.shader", @"
+					// test shader, only for test.
+					import je.shader;
+
+					ZTEST   (OFF);
+					ZWRITE  (DISABLE);
+
+					using VAO_STRUCT vin = struct {
+						vertex  : float3,
+						uv      : float2,
+					};
+
+					using v2f = struct {
+						pos     : float4,
+						uv      : float2,
+					};
+
+					func vert(vdata : vin)
+					{
+						return v2f{
+							pos = je_mvp * float4(float3(0.5, 0.5, 0.5) * vdata.vertex, 1.),
+							uv = vdata.uv,
+						};
+					}
+
+					using fout = struct {
+						color : float4
+					};
+
+					let main_texture = uniform:<texture2d>("main_texture");
+
+					func frag(v2f : v2f)
+					{
+						return fout{
+							color = texture(main_texture, v2f.uv),
+						};
+					}
+				"@);
+
+			context.count += 1;
+			return je::gui::FormAction::Nothing;
+		}
+
+		return je::gui::FormAction::Close;
+	}
+
+	func show()
+	{
+		using je::gui;
+
+		static let mut testing = false;
+
+		let mut open = true;
+		Begin("内存泄漏检查（图形系统资源）", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+			Text("这个窗口被用于检查图形系统资源是否造成内存泄漏");
+			Text("关闭窗口即停止测试，不要重复开启窗口");
+		End();
+
+		if (!testing)
+		{
+			testing = true;
+			launch(_test_co, (test_context{count = 0}, ref testing));
+		}
+
+		if (!open)
+		{
+			testing = false;
+			return FormAction::Close;
+		}
+		return FormAction::Nothing;
+	}
+}

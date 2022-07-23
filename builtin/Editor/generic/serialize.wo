@@ -4,74 +4,74 @@ import je;
 
 namespace utils
 {
-	// 序列化操作
-	func serialize(e: je::entity)
-	{
-		// 实体的序列化格式如下：
-		/*
-		{
-			"component_1" : { "member" : "...", ... },
-			...
-		}
-		*/
-		if (e->editor::valid())
-		{
-			let entity_info = {}: map<string, map<string, string>>;
+    // 序列化操作
+    func serialize(e: je::entity)
+    {
+        // 实体的序列化格式如下：
+        /*
+        {
+            "component_1" : { "member" : "...", ... },
+            ...
+        }
+        */
+        if (e->editor::valid())
+        {
+            let entity_info = {}: map<string, map<string, string>>;
 
 
-			// 如果实体合法，则遍历全部所有组件类型
-			for (let component_type : e->editor::get_components_types())
-			{
-				let component_map = {}: map<string, string>;
-				entity_info[component_type->name()] = component_map;
+            // 如果实体合法，则遍历全部所有组件类型
+            for (let component_type : e->editor::get_components_types())
+            {
+                let component_map = {}: map<string, string>;
+                entity_info[component_type->name()] = component_map;
 
-				for (let name, type, addr : e->editor::get_component(component_type)
-											 ->val()->editor::iter_member(component_type))
-				{
-					component_map[name] = addr->to_string(type);
-				}
-			}
+                for (let name, type, addr : e->editor::get_component(component_type)
+                                             ->val()->editor::iter_member(component_type))
+                {
+                    component_map[name] = addr->to_string(type);
+                }
+            }
 
-			return entity_info;
-		}
-		return {}: map<string, map<string, string>>;
-	}
+            return entity_info;
+        }
+        return {}: map<string, map<string, string>>;
+    }
 
-	func serialize(w: je::world)
-	{
-		// 世界的序列化格式如下:
-		/*
-		{
-			"entities" : ["", ...],
-			"systems" : ["", ...],
-			"shareds" : ["", ...]
-		}
-		*/
+    func serialize(w: je::world)
+    {
+        // 世界的序列化格式如下:
+        /*
+        {
+            "entities" : ["", ...],
+            "systems" : ["", ...],
+            "shareds" : ["", ...]
+        }
+        */
 
-		let entities_list = []: array<string>;
-		for (let entity : w->editor::get_all_entities())
-			entities_list->add(serialize(entity): string);
+        let entities_list = []: array<string>;
+        for (let entity : w->editor::get_all_entities())
+            entities_list->add(serialize(entity): string);
 
-		let systems_list = []: array<string>;
-		for (let system_type : w->editor::get_systems_types())
-			systems_list->add(system_type->name());
+        let systems_list = []: array<string>;
+        for (let system_type : w->editor::get_systems_types())
+            systems_list->add(system_type->name());
 
-		let shared_systems_list = []: array<string>;
-		for (let shared_system_type : je::world::editor::get_shared_systems_types())
-			match(je::universe::current()->editor::get_shared_system_attached_world(shared_system_type))
-			{
-				value(attached_world)?
-					if (w == attached_world)
-						shared_systems_list->add(shared_system_type->name());
-				none?
-					; /* 这个共享系统没有附加到任何世界，一样跳过 */
-			}
-			
+        let shared_systems_list = []: array<string>;
+        for (let shared_system_type : je::world::editor::get_shared_systems_types())
+            match(je::universe::current()->editor::get_shared_system_attached_world(shared_system_type))
+            {
+                value(attached_world)?
+                    if (w == attached_world)
+                        shared_systems_list->add(shared_system_type->name());
+                none?
+                    ; /* 这个共享系统没有附加到任何世界，一样跳过 */
+            }
+            
 
-		return {
-			{"entities",	entities_list},
-			{"systems",		systems_list},
-			{"shareds",		shared_systems_list}
-		};
-	}
+        return {
+            {"entities",    entities_list},
+            {"systems",        systems_list},
+            {"shareds",        shared_systems_list}
+        };
+    }
 }

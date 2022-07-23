@@ -10,44 +10,44 @@ import creatorcontext;
 
 namespace editor::WorldCreator
 {
-	private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/System.png")->val();
+    private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/System.png")->val();
 
-	using WorldContext  = struct {
-		name  : string,
-		has_append_types : array<je::typeinfo>,
-		has_active_types : array<je::typeinfo>,
-		not_append_types : array<je::typeinfo>,
-	};
+    using WorldContext  = struct {
+        name  : string,
+        has_append_types : array<je::typeinfo>,
+        has_active_types : array<je::typeinfo>,
+        not_append_types : array<je::typeinfo>,
+    };
 
-	func create_context()=> WorldContext
-	{
-		let context = WorldContext{
-			name = "New world",
-			has_append_types = [],
-			has_active_types = [],
-			not_append_types = je::typeinfo::editor::get_all_systems_types(),
-		};
+    func create_context()=> WorldContext
+    {
+        let context = WorldContext{
+            name = "New world",
+            has_append_types = [],
+            has_active_types = [],
+            not_append_types = je::typeinfo::editor::get_all_systems_types(),
+        };
 
-		let comps = context.not_append_types;
-		context.not_append_types = [];
-	
-		for (let comp : comps)
-			// 不显示所有编辑器系统
-			if (!comp->name()->beginwith("Editor::"))
-				if (comp->name()->beginwith("Translation::"))
-					// 默认添加Translation相关系统
-					context.has_active_types->add(comp);
-				else
-					context.not_append_types->add(comp);
+        let comps = context.not_append_types;
+        context.not_append_types = [];
+    
+        for (let comp : comps)
+            // 不显示所有编辑器系统
+            if (!comp->name()->beginwith("Editor::"))
+                if (comp->name()->beginwith("Translation::"))
+                    // 默认添加Translation相关系统
+                    context.has_active_types->add(comp);
+                else
+                    context.not_append_types->add(comp);
 
-		return context;
-	}
+        return context;
+    }
 
-	func show_system(typename: string)
-	{
-		using je::gui;
+    func show_system(typename: string)
+    {
+        using je::gui;
 
-		BeginGroup();
+        BeginGroup();
             PushID(typename);
                 ImageButtom(icon_image, 0.075);
             PopID();
@@ -61,168 +61,168 @@ namespace editor::WorldCreator
             SameLine();
             Text(typename);
         EndGroup();
-	}
+    }
 
-	func unuse_systems(context: WorldContext, type_name: string)
-	{
-		match(je::typeinfo(type_name))
-		{
-			value(type)?
-				if (context.not_append_types->find(type) == -1)
-				{
-					context.not_append_types->add(type);
-					context.has_append_types->remove(context.has_append_types->find(type));
-					context.has_active_types->remove(context.has_active_types->find(type));
-				}
-			none?
-				je::logfatal("Cannot find system type named: ", type_name);
-		}
-		
-	}
-	func active_systems(context: WorldContext, type_name: string)
-	{
-		match(je::typeinfo(type_name))
-		{
-			value(type)?
-				if (context.has_active_types->find(type) == -1)
-				{
-					context.has_active_types->add(type);
-					context.not_append_types->remove(context.not_append_types->find(type));
-					context.has_append_types->remove(context.has_append_types->find(type));
-				}
-			none?
-				je::logfatal("Cannot find system type named: ", type_name);
-		}
-	}
-	func append_systems(context: WorldContext, type_name: string)
-	{
-		match(je::typeinfo(type_name))
-		{
-			value(type)?
-				if (context.has_append_types->find(type) == -1)
-				{
-					context.has_append_types->add(type);
-					context.not_append_types->remove(context.not_append_types->find(type));
-					context.has_active_types->remove(context.has_active_types->find(type));
-				}
-			none?
-				je::logfatal("Cannot find system type named: ", type_name);
-		}
-	}
-
-	func show_active_systems(context: WorldContext, width: real, height: real)
-	{
-		using je::gui;
-		BeginChild("active_system", width, height);
-			Text("环境系统（编辑/运行时生效）");
-			for(let component_type : context.has_active_types)
-				show_system(component_type->name());
-		EndChild();
-
-		if(BeginDragDropTarget())
-		{
-			let mut data = "";
-			if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
-			{
-				// 有组件被拖动至此
-				active_systems(context, data);
-			}
-			EndDragDropTarget();
-		}
-	}
-
-	func show_append_systems(context: WorldContext, width: real, height: real)
-	{
-		using je::gui;
-		BeginChild("append_system", width, height);
-			Text("运行时系统（运行时生效）");
-			for(let component_type : context.has_append_types)
-				show_system(component_type->name());
-		EndChild();
-
-		if(BeginDragDropTarget())
-		{
-			let mut data = "";
-			if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
-			{
-				// 有组件被拖动至此
-				append_systems(context, data);
-			}
-			EndDragDropTarget();
-		}
-	}
-
-	func show_usable_systems(context: WorldContext, width: real)
-	{
-		using je::gui;
-		BeginChild("usable_system", width, 0.);
-			Text("可用系统");
-			for(let component_type : context.not_append_types)
-				show_system(component_type->name());
-		EndChild();
-
-		if(BeginDragDropTarget())
-		{
-			let mut data = "";
-			if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
-			{
-				// 有组件被拖动至此
-				unuse_systems(context, data);
-			}
-			EndDragDropTarget();
-		}
-	}
-
-	func menu_bar(context: WorldContext)
-	{
-		using je::gui;
-
-		let mut create_world = false;
-
-		if (BeginMenuBar())
+    func unuse_systems(context: WorldContext, type_name: string)
+    {
+        match(je::typeinfo(type_name))
         {
-			if (MenuItem("创建", context.name != ""))
-				create_world = true;
-			
-			EndMenuBar();
-		}
+            value(type)?
+                if (context.not_append_types->find(type) == -1)
+                {
+                    context.not_append_types->add(type);
+                    context.has_append_types->remove(context.has_append_types->find(type));
+                    context.has_active_types->remove(context.has_active_types->find(type));
+                }
+            none?
+                je::logfatal("Cannot find system type named: ", type_name);
+        }
+        
+    }
+    func active_systems(context: WorldContext, type_name: string)
+    {
+        match(je::typeinfo(type_name))
+        {
+            value(type)?
+                if (context.has_active_types->find(type) == -1)
+                {
+                    context.has_active_types->add(type);
+                    context.not_append_types->remove(context.not_append_types->find(type));
+                    context.has_append_types->remove(context.has_append_types->find(type));
+                }
+            none?
+                je::logfatal("Cannot find system type named: ", type_name);
+        }
+    }
+    func append_systems(context: WorldContext, type_name: string)
+    {
+        match(je::typeinfo(type_name))
+        {
+            value(type)?
+                if (context.has_append_types->find(type) == -1)
+                {
+                    context.has_append_types->add(type);
+                    context.not_append_types->remove(context.not_append_types->find(type));
+                    context.has_active_types->remove(context.has_active_types->find(type));
+                }
+            none?
+                je::logfatal("Cannot find system type named: ", type_name);
+        }
+    }
 
-		return create_world;
-	}
+    func show_active_systems(context: WorldContext, width: real, height: real)
+    {
+        using je::gui;
+        BeginChild("active_system", width, height);
+            Text("环境系统（编辑/运行时生效）");
+            for(let component_type : context.has_active_types)
+                show_system(component_type->name());
+        EndChild();
 
-	func show(context: WorldContext)
-	{
-		using je::gui;
+        if(BeginDragDropTarget())
+        {
+            let mut data = "";
+            if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
+            {
+                // 有组件被拖动至此
+                active_systems(context, data);
+            }
+            EndDragDropTarget();
+        }
+    }
 
-		let mut open = true;
-		Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
-			if (menu_bar(context))
-			{
-				let created_world = Project::GetCurrentProject()->CreateWorld().instance->val();
-				created_world->editor::name(context.name);
+    func show_append_systems(context: WorldContext, width: real, height: real)
+    {
+        using je::gui;
+        BeginChild("append_system", width, height);
+            Text("运行时系统（运行时生效）");
+            for(let component_type : context.has_append_types)
+                show_system(component_type->name());
+        EndChild();
 
-				for (let active_sys : context.has_active_types)
-					created_world->add_system(active_sys);
+        if(BeginDragDropTarget())
+        {
+            let mut data = "";
+            if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
+            {
+                // 有组件被拖动至此
+                append_systems(context, data);
+            }
+            EndDragDropTarget();
+        }
+    }
 
-				open = false;
-			}
+    func show_usable_systems(context: WorldContext, width: real)
+    {
+        using je::gui;
+        BeginChild("usable_system", width, 0.);
+            Text("可用系统");
+            for(let component_type : context.not_append_types)
+                show_system(component_type->name());
+        EndChild();
 
-			InputText("名称", ref context.name);
+        if(BeginDragDropTarget())
+        {
+            let mut data = "";
+            if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
+            {
+                // 有组件被拖动至此
+                unuse_systems(context, data);
+            }
+            EndDragDropTarget();
+        }
+    }
 
-			let mut available_width = 0., mut available_height = 0.;
-			GetContentRegionAvail(ref available_width, ref available_height);
+    func menu_bar(context: WorldContext)
+    {
+        using je::gui;
 
-			BeginGroup();
-				show_active_systems(context, available_width / 2., available_height / 2.);
-				show_append_systems(context, available_width / 2., available_height / 2.);
-			EndGroup();
+        let mut create_world = false;
 
-			SameLine();
-			show_usable_systems(context, available_width / 2.);
-		End();
+        if (BeginMenuBar())
+        {
+            if (MenuItem("创建", context.name != ""))
+                create_world = true;
+            
+            EndMenuBar();
+        }
 
-		if (!open)
-			return FormAction::Close;
-		return FormAction::Nothing;
-	}
+        return create_world;
+    }
+
+    func show(context: WorldContext)
+    {
+        using je::gui;
+
+        let mut open = true;
+        Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+            if (menu_bar(context))
+            {
+                let created_world = Project::GetCurrentProject()->CreateWorld().instance->val();
+                created_world->editor::name(context.name);
+
+                for (let active_sys : context.has_active_types)
+                    created_world->add_system(active_sys);
+
+                open = false;
+            }
+
+            InputText("名称", ref context.name);
+
+            let mut available_width = 0., mut available_height = 0.;
+            GetContentRegionAvail(ref available_width, ref available_height);
+
+            BeginGroup();
+                show_active_systems(context, available_width / 2., available_height / 2.);
+                show_append_systems(context, available_width / 2., available_height / 2.);
+            EndGroup();
+
+            SameLine();
+            show_usable_systems(context, available_width / 2.);
+        End();
+
+        if (!open)
+            return FormAction::Close;
+        return FormAction::Nothing;
+    }
 }

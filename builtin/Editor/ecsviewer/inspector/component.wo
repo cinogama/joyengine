@@ -5,6 +5,8 @@ import je;
 import builtin.Editor.generic.form.inputbox;
 import builtin.Editor.generic.form.askfor;
 
+import builtin.Editor.ecsviewer.entitycreator;
+
 namespace editor::Inspector::Component
 {
     let _type_widget_methods = {}: map<je::typeinfo, (string, je::native_value)=>void>;
@@ -22,7 +24,8 @@ namespace editor::Inspector::Component
         {
             if (MenuItem(F"移除组件: {component_type->name()}"))
                 entity->editor::remove_component(component_type);
-
+            if (MenuItem("向当前实体添加组件"))
+                launch(EntityCreator::show, (EntityCreator::edit_context(entity),));
             EndPopup();
         }
     }
@@ -195,9 +198,9 @@ namespace editor::Inspector::Component
             _type_widget_methods[type](name, addr);
         else
         {
-            // TODO: 使用默认的 to_string 方法？
-
+            // 没有注册的特殊控件，使用底层自带的to_string方法处理
             let mut data_str = addr->to_string(type);
+
             if (InputText(name, ref data_str))
                 addr->parse(type, data_str);
         }

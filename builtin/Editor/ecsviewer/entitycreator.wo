@@ -10,38 +10,66 @@ import creatorcontext;
 
 namespace editor::EntityCreator
 {
-	private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png")->val();
+    private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png")->val();
+    
+    using EntityContext = struct {
+        name  : string,
+        edit_entity      : option<je::entity>,
+        has_append_types : array<je::typeinfo>,
+        not_append_types : array<je::typeinfo>,
+    };
+    
+    func edit_context(entity: je::entity)=> EntityContext
+    {
+        let context = EntityContext{
+            name = entity->editor::name(),
+            edit_entity = option::value(entity),
+            has_append_types = [],
+            not_append_types = je::typeinfo::editor::get_all_components_types(),
+        };
 
-		using EntityContext = struct {
-		name  : string,
-		has_append_types : array<je::typeinfo>,
-		not_append_types : array<je::typeinfo>,
-	};
-	
-	func create_context()=> EntityContext
-	{
-		let context = EntityContext{
-			name = "New entity",
-			has_append_types = [],
-			not_append_types = je::typeinfo::editor::get_all_components_types(),
-		};
+        let comps = context.not_append_types;
+        context.not_append_types = [];
 
-		let comps = context.not_append_types;
-		context.not_append_types = [];
+        // 不显示所有编辑器组件
+        for (let comp : comps)
+            if (!comp->name()->beginwith("Editor::"))
+                context.not_append_types->add(comp);
 
-		// 不显示所有编辑器组件
-		for (let comp : comps)
-			if (!comp->name()->beginwith("Editor::"))
-				context.not_append_types->add(comp);
+        // 把当前已有的组件处理一下
+        let all_comps = context.not_append_types->dup();
+        for (let comp : all_comps)
+            if (entity->editor::get_component(comp)->has())
+                add_components(context, comp->name());
 
-		return context;
-	}
+        return context;
+    }
 
-	func show_component(typename: string)
-	{
-		using je::gui;
+    func create_context()=> EntityContext
+    {
+        let context = EntityContext{
+            name = "New entity",
+            edit_entity = option::none,
+            has_append_types = [],
+            not_append_types = je::typeinfo::editor::get_all_components_types(),
+        };
 
-		BeginGroup();
+        let comps = context.not_append_types;
+        context.not_append_types = [];
+
+        // 不显示所有编辑器组件
+        for (let comp : comps)
+            if (!comp->name()->beginwith("Editor::"))
+                context.not_append_types->add(comp);
+
+        return context;
+    }
+
+    func show_component(typename: string)
+    {
+        using je::gui;
+
+        BeginGroup();
             PushID(typename);
                 ImageButtom(icon_image, 0.075);
             PopID();
@@ -55,200 +83,225 @@ namespace editor::EntityCreator
             SameLine();
             Text(typename);
         EndGroup();
-	}
+    }
 
-	func show_append_components(context: EntityContext, width: real)
-	{
-		using je::gui;
-		BeginChild("append_components", width, 0.);
-			Text("新实体组件");
-			for(let component_type : context.has_append_types)
-				show_component(component_type->name());
-		EndChild();
+    func show_append_components(context: EntityContext, width: real)
+    {
+        using je::gui;
+        BeginChild("append_components", width, 0.);
+            Text("新实体组件");
+            for(let component_type : context.has_append_types)
+                show_component(component_type->name());
+        EndChild();
 
-		if(BeginDragDropTarget())
-		{
-			let mut data = "";
-			if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
-			{
-				// 有组件被拖动至此
-				add_components(context, data);
-			}
-			EndDragDropTarget();
-		}
-	}
+        if(BeginDragDropTarget())
+        {
+            let mut data = "";
+            if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
+            {
+                // 有组件被拖动至此
+                add_components(context, data);
+            }
+            EndDragDropTarget();
+        }
+    }
 
-	func show_usable_components(context: EntityContext, width: real)
-	{
-		using je::gui;
-		BeginChild("usable_components", width, 0.);
-			Text("可用组件");
-			for(let component_type : context.not_append_types)
-				show_component(component_type->name());
-		EndChild();
+    func show_usable_components(context: EntityContext, width: real)
+    {
+        using je::gui;
+        BeginChild("usable_components", width, 0.);
+            Text("可用组件");
+            for(let component_type : context.not_append_types)
+                show_component(component_type->name());
+        EndChild();
 
-		if(BeginDragDropTarget())
-		{
-			let mut data = "";
-			if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
-			{
-				// 有组件被拖动至此
-				remove_components(context, data);
-			}
-			EndDragDropTarget();
-		}
-	}
+        if(BeginDragDropTarget())
+        {
+            let mut data = "";
+            if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
+            {
+                // 有组件被拖动至此
+                remove_components(context, data);
+            }
+            EndDragDropTarget();
+        }
+    }
 
-	func reset_context_cur_components(context: EntityContext)
-	{
-		for (let append_component : context.has_append_types)
-			context.not_append_types->add(append_component);
-		context.has_append_types->clear();
-	}
-	func remove_components(context: EntityContext, type_name: string)
-	{
-		match(je::typeinfo(type_name))
-		{
-			value(type)?
-				if (context.not_append_types->find(type) == -1)
-				{
-					context.not_append_types->add(type);
-					context.has_append_types->remove(context.has_append_types->find(type));
-				}
-			none?
-				je::logfatal("Cannot find component type named: ", type_name);
-		}
-		
-	}
-	func add_components(context: EntityContext, type_name: string)
-	{
-		match(je::typeinfo(type_name))
-		{
-			value(type)?
-				if (context.has_append_types->find(type) == -1)
-				{
-					context.has_append_types->add(type);
-					context.not_append_types->remove(context.not_append_types->find(type));
-				}
-			none?
-				je::logfatal("Cannot find component type named: ", type_name);
-		}
-	}
+    func reset_context_cur_components(context: EntityContext)
+    {
+        for (let append_component : context.has_append_types)
+            context.not_append_types->add(append_component);
+        context.has_append_types->clear();
+    }
+    func remove_components(context: EntityContext, type_name: string)
+    {
+        match(je::typeinfo(type_name))
+        {
+            value(type)?
+                if (context.not_append_types->find(type) == -1)
+                {
+                    context.not_append_types->add(type);
+                    context.has_append_types->remove(context.has_append_types->find(type));
+                }
+            none?
+                je::logfatal("Cannot find component type named: ", type_name);
+        }
+        
+    }
+    func add_components(context: EntityContext, type_name: string)
+    {
+        match(je::typeinfo(type_name))
+        {
+            value(type)?
+                if (context.has_append_types->find(type) == -1)
+                {
+                    context.has_append_types->add(type);
+                    context.not_append_types->remove(context.not_append_types->find(type));
+                }
+            none?
+                je::logfatal("Cannot find component type named: ", type_name);
+        }
+    }
 
-	func menu_bar(context: EntityContext)=> bool
-	{
-		using je::gui;
-		let mut create_entity = false;
+    func menu_bar(context: EntityContext)=> bool
+    {
+        using je::gui;
+        let mut create_entity = false;
 
         if (BeginMenuBar())
         {
             if (MenuItem("创建", context.name != "" 
-							&& !context.has_append_types->empty()))
+                            && !context.has_append_types->empty()))
             {
-				// TODO: 实例化实体，至少要有一个组件
-				create_entity = true;
+                // TODO: 实例化实体，至少要有一个组件
+                create_entity = true;
             }
-			if (BeginMenu("常用实体"))
+            if (BeginMenu("常用实体"))
             {
-				if (MenuItem("重置列表"))
-					reset_context_cur_components(context);
+                if (MenuItem("重置列表"))
+                    reset_context_cur_components(context);
 
-				Separator();
+                Separator();
 
-				if (MenuItem("带有Transform的空实体"))
-				{
-					reset_context_cur_components(context);
-					add_components(context, "Transform::LocalPosition");
-					add_components(context, "Transform::LocalRotation");
-					add_components(context, "Transform::LocalScale");
-					add_components(context, "Transform::LocalToWorld");
-					add_components(context, "Transform::Translation");
-				}
+                if (MenuItem("带有Transform的空实体"))
+                {
+                    reset_context_cur_components(context);
+                    add_components(context, "Transform::LocalPosition");
+                    add_components(context, "Transform::LocalRotation");
+                    add_components(context, "Transform::LocalScale");
+                    add_components(context, "Transform::LocalToWorld");
+                    add_components(context, "Transform::Translation");
+                }
 
-				if (MenuItem("完整渲染实体"))
-				{
-					reset_context_cur_components(context);
-					add_components(context, "Transform::LocalPosition");
-					add_components(context, "Transform::LocalRotation");
-					add_components(context, "Transform::LocalScale");
-					add_components(context, "Transform::LocalToWorld");
-					add_components(context, "Transform::Translation");
-					add_components(context, "Renderer::Shape");
-					add_components(context, "Renderer::Shaders");
-					add_components(context, "Renderer::Textures");
-				}
+                if (MenuItem("完整渲染实体"))
+                {
+                    reset_context_cur_components(context);
+                    add_components(context, "Transform::LocalPosition");
+                    add_components(context, "Transform::LocalRotation");
+                    add_components(context, "Transform::LocalScale");
+                    add_components(context, "Transform::LocalToWorld");
+                    add_components(context, "Transform::Translation");
+                    add_components(context, "Renderer::Shape");
+                    add_components(context, "Renderer::Shaders");
+                    add_components(context, "Renderer::Textures");
+                }
 
-				if (MenuItem("摄像机（透视）"))
-				{
-					reset_context_cur_components(context);
-					add_components(context, "Transform::LocalPosition");
-					add_components(context, "Transform::LocalRotation");
-					add_components(context, "Transform::LocalScale");
-					add_components(context, "Transform::LocalToWorld");
-					add_components(context, "Transform::Translation");
-					add_components(context, "Camera::Clip");
-					add_components(context, "Camera::Projection");
-					add_components(context, "Camera::PerspectiveProjection");
-					add_components(context, "Camera::Viewport");
-				}
+                if (MenuItem("摄像机（透视）"))
+                {
+                    reset_context_cur_components(context);
+                    add_components(context, "Transform::LocalPosition");
+                    add_components(context, "Transform::LocalRotation");
+                    add_components(context, "Transform::LocalScale");
+                    add_components(context, "Transform::LocalToWorld");
+                    add_components(context, "Transform::Translation");
+                    add_components(context, "Camera::Clip");
+                    add_components(context, "Camera::Projection");
+                    add_components(context, "Camera::PerspectiveProjection");
+                    add_components(context, "Camera::Viewport");
+                }
 
-				if (MenuItem("摄像机（平行）"))
-				{
-					reset_context_cur_components(context);
-					add_components(context, "Transform::LocalPosition");
-					add_components(context, "Transform::LocalRotation");
-					add_components(context, "Transform::LocalScale");
-					add_components(context, "Transform::LocalToWorld");
-					add_components(context, "Transform::Translation");
-					add_components(context, "Camera::Clip");
-					add_components(context, "Camera::Projection");
-					add_components(context, "Camera::OrthoProjection");
-					add_components(context, "Camera::Viewport");
-				}
+                if (MenuItem("摄像机（平行）"))
+                {
+                    reset_context_cur_components(context);
+                    add_components(context, "Transform::LocalPosition");
+                    add_components(context, "Transform::LocalRotation");
+                    add_components(context, "Transform::LocalScale");
+                    add_components(context, "Transform::LocalToWorld");
+                    add_components(context, "Transform::Translation");
+                    add_components(context, "Camera::Clip");
+                    add_components(context, "Camera::Projection");
+                    add_components(context, "Camera::OrthoProjection");
+                    add_components(context, "Camera::Viewport");
+                }
 
-				EndMenu();
+                EndMenu();
             }
 
             EndMenuBar();
         }
 
-		return create_entity;
-	}
+        return create_entity;
+    }
 
-	func show(context: EntityContext)
-	{
-		using je::gui;
+    func show(context: EntityContext)
+    {
+        using je::gui;
 
-		let mut open = true;
-		Begin(F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
-			if (menu_bar(context))
-			{
-				// 选择创建实体，开始实例化！
-				match(je::world::rend())
-				{
-					value(rworld)?
-					{
-						let added = rworld->add_entity(context.has_append_types);
-						added->editor::name(context.name);
-					}
-					none?
-						launch(generic::MsgBox, ("创建实体失败", "没有找到渲染中的世界",));
-				}
-				open = false;
-			}
+        let mut open = true;
+        if (context.edit_entity->has())
+            Begin(F"编辑实体{context.edit_entity->val()->editor::name()}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+        else
+            Begin(F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
 
-			InputText("名称", ref context.name);
+            if (menu_bar(context))
+            {
+                match(context.edit_entity)
+                {
+                value(e)?
+                {
+                    // TODO: 在此实现实体的组件编辑
 
-			let mut available_width = 0.;
-			GetContentRegionAvail(ref available_width, 0./* 不关心高度 */);
+                    // 0. 获取准备新增的组件
+                    let add_components = context.has_append_types->forall(
+                            func(type: je::typeinfo){return !e->editor::get_component(type)->has()});
+                    // 1. 获取即将移除的组件
+                    let removing_components = context.not_append_types->forall(
+                            func(type: je::typeinfo){return e->editor::get_component(type)->has()});
 
-			show_append_components(context, available_width / 2.);
-			SameLine();
-			show_usable_components(context, available_width / 2.);
+                    for (let new_comp : add_components)
+                        e->editor::add_component(new_comp);
+                    for (let removing_comp : removing_components)
+                        e->editor::remove_component(removing_comp);
+                }
+                none?
+                    match(je::world::rend())
+                    {
+                        value(rworld)?
+                        {
+                            let added = rworld->add_entity(context.has_append_types);
+                            added->editor::name(context.name);
+                        }
+                        none?
+                            launch(generic::MsgBox, ("创建实体失败", "没有找到渲染中的世界",));
+                    } 
+                }
+                // 选择创建实体，开始实例化！
+               
+                open = false;
+            }
+
+            InputText("名称", ref context.name);
+
+            let mut available_width = 0.;
+            GetContentRegionAvail(ref available_width, 0./* 不关心高度 */);
+
+            show_append_components(context, available_width / 2.);
+            SameLine();
+            show_usable_components(context, available_width / 2.);
         End();
 
-		if (!open)
-			return FormAction::Close;
-		return FormAction::Nothing;
-	}
+        if (!open)
+            return FormAction::Close;
+        return FormAction::Nothing;
+    }
 }

@@ -16,6 +16,10 @@ import generic.serialize;
 
 import project.config;
 import project.init;
+
+import test.memleak_component_modify;
+import test.memleak_world_lifecycle;
+import test.memleak_graphic_resource;
                     
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
@@ -92,7 +96,13 @@ func Editor_MainMenuBar()
                 none?
                     std::println("序列化个锤子！没有世界！");
             }
-
+        if (MenuItem("内存泄漏测试（组件增删改查）"))
+            launch(test::memory_leak::ComponentModify::show, ());
+        if (MenuItem("内存泄漏测试（世界生命周期）"))
+            launch(test::memory_leak::WorldLifecycle::show, ());
+        if (MenuItem("内存泄漏测试（图形系统资源）"))
+            launch(test::memory_leak::GraphicResource::show, ());
+            
         EndMenu();
     }
     EndMainMenuBar();

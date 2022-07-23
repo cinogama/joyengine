@@ -1063,7 +1063,7 @@ namespace jeecs_impl
                     }
                     else if (dep == ecs_system_function::sequence::UNABLE_DETERMINE)
                         // error, give warning
-                        jeecs::debug::log_error("sequence conflict between system(%p) and system(%p).",
+                        jeecs::debug::log_error("Sequence conflict between system(%p) and system(%p).",
                             cmp_sys, (*cur_sys));
                 }
             }
@@ -1399,13 +1399,20 @@ namespace jeecs_impl
                             auto current_typed_component = append_typed_components;
                             append_typed_components = append_typed_components->last;
 
-                            assert(new_chunk_types.find(current_typed_component->m_typeinfo->m_id) == new_chunk_types.end());
+                            if (new_chunk_types.find(current_typed_component->m_typeinfo->m_id) != new_chunk_types.end())
+                            {
+                                // Origin chunk has same component, the old one will be replaced by the new one.
+                                // Give warning here!
+                                jeecs::debug::log_warn("Try adding component '%s' to entity, but here is already have a same one.",
+                                    current_typed_component->m_typeinfo->m_typename);
+                            }
 
                             auto& addr_place = append_component_type_addr_set[current_typed_component->m_typeinfo->m_id];
                             if (addr_place)
                             {
                                 // This type of component already in list, destruct/free it and give warning
-                                // TODO: WARNING~
+                                jeecs::debug::log_warn("Try adding same component named '%s' to entity in same frame.",
+                                    current_typed_component->m_typeinfo->m_typename);
                                 current_typed_component->m_typeinfo->m_destructor(addr_place);
                                 je_mem_free(addr_place);
                             }
@@ -2126,7 +2133,7 @@ const jeecs::typing::type_info** jedbg_get_attached_system_types_in_world(void* 
 {
     jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)_world;
 
-    auto&& stored_systems = world 
+    auto&& stored_systems = world
         ? world->get_universe()->get_stored_system_of_world(world)
         : ((jeecs_impl::ecs_universe*)jedbg_get_editor_universe())
         ->get_stored_system_of_world(world);

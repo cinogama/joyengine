@@ -4,11 +4,11 @@ import woo.std;
 
 namespace utils
 {
-	// 如果给定字符串太长，就截断到限定长度
-	func ShortString(str: string, maxlen: int)
-	{
-		if (str->len() > maxlen)
+    // 如果给定字符串太长，就截断到限定长度
+    func ShortString(str: string, maxlen: int)
+    {
+        if (str->len() > maxlen)
             return "..." + str->sub(str->len() - (maxlen - 3));
-		return str;
-	}
+        return str;
+    }
 }
