@@ -1041,11 +1041,11 @@ namespace je
                 return result;
             }
             func set_uniform<T>(self: shader, name: string, val: T)
-                where (nil:dynamic:T is int)
-                   || (nil:dynamic:T is real)
-                   || (nil:dynamic:T is (real, real))
-                   || (nil:dynamic:T is (real, real, real))
-                   || (nil:dynamic:T is (real, real, real, real));
+                where nil:dynamic:T is int
+                   || nil:dynamic:T is real
+                   || nil:dynamic:T is (real, real)
+                   || nil:dynamic:T is (real, real, real)
+                   || nil:dynamic:T is (real, real, real, real);
             {
                 
             }

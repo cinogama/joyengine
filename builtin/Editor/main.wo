@@ -135,6 +135,7 @@ func Editor_Welcome(ref open: bool)
     return FormAction::Nothing;
 }
 
-editor::Project::Start(Editor_MainMenuBar, ());
+/////////////////////
 
 /////////////////////
+editor::Project::Start(Editor_MainMenuBar, ());
