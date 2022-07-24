@@ -170,7 +170,9 @@ namespace editor::EntityCreator
 
         if (BeginMenuBar())
         {
-            if (MenuItem("创建", context.name != "" 
+            let menu_button_text = func(){if (context.edit_entity->has()) return "应用"; return "创建"}();
+
+            if (MenuItem(menu_button_text, context.name != "" 
                             && !context.has_append_types->empty()))
             {
                 // TODO: 实例化实体，至少要有一个组件
