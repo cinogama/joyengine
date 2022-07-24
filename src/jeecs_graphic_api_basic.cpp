@@ -429,11 +429,6 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
         wo_close_vm(vmm);
         return nullptr;
     }
-    if (wo_has_compile_warning(vmm))
-    {
-        jeecs::debug::log_warn(wo_get_compile_warning(vmm, WO_NEED_COLOR));
-        jeecs::debug::log_warn("There are some warning when loading shader: %s.", path);
-    }
 
     wo_run(vmm);
 

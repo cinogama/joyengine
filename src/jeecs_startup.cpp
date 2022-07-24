@@ -30,9 +30,7 @@ bool jedbg_editor(void)
     wo_vm vmm = wo_create_vm();
     if (wo_load_file(vmm, "builtin/Editor/main.wo"))
         wo_run(vmm);
-    if (wo_has_compile_warning(vmm))
-        jeecs::debug::log_warn(wo_get_compile_warning(vmm, WO_NEED_COLOR));
-    if (wo_has_compile_error(vmm))
+    else
     {
         jeecs::debug::log_error(wo_get_compile_error(vmm, WO_NEED_COLOR));
         failed_in_start_editor = true;

@@ -3545,7 +3545,7 @@ namespace jeecs
             math::vec3 scale;
             math::quat rot;
 
-            typing::uid_t parent_uid;
+            typing::uid_t parent_uid = {};
 
             static void JERefRegsiter()
             {
