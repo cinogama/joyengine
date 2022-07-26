@@ -847,8 +847,22 @@ namespace jeecs_impl
                 }
             };
 
+            struct system_instance_list_node
+            {
+                const jeecs::typing::type_info* m_typeinfo;
+                jeecs::game_system* m_system_instance;
+                system_instance_list_node* last;
+                system_instance_list_node(jeecs::game_system* instance, const jeecs::typing::type_info* typeinfo)
+                    : m_system_instance(instance)
+                    , m_typeinfo(typeinfo)
+                {
+
+                }
+            };
+
             jeecs::basic::atomic_list<system_list_node> m_append_system;
             jeecs::basic::atomic_list<system_list_node> m_removed_system;
+            jeecs::basic::atomic_list<system_instance_list_node> m_destroy_sys_instance;
             bool                                        m_destroy_world;
         };
 
@@ -966,6 +980,15 @@ namespace jeecs_impl
                 jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function,
                     nullptr)
             );
+        }
+
+        void destroy_system_instance(ecs_world* w, jeecs::game_system* game_system_instance, const jeecs::typing::type_info* typeinfo)
+        {
+            DEBUG_ARCH_LOG("World: %p destroy system instance:%p operation has been committed to the command buffer.",
+                w, game_system_instance);
+
+            _find_or_create_buffer_for(w).m_destroy_sys_instance.add_one(
+                jeecs::basic::create_new<_world_command_buffer::system_instance_list_node>(game_system_instance, typeinfo));
         }
 
         void close_world(ecs_world* w)
@@ -1563,6 +1586,29 @@ namespace jeecs_impl
                     jeecs::basic::destroy_free(current_removed_system);
                 }
 
+                auto* destroy_sys_instance = _buf_in_world.second.m_destroy_sys_instance.pick_all();
+                while (destroy_sys_instance)
+                {
+                    auto current_destroy_sys_instance = destroy_sys_instance;
+                    destroy_sys_instance = destroy_sys_instance->last;
+
+                    auto* sysfuncs = current_destroy_sys_instance->m_system_instance->get_registed_function_chain();
+                    while (sysfuncs)
+                    {
+                        DEBUG_ARCH_LOG("System: %p, removed from world: %p.",
+                            sysfuncs, world);
+                        world->unregister_system(sysfuncs);
+                        sysfuncs = sysfuncs->last;
+                    }
+
+                    DEBUG_ARCH_LOG("System instance: %p, removed from world: %p.",
+                        current_destroy_sys_instance->m_system_instance, world);
+                    current_destroy_sys_instance->m_typeinfo->destruct(current_destroy_sys_instance->m_system_instance);
+                    je_mem_free(current_destroy_sys_instance->m_system_instance);
+
+                    jeecs::basic::destroy_free(current_destroy_sys_instance);
+                }
+
             });
 
         // Finish! clear buffer.
@@ -1630,7 +1676,7 @@ namespace jeecs_impl
 
                     DEBUG_ARCH_LOG("World %p: destroied.", world);
 
-                    unstore_system_for_world(world);
+                    destroy_all_systems_for_world(world);
 
                     // Execute here means world has been destroied, remove it from list;
                     std::lock_guard g1(_m_world_list_mx);
@@ -1707,7 +1753,7 @@ namespace jeecs_impl
             if (_m_universe_update_thread.joinable())
                 _m_universe_update_thread.join();
 
-            unstore_system_for_world(nullptr);
+            destroy_all_systems_for_world(nullptr);
 
             assert(_m_stored_systems.empty());
 
@@ -1751,7 +1797,28 @@ namespace jeecs_impl
             return _m_world_list;
         }
 
-        void unstore_system_for_world(ecs_world* world)
+        jeecs::game_system* unstore_system_for_world(ecs_world* world, const jeecs::typing::type_info* type)
+        {
+            std::lock_guard g1(_m_stored_systems_mx);
+            auto fnd = _m_stored_systems.find(world);
+
+            if (fnd != _m_stored_systems.end())
+            {
+                auto& systems = fnd->second;
+                for (auto i = systems.begin(); i != systems.end(); ++i)
+                {
+                    if (i->m_system_typeinfo == type)
+                    {
+                        auto* sys_instance = i->m_system_instance;
+                        systems.erase(i);
+                        return sys_instance;
+                    }
+                }
+            }
+            return nullptr;
+        }
+
+        void destroy_all_systems_for_world(ecs_world* world)
         {
             std::vector<stored_system_instance> removing_sys_instances;
             do
@@ -1917,6 +1984,18 @@ void* je_ecs_universe_instance_system(
         (jeecs_impl::ecs_world*)aim_world, system_type, (jeecs::game_system*)instance);
 
     return instance;
+}
+
+void je_ecs_universe_remove_system(
+    void* universe,
+    void* aim_world,
+    const jeecs::typing::type_info* system_type)
+{
+    auto* sys_instance = ((jeecs_impl::ecs_universe*)universe)->unstore_system_for_world(
+        (jeecs_impl::ecs_world*)aim_world, system_type);
+
+    ((jeecs_impl::ecs_world*)aim_world)->get_command_buffer().destroy_system_instance(
+        (jeecs_impl::ecs_world*)aim_world, sys_instance, system_type);
 }
 
 void je_ecs_universe_attach_shared_system_to(

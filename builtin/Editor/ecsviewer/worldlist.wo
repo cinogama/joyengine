@@ -83,7 +83,6 @@ namespace editor::WorldList
                                             }));
             }
             if (MenuItem("重命名世界"))
-            {
                 launch(generic::InputBox, ("重命名世界",
                                         F"请输入世界的新名称", "",
                                         func(new_name: string){
@@ -91,6 +90,10 @@ namespace editor::WorldList
                                                 return; // 输入为空，直接跳过
                                             world->editor::name(new_name);
                                         }));
+            if (MenuItem("变更系统"))
+            {
+                // 在此处打开世界变更界面，山寨一下实体组件变更界面
+                launch(WorldCreator::show, (WorldCreator::create_context(),));
             }
             EndPopup();
         }

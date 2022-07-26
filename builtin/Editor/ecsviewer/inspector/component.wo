@@ -16,16 +16,25 @@ namespace editor::Inspector::Component
         m_component_type:   option<je::typeinfo>,
     };
 
-    func show_component_menu(entity: je::entity, component_type: je::typeinfo)
+    func show_component_menu(entity: je::entity, component_type: option<je::typeinfo>)
     {
         using je::gui;
 
         if (BeginPopupContextItem())
         {
-            if (MenuItem(F"移除组件: {component_type->name()}"))
-                entity->editor::remove_component(component_type);
-            if (MenuItem("向当前实体添加组件"))
-                launch(EntityCreator::show, (EntityCreator::edit_context(entity),));
+            match (component_type)
+            {
+            value(comp_type)?
+                if (MenuItem(F"移除组件: {comp_type->name()}"))
+                    entity->editor::remove_component(comp_type);
+            none?
+                MenuItem("移除组件", false);
+            }
+            Separator();
+
+            if (MenuItem("编辑实体组件"))
+                    launch(EntityCreator::show, (EntityCreator::edit_context(entity),));
+
             EndPopup();
         }
     }
@@ -73,12 +82,7 @@ namespace editor::Inspector::Component
                         for (let name, chain: current_node.m_map)
                         {
                             let show_child_nodes = TreeNode(name);
-                            chain.m_component_type->map(
-                                func(type: je::typeinfo)
-                                {
-                                    show_component_menu(entity, type) 
-                                });
-
+                            show_component_menu(entity, chain.m_component_type);
                             if (show_child_nodes)
                             {
                                 waklthrow_and_display_components(chain, entity);
@@ -89,28 +93,28 @@ namespace editor::Inspector::Component
                         // 显示组件内的数据信息
                         match (current_node.m_component_type)
                         {
-                            value(type)?
+                        value(type)?
+                        {
+                            let mut member_count = 0;
+                            match (entity->editor::get_component(type))
                             {
-                                let mut member_count = 0;
-                                match (entity->editor::get_component(type))
+                                value(component_addr)?
                                 {
-                                    value(component_addr)?
+                                    for (let name, type, addr : component_addr->editor::iter_member(type))
                                     {
-                                        for (let name, type, addr : component_addr->editor::iter_member(type))
-                                        {
-                                            member_count += 1;
-                                            _show_edit_widget(name, type, addr);
-                                        }
-
-                                        if (0 == member_count)
-                                            Text("<此组件没有可编辑字段>");
+                                        member_count += 1;
+                                        _show_edit_widget(name, type, addr);
                                     }
-                                    none?
-                                        ; // 如果实体出现更新，这里会很麻烦
+
+                                    if (0 == member_count)
+                                        Text("<此组件没有可编辑字段>");
                                 }
+                                none?
+                                    ; // 如果实体出现更新，这里会很麻烦
                             }
-                            none?
-                                ; // 啥也不干
+                        }
+                        none?
+                            ; // 啥也不干
                         }
                     }
                     waklthrow_and_display_components(current_component_types, current_entity);

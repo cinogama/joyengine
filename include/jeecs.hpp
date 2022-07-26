@@ -261,6 +261,10 @@ JE_API void* je_ecs_universe_instance_system(
     void* aim_world,
     const jeecs::typing::type_info* system_type
 );
+JE_API void je_ecs_universe_remove_system(
+    void* universe,
+    void* aim_world,
+    const jeecs::typing::type_info* system_type);
 JE_API void je_ecs_universe_attach_shared_system_to(
     void* universe,
     void* aim_world,
@@ -1800,6 +1804,24 @@ namespace jeecs
         inline T* add_system()
         {
             return (T*)add_system(typing::type_info::of<T>());
+        }
+
+        inline void remove_system(const typing::type_info* sys_type)
+        {
+            if (sys_type->is_system())
+                je_ecs_universe_remove_system(
+                    je_ecs_world_in_universe(handle()),
+                    handle(),
+                    sys_type
+                );
+            else
+                debug::log_fatal("Cannot remove '%s' from world, it is not a system.", sys_type->m_typename);
+        }
+
+        template<typename T>
+        inline void remove_system()
+        {
+            remove_system(typing::type_info::of<T>());
         }
 
         template<typename ... CompTs>

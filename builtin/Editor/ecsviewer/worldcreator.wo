@@ -14,6 +14,7 @@ namespace editor::WorldCreator
 
     using WorldContext  = struct {
         name  : string,
+        edit_world : option<je::world>,
         has_append_types : array<je::typeinfo>,
         has_active_types : array<je::typeinfo>,
         not_append_types : array<je::typeinfo>,
@@ -23,6 +24,7 @@ namespace editor::WorldCreator
     {
         let context = WorldContext{
             name = "New world",
+            edit_world = option::none,
             has_append_types = [],
             has_active_types = [],
             not_append_types = je::typeinfo::editor::get_all_systems_types(),
@@ -40,6 +42,40 @@ namespace editor::WorldCreator
                 else
                     context.not_append_types->add(comp);
 
+        return context;
+    }
+
+    func edit_context(world: je::world)=> WorldContext
+    {
+        let context = WorldContext{
+            name = world->editor::name(),
+            edit_world = option::value(world),
+            has_append_types = [],
+            has_active_types = [],
+            not_append_types = je::typeinfo::editor::get_all_systems_types(),
+        };
+
+        let comps = context.not_append_types;
+        context.not_append_types = [];
+    
+        for (let comp : comps)
+            // 不显示所有编辑器系统
+            if (!comp->name()->beginwith("Editor::"))
+                if (comp->name()->beginwith("Translation::"))
+                    context.not_append_types->add(comp);
+
+        // 处理一下已经创建/添加的系统
+        for (let actived_sys : world->editor::get_systems_types())
+            active_systems(context, actived_sys->name());
+
+        match(Project::GetCurrentProject()->FindWorld(world))
+        {
+        value(proj_world)?
+            for (let actived_sys : proj_world->get_runtime_system())
+                append_systems(context, actived_sys->name());
+        none?
+            je::logfatal("发现一个未被列入项目中的游离实体：", world->editor::name());
+        }
         return context;
     }
 
@@ -195,14 +231,23 @@ namespace editor::WorldCreator
         using je::gui;
 
         let mut open = true;
-        Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+        if (context.edit_world->has())
+            Begin("编辑世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+        else
+            Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+
             if (menu_bar(context))
             {
-                let created_world = Project::GetCurrentProject()->CreateWorld().instance->val();
+                let project_world = Project::GetCurrentProject()->CreateWorld();
+                let created_world = project_world.instance->val();
+
                 created_world->editor::name(context.name);
 
                 for (let active_sys : context.has_active_types)
                     created_world->add_system(active_sys);
+
+                for (let active_sys : context.has_append_types)
+                    project_world->add_runtime_system(active_sys);
 
                 open = false;
             }
@@ -213,13 +258,13 @@ namespace editor::WorldCreator
             GetContentRegionAvail(ref available_width, ref available_height);
 
             BeginGroup();
-                show_active_systems(context, available_width / 2., available_height / 2.);
-                show_append_systems(context, available_width / 2., available_height / 2.);
+                show_append_systems(context, available_width / 2., available_height * 2. / 3.);
+                show_active_systems(context, available_width / 2., available_height / 3.);
             EndGroup();
 
             SameLine();
             show_usable_systems(context, available_width / 2.);
-        End();
+        End(); // End of Form
 
         if (!open)
             return FormAction::Close;

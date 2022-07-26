@@ -29,6 +29,14 @@ namespace editor::Project
                 none? std::panic("Not impl now!"); // TODO: 当前World还没有实例，从path对应的文件加载出来
             }
         }
+        func add_runtime_system(self: World, systype: je::typeinfo)
+        {
+            self.runtime_system->add(systype);
+        }
+        func get_runtime_system(self: World)
+        {
+            return self.runtime_system;
+        }
     }
 
     // 用于储存项目的配置信息
