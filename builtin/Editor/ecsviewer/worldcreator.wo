@@ -71,10 +71,10 @@ namespace editor::WorldCreator
         match(Project::GetCurrentProject()->FindWorld(world))
         {
         value(proj_world)?
-            for (let actived_sys : proj_world->get_runtime_system())
+            for (let actived_sys : proj_world.runtime_systems)
                 append_systems(context, actived_sys->name());
         none?
-            je::logfatal("发现一个未被列入项目中的游离实体：", world->editor::name());
+            je::logwarn("发现一个未被列入项目中的游离世界：", world->editor::name());
         }
         return context;
     }
@@ -217,8 +217,13 @@ namespace editor::WorldCreator
 
         if (BeginMenuBar())
         {
-            if (MenuItem("创建", context.name != ""))
-                create_world = true;
+            if (context.edit_world->has())
+            {
+                if (MenuItem("更新", context.name != ""))
+                    create_world = true;
+            }
+            else if (MenuItem("创建", context.name != ""))
+               create_world = true;
             
             EndMenuBar();
         }
@@ -238,17 +243,44 @@ namespace editor::WorldCreator
 
             if (menu_bar(context))
             {
-                let project_world = Project::GetCurrentProject()->CreateWorld();
-                let created_world = project_world.instance->val();
+                match(context.edit_world)
+                {
+                    none?
+                    {
+                        let project_world = Project::GetCurrentProject()->CreateWorld();
+                        let created_world = project_world.instance->val();
 
-                created_world->editor::name(context.name);
+                        created_world->editor::name(context.name);
 
-                for (let active_sys : context.has_active_types)
-                    created_world->add_system(active_sys);
+                        for (let active_sys : context.has_active_types)
+                            created_world->add_system(active_sys);
 
-                for (let active_sys : context.has_append_types)
-                    project_world->add_runtime_system(active_sys);
+                        for (let active_sys : context.has_append_types)
+                            project_world.runtime_systems->add(active_sys);
+                    }
+                    value(world)?
+                    {
+                        match(Project::GetCurrentProject()->FindWorld(world))
+                        {
+                        value(project_world)?
+                            project_world.runtime_systems = context.has_append_types;
+                        none?
+                            je::logwarn("发现一个未被列入项目中的游离世界：", world->editor::name());
+                        }
+                        
+                        let active_systems = world->editor::get_systems_types();
 
+                        // 当前世界中还没有这个系统，立即添加
+                        context.has_active_types
+                            ->forall(func(t: je::typeinfo){return active_systems->find(t) == -1})
+                            ->trans(func(t: je::typeinfo){world->add_system(t)});
+
+                        // 系统被移除
+                        active_systems
+                            ->forall(func(t: je::typeinfo){return context.has_active_types->find(t) == -1})
+                            ->trans(func(t: je::typeinfo){world->editor::remove_system(t)});
+                    }
+                }
                 open = false;
             }
 

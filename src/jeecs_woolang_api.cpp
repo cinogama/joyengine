@@ -112,6 +112,13 @@ WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args, size_t argc)
         , nullptr != gworld.add_system((const jeecs::typing::type_info*)wo_pointer(args + 1)));
 }
 
+WO_API wo_api wojeapi_remove_system_from_world(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world gworld = wo_pointer(args + 0);
+    gworld.remove_system((const jeecs::typing::type_info*)wo_pointer(args + 1));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_world gworld = wo_pointer(args + 0);
@@ -1126,6 +1133,9 @@ namespace je
 
         namespace editor
         {
+            extern("libjoyecs", "wojeapi_remove_system_from_world")
+            func remove_system(self: world, sysinfo: typeinfo)=> void;
+
             extern("libjoyecs", "wojeapi_get_world_name")
             func name(self: world)=> string;
 

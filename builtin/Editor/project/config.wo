@@ -16,7 +16,7 @@ namespace editor::Project
         name : option<string>, // 世界名称，保存项目/加载项目才有，新建世界没有这个值
         path : option<string>,    // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
         instance : option<je::world>, // 世界实例，只有正在编辑器里的世界会有这个值
-        runtime_system : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
+        runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     };
 
     namespace World
@@ -28,14 +28,6 @@ namespace editor::Project
                 value(ins)? return ins;
                 none? std::panic("Not impl now!"); // TODO: 当前World还没有实例，从path对应的文件加载出来
             }
-        }
-        func add_runtime_system(self: World, systype: je::typeinfo)
-        {
-            self.runtime_system->add(systype);
-        }
-        func get_runtime_system(self: World)
-        {
-            return self.runtime_system;
         }
     }
 

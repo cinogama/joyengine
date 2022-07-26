@@ -93,7 +93,7 @@ namespace editor::WorldList
             if (MenuItem("变更系统"))
             {
                 // 在此处打开世界变更界面，山寨一下实体组件变更界面
-                launch(WorldCreator::show, (WorldCreator::create_context(),));
+                launch(WorldCreator::show, (WorldCreator::edit_context(world),));
             }
             EndPopup();
         }

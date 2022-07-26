@@ -1835,6 +1835,7 @@ namespace jeecs_impl
 
             for (auto& stored_system : removing_sys_instances)
             {
+                DEBUG_ARCH_LOG("System instance: %p, removed from world: %p.", stored_system.m_system_instance, world);
                 stored_system.m_system_typeinfo->destruct(stored_system.m_system_instance);
                 je_mem_free(stored_system.m_system_instance);
             }
