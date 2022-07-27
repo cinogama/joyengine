@@ -279,6 +279,8 @@ namespace editor::WorldCreator
                         active_systems
                             ->forall(func(t: je::typeinfo){return context.has_active_types->find(t) == -1})
                             ->trans(func(t: je::typeinfo){world->editor::remove_system(t)});
+
+                        world->editor::name(context.name);
                     }
                 }
                 open = false;

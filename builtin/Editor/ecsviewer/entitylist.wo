@@ -44,6 +44,10 @@ namespace editor::EntityList
                                         entity->editor::name(),
                                         func(text: string){ entity->editor::name(text); }));
             }
+            if (MenuItem("编辑组件"))
+            {
+                launch(EntityCreator::show, (EntityCreator::edit_context(entity),));
+            }
             EndPopup();
         }
     }
