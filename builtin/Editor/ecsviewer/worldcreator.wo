@@ -272,14 +272,13 @@ namespace editor::WorldCreator
 
                         // 当前世界中还没有这个系统，立即添加
                         context.has_active_types
-                            ->forall(func(t: je::typeinfo){return active_systems->find(t) == -1})
-                            ->trans(func(t: je::typeinfo){world->add_system(t)});
+                            ->forall(\t: je::typeinfo=active_systems->find(t) == -1;)
+                            ->trans(\t: je::typeinfo=world->add_system(t););
 
                         // 系统被移除
                         active_systems
-                            ->forall(func(t: je::typeinfo){return context.has_active_types->find(t) == -1})
-                            ->trans(func(t: je::typeinfo){world->editor::remove_system(t)});
-
+                            ->forall(\t: je::typeinfo=context.has_active_types->find(t) == -1;)
+                            ->trans(\t: je::typeinfo=world->editor::remove_system(t););
                         world->editor::name(context.name);
                     }
                 }

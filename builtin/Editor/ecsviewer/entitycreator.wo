@@ -265,15 +265,13 @@ namespace editor::EntityCreator
 
                     // 0. 获取准备新增的组件
                     let add_components = context.has_append_types->forall(
-                            func(type: je::typeinfo){return !e->editor::get_component(type)->has()});
+                            \type: je::typeinfo = !e->editor::get_component(type)->has(););
                     // 1. 获取即将移除的组件
                     let removing_components = context.not_append_types->forall(
-                            func(type: je::typeinfo){return e->editor::get_component(type)->has()});
+                            \type: je::typeinfo = e->editor::get_component(type)->has(););
 
-                    for (let new_comp : add_components)
-                        e->editor::add_component(new_comp);
-                    for (let removing_comp : removing_components)
-                        e->editor::remove_component(removing_comp);
+                    add_components->trans(\t: je::typeinfo = e->editor::add_component(t););
+                    removing_components->trans(\t: je::typeinfo = e->editor::remove_component(t););
 
                     e->editor::name(context.name);
                 }
