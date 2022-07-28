@@ -74,7 +74,7 @@ namespace editor::WorldCreator
             for (let actived_sys : proj_world.runtime_systems)
                 append_systems(context, actived_sys->name());
         none?
-            je::logwarn("发现一个未被列入项目中的游离世界：", world->editor::name());
+            ;
         }
         return context;
     }
@@ -265,7 +265,7 @@ namespace editor::WorldCreator
                         value(project_world)?
                             project_world.runtime_systems = context.has_append_types;
                         none?
-                            je::logwarn("发现一个未被列入项目中的游离世界：", world->editor::name());
+                            ;
                         }
                         
                         let active_systems = world->editor::get_systems_types();

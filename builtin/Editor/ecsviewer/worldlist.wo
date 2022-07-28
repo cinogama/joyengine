@@ -8,6 +8,8 @@ import builtin.Editor.generic.form.msgbox;
 
 import worldcreator;
 
+import builtin.Editor.project.config;
+
 namespace editor::WorldList
 {
     private func menu()
@@ -43,11 +45,11 @@ namespace editor::WorldList
                                 if (rend_world != world)
                                     launch(generic::AskFor, ("切换渲染世界",
                                                 F"即将切换到{world->editor::name()}，是否继续？",
-                                                func(){ world->rend(); }));
+                                                \=world->rend();));
                             none?
                                 launch(generic::AskFor, ("切换渲染世界",
                                             F"即将切换到{world->editor::name()}，是否继续？",
-                                            func(){ world->rend(); }));
+                                            \=world->rend();));
                         }
                     }
                     context_menu(world);
@@ -75,12 +77,25 @@ namespace editor::WorldList
                     launch(generic::MsgBox, ("删除世界失败",
                                             "不能删除正在渲染的世界"));
                 else
-                    launch(generic::AskFor, ("确认删除世界",
-                                            F"确定要删除世界{world->editor::name()}吗？未保存的世界将永久丢失！",
-                                            func(){
-                                                EntityList::set_current_entity(option::none:<je::entity>);
-                                                world->close();
-                                            }));
+                {
+                    let delete_func = 
+                        \=launch(generic::AskFor, ("确认删除世界",
+                            F"确定要删除世界{world->editor::name()}吗？未保存的世界将永久丢失！",
+                            func(){
+                                EntityList::set_current_entity(option::none:<je::entity>);
+                                world->close();
+                            }));;
+                    match(Project::GetCurrentProject()->FindWorld(world))
+                    {
+                    value(proj_world)?
+                        proj_world.path
+                            ->map(\p:string=std::panic("TODO");) // 如果当前项目有路径，则询问是否关闭
+                            ->or(\=delete_func(););    
+                    none?
+                        delete_func();
+                    }
+                    
+                }
             }
             if (MenuItem("重命名世界"))
                 launch(generic::InputBox, ("重命名世界",

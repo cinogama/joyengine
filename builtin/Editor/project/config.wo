@@ -61,6 +61,7 @@ namespace editor::Project
                         return option::value(project_world);
                 none?;
             }
+        je::logwarn("发现一个未被列入项目中的游离世界：", world->editor::name());
         return option::none;
     }
 
