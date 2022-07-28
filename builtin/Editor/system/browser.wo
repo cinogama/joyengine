@@ -81,7 +81,14 @@ namespace editor::Browser
 
     static let mut current_work_path = "";        
 
-    func FileIcon(path: PathInfo)
+    enum Action
+    {
+        Nothing,
+        Click,
+        DoubleClick,
+    }
+
+    func FileIcon(path: PathInfo)=> Action
     {
         using je::gui;
             
@@ -100,7 +107,19 @@ namespace editor::Browser
             Text(path.name);
         EndGroup();
 
-        return clicked;
+        static let mut _last_click_time = std::time();
+
+        if(clicked)
+        {
+            let _current_click_time = std::time();
+            if (_current_click_time - _last_click_time < 0.2)
+                return Action::DoubleClick;
+
+            _last_click_time = _current_click_time;
+            return Action::Click;
+        }
+
+        return Action::Nothing;
     }
 
     func files_group()
@@ -128,7 +147,25 @@ namespace editor::Browser
 
         BeginChild("files_list");
             for (let subpath : now_item_in_path)
-                FileIcon(subpath);
+            {
+                let action = FileIcon(subpath);
+
+                if (action == Action::Click)
+                    ;
+                else if (action == Action::DoubleClick)
+                {
+                    match (subpath.type)
+                    {
+                    dir(_)?
+                        // 双击的是一个目录，进入这个目录
+                        current_work_path = subpath.path; 
+                    file?
+                        ; // TODO: 在资源管理器中打开文件
+                    }
+                }
+                else
+                    ;
+            }               
         EndChild();
     }
 
@@ -216,7 +253,11 @@ namespace editor::Browser
         Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
             path_tree();
             SameLine();
-            files_group();
+            BeginGroup();
+                BeginChild("tools_bar", 0., 30.);
+                EndChild();
+                files_group();
+            EndGroup();
         End();
 
         if (!open)
