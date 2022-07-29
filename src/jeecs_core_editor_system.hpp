@@ -23,8 +23,7 @@ namespace jeecs
             Transform::LocalPosition* position,
             Transform::LocalRotation* rotation)
         {
-            have_editor_walker = true;
-
+            
 
         }
         void EditorCameraWork(
@@ -41,18 +40,11 @@ namespace jeecs
                 {
                     contain<Editor::EditorWalker>(),
                     except<Camera::Projection>(),
-                    system_write(&have_editor_walker),
                 });
             register_system_func(&DefaultEditorSystem::EditorCameraWork,
                 {
                     contain<Editor::EditorWalker>(),
                     contain<Camera::Projection>()
-                });
-
-            // MakeSureEditorCameraExists must work after EditorWalkerWork
-            register_system_func(&DefaultEditorSystem::MakeSureEditorCameraExists,
-                {
-                    system_read(&have_editor_walker),
                 });
         }
     };

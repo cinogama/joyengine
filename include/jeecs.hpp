@@ -677,6 +677,12 @@ JE_API void jegl_uniform_float4x4(jegl_resource* shader, int location, const flo
 
 JE_API jegl_thread* jegl_current_thread();
 
+
+JE_API void je_input_set_keydown(int keycode);
+JE_API void je_input_set_keyup(int keycode);
+JE_API void je_input_set_mouse_buttom(int keycode);
+JE_API void je_input_set_keyup(int keycode);
+
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
 
