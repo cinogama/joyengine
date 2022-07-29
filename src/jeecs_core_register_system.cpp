@@ -3,9 +3,11 @@
 
 #include "jeecs_core_translation_system.hpp"
 #include "jeecs_core_graphic_system.hpp"
+#include "jeecs_core_editor_system.hpp"
 
 void jeecs_entry_register_core_systems()
 {
     jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
     jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
+    jeecs::typing::type_info::of<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
 }

@@ -1192,6 +1192,7 @@ namespace jeecs_impl
         {
             _m_system_modified.clear();
             _m_registed_system.push_back(sys);
+            sys->m_game_system_function->m_ecs_world_addr = this;
         }
 
         void register_system_next_frame(ecs_system_function* sys)

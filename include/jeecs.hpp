@@ -1706,6 +1706,7 @@ namespace jeecs
             dependence_type  m_depend;
         };
 
+        void* m_ecs_world_addr;     // Will be set in
         arch_index_info* m_archs;
         size_t m_arch_count;
         typeid_dependence_pair* m_dependence;
@@ -1996,9 +1997,25 @@ namespace jeecs
             }
         }
 
-        const game_world* get_world() const noexcept
+        // Get binded world or attached world
+        game_world get_world() const noexcept
         {
-            return &_m_game_world;
+            if (_m_game_world)
+                return _m_game_world;
+
+            // May be shared system, try get world from chain
+            void* chain_world = nullptr;
+
+            auto* sys = get_registed_function_chain();
+            while (sys)
+            {
+                if (chain_world && chain_world != sys->m_ecs_world_addr)
+                    return nullptr;
+                else
+                    chain_world = sys->m_ecs_world_addr;
+                sys = sys->last;
+            }
+            return chain_world;
         }
 
         game_system_function* get_registed_function_chain() const noexcept
@@ -2449,8 +2466,8 @@ namespace jeecs
             debug::log_error("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
 #endif
             return "";
+            }
         }
-    }
 
     template<typename T>
     inline T* game_entity::get_component()const noexcept
@@ -3794,6 +3811,6 @@ namespace jeecs
             typing::type_info::unregister_all_type_in_shutdown();
         }
     }
-}
+    }
 
 #endif

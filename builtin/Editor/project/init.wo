@@ -9,22 +9,23 @@ namespace editor::Project
     {
         // 必须在编辑器初始化时运行，负责创建默认项目环境
 
+        // -1. 创建项目上下文
+        let proj = CreateDefaultProject();
+
         // 0. 准备需要用到的常量
-        let default_graphic_pipeline_type = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
         let default_translation_sys_type  = je::typeinfo("Translation::TranslationUpdatingSystem")->val();
 
         // 1. 创建引擎的基本上下文
         let universe = je::universe::editor::create();
         universe->editor::set_current_universe();
-        universe->add_shared_system(default_graphic_pipeline_type);
+        universe->add_shared_system(proj.config.graphic_system);
+        universe->add_shared_system(proj.config.editor_system);
 
-        // 2. 创建项目上下文
-        let proj = CreateDefaultProject();
-
-        // 3. 创建默认的世界
+        // 2. 创建默认的世界
         let default_world = proj->CreateWorld().instance->val();
         default_world->editor::name("Default");
-        default_world->attach_shared_system(default_graphic_pipeline_type);
+        default_world->attach_shared_system(proj.config.graphic_system);
+        default_world->attach_shared_system(proj.config.editor_system);
         default_world->add_system(default_translation_sys_type);
     }
 

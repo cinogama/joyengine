@@ -35,6 +35,7 @@ namespace editor::Project
     using Config = struct {
         name : string,                    // 项目的名称
         graphic_system : je::typeinfo,    // 默认使用的图形系统类型
+        editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
     };
 
     // 在当前项目中创建一个世界，世界会被保存进项目的世界列表中
@@ -78,8 +79,9 @@ namespace editor::Project
         return SetCurrentProject(Project{
             config = Config {
                 name = "Empty project",
-                // NOTE: 默认图形系统应该内置在引擎里，如果获取不到这里直接爆炸
+                // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
                 graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
+                editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
             },
             worlds = [],
         });
