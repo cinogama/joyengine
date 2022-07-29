@@ -34,26 +34,54 @@ void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
 
 void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
 {
-    MOUSE_POS_X = (float)x / WINDOWS_SIZE_WIDTH * 2.0f - 1.0f;
-    MOUSE_POS_Y = -((float)y / WINDOWS_SIZE_HEIGHT * 2.0f - 1.0f);
+    je_io_set_mousepos(0,
+        (float)x / WINDOWS_SIZE_WIDTH * 2.0f - 1.0f,
+        (float)y / WINDOWS_SIZE_HEIGHT * 2.0f - 1.0f);
 }
 
 void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
 {
-    assert(key < MAX_MOUSE_BUTTON_COUNT);
-    MOUSE_KEY_STATE[key] = state;
+    switch (key)
+    {
+    case GLFW_MOUSE_BUTTON_LEFT:
+        je_io_set_keystate(je_keycode::MOUSE_L_BUTTION, state); break;
+    case GLFW_MOUSE_BUTTON_MIDDLE:
+        je_io_set_keystate(je_keycode::MOUSE_M_BUTTION, state); break;
+    case GLFW_MOUSE_BUTTON_RIGHT:
+        je_io_set_keystate(je_keycode::MOUSE_R_BUTTION, state); break;
+    default:
+        // do nothing.
+        break;
+    }
 }
 
 void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
 {
-    MOUSE_SCROLL_X_COUNT += (float)yoffset;
-    MOUSE_SCROLL_Y_COUNT += (float)yoffset;
+    je_io_set_wheel(je_io_wheel() + yoffset);
 }
 
 void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)
 {
-    assert(key < MAX_KEYBOARD_BUTTON_COUNT);
-    KEYBOARD_STATE[key] = stage;
+    assert(GLFW_KEY_A == 'A');
+    assert(GLFW_KEY_0 == '0');
+    switch (key)
+    {
+    case GLFW_KEY_LEFT_SHIFT:
+        je_io_set_keystate(je_keycode::L_SHIFT, stage); break;
+    case GLFW_KEY_LEFT_ALT:
+        je_io_set_keystate(je_keycode::L_ALT, stage); break;
+    case GLFW_KEY_LEFT_CONTROL:
+        je_io_set_keystate(je_keycode::L_CTRL, stage); break;
+    case GLFW_KEY_TAB:
+        je_io_set_keystate(je_keycode::TAB, stage); break;
+    case GLFW_KEY_ENTER:
+        je_io_set_keystate(je_keycode::ENTER, stage); break;
+    case GLFW_KEY_BACKSPACE:
+        je_io_set_keystate(je_keycode::BACKSPACE, stage); break;
+    default:
+        je_io_set_keystate((je_keycode)key, stage); break;
+    }
+    
 }
 
 jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config)

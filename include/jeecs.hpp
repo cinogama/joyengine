@@ -677,9 +677,31 @@ JE_API void jegl_uniform_float4x4(jegl_resource* shader, int location, const flo
 
 JE_API jegl_thread* jegl_current_thread();
 
+enum class je_keycode
+{
+    A = 'A', B, C, D, E, F, G, H, I, J, K, L,
+    M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+    _1 = '1', _2, _3, _4, _5, _6, _7, _8, _9,
+    _0, _ = ' ',
 
+    L_SHIFT = 256,
+    L_CTRL,
+    L_ALT,
+    TAB, ENTER, ECS, BACKSPACE,
 
-JE_API void je_input_set_keystate(uint64_t keycode, bool down);
+    MOUSE_L_BUTTION = 512,
+    MOUSE_M_BUTTION,
+    MOUSE_R_BUTTION,
+
+    MAX_KEY_CODE = 1024,
+};
+JE_API void je_io_set_keystate(je_keycode keycode, bool keydown);
+JE_API void je_io_set_mousepos(int group, float x, float y);
+JE_API void je_io_set_wheel(float count);
+
+JE_API bool je_io_is_keydown(je_keycode keycode);
+JE_API void je_io_mouse_pos(int group, float* x, float* y);
+JE_API float je_io_wheel();
 
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
@@ -2471,8 +2493,8 @@ namespace jeecs
             debug::log_error("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
 #endif
             return "";
-            }
         }
+    }
 
     template<typename T>
     inline T* game_entity::get_component()const noexcept
@@ -3816,6 +3838,6 @@ namespace jeecs
             typing::type_info::unregister_all_type_in_shutdown();
         }
     }
-    }
+}
 
 #endif
