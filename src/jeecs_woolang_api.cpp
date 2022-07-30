@@ -172,6 +172,36 @@ WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_get_editing_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_option_ptr(vm, jedbg_get_editing_entity());
+}
+
+WO_API wo_api wojeapi_set_editing_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    if (argc)
+        jedbg_set_editing_entity((jeecs::game_entity*)wo_pointer(args + 0));
+    else
+        jedbg_set_editing_entity(nullptr);
+    return wo_ret_void(vm);
+}
+
+
+WO_API wo_api wojeapi_set_parent(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    jeecs::game_entity* parent = (jeecs::game_entity*)wo_pointer(args + 1);
+
+    if (auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>())
+        if (auto* ca = parent->get_component<jeecs::Transform::ChildAnchor>())
+        {
+            l2p->parent_uid = ca->anchor_uid;
+            return wo_ret_bool(vm, true);
+        }
+
+    return wo_ret_bool(vm, false);
+}
+
 WO_API wo_api wojeapi_get_entity_name(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -1194,6 +1224,26 @@ R"(
 
         namespace editor
         {
+            extern("libjoyecs", "wojeapi_get_editing_entity")
+            func editing()=> option<entity>;
+
+            func set_editing(self: option<entity>)
+            {
+                extern("libjoyecs", "wojeapi_set_editing_entity")
+                func _set_editing_entity(e: entity)=> void;
+                extern("libjoyecs", "wojeapi_set_editing_entity")
+                func _set_editing_entity()=> void;
+
+                match(self)
+                {
+                value(e)? _set_editing_entity(e);
+                none? _set_editing_entity();
+                }
+            }
+
+            extern("libjoyecs", "wojeapi_set_parent")
+            func set_parent(self: entity, parent: entity)=> bool;
+
             extern("libjoyecs", "wojeapi_get_entity_name")
             func name(self: entity)=> string;
 

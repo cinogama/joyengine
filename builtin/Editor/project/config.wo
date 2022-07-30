@@ -41,10 +41,43 @@ namespace editor::Project
     // 在当前项目中创建一个世界，世界会被保存进项目的世界列表中
     func CreateWorld(self: Project)
     {
+        let world_instance = je::universe::current()->create_world();
+
+        // 创建调试摄像机组
+        // 父对象，负责带着摄像机运动，同时负责y轴旋转
+        let camera_walker = world_instance->add_entity([
+            // Transform 族组件
+            je::typeinfo("Transform::LocalPosition")->val(),
+            je::typeinfo("Transform::LocalRotation")->val(),
+            je::typeinfo("Transform::LocalToWorld")->val(),
+            je::typeinfo("Transform::Translation")->val(),
+            je::typeinfo("Transform::ChildAnchor")->val(),
+            // Editor 族组件
+            je::typeinfo("Editor::Invisable")->val(),
+            je::typeinfo("Editor::EditorWalker")->val(),
+        ]);
+        // 摄像机，同时负责x轴旋转
+        let editor_camera = world_instance->add_entity([
+            // Transform 族组件
+            je::typeinfo("Transform::LocalPosition")->val(),
+            je::typeinfo("Transform::LocalRotation")->val(),
+            je::typeinfo("Transform::LocalToParent")->val(),
+            je::typeinfo("Transform::Translation")->val(),
+            // Editor 族组件
+            je::typeinfo("Editor::Invisable")->val(),
+            je::typeinfo("Editor::EditorWalker")->val(),
+            // Camera 族组件
+            je::typeinfo("Camera::PerspectiveProjection")->val(),
+            je::typeinfo("Camera::Projection")->val(),
+        ]);
+        editor_camera->editor::set_parent(camera_walker);
+        camera_walker->editor::name("调试摄像机组");
+        editor_camera->editor::name("调试摄像机");
+
         let world = World{
             name = option::none,
             path = option::none,
-            instance = option::value(je::universe::current()->create_world()),
+            instance = option::value(world_instance),
             runtime_system = [],
         };
 

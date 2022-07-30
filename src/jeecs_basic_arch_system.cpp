@@ -2135,8 +2135,9 @@ void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
 
 bool je_ecs_world_validate_entity(const jeecs::game_entity* entity)
 {
-    auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk;
-    return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
+    if (auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk)
+        return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
+    return false;
 }
 
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
@@ -2253,6 +2254,7 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeec
 }
 
 static void* _editor_universe;
+static jeecs::game_entity _editor_entity;
 
 void jedbg_set_editor_universe(void* universe_handle)
 {
@@ -2262,4 +2264,18 @@ void jedbg_set_editor_universe(void* universe_handle)
 void* jedbg_get_editor_universe(void)
 {
     return _editor_universe;
+}
+void jedbg_set_editing_entity(jeecs::game_entity* _entity)
+{
+    if (_entity)
+        _editor_entity = *_entity;
+    else
+        _editor_entity._m_in_chunk = nullptr;
+}
+
+JE_API jeecs::game_entity* jedbg_get_editing_entity()
+{
+    if (_editor_entity.valid())
+        return &_editor_entity;
+    return nullptr;
 }

@@ -8,8 +8,11 @@
 //  will be push_front to 'pick-out' system function and re-add it to another world.
 
 
-#define JE_IMPL
-#include "jeecs.hpp"
+#ifndef JE_IMPL
+#   define JE_IMPL
+#   define JE_ENABLE_DEBUG_API
+#   include "jeecs.hpp"
+#endif
 
 #include <queue>
 #include <list>
@@ -64,25 +67,15 @@ import je.shader;
 using VAO_STRUCT vin = struct {
     vertex : float3,
 };
-
 using v2f = struct {
     pos : float4,
 };
-
 using fout = struct {
     color : float4
 };
 
-func vert(vdata: vin)
-{
-    let opos = je_mvp * float4(vdata.vertex, 1.);
-    return v2f{ pos = opos };
-}
-func frag(fdata: v2f)
-{
-    let flashing_color = je_time->y();
-    return fout{ color = float4(flashing_color, 0, flashing_color, 1) };
-}
+let vert = \vdata: vin = v2f{ pos = je_mvp * float4(vdata.vertex, 1.) };;
+let frag = \fdata: v2f = fout{ color = float4(je_time->y(), 0, je_time->y(), 1) };;
 
 )");
             default_shaders_list.push_back(default_shader);
@@ -289,7 +282,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             mat_inv_position[3][2] = -translation->world_position.z;
 
             // TODO: Optmize
-            math::mat4xmat4(projection->view, mat_inv_position, mat_inv_rotation);
+            math::mat4xmat4(projection->view, mat_inv_rotation, mat_inv_position);
 
             assert(ortho || perspec);
             float znear = clip ? clip->znear : 0.3f;
@@ -299,10 +292,16 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                 graphic::ortho_projection(projection->projection,
                     (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
                     ortho->scale, znear, zfar);
+                graphic::ortho_inv_projection(projection->inv_projection,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    ortho->scale, znear, zfar);
             }
             else
             {
                 graphic::perspective_projection(projection->projection,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    perspec->angle, znear, zfar);
+                graphic::perspective_inv_projection(projection->inv_projection,
                     (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
                     perspec->angle, znear, zfar);
             }

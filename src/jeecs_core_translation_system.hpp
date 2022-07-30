@@ -1,7 +1,10 @@
 #pragma once
 
-#define JE_IMPL
-#include "jeecs.hpp"
+#ifndef JE_IMPL
+#   define JE_IMPL
+#   define JE_ENABLE_DEBUG_API
+#   include "jeecs.hpp"
+#endif
 
 namespace jeecs
 {

@@ -415,6 +415,41 @@ jegl_resource* jegl_create_vertex(
     memcpy(vertex->m_raw_vertex_data->m_vertex_formats, format,
         format_length * sizeof(size_t));
 
+    // Calc size by default:
+    if (format[0] == 3)
+    {
+        float
+            x_min = INFINITY, x_max = -INFINITY,
+            y_min = INFINITY, y_max = -INFINITY,
+            z_min = INFINITY, z_max = -INFINITY;
+        // First data group is position(by default).
+        for (size_t i = 0; i < point_count; ++i)
+        {
+            float x = datas[0 + i * datacount_per_point];
+            float y = datas[1 + i * datacount_per_point];
+            float z = datas[2 + i * datacount_per_point];
+
+            x_min = std::min(x, x_min);
+            x_max = std::max(x, x_max);
+            y_min = std::min(y, y_min);
+            y_max = std::max(y, y_max);
+            z_min = std::min(z, z_min);
+            z_max = std::max(z, z_max);
+        }
+
+        vertex->m_raw_vertex_data->m_size_x = x_max - x_min;
+        vertex->m_raw_vertex_data->m_size_y = y_max - y_min;
+        vertex->m_raw_vertex_data->m_size_z = z_max - z_min;
+    }
+    else
+    {
+        jeecs::debug::log_warn("Position data of vertex(%p) mismatch, first data should be position and with length '3'", vertex);
+        vertex->m_raw_vertex_data->m_size_x = 1.f;
+        vertex->m_raw_vertex_data->m_size_y = 1.f;
+        vertex->m_raw_vertex_data->m_size_z = 1.f;
+    }
+    
+
     return vertex;
 }
 

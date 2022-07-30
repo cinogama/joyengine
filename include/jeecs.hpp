@@ -164,6 +164,28 @@ namespace jeecs
 
         inline std::string name(const std::string& _name);
     };
+
+    namespace input
+    {
+        enum class keycode
+        {
+            A = 'A', B, C, D, E, F, G, H, I, J, K, L,
+            M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+            _1 = '1', _2, _3, _4, _5, _6, _7, _8, _9,
+            _0, _ = ' ',
+
+            L_SHIFT = 256,
+            L_CTRL,
+            L_ALT,
+            TAB, ENTER, ECS, BACKSPACE,
+
+            MOUSE_L_BUTTION = 512,
+            MOUSE_M_BUTTION,
+            MOUSE_R_BUTTION,
+
+            MAX_KEY_CODE = 1024,
+        };
+    }
 }
 
 namespace std
@@ -397,6 +419,7 @@ struct jegl_vertex
         TRIANGLESTRIP,
         QUADS,
     };
+    float m_size_x, m_size_y, m_size_z;
     float* m_vertex_datas;
     size_t* m_vertex_formats;
     const char* m_path;
@@ -677,31 +700,15 @@ JE_API void jegl_uniform_float4x4(jegl_resource* shader, int location, const flo
 
 JE_API jegl_thread* jegl_current_thread();
 
-enum class je_keycode
-{
-    A = 'A', B, C, D, E, F, G, H, I, J, K, L,
-    M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-    _1 = '1', _2, _3, _4, _5, _6, _7, _8, _9,
-    _0, _ = ' ',
-
-    L_SHIFT = 256,
-    L_CTRL,
-    L_ALT,
-    TAB, ENTER, ECS, BACKSPACE,
-
-    MOUSE_L_BUTTION = 512,
-    MOUSE_M_BUTTION,
-    MOUSE_R_BUTTION,
-
-    MAX_KEY_CODE = 1024,
-};
-JE_API void je_io_set_keystate(je_keycode keycode, bool keydown);
+JE_API void je_io_set_keystate(jeecs::input::keycode keycode, bool keydown);
 JE_API void je_io_set_mousepos(int group, float x, float y);
 JE_API void je_io_set_wheel(float count);
+JE_API void je_io_lock_mouse(bool lock);
 
-JE_API bool je_io_is_keydown(je_keycode keycode);
+JE_API bool je_io_is_keydown(jeecs::input::keycode keycode);
 JE_API void je_io_mouse_pos(int group, float* x, float* y);
 JE_API float je_io_wheel();
+JE_API bool je_io_should_lock_mouse();
 
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
@@ -737,6 +744,10 @@ JE_API void jedbg_set_editor_universe(void* universe_handle);
 JE_API void* jedbg_get_editor_universe(void);
 
 JE_API bool jedbg_editor(void);
+
+JE_API void jedbg_set_editing_entity(jeecs::game_entity* _entity);
+
+JE_API jeecs::game_entity* jedbg_get_editing_entity();
 
 #endif
 
@@ -1090,6 +1101,14 @@ namespace jeecs
 
     namespace basic
     {
+        constexpr typing::typehash_t prime = 0x100000001B3ull;
+        constexpr typing::typehash_t basis = 0xCBF29CE484222325ull;
+
+        constexpr typing::typehash_t hash_compile_time(char const* str, typing::typehash_t last_value = basis)
+        {
+            return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
+        }
+
         constexpr static size_t allign_size(size_t _origin_sz, size_t _allign_base)
         {
             size_t aligned_sz = (_origin_sz / _allign_base) * _allign_base;
@@ -2590,6 +2609,47 @@ namespace jeecs
             return mat4xmat4((float*)out_result, (const float*)left, (const float*)right);
         }
 
+        inline void mat4xvec4(float* out_result, const float* left_mat, const float* right_vex)
+        {
+#define R(x) (out_result[x])
+#define A(x, y) (left_mat[(x) + (y)* 4])
+#define B(x) (right_vex[x])
+            R(0) = A(0, 0) * B(0) + A(0, 1) * B(1) + A(0, 2) * B(2) + A(0, 3) * B(3);
+            R(1) = A(1, 0) * B(0) + A(1, 1) * B(1) + A(1, 2) * B(2) + A(1, 3) * B(3);
+            R(2) = A(2, 0) * B(0) + A(2, 1) * B(1) + A(2, 2) * B(2) + A(2, 3) * B(3);
+            R(3) = A(3, 0) * B(0) + A(3, 1) * B(1) + A(3, 2) * B(2) + A(3, 3) * B(3);
+#undef R
+#undef A
+#undef B
+        }
+        inline void mat4xvec4(float* out_result, const float(*left)[4], const float* right)
+        {
+            return mat4xvec4(out_result, (const float*)left, right);
+        }
+
+        inline void mat4xvec3(float* out_result, const float* left, const float* right)
+        {
+            float dat[4] = { right[0], right[1], right[2], 1.f };
+            float result[4];
+            mat4xvec4(result, left, dat);
+            if (result[3] != 0.f)
+            {
+                out_result[0] = result[0] / result[3];
+                out_result[1] = result[1] / result[3];
+                out_result[2] = result[2] / result[3];
+            }
+            else
+            {
+                out_result[0] = result[0];
+                out_result[1] = result[1];
+                out_result[2] = result[2];
+            }
+        }
+        inline void mat4xvec3(float* out_result, const float(*left)[4], const float* right)
+        {
+            mat4xvec3(out_result, (const float*)left, right);
+        }
+
         struct _basevec2
         {
             float x, y;
@@ -3266,6 +3326,14 @@ namespace jeecs
                 return 2 * RAD2DEG * theta;
             }
 
+            static inline quat rotation(const vec3& a, const vec3& b)noexcept
+            {
+                auto axis = b.cross(a);
+                auto angle = RAD2DEG * acos(b.dot(a) / (b.length() * a.length()));
+
+                return quat::axis_angle(axis.unit(), angle);
+            }
+
             inline constexpr quat conjugate() const noexcept
             {
                 return quat(-x, -y, -z, w);
@@ -3511,6 +3579,44 @@ namespace jeecs
             m[3][3] = 1;
         }
 
+        inline void ortho_inv_projection(
+            float(*out_proj_mat)[4],
+            float windows_width,
+            float windows_height,
+            float scale,
+            float znear,
+            float zfar)
+        {
+            const float RATIO = 1024.0f;
+            const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
+
+            const float R = WIDTH_HEIGHT_RATIO * RATIO / 2.0f / scale / 100.0f;
+            const float L = -R;
+            const float T = RATIO / 2.0f / scale / 100.0f;
+            const float B = -T;
+
+            auto m = out_proj_mat;
+            m[0][0] = (R - L) / 2.0f;
+            m[0][1] = 0;
+            m[0][2] = 0;
+            m[0][3] = 0;
+
+            m[1][0] = 0;
+            m[1][1] = (T - B) / 2.0f;
+            m[1][2] = 0;
+            m[1][3] = 0;
+
+            m[2][0] = 0;
+            m[2][1] = 0;
+            m[2][2] = (zfar - znear) / 2.0f;
+            m[2][3] = 0;
+
+            m[3][0] = (R + L) / 2.0f;
+            m[3][1] = (T + B) / 2.0f;
+            m[3][2] = (zfar + znear) / 2.0f;
+            m[3][3] = 1;
+        }
+
         inline void perspective_projection(
             float(*out_proj_mat)[4],
             float windows_width,
@@ -3544,6 +3650,41 @@ namespace jeecs
             m[3][1] = 0;
             m[3][2] = 2.0f * zfar * znear / ZRANGE;
             m[3][3] = 0;
+        }
+
+        inline void perspective_inv_projection(
+            float(*out_proj_mat)[4],
+            float windows_width,
+            float windows_height,
+            float angle,
+            float znear,
+            float zfar)
+        {
+            const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
+            const float ZRANGE = znear - zfar;
+            const float TAN_HALF_FOV = tanf(angle / math::quat::RAD2DEG / 2.0f);
+
+
+            auto m = out_proj_mat;
+            m[0][0] = TAN_HALF_FOV * WIDTH_HEIGHT_RATIO;
+            m[0][1] = 0;
+            m[0][2] = 0;
+            m[0][3] = 0;
+
+            m[1][0] = 0;
+            m[1][1] = TAN_HALF_FOV;
+            m[1][2] = 0;
+            m[1][3] = 0;
+
+            m[2][0] = 0;
+            m[2][1] = 0;
+            m[2][2] = 0;
+            m[2][3] = ZRANGE / (2 * zfar * znear);
+
+            m[3][0] = 0;
+            m[3][1] = 0;
+            m[3][2] = 1;
+            m[3][3] = (zfar + znear) / (2 * zfar * znear);
         }
     }
 
@@ -3741,8 +3882,9 @@ namespace jeecs
 
         struct Projection
         {
-            float view[4][4];
-            float projection[4][4];
+            float view[4][4] = {};
+            float projection[4][4] = {};
+            float inv_projection[4][4] = {};
         };
 
         struct OrthoProjection
@@ -3802,6 +3944,303 @@ namespace jeecs
         return c_name->name = _name;
     }
 
+    namespace math
+    {
+        struct ray
+        {
+        public:
+            vec3 orgin = { 0,0,0 };
+            vec3 direction = { 0,0,1 };
+
+            ray() = default;
+
+            ray(ray&&) = default;
+            ray(const ray&) = default;
+
+            ray& operator = (ray&&) = default;
+            ray& operator = (const ray&) = default;
+
+            ray(const vec3& _orgin, const vec3& _direction) :
+                orgin(_orgin),
+                direction(_direction)
+            {
+
+            }
+            ray(const Transform::Translation* camera_trans, const Camera::Projection* camera_proj, const vec2& screen_pos, bool ortho)
+            {
+                //根据摄像机和屏幕坐标创建射线
+                float ray_eye[4] = { screen_pos.x, screen_pos.y, 1.0f, 1.0f };
+
+                float ray_world[4];
+                mat4xvec4(ray_world, camera_proj->inv_projection, ray_eye);
+
+                if (ray_world[3] != 0.0f)
+                {
+                    // is perspective
+                    ray_world[0] /= ray_world[3];
+                    ray_world[1] /= ray_world[3];
+                    ray_world[2] /= ray_world[3];
+                }
+
+                if (ortho)
+                {
+                    // not perspective
+                    orgin = camera_trans->world_position + camera_trans->world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
+                    direction = vec3(0, 0, 1);
+                }
+                else
+                {
+                    vec3 ray_dir(ray_world[0], ray_world[1], ray_world[2]);
+                    orgin = camera_trans->world_position;
+                    direction = (camera_trans->world_rotation * ray_dir).unit();
+                }
+            }
+
+            struct intersect_result
+            {
+                bool intersected = false;
+                vec3 place = {};
+                float distance = INFINITY;
+
+                intersect_result() = default;
+                intersect_result(bool rslt, float dist = INFINITY, const vec3& plce = vec3(0, 0, 0)) :
+                    intersected(rslt),
+                    place(plce),
+                    distance(dist)
+                {
+
+                }
+            };
+
+            intersect_result intersect_triangle(const vec3& v0, const vec3& v1, const vec3& v2) const
+            {
+                float _t, _u, _v;
+                float* t = &_t, * u = &_u, * v = &_v;
+
+                // E1
+                vec3 E1 = v1 - v0;
+                // E2
+                vec3 E2 = v2 - v0;
+                // P
+                vec3 P = direction.cross(E2);
+                // determinant
+                float det = E1.dot(P);
+                // keep det > 0, modify T accordingly
+                vec3 T;
+                if (det > 0)
+                {
+                    T = orgin - v0;
+                }
+                else
+                {
+                    T = v0 - orgin;
+                    det = -det;
+                }
+                // If determinant is near zero, ray lies in plane of triangle
+                if (det < 0.0001f)
+                    return false;
+                // Calculate u and make sure u <= 1
+
+                *u = T.dot(P);// T.dot(P);
+                if (*u < 0.0f || *u > det)
+                    return false;
+
+                // Q
+
+                vec3 Q = T.cross(E1);// T.Cross(E1);
+
+                // Calculate v and make sure u + v <= 1
+                *v = direction.dot(Q); //direction.dot(Q);
+
+                if (*v < 0.0f || *u + *v > det)
+                    return false;
+
+                // Calculate t, scale parameters, ray intersects triangle
+
+                *t = E2.dot(Q);// .dot(Q);
+
+                float fInvDet = 1.0f / det;
+                *t *= fInvDet;
+                *u *= fInvDet;
+                *v *= fInvDet;
+
+                auto&& clid = ((1.0f - *u - *v) * v0 + *u * v1 + *v * v2);
+                auto&& delta = clid - orgin;
+
+                if (delta.dot(direction) < 0)
+                {
+                    return false;
+                }
+                //if (vec3::dot(delta, direction) < 0.0f)
+                //	return false;
+                return intersect_result(true, delta.length(), clid);
+            }
+            intersect_result intersect_rectangle(const vec3& v0, const vec3& v1, const vec3& v2, const vec3& v3) const
+            {
+                /*
+
+                v0				v3
+
+
+                v1				v2
+
+                */
+
+
+
+                auto&& inresult = intersect_triangle(v0, v1, v2);
+                if (inresult.intersected)
+                    return inresult;
+                return intersect_triangle(v0, v3, v2);
+            }
+            intersect_result intersect_box(const vec3& size, const vec3& centerpos, const quat& rotation) const
+            {
+                /*
+                        4----------5
+                    /   |      /   |
+                0----------1       |
+                |       |  |       |
+                |       |  |       |
+                |       |  |       |
+                |       6--|-------7
+                |   /     |	   /
+                2----------3
+
+                */
+                vec3 finalBoxPos[8];
+                intersect_result minResult = false;
+                minResult.distance = INFINITY;
+
+                //pos
+                finalBoxPos[0].x = finalBoxPos[2].x = finalBoxPos[4].x = finalBoxPos[6].x =
+                    -(finalBoxPos[1].x = finalBoxPos[3].x = finalBoxPos[5].x = finalBoxPos[7].x = size.x / 2.0f);
+                finalBoxPos[2].y = finalBoxPos[3].y = finalBoxPos[6].y = finalBoxPos[7].y =
+                    -(finalBoxPos[0].y = finalBoxPos[1].y = finalBoxPos[4].y = finalBoxPos[5].y = size.y / 2.0f);
+                finalBoxPos[0].z = finalBoxPos[1].z = finalBoxPos[2].z = finalBoxPos[3].z =
+                    -(finalBoxPos[4].z = finalBoxPos[5].z = finalBoxPos[6].z = finalBoxPos[7].z = size.z / 2.0f);
+
+                //rot and transform
+                for (int i = 0; i < 8; i++)
+                    finalBoxPos[i] = (rotation * finalBoxPos[i]) + centerpos;
+                {
+                    //front
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[3], finalBoxPos[2]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //back
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[4], finalBoxPos[5], finalBoxPos[7], finalBoxPos[6]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //left
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[2], finalBoxPos[6], finalBoxPos[4]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //right
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[1], finalBoxPos[3], finalBoxPos[7], finalBoxPos[5]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //top
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[5], finalBoxPos[4]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //buttom
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[2], finalBoxPos[3], finalBoxPos[7], finalBoxPos[6]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                }
+
+
+                return minResult;
+            }
+            intersect_result intersect_entity(const Transform::Translation* translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
+            {
+                vec3 entity_box_sz;
+                if (entity_shape && entity_shape->vertex && entity_shape->vertex->enabled())
+                {
+                    auto* vertex_dat = entity_shape->vertex->resouce()->m_raw_vertex_data;
+                    entity_box_sz = { vertex_dat->m_size_x, vertex_dat->m_size_y ,vertex_dat->m_size_z };
+                }
+                else
+                    entity_box_sz = vec3(1, 1, 0); // default shape size
+
+                vec3 finalBoxPos[8];
+                intersect_result minResult = false;
+                minResult.distance = INFINITY;
+
+                //pos
+                finalBoxPos[0].x = finalBoxPos[2].x = finalBoxPos[4].x = finalBoxPos[6].x =
+                    -(finalBoxPos[1].x = finalBoxPos[3].x = finalBoxPos[5].x = finalBoxPos[7].x = entity_box_sz.x / 2.0f);
+                finalBoxPos[2].y = finalBoxPos[3].y = finalBoxPos[6].y = finalBoxPos[7].y =
+                    -(finalBoxPos[0].y = finalBoxPos[1].y = finalBoxPos[4].y = finalBoxPos[5].y = entity_box_sz.y / 2.0f);
+                finalBoxPos[0].z = finalBoxPos[1].z = finalBoxPos[2].z = finalBoxPos[3].z =
+                    -(finalBoxPos[4].z = finalBoxPos[5].z = finalBoxPos[6].z = finalBoxPos[7].z = entity_box_sz.z / 2.0f);
+
+                //rot and transform
+                for (int i = 0; i < 8; i++)
+                {
+                    float pos[3] = { finalBoxPos[i].x, finalBoxPos[i].y, finalBoxPos[i].z };
+                    mat4xvec3(pos, translation->object2world, pos);
+
+                    finalBoxPos[i].x = pos[0];
+                    finalBoxPos[i].y = pos[1];
+                    finalBoxPos[i].z = pos[2];
+                }
+                {
+                    //front
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[3], finalBoxPos[2]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //back
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[4], finalBoxPos[5], finalBoxPos[7], finalBoxPos[6]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //left
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[2], finalBoxPos[6], finalBoxPos[4]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //right
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[1], finalBoxPos[3], finalBoxPos[7], finalBoxPos[5]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //top
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[5], finalBoxPos[4]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    //buttom
+                    {
+                        auto&& f = intersect_rectangle(finalBoxPos[2], finalBoxPos[3], finalBoxPos[7], finalBoxPos[6]);
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                }
+
+                return minResult;
+            }
+        };
+    }
+
     namespace enrty
     {
         inline void module_entry()
@@ -3837,6 +4276,47 @@ namespace jeecs
             // 0. ungister this module components
             typing::type_info::unregister_all_type_in_shutdown();
         }
+    }
+
+    namespace input
+    {
+        inline bool keydown(keycode key)
+        {
+            return je_io_is_keydown(key);
+        }
+        inline float wheel(keycode key)
+        {
+            return je_io_wheel();
+        }
+        inline math::vec2 mousepos(int group)
+        {
+            float x, y;
+            je_io_mouse_pos(group, &x, &y);
+            return { x,y };
+        }
+
+        template<typing::typehash_t hash_v1, int v2>
+        static bool _isUp(bool keystate)
+        {
+            static bool lastframekeydown;
+            bool res = (!keystate) && lastframekeydown;
+            lastframekeydown = keystate;
+            return res;
+        }
+        template<typing::typehash_t hash_v1, int v2>
+        static bool _firstDown(bool keystate)
+        {
+            static bool lastframekeydown;
+            bool res = (keystate) && !lastframekeydown;
+            lastframekeydown = keystate;
+            return res;
+        }
+
+        static void is_up(...);
+        static void first_down(...); // just for fool ide
+
+#define is_up _isUp<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
+#define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
     }
 }
 

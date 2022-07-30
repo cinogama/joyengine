@@ -36,7 +36,7 @@ void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
 {
     je_io_set_mousepos(0,
         (float)x / WINDOWS_SIZE_WIDTH * 2.0f - 1.0f,
-        (float)y / WINDOWS_SIZE_HEIGHT * 2.0f - 1.0f);
+        -((float)y / WINDOWS_SIZE_HEIGHT * 2.0f - 1.0f));
 }
 
 void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
@@ -44,11 +44,11 @@ void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod
     switch (key)
     {
     case GLFW_MOUSE_BUTTON_LEFT:
-        je_io_set_keystate(je_keycode::MOUSE_L_BUTTION, state); break;
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_L_BUTTION, state); break;
     case GLFW_MOUSE_BUTTON_MIDDLE:
-        je_io_set_keystate(je_keycode::MOUSE_M_BUTTION, state); break;
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_M_BUTTION, state); break;
     case GLFW_MOUSE_BUTTON_RIGHT:
-        je_io_set_keystate(je_keycode::MOUSE_R_BUTTION, state); break;
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_R_BUTTION, state); break;
     default:
         // do nothing.
         break;
@@ -67,21 +67,21 @@ void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int st
     switch (key)
     {
     case GLFW_KEY_LEFT_SHIFT:
-        je_io_set_keystate(je_keycode::L_SHIFT, stage); break;
+        je_io_set_keystate(jeecs::input::keycode::L_SHIFT, stage); break;
     case GLFW_KEY_LEFT_ALT:
-        je_io_set_keystate(je_keycode::L_ALT, stage); break;
+        je_io_set_keystate(jeecs::input::keycode::L_ALT, stage); break;
     case GLFW_KEY_LEFT_CONTROL:
-        je_io_set_keystate(je_keycode::L_CTRL, stage); break;
+        je_io_set_keystate(jeecs::input::keycode::L_CTRL, stage); break;
     case GLFW_KEY_TAB:
-        je_io_set_keystate(je_keycode::TAB, stage); break;
+        je_io_set_keystate(jeecs::input::keycode::TAB, stage); break;
     case GLFW_KEY_ENTER:
-        je_io_set_keystate(je_keycode::ENTER, stage); break;
+        je_io_set_keystate(jeecs::input::keycode::ENTER, stage); break;
     case GLFW_KEY_BACKSPACE:
-        je_io_set_keystate(je_keycode::BACKSPACE, stage); break;
+        je_io_set_keystate(jeecs::input::keycode::BACKSPACE, stage); break;
     default:
-        je_io_set_keystate((je_keycode)key, stage); break;
+        je_io_set_keystate((jeecs::input::keycode)key, stage); break;
     }
-    
+
 }
 
 jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config)
@@ -139,6 +139,9 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 
     glfwSwapBuffers(WINDOWS_HANDLE);
     glfwPollEvents();
+
+    if (je_io_should_lock_mouse())
+        glfwSetCursorPos(WINDOWS_HANDLE, round(WINDOWS_SIZE_WIDTH / 2.0f), round(WINDOWS_SIZE_HEIGHT / 2.0f));
 
     if (glfwWindowShouldClose(WINDOWS_HANDLE))
     {
@@ -615,6 +618,7 @@ void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
     *w = WINDOWS_SIZE_WIDTH;
     *h = WINDOWS_SIZE_HEIGHT;
 }
+
 
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 {

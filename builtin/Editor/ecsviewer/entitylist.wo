@@ -84,16 +84,14 @@ namespace editor::EntityList
         return FormAction::Nothing;
     }
 
-    private let mut _current_entity = option::none as option<je::entity>;
-
     func set_current_entity(current_entity: option<je::entity>)
     {
-        _current_entity = current_entity;
+        je::entity::editor::set_editing(current_entity);
     }
 
     func get_current_entity()
     {
-        return _current_entity;
+        return je::entity::editor::editing();
     }
 
     private func _display_entity_with_iter(entity_iter: je::entity::editor::entity_iter)=> int
@@ -104,6 +102,11 @@ namespace editor::EntityList
         for (let entity : entity_iter)
         {
             display_count += 1;
+            
+            // 如果实体有 Editor::Invisable 这个组件，就跳过显示
+            static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
+            if (entity->editor::get_component(INVISABLE)->has())
+                continue;
 
             let mut entity_name = entity->editor::name();
             if (entity_name == "")
