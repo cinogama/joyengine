@@ -74,6 +74,19 @@ namespace editor::Project
         camera_walker->editor::name("调试摄像机组");
         editor_camera->editor::name("调试摄像机");
 
+        // 移动器，这里只创建根实体，具体的轴由编辑器系统生成
+        let entity_mover = world_instance->add_entity([
+            // Transform 族组件
+            je::typeinfo("Transform::LocalPosition")->val(),
+            je::typeinfo("Transform::LocalRotation")->val(),
+            je::typeinfo("Transform::ChildAnchor")->val(),
+            je::typeinfo("Transform::Translation")->val(),
+            je::typeinfo("Transform::LocalToWorld")->val(),
+            // Editor 族组件
+            // je::typeinfo("Editor::Invisable")->val(),
+            je::typeinfo("Editor::EntityMover")->val(),
+        ]);
+
         let world = World{
             name = option::none,
             path = option::none,

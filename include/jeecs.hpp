@@ -154,6 +154,9 @@ namespace jeecs
         template<typename T>
         inline T* add_component() const noexcept;
 
+        template<typename T>
+        inline void remove_component() const noexcept;
+
         inline jeecs::game_world game_world() const noexcept;
 
         inline void close() const noexcept;
@@ -2529,6 +2532,14 @@ namespace jeecs
         auto* type = typing::type_info::of<T>();
         assert(type->is_component());
         return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, type);
+    }
+
+    template<typename T>
+    inline void game_entity::remove_component() const noexcept
+    {
+        auto* type = typing::type_info::of<T>();
+        assert(type->is_component());
+        return je_ecs_world_entity_remove_component(je_ecs_world_of_entity(this), this, type);
     }
 
     inline bool game_entity::valid() const noexcept
