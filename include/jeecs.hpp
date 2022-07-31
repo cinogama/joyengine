@@ -586,6 +586,7 @@ struct jegl_resource
         };
     };
 
+    int* m_raw_ref_count;
     union
     {
         jegl_custom_resource_t m_custom_resource;
@@ -673,6 +674,8 @@ JE_API jegl_resource* jegl_create_vertex(
     const size_t* format,
     size_t                      data_length,
     size_t                      format_length);
+
+JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
 
 JE_API void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
 JE_API void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
@@ -3439,6 +3442,10 @@ namespace jeecs
                 : resouce_basic(jegl_load_texture(str.c_str()))
             {
             }
+            explicit texture(const texture& res)
+                : resouce_basic(jegl_copy_resource(res.resouce()))
+            {
+            }
             explicit texture(size_t width, size_t height, jegl_texture::texture_format format)
                 : resouce_basic(jegl_create_texture(width, height, format))
             {
@@ -3528,12 +3535,161 @@ namespace jeecs
                 if (enabled())
                     m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
             }
+            explicit shader(const shader& res)
+                : resouce_basic(jegl_copy_resource(res.resouce()))
+                , m_builtin(nullptr)
+            {
+                if (enabled())
+                    m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
+            }
             explicit shader(const std::string& src_path)
                 : resouce_basic(jegl_load_shader(src_path.c_str()))
                 , m_builtin(nullptr)
             {
                 if (enabled())
                     m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
+            }
+
+            void set_uniform(const std::string& name, int val)noexcept
+            {
+                if (enabled())
+                {
+                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                    while (jegl_shad_uniforms)
+                    {
+                        if (jegl_shad_uniforms->m_name == name)
+                        {
+                            if (jegl_shad_uniforms->m_uniform_type !=
+                                jegl_shader::uniform_type::INT)
+                                debug::log_error("Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'."
+                                    , name.c_str(), val, this);
+                            else
+                            {
+                                jegl_shad_uniforms->n = val;
+                                jegl_shad_uniforms->m_updated = true;
+                            }
+                            return;
+                        }
+                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                    }
+                }
+                else
+                    debug::log_error("Trying set uniform('%s' = %d) to invalid shader(%p), please check."
+                        , name.c_str(), val, this);
+            }
+            void set_uniform(const std::string& name, float val)noexcept
+            {
+                if (enabled())
+                {
+                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                    while (jegl_shad_uniforms)
+                    {
+                        if (jegl_shad_uniforms->m_name == name)
+                        {
+                            if (jegl_shad_uniforms->m_uniform_type !=
+                                jegl_shader::uniform_type::FLOAT)
+                                debug::log_error("Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'."
+                                    , name.c_str(), val, this);
+                            else
+                            {
+                                jegl_shad_uniforms->x = val;
+                                jegl_shad_uniforms->m_updated = true;
+                            }
+                            return;
+                        }
+                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                    }
+                }
+                else
+                    debug::log_error("Trying set uniform('%s' = %f) to invalid shader(%p), please check."
+                        , name.c_str(), val, this);
+            }
+            void set_uniform(const std::string& name, const math::vec2& val)noexcept
+            {
+                if (enabled())
+                {
+                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                    while (jegl_shad_uniforms)
+                    {
+                        if (jegl_shad_uniforms->m_name == name)
+                        {
+                            if (jegl_shad_uniforms->m_uniform_type !=
+                                jegl_shader::uniform_type::FLOAT2)
+                                debug::log_error("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT2'."
+                                    , name.c_str(), val.to_string().c_str(), this);
+                            else
+                            {
+                                jegl_shad_uniforms->x = val.x;
+                                jegl_shad_uniforms->y = val.y;
+                                jegl_shad_uniforms->m_updated = true;
+                            }
+                            return;
+                        }
+                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                    }
+                }
+                else
+                    debug::log_error("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
+                        , name.c_str(), val.to_string().c_str(), this);
+            }
+            void set_uniform(const std::string& name, const math::vec3& val)noexcept
+            {
+                if (enabled())
+                {
+                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                    while (jegl_shad_uniforms)
+                    {
+                        if (jegl_shad_uniforms->m_name == name)
+                        {
+                            if (jegl_shad_uniforms->m_uniform_type !=
+                                jegl_shader::uniform_type::FLOAT3)
+                                debug::log_error("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT3'."
+                                    , name.c_str(), val.to_string().c_str(), this);
+                            else
+                            {
+                                jegl_shad_uniforms->x = val.x;
+                                jegl_shad_uniforms->y = val.y;
+                                jegl_shad_uniforms->z = val.z;
+                                jegl_shad_uniforms->m_updated = true;
+                            }
+                            return;
+                        }
+                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                    }
+                }
+                else
+                    debug::log_error("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
+                        , name.c_str(), val.to_string().c_str(), this);
+            }
+            void set_uniform(const std::string& name, const math::vec4& val)noexcept
+            {
+                if (enabled())
+                {
+                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                    while (jegl_shad_uniforms)
+                    {
+                        if (jegl_shad_uniforms->m_name == name)
+                        {
+                            if (jegl_shad_uniforms->m_uniform_type !=
+                                jegl_shader::uniform_type::FLOAT4)
+                                debug::log_error("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT4'."
+                                    , name.c_str(), val.to_string().c_str(), this);
+                            else
+                            {
+                                jegl_shad_uniforms->x = val.x;
+                                jegl_shad_uniforms->y = val.y;
+                                jegl_shad_uniforms->z = val.z;
+                                jegl_shad_uniforms->w = val.w;
+                                jegl_shad_uniforms->m_updated = true;
+                            }
+                            return;
+                        }
+                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                    }
+                }
+                else
+                    debug::log_error("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
+                        , name.c_str(), val.to_string().c_str(), this);
             }
         };
 
@@ -3544,6 +3700,10 @@ namespace jeecs
 
             explicit vertex(const std::string& str)
                 : resouce_basic(jegl_load_vertex(str.c_str()))
+            {
+            }
+            explicit vertex(const vertex& res)
+                : resouce_basic(jegl_copy_resource(res.resouce()))
             {
             }
             explicit vertex(type vertex_type, const std::vector<float>& pdatas, const std::vector<size_t>& formats)
@@ -3843,6 +4003,13 @@ namespace jeecs
         {
             // NOTE: shaders should not be nullptr!
             jeecs::vector<basic::resource<graphic::shader>> shaders;
+
+            template<typename T>
+            void set_uniform(const std::string& name, const T& val) noexcept
+            {
+                for (auto& shad : shaders)
+                    shad->set_uniform(name, val);
+            }
         };
 
         struct Textures

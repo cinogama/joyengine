@@ -74,10 +74,10 @@ using fout = struct {
     color : float4
 };
 
-let vert = \vdata: vin = v2f{ pos = je_mvp * vertex_pos }
-                where vertex_pos = float4(vdata.vertex, 1.);;
+let vert = \v: vin = v2f{ pos = je_mvp * vertex_pos }
+                where vertex_pos = float4(v.vertex, 1.);;
 
-let frag = \fdata: v2f = fout{ color = float4(t, 0, t, 1) }
+let frag = \f: v2f = fout{ color = float4(t, 0, t, 1) }
                 where t = je_time->y();;
 
 )");

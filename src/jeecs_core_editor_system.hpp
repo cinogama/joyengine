@@ -20,11 +20,13 @@ namespace jeecs
         };
         struct EntityMover
         {
-            // Editor will create a entity with EntityMover,
+            // Editor will create a entity with EntityMoverRoot,
             // and DefaultEditorSystem should handle this entity hand create 3 mover for x,y,z axis
-            bool init_root = true;
-
             math::vec3 axis = {};
+        };
+        struct EntityMoverRoot
+        {
+            bool init = false;
         };
         struct EditorLife
         {
@@ -77,6 +79,7 @@ namespace jeecs
             else
                 je_io_lock_mouse(false);
         }
+
         void EditorCameraWork(
             Transform::LocalPosition* position,
             Transform::LocalRotation* rotation,
@@ -111,9 +114,9 @@ using fout = struct {
     color : float4
 };
 
-let vert = \vdata: vin = v2f{ pos = je_mvp * vertex_pos }
-                where vertex_pos = float4(vdata.vertex, 1.);;
-let frag = \fdata: v2f = fout{ color = float4(1, 1, 1, 1) };;
+let vert = \v: vin = v2f{ pos = je_mvp * vertex_pos }
+                where vertex_pos = float4(v.vertex, 1.);;
+let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
 
 )");
 
@@ -145,12 +148,14 @@ let frag = \fdata: v2f = fout{ color = float4(1, 1, 1, 1) };;
             }
         }
         void LifeDyingEntity(
+
             game_entity entity,
             Editor::EditorLife* life)
         {
             if (life->life-- < 0)
                 entity.close();
         }
+
         void SelectEntity(
             game_entity entity,
             read<Transform::Translation> trans,
@@ -167,6 +172,7 @@ let frag = \fdata: v2f = fout{ color = float4(1, 1, 1, 1) };;
                 }
             }
         }
+
         void UpdateSelectedEntity()
         {
             if (intersect_result.intersected)
@@ -175,32 +181,43 @@ let frag = \fdata: v2f = fout{ color = float4(1, 1, 1, 1) };;
             }
             intersect_result = math::ray::intersect_result();
         }
-        void EntityMoverMgr(
+
+        void EntityMoverRootMgr(
             game_entity mover_entity,
             read<Transform::ChildAnchor> anchor,
-            Editor::EntityMover* mover)
+            Transform::LocalPosition* position,
+            Transform::LocalRotation* rotation,
+            Editor::EntityMoverRoot* mover)
         {
-            if (mover->init_root)
+            if (!mover->init)
             {
-                mover->init_root = false;
-                mover_entity.remove_component<Editor::EntityMover>();
+                mover->init = true;
 
                 static basic::resource<graphic::vertex>
                     axis_x =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { 0,0,0,  0.5f,0,0,
-                          7.5f,0,0,  1,0,0 },
+                        { 0,0,0,        0.25f,0,0,
+                          7.5f,0,0,     1,0,0 },
                         { 3, 3 }),
                     axis_y =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { 0,0,0,  0,0.5f,0,
-                          0,7.5f,0,  0,1,0 },
+                        { 0,0,0,        0,0.25f,0,
+                          0,7.5f,0,     0,1,0 },
                         { 3, 3 }),
                     axis_z =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { 0,0,0,  0,0,0.5f,
-                          0,0,7.5f,  0,0,1 },
+                        { 0,0,0,        0,0,0.25f,
+                          0,0,7.5f,     0,0,1 },
                         { 3, 3 });
+
+                axis_x->resouce()->m_raw_vertex_data->m_size_y
+                    = axis_x->resouce()->m_raw_vertex_data->m_size_z
+                    = axis_y->resouce()->m_raw_vertex_data->m_size_x
+                    = axis_y->resouce()->m_raw_vertex_data->m_size_z
+                    = axis_z->resouce()->m_raw_vertex_data->m_size_x
+                    = axis_z->resouce()->m_raw_vertex_data->m_size_y
+                    = 0.1f;
+
                 static basic::resource<graphic::shader>
                     axis_shader = new graphic::shader("je/debug/mover_axis.shader",
                         R"(
@@ -219,12 +236,15 @@ using v2f = struct {
 using fout = struct {
     color : float4
 };
-let vert = \vdata: vin = v2f { 
-                            pos = je_mvp * vertex_pos, 
-                            color = vdata.color 
-                        } where vertex_pos = float4(vdata.vertex, 1.);;
-                
-let frag = \fdata: v2f = fout{ color = float4(fdata.color, 1) };;
+
+let vert = \v: vin = v2f { pos = je_mvp * vertex_pos, 
+                           color = v.color } 
+                where vertex_pos = float4(v.vertex, 1.);;
+
+let frag = \f: v2f = fout{ color = float4(show_color, 1) }
+                where show_color = lerp(f.color, float3(1., 1., 1.), ratio),
+                           ratio = step(float(0.5), high_light),
+                      high_light = uniform("high_light", float(0.0));;
 
 )");
                 game_world current_world = mover_entity.game_world();
@@ -232,27 +252,34 @@ let frag = \fdata: v2f = fout{ color = float4(fdata.color, 1) };;
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
-                    Renderer::Shape/*,
-                    Editor::Invisable*/
+                    Renderer::Shape,
+                    Editor::Invisable,
+                    Editor::EntityMover
                 >();
                 game_entity axis_y_e = current_world.add_entity<
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
-                    Renderer::Shape/*,
-                    Editor::Invisable*/
+                    Renderer::Shape,
+                    Editor::Invisable,
+                    Editor::EntityMover
                 >();
                 game_entity axis_z_e = current_world.add_entity<
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
-                    Renderer::Shape/*,
-                    Editor::Invisable*/
+                    Renderer::Shape,
+                    Editor::Invisable,
+                    Editor::EntityMover
                 >();
 
-                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(new graphic::shader(axis_shader));
+                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(new graphic::shader(axis_shader));
+                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(new graphic::shader(axis_shader));
+
+                axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1, 0, 0);
+                axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1, 0);
+                axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1);
 
                 axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
                 axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
@@ -263,7 +290,29 @@ let frag = \fdata: v2f = fout{ color = float4(fdata.color, 1) };;
                     axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
                     anchor->anchor_uid;
             }
+            if (game_entity* current = jedbg_get_editing_entity())
+            {
+                if (auto* trans = current->get_component<Transform::Translation>())
+                {
+                    position->pos = trans->world_position;
+                    rotation->rot = trans->world_rotation;
+                }
+            }
         }
+
+        void EntityMoverMgr(
+            read<Editor::EntityMover> mover,
+            read<Transform::Translation> trans,
+            read<Renderer::Shape> shape,
+            Renderer::Shaders* shaders)
+        {
+            auto result = _camera_ray.intersect_entity(trans, shape);
+            if (result.intersected)
+                shaders->set_uniform("high_light", 1.0f);
+            else
+                shaders->set_uniform("high_light", 0.0f);
+        }
+
         DefaultEditorSystem(game_universe universe)
             : game_shared_system(universe)
         {
@@ -293,7 +342,11 @@ let frag = \fdata: v2f = fout{ color = float4(fdata.color, 1) };;
                 });
 
             register_system_func(&DefaultEditorSystem::LifeDyingEntity);
-            register_system_func(&DefaultEditorSystem::EntityMoverMgr);
+            register_system_func(&DefaultEditorSystem::EntityMoverRootMgr);
+            register_system_func(&DefaultEditorSystem::EntityMoverMgr,
+                {
+                    system_read_updated(&_camera_ray),
+                });
         }
     };
 }

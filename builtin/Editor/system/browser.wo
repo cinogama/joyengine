@@ -138,11 +138,10 @@ namespace editor::Browser
                         path = subpath,
                         name = je::filesys::filename(subpath),
                         externname = je::filesys::externname(subpath),
-                        type =  func(){
-                            if (je::filesys::isdir(subpath))
-                                return PathType::dir(SubPath::notfetch);
-                            return PathType::file;
-                        }() });
+                        type =  je::filesys::isdir(subpath)?
+                            PathType::dir(SubPath::notfetch) | PathType::file,
+                        }
+                );
         }
 
         BeginChild("files_list");
@@ -218,11 +217,9 @@ namespace editor::Browser
                                             path = current_subpath, 
                                             name = je::filesys::filename(current_subpath),
                                             externname = je::filesys::externname(current_subpath),
-                                            type = func(){
-                                                if (je::filesys::isdir(current_subpath))
-                                                    return PathType::dir(SubPath::notfetch);
-                                                return PathType::file;
-                                            }() 
+                                            type = 
+                                                je::filesys::isdir(current_subpath)?
+                                                    PathType::dir(SubPath::notfetch) | PathType::file,
                                         });
                                 path.type =  PathType::dir(SubPath::subpath(sublist));
                             }

@@ -83,8 +83,8 @@ namespace editor::Project
             je::typeinfo("Transform::Translation")->val(),
             je::typeinfo("Transform::LocalToWorld")->val(),
             // Editor 族组件
-            // je::typeinfo("Editor::Invisable")->val(),
-            je::typeinfo("Editor::EntityMover")->val(),
+            je::typeinfo("Editor::Invisable")->val(),
+            je::typeinfo("Editor::EntityMoverRoot")->val(),
         ]);
 
         let world = World{

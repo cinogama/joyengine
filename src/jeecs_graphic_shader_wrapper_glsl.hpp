@@ -129,6 +129,8 @@ std::string _generate_code_for_glsl_impl(
                         funcname = "mat3";
                     else if (funcname == "float4x4")
                         funcname = "mat4";
+                    else if (funcname == "lerp")
+                        funcname = "mix";
 
                     if (funcname.find("JEBUILTIN_") == 0)
                         contex->_used_builtin_func.insert(funcname);

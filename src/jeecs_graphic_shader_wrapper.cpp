@@ -865,6 +865,19 @@ namespace float
     {
         return apply_operation:<float>("/", a, b);
     }
+
+    func operator * (a:float, b:float2)=> float2
+    {
+        return apply_operation:<float2>("*", b, a);
+    }
+    func operator * (a:float, b:float3)=> float3
+    {
+        return apply_operation:<float3>("*", b, a);
+    }
+    func operator * (a:float, b:float4)=> float4
+    {
+        return apply_operation:<float4>("*", b, a);
+    }   
 }
 namespace float2
 {
@@ -889,6 +902,16 @@ namespace float2
     func operator * (a:float2, b:float2)=> float2
     {
         return apply_operation:<float2>("*", a, b);
+    }
+
+    func operator * (a:float2, b:float)=> float2
+    {
+        return apply_operation:<float2>("*", a, b);
+    }
+    
+    func operator / (a:float2, b:float)=> float2
+    {
+        return apply_operation:<float2>("/", a, b);
     }
 }
 namespace float3
@@ -925,6 +948,16 @@ namespace float3
     func operator * (a:float3, b:float3)=> float3
     {
         return apply_operation:<float3>("*", a, b);
+    }
+
+    func operator * (a:float3, b:float)=> float3
+    {
+        return apply_operation:<float3>("*", a, b);
+    }
+    
+    func operator / (a:float3, b:float)=> float3
+    {
+        return apply_operation:<float3>("/", a, b);
     }
 }
 namespace float4
@@ -1015,8 +1048,19 @@ namespace float4
         return apply_operation:<float4>("*", a, b);
     }
 
+    func operator * (a:float4, b:float)=> float4
+    {
+        return apply_operation:<float4>("*", a, b);
+    }
+
+    func operator / (a:float4, b:float)=> float4
+    {
+        return apply_operation:<float4>("/", a, b);
+    }
+
     )" R"(
 }
+
 namespace float4x4
 {
     extern("libjoyecs", "jeecs_shader_float4x4_create")
@@ -1112,12 +1156,22 @@ let je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
 func texture(tex:texture2d, uv:float2)=> float4
 {
     return apply_operation:<float4>("texture", tex, uv);
-};
+}
+
+func lerp<T>(a: T, b: T, uv:float)=> T
+{
+    return apply_operation:<T>("lerp", a, b, uv);
+}
+
+func step(a: float, b: float)=> float
+{
+    return apply_operation:<float>("step", a, b);
+}
 
 func alphatest(colf4: float4)=> float4
 {
     return apply_operation:<float4>("JEBUILTIN_AlphaTest", colf4);
-};
+}
 
 enum ZConfig
 {

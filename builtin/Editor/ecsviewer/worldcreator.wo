@@ -236,11 +236,9 @@ namespace editor::WorldCreator
         using je::gui;
 
         let mut open = true;
-        if (context.edit_world->has())
-            Begin("编辑世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
-        else
-            Begin("创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
-
+        Begin(context.edit_world->has() 
+            ? "编辑世界##{JobID()}"
+            | "创建新世界##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
             if (menu_bar(context))
             {
                 match(context.edit_world)

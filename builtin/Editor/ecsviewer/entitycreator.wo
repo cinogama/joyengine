@@ -170,7 +170,7 @@ namespace editor::EntityCreator
 
         if (BeginMenuBar())
         {
-            let menu_button_text = func(){if (context.edit_entity->has()) return "应用"; return "创建"}();
+            let menu_button_text = context.edit_entity->has()?"应用"|"创建";
 
             if (MenuItem(menu_button_text, context.name != "" 
                             && !context.has_append_types->empty()))
@@ -250,11 +250,10 @@ namespace editor::EntityCreator
         using je::gui;
 
         let mut open = true;
-        if (context.edit_entity->has())
-            Begin(F"编辑实体{context.edit_entity->val()->editor::name()}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
-        else
-            Begin(F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
-
+        Begin(context.edit_entity->has() 
+            ? F"编辑实体{context.edit_entity->val()->editor::name()}##{JobID()}"
+            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+   
             if (menu_bar(context))
             {
                 match(context.edit_entity)
