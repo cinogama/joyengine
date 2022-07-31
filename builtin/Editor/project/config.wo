@@ -79,6 +79,7 @@ namespace editor::Project
             // Transform 族组件
             je::typeinfo("Transform::LocalPosition")->val(),
             je::typeinfo("Transform::LocalRotation")->val(),
+            je::typeinfo("Transform::LocalScale")->val(),
             je::typeinfo("Transform::ChildAnchor")->val(),
             je::typeinfo("Transform::Translation")->val(),
             je::typeinfo("Transform::LocalToWorld")->val(),

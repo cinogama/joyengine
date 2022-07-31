@@ -293,6 +293,22 @@ void jegl_close_resource(jegl_resource* resource)
             return;
         }
     }
+    else
+    {
+        if (resource->m_type == jegl_resource::type::SHADER)
+        {
+            // SHADER copy have raw data to free..
+            auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
+            while (uniform_var)
+            {
+                auto* cur_uniform = uniform_var;
+                uniform_var = uniform_var->m_next;
+
+                delete cur_uniform;
+            }
+            delete resource->m_raw_shader_data;
+        }
+    }
     resource->m_custom_resource = nullptr;
 
     // Send this resource to destroing list;
@@ -320,14 +336,33 @@ jegl_resource* jegl_copy_resource(jegl_resource* resource)
     if (nullptr == resource)
         return nullptr;
 
-    jegl_resource* res = new jegl_resource();
-    *res = *resource;
+    jegl_resource* res = new jegl_resource(*resource);
 
     res->m_handle = 0;
     res->m_graphic_thread = nullptr;
     res->m_graphic_thread_version = 0;
 
     ++* res->m_raw_ref_count;
+    if (res->m_type == jegl_resource::type::SHADER)
+    {
+        // Copy shader raw info to make sure member chain is available for all instance.
+        jegl_shader* new_shad_instance = new jegl_shader(*res->m_raw_shader_data);
+
+        jegl_shader::unifrom_variables* uniform_var = new_shad_instance->m_custom_uniforms;
+        jegl_shader::unifrom_variables* last_var = nullptr;
+        while (uniform_var)
+        {
+            jegl_shader::unifrom_variables* cur_var = new jegl_shader::unifrom_variables(*uniform_var);
+            if (last_var)
+                last_var->m_next = cur_var;
+            else
+                new_shad_instance->m_custom_uniforms = last_var = cur_var;
+            last_var = cur_var;
+
+            uniform_var = uniform_var->m_next;
+        }
+        res->m_raw_shader_data = new_shad_instance;
+    }
 
     return res;
 }

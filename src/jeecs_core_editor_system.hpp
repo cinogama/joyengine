@@ -187,6 +187,7 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
             read<Transform::ChildAnchor> anchor,
             Transform::LocalPosition* position,
             Transform::LocalRotation* rotation,
+            Transform::LocalScale* scale,
             Editor::EntityMoverRoot* mover)
         {
             if (!mover->init)
@@ -196,18 +197,18 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
                 static basic::resource<graphic::vertex>
                     axis_x =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { 0,0,0,        0.25f,0,0,
-                          7.5f,0,0,     1,0,0 },
+                        { -0.5f,0,0,        0.25f,0,0,
+                          0.5f,0,0,      1,0,0 },
                         { 3, 3 }),
                     axis_y =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { 0,0,0,        0,0.25f,0,
-                          0,7.5f,0,     0,1,0 },
+                        { 0,-0.5f,0,        0,0.25f,0,
+                          0,0.5f,0,      0,1,0 },
                         { 3, 3 }),
                     axis_z =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { 0,0,0,        0,0,0.25f,
-                          0,0,7.5f,     0,0,1 },
+                        { 0,0,-0.5f,        0,0,0.25f,
+                          0,0,0.5f,      0,0,1 },
                         { 3, 3 });
 
                 axis_x->resouce()->m_raw_vertex_data->m_size_y
@@ -249,26 +250,32 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
 )");
                 game_world current_world = mover_entity.game_world();
                 game_entity axis_x_e = current_world.add_entity<
+                    Transform::LocalPosition,
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
                     Renderer::Shape,
+                    Renderer::Rendqueue,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
                 game_entity axis_y_e = current_world.add_entity<
+                    Transform::LocalPosition,
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
                     Renderer::Shape,
+                    Renderer::Rendqueue,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
                 game_entity axis_z_e = current_world.add_entity<
+                    Transform::LocalPosition,
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
                     Renderer::Shape,
+                    Renderer::Rendqueue,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
@@ -285,6 +292,14 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                 axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
                 axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
 
+                axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                    axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                    axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
+
+                axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0.5f, 0, 0);
+                axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0.5f, 0);
+                axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 0.5f);
+
                 axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
                     axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
                     axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
@@ -296,6 +311,10 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                 {
                     position->pos = trans->world_position;
                     rotation->rot = trans->world_rotation;
+
+                    float distance = 0.25f * (_camera_ray.orgin - trans->world_position).length();
+
+                    scale->scale = math::vec3(distance, distance, distance);
                 }
             }
         }
