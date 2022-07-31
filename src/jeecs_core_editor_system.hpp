@@ -177,9 +177,16 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
 
         void UpdateSelectedEntity()
         {
-            if (nullptr == _grab_axis_translation && intersect_result.intersected)
+            if (nullptr == _grab_axis_translation)
             {
-                jedbg_set_editing_entity(&intersect_entity);
+                if (intersect_result.intersected)
+                {
+                    jedbg_set_editing_entity(&intersect_entity);
+                }
+                else if(input::keydown(input::keycode::MOUSE_L_BUTTION))
+                {
+                    jedbg_set_editing_entity(nullptr);
+                }
             }
             intersect_result = math::ray::intersect_result();
         }
@@ -362,8 +369,8 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                     math::vec2 diff = cur_mouse_pos - _grab_last_pos;
 
                     editing_pos->set_world_position(
-                        editing_trans->world_position+ diff.dot(screen_axis) * (trans->world_rotation * mover->axis), 
-                        editing_trans, 
+                        editing_trans->world_position + diff.dot(screen_axis) * (trans->world_rotation * mover->axis),
+                        editing_trans,
                         editing_rot_may_null
                     );
 
