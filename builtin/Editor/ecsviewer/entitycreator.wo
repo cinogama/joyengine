@@ -306,3 +306,5 @@ namespace editor::EntityCreator
         return FormAction::Nothing;
     }
 }
+
+import woo.debug;

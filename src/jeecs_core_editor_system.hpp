@@ -42,6 +42,7 @@ namespace jeecs
         math::quat _camera_rot;
         math::ray _camera_ray;
         math::ray::intersect_result intersect_result;
+        const Camera::Projection* _camera_porjection;
         game_entity intersect_entity;
 
         void EditorWalkerWork(
@@ -92,6 +93,7 @@ namespace jeecs
             auto mouse_position = mousepos(0);
 
             _camera_ray = math::ray(trans, proj, mouse_position, false);
+            _camera_porjection = proj;
 
             if (input::keydown(input::keycode::L_CTRL)
                 && input::first_down(input::keydown(input::keycode::MOUSE_L_BUTTION)))
@@ -175,7 +177,7 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
 
         void UpdateSelectedEntity()
         {
-            if (intersect_result.intersected)
+            if (nullptr == _grab_axis_translation && intersect_result.intersected)
             {
                 jedbg_set_editing_entity(&intersect_entity);
             }
@@ -319,17 +321,70 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
             }
         }
 
+        const Transform::Translation* _grab_axis_translation = nullptr;
+        math::vec2 _grab_last_pos;
+
         void EntityMoverMgr(
             read<Editor::EntityMover> mover,
             read<Transform::Translation> trans,
             read<Renderer::Shape> shape,
             Renderer::Shaders* shaders)
         {
-            auto result = _camera_ray.intersect_entity(trans, shape);
-            if (result.intersected)
-                shaders->set_uniform("high_light", 1.0f);
+            auto* editing_entity = jedbg_get_editing_entity();
+            Transform::LocalPosition* editing_pos = editing_entity
+                ? editing_entity->get_component<Transform::LocalPosition>()
+                : nullptr;
+            Transform::Translation* editing_trans = editing_entity
+                ? editing_entity->get_component<Transform::Translation>()
+                : nullptr;
+            Transform::LocalRotation* editing_rot_may_null = editing_entity
+                ? editing_entity->get_component<Transform::LocalRotation>()
+                : nullptr;
+
+            if (!input::keydown(input::keycode::MOUSE_L_BUTTION) || nullptr == editing_pos || nullptr == editing_trans)
+                _grab_axis_translation = nullptr;
+
+            if (_grab_axis_translation && input::keydown(input::keycode::MOUSE_L_BUTTION) && editing_pos && editing_trans)
+            {
+                if (_grab_axis_translation == trans && _camera_porjection)
+                {
+                    math::vec4 p0 = trans->world_position;
+                    p0.w = 1.0f;
+                    p0 = math::mat4trans(_camera_porjection->projection, math::mat4trans(_camera_porjection->view, p0));
+                    math::vec4 p1 = trans->world_position + trans->world_rotation * mover->axis;
+                    p1.w = 1.0f;
+                    p1 = math::mat4trans(_camera_porjection->projection, math::mat4trans(_camera_porjection->view, p1));
+
+                    math::vec2 screen_axis = { p1.x - p0.x,p1.y - p0.y };
+                    screen_axis = screen_axis.unit();
+
+                    math::vec2 cur_mouse_pos = input::mousepos(0);
+                    math::vec2 diff = cur_mouse_pos - _grab_last_pos;
+
+                    editing_pos->set_world_position(
+                        editing_trans->world_position+ diff.dot(screen_axis) * (trans->world_rotation * mover->axis), 
+                        editing_trans, 
+                        editing_rot_may_null
+                    );
+
+                    _grab_last_pos = cur_mouse_pos;
+                }
+            }
             else
-                shaders->set_uniform("high_light", 0.0f);
+            {
+                auto result = _camera_ray.intersect_entity(trans, shape);
+                if (result.intersected)
+                {
+                    if (input::keydown(input::keycode::MOUSE_L_BUTTION))
+                    {
+                        _grab_axis_translation = trans;
+                        _grab_last_pos = input::mousepos(0);
+                    }
+                    shaders->set_uniform("high_light", 1.0f);
+                }
+                else
+                    shaders->set_uniform("high_light", 0.0f);
+            }
         }
 
         DefaultEditorSystem(game_universe universe)
@@ -346,6 +401,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                     contain<Editor::EditorWalker>(),
                     system_write(&_camera_ray),
                     system_write(&_camera_rot),
+                    system_write(&_camera_porjection),
                 });
             register_system_func(&DefaultEditorSystem::SelectEntity,
                 {
@@ -365,6 +421,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
             register_system_func(&DefaultEditorSystem::EntityMoverMgr,
                 {
                     system_read_updated(&_camera_ray),
+                    system_read_updated(&_camera_porjection),
                 });
         }
     };

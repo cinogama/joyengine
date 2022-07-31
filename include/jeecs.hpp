@@ -3396,6 +3396,39 @@ namespace jeecs
                 sscanf(str.c_str(), "(%f,%f,%f,%f)", &x, &y, &z, &w);
             }
         };
+
+        inline math::vec3 mat4trans(const float* left_mat, const math::vec3& v3)
+        {
+            float v33[3] = { v3.x, v3.y, v3.z };
+            float result[3];
+            mat4xvec3(result, left_mat, v33);
+
+            return math::vec3(result[0], result[1], result[2]);
+        }
+        inline math::vec3 mat4trans(const float(*left_mat)[4], const math::vec3& v3)
+        {
+            float v33[3] = { v3.x, v3.y, v3.z };
+            float result[3];
+            mat4xvec3(result, left_mat, v33);
+
+            return math::vec3(result[0], result[1], result[2]);
+        }
+        inline math::vec4 mat4trans(const float* left_mat, const math::vec4& v4)
+        {
+            float v44[4] = { v4.x, v4.y, v4.z, v4.w };
+            float result[4];
+            mat4xvec4(result, left_mat, v44);
+
+            return math::vec4(result[0], result[1], result[2], result[3]);
+        }
+        inline math::vec4 mat4trans(const float(*left_mat)[4], const math::vec4& v4)
+        {
+            float v44[4] = { v4.x, v4.y, v4.z, v4.w };
+            float result[4];
+            mat4xvec4(result, left_mat, v44);
+
+            return math::vec4(result[0], result[1], result[2], result[3]);
+        }
     }
 
     namespace graphic
@@ -3881,22 +3914,76 @@ namespace jeecs
 
         */
 
-        struct LocalPosition
+        struct Translation
         {
-            math::vec3 pos;
-            static void JERefRegsiter()
+            float object2world[4][4] = { };
+
+            math::vec3 world_position = { 0,0,0 };
+            math::quat world_rotation;
+            math::vec3 local_scale = { 1,1,1 };
+
+            inline void set_position(const math::vec3& _v3) noexcept
             {
-                typing::register_member(&LocalPosition::pos, "pos");
+                world_position = _v3;
+            }
+            inline void set_scale(const math::vec3& _v3) noexcept
+            {
+                local_scale = _v3;
+            }
+            inline void set_rotation(const math::quat& _quat)noexcept
+            {
+                world_rotation = _quat;
             }
         };
+
         struct LocalRotation
         {
             math::quat rot;
+            inline math::quat get_parent_world_rotation(const Translation* translation)const noexcept
+            {
+                assert(translation != nullptr);
+                return translation->world_rotation * rot.inverse();
+            }
+            inline void set_world_rotation(const math::quat& _rot, const Translation* translation) noexcept
+            {
+                assert(translation != nullptr);
+                rot = _rot * get_parent_world_rotation(translation).inverse();
+            }
+
             static void JERefRegsiter()
             {
                 typing::register_member(&LocalRotation::rot, "rot");
             }
         };
+
+        struct LocalPosition
+        {
+            math::vec3 pos;
+            inline math::vec3 get_parent_world_position(const Translation* translation, const LocalRotation* rotation) const noexcept
+            {
+                assert(translation != nullptr);
+                if (rotation)
+                    return translation->world_position - rotation->get_parent_world_rotation(translation) * pos;
+                else
+                    return translation->world_position - translation->world_rotation * pos;
+            }
+
+            void set_world_position(const math::vec3& _pos, const Translation* translation, const LocalRotation* rotation) noexcept
+            {
+                assert(translation != nullptr);
+
+                if (rotation)
+                    pos = rotation->get_parent_world_rotation(translation).inverse() * (_pos - get_parent_world_position(translation, rotation));
+                else
+                    pos = translation->world_rotation.inverse() * (_pos - get_parent_world_position(translation, nullptr));
+            }
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&LocalPosition::pos, "pos");
+            }
+        };
+
         struct LocalScale
         {
             math::vec3 scale = { 1.0f, 1.0f, 1.0f };
@@ -3940,28 +4027,6 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, pos) == offsetof(LocalToWorld, pos));
         static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
-
-        struct Translation
-        {
-            float object2world[4][4] = { };
-
-            math::vec3 world_position = { 0,0,0 };
-            math::quat world_rotation;
-            math::vec3 local_scale = { 1,1,1 };
-
-            inline void set_position(const math::vec3& _v3) noexcept
-            {
-                world_position = _v3;
-            }
-            inline void set_scale(const math::vec3& _v3) noexcept
-            {
-                local_scale = _v3;
-            }
-            inline void set_rotation(const math::quat& _quat)noexcept
-            {
-                world_rotation = _quat;
-            }
-        };
 
     }
     namespace Renderer
@@ -4367,14 +4432,8 @@ namespace jeecs
 
                 //rot and transform
                 for (int i = 0; i < 8; i++)
-                {
-                    float pos[3] = { finalBoxPos[i].x, finalBoxPos[i].y, finalBoxPos[i].z };
-                    mat4xvec3(pos, translation->object2world, pos);
+                    finalBoxPos[i] = mat4trans(translation->object2world, finalBoxPos[i]);
 
-                    finalBoxPos[i].x = pos[0];
-                    finalBoxPos[i].y = pos[1];
-                    finalBoxPos[i].z = pos[2];
-                }
                 {
                     //front
                     {
