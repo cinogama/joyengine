@@ -151,7 +151,7 @@ namespace editor::EntityList
                         {
                         value(child_e)?
                         {
-                            let static ChildAnchor   = je::typeinfo("Transform::ChildAnchor")->val(),
+                            static let ChildAnchor   = je::typeinfo("Transform::ChildAnchor")->val(),
                                        LocalToParent = je::typeinfo("Transform::LocalToParent")->val(),
                                        LocalToWorld  = je::typeinfo("Transform::LocalToWorld")->val();
 
