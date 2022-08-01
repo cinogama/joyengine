@@ -186,18 +186,65 @@ WO_API wo_api wojeapi_set_editing_entity(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_get_parent_uid(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    if (auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>())
+        return wo_ret_option_string(vm, l2p->parent_uid.to_string().c_str());
+
+    return wo_ret_option_none(vm);
+}
 
 WO_API wo_api wojeapi_set_parent(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     jeecs::game_entity* parent = (jeecs::game_entity*)wo_pointer(args + 1);
+    bool force = wo_bool(args + 2);
 
-    if (auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>())
-        if (auto* ca = parent->get_component<jeecs::Transform::ChildAnchor>())
-        {
-            l2p->parent_uid = ca->anchor_uid;
-            return wo_ret_bool(vm, true);
-        }
+    auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
+    auto* ca = parent->get_component<jeecs::Transform::ChildAnchor>();
+    if (force)
+    {
+        if (nullptr == l2p)
+            l2p = entity->add_component<jeecs::Transform::LocalToParent>();
+        if (nullptr == ca)
+            ca = parent->add_component<jeecs::Transform::ChildAnchor>();
+    }
+
+    if (l2p && ca)
+    {
+        if (entity->get_component<jeecs::Transform::LocalToWorld>())
+            entity->remove_component<jeecs::Transform::LocalToWorld>();
+
+        l2p->parent_uid = ca->anchor_uid;
+        return wo_ret_bool(vm, true);
+    }
+
+    return wo_ret_bool(vm, false);
+}
+
+WO_API wo_api wojeapi_set_parent_with_uid(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    const char* parent_uid = wo_string(args + 1);
+
+    bool force = wo_bool(args + 2);
+
+    auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
+    if (force)
+    {
+        if (nullptr == l2p)
+            l2p = entity->add_component<jeecs::Transform::LocalToParent>();
+    }
+
+    if (l2p)
+    {
+        if (entity->get_component<jeecs::Transform::LocalToWorld>())
+            entity->remove_component<jeecs::Transform::LocalToWorld>();
+
+        l2p->parent_uid.parse(parent_uid);
+        return wo_ret_bool(vm, true);
+    }
 
     return wo_ret_bool(vm, false);
 }
@@ -220,6 +267,18 @@ WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args, size_t argc
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     sprintf(buf, "[%p:%zuv%zu]", entity->_m_in_chunk, entity->_m_id, entity->_m_version);
     return wo_ret_string(vm, buf);
+}
+
+WO_API wo_api wojeapi_find_entity_with_chunk_info(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = new jeecs::game_entity();
+    sscanf(wo_string(args + 0), "[%p:%zuv%zu]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version);
+
+    if (entity->valid())
+        return wo_ret_option_gchandle(vm, entity,
+            nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
+    delete entity;
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_is_entity_valid(wo_vm vm, wo_value args, size_t argc)
@@ -1207,11 +1266,11 @@ R"(
     {
         func operator == (a: entity, b: entity)
         {
-            return a->editor::chunk_info() == b->editor::chunk_info();
+            return a->editor::chunkinfo() == b->editor::chunkinfo();
         }
         func operator != (a: entity, b: entity)
         {
-            return a->editor::chunk_info() != b->editor::chunk_info();
+            return a->editor::chunkinfo() != b->editor::chunkinfo();
         }
 
         func close(self: entity)
@@ -1242,7 +1301,13 @@ R"(
             }
 
             extern("libjoyecs", "wojeapi_set_parent")
-            func set_parent(self: entity, parent: entity)=> bool;
+            func set_parent(self: entity, parent: entity, force: bool)=> bool;
+
+            extern("libjoyecs", "wojeapi_set_parent_with_uid")
+            func set_parent_with_uid(self: entity, parent_uid: string, force: bool)=> bool;
+
+            extern("libjoyecs", "wojeapi_get_parent_uid")
+            func get_parent_uid(self: entity)=> option<string>;
 
             extern("libjoyecs", "wojeapi_get_entity_name")
             func name(self: entity)=> string;
@@ -1251,7 +1316,10 @@ R"(
             func name(self: entity, name: string)=> string;
 
             extern("libjoyecs", "wojeapi_get_entity_chunk_info")
-            func chunk_info(self: entity)=> string;
+            func chunkinfo(self: entity)=> string;
+
+            extern("libjoyecs", "wojeapi_find_entity_with_chunk_info")
+            func find_entity_by_chunkinfo(chunkinfo: string)=> option<entity>;
 
             extern("libjoyecs", "wojeapi_is_entity_valid")
             func valid(self: entity)=> bool;

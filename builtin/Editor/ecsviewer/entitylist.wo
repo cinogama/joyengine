@@ -29,20 +29,20 @@ namespace editor::EntityList
         using je::gui;
         if (BeginPopupContextItem())
         {
-            MenuItem(F"实体 {entity->editor::chunk_info()}", false);
+            MenuItem(F"实体 {entity->editor::chunkinfo()}", false);
             Separator();
             if (MenuItem(F"删除 {entity->editor::name()}"))
             {
                 launch(generic::AskFor, ("删除实体",
                                         F"确认要删除实体{entity->editor::name()}吗？",
-                                        func(){ entity->close(); }));
+                                        \ = entity->close();));
             }
             if (MenuItem("重命名"))
             {
                 launch(generic::InputBox, ("重命名实体",
                                         F"请输入新名称",
                                         entity->editor::name(),
-                                        func(text: string){ entity->editor::name(text); }));
+                                        \text: string = entity->editor::name(text);));
             }
             if (MenuItem("编辑组件"))
             {
@@ -114,8 +114,8 @@ namespace editor::EntityList
 
             let mut attribute = 
                 TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
-            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
-            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
 
             match (get_current_entity())
             {
@@ -129,7 +129,91 @@ namespace editor::EntityList
                     ; // 没有选中的实体，啥也不干
             }
 
-            let shown_child = TreeNodeEx(F"{entity_name}##{entity->editor::chunk_info()}", attribute);
+            let shown_child = TreeNodeEx(F"{entity_name}##{entity->editor::chunkinfo()}", attribute);
+            // 支持拖动和接受，用于快速变更子实体
+            if (BeginDragDropSource())
+            {
+                SetDragDropPayload("JEDITOR_ENTITY_INSTANCE", entity->editor::chunkinfo());
+                    Text(F"Entity: {entity->editor::name()}");
+                EndDragDropSource();
+            }
+            if(BeginDragDropTarget())
+            {
+                let mut drag_entity_chunkinfo = "";
+                if (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE", ref drag_entity_chunkinfo))
+                {
+                    if (drag_entity_chunkinfo != entity->editor::chunkinfo())
+                    {
+                        // 自己拖到自己身上肯定就寄了，只处理不同的实体。
+                        // TODO: 支持逆转父子关系
+
+                        match(je::entity::editor::find_entity_by_chunkinfo(drag_entity_chunkinfo))
+                        {
+                        value(child_e)?
+                        {
+                            let static ChildAnchor   = je::typeinfo("Transform::ChildAnchor")->val(),
+                                       LocalToParent = je::typeinfo("Transform::LocalToParent")->val(),
+                                       LocalToWorld  = je::typeinfo("Transform::LocalToWorld")->val();
+
+                            let add_to_e_component_t = []: array<je::typeinfo>;
+                            let remove_from_e_component_t = []: array<je::typeinfo>;
+                            let add_to_c_component_t = []: array<je::typeinfo>;
+
+                            // 移除子实体的L2W组件
+                            if (child_e->editor::get_component(LocalToWorld)->has())
+                                remove_from_e_component_t->add(LocalToWorld);
+
+                            // 向子实体添加L2P组件
+                            if (!child_e->editor::get_component(LocalToParent)->has())
+                                add_to_e_component_t->add(LocalToParent);
+
+                            // 向父实体添加ChildAnchor
+                            if (!entity->editor::get_component(ChildAnchor)->has())
+                                add_to_c_component_t->add(ChildAnchor);
+
+                            if (add_to_e_component_t->empty() && remove_from_e_component_t->empty() && add_to_c_component_t->empty())
+                                // 待添加/移除的组件都已经处理，直接变更父子关系
+                                child_e->editor::set_parent(entity, true);
+                            else
+                            {
+                                let mut msg = "即将变更父子变换实体，以下变更将会发生：\n";
+
+                                msg += F"父实体 {entity->editor::name()}\n";
+                                if (!add_to_c_component_t->empty())
+                                {
+                                    msg += " 添加以下组件\n";
+                                    for (let ctype : add_to_c_component_t)
+                                        msg += F"  {ctype->name()}\n";
+                                }
+
+                                msg += F"子实体 {child_e->editor::name()}\n";
+                                if (!add_to_e_component_t->empty() || !remove_from_e_component_t->empty())
+                                {
+                                    if (!add_to_e_component_t->empty())
+                                    {
+                                        msg += " 添加以下组件\n";
+                                        for (let ctype : add_to_e_component_t)
+                                            msg += F"  {ctype->name()}\n";
+                                    }
+                                    if (!remove_from_e_component_t->empty())
+                                    {
+                                        msg += " 移除以下组件\n";
+                                        for (let ctype : remove_from_e_component_t)
+                                            msg += F"  {ctype->name()}\n";
+                                    }
+                                }
+                                
+                                launch(generic::AskFor, ("变更父子实体", msg + "是否确认?", \ = child_e->editor::set_parent(entity, true);));
+                            }
+                                
+                        }
+                        none? /*拖过来的实体已经寄了，跳过*/ ;
+                        }
+                    }
+                }
+                EndDragDropTarget();
+            }
+
             context_menu(entity);
             if (IsItemClicked() && !IsItemToggledOpen())
             {
