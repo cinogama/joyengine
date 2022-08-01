@@ -181,8 +181,8 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
             {
                 if (intersect_result.intersected)
                     jedbg_set_editing_entity(&intersect_entity);
-                else if(input::keydown(input::keycode::MOUSE_L_BUTTION))
-                    jedbg_set_editing_entity(nullptr);
+                //else if(input::keydown(input::keycode::MOUSE_L_BUTTION))
+                //    jedbg_set_editing_entity(nullptr);
             }
             intersect_result = math::ray::intersect_result();
         }
