@@ -94,11 +94,102 @@ namespace editor::EntityList
         return je::entity::editor::editing();
     }
 
+    // 实体的UID表，根据uid获取实体实例
+    private let mut uid_entity_map = {}: map<string, je::entity>;
+
+    // 检查给定checking实体是否是cur实体的祖实体
+    private func is_ancestor(cur: je::entity, checking: je::entity)
+    {
+        match(checking->editor::get_uid())
+        {
+        value(uid)?
+        {
+            let mut e = option::value(cur);
+            while(true)
+            {
+                match (e->map(\ent: je::entity = ent->editor::get_uid();)->reduce())
+                {
+                value(current_uid)?
+                    if (current_uid == uid)
+                        return true;
+                    else
+                        e = e->map(\ent: je::entity = ent->editor::get_parent_uid();)
+                             ->map(\puid: string = uid_entity_map[puid];)
+                             ->reduce();
+                none?
+                    return false;
+                }
+            }
+        }
+        none?
+            // 指定的祖实体没有锚点，肯定没有子实体
+            return false;
+        }
+    }
+
+    private func set_parent(child: je::entity, parent: je::entity)
+    {
+        using je::gui;
+
+        static let ChildAnchor   = je::typeinfo("Transform::ChildAnchor")->val(),
+                   LocalToParent = je::typeinfo("Transform::LocalToParent")->val(),
+                   LocalToWorld  = je::typeinfo("Transform::LocalToWorld")->val();
+
+        let add_to_e_component_t = []: array<je::typeinfo>;
+        let remove_from_e_component_t = []: array<je::typeinfo>;
+        let add_to_c_component_t = []: array<je::typeinfo>;
+
+        // 移除子实体的L2W组件
+        if (child->editor::get_component(LocalToWorld)->has())
+            remove_from_e_component_t->add(LocalToWorld);
+
+        // 向子实体添加L2P组件
+        if (!child->editor::get_component(LocalToParent)->has())
+            add_to_e_component_t->add(LocalToParent);
+
+        // 向父实体添加ChildAnchor
+        if (!parent->editor::get_component(ChildAnchor)->has())
+            add_to_c_component_t->add(ChildAnchor);
+
+        if (add_to_e_component_t->empty() && remove_from_e_component_t->empty() && add_to_c_component_t->empty())
+            // 待添加/移除的组件都已经处理，直接变更父子关系
+            child->editor::set_parent(parent, false);
+        else
+        {
+            let mut msg = "即将变更父子变换实体，以下变更将会发生：\n";
+
+            msg += F"父实体 {parent->editor::name()}\n";
+            if (!add_to_c_component_t->empty())
+            {
+                msg += " 添加以下组件\n";
+                for (let ctype : add_to_c_component_t)
+                    msg += F"  {ctype->name()}\n";
+            }
+
+            msg += F"子实体 {child->editor::name()}\n";
+            if (!add_to_e_component_t->empty() || !remove_from_e_component_t->empty())
+            {
+                if (!add_to_e_component_t->empty())
+                {
+                    msg += " 添加以下组件\n";
+                    for (let ctype : add_to_e_component_t)
+                        msg += F"  {ctype->name()}\n";
+                }
+                if (!remove_from_e_component_t->empty())
+                {
+                    msg += " 移除以下组件\n";
+                    for (let ctype : remove_from_e_component_t)
+                        msg += F"  {ctype->name()}\n";
+                }
+            }
+                                
+            launch(generic::AskFor, ("变更父子实体", msg + "是否确认?", \ = child->editor::set_parent(parent, true);));
+        }
+    }
     private func _display_entity_with_iter(entity_iter: je::entity::editor::entity_iter)=> int
     {
         using je::gui;
 
-        static let mut uid_entity_map = {}: map<string, je::entity>;
         let mut current_uid_entity_map = {}: map<string, je::entity>;
         
         let mut display_count = 0;
@@ -158,63 +249,7 @@ namespace editor::EntityList
                         match(je::entity::editor::find_entity_by_chunkinfo(drag_entity_chunkinfo))
                         {
                         value(child_e)?
-                        {
-                            static let ChildAnchor   = je::typeinfo("Transform::ChildAnchor")->val(),
-                                       LocalToParent = je::typeinfo("Transform::LocalToParent")->val(),
-                                       LocalToWorld  = je::typeinfo("Transform::LocalToWorld")->val();
-
-                            let add_to_e_component_t = []: array<je::typeinfo>;
-                            let remove_from_e_component_t = []: array<je::typeinfo>;
-                            let add_to_c_component_t = []: array<je::typeinfo>;
-
-                            // 移除子实体的L2W组件
-                            if (child_e->editor::get_component(LocalToWorld)->has())
-                                remove_from_e_component_t->add(LocalToWorld);
-
-                            // 向子实体添加L2P组件
-                            if (!child_e->editor::get_component(LocalToParent)->has())
-                                add_to_e_component_t->add(LocalToParent);
-
-                            // 向父实体添加ChildAnchor
-                            if (!entity->editor::get_component(ChildAnchor)->has())
-                                add_to_c_component_t->add(ChildAnchor);
-
-                            if (add_to_e_component_t->empty() && remove_from_e_component_t->empty() && add_to_c_component_t->empty())
-                                // 待添加/移除的组件都已经处理，直接变更父子关系
-                                child_e->editor::set_parent(entity, true);
-                            else
-                            {
-                                let mut msg = "即将变更父子变换实体，以下变更将会发生：\n";
-
-                                msg += F"父实体 {entity->editor::name()}\n";
-                                if (!add_to_c_component_t->empty())
-                                {
-                                    msg += " 添加以下组件\n";
-                                    for (let ctype : add_to_c_component_t)
-                                        msg += F"  {ctype->name()}\n";
-                                }
-
-                                msg += F"子实体 {child_e->editor::name()}\n";
-                                if (!add_to_e_component_t->empty() || !remove_from_e_component_t->empty())
-                                {
-                                    if (!add_to_e_component_t->empty())
-                                    {
-                                        msg += " 添加以下组件\n";
-                                        for (let ctype : add_to_e_component_t)
-                                            msg += F"  {ctype->name()}\n";
-                                    }
-                                    if (!remove_from_e_component_t->empty())
-                                    {
-                                        msg += " 移除以下组件\n";
-                                        for (let ctype : remove_from_e_component_t)
-                                            msg += F"  {ctype->name()}\n";
-                                    }
-                                }
-                                
-                                launch(generic::AskFor, ("变更父子实体", msg + "是否确认?", \ = child_e->editor::set_parent(entity, true);));
-                            }
-                                
-                        }
+                            set_parent(child_e, entity);
                         none? /*拖过来的实体已经寄了，跳过*/ ;
                         }
                     }
