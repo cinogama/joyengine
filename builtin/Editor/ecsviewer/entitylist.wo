@@ -114,7 +114,8 @@ namespace editor::EntityList
                         return true;
                     else
                         e = e->map(\ent: je::entity = ent->editor::get_parent_uid();)
-                             ->map(\puid: string = uid_entity_map[puid];)
+                             ->reduce()
+                             ->map(\puid: string = uid_entity_map->get(puid);)
                              ->reduce();
                 none?
                     return false;
