@@ -98,9 +98,17 @@ namespace editor::EntityList
     {
         using je::gui;
 
+        static let mut uid_entity_map = {}: map<string, je::entity>;
+        let mut current_uid_entity_map = {}: map<string, je::entity>;
+        
         let mut display_count = 0;
         for (let entity : entity_iter)
         {
+            // 如果当前实体有uid组件，那么添加一下
+            entity
+                ->editor::get_uid()
+                ->map(\x: string = current_uid_entity_map[x] = entity;);
+
             display_count += 1;
             
             // 如果实体有 Editor::Invisable 这个组件，就跳过显示
@@ -227,6 +235,8 @@ namespace editor::EntityList
                 TreePop();
             }
         }
+        uid_entity_map = current_uid_entity_map;
+
         return display_count;
     }
 }

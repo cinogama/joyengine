@@ -186,6 +186,14 @@ WO_API wo_api wojeapi_set_editing_entity(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    if (auto* anc = entity->get_component<jeecs::Transform::ChildAnchor>())
+        return wo_ret_option_string(vm, anc->anchor_uid.to_string().c_str());
+
+    return wo_ret_option_none(vm);
+}
 WO_API wo_api wojeapi_get_parent_uid(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -1305,6 +1313,9 @@ R"(
 
             extern("libjoyecs", "wojeapi_set_parent_with_uid")
             func set_parent_with_uid(self: entity, parent_uid: string, force: bool)=> bool;
+
+            extern("libjoyecs", "wojeapi_get_entity_uid")
+            func get_uid(self: entity)=> option<string>;
 
             extern("libjoyecs", "wojeapi_get_parent_uid")
             func get_parent_uid(self: entity)=> option<string>;
