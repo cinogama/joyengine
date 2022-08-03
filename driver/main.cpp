@@ -10,6 +10,13 @@
 
 #include <iostream>
 
+#ifdef _WIN32
+#   ifndef NDEBUG
+//      Woolang's compiler is too complex, need more stack space in debug.
+#       pragma comment(linker, "/STACK:67108864")
+#   endif
+#endif
+
 int main(int argc, char** argv)
 {
     je_init(argc, argv);

@@ -1,4 +1,6 @@
 import woo.std;
+import woo.debug;
+
 import je.gui;
 import je;
 import je.filesys;
