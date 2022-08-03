@@ -13,7 +13,7 @@
 #ifdef _WIN32
 #   ifndef NDEBUG
 //      Woolang's compiler is too complex, need more stack space in debug.
-#       pragma comment(linker, "/STACK:67108864")
+#       pragma comment(linker, "/STACK:134217728")
 #   endif
 #endif
 
