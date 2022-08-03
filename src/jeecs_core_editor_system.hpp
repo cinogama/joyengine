@@ -376,14 +376,17 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
             else
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
+                bool select_click = input::first_down(input::keydown(input::keycode::MOUSE_L_BUTTION));
+
                 if (result.intersected)
                 {
-                    if (input::keydown(input::keycode::MOUSE_L_BUTTION))
+                    if (select_click)
                     {
                         _grab_axis_translation = trans;
                         _grab_last_pos = input::mousepos(0);
                     }
-                    shaders->set_uniform("high_light", 1.0f);
+                    if (!input::keydown(input::keycode::MOUSE_L_BUTTION))
+                        shaders->set_uniform("high_light", 1.0f);
                 }
                 else
                     shaders->set_uniform("high_light", 0.0f);
