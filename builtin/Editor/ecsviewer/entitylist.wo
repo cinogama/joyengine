@@ -104,7 +104,7 @@ namespace editor::EntityList
         {
         value(uid)?
         {
-            if (!cur->editor::get_uid()
+            if (cur->editor::get_uid()
                    ->map(\cuidv: string = puid->map(\puidv: string = puidv == cuidv;)
                         where puid = checking->editor::get_uid();)
                    ->reduce()
@@ -115,13 +115,13 @@ namespace editor::EntityList
             let mut e = option::value(cur);
             while(true)
             {
-                match (e->map(\ent: je::entity = ent->editor::get_uid();)->reduce())
+                match (e->map(\ent: je::entity = ent->editor::get_parent_uid();)->reduce())
                 {
                 value(current_uid)?
                     if (current_uid == uid)
                         return true;
                     else
-                        e = e->map(\ent: je::entity = ent->editor::get_parent_uid();)
+                        e = e->map(\ent: je::entity = ent->editor::get_uid();)
                              ->reduce()
                              ->map(\puid: string = uid_entity_map->get(puid);)
                              ->reduce();
@@ -136,11 +136,6 @@ namespace editor::EntityList
         }
     }
 
-    private func set_parnet_impl(child: je::entity, parent: je::entity)
-    {
-        
-    }
-
     private func set_parent(child: je::entity, parent: je::entity)
     {
         using je::gui;
@@ -150,6 +145,7 @@ namespace editor::EntityList
                    LocalToWorld  = je::typeinfo("Transform::LocalToWorld")->val();
 
         if (is_ancestor(parent, child))
+        {
             // 如果正在设置的子实体是父实体的祖先节点，需要先调整顺序
             /*
             ?       ? --- P
@@ -158,7 +154,6 @@ namespace editor::EntityList
             |  
             P
             */
-            std::debug::breakdown();
             // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把父节点设置为L2W
             child->editor::get_parent_uid()
                  ->map(\uid: string = parent->editor::set_parent_with_uid(uid, true);)
@@ -169,6 +164,7 @@ namespace editor::EntityList
                         parent->editor::add_component(LocalToWorld);
                     return true;
                  });
+        }
         child->editor::set_parent(parent, true);
     }
     private func _display_entity_with_iter(entity_iter: je::entity::editor::entity_iter)=> int
