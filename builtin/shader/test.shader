@@ -14,23 +14,16 @@ using v2f = struct {
     uv      : float2,
 };
 
-func vert(vdata : vin)
-{
-    return v2f{
-        pos = je_mvp * float4(float3(0.5, 0.5, 0.5) * vdata.vertex, 1.),
-        uv = vdata.uv,
-    };
-}
-
 using fout = struct {
-    color : float4
+    color: float4
 };
 
-let main_texture = uniform:<texture2d>("main_texture");
+let vert = \v: vin = v2f{ pos = trans(v.vertex), uv = v.uv }
+    where 
+        trans = \v3: float3 = je_mvp *  float4(v3, 1.);;;
 
-func frag(v2f : v2f)
-{
-    return fout{
-        color = texture(main_texture, v2f.uv),
-    };
-}
+let frag = \f: v2f = fout{ color = inverse_col(texture(main_texture, f.uv)) }
+    where
+        main_texture = uniform:<texture2d>("main_texture"),
+        inverse_col = \col: float4 = float4((white - col)->xyz(), col->w());,
+        white = float4(1., 1., 1., 1.);;

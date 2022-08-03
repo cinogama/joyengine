@@ -225,14 +225,8 @@ namespace editor::EntityList
                     if (drag_entity_chunkinfo != entity->editor::chunkinfo())
                     {
                         // 自己拖到自己身上肯定就寄了，只处理不同的实体。
-                        // TODO: 支持逆转父子关系
-
-                        match(je::entity::editor::find_entity_by_chunkinfo(drag_entity_chunkinfo))
-                        {
-                        value(child_e)?
-                            set_parent(child_e, entity);
-                        none? /*拖过来的实体已经寄了，跳过*/ ;
-                        }
+                        je::entity::editor::find_entity_by_chunkinfo(drag_entity_chunkinfo)
+                            ->map(\e: je::entity = set_parent(e, entity););
                     }
                 }
                 EndDragDropTarget();
