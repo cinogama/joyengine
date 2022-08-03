@@ -104,6 +104,14 @@ namespace editor::EntityList
         {
         value(uid)?
         {
+            if (!cur->editor::get_uid()
+                   ->map(\cuidv: string = puid->map(\puidv: string = puidv == cuidv;)
+                        where puid = checking->editor::get_uid();)
+                   ->reduce()
+                   ->valor(false))
+                // 当前实体和目标实体相同，直接返回
+                return false;
+
             let mut e = option::value(cur);
             while(true)
             {
