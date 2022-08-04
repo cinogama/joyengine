@@ -4548,12 +4548,46 @@ namespace jeecs
             lastframekeydown = keystate;
             return res;
         }
+        template<typing::typehash_t hash_v1, int v2>
+        static bool _doubleClick(bool keystate, float i = 0.1f)
+        {
+            static typing::ms_stamp_t lact_click_tm = je_clock_time_stamp();
+            static bool release_for_next_click = false;
+
+            auto cur_time = je_clock_time_stamp();
+
+            // 1. first click.
+            if (keystate)
+            {
+                if (release_for_next_click && cur_time - lact_click_tm < (typing::ms_stamp_t)(i * 1000.f))
+                {
+                    // Is Double click!
+                    lact_click_tm = 0; // reset the time.
+                    release_for_next_click = false;
+                    return true;
+                }
+                // Release for a long time, re calc the time
+                if (!release_for_next_click || cur_time - lact_click_tm > (typing::ms_stamp_t)(i * 1000.f))
+                {
+                    lact_click_tm = cur_time;
+                    release_for_next_click = false;
+                }
+            }
+            else
+            {
+                if (!release_for_next_click && cur_time - lact_click_tm < (typing::ms_stamp_t)(i * 1000.f))
+                    release_for_next_click = true;
+            }
+            return false;
+        }
 
         static void is_up(...);
-        static void first_down(...); // just for fool ide
+        static void first_down(...);
+        static void double_click(...);// just for fool ide
 
 #define is_up _isUp<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
+#define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
     }
 }
 

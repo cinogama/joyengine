@@ -45,6 +45,40 @@ namespace jeecs
         const Camera::Projection* _camera_porjection;
         game_entity intersect_entity;
 
+        struct input_msg
+        {
+            bool w = false;
+            bool s = false;
+            bool a = false;
+            bool d = false;
+
+            bool l_ctrl = false;
+
+            bool l_buttom = false;
+            bool r_buttom = false;
+
+            bool l_buttom_click = false;
+            bool r_buttom_click = false;
+
+            bool l_buttom_double_click = false;
+        }_inputs;
+
+        void InputMgr()
+        {
+            _inputs.w = input::keydown(input::keycode::W);
+            _inputs.s = input::keydown(input::keycode::S);
+            _inputs.a = input::keydown(input::keycode::A);
+            _inputs.d = input::keydown(input::keycode::D);
+            _inputs.l_ctrl = input::keydown(input::keycode::L_CTRL);
+            _inputs.l_buttom = input::keydown(input::keycode::MOUSE_L_BUTTION);
+            _inputs.r_buttom = input::keydown(input::keycode::MOUSE_R_BUTTION);
+
+            _inputs.l_buttom_click = input::first_down(_inputs.l_buttom);
+            _inputs.r_buttom_click = input::first_down(_inputs.r_buttom);
+
+            _inputs.l_buttom_double_click = input::double_click(_inputs.l_buttom);
+        }
+
         void EditorWalkerWork(
             Transform::LocalPosition* position,
             Transform::LocalRotation* rotation,
@@ -53,13 +87,13 @@ namespace jeecs
             using namespace input;
             using namespace math;
 
-            if (first_down(keydown(keycode::MOUSE_R_BUTTION)))
+            if (_inputs.r_buttom_click)
             {
                 _begin_drag = mousepos(0);
                 _drag_viewing = false;
             }
 
-            if (keydown(keycode::MOUSE_R_BUTTION))
+            if (_inputs.r_buttom)
             {
                 if (_drag_viewing || (mousepos(0) - _begin_drag).length() >= 0.01)
                 {
@@ -68,13 +102,13 @@ namespace jeecs
 
                     rotation->rot = rotation->rot * quat(0, 30.f * mousepos(0).x, 0);
                 }
-                if (keydown(keycode::W))
+                if (_inputs.w)
                     position->pos += _camera_rot * vec3(0, 0, 0.5);
-                if (keydown(keycode::S))
+                if (_inputs.s)
                     position->pos += _camera_rot * vec3(0, 0, -0.5);
-                if (keydown(keycode::A))
+                if (_inputs.a)
                     position->pos += _camera_rot * vec3(-0.5, 0, 0);
-                if (keydown(keycode::D))
+                if (_inputs.d)
                     position->pos += _camera_rot * vec3(0.5, 0, 0);
             }
             else
@@ -95,8 +129,7 @@ namespace jeecs
             _camera_ray = math::ray(trans, proj, mouse_position, false);
             _camera_porjection = proj;
 
-            if (input::keydown(input::keycode::L_CTRL)
-                && input::first_down(input::keydown(input::keycode::MOUSE_L_BUTTION)))
+            if (_inputs.l_ctrl && _inputs.l_buttom_click)
             {
                 // 创建一条射线
                 static basic::resource<graphic::vertex> line = new graphic::vertex(
@@ -143,14 +176,14 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
                 }
             }
 
-            if (_drag_viewing && keydown(keycode::MOUSE_R_BUTTION))
+            if (_drag_viewing && _inputs.r_buttom)
             {
                 rotation->rot = rotation->rot * quat(30.f * -mouse_position.y, 0, 0);
                 _camera_rot = trans->world_rotation;
             }
         }
-        void LifeDyingEntity(
 
+        void LifeDyingEntity(
             game_entity entity,
             Editor::EditorLife* life)
         {
@@ -163,7 +196,7 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
             read<Transform::Translation> trans,
             maynot<read<Renderer::Shape>> shape)
         {
-            if (input::keydown(input::keycode::MOUSE_L_BUTTION))
+            if (_inputs.l_buttom_click)
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
 
@@ -181,8 +214,8 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
             {
                 if (intersect_result.intersected)
                     jedbg_set_editing_entity(&intersect_entity);
-                //else if(input::keydown(input::keycode::MOUSE_L_BUTTION))
-                //    jedbg_set_editing_entity(nullptr);
+                else if(_inputs.l_buttom_double_click)
+                    jedbg_set_editing_entity(nullptr);
             }
             intersect_result = math::ray::intersect_result();
         }
@@ -344,10 +377,10 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                 ? editing_entity->get_component<Transform::LocalRotation>()
                 : nullptr;
 
-            if (!input::keydown(input::keycode::MOUSE_L_BUTTION) || nullptr == editing_pos || nullptr == editing_trans)
+            if (!_inputs.l_buttom || nullptr == editing_pos || nullptr == editing_trans)
                 _grab_axis_translation = nullptr;
 
-            if (_grab_axis_translation && input::keydown(input::keycode::MOUSE_L_BUTTION) && editing_pos && editing_trans)
+            if (_grab_axis_translation && _inputs.l_buttom && editing_pos && editing_trans)
             {
                 if (_grab_axis_translation == trans && _camera_porjection)
                 {
@@ -376,7 +409,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
             else
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
-                bool select_click = input::first_down(input::keydown(input::keycode::MOUSE_L_BUTTION));
+                bool select_click = _inputs.l_buttom_click;
 
                 if (result.intersected)
                 {
@@ -385,7 +418,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                         _grab_axis_translation = trans;
                         _grab_last_pos = input::mousepos(0);
                     }
-                    if (!input::keydown(input::keycode::MOUSE_L_BUTTION))
+                    if (!_inputs.l_buttom)
                         shaders->set_uniform("high_light", 1.0f);
                 }
                 else
@@ -396,11 +429,16 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
         DefaultEditorSystem(game_universe universe)
             : game_shared_system(universe)
         {
+            register_system_func(&DefaultEditorSystem::InputMgr,
+                {
+                    system_write(&_inputs),
+                });
             register_system_func(&DefaultEditorSystem::EditorWalkerWork,
                 {
                     contain<Editor::EditorWalker>(),
                     except<Camera::Projection>(),
                     system_read(&_camera_rot),
+                    system_read_updated(&_inputs),
                 });
             register_system_func(&DefaultEditorSystem::EditorCameraWork,
                 {
@@ -408,6 +446,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                     system_write(&_camera_ray),
                     system_write(&_camera_rot),
                     system_write(&_camera_porjection),
+                    system_read_updated(&_inputs),
                 });
             register_system_func(&DefaultEditorSystem::SelectEntity,
                 {
@@ -415,6 +454,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                     system_read_updated(&_camera_ray),
                     system_write(&intersect_result),
                     system_write(&intersect_entity),
+                    system_read_updated(&_inputs),
                 });
             register_system_func(&DefaultEditorSystem::LifeDyingEntity);
             register_system_func(&DefaultEditorSystem::EntityMoverRootMgr);
@@ -422,6 +462,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                 {
                     system_read_updated(&_camera_ray),
                     system_read_updated(&_camera_porjection),
+                    system_read_updated(&_inputs),
                 });
             register_system_func(&DefaultEditorSystem::UpdateSelectedEntity,
                 {
