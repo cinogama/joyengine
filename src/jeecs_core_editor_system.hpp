@@ -41,9 +41,8 @@ namespace jeecs
 
         math::quat _camera_rot;
         math::ray _camera_ray;
-        math::ray::intersect_result intersect_result;
+
         const Camera::Projection* _camera_porjection;
-        game_entity intersect_entity;
 
         struct input_msg
         {
@@ -191,6 +190,18 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
                 entity.close();
         }
 
+        struct SelectedResult
+        {
+            float distance;
+            jeecs::game_entity entity;
+
+            bool operator < (const SelectedResult& s) const noexcept
+            {
+                return distance < s.distance;
+            }
+        };
+        std::set<SelectedResult> selected_list;
+
         void SelectEntity(
             game_entity entity,
             read<Transform::Translation> trans,
@@ -200,11 +211,8 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
 
-                if (result.intersected && result.distance < intersect_result.distance)
-                {
-                    intersect_result = result;
-                    intersect_entity = entity;
-                }
+                if (result.intersected)
+                    selected_list.insert(SelectedResult{ result.distance, entity });
             }
         }
 
@@ -212,12 +220,26 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
         {
             if (nullptr == _grab_axis_translation)
             {
-                if (intersect_result.intersected)
-                    jedbg_set_editing_entity(&intersect_entity);
-                else if(_inputs.l_buttom_double_click)
+                if (!selected_list.empty())
+                {
+                    const game_entity* e = jedbg_get_editing_entity();
+                    if (auto& fnd = std::find_if(selected_list.begin(), selected_list.end(),
+                        [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
+                        fnd != selected_list.end())
+                    {
+                        if (++fnd == selected_list.end())
+                            jedbg_set_editing_entity(&selected_list.begin()->entity);
+                        else
+                            jedbg_set_editing_entity(&fnd->entity);
+                    }
+                    else
+                        jedbg_set_editing_entity(&selected_list.begin()->entity);
+                }
+                else if (_inputs.l_buttom_double_click)
                     jedbg_set_editing_entity(nullptr);
             }
-            intersect_result = math::ray::intersect_result();
+
+            selected_list.clear();
         }
 
         void EntityMoverRootMgr(
@@ -343,7 +365,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                     axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
                     anchor->anchor_uid;
             }
-            if (game_entity* current = jedbg_get_editing_entity())
+            if (const game_entity* current = jedbg_get_editing_entity())
             {
                 if (auto* trans = current->get_component<Transform::Translation>())
                 {
@@ -354,6 +376,11 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
 
                     scale->scale = math::vec3(distance, distance, distance);
                 }
+            }
+            else
+            {
+                // Hide the mover
+                scale->scale = math::vec3(0, 0, 0);
             }
         }
 
@@ -452,8 +479,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                 {
                     except<Editor::Invisable>(),
                     system_read_updated(&_camera_ray),
-                    system_write(&intersect_result),
-                    system_write(&intersect_entity),
+                    system_write(&selected_list),
                     system_read_updated(&_inputs),
                 });
             register_system_func(&DefaultEditorSystem::LifeDyingEntity);
@@ -466,8 +492,7 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
                 });
             register_system_func(&DefaultEditorSystem::UpdateSelectedEntity,
                 {
-                    system_read_updated(&intersect_result),
-                    system_read_updated(&intersect_entity),
+                    system_read_updated(&selected_list),
                     after(&DefaultEditorSystem::EntityMoverMgr),
                 });
         }

@@ -166,6 +166,15 @@ namespace jeecs
         inline std::string name();
 
         inline std::string name(const std::string& _name);
+
+        inline bool operator == (const game_entity& e) const noexcept
+        {
+            return _m_in_chunk == e._m_in_chunk && _m_id == e._m_id && _m_version == e._m_version;
+        }
+        inline bool operator != (const game_entity& e) const noexcept
+        {
+            return _m_in_chunk != e._m_in_chunk || _m_id != e._m_id || _m_version != e._m_version;
+        }
     };
 
     namespace input
@@ -751,9 +760,9 @@ JE_API void* jedbg_get_editor_universe(void);
 
 JE_API bool jedbg_editor(void);
 
-JE_API void jedbg_set_editing_entity(jeecs::game_entity* _entity);
+JE_API void jedbg_set_editing_entity(const jeecs::game_entity* _entity);
 
-JE_API jeecs::game_entity* jedbg_get_editing_entity();
+JE_API const jeecs::game_entity* jedbg_get_editing_entity();
 
 #endif
 

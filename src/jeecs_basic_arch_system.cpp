@@ -2265,7 +2265,7 @@ void* jedbg_get_editor_universe(void)
 {
     return _editor_universe;
 }
-void jedbg_set_editing_entity(jeecs::game_entity* _entity)
+void jedbg_set_editing_entity(const jeecs::game_entity* _entity)
 {
     if (_entity)
         _editor_entity = *_entity;
@@ -2273,7 +2273,7 @@ void jedbg_set_editing_entity(jeecs::game_entity* _entity)
         _editor_entity._m_in_chunk = nullptr;
 }
 
-JE_API jeecs::game_entity* jedbg_get_editing_entity()
+const jeecs::game_entity* jedbg_get_editing_entity()
 {
     if (_editor_entity.valid())
         return &_editor_entity;

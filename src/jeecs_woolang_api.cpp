@@ -174,7 +174,7 @@ WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_get_editing_entity(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_option_ptr(vm, jedbg_get_editing_entity());
+    return wo_ret_option_ptr(vm, (void*)jedbg_get_editing_entity());
 }
 
 WO_API wo_api wojeapi_set_editing_entity(wo_vm vm, wo_value args, size_t argc)
