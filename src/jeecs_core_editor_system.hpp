@@ -130,7 +130,7 @@ namespace jeecs
 
             if (_inputs.l_ctrl && _inputs.l_buttom_click)
             {
-                // 创建一条射线
+                // 一
                 static basic::resource<graphic::vertex> line = new graphic::vertex(
                     graphic::vertex::type::LINES,
                     { 0,0,0,
@@ -223,7 +223,7 @@ let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
                 if (!selected_list.empty())
                 {
                     const game_entity* e = jedbg_get_editing_entity();
-                    if (auto& fnd = std::find_if(selected_list.begin(), selected_list.end(),
+                    if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
                         [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
                         fnd != selected_list.end())
                     {
