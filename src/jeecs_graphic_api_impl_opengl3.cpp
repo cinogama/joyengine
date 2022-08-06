@@ -26,6 +26,9 @@ thread_local float MOUSE_SCROLL_X_COUNT = 0.f;
 thread_local float MOUSE_SCROLL_Y_COUNT = 0.f;
 thread_local int KEYBOARD_STATE[MAX_KEYBOARD_BUTTON_COUNT];
 
+extern "C" __declspec(dllexport) int NvOptimusEnablement = 0x00000001;
+extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 0x00000001;
+
 void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
 {
     WINDOWS_SIZE_WIDTH = (size_t)x;

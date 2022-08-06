@@ -1671,7 +1671,7 @@ namespace jeecs_impl
                                 if (je_clock_time() > 1.0 + current_time)
                                     current_time = je_clock_time();
 
-                                je_clock_sleep_until(current_time += 0.0166'6667/2.0);
+                                je_clock_sleep_until(current_time += 0.0166'6667);
 
                             } while (world->update());
 
