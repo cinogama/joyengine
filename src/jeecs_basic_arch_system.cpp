@@ -1649,47 +1649,52 @@ namespace jeecs_impl
             } while (0);
 
             size_t executing_world_count = _m_reading_world_list.size();
-
-            std::for_each(
-#ifdef __cpp_lib_execution
-                std::execution::par_unseq,
-#endif
-                _m_reading_world_list.begin(), _m_reading_world_list.end(),
-                [this](ecs_world* world)
-                {
-                    DEBUG_ARCH_LOG("World %p: updating...", world);
-
-                    double current_time = je_clock_time();
-
-                    do
-                    {
-                        if (_m_pause_universe_update_for_world)
+            
+            std::vector<std::thread> _world_job_thread;
+            for (ecs_world* world: _m_reading_world_list)
+            {
+                _world_job_thread.emplace_back(
+                    std::move(std::thread(
+                        [this, world]()
                         {
-                            DEBUG_ARCH_LOG("World %p: stop update for ecs_universe world list modify.", world);
-                            return;
+                            DEBUG_ARCH_LOG("World %p: updating...", world);
+
+                            double current_time = je_clock_time();
+
+                            do
+                            {
+                                if (_m_pause_universe_update_for_world)
+                                {
+                                    DEBUG_ARCH_LOG("World %p: stop update for ecs_universe world list modify.", world);
+                                    return;
+                                }
+                                if (je_clock_time() > 1.0 + current_time)
+                                    current_time = je_clock_time();
+
+                                je_clock_sleep_until(current_time += 0.0166'6667/2.0);
+
+                            } while (world->update());
+
+                            DEBUG_ARCH_LOG("World %p: destroied.", world);
+
+                            destroy_all_systems_for_world(world);
+
+                            // Execute here means world has been destroied, remove it from list;
+                            std::lock_guard g1(_m_world_list_mx);
+                            if (auto fnd = std::find(_m_world_list.begin(), _m_world_list.end(), world);
+                                fnd != _m_world_list.end())
+                                _m_world_list.erase(fnd);
+                            else
+                                assert(false);
+
+                            jeecs::basic::destroy_free(world);
                         }
-                        if (je_clock_time() > 1.0 + current_time)
-                            current_time = je_clock_time();
+                    ))
+                );
+            }
 
-                        je_clock_sleep_until(current_time += 0.0166'6667);
-
-                    } while (world->update());
-
-                    DEBUG_ARCH_LOG("World %p: destroied.", world);
-
-                    destroy_all_systems_for_world(world);
-
-                    // Execute here means world has been destroied, remove it from list;
-                    std::lock_guard g1(_m_world_list_mx);
-                    if (auto fnd = std::find(_m_world_list.begin(), _m_world_list.end(), world);
-                        fnd != _m_world_list.end())
-                        _m_world_list.erase(fnd);
-                    else
-                        assert(false);
-
-                    jeecs::basic::destroy_free(world);
-                }
-            );
+            for (auto& job_thread : _world_job_thread)
+                job_thread.join();
 
             return executing_world_count;
         }
