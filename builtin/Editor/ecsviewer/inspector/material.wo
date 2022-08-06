@@ -35,16 +35,19 @@ namespace editor::Inspector::Material
         return menu_option;
     }
 
-    func show_shader(entity: je::entity, shader: je::graphic::shader, index: int)=> shader_option
+    func show_shader(entity: je::entity, shader: je::graphic::shader, index: int, expand: bool)=> shader_option
     {
         using je::gui;
 
         let attribute = 
-                TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+              TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
             + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
             + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
 
         let textures = entity->editor::graphic::get_textures();
+
+        if (expand)
+            SetNextItemOpen(true);
 
         let show_uniforms = TreeNodeEx(utils::ShortString(shader->path(), 25) + "##" + index:string, attribute);
         let mut shader_operation = show_shader_menu();
@@ -122,6 +125,16 @@ namespace editor::Inspector::Material
     {
         using je::gui;
 
+        static let mut _last_display_entity = option::none: option<je::entity>;
+
+        let _display_entity_changed = 
+            _last_display_entity
+                ->map(\e: je::entity = cur_entity->map(\ce: je::entity = e != ce;);)
+                ->reduce()
+                ->valor(true);
+
+        _last_display_entity = cur_entity; // 
+
         BeginChild("material_editor", 0., max_height);
             Text("材质编辑器");
             Separator();
@@ -139,7 +152,7 @@ namespace editor::Inspector::Material
                             let mut index = 0, mut shaders_has_updated = false;
                             for (let shader : shaders->dup())
                             {
-                                match (show_shader(current_entity, shader, index))
+                                match (show_shader(current_entity, shader, index, _display_entity_changed))
                                 {
                                     AddShader(shad)?
                                     {
@@ -166,6 +179,9 @@ namespace editor::Inspector::Material
                                         launch(generic::MsgBox, ("加载着色器失败", F"无法加载着色器: {shader_path}"));
                                     else
                                     {
+                                        // 强行让编辑器展开所有shader
+                                        _last_display_entity = option::none;
+
                                         shaders->add(drag_append_new_shader->val());
                                         shaders_has_updated = true;
                                     }

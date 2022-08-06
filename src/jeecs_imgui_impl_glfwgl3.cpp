@@ -325,6 +325,8 @@ R"(
     extern("libjoyecs", "je_gui_end_accept_drop_source")
     func EndDragDropTarget()=> bool;
 
+    extern("libjoyecs", "je_gui_set_next_item_open")
+    func SetNextItemOpen(open: bool)=> void;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -395,7 +397,7 @@ WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args, size_t ar
 {
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(wo_string(args + 0)))
     {
-        wo_set_string(args+1, (const char*)payload->Data);
+        wo_set_string(args + 1, (const char*)payload->Data);
         return wo_ret_bool(vm, true);
     }
     return wo_ret_bool(vm, false);
@@ -403,6 +405,11 @@ WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args, size_t ar
 WO_API wo_api je_gui_end_accept_drop_source(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::EndDragDropTarget();
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_set_next_item_open(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::SetNextItemOpen(wo_bool(args + 0));
     return wo_ret_void(vm);
 }
 
@@ -534,8 +541,8 @@ WO_API wo_api je_gui_treepop(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
 {
-    int selected_item = argc >= 3 ? (int)wo_int(args + 2): -1;
-    int max_height_item = argc == 4 ? (int)wo_int(args + 3): -1;
+    int selected_item = argc >= 3 ? (int)wo_int(args + 2) : -1;
+    int max_height_item = argc == 4 ? (int)wo_int(args + 3) : -1;
 
     std::vector<const char*> items(wo_lengthof(args + 1));
     for (size_t i = 0; i < items.size(); i++)

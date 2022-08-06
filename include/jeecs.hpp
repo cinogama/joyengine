@@ -232,6 +232,9 @@ JE_API void je_mem_free(void* ptr);
 JE_API void je_init(int argc, char** argv);
 JE_API void je_finish(void);
 
+JE_API void je_log_strat(void);
+JE_API void je_log_shutdown(void);
+
 #define JE_LOG_NORMAL 0
 #define JE_LOG_INFO 1
 #define JE_LOG_WARNING 2
@@ -1215,6 +1218,11 @@ namespace jeecs
             NodeT* peek() const noexcept
             {
                 return last_node;
+            }
+
+            bool empty() const noexcept
+            {
+                return last_node == nullptr;
             }
         };
 

@@ -43,6 +43,16 @@ namespace editor::Inspector::Component
     {
         using je::gui;
 
+        static let mut _last_display_entity = option::none: option<je::entity>;
+
+        let _display_entity_changed = 
+            _last_display_entity
+                ->map(\e: je::entity = cur_entity->map(\ce: je::entity = e != ce;);)
+                ->reduce()
+                ->valor(true);
+
+        _last_display_entity = cur_entity; // 
+
         BeginChild("component_editor", 0., max_height);
             match (cur_entity)
             {
@@ -77,15 +87,17 @@ namespace editor::Inspector::Component
 
                         current_types.m_component_type = option::value(component_type);
                     }
-                    func waklthrow_and_display_components(current_node: component_chain, entity: je::entity)=> void
+                    func waklthrow_and_display_components(current_node: component_chain, entity: je::entity, expand: bool)=> void
                     {
                         for (let name, chain: current_node.m_map)
                         {
+                            if (expand)
+                                SetNextItemOpen(true);
                             let show_child_nodes = TreeNode(name);
                             show_component_menu(entity, chain.m_component_type);
                             if (show_child_nodes)
                             {
-                                waklthrow_and_display_components(chain, entity);
+                                waklthrow_and_display_components(chain, entity, expand);
                                 TreePop();
                             }
                         }
@@ -117,7 +129,7 @@ namespace editor::Inspector::Component
                             ; // 啥也不干
                         }
                     }
-                    waklthrow_and_display_components(current_component_types, current_entity);
+                    waklthrow_and_display_components(current_component_types, current_entity, _display_entity_changed);
                 }
                 none?
                     Text("<没有选中可编辑的实体>");
