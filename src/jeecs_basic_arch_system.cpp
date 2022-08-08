@@ -43,8 +43,9 @@ namespace jeecs
 
             bool need_update(const game_world& aim_world) const noexcept
             {
-                // TODO: Impl jeecs_archmgr_updated.
-                if (m_world != aim_world /*|| jeecs_archmgr_updated(aim_world)*/)
+                assert(aim_world.handle() != nullptr);
+
+                if (m_world != aim_world || je_ecs_archmgr_updated(aim_world.handle()))
                     return true;
                 return false;
             }
@@ -514,177 +515,6 @@ namespace jeecs_impl
         }
     };
 
-    struct ecs_system_function
-    {
-        JECS_DISABLE_MOVE_AND_COPY(ecs_system_function);
-
-        enum sequence
-        {
-            CAN_HAPPEND_SAME_TIME,
-            WRITE_CONFLICT,
-            ONLY_HAPPEND_BEFORE,
-            ONLY_HAPPEND_AFTER,
-            UNABLE_DETERMINE,
-        };
-        using dependences_t = std::unordered_multimap<jeecs::typing::typeid_t, jeecs::game_system_function::dependence_type>;
-
-    public:
-        dependences_t m_dependence_list;
-        std::vector<arch_type*> m_arch_types;
-        jeecs::game_system_function* m_game_system_function;
-
-    public:
-        ecs_system_function(jeecs::game_system_function* gsf)
-            :m_game_system_function(gsf)
-        {
-            for (size_t dindex = 0; dindex < gsf->m_dependence_count; dindex++)
-                m_dependence_list.insert(std::make_pair(gsf->m_dependence[dindex].m_tid, gsf->m_dependence[dindex].m_depend));
-        }
-        ~ecs_system_function()
-        {
-            if (m_game_system_function->m_rw_component_count)
-            {
-                if (m_game_system_function->m_archs
-                    && m_game_system_function->m_arch_count)
-                {
-                    // Free old arch infos
-                    for (size_t aindex = 0; aindex < m_game_system_function->m_arch_count; aindex++)
-                    {
-                        auto& ainfo = m_game_system_function->m_archs[aindex];
-                        je_mem_free(ainfo.m_component_sizes);
-                        je_mem_free(ainfo.m_component_mem_begin_offsets);
-                    }
-
-                    je_mem_free(m_game_system_function->m_archs);
-
-                    m_game_system_function->m_archs = nullptr;
-                    m_game_system_function->m_arch_count = 0;
-                }
-            }
-            m_game_system_function->m_attached_flag.clear();
-        }
-    public:
-
-        sequence check_dependence(const dependences_t& depend) const noexcept
-        {
-            bool write_conflict = false;
-            sequence result = sequence::CAN_HAPPEND_SAME_TIME;
-
-            auto decided_depend_seq = [&](sequence seq) {
-                if (seq == sequence::UNABLE_DETERMINE || result == sequence::UNABLE_DETERMINE)
-                    return sequence::UNABLE_DETERMINE;
-                if (result == sequence::CAN_HAPPEND_SAME_TIME)
-                    return seq;
-                if (result == sequence::ONLY_HAPPEND_BEFORE)
-                {
-                    if (seq == sequence::ONLY_HAPPEND_AFTER)
-                        return sequence::UNABLE_DETERMINE;
-                    return sequence::ONLY_HAPPEND_BEFORE;
-                }
-                if (result == sequence::ONLY_HAPPEND_AFTER)
-                {
-                    if (seq == sequence::ONLY_HAPPEND_BEFORE)
-                        return sequence::UNABLE_DETERMINE;
-                    return sequence::ONLY_HAPPEND_AFTER;
-                }
-                return sequence::UNABLE_DETERMINE;
-            };
-
-            bool has_excepted_component = false;
-            bool cannot_happend_in_same_time = false;
-
-            for (auto [depend_tid, depend_type] : m_dependence_list)
-            {
-                bool is_normal_component_id = !(jeecs::typing::NOT_TYPEID_FLAG & depend_tid);
-
-                // Check dependence
-                if (has_excepted_component && is_normal_component_id)
-                    continue;
-
-                auto fnd = depend.find(depend_tid);
-
-                if (fnd == depend.end())
-                {
-                    // NO REQUIRE, JUST GOON..
-                }
-                else
-                {
-                    auto aim_require_type = fnd->second;
-
-                    if ((depend_type == jeecs::game_system_function::dependence_type::EXCEPT
-                        || aim_require_type == jeecs::game_system_function::dependence_type::EXCEPT)
-                        && depend_type != aim_require_type)
-                    {
-                        // These two set will not meet at same time, just skip them
-                        if (!cannot_happend_in_same_time)
-                            has_excepted_component = true;
-                    }
-                    else if (aim_require_type == jeecs::game_system_function::dependence_type::EXCEPT)
-                    {
-                        result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                    }
-                    else if (aim_require_type == jeecs::game_system_function::dependence_type::WRITE)
-                    {
-                        if (depend_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
-                            result = decided_depend_seq(sequence::ONLY_HAPPEND_BEFORE);
-                        else if (depend_type == jeecs::game_system_function::dependence_type::WRITE)
-                        {
-                            write_conflict = true;
-                            result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                        }
-                        else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
-                        {
-                            if (!is_normal_component_id) { has_excepted_component = false; cannot_happend_in_same_time = true; }
-                            result = decided_depend_seq(sequence::ONLY_HAPPEND_AFTER);
-                        }
-                        else
-                            result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                    }
-                    else if (aim_require_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
-                    {
-                        if (depend_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
-                            result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                        else if (depend_type == jeecs::game_system_function::dependence_type::WRITE)
-                        {
-                            if (!is_normal_component_id) { has_excepted_component = false; cannot_happend_in_same_time = true; }
-                            result = decided_depend_seq(sequence::ONLY_HAPPEND_AFTER);
-                        }
-                        else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
-                            result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                        else
-                            result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                    }
-                    else if (aim_require_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
-                    {
-                        if (depend_type == jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME)
-                            result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                        else if (depend_type == jeecs::game_system_function::dependence_type::WRITE)
-                        {
-                            if (!is_normal_component_id) { has_excepted_component = false; cannot_happend_in_same_time = true; }
-                            result = decided_depend_seq(sequence::ONLY_HAPPEND_BEFORE);
-                        }
-                        else if (depend_type == jeecs::game_system_function::dependence_type::READ_AFTER_WRITE)
-                            result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                        else
-                            result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                    }
-                    else
-                        result = decided_depend_seq(sequence::CAN_HAPPEND_SAME_TIME);
-                }
-            }
-
-            if (has_excepted_component)
-                return sequence::CAN_HAPPEND_SAME_TIME;
-
-            if (write_conflict && result == sequence::CAN_HAPPEND_SAME_TIME)
-                return sequence::WRITE_CONFLICT;
-
-            return result;
-        }
-
-
-    };
-
     class arch_manager
     {
         JECS_DISABLE_MOVE_AND_COPY(arch_manager);
@@ -739,130 +569,130 @@ namespace jeecs_impl
             return !_m_arch_modified.test_and_set();
         }
 
-        inline void _update_system_func_arch(ecs_system_function* modify_sys_func) const
+        inline void _update_selector_arch(jeecs::selector::dependence* modify_sys_func) const
         {
             // TODO: OPTMIZE..
+            assert(false); // TODO;
+            //types_set need_set, any_set, except_set, mayhave_set;
+            //for (auto& depend : modify_sys_func->m_dependence_list)
+            //{
+            //    if (is_system_component_depends(depend.first))
+            //    {
+            //        // Do nothing.
+            //    }
+            //    else
+            //    {
+            //        switch (depend.second)
+            //        {
+            //        case jeecs::game_system_function::dependence_type::ANY:
+            //            any_set.insert(depend.first); break;
+            //        case jeecs::game_system_function::dependence_type::EXCEPT:
+            //            except_set.insert(depend.first); break;
+            //        case jeecs::game_system_function::dependence_type::CONTAIN:
+            //        case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
+            //        case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
+            //        case jeecs::game_system_function::dependence_type::WRITE:
+            //            if (mayhave_set.find(depend.first) == mayhave_set.end())
+            //                need_set.insert(depend.first); break;
+            //        case jeecs::game_system_function::dependence_type::MAY_NOT_HAVE:
+            //            // Remove 'MAYHAVE' component need-requirement from need-set; 
+            //            mayhave_set.insert(depend.first);
+            //            need_set.erase(depend.first);
+            //            break;
+            //        default:
+            //            assert(false); //  Unknown type
+            //        }
+            //    }
+            //}
 
-            types_set need_set, any_set, except_set, mayhave_set;
-            for (auto& depend : modify_sys_func->m_dependence_list)
-            {
-                if (is_system_component_depends(depend.first))
-                {
-                    // Do nothing.
-                }
-                else
-                {
-                    switch (depend.second)
-                    {
-                    case jeecs::game_system_function::dependence_type::ANY:
-                        any_set.insert(depend.first); break;
-                    case jeecs::game_system_function::dependence_type::EXCEPT:
-                        except_set.insert(depend.first); break;
-                    case jeecs::game_system_function::dependence_type::CONTAIN:
-                    case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
-                    case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
-                    case jeecs::game_system_function::dependence_type::WRITE:
-                        if (mayhave_set.find(depend.first) == mayhave_set.end())
-                            need_set.insert(depend.first); break;
-                    case jeecs::game_system_function::dependence_type::MAY_NOT_HAVE:
-                        // Remove 'MAYHAVE' component need-requirement from need-set; 
-                        mayhave_set.insert(depend.first);
-                        need_set.erase(depend.first);
-                        break;
-                    default:
-                        assert(false); //  Unknown type
-                    }
-                }
-            }
+            //static auto contain = [](const types_set& a, const types_set& b)
+            //{
+            //    for (auto type_id : b)
+            //        if (a.find(type_id) == a.end())
+            //            return false;
+            //    return true;
+            //};
+            //static auto contain_any = [](const types_set& a, const types_set& b)
+            //{
+            //    for (auto type_id : b)
+            //        if (a.find(type_id) != a.end())
+            //            return true;
+            //    return b.empty();
+            //};
+            //static auto except = [](const types_set& a, const types_set& b)
+            //{
+            //    for (auto type_id : b)
+            //        if (a.find(type_id) != a.end())
+            //            return false;
+            //    return true;
+            //};
 
-            static auto contain = [](const types_set& a, const types_set& b)
-            {
-                for (auto type_id : b)
-                    if (a.find(type_id) == a.end())
-                        return false;
-                return true;
-            };
-            static auto contain_any = [](const types_set& a, const types_set& b)
-            {
-                for (auto type_id : b)
-                    if (a.find(type_id) != a.end())
-                        return true;
-                return b.empty();
-            };
-            static auto except = [](const types_set& a, const types_set& b)
-            {
-                for (auto type_id : b)
-                    if (a.find(type_id) != a.end())
-                        return false;
-                return true;
-            };
+            //// OK Get fetched arch_types;
+            //modify_sys_func->m_arch_types.clear();
 
-            // OK Get fetched arch_types;
-            modify_sys_func->m_arch_types.clear();
+            //do
+            //{
+            //    std::shared_lock sg1(_m_arch_types_mapping_mx);
+            //    for (auto& [typeset, arch] : _m_arch_types_mapping)
+            //    {
+            //        if (contain(typeset, need_set)
+            //            && contain_any(typeset, any_set)
+            //            && except(typeset, except_set))
+            //        {
+            //            modify_sys_func->m_arch_types.push_back(arch);
+            //        }
+            //    }
+            //} while (0);
 
-            do
-            {
-                std::shared_lock sg1(_m_arch_types_mapping_mx);
-                for (auto& [typeset, arch] : _m_arch_types_mapping)
-                {
-                    if (contain(typeset, need_set)
-                        && contain_any(typeset, any_set)
-                        && except(typeset, except_set))
-                    {
-                        modify_sys_func->m_arch_types.push_back(arch);
-                    }
-                }
-            } while (0);
+            //// Update game_system..
+            //if (modify_sys_func->m_game_system_function->m_rw_component_count)
+            //{
+            //    if (modify_sys_func->m_game_system_function->m_archs
+            //        && modify_sys_func->m_game_system_function->m_arch_count)
+            //    {
+            //        // Free old arch infos
+            //        for (size_t aindex = 0; aindex < modify_sys_func->m_game_system_function->m_arch_count; aindex++)
+            //        {
+            //            auto& ainfo = modify_sys_func->m_game_system_function->m_archs[aindex];
+            //            je_mem_free(ainfo.m_component_sizes);
+            //            je_mem_free(ainfo.m_component_mem_begin_offsets);
+            //        }
 
-            // Update game_system..
-            if (modify_sys_func->m_game_system_function->m_rw_component_count)
-            {
-                if (modify_sys_func->m_game_system_function->m_archs
-                    && modify_sys_func->m_game_system_function->m_arch_count)
-                {
-                    // Free old arch infos
-                    for (size_t aindex = 0; aindex < modify_sys_func->m_game_system_function->m_arch_count; aindex++)
-                    {
-                        auto& ainfo = modify_sys_func->m_game_system_function->m_archs[aindex];
-                        je_mem_free(ainfo.m_component_sizes);
-                        je_mem_free(ainfo.m_component_mem_begin_offsets);
-                    }
+            //        je_mem_free(modify_sys_func->m_game_system_function->m_archs);
+            //    }
 
-                    je_mem_free(modify_sys_func->m_game_system_function->m_archs);
-                }
+            //    modify_sys_func->m_game_system_function->m_arch_count = modify_sys_func->m_arch_types.size();
+            //    if (modify_sys_func->m_game_system_function->m_arch_count)
+            //    {
+            //        modify_sys_func->m_game_system_function->m_archs = (jeecs::game_system_function::arch_index_info*)je_mem_alloc(
+            //            modify_sys_func->m_game_system_function->m_arch_count * sizeof(jeecs::game_system_function::arch_index_info));
 
-                modify_sys_func->m_game_system_function->m_arch_count = modify_sys_func->m_arch_types.size();
-                if (modify_sys_func->m_game_system_function->m_arch_count)
-                {
-                    modify_sys_func->m_game_system_function->m_archs = (jeecs::game_system_function::arch_index_info*)je_mem_alloc(
-                        modify_sys_func->m_game_system_function->m_arch_count * sizeof(jeecs::game_system_function::arch_index_info));
+            //        for (size_t aindex = 0; aindex < modify_sys_func->m_game_system_function->m_arch_count; aindex++)
+            //        {
+            //            auto& ainfo = modify_sys_func->m_game_system_function->m_archs[aindex];
+            //            ainfo.m_archtype = modify_sys_func->m_arch_types[aindex];
+            //            ainfo.m_entity_count_per_arch_chunk = modify_sys_func->m_arch_types[aindex]->get_entity_count_per_chunk();
 
-                    for (size_t aindex = 0; aindex < modify_sys_func->m_game_system_function->m_arch_count; aindex++)
-                    {
-                        auto& ainfo = modify_sys_func->m_game_system_function->m_archs[aindex];
-                        ainfo.m_archtype = modify_sys_func->m_arch_types[aindex];
-                        ainfo.m_entity_count_per_arch_chunk = modify_sys_func->m_arch_types[aindex]->get_entity_count_per_chunk();
+            //            ainfo.m_component_sizes = (size_t*)je_mem_alloc(modify_sys_func->m_game_system_function->m_rw_component_count * sizeof(size_t));
+            //            ainfo.m_component_mem_begin_offsets = (size_t*)je_mem_alloc(modify_sys_func->m_game_system_function->m_rw_component_count * sizeof(size_t));
+            //            for (size_t cindex = 0; cindex < modify_sys_func->m_game_system_function->m_rw_component_count; cindex++)
+            //            {
+            //                auto* arch_typeinfo = modify_sys_func->m_arch_types[aindex]->get_arch_type_info_by_type_id(
+            //                    modify_sys_func->m_game_system_function->m_dependence[cindex].m_tid
+            //                );
+            //                if (arch_typeinfo)
+            //                {
+            //                    ainfo.m_component_sizes[cindex] = arch_typeinfo->m_typeinfo->m_chunk_size;
+            //                    ainfo.m_component_mem_begin_offsets[cindex] = arch_typeinfo->m_begin_offset_in_chunk;
+            //                }
+            //                else
+            //                    ainfo.m_component_sizes[cindex] = ainfo.m_component_mem_begin_offsets[cindex] = 0;
+            //                // end of one component datas
+            //            }
+            //        }
+            //    }
 
-                        ainfo.m_component_sizes = (size_t*)je_mem_alloc(modify_sys_func->m_game_system_function->m_rw_component_count * sizeof(size_t));
-                        ainfo.m_component_mem_begin_offsets = (size_t*)je_mem_alloc(modify_sys_func->m_game_system_function->m_rw_component_count * sizeof(size_t));
-                        for (size_t cindex = 0; cindex < modify_sys_func->m_game_system_function->m_rw_component_count; cindex++)
-                        {
-                            auto* arch_typeinfo = modify_sys_func->m_arch_types[aindex]->get_arch_type_info_by_type_id(
-                                modify_sys_func->m_game_system_function->m_dependence[cindex].m_tid
-                            );
-                            if (arch_typeinfo)
-                            {
-                                ainfo.m_component_sizes[cindex] = arch_typeinfo->m_typeinfo->m_chunk_size;
-                                ainfo.m_component_mem_begin_offsets[cindex] = arch_typeinfo->m_begin_offset_in_chunk;
-                            }
-                            else
-                                ainfo.m_component_sizes[cindex] = ainfo.m_component_mem_begin_offsets[cindex] = 0;
-                            // end of one component datas
-                        }
-                    }
-                }
-
-            }
+            //}
         }
 
         inline void close_all_entity(ecs_world* by_world)
@@ -926,36 +756,13 @@ namespace jeecs_impl
         {
             struct system_list_node
             {
-                jeecs::game_system_function* m_system_function;
-                ecs_system_function* m_ecs_system_function;
                 system_list_node* last;
 
-                system_list_node(
-                    jeecs::game_system_function* system_function,
-                    ecs_system_function* ecs_system_function)
-                    : m_system_function(system_function)
-                    , m_ecs_system_function(ecs_system_function)
-                {
-                    // Do nothing else
-                }
-            };
-
-            struct system_instance_list_node
-            {
-                const jeecs::typing::type_info* m_typeinfo;
-                jeecs::game_system* m_system_instance;
-                system_instance_list_node* last;
-                system_instance_list_node(jeecs::game_system* instance, const jeecs::typing::type_info* typeinfo)
-                    : m_system_instance(instance)
-                    , m_typeinfo(typeinfo)
-                {
-
-                }
+                static_assert(false, "todo");
             };
 
             jeecs::basic::atomic_list<system_list_node> m_append_system;
             jeecs::basic::atomic_list<system_list_node> m_removed_system;
-            jeecs::basic::atomic_list<system_instance_list_node> m_destroy_sys_instance;
             bool                                        m_destroy_world;
         };
 
@@ -1048,41 +855,32 @@ namespace jeecs_impl
             );
         }
 
-        void append_system(ecs_world* w, jeecs::game_system_function* game_system_function)
-        {
-            DEBUG_ARCH_LOG("World: %p append system:%p operation has been committed to the command buffer.",
-                w, game_system_function);
+        //void append_system(ecs_world* w, jeecs::game_system_function* game_system_function)
+        //{
+        //    DEBUG_ARCH_LOG("World: %p append system:%p operation has been committed to the command buffer.",
+        //        w, game_system_function);
 
-            std::shared_lock sl(_m_command_executer_guard_mx);
+        //    std::shared_lock sl(_m_command_executer_guard_mx);
 
-            auto* func_instance = jeecs::basic::create_new<jeecs_impl::ecs_system_function>(game_system_function);
+        //    auto* func_instance = jeecs::basic::create_new<jeecs_impl::ecs_system_function>(game_system_function);
 
-            _find_or_create_buffer_for(w).m_append_system.add_one(
-                jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function, func_instance)
-            );
-        }
+        //    _find_or_create_buffer_for(w).m_append_system.add_one(
+        //        jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function, func_instance)
+        //    );
+        //}
 
-        void remove_system(ecs_world* w, jeecs::game_system_function* game_system_function)
-        {
-            DEBUG_ARCH_LOG("World: %p remove system:%p operation has been committed to the command buffer.",
-                w, game_system_function);
+        //void remove_system(ecs_world* w, jeecs::game_system_function* game_system_function)
+        //{
+        //    DEBUG_ARCH_LOG("World: %p remove system:%p operation has been committed to the command buffer.",
+        //        w, game_system_function);
 
-            std::shared_lock sl(_m_command_executer_guard_mx);
+        //    std::shared_lock sl(_m_command_executer_guard_mx);
 
-            _find_or_create_buffer_for(w).m_removed_system.add_one(
-                jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function,
-                    nullptr)
-            );
-        }
-
-        void destroy_system_instance(ecs_world* w, jeecs::game_system* game_system_instance, const jeecs::typing::type_info* typeinfo)
-        {
-            DEBUG_ARCH_LOG("World: %p destroy system instance:%p operation has been committed to the command buffer.",
-                w, game_system_instance);
-
-            _find_or_create_buffer_for(w).m_destroy_sys_instance.add_one(
-                jeecs::basic::create_new<_world_command_buffer::system_instance_list_node>(game_system_instance, typeinfo));
-        }
+        //    _find_or_create_buffer_for(w).m_removed_system.add_one(
+        //        jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function,
+        //            nullptr)
+        //    );
+        //}
 
         void close_world(ecs_world* w)
         {
@@ -1106,14 +904,11 @@ namespace jeecs_impl
 
         command_buffer _m_command_buffer;
         arch_manager _m_arch_manager;
-        std::vector<ecs_system_function*> _m_registed_system;
-        std::vector<ecs_system_function*> _m_non_registed_system;
-        std::list<std::list<ecs_system_function*>> _m_execute_seq;
         std::atomic_flag _m_system_modified = {};
-
         std::string _m_name;
 
         std::atomic_bool _m_destroying_flag = false;
+        std::atomic_bool _m_archmgr_updated = false;
 
         inline bool _system_modified()noexcept
         {
@@ -1146,181 +941,12 @@ namespace jeecs_impl
             return _m_name = new_name;
         }
 
-        void build_dependence_graph()
-        {
-            std::list<std::list<ecs_system_function*>> output_layer;
-
-            // 1. Create dependence relationship
-            std::unordered_map<ecs_system_function*, std::unordered_set<ecs_system_function*>>
-                depend_map;
-            std::unordered_map<ecs_system_function*, std::unordered_set<ecs_system_function*>>
-                inv_depend_map;
-
-            for (auto cur_sys = _m_registed_system.begin();
-                cur_sys != _m_registed_system.end();
-                ++cur_sys)
-            {
-                for (auto cmp_sys = cur_sys + 1;
-                    cmp_sys != _m_registed_system.end();
-                    ++cmp_sys)
-                {
-                    auto dep = (*cur_sys)->check_dependence((*cmp_sys)->m_dependence_list);
-                    if (dep == ecs_system_function::sequence::ONLY_HAPPEND_AFTER)
-                    {
-                        // cur_sys depends on cmp_sys
-                        depend_map[*cmp_sys].insert(*cur_sys);
-                        inv_depend_map[*cur_sys].insert(*cmp_sys);
-                    }
-                    else if (dep == ecs_system_function::sequence::ONLY_HAPPEND_BEFORE)
-                    {
-                        //  cmp_sys depends on cur_sys
-                        depend_map[*cur_sys].insert(*cmp_sys);
-                        inv_depend_map[*cmp_sys].insert(*cur_sys);
-                    }
-                    else if (dep == ecs_system_function::sequence::UNABLE_DETERMINE)
-                        // error, give warning
-                        jeecs::debug::log_error("Sequence conflict between system(%p) and system(%p).",
-                            cmp_sys, (*cur_sys));
-                }
-            }
-
-            // ok we got a depend map, calc depend chain
-            std::vector<ecs_system_function*> current_syss = _m_registed_system;
-            size_t not_ready_system_count = current_syss.size();
-
-            while (not_ready_system_count)
-            {
-                output_layer.push_back({});
-                auto& current_layer = output_layer.back();
-
-                for (auto& cur_sys : current_syss)
-                {
-                    bool can_execute_now = true;
-                    if (cur_sys)
-                    {
-                        for (auto dep_sys : inv_depend_map[cur_sys])
-                        {
-                            if (std::find(current_syss.begin(), current_syss.end(), dep_sys) != current_syss.end())
-                            {
-                                // Depend sys not ready, break
-                                can_execute_now = false;
-                                break;
-                            }
-                        }
-                        if (can_execute_now)
-                            current_layer.push_back(cur_sys);
-                    }
-                }
-
-                if (current_layer.empty())
-                {
-                    // Loop depends, give error
-                    jeecs::debug::log_error("World: %p cannot generate system dependences, maybe interdependent?");
-                    // Insert all system to current layer
-
-                    for (auto& cur_sys : current_syss)
-                        if (cur_sys)
-                            current_layer.push_back(cur_sys);
-                }
-
-                assert(current_layer.size() <= not_ready_system_count);
-                not_ready_system_count -= current_layer.size();
-                for (auto ready_systems : current_layer)
-                {
-                    auto fnd = std::find(current_syss.begin(), current_syss.end(), ready_systems);
-                    assert(fnd != current_syss.end());
-                    *fnd = nullptr;
-                }
-            }
-
-            _m_execute_seq = std::move(output_layer);
-        }
-
-        void display_execute_seq()
-        {
-            jeecs::debug::log_info("This world has %zu system(s) to work.", _m_registed_system.size());
-
-            size_t count = 1;
-            for (auto& systems : _m_execute_seq)
-            {
-                jeecs::debug::log_info("seq %zu", count++);
-                for (auto* sys : systems)
-                {
-                    jeecs::debug::log_info("    system %p", sys);
-                    for (auto& [dep_id, dep_type] : sys->m_dependence_list)
-                    {
-                        const char* wtype = "";
-                        switch (dep_type)
-                        {
-                        case jeecs::game_system_function::dependence_type::EXCEPT:
-                            wtype = "EXCEPT"; break;
-                        case jeecs::game_system_function::dependence_type::ANY:
-                            wtype = "ANY"; break;
-                        case jeecs::game_system_function::dependence_type::CONTAIN:
-                            wtype = "CONTAIN"; break;
-                        case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
-                            wtype = "READ(LF)"; break;
-                        case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
-                            wtype = "READ(AF)"; break;
-                        case jeecs::game_system_function::dependence_type::WRITE:
-                            wtype = "WRITE"; break;
-                        case jeecs::game_system_function::dependence_type::MAY_NOT_HAVE:
-                            wtype = "MAY_NOT_HAVE"; break;
-                        default:
-                            assert(false);
-                        }
-
-                        if (is_system_component_depends(dep_id))
-                            jeecs::debug::log_info("        %s SYSTEM_COMPONENT: %p", wtype, dep_id);
-                        else
-                            jeecs::debug::log_info("        %s %s", wtype, jeecs::typing::type_info::of(dep_id)->m_typename);
-                    }
-                }
-            }
-
-        }
-
-        // TEST
-        void register_system(ecs_system_function* sys)
-        {
-            _m_system_modified.clear();
-            _m_registed_system.push_back(sys);
-            sys->m_game_system_function->m_ecs_world_addr = this;
-        }
-
-        void register_system_next_frame(ecs_system_function* sys)
-        {
-            _m_system_modified.clear();
-            _m_non_registed_system.push_back(sys);
-        }
-
-        void unregister_system(jeecs::game_system_function* sys)
-        {
-            _m_system_modified.clear();
-
-            for (auto i = _m_registed_system.begin(); i != _m_registed_system.end(); i++)
-            {
-                if ((*i)->m_game_system_function == sys)
-                {
-                    jeecs::basic::destroy_free(*i);
-                    _m_registed_system.erase(i);
-                    break;
-                }
-            }
-
-            // Try remove the system from non_registed_system set;
-            for (auto i = _m_non_registed_system.begin(); i != _m_non_registed_system.end(); i++)
-            {
-                if ((*i)->m_game_system_function == sys)
-                {
-                    jeecs::basic::destroy_free(*i);
-                    _m_non_registed_system.erase(i);
-                    break;
-                }
-            }
-        }
-
     public:
+        bool archtype_mgr_updated()const noexcept
+        {
+            return _m_archmgr_updated;
+        }
+
         bool update()
         {
             if (!is_destroying())
@@ -1329,50 +955,13 @@ namespace jeecs_impl
                 bool system_changed_flag = false;
                 if (_system_modified())
                 {
-                    // Try add non_registed system to world
-                    std::vector<ecs_system_function*> non_registed_systems;
-                    non_registed_systems.swap(_m_non_registed_system);
-                    for (auto* non_registed_sys : non_registed_systems)
-                    {
-                        if (non_registed_sys->m_game_system_function->m_attached_flag.test_and_set())
-                            // Still not ready!
-                            this->register_system_next_frame(non_registed_sys);
-                        else
-                            this->register_system(non_registed_sys);
-                    }
-
-                    build_dependence_graph();
-                    system_changed_flag = true;
-
-                    display_execute_seq();
+                    assert(false); // TODO
                 }
-                // If arch changed, update system's data from..
-                if (_m_arch_manager._arch_modified() || system_changed_flag)
-                {
-                    for (auto* sys_func : _m_registed_system)
-                        _m_arch_manager._update_system_func_arch(sys_func);
-                }
+                
+                _m_archmgr_updated = _m_arch_manager._arch_modified();
+                // Ok, execute SYSTEMS
 
-                // Ok, execute chain:
-
-                //  auto current = je_clock_time();
-
-                for (auto& seq : _m_execute_seq)
-                {
-                    std::for_each(
-#ifdef __cpp_lib_execution
-                        std::execution::par_unseq,
-#endif
-                        seq.begin(), seq.end(),
-                        [](ecs_system_function* func)
-                        {
-                            func->m_game_system_function->update();
-                        }
-                    );
-                }
-
-                //auto endwork = je_clock_time();
-                //jeecs::debug::log_warn("A round of system scheduler: %f", endwork - current);
+                assert(false); // TODO
             }
             else
             {
@@ -1380,8 +969,7 @@ namespace jeecs_impl
                 _m_arch_manager.close_all_entity(this);
 
                 // Find all system to close.
-                for (auto* sys : _m_registed_system)
-                    _m_command_buffer.remove_system(this, sys->m_game_system_function);
+                assert(false); // TODO
 
                 // After this round, we should do a round of command buffer update, then close this.     
                 _m_command_buffer.update();
@@ -1639,30 +1227,8 @@ namespace jeecs_impl
                 {
                     auto current_append_system = append_system;
                     append_system = append_system->last;
-                    if (world->is_destroying())
-                    {
-                        DEBUG_ARCH_LOG_WARN("System: %p, is trying add to world: %p, but this world is destroying.",
-                            current_append_system->m_system_function, world);
-                        jeecs::basic::destroy_free(current_append_system->m_ecs_system_function);
-                    }
-                    else
-                    {
-                        if (current_append_system->m_ecs_system_function->m_game_system_function->m_attached_flag.test_and_set())
-                        {
-                            // Current system has been attached to another world, retry in next frame
-                            DEBUG_ARCH_LOG_WARN("System: %p, has been attached by another world, try add it next frame.",
-                                current_append_system->m_system_function);
 
-                            world->register_system_next_frame(current_append_system->m_ecs_system_function);
-                        }
-                        else
-                        {
-                            DEBUG_ARCH_LOG("System: %p, added to world: %p.",
-                                current_append_system->m_system_function, world);
-
-                            world->register_system(current_append_system->m_ecs_system_function);
-                        }
-                    }
+                    assert(false); // TODO
 
                     jeecs::basic::destroy_free(current_append_system);
                 }
@@ -1673,36 +1239,10 @@ namespace jeecs_impl
                     auto current_removed_system = removed_system;
                     removed_system = removed_system->last;
 
-                    DEBUG_ARCH_LOG("System: %p, removed from world: %p.",
-                        current_removed_system->m_system_function, world);
-                    world->unregister_system(current_removed_system->m_system_function);
+                    assert(false); // TODO
 
                     jeecs::basic::destroy_free(current_removed_system);
                 }
-
-                auto* destroy_sys_instance = _buf_in_world.second.m_destroy_sys_instance.pick_all();
-                while (destroy_sys_instance)
-                {
-                    auto current_destroy_sys_instance = destroy_sys_instance;
-                    destroy_sys_instance = destroy_sys_instance->last;
-
-                    auto* sysfuncs = current_destroy_sys_instance->m_system_instance->get_registed_function_chain();
-                    while (sysfuncs)
-                    {
-                        DEBUG_ARCH_LOG("System: %p, removed from world: %p.",
-                            sysfuncs, world);
-                        world->unregister_system(sysfuncs);
-                        sysfuncs = sysfuncs->last;
-                    }
-
-                    DEBUG_ARCH_LOG("System instance: %p, removed from world: %p.",
-                        current_destroy_sys_instance->m_system_instance, world);
-                    current_destroy_sys_instance->m_typeinfo->destruct(current_destroy_sys_instance->m_system_instance);
-                    je_mem_free(current_destroy_sys_instance->m_system_instance);
-
-                    jeecs::basic::destroy_free(current_destroy_sys_instance);
-                }
-
             });
 
         // Finish! clear buffer.
@@ -1960,55 +1500,57 @@ namespace jeecs_impl
 
         void attach_shared_system_to_world(ecs_world* world, const jeecs::typing::type_info* system_type)
         {
-            std::lock_guard g1(_m_stored_systems_mx);
-            stored_system_instance* fnd = nullptr;
-            for (auto& shared_system : _m_stored_systems[nullptr])
-            {
-                if (shared_system.m_system_typeinfo == system_type)
-                {
-                    fnd = &shared_system;
-                    break;
-                }
-            }
+            static_assert(false, "todo");
 
-            if (fnd)
-            {
-                if (fnd->m_attached_world)
-                {
-                    if (fnd->m_attached_world == world)
-                    {
-                        // FUCK YOU!
-                        DEBUG_ARCH_LOG_WARN("Shared system has been attached to world: %p, skip.", world);
-                        return;
-                    }
+            //std::lock_guard g1(_m_stored_systems_mx);
+            //stored_system_instance* fnd = nullptr;
+            //for (auto& shared_system : _m_stored_systems[nullptr])
+            //{
+            //    if (shared_system.m_system_typeinfo == system_type)
+            //    {
+            //        fnd = &shared_system;
+            //        break;
+            //    }
+            //}
 
-                    // Disattach from old world
-                    auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
+            //if (fnd)
+            //{
+            //    if (fnd->m_attached_world)
+            //    {
+            //        if (fnd->m_attached_world == world)
+            //        {
+            //            // FUCK YOU!
+            //            DEBUG_ARCH_LOG_WARN("Shared system has been attached to world: %p, skip.", world);
+            //            return;
+            //        }
 
-                    while (func_chain)
-                    {
-                        fnd->m_attached_world->get_command_buffer().remove_system(fnd->m_attached_world, func_chain);
-                        func_chain = func_chain->last;
-                    }
-                }
+            //        // Disattach from old world
+            //        //auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
 
-                // NOTE: Attach system in next universe update.
-                if (world)
-                {
-                    // Attach to new world.
-                    auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
+            //        //while (func_chain)
+            //        //{
+            //        //    fnd->m_attached_world->get_command_buffer().remove_system(fnd->m_attached_world, func_chain);
+            //        //    func_chain = func_chain->last;
+            //        //}
+            //    }
 
-                    while (func_chain)
-                    {
-                        world->get_command_buffer().append_system(world, func_chain);
-                        func_chain = func_chain->last;
-                    }
-                }
-                fnd->m_attached_world = world;
-            }
-            else
-                jeecs::debug::log_error("There is no shared-system: '%s' in universe:%p.",
-                    system_type->m_typename, this);
+            //    // NOTE: Attach system in next universe update.
+            //    if (world)
+            //    {
+            //        // Attach to new world.
+            //        auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
+
+            //        while (func_chain)
+            //        {
+            //            world->get_command_buffer().append_system(world, func_chain);
+            //            func_chain = func_chain->last;
+            //        }
+            //    }
+            //    fnd->m_attached_world = world;
+            //}
+            //else
+            //    jeecs::debug::log_error("There is no shared-system: '%s' in universe:%p.",
+            //        system_type->m_typename, this);
         }
 
         ecs_world* _shared_system_attached_world(const jeecs::typing::type_info* system_type)
@@ -2086,27 +1628,27 @@ void* je_ecs_universe_instance_system(
     return instance;
 }
 
-void je_ecs_universe_remove_system(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type)
-{
-    auto* sys_instance = ((jeecs_impl::ecs_universe*)universe)->unstore_system_for_world(
-        (jeecs_impl::ecs_world*)aim_world, system_type);
+//void je_ecs_universe_remove_system(
+//    void* universe,
+//    void* aim_world,
+//    const jeecs::typing::type_info* system_type)
+//{
+//    auto* sys_instance = ((jeecs_impl::ecs_universe*)universe)->unstore_system_for_world(
+//        (jeecs_impl::ecs_world*)aim_world, system_type);
+//
+//    ((jeecs_impl::ecs_world*)aim_world)->get_command_buffer().destroy_system_instance(
+//        (jeecs_impl::ecs_world*)aim_world, sys_instance, system_type);
+//}
 
-    ((jeecs_impl::ecs_world*)aim_world)->get_command_buffer().destroy_system_instance(
-        (jeecs_impl::ecs_world*)aim_world, sys_instance, system_type);
-}
-
-void je_ecs_universe_attach_shared_system_to(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type
-)
-{
-    ((jeecs_impl::ecs_universe*)universe)->attach_shared_system_to_world(
-        (jeecs_impl::ecs_world*)aim_world, system_type);
-}
+//void je_ecs_universe_attach_shared_system_to(
+//    void* universe,
+//    void* aim_world,
+//    const jeecs::typing::type_info* system_type
+//)
+//{
+//    ((jeecs_impl::ecs_universe*)universe)->attach_shared_system_to_world(
+//        (jeecs_impl::ecs_world*)aim_world, system_type);
+//}
 
 void* je_arch_get_chunk(void* archtype)
 {
@@ -2128,17 +1670,17 @@ void je_ecs_world_destroy(void* world)
     ((jeecs_impl::ecs_world*)world)->get_command_buffer().close_world((jeecs_impl::ecs_world*)world);
 }
 
-void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function)
-{
-    jeecs_impl::ecs_world* ecsworld = (jeecs_impl::ecs_world*)world;
-    ecsworld->get_command_buffer().append_system(ecsworld, game_system_function);
-}
-
-void je_ecs_world_unregister_system_func(void* world, jeecs::game_system_function* game_system_function)
-{
-    jeecs_impl::ecs_world* ecsworld = (jeecs_impl::ecs_world*)world;
-    ecsworld->get_command_buffer().remove_system(ecsworld, game_system_function);
-}
+//void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function)
+//{
+//    jeecs_impl::ecs_world* ecsworld = (jeecs_impl::ecs_world*)world;
+//    ecsworld->get_command_buffer().append_system(ecsworld, game_system_function);
+//}
+//
+//void je_ecs_world_unregister_system_func(void* world, jeecs::game_system_function* game_system_function)
+//{
+//    jeecs_impl::ecs_world* ecsworld = (jeecs_impl::ecs_world*)world;
+//    ecsworld->get_command_buffer().remove_system(ecsworld, game_system_function);
+//}
 
 void je_ecs_world_create_entity_with_components(
     void* world,
@@ -2236,6 +1778,11 @@ bool je_ecs_world_validate_entity(const jeecs::game_entity* entity)
     if (auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk)
         return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
     return false;
+}
+
+bool je_ecs_archmgr_updated(void* world)
+{
+    return ((jeecs_impl::ecs_world*)world)->archtype_mgr_updated();
 }
 
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
