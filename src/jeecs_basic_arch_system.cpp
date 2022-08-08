@@ -15,6 +15,99 @@
 #   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::log_warn( __VA_ARGS__ );
 #endif
 
+namespace jeecs
+{
+    // Used for select the components of entities which match spcify requirements.
+    struct selector
+    {
+        struct requirement
+        {
+            enum type : uint8_t
+            {
+                CONTAIN,        // Must have spcify component
+                MAYNOT,         // May have or not have
+                ANYOF,          // Must have one of 'ANYOF' components
+                EXCEPT,         // Must not contain spcify component
+            };
+
+            type m_require;
+            typing::typeid_t m_type;
+        };
+
+        struct dependence
+        {
+            jeecs::vector<requirement> m_dependences;
+
+            // Store archtypes here?
+            game_world                 m_world;
+
+            bool need_update(const game_world& aim_world) const noexcept
+            {
+                // TODO: Impl jeecs_archmgr_updated.
+                if (m_world != aim_world /*|| jeecs_archmgr_updated(aim_world)*/)
+                    return true;
+                return false;
+            }
+        };
+
+        bool                        m_enabled = false;
+        size_t                      m_curstep = 0;
+        game_world                  m_current_world = nullptr;
+        jeecs::vector<dependence>   m_steps;
+
+        selector& at(game_world w)
+        {
+            if (w)
+                m_enabled = true;
+            m_curstep = 0;
+            m_current_world = w;
+            return *this;
+        }
+
+        template<typename ... RequirementTs>
+        bool _update()
+        {
+            if (!m_enabled)
+            {
+                jeecs::debug::log_warn("Failed to execute current jobs(%p). Game world not specify!");
+                return false;
+            }
+
+            assert(m_curstep <= m_steps.size());
+            if (m_curstep == m_steps.size())
+            {
+                // First times to execute this job or arch/world changed, register requirements
+                m_steps.push_back({});
+                dependence& dep = m_steps.back();
+
+                // TODO: 
+                //dep.m_dependences...;
+            }
+
+            dependence& cur_dependence = m_steps.back();
+            if (cur_dependence.need_update(m_current_world))
+            {
+                // TODO: Update new arch/chunk informations.
+            }
+
+            return true;
+        }
+
+        template<typename RT, typename ... RequirementTs>
+        selector& exec(std::function<RT(RequirementTs...)>&& _exec)
+        {
+            if (_update<RequirementTs...>())
+            {
+
+                // TODO: Execute actions.
+                //
+                ++m_curstep;
+            }
+            return *this;
+        }
+    };
+}
+
 namespace jeecs_impl
 {
     using types_set = std::set<jeecs::typing::typeid_t>;
@@ -1649,9 +1742,9 @@ namespace jeecs_impl
             } while (0);
 
             size_t executing_world_count = _m_reading_world_list.size();
-            
+
             std::vector<std::thread> _world_job_thread;
-            for (ecs_world* world: _m_reading_world_list)
+            for (ecs_world* world : _m_reading_world_list)
             {
                 _world_job_thread.emplace_back(
                     std::move(std::thread(
@@ -1668,7 +1761,7 @@ namespace jeecs_impl
                                     return;
                                 }
                                 // Pending for blocking world's system update.
-                                je_clock_sleep_until(current_time += 1./60.);
+                                je_clock_sleep_until(current_time += 1. / 60.);
 
                                 if (je_clock_time() > 1.0 + current_time)
                                     current_time = je_clock_time();

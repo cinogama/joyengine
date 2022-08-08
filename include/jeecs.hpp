@@ -935,6 +935,16 @@ namespace jeecs
             return _elems_ptr_end;
         }
 
+        inline auto front() const noexcept->ElemT&
+        {
+            return *_elems_ptr_begin;
+        }
+
+        inline auto back() const noexcept->ElemT&
+        {
+            return *(_elems_ptr_end - 1);
+        }
+
         inline void erase(size_t index)
         {
             _elems_ptr_begin[index].~ElemT();
