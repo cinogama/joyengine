@@ -140,7 +140,6 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 {
     assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
 
-    glfwSwapBuffers(WINDOWS_HANDLE);
     glfwPollEvents();
 
     if (je_io_should_lock_mouse())
@@ -154,11 +153,20 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
     return true;
 }
 
+thread_local double _last_swap_buffer_tpoint = 0.;
+
 bool gl_lateupdate(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 {
     assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
 
     jegui_update();
+
+    je_clock_sleep_until(_last_swap_buffer_tpoint += 1. / 60.);
+    if (je_clock_time() - _last_swap_buffer_tpoint >= 1.0)
+        _last_swap_buffer_tpoint = je_clock_time();
+
+    glfwSwapBuffers(WINDOWS_HANDLE);
+
     return true;
 }
 

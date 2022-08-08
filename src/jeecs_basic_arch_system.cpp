@@ -1660,7 +1660,6 @@ namespace jeecs_impl
                             DEBUG_ARCH_LOG("World %p: updating...", world);
 
                             double current_time = je_clock_time();
-
                             do
                             {
                                 if (_m_pause_universe_update_for_world)
@@ -1668,10 +1667,11 @@ namespace jeecs_impl
                                     DEBUG_ARCH_LOG("World %p: stop update for ecs_universe world list modify.", world);
                                     return;
                                 }
+                                // Pending for blocking world's system update.
+                                je_clock_sleep_until(current_time += 1./60.);
+
                                 if (je_clock_time() > 1.0 + current_time)
                                     current_time = je_clock_time();
-
-                                je_clock_sleep_until(current_time += 0.0166'6667);
 
                             } while (world->update());
 

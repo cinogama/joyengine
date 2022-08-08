@@ -94,7 +94,7 @@ namespace jeecs
 
             if (_inputs.r_buttom)
             {
-                if (_drag_viewing || (mousepos(0) - _begin_drag).length() >= 0.01)
+                if (_drag_viewing || (mousepos(0) - _begin_drag).length() >= 0.01f)
                 {
                     _drag_viewing = true;
                     je_io_lock_mouse(true);
@@ -102,13 +102,13 @@ namespace jeecs
                     rotation->rot = rotation->rot * quat(0, 30.f * mousepos(0).x, 0);
                 }
                 if (_inputs.w)
-                    position->pos += _camera_rot * vec3(0, 0, 0.5);
+                    position->pos += _camera_rot * vec3(0, 0, 5.f / 60.f);
                 if (_inputs.s)
-                    position->pos += _camera_rot * vec3(0, 0, -0.5);
+                    position->pos += _camera_rot * vec3(0, 0, -5.f / 60.f);
                 if (_inputs.a)
-                    position->pos += _camera_rot * vec3(-0.5, 0, 0);
+                    position->pos += _camera_rot * vec3(-5.f / 60.f, 0, 0);
                 if (_inputs.d)
-                    position->pos += _camera_rot * vec3(0.5, 0, 0);
+                    position->pos += _camera_rot * vec3(5.f / 60.f, 0, 0);
             }
             else
                 je_io_lock_mouse(false);

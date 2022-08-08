@@ -6,7 +6,7 @@
 
 std::chrono::high_resolution_clock _hs_clock;
 auto _start_time = _hs_clock.now();
-double _sleep_suppression = 0.0001;
+double _sleep_suppression = 0.001;
 
 double je_clock_time()
 {

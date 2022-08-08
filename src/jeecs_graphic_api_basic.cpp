@@ -29,7 +29,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
         auto custom_interface = thread->m_apis->init_interface(thread, &thread->_m_thread_notifier->m_interface_config);
         ++thread->m_version;
         while (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
-        {
+        {   
             do
             {
                 std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
@@ -37,11 +37,6 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                     return thread->_m_thread_notifier->m_update_flag;
                     });
             } while (0);
-            // Ready for rend..
-
-            if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
-                || thread->_m_thread_notifier->m_reboot_flag)
-                break;
 
             auto* del_res = _destroing_graphic_resources.pick_all();
             while (del_res)
@@ -71,18 +66,25 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                 }
             }
 
+            // Ready for rend..
+            if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
+                || thread->_m_thread_notifier->m_reboot_flag)
+                break;
+
             if (!thread->m_apis->update_interface(thread, custom_interface))
                 // graphic thread want to exit. mark stop update
                 thread->m_stop_update = true;
             else
                 frame_rend_work(arg, thread);
-
+            
             if (!thread->m_apis->late_update_interface(thread, custom_interface))
                 thread->m_stop_update = true;
 
-            std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-            thread->_m_thread_notifier->m_update_flag = false;
-            thread->_m_thread_notifier->m_update_waiter.notify_all();
+            do {
+                std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
+                thread->_m_thread_notifier->m_update_flag = false;
+                thread->_m_thread_notifier->m_update_waiter.notify_all();
+            } while (0);
         }
 
         thread->m_apis->shutdown_interface(thread, custom_interface);
