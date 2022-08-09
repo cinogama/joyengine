@@ -721,6 +721,30 @@ namespace jeecs_impl
         }
     };
 
+
+    struct ecs_job
+    {
+        using job_t = double(*)(ecs_world*);
+
+        job_t       m_job_function;
+        ecs_world* m_attached_world;
+
+        ecs_job(job_t _job)
+            : m_job_function(_job)
+            , m_attached_world(nullptr)
+        {
+            assert(_job != nullptr);
+
+        }
+
+        inline double exec(ecs_world* world) const noexcept
+        {
+            if (nullptr == m_attached_world || m_attached_world == world)
+                return m_job_function(world);
+            return 1.0;     // default interv time;
+        }
+    };
+
     class command_buffer
     {
         // command_buffer used to store operations happend in a entity.
@@ -754,16 +778,28 @@ namespace jeecs_impl
 
         struct _world_command_buffer
         {
-            struct system_list_node
+            struct attach_job_list_node
             {
-                system_list_node* last;
+                attach_job_list_node* last;
 
-                static_assert(false, "todo");
+                enum method
+                {
+                    ATTACH_PRIVATE,
+                    DISATTACH,
+                };
+                method m_method;
+                ecs_job* m_attaching_job;
+
+                attach_job_list_node(method _method, ecs_job* _job)
+                    : m_method(_method)
+                    , m_attaching_job(_job)
+                {
+
+                }
             };
 
-            jeecs::basic::atomic_list<system_list_node> m_append_system;
-            jeecs::basic::atomic_list<system_list_node> m_removed_system;
-            bool                                        m_destroy_world;
+            jeecs::basic::atomic_list<attach_job_list_node> m_modify_jobs;
+            bool                                            m_destroy_world;
         };
 
         std::shared_mutex _m_command_buffer_mx;
@@ -855,32 +891,33 @@ namespace jeecs_impl
             );
         }
 
-        //void append_system(ecs_world* w, jeecs::game_system_function* game_system_function)
-        //{
-        //    DEBUG_ARCH_LOG("World: %p append system:%p operation has been committed to the command buffer.",
-        //        w, game_system_function);
+        void attach_private_job(ecs_world* w, ecs_job* attaching_job)
+        {
+            assert(attaching_job != nullptr);
 
-        //    std::shared_lock sl(_m_command_executer_guard_mx);
+            DEBUG_ARCH_LOG("World: %p trying to attach private job:%p operation has been committed to the command buffer.",
+                w, attaching_job);
 
-        //    auto* func_instance = jeecs::basic::create_new<jeecs_impl::ecs_system_function>(game_system_function);
+            std::shared_lock sl(_m_command_executer_guard_mx);
 
-        //    _find_or_create_buffer_for(w).m_append_system.add_one(
-        //        jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function, func_instance)
-        //    );
-        //}
+            _find_or_create_buffer_for(w).m_modify_jobs.add_one(
+                jeecs::basic::create_new<_world_command_buffer::attach_job_list_node>(_world_command_buffer::attach_job_list_node::method::ATTACH_PRIVATE, attaching_job)
+            );
+        }
 
-        //void remove_system(ecs_world* w, jeecs::game_system_function* game_system_function)
-        //{
-        //    DEBUG_ARCH_LOG("World: %p remove system:%p operation has been committed to the command buffer.",
-        //        w, game_system_function);
+        void disattach_job(ecs_world* w, ecs_job* attaching_job)
+        {
+            assert(attaching_job != nullptr);
 
-        //    std::shared_lock sl(_m_command_executer_guard_mx);
+            DEBUG_ARCH_LOG("World: %p trying to disattach job:%p operation has been committed to the command buffer.",
+                w, attaching_job);
 
-        //    _find_or_create_buffer_for(w).m_removed_system.add_one(
-        //        jeecs::basic::create_new<_world_command_buffer::system_list_node>(game_system_function,
-        //            nullptr)
-        //    );
-        //}
+            std::shared_lock sl(_m_command_executer_guard_mx);
+
+            _find_or_create_buffer_for(w).m_modify_jobs.add_one(
+                jeecs::basic::create_new<_world_command_buffer::attach_job_list_node>(_world_command_buffer::attach_job_list_node::method::DISATTACH, attaching_job)
+            );
+        }
 
         void close_world(ecs_world* w)
         {
@@ -904,17 +941,14 @@ namespace jeecs_impl
 
         command_buffer _m_command_buffer;
         arch_manager _m_arch_manager;
-        std::atomic_flag _m_system_modified = {};
+
         std::string _m_name;
 
         std::atomic_bool _m_destroying_flag = false;
         std::atomic_bool _m_archmgr_updated = false;
 
-        inline bool _system_modified()noexcept
-        {
-            return !_m_system_modified.test_and_set();
-        }
-
+        std::vector<ecs_job*> _m_attached_private_jobs;
+        std::vector<ecs_job*> _m_waiting_for_attaching_jobs;
     public:
         ecs_world(ecs_universe* universe)
             :_m_universe(universe)
@@ -951,17 +985,23 @@ namespace jeecs_impl
         {
             if (!is_destroying())
             {
-                // If system added/removed, update dependence relationship.
-                bool system_changed_flag = false;
-                if (_system_modified())
-                {
-                    assert(false); // TODO
-                }
-                
                 _m_archmgr_updated = _m_arch_manager._arch_modified();
-                // Ok, execute SYSTEMS
+                // Ok, execute JOBS here.
 
-                assert(false); // TODO
+                if (!_m_waiting_for_attaching_jobs.empty())
+                {
+                    std::vector<ecs_job*> adding_list;
+                    adding_list.swap(_m_waiting_for_attaching_jobs);
+
+                    assert(_m_waiting_for_attaching_jobs.empty());
+
+                    for (ecs_job * job : adding_list)
+                        attach_private_job_impl(job);
+                }
+
+                for (ecs_job* job : _m_attached_private_jobs)
+                    job->exec(this);
+
             }
             else
             {
@@ -969,11 +1009,11 @@ namespace jeecs_impl
                 _m_arch_manager.close_all_entity(this);
 
                 // Find all system to close.
-                assert(false); // TODO
+                for (ecs_job* job : _m_attached_private_jobs)
+                    _m_command_buffer.disattach_job(this, job);
 
                 // After this round, we should do a round of command buffer update, then close this.     
                 _m_command_buffer.update();
-
 
                 // Return false and world will be closed by universe-loop.
                 return false;
@@ -1010,6 +1050,45 @@ namespace jeecs_impl
         inline ecs_universe* get_universe() const noexcept
         {
             return _m_universe;
+        }
+
+        //inline void attach_shared_job_impl(ecs_job* job)noexcept
+        //{
+        //    assert(job->m_attached_world == nullptr);
+        //    _m_attached_jobs.push_back(job);
+        //}
+        inline void attach_private_job_impl(ecs_job* job)noexcept
+        {
+            if (job->m_attached_world == nullptr)
+            {
+                job->m_attached_world = this;
+                _m_attached_private_jobs.push_back(job);
+            }
+            else
+            {
+                jeecs::debug::log("Current private job(%p) still attached to another world, attach it to world(%p) next frame.", job, this);
+                _m_waiting_for_attaching_jobs.push_back(job);
+            }
+        }
+        inline void disattach_job_impl(ecs_job* job)noexcept
+        {
+            assert(job->m_attached_world == nullptr || job->m_attached_world == this);
+
+            auto fnd = std::find(_m_attached_private_jobs.begin(), _m_attached_private_jobs.end(), job);
+            if (fnd == _m_attached_private_jobs.end())
+            {
+                auto pfnd = std::find(_m_waiting_for_attaching_jobs.begin(), _m_waiting_for_attaching_jobs.end(), job);
+                if (pfnd == _m_waiting_for_attaching_jobs.end())
+                    jeecs::debug::log_error("Failed to disattach job(%p) from world(%p), not found", job, this);
+                else
+                    _m_waiting_for_attaching_jobs.erase(pfnd);
+            }
+            else
+            {
+                if (job->m_attached_world)
+                    job->m_attached_world == nullptr;
+                _m_attached_private_jobs.erase(fnd);
+            }
         }
     };
 
@@ -1222,26 +1301,25 @@ namespace jeecs_impl
                 if (_buf_in_world.second.m_destroy_world)
                     world->ready_to_destroy();
 
-                auto* append_system = _buf_in_world.second.m_append_system.pick_all();
-                while (append_system)
+                auto* modify_job = _buf_in_world.second.m_modify_jobs.pick_all();
+                while (modify_job)
                 {
-                    auto current_append_system = append_system;
-                    append_system = append_system->last;
+                    auto current_modify_job = modify_job;
+                    modify_job = modify_job->last;
 
-                    assert(false); // TODO
+                    switch (current_modify_job->m_method)
+                    {
+                    case _world_command_buffer::attach_job_list_node::method::ATTACH_PRIVATE:
+                        world->attach_private_job_impl(current_modify_job->m_attaching_job);
+                        break;
+                    case _world_command_buffer::attach_job_list_node::method::DISATTACH:
+                        world->disattach_job_impl(current_modify_job->m_attaching_job);
+                        break;
+                    default:
+                        jeecs::debug::log_fatal("Unknown jobs modify method: '%d'.", (int)current_modify_job->m_method);
+                    }
 
-                    jeecs::basic::destroy_free(current_append_system);
-                }
-
-                auto* removed_system = _buf_in_world.second.m_removed_system.pick_all();
-                while (removed_system)
-                {
-                    auto current_removed_system = removed_system;
-                    removed_system = removed_system->last;
-
-                    assert(false); // TODO
-
-                    jeecs::basic::destroy_free(current_removed_system);
+                    jeecs::basic::destroy_free(current_modify_job);
                 }
             });
 
@@ -1259,13 +1337,6 @@ namespace jeecs_impl
         std::thread _m_universe_update_thread;
         std::atomic_flag _m_universe_update_thread_stop_flag = {};
         std::atomic_bool _m_pause_universe_update_for_world = true;
-
-        struct stored_system_instance
-        {
-            jeecs::game_system* m_system_instance;
-            const jeecs::typing::type_info* m_system_typeinfo;
-            ecs_world* m_attached_world; // only used in shared_system
-        };
 
         std::recursive_mutex _m_stored_systems_mx;
         std::unordered_map<ecs_world*, std::vector<stored_system_instance>> _m_stored_systems;
