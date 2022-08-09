@@ -995,7 +995,7 @@ namespace jeecs_impl
 
                     assert(_m_waiting_for_attaching_jobs.empty());
 
-                    for (ecs_job * job : adding_list)
+                    for (ecs_job* job : adding_list)
                         attach_private_job_impl(job);
                 }
 
@@ -1338,8 +1338,8 @@ namespace jeecs_impl
         std::atomic_flag _m_universe_update_thread_stop_flag = {};
         std::atomic_bool _m_pause_universe_update_for_world = true;
 
-        std::recursive_mutex _m_stored_systems_mx;
-        std::unordered_map<ecs_world*, std::vector<stored_system_instance>> _m_stored_systems;
+        std::recursive_mutex _m_shared_job_mx;
+        std::vector<ecs_job*> _m_shared_job;
 
     public:
         size_t update()
