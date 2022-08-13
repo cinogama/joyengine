@@ -1283,6 +1283,11 @@ namespace jeecs_impl
                 _m_next_execute_interval = interval;
         }
 
+        void append_universe_action(universe_action* act) noexcept
+        {
+            _m_universe_actions.add_one(act);
+        }
+
     public:
         inline double current_time() const noexcept
         {
@@ -1423,15 +1428,31 @@ namespace jeecs_impl
 
                 delete cur_action;
             }
+            std::vector<ecs_world*> removing_worlds;
 
             ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                [this](ecs_world* world) {
+                [this, &removing_worlds](ecs_world* world) {
                     if (!world->update())
                     {
                         // Current world is dying! ready to destroy it!
+                        destroy_all_systems_for_world(world);
+
+                        // Ready remove the world from list;
+                        removing_worlds.push_back(world);
                     }
                 });
 
+            for (ecs_world* removed_world : removing_worlds)
+            {
+                auto fnd = std::find(_m_world_list.begin(), _m_world_list.end(), removed_world);
+                if (fnd != _m_world_list.end())
+                    _m_world_list.erase(fnd);
+                else
+                    // Current world is not found in world_list, that should not happend.
+                    assert(false);
+
+                delete removed_world;
+            }
 
             _m_current_time = je_clock_time();
             double next_update_time = _m_current_time + 0.1f;
@@ -1445,7 +1466,8 @@ namespace jeecs_impl
             if (je_clock_time() - _m_current_time >= 2.0)
                 _m_current_time = je_clock_time();
             _m_next_execute_interval = 1.0;
-            //
+
+            // Sleep end, new frame begin here!!!!
 
             // Walk through all jobs:
             // 1. Do pre jobs.
@@ -1513,14 +1535,10 @@ namespace jeecs_impl
                 [this]() {
                     while (true)
                     {
-                        if (0 == this->update())
-                        {
+                        update();
+                        if (_m_world_list.empty() && !_m_universe_update_thread_stop_flag.test_and_set())
                             // If there is no world alive, and exit flag is setten, exit this thread.
-                            if (!_m_universe_update_thread_stop_flag.test_and_set())
-                                break;
-
-                            je_clock_sleep_for(0.1);
-                        }
+                            break;
                     }
 
                     // invoke callback
@@ -1573,15 +1591,9 @@ namespace jeecs_impl
     public:
         void stop_universe_loop() noexcept
         {
-            do
-            {
-                std::lock_guard g1(_m_world_list_mx);
-                for (auto* world : _m_world_list)
-                {
-                    je_ecs_world_destroy(world);
-                }
-
-            } while (0);
+            // Only invoke in game thread!
+            for (auto* world : _m_world_list)
+                je_ecs_world_destroy(world);
 
             _m_universe_update_thread_stop_flag.clear();
         }
@@ -1590,84 +1602,20 @@ namespace jeecs_impl
         {
             DEBUG_ARCH_LOG("Universe: %p want to create a world.", this);
 
-            std::lock_guard g1(_m_world_list_mx);
+            jeecs_impl::ecs_world* new_world = new jeecs_impl::ecs_world(this);
 
-            auto* world = jeecs::basic::create_new<jeecs_impl::ecs_world>(this);
+            universe_action* add_world_action = new universe_action;
+            add_world_action->m_type = universe_action::ADD_WORLD;
+            add_world_action->m_adding_world = new_world;
 
-            _m_world_list.push_back(world);
-            _m_pause_universe_update_for_world = true;
+            append_universe_action(add_world_action);
 
-            DEBUG_ARCH_LOG("Universe: %p create a world: %p.", this, world);
-
-            return world;
+            return new_world;
         }
         std::vector<ecs_world*> _get_all_worlds()
         {
             // NOTE: This function is designed for editor
-            std::lock_guard g1(_m_world_list_mx);
             return _m_world_list;
-        }
-
-        jeecs::game_system* unstore_system_for_world(ecs_world* world, const jeecs::typing::type_info* type)
-        {
-            std::lock_guard g1(_m_stored_systems_mx);
-            auto fnd = _m_stored_systems.find(world);
-
-            if (fnd != _m_stored_systems.end())
-            {
-                auto& systems = fnd->second;
-                for (auto i = systems.begin(); i != systems.end(); ++i)
-                {
-                    if (i->m_system_typeinfo == type)
-                    {
-                        auto* sys_instance = i->m_system_instance;
-                        systems.erase(i);
-                        return sys_instance;
-                    }
-                }
-            }
-            return nullptr;
-        }
-
-        void destroy_all_systems_for_world(ecs_world* world)
-        {
-            std::vector<stored_system_instance> removing_sys_instances;
-            do
-            {
-                std::lock_guard g1(_m_stored_systems_mx);
-                auto fnd = _m_stored_systems.find(world);
-
-                if (fnd != _m_stored_systems.end())
-                {
-                    removing_sys_instances = std::move(fnd->second);
-                    _m_stored_systems.erase(fnd);
-                }
-            } while (0);
-
-            for (auto& stored_system : removing_sys_instances)
-            {
-                DEBUG_ARCH_LOG("System instance: %p, removed from world: %p.", stored_system.m_system_instance, world);
-                stored_system.m_system_typeinfo->destruct(stored_system.m_system_instance);
-                je_mem_free(stored_system.m_system_instance);
-            }
-        }
-
-        void store_system_for_world(ecs_world* world, const jeecs::typing::type_info* system_type, jeecs::game_system* system_instacne)
-        {
-            std::lock_guard g1(_m_stored_systems_mx);
-            _m_stored_systems[world].push_back(stored_system_instance{ system_instacne,system_type, world });
-        }
-
-        std::vector<const jeecs::typing::type_info*> get_stored_system_of_world(ecs_world* world)
-        {
-            std::lock_guard g1(_m_stored_systems_mx);
-            auto& stored_systems = _m_stored_systems[world];
-
-            std::vector<const jeecs::typing::type_info*> result(stored_systems.size());
-            for (size_t i = 0; i < result.size(); ++i)
-                result[i] = stored_systems[i].m_system_typeinfo;
-
-            return result;
         }
 
         void attach_shared_system_to_world(ecs_world* world, const jeecs::typing::type_info* system_type)
@@ -1723,26 +1671,6 @@ namespace jeecs_impl
             //else
             //    jeecs::debug::log_error("There is no shared-system: '%s' in universe:%p.",
             //        system_type->m_typename, this);
-        }
-
-        ecs_world* _shared_system_attached_world(const jeecs::typing::type_info* system_type)
-        {
-            // This function only worked for editor
-            std::lock_guard g1(_m_stored_systems_mx);
-            stored_system_instance* fnd = nullptr;
-            for (auto& shared_system : _m_stored_systems[nullptr])
-            {
-                if (shared_system.m_system_typeinfo == system_type)
-                {
-                    fnd = &shared_system;
-                    break;
-                }
-            }
-
-            if (fnd)
-                return fnd->m_attached_world;
-
-            return nullptr;
         }
     };
 
