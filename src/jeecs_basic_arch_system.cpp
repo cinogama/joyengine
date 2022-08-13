@@ -15,6 +15,14 @@
 #   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::log_warn( __VA_ARGS__ );
 #endif
 
+#ifdef __cpp_lib_execution
+#   define ParallelForeach(...) std::for_each( std::execution::par_unseq, __VA_ARGS__ )
+#else
+#   define ParallelForeach(...) std::for_each( __VA_ARGS__ )
+#endif
+
+#define CHECK(A,B)((A-B>=-0.0001))
+
 namespace jeecs
 {
     // Used for select the components of entities which match spcify requirements.
@@ -721,28 +729,49 @@ namespace jeecs_impl
         }
     };
 
+    class ecs_universe;
 
     struct ecs_job
     {
-        using job_t = double(*)(ecs_world*);
+        using job_for_worlds_t = double(*)(ecs_world*);
+        using job_call_once_t = double(*)(void);
 
-        job_t       m_job_function;
-        ecs_world* m_attached_world;
+        enum job_type
+        {
+            CALL_ONCE,
+            FOR_WORLDS,
+        };
+        job_type m_job_type;
 
-        ecs_job(job_t _job)
-            : m_job_function(_job)
-            , m_attached_world(nullptr)
+        union
+        {
+            job_for_worlds_t m_for_worlds_job;
+            job_call_once_t m_call_once_job;
+        };
+
+        ecs_universe* m_universe;
+
+        std::mutex m_time_guard;
+        double m_next_execute_time;
+
+        ecs_job(ecs_universe* universe, job_for_worlds_t _job)
+            : m_for_worlds_job(_job)
+            , m_job_type(job_type::FOR_WORLDS)
+            , m_next_execute_time(0.)
+            , m_universe(universe)
         {
             assert(_job != nullptr);
-
         }
-
-        inline double exec(ecs_world* world) const noexcept
+        ecs_job(ecs_universe* universe, job_call_once_t _job)
+            : m_call_once_job(_job)
+            , m_job_type(job_type::CALL_ONCE)
+            , m_next_execute_time(0.)
+            , m_universe(universe)
         {
-            if (nullptr == m_attached_world || m_attached_world == world)
-                return m_job_function(world);
-            return 1.0;     // default interv time;
+            assert(_job != nullptr);
         }
+
+        void set_next_execute_time(double nextTime) noexcept;
     };
 
     class command_buffer
@@ -778,28 +807,7 @@ namespace jeecs_impl
 
         struct _world_command_buffer
         {
-            struct attach_job_list_node
-            {
-                attach_job_list_node* last;
-
-                enum method
-                {
-                    ATTACH_PRIVATE,
-                    DISATTACH,
-                };
-                method m_method;
-                ecs_job* m_attaching_job;
-
-                attach_job_list_node(method _method, ecs_job* _job)
-                    : m_method(_method)
-                    , m_attaching_job(_job)
-                {
-
-                }
-            };
-
-            jeecs::basic::atomic_list<attach_job_list_node> m_modify_jobs;
-            bool                                            m_destroy_world;
+            bool m_destroy_world;
         };
 
         std::shared_mutex _m_command_buffer_mx;
@@ -891,34 +899,6 @@ namespace jeecs_impl
             );
         }
 
-        void attach_private_job(ecs_world* w, ecs_job* attaching_job)
-        {
-            assert(attaching_job != nullptr);
-
-            DEBUG_ARCH_LOG("World: %p trying to attach private job:%p operation has been committed to the command buffer.",
-                w, attaching_job);
-
-            std::shared_lock sl(_m_command_executer_guard_mx);
-
-            _find_or_create_buffer_for(w).m_modify_jobs.add_one(
-                jeecs::basic::create_new<_world_command_buffer::attach_job_list_node>(_world_command_buffer::attach_job_list_node::method::ATTACH_PRIVATE, attaching_job)
-            );
-        }
-
-        void disattach_job(ecs_world* w, ecs_job* attaching_job)
-        {
-            assert(attaching_job != nullptr);
-
-            DEBUG_ARCH_LOG("World: %p trying to disattach job:%p operation has been committed to the command buffer.",
-                w, attaching_job);
-
-            std::shared_lock sl(_m_command_executer_guard_mx);
-
-            _find_or_create_buffer_for(w).m_modify_jobs.add_one(
-                jeecs::basic::create_new<_world_command_buffer::attach_job_list_node>(_world_command_buffer::attach_job_list_node::method::DISATTACH, attaching_job)
-            );
-        }
-
         void close_world(ecs_world* w)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
@@ -930,8 +910,6 @@ namespace jeecs_impl
     public:
         void update();
     };
-
-    class ecs_universe;
 
     class ecs_world
     {
@@ -947,8 +925,6 @@ namespace jeecs_impl
         std::atomic_bool _m_destroying_flag = false;
         std::atomic_bool _m_archmgr_updated = false;
 
-        std::vector<ecs_job*> _m_attached_private_jobs;
-        std::vector<ecs_job*> _m_waiting_for_attaching_jobs;
     public:
         ecs_world(ecs_universe* universe)
             :_m_universe(universe)
@@ -987,30 +963,11 @@ namespace jeecs_impl
             {
                 _m_archmgr_updated = _m_arch_manager._arch_modified();
                 // Ok, execute JOBS here.
-
-                if (!_m_waiting_for_attaching_jobs.empty())
-                {
-                    std::vector<ecs_job*> adding_list;
-                    adding_list.swap(_m_waiting_for_attaching_jobs);
-
-                    assert(_m_waiting_for_attaching_jobs.empty());
-
-                    for (ecs_job* job : adding_list)
-                        attach_private_job_impl(job);
-                }
-
-                for (ecs_job* job : _m_attached_private_jobs)
-                    job->exec(this);
-
             }
             else
             {
                 // Find all entity to close.
                 _m_arch_manager.close_all_entity(this);
-
-                // Find all system to close.
-                for (ecs_job* job : _m_attached_private_jobs)
-                    _m_command_buffer.disattach_job(this, job);
 
                 // After this round, we should do a round of command buffer update, then close this.     
                 _m_command_buffer.update();
@@ -1052,44 +1009,6 @@ namespace jeecs_impl
             return _m_universe;
         }
 
-        //inline void attach_shared_job_impl(ecs_job* job)noexcept
-        //{
-        //    assert(job->m_attached_world == nullptr);
-        //    _m_attached_jobs.push_back(job);
-        //}
-        inline void attach_private_job_impl(ecs_job* job)noexcept
-        {
-            if (job->m_attached_world == nullptr)
-            {
-                job->m_attached_world = this;
-                _m_attached_private_jobs.push_back(job);
-            }
-            else
-            {
-                jeecs::debug::log("Current private job(%p) still attached to another world, attach it to world(%p) next frame.", job, this);
-                _m_waiting_for_attaching_jobs.push_back(job);
-            }
-        }
-        inline void disattach_job_impl(ecs_job* job)noexcept
-        {
-            assert(job->m_attached_world == nullptr || job->m_attached_world == this);
-
-            auto fnd = std::find(_m_attached_private_jobs.begin(), _m_attached_private_jobs.end(), job);
-            if (fnd == _m_attached_private_jobs.end())
-            {
-                auto pfnd = std::find(_m_waiting_for_attaching_jobs.begin(), _m_waiting_for_attaching_jobs.end(), job);
-                if (pfnd == _m_waiting_for_attaching_jobs.end())
-                    jeecs::debug::log_error("Failed to disattach job(%p) from world(%p), not found", job, this);
-                else
-                    _m_waiting_for_attaching_jobs.erase(pfnd);
-            }
-            else
-            {
-                if (job->m_attached_world)
-                    job->m_attached_world == nullptr;
-                _m_attached_private_jobs.erase(fnd);
-            }
-        }
     };
 
     void command_buffer::update()
@@ -1300,27 +1219,6 @@ namespace jeecs_impl
 
                 if (_buf_in_world.second.m_destroy_world)
                     world->ready_to_destroy();
-
-                auto* modify_job = _buf_in_world.second.m_modify_jobs.pick_all();
-                while (modify_job)
-                {
-                    auto current_modify_job = modify_job;
-                    modify_job = modify_job->last;
-
-                    switch (current_modify_job->m_method)
-                    {
-                    case _world_command_buffer::attach_job_list_node::method::ATTACH_PRIVATE:
-                        world->attach_private_job_impl(current_modify_job->m_attaching_job);
-                        break;
-                    case _world_command_buffer::attach_job_list_node::method::DISATTACH:
-                        world->disattach_job_impl(current_modify_job->m_attaching_job);
-                        break;
-                    default:
-                        jeecs::debug::log_fatal("Unknown jobs modify method: '%d'.", (int)current_modify_job->m_method);
-                    }
-
-                    jeecs::basic::destroy_free(current_modify_job);
-                }
             });
 
         // Finish! clear buffer.
@@ -1330,82 +1228,280 @@ namespace jeecs_impl
     // ecs_universe
     class ecs_universe
     {
-        std::recursive_mutex _m_world_list_mx;
         std::vector<ecs_world*> _m_world_list;
 
-        std::vector<ecs_world*> _m_reading_world_list;
         std::thread _m_universe_update_thread;
         std::atomic_flag _m_universe_update_thread_stop_flag = {};
         std::atomic_bool _m_pause_universe_update_for_world = true;
 
         // Used for store shared jobs instance.
-        std::mutex _m_shared_jobs_mx;
+        std::vector<ecs_job*> _m_shared_pre_jobs;
         std::vector<ecs_job*> _m_shared_jobs;
+        std::vector<ecs_job*> _m_shared_after_jobs;
 
-        // Used for store private jobs instance, other place can register/
-        std::mutex _m_private_jobs_mx;
-        std::vector<ecs_job*> _m_private_jobs;
+        std::mutex _m_next_execute_interval_mx;
+        double _m_current_time = 0.;
+        double _m_next_execute_interval = 0.5;
+
+        struct universe_action
+        {
+            enum action_type
+            {
+                ADD_WORLD,
+
+                ADD_PRE_JOB_FOR_WORLDS,
+                ADD_PRE_JOB_CALL_ONCE,
+                ADD_NORMAL_JOB_FOR_WORLDS,
+                ADD_NORMAL_JOB_CALL_ONCE,
+                ADD_AFTER_JOB_FOR_WORLDS,
+                ADD_AFTER_JOB_CALL_ONCE,
+
+                REMOVE_PRE_JOB_FOR_WORLDS,
+                REMOVE_PRE_JOB_CALL_ONCE,
+                REMOVE_NORMAL_JOB_FOR_WORLDS,
+                REMOVE_NORMAL_JOB_CALL_ONCE,
+                REMOVE_AFTER_JOB_FOR_WORLDS,
+                REMOVE_AFTER_JOB_CALL_ONCE,
+            };
+
+            action_type m_type;
+            union
+            {
+                ecs_world* m_adding_world;
+                ecs_job::job_call_once_t m_call_once_job;
+                ecs_job::job_for_worlds_t m_for_worlds_job;
+            };
+            universe_action* last;
+        };
+
+        jeecs::basic::atomic_list<universe_action> _m_universe_actions;
+
+        void set_next_execute_interval(double interval)
+        {
+            std::lock_guard g1(_m_next_execute_interval_mx);
+            if (interval > 0 && interval < _m_next_execute_interval)
+                _m_next_execute_interval = interval;
+        }
 
     public:
-        size_t update()
+        inline double current_time() const noexcept
         {
-            _m_pause_universe_update_for_world = false;
+            return _m_current_time;
+        }
+        inline double next_execute_time_allign(double exec_intv)const noexcept
+        {
+            return ((double)(int)(0.5 + current_time() / exec_intv) + 1) * exec_intv;
+        }
 
-            do
+        void update()
+        {
+            // After a round of update, execute universe actions
+            auto* universe_act = _m_universe_actions.pick_all();
+            while (universe_act)
             {
-                std::lock_guard g1(_m_world_list_mx);
-                _m_reading_world_list = _m_world_list;
-            } while (0);
+                auto* cur_action = universe_act;
+                universe_act = universe_act->last;
 
-            size_t executing_world_count = _m_reading_world_list.size();
+                switch (cur_action->m_type)
+                {
+                case universe_action::action_type::ADD_WORLD:
+                    _m_world_list.push_back(cur_action->m_adding_world);
+                    break;
 
-            std::vector<std::thread> _world_job_thread;
-            for (ecs_world* world : _m_reading_world_list)
-            {
-                _world_job_thread.emplace_back(
-                    std::move(std::thread(
-                        [this, world]()
-                        {
-                            DEBUG_ARCH_LOG("World %p: updating...", world);
+                case universe_action::action_type::ADD_PRE_JOB_FOR_WORLDS:
+                    _m_shared_pre_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job));
+                    break;
+                case universe_action::action_type::ADD_PRE_JOB_CALL_ONCE:
+                    _m_shared_pre_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job));
+                    break;
+                case universe_action::action_type::ADD_NORMAL_JOB_FOR_WORLDS:
+                    _m_shared_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job));
+                    break;
+                case universe_action::action_type::ADD_NORMAL_JOB_CALL_ONCE:
+                    _m_shared_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job));
+                    break;
+                case universe_action::action_type::ADD_AFTER_JOB_FOR_WORLDS:
+                    _m_shared_after_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job));
+                    break;
+                case universe_action::action_type::ADD_AFTER_JOB_CALL_ONCE:
+                    _m_shared_after_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job));
+                    break;
 
-                            double current_time = je_clock_time();
-                            do
-                            {
-                                if (_m_pause_universe_update_for_world)
-                                {
-                                    DEBUG_ARCH_LOG("World %p: stop update for ecs_universe world list modify.", world);
-                                    return;
-                                }
-                                // Pending for blocking world's system update.
-                                je_clock_sleep_until(current_time += 1. / 60.);
+                case universe_action::action_type::REMOVE_PRE_JOB_FOR_WORLDS:
+                {
+                    auto fnd = std::find_if(_m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
+                        [cur_action](ecs_job* _job) {
+                            return _job->m_job_type == ecs_job::job_type::FOR_WORLDS
+                                && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                        });
 
-                                if (je_clock_time() > 1.0 + current_time)
-                                    current_time = je_clock_time();
+                    if (fnd == _m_shared_pre_jobs.end())
+                        jeecs::debug::log_error("Cannot find pre-job(%p) in universe(%p), remove failed.",
+                            cur_action->m_for_worlds_job, this);
+                    else
+                        _m_shared_pre_jobs.erase(fnd);
+                    break;
+                }
+                case universe_action::action_type::REMOVE_PRE_JOB_CALL_ONCE:
+                {
+                    auto fnd = std::find_if(_m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
+                        [cur_action](ecs_job* _job) {
+                            return _job->m_job_type == ecs_job::job_type::CALL_ONCE
+                                && _job->m_call_once_job == cur_action->m_call_once_job;
+                        });
 
-                            } while (world->update());
+                    if (fnd == _m_shared_pre_jobs.end())
+                        jeecs::debug::log_error("Cannot find pre-callonce-job(%p) in universe(%p), remove failed.",
+                            cur_action->m_call_once_job, this);
+                    else
+                        _m_shared_pre_jobs.erase(fnd);
+                    break;
+                }
+                case universe_action::action_type::REMOVE_NORMAL_JOB_FOR_WORLDS:
+                {
+                    auto fnd = std::find_if(_m_shared_jobs.begin(), _m_shared_jobs.end(),
+                        [cur_action](ecs_job* _job) {
+                            return _job->m_job_type == ecs_job::job_type::FOR_WORLDS
+                                && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                        });
 
-                            DEBUG_ARCH_LOG("World %p: destroied.", world);
+                    if (fnd == _m_shared_jobs.end())
+                        jeecs::debug::log_error("Cannot find job(%p) in universe(%p), remove failed.",
+                            cur_action->m_for_worlds_job, this);
+                    else
+                        _m_shared_jobs.erase(fnd);
+                    break;
+                }
+                case universe_action::action_type::REMOVE_NORMAL_JOB_CALL_ONCE:
+                {
+                    auto fnd = std::find_if(_m_shared_jobs.begin(), _m_shared_jobs.end(),
+                        [cur_action](ecs_job* _job) {
+                            return _job->m_job_type == ecs_job::job_type::CALL_ONCE
+                                && _job->m_call_once_job == cur_action->m_call_once_job;
+                        });
 
-                            destroy_all_systems_for_world(world);
+                    if (fnd == _m_shared_jobs.end())
+                        jeecs::debug::log_error("Cannot find callonce-job(%p) in universe(%p), remove failed.",
+                            cur_action->m_call_once_job, this);
+                    else
+                        _m_shared_jobs.erase(fnd);
+                    break;
+                }
+                case universe_action::action_type::REMOVE_AFTER_JOB_FOR_WORLDS:
+                {
+                    auto fnd = std::find_if(_m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
+                        [cur_action](ecs_job* _job) {
+                            return _job->m_job_type == ecs_job::job_type::FOR_WORLDS
+                                && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                        });
 
-                            // Execute here means world has been destroied, remove it from list;
-                            std::lock_guard g1(_m_world_list_mx);
-                            if (auto fnd = std::find(_m_world_list.begin(), _m_world_list.end(), world);
-                                fnd != _m_world_list.end())
-                                _m_world_list.erase(fnd);
-                            else
-                                assert(false);
+                    if (fnd == _m_shared_after_jobs.end())
+                        jeecs::debug::log_error("Cannot find after-job(%p) in universe(%p), remove failed.",
+                            cur_action->m_for_worlds_job, this);
+                    else
+                        _m_shared_after_jobs.erase(fnd);
+                    break;
+                }
+                case universe_action::action_type::REMOVE_AFTER_JOB_CALL_ONCE:
+                {
+                    auto fnd = std::find_if(_m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
+                        [cur_action](ecs_job* _job) {
+                            return _job->m_job_type == ecs_job::job_type::CALL_ONCE
+                                && _job->m_call_once_job == cur_action->m_call_once_job;
+                        });
 
-                            jeecs::basic::destroy_free(world);
-                        }
-                    ))
-                );
+                    if (fnd == _m_shared_after_jobs.end())
+                        jeecs::debug::log_error("Cannot find after-callonce-job(%p) in universe(%p), remove failed.",
+                            cur_action->m_call_once_job, this);
+                    else
+                        _m_shared_after_jobs.erase(fnd);
+                    break;
+                }
+                default:
+                    break;
+                }
+
+                delete cur_action;
             }
 
-            for (auto& job_thread : _world_job_thread)
-                job_thread.join();
+            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                [this](ecs_world* world) {
+                    if (!world->update())
+                    {
+                        // Current world is dying! ready to destroy it!
+                    }
+                });
 
-            return executing_world_count;
+
+            _m_current_time = je_clock_time();
+            double next_update_time = _m_current_time + 0.1f;
+
+            double next_shared_jobs_update_time = _m_current_time;
+            double next_world_update_time = _m_current_time;
+
+            je_clock_sleep_until(_m_current_time + _m_next_execute_interval);
+            _m_current_time += _m_next_execute_interval;
+
+            if (je_clock_time() - _m_current_time >= 2.0)
+                _m_current_time = je_clock_time();
+            _m_next_execute_interval = 1.0;
+            //
+
+            // Walk through all jobs:
+            // 1. Do pre jobs.
+            ParallelForeach(
+                _m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
+                [this](ecs_job* shared_job) {
+                    if (CHECK(_m_current_time, shared_job->m_next_execute_time))
+                    {
+                        if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
+                            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                                [this, shared_job](ecs_world* world) {
+                                    shared_job->set_next_execute_time(
+                                        next_execute_time_allign(shared_job->m_for_worlds_job(world)));
+                                });
+                        else
+                            shared_job->set_next_execute_time(
+                                next_execute_time_allign(shared_job->m_call_once_job()));
+                    }
+                    set_next_execute_interval(shared_job->m_next_execute_time - current_time());
+                });
+            // 2. Do normal jobs.
+            ParallelForeach(
+                _m_shared_jobs.begin(), _m_shared_jobs.end(),
+                [this](ecs_job* shared_job) {
+                    if (CHECK(_m_current_time, shared_job->m_next_execute_time))
+                    {
+                        if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
+                            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                                [this, shared_job](ecs_world* world) {
+                                    shared_job->set_next_execute_time(
+                                        next_execute_time_allign(shared_job->m_for_worlds_job(world)));
+                                });
+                        else
+                            shared_job->set_next_execute_time(
+                                next_execute_time_allign(shared_job->m_call_once_job()));
+                    }
+                    set_next_execute_interval(shared_job->m_next_execute_time - current_time());
+                });
+            // 3. Do after jobs.
+            ParallelForeach(
+                _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
+                [this](ecs_job* shared_job) {
+                    if (CHECK(_m_current_time, shared_job->m_next_execute_time))
+                    {
+                        if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
+                            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                                [this, shared_job](ecs_world* world) {
+                                    shared_job->set_next_execute_time(
+                                        next_execute_time_allign(shared_job->m_for_worlds_job(world)));
+                                });
+                        else
+                            shared_job->set_next_execute_time(
+                                next_execute_time_allign(shared_job->m_call_once_job()));
+                    }
+                    set_next_execute_interval(shared_job->m_next_execute_time - current_time());
+                });
         }
     public:
         ecs_universe()
@@ -1649,6 +1745,15 @@ namespace jeecs_impl
             return nullptr;
         }
     };
+
+    void ecs_job::set_next_execute_time(double nextTime)noexcept
+    {
+        std::lock_guard g1(m_time_guard);
+        if (CHECK(m_universe->current_time(), m_next_execute_time)
+            || (nextTime > 0 && nextTime < m_next_execute_time))
+            m_next_execute_time = nextTime;
+
+    }
 }
 
 void* je_ecs_universe_create()
