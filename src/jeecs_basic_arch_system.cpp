@@ -1338,8 +1338,13 @@ namespace jeecs_impl
         std::atomic_flag _m_universe_update_thread_stop_flag = {};
         std::atomic_bool _m_pause_universe_update_for_world = true;
 
-        std::recursive_mutex _m_shared_job_mx;
-        std::vector<ecs_job*> _m_shared_job;
+        // Used for store shared jobs instance.
+        std::mutex _m_shared_jobs_mx;
+        std::vector<ecs_job*> _m_shared_jobs;
+
+        // Used for store private jobs instance, other place can register/
+        std::recursive_mutex _m_private_jobs_mx;
+        std::vector<ecs_job*> _m_private_jobs;
 
     public:
         size_t update()
