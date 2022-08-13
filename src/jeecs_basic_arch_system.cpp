@@ -1343,7 +1343,7 @@ namespace jeecs_impl
         std::vector<ecs_job*> _m_shared_jobs;
 
         // Used for store private jobs instance, other place can register/
-        std::recursive_mutex _m_private_jobs_mx;
+        std::mutex _m_private_jobs_mx;
         std::vector<ecs_job*> _m_private_jobs;
 
     public:
