@@ -733,8 +733,8 @@ namespace jeecs_impl
 
     struct ecs_job
     {
-        using job_for_worlds_t = double(*)(ecs_world*);
-        using job_call_once_t = double(*)(void);
+        using job_for_worlds_t = je_job_for_worlds_t;
+        using job_call_once_t = je_job_call_once_t;
 
         enum job_type
         {
@@ -771,7 +771,7 @@ namespace jeecs_impl
             assert(_job != nullptr);
         }
 
-        void set_next_execute_time(double nextTime) noexcept;
+        inline void set_next_execute_time(double nextTime) noexcept;
     };
 
     class command_buffer
@@ -1230,9 +1230,10 @@ namespace jeecs_impl
     {
         std::vector<ecs_world*> _m_world_list;
 
+        std::mutex _m_removing_worlds_appending_mx;
+
         std::thread _m_universe_update_thread;
         std::atomic_flag _m_universe_update_thread_stop_flag = {};
-        std::atomic_bool _m_pause_universe_update_for_world = true;
 
         // Used for store shared jobs instance.
         std::vector<ecs_job*> _m_shared_pre_jobs;
@@ -1428,18 +1429,23 @@ namespace jeecs_impl
 
                 delete cur_action;
             }
-            std::vector<ecs_world*> removing_worlds;
 
+            std::vector<ecs_world*> _m_removing_worlds;
+
+            // Update all worlds, if world is closing, add it to _m_removing_worlds.
             ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                [this, &removing_worlds](ecs_world* world) {
+                [this, &_m_removing_worlds](ecs_world* world) {
                     if (!world->update())
                     {
+                        std::lock_guard g1(_m_removing_worlds_appending_mx);
+
                         // Ready remove the world from list;
-                        removing_worlds.push_back(world);
+                        _m_removing_worlds.push_back(world);
                     }
                 });
 
-            for (ecs_world* removed_world : removing_worlds)
+            // Remove all closed worlds
+            for (ecs_world* removed_world : _m_removing_worlds)
             {
                 auto fnd = std::find(_m_world_list.begin(), _m_world_list.end(), removed_world);
                 if (fnd != _m_world_list.end())
@@ -1448,6 +1454,7 @@ namespace jeecs_impl
                     // Current world is not found in world_list, that should not happend.
                     assert(false);
 
+                DEBUG_ARCH_LOG("World(%p) has been destroyed.", removed_world);
                 delete removed_world;
             }
 
@@ -1551,9 +1558,6 @@ namespace jeecs_impl
                 }
             ));
 
-            while (_m_pause_universe_update_for_world)
-                std::this_thread::yield();
-
             DEBUG_ARCH_LOG("Universe: %p created.", this);
         }
 
@@ -1569,6 +1573,105 @@ namespace jeecs_impl
             callback_function_node* node = jeecs::basic::create_new<callback_function_node>();
             node->m_method = function;
             m_exit_callback_list.add_one(node);
+        }
+
+        inline void register_pre_call_once_job(je_job_call_once_t job)noexcept
+        {
+            universe_action * action = new universe_action;
+            action->m_type = universe_action::action_type::ADD_PRE_JOB_CALL_ONCE;
+            action->m_call_once_job = job;
+
+            append_universe_action(action);
+        }
+        inline void register_pre_for_worlds_job(je_job_for_worlds_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::ADD_PRE_JOB_FOR_WORLDS;
+            action->m_for_worlds_job = job;
+
+            append_universe_action(action);
+        }
+        inline void register_call_once_job(je_job_call_once_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::ADD_NORMAL_JOB_CALL_ONCE;
+            action->m_call_once_job = job;
+
+            append_universe_action(action);
+        }
+        inline void register_for_worlds_job(je_job_for_worlds_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::ADD_NORMAL_JOB_FOR_WORLDS;
+            action->m_for_worlds_job = job;
+
+            append_universe_action(action);
+        }
+        inline void register_after_call_once_job(je_job_call_once_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::ADD_AFTER_JOB_CALL_ONCE;
+            action->m_call_once_job = job;
+
+            append_universe_action(action);
+        }
+        inline void register_after_for_worlds_job(je_job_for_worlds_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::ADD_AFTER_JOB_FOR_WORLDS;
+            action->m_for_worlds_job = job;
+
+            append_universe_action(action);
+        }
+
+
+        inline void unregister_pre_call_once_job(je_job_call_once_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::REMOVE_PRE_JOB_CALL_ONCE;
+            action->m_call_once_job = job;
+
+            append_universe_action(action);
+        }
+        inline void unregister_pre_for_worlds_job(je_job_for_worlds_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::REMOVE_PRE_JOB_FOR_WORLDS;
+            action->m_for_worlds_job = job;
+
+            append_universe_action(action);
+        }
+        inline void unregister_call_once_job(je_job_call_once_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::REMOVE_NORMAL_JOB_CALL_ONCE;
+            action->m_call_once_job = job;
+
+            append_universe_action(action);
+        }
+        inline void unregister_for_worlds_job(je_job_for_worlds_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::REMOVE_NORMAL_JOB_FOR_WORLDS;
+            action->m_for_worlds_job = job;
+
+            append_universe_action(action);
+        }
+        inline void unregister_after_call_once_job(je_job_call_once_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::REMOVE_AFTER_JOB_CALL_ONCE;
+            action->m_call_once_job = job;
+
+            append_universe_action(action);
+        }
+        inline void unregister_after_for_worlds_job(je_job_for_worlds_t job)noexcept
+        {
+            universe_action* action = new universe_action;
+            action->m_type = universe_action::action_type::REMOVE_AFTER_JOB_FOR_WORLDS;
+            action->m_for_worlds_job = job;
+
+            append_universe_action(action);
         }
 
         ~ecs_universe()
@@ -1612,7 +1715,7 @@ namespace jeecs_impl
         }
     };
 
-    void ecs_job::set_next_execute_time(double nextTime)noexcept
+    inline void ecs_job::set_next_execute_time(double nextTime)noexcept
     {
         std::lock_guard g1(m_time_guard);
         if (CHECK(m_universe->current_time(), m_next_execute_time)
@@ -1894,4 +1997,54 @@ const jeecs::game_entity* jedbg_get_editing_entity()
     if (_editor_entity.valid())
         return &_editor_entity;
     return nullptr;
+}
+
+void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->register_pre_for_worlds_job(job);
+}
+void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->register_pre_call_once_job(job);
+}
+void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->register_for_worlds_job(job);
+}
+void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->register_call_once_job(job);
+}
+void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->register_after_for_worlds_job(job);
+}
+void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->register_after_call_once_job(job);
+}
+
+void je_ecs_universe_unregister_pre_for_worlds_job(void* universe, je_job_for_worlds_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->unregister_pre_for_worlds_job(job);
+}
+void je_ecs_universe_unregister_pre_call_once_job(void* universe, je_job_call_once_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->unregister_pre_call_once_job(job);
+}
+void je_ecs_universe_unregister_for_worlds_job(void* universe, je_job_for_worlds_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->unregister_for_worlds_job(job);
+}
+void je_ecs_universe_unregister_call_once_job(void* universe, je_job_call_once_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->unregister_call_once_job(job);
+}
+void je_ecs_universe_unregister_after_for_worlds_job(void* universe, je_job_for_worlds_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->unregister_after_for_worlds_job(job);
+}
+void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_once_t job)
+{
+    ((jeecs_impl::ecs_universe*)universe)->unregister_after_call_once_job(job);
 }

@@ -26,5 +26,20 @@ int main(int argc, char** argv)
 
     // jedbg_editor();
 
+    game_universe u(je_ecs_universe_create());
+
+    while (true)
+    {
+        for (int i = 0; i < 10; ++i)
+        {
+            auto w = u.create_world();
+            w.close();
+        }
+        je_clock_sleep_for(0.5);
+    }
+
+    u.wait();
+
+
     je_clock_sleep_for(1);
 }

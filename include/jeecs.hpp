@@ -293,6 +293,23 @@ JE_API void je_universe_loop(void* universe);
 JE_API void je_ecs_universe_destroy(void* universe);
 JE_API void je_ecs_universe_stop(void* universe);
 
+typedef double(*je_job_for_worlds_t)(void* world);
+typedef double(*je_job_call_once_t)(void);
+
+JE_API void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job);
+
+JE_API void je_ecs_universe_unregister_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_pre_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_unregister_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_unregister_after_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_once_t job);
+
 JE_API void* je_ecs_world_in_universe(void* world);
 JE_API void* je_ecs_world_create(void* in_universe);
 JE_API void je_ecs_world_destroy(void* world);
