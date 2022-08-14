@@ -25,7 +25,6 @@ int main(int argc, char** argv)
     at_quick_exit(jeecs::enrty::module_leave);
 
     // jedbg_editor();
-
     game_universe u(je_ecs_universe_create());
 
     while (true)

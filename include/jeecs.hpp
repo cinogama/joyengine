@@ -119,6 +119,35 @@ namespace jeecs
 
         using uid_t = uuid;
         using ms_stamp_t = uint64_t;
+
+        template<typename T>
+        struct _origin_type
+        {
+            template<typename T>
+            using _origin_t =
+                typename std::remove_cv<
+                    typename std::remove_reference<
+                        typename std::remove_pointer<T>::type
+                    >::type
+                >::type;
+
+            static auto _type_selector() // -> T*
+            {
+                if constexpr (
+                    std::is_reference<T>::value
+                    || std::is_pointer<T>::value
+                    || std::is_const<T>::value
+                    || std::is_volatile<T>::value)
+                    return _origin_type<typename _origin_t<T>>::_type_selector();
+                else
+                    return (T*) nullptr;
+            }
+
+            using type = typename std::remove_pointer<decltype(_type_selector())>::type;
+        };
+        
+        template<typename T>
+        using origin_t = typename _origin_type<T>::type;
     }
 
     class game_system;
@@ -1795,7 +1824,7 @@ namespace jeecs
 
             assert(false); // TODO
             return chain_world;
-        } 
+        }
     };
 
     class game_universe
@@ -1842,6 +1871,127 @@ namespace jeecs
         static void destroy_universe(game_universe universe)
         {
             return je_ecs_universe_destroy(universe.handle());
+        }
+    };
+
+    // Used for select the components of entities which match spcify requirements.
+    struct selector
+    {
+        struct requirement
+        {
+            enum type : uint8_t
+            {
+                CONTAIN,        // Must have spcify component
+                MAYNOT,         // May have or not have
+                ANYOF,          // Must have one of 'ANYOF' components
+                EXCEPT,         // Must not contain spcify component
+            };
+
+            type m_require;
+            typing::typeid_t m_type;
+
+            requirement(type _require, typing::typeid_t _type)
+                : m_require(_require)
+                , m_type(_type)
+            { }
+        };
+
+        struct dependence
+        {
+            jeecs::vector<requirement> m_dependences;
+
+            // Store archtypes here?
+            game_world                 m_world;
+
+            bool need_update(const game_world& aim_world) const noexcept
+            {
+                assert(aim_world.handle() != nullptr);
+
+                if (m_world != aim_world || je_ecs_archmgr_updated(aim_world.handle()))
+                    return true;
+                return false;
+            }
+        };
+
+        bool                        m_enabled = false;
+        size_t                      m_curstep = 0;
+        game_world                  m_current_world = nullptr;
+        jeecs::vector<dependence>   m_steps;
+
+    private:
+        template<typename CurRequireT, typename ... OtherRequirementTs>
+        void _update_dependence(dependence& dep)
+        {
+            if constexpr (std::is_reference<CurRequireT>::value)
+                // Reference, means CONTAIN
+                dep.m_dependences.push_back(
+                    requirement(requirement::type::CONTAIN,
+                        typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+            else if constexpr (std::is_pointer<CurRequireT>::value)
+                // Pointer, means MAYNOT
+                dep.m_dependences.push_back(
+                    requirement(requirement::type::MAYNOT,
+                        typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+            else
+            {
+                static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value
+                   "'exec' of selector only accept ref or ptr type of Components.");
+            }
+
+            if (sizeof...(OtherRequirementTs) != 0)
+                _update_dependence<OtherRequirementTs...>();
+        }
+
+        template<typename ... RequirementTs>
+        bool _update()
+        {
+            if (!m_enabled)
+            {
+                jeecs::debug::log_warn("Failed to execute current jobs(%p). Game world not specify!");
+                return false;
+            }
+
+            assert(m_curstep <= m_steps.size());
+            if (m_curstep == m_steps.size())
+            {
+                // First times to execute this job or arch/world changed, register requirements
+                m_steps.push_back(dependence{});
+                dependence& dep = m_steps.back();
+
+                assert(dep.m_dependences.size() == 0);
+            }
+
+            dependence& cur_dependence = m_steps.back();
+            if (cur_dependence.need_update(m_current_world))
+            {
+                // TODO: Update new arch/chunk informations.
+            }
+
+            return true;
+        }
+
+    public:
+
+        selector& at(game_world w)
+        {
+            if (w)
+                m_enabled = true;
+            m_curstep = 0;
+            m_current_world = w;
+            return *this;
+        }
+
+        template<typename RT, typename ... RequirementTs>
+        selector& exec(std::function<RT(RequirementTs...)>&& _exec)
+        {
+            if (_update<RequirementTs...>())
+            {
+
+                // TODO: Execute actions.
+                //
+                ++m_curstep;
+            }
+            return *this;
         }
     };
 
