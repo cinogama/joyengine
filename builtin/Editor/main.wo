@@ -142,12 +142,3 @@ func Editor_Welcome(ref open: bool)
 
 /////////////////////
 editor::Project::Start(Editor_MainMenuBar, ());
-
-
-
-let f = \x:string = p(x)
-    where p = \msg: string = std::println(msg);;
-
-    as (string)=> int;
-    
-f("Helloworld");

@@ -483,10 +483,8 @@ namespace jeecs_impl
             return !_m_arch_modified.test_and_set();
         }
 
-        inline void _update_selector_arch(jeecs::selector::dependence* modify_sys_func) const
+        inline void update_dependence_arch(jeecs::dependence* dependence) const
         {
-            // TODO: OPTMIZE..
-            assert(false); // TODO;
             //types_set need_set, any_set, except_set, mayhave_set;
             //for (auto& depend : modify_sys_func->m_dependence_list)
             //{
@@ -861,6 +859,11 @@ namespace jeecs_impl
         bool archtype_mgr_updated()const noexcept
         {
             return _m_archmgr_updated;
+        }
+
+        void update_dependence_archinfo(jeecs::dependence* require)const noexcept
+        {
+
         }
 
         bool update()
@@ -1698,9 +1701,17 @@ void je_ecs_world_create_entity_with_components(
     auto&& entity = ((jeecs_impl::ecs_world*)world)->create_entity_with_component(types);
 
     if (out_entity)
-    {
         out_entity->_set_arch_chunk_info(entity._m_in_chunk, entity._m_id, entity._m_version);
-    }
+}
+
+bool je_ecs_world_archmgr_updated(void* world)
+{
+    return ((jeecs_impl::ecs_world*)world)->archtype_mgr_updated();
+}
+
+void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence)
+{
+    ((jeecs_impl::ecs_world*)world)->update_dependence_archinfo(dependence);
 }
 
 void* je_ecs_world_entity_add_component(
@@ -1782,11 +1793,6 @@ bool je_ecs_world_validate_entity(const jeecs::game_entity* entity)
     if (auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk)
         return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
     return false;
-}
-
-bool je_ecs_archmgr_updated(void* world)
-{
-    return ((jeecs_impl::ecs_world*)world)->archtype_mgr_updated();
 }
 
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////

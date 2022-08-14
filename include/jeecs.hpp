@@ -205,6 +205,8 @@ namespace jeecs
         }
     };
 
+    struct dependence;
+
     namespace input
     {
         enum class keycode
@@ -343,7 +345,8 @@ JE_API void* je_ecs_world_in_universe(void* world);
 JE_API void* je_ecs_world_create(void* in_universe);
 JE_API void je_ecs_world_destroy(void* world);
 
-JE_API bool je_ecs_archmgr_updated(void* world);
+JE_API bool je_ecs_world_archmgr_updated(void* world);
+JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
 
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
@@ -1875,44 +1878,45 @@ namespace jeecs
     };
 
     // Used for select the components of entities which match spcify requirements.
+
+    struct requirement
+    {
+        enum type : uint8_t
+        {
+            CONTAIN,        // Must have spcify component
+            MAYNOT,         // May have or not have
+            ANYOF,          // Must have one of 'ANYOF' components
+            EXCEPT,         // Must not contain spcify component
+        };
+
+        type m_require;
+        typing::typeid_t m_type;
+
+        requirement(type _require, typing::typeid_t _type)
+            : m_require(_require)
+            , m_type(_type)
+        { }
+    };
+
+    struct dependence
+    {
+        jeecs::vector<requirement> m_dependences;
+
+        // Store archtypes here?
+        game_world                 m_world;
+
+        bool need_update(const game_world& aim_world) const noexcept
+        {
+            assert(aim_world.handle() != nullptr);
+
+            if (m_world != aim_world || je_ecs_world_archmgr_updated(aim_world.handle()))
+                return true;
+            return false;
+        }
+    };
+
     struct selector
     {
-        struct requirement
-        {
-            enum type : uint8_t
-            {
-                CONTAIN,        // Must have spcify component
-                MAYNOT,         // May have or not have
-                ANYOF,          // Must have one of 'ANYOF' components
-                EXCEPT,         // Must not contain spcify component
-            };
-
-            type m_require;
-            typing::typeid_t m_type;
-
-            requirement(type _require, typing::typeid_t _type)
-                : m_require(_require)
-                , m_type(_type)
-            { }
-        };
-
-        struct dependence
-        {
-            jeecs::vector<requirement> m_dependences;
-
-            // Store archtypes here?
-            game_world                 m_world;
-
-            bool need_update(const game_world& aim_world) const noexcept
-            {
-                assert(aim_world.handle() != nullptr);
-
-                if (m_world != aim_world || je_ecs_archmgr_updated(aim_world.handle()))
-                    return true;
-                return false;
-            }
-        };
-
         bool                        m_enabled = false;
         size_t                      m_curstep = 0;
         game_world                  m_current_world = nullptr;
@@ -1920,7 +1924,7 @@ namespace jeecs
 
     private:
         template<typename CurRequireT, typename ... OtherRequirementTs>
-        void _update_dependence(dependence& dep)
+        void _apply_dependence(dependence& dep)
         {
             if constexpr (std::is_reference<CurRequireT>::value)
                 // Reference, means CONTAIN
@@ -1955,16 +1959,18 @@ namespace jeecs
             if (m_curstep == m_steps.size())
             {
                 // First times to execute this job or arch/world changed, register requirements
-                m_steps.push_back(dependence{});
+                m_steps.push_back(dependence());
                 dependence& dep = m_steps.back();
 
                 assert(dep.m_dependences.size() == 0);
+                _apply_dependence<RequirementTs...>():
             }
 
             dependence& cur_dependence = m_steps.back();
             if (cur_dependence.need_update(m_current_world))
             {
                 // TODO: Update new arch/chunk informations.
+                je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
             }
 
             return true;
@@ -1986,7 +1992,6 @@ namespace jeecs
         {
             if (_update<RequirementTs...>())
             {
-
                 // TODO: Execute actions.
                 //
                 ++m_curstep;
