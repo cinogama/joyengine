@@ -1434,9 +1434,6 @@ namespace jeecs_impl
                 [this, &removing_worlds](ecs_world* world) {
                     if (!world->update())
                     {
-                        // Current world is dying! ready to destroy it!
-                        destroy_all_systems_for_world(world);
-
                         // Ready remove the world from list;
                         removing_worlds.push_back(world);
                     }
@@ -1582,10 +1579,6 @@ namespace jeecs_impl
             if (_m_universe_update_thread.joinable())
                 _m_universe_update_thread.join();
 
-            destroy_all_systems_for_world(nullptr);
-
-            assert(_m_stored_systems.empty());
-
             DEBUG_ARCH_LOG("Universe: %p closed.", this);
         }
     public:
@@ -1616,61 +1609,6 @@ namespace jeecs_impl
         {
             // NOTE: This function is designed for editor
             return _m_world_list;
-        }
-
-        void attach_shared_system_to_world(ecs_world* world, const jeecs::typing::type_info* system_type)
-        {
-            static_assert(false, "todo");
-
-            //std::lock_guard g1(_m_stored_systems_mx);
-            //stored_system_instance* fnd = nullptr;
-            //for (auto& shared_system : _m_stored_systems[nullptr])
-            //{
-            //    if (shared_system.m_system_typeinfo == system_type)
-            //    {
-            //        fnd = &shared_system;
-            //        break;
-            //    }
-            //}
-
-            //if (fnd)
-            //{
-            //    if (fnd->m_attached_world)
-            //    {
-            //        if (fnd->m_attached_world == world)
-            //        {
-            //            // FUCK YOU!
-            //            DEBUG_ARCH_LOG_WARN("Shared system has been attached to world: %p, skip.", world);
-            //            return;
-            //        }
-
-            //        // Disattach from old world
-            //        //auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
-
-            //        //while (func_chain)
-            //        //{
-            //        //    fnd->m_attached_world->get_command_buffer().remove_system(fnd->m_attached_world, func_chain);
-            //        //    func_chain = func_chain->last;
-            //        //}
-            //    }
-
-            //    // NOTE: Attach system in next universe update.
-            //    if (world)
-            //    {
-            //        // Attach to new world.
-            //        auto* func_chain = fnd->m_system_instance->get_registed_function_chain();
-
-            //        while (func_chain)
-            //        {
-            //            world->get_command_buffer().append_system(world, func_chain);
-            //            func_chain = func_chain->last;
-            //        }
-            //    }
-            //    fnd->m_attached_world = world;
-            //}
-            //else
-            //    jeecs::debug::log_error("There is no shared-system: '%s' in universe:%p.",
-            //        system_type->m_typename, this);
         }
     };
 
@@ -1719,46 +1657,6 @@ void je_ecs_universe_stop(void* ecs_universe)
     ((jeecs_impl::ecs_universe*)ecs_universe)->stop_universe_loop();
 }
 
-void* je_ecs_universe_instance_system(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type)
-{
-    void* instance = je_mem_alloc(system_type->m_size);
-
-    if (aim_world)
-        system_type->construct(instance, aim_world);
-    else
-        system_type->construct(instance, universe);
-
-    ((jeecs_impl::ecs_universe*)universe)->store_system_for_world(
-        (jeecs_impl::ecs_world*)aim_world, system_type, (jeecs::game_system*)instance);
-
-    return instance;
-}
-
-//void je_ecs_universe_remove_system(
-//    void* universe,
-//    void* aim_world,
-//    const jeecs::typing::type_info* system_type)
-//{
-//    auto* sys_instance = ((jeecs_impl::ecs_universe*)universe)->unstore_system_for_world(
-//        (jeecs_impl::ecs_world*)aim_world, system_type);
-//
-//    ((jeecs_impl::ecs_world*)aim_world)->get_command_buffer().destroy_system_instance(
-//        (jeecs_impl::ecs_world*)aim_world, sys_instance, system_type);
-//}
-
-//void je_ecs_universe_attach_shared_system_to(
-//    void* universe,
-//    void* aim_world,
-//    const jeecs::typing::type_info* system_type
-//)
-//{
-//    ((jeecs_impl::ecs_universe*)universe)->attach_shared_system_to_world(
-//        (jeecs_impl::ecs_world*)aim_world, system_type);
-//}
-
 void* je_arch_get_chunk(void* archtype)
 {
     return ((jeecs_impl::arch_type*)archtype)->get_head_chunk();
@@ -1778,18 +1676,6 @@ void je_ecs_world_destroy(void* world)
 {
     ((jeecs_impl::ecs_world*)world)->get_command_buffer().close_world((jeecs_impl::ecs_world*)world);
 }
-
-//void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function)
-//{
-//    jeecs_impl::ecs_world* ecsworld = (jeecs_impl::ecs_world*)world;
-//    ecsworld->get_command_buffer().append_system(ecsworld, game_system_function);
-//}
-//
-//void je_ecs_world_unregister_system_func(void* world, jeecs::game_system_function* game_system_function)
-//{
-//    jeecs_impl::ecs_world* ecsworld = (jeecs_impl::ecs_world*)world;
-//    ecsworld->get_command_buffer().remove_system(ecsworld, game_system_function);
-//}
 
 void je_ecs_world_create_entity_with_components(
     void* world,
@@ -1920,11 +1806,6 @@ void jedbg_set_world_name(void* _world, const char* name)
     ((jeecs_impl::ecs_world*)_world)->_name(name);
 }
 
-void* jedbg_get_shared_system_attached_world(void* _universe, const jeecs::typing::type_info* tinfo)
-{
-    return ((jeecs_impl::ecs_universe*)_universe)->_shared_system_attached_world(tinfo);
-}
-
 void jedbg_free_entity(jeecs::game_entity* _entity_list)
 {
     jeecs::basic::destroy_free(_entity_list);
@@ -1962,25 +1843,6 @@ jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world)
     out_result[out_entities.size()] = nullptr;
 
     return out_result;
-}
-
-// NOTE: need free the return result by 'je_mem_free'
-const jeecs::typing::type_info** jedbg_get_attached_system_types_in_world(void* _world)
-{
-    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)_world;
-
-    auto&& stored_systems = world
-        ? world->get_universe()->get_stored_system_of_world(world)
-        : ((jeecs_impl::ecs_universe*)jedbg_get_editor_universe())
-        ->get_stored_system_of_world(world);
-
-    const jeecs::typing::type_info** outresult = (const jeecs::typing::type_info**)je_mem_alloc(
-        sizeof(const jeecs::typing::type_info*) * (stored_systems.size() + 1));
-
-    memcpy(outresult, stored_systems.data(), sizeof(const jeecs::typing::type_info*) * stored_systems.size());
-    outresult[stored_systems.size()] = nullptr;
-
-    return outresult;
 }
 
 const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity)

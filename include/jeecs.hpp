@@ -292,20 +292,7 @@ JE_API void* je_ecs_universe_create(void);
 JE_API void je_universe_loop(void* universe);
 JE_API void je_ecs_universe_destroy(void* universe);
 JE_API void je_ecs_universe_stop(void* universe);
-JE_API void* je_ecs_universe_instance_system(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type
-);
-JE_API void je_ecs_universe_remove_system(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type);
-JE_API void je_ecs_universe_attach_shared_system_to(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type
-);
+
 JE_API void* je_ecs_world_in_universe(void* world);
 JE_API void* je_ecs_world_create(void* in_universe);
 JE_API void je_ecs_world_destroy(void* world);
@@ -740,15 +727,10 @@ JE_API const char* jedbg_get_world_name(void* _world);
 
 JE_API void jedbg_set_world_name(void* _world, const char* name);
 
-JE_API void* jedbg_get_shared_system_attached_world(void* _universe, const jeecs::typing::type_info* tinfo);
-
 JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
 
 // NOTE: need free the return result by 'je_mem_free'(and elem with jedbg_free_entity)
 JE_API jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world);
-
-// NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_attached_system_types_in_world(void* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
@@ -1727,43 +1709,6 @@ namespace jeecs
             return _m_ecs_world_addr;
         }
 
-        inline void* add_system(const typing::type_info* sys_type)
-        {
-            if (sys_type->is_system())
-                return je_ecs_universe_instance_system(
-                    je_ecs_world_in_universe(handle()),
-                    handle(),
-                    sys_type
-                );
-            else
-                debug::log_fatal("Cannot add '%s' to world, it is not a system.", sys_type->m_typename);
-            return nullptr;
-        }
-
-        template<typename T>
-        inline T* add_system()
-        {
-            return (T*)add_system(typing::type_info::of<T>());
-        }
-
-        inline void remove_system(const typing::type_info* sys_type)
-        {
-            if (sys_type->is_system())
-                je_ecs_universe_remove_system(
-                    je_ecs_world_in_universe(handle()),
-                    handle(),
-                    sys_type
-                );
-            else
-                debug::log_fatal("Cannot remove '%s' from world, it is not a system.", sys_type->m_typename);
-        }
-
-        template<typename T>
-        inline void remove_system()
-        {
-            remove_system(typing::type_info::of<T>());
-        }
-
         template<typename ... CompTs>
         inline game_entity add_entity()
         {
@@ -1793,18 +1738,6 @@ namespace jeecs
         inline void remove_entity(const game_entity& entity)
         {
             je_ecs_world_destroy_entity(handle(), &entity);
-        }
-
-        inline void attach_shared_system(const typing::type_info* sys_type)
-        {
-            if (sys_type->is_shared_system())
-                je_ecs_universe_attach_shared_system_to(
-                    je_ecs_world_in_universe(handle()),
-                    handle(),
-                    sys_type
-                );
-            else
-                debug::log_fatal("Cannot attach '%s' to world, it is not a shared-system.", sys_type->m_typename);
         }
 
         inline operator bool()const noexcept
@@ -1869,24 +1802,6 @@ namespace jeecs
             return je_ecs_world_create(_m_universe_addr);
         }
 
-        inline void* add_shared_system(const typing::type_info* sys_type)
-        {
-            if (sys_type->is_shared_system())
-                return je_ecs_universe_instance_system(
-                    handle(),
-                    nullptr,
-                    sys_type
-                );
-            else
-                debug::log_fatal("Cannot add '%s' to universe, it is not a shared-system.", sys_type->m_typename);
-            return nullptr;
-        }
-
-        inline void attach_shared_system_to(const typing::type_info* typeinfo, game_world world)
-        {
-            je_ecs_universe_attach_shared_system_to(handle(), world.handle(), typeinfo);
-        }
-
         inline void wait()const noexcept
         {
             je_universe_loop(handle());
@@ -1910,23 +1825,6 @@ namespace jeecs
         static void destroy_universe(game_universe universe)
         {
             return je_ecs_universe_destroy(universe.handle());
-        }
-    };
-
-    class game_shared_system : public game_system
-    {
-    private:
-        game_universe _m_current_universe = nullptr;
-    public:
-        game_universe get_universe() const noexcept
-        {
-            return _m_current_universe;
-        }
-
-        game_shared_system(game_universe universe)
-            : game_system(nullptr)
-            , _m_current_universe(universe)
-        {
         }
     };
 

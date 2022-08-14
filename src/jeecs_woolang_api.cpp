@@ -50,21 +50,6 @@ WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args, size_t a
         jeecs::game_universe(wo_pointer(args + 0)).create_world().handle());
 }
 
-
-WO_API wo_api wojeapi_add_shared_system_to_universe(wo_vm vm, wo_value args, size_t argc)
-{
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
-
-    return wo_ret_bool(vm,
-        nullptr != jeecs::game_universe(wo_pointer(args + 0)).add_shared_system(type));
-}
-
-WO_API wo_api wojeapi_get_shared_system_attached_world(wo_vm vm, wo_value args, size_t argc)
-{
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
-    return wo_ret_option_ptr(vm, jedbg_get_shared_system_attached_world(wo_pointer(args + 0), type));
-}
-
 WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t argc)
 {
     void* universe = wo_pointer(args + 0);
@@ -98,27 +83,6 @@ WO_API wo_api wojeapi_set_world_name(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_attach_shared_system_to_world(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_world gworld = wo_pointer(args + 0);
-    gworld.attach_shared_system((const jeecs::typing::type_info*)wo_pointer(args + 1));
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_world gworld = wo_pointer(args + 0);
-    return wo_ret_bool(vm
-        , nullptr != gworld.add_system((const jeecs::typing::type_info*)wo_pointer(args + 1)));
-}
-
-WO_API wo_api wojeapi_remove_system_from_world(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_world gworld = wo_pointer(args + 0);
-    gworld.remove_system((const jeecs::typing::type_info*)wo_pointer(args + 1));
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_world gworld = wo_pointer(args + 0);
@@ -146,20 +110,6 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
             });
     }
     je_mem_free(entities);
-
-    return wo_ret_val(vm, out_arr);
-}
-
-WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args, size_t argc)
-{
-    wo_value out_arr = args + 1;
-
-    auto systems = jedbg_get_attached_system_types_in_world(wo_pointer(args + 0));
-    auto system_iter = systems;
-    while (*system_iter)
-        wo_set_pointer(wo_arr_add(out_arr, nullptr), (void*)*(system_iter++));
-
-    je_mem_free(systems);
 
     return wo_ret_val(vm, out_arr);
 }
@@ -491,13 +441,6 @@ WO_API wo_api wojeapi_type_is_system(wo_vm vm, wo_value args, size_t argc)
     const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
     return wo_ret_bool(vm, type->is_system());
 }
-
-WO_API wo_api wojeapi_type_is_shared_system(wo_vm vm, wo_value args, size_t argc)
-{
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, type->is_shared_system());
-}
-
 
 WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args, size_t argc)
 {

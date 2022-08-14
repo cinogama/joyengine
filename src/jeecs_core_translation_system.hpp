@@ -6,6 +6,9 @@
 #   include "jeecs.hpp"
 #endif
 
+
+#if 0
+
 namespace jeecs
 {
     struct TranslationUpdatingSystem :public game_system
@@ -148,3 +151,5 @@ namespace jeecs
         }
     };
 }
+
+#endif

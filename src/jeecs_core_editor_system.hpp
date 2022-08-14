@@ -6,6 +6,8 @@
 #   include "jeecs.hpp"
 #endif
 
+#if 0
+
 namespace jeecs
 {
     namespace Editor
@@ -498,3 +500,5 @@ let frag = \f: v2f = fout{ color = float4(show_color, 1) }
         }
     };
 }
+
+#endif

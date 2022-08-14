@@ -24,7 +24,7 @@ int main(int argc, char** argv)
     atexit(jeecs::enrty::module_leave);
     at_quick_exit(jeecs::enrty::module_leave);
 
-    jedbg_editor();
+    // jedbg_editor();
 
     je_clock_sleep_for(1);
 }

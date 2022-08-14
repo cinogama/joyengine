@@ -17,6 +17,8 @@
 #include <queue>
 #include <list>
 
+#if 0
+
 namespace jeecs
 {
     struct DefaultGraphicPipelineSystem : public game_shared_system
@@ -352,3 +354,5 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
     };
 
 }
+
+#endif
