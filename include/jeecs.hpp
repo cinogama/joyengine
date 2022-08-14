@@ -1963,7 +1963,7 @@ namespace jeecs
                 dependence& dep = m_steps.back();
 
                 assert(dep.m_dependences.size() == 0);
-                _apply_dependence<RequirementTs...>():
+                _apply_dependence<RequirementTs...>();
             }
 
             dependence& cur_dependence = m_steps.back();
