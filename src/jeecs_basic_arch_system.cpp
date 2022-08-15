@@ -427,6 +427,42 @@ namespace jeecs_impl
         {
             return _m_arch_typeinfo;
         }
+        static void free_chunk_info(jeecs::dependence::arch_chunks_info* archinfo) noexcept
+        {
+            delete[] archinfo->m_component_sizes;
+            delete[]archinfo->m_component_offsets;
+
+            delete archinfo;
+        }
+        inline jeecs::dependence::arch_chunks_info* create_chunk_info(const jeecs::dependence* depend) const noexcept
+        {
+            jeecs::dependence::arch_chunks_info* info = new jeecs::dependence::arch_chunks_info;
+            info->m_arch = this;
+            info->m_entity_count = get_entity_count_per_chunk();
+
+            info->m_component_count = depend->m_requirements.size();
+            info->m_component_sizes = new size_t[info->m_component_count];
+            info->m_component_offsets = new size_t[info->m_component_count];
+
+            for (size_t reqid = 0; reqid < info->m_component_count; ++reqid)
+            {
+                auto* arch_typeinfo = get_arch_type_info_by_type_id(depend->m_requirements[reqid].m_type);
+
+                if (arch_typeinfo)
+                {
+                    info->m_component_sizes[reqid] = arch_typeinfo->m_typeinfo->m_chunk_size;
+                    info->m_component_offsets[reqid] = arch_typeinfo->m_begin_offset_in_chunk;
+                }
+                else
+                {
+                    assert(depend->m_requirements[reqid].m_require == jeecs::requirement::ANYOF
+                        || depend->m_requirements[reqid].m_require == jeecs::requirement::MAYNOT);
+                    info->m_component_sizes[reqid] = info->m_component_offsets[reqid] = 0;
+                }
+            }
+
+            return info;
+        }
     };
 
     class arch_manager
@@ -452,7 +488,7 @@ namespace jeecs_impl
                 jeecs::basic::destroy_free(archtype);
         }
 
-        arch_type* find_or_add_arch(const types_set& _types)
+        arch_type* find_or_add_arch(const types_set& _types) noexcept
         {
             do
             {
@@ -471,7 +507,7 @@ namespace jeecs_impl
             _m_arch_modified.clear();
             return atype;
         }
-        arch_type::entity create_an_entity_with_component(const types_set& _types)
+        arch_type::entity create_an_entity_with_component(const types_set& _types) noexcept
         {
             assert(!_types.empty());
             return find_or_add_arch(_types)->instance_entity();
@@ -483,128 +519,61 @@ namespace jeecs_impl
             return !_m_arch_modified.test_and_set();
         }
 
-        inline void update_dependence_arch(jeecs::dependence* dependence) const
+        inline void update_dependence_archinfo(jeecs::dependence* dependence) const noexcept
         {
-            //types_set need_set, any_set, except_set, mayhave_set;
-            //for (auto& depend : modify_sys_func->m_dependence_list)
-            //{
-            //    if (is_system_component_depends(depend.first))
-            //    {
-            //        // Do nothing.
-            //    }
-            //    else
-            //    {
-            //        switch (depend.second)
-            //        {
-            //        case jeecs::game_system_function::dependence_type::ANY:
-            //            any_set.insert(depend.first); break;
-            //        case jeecs::game_system_function::dependence_type::EXCEPT:
-            //            except_set.insert(depend.first); break;
-            //        case jeecs::game_system_function::dependence_type::CONTAIN:
-            //        case jeecs::game_system_function::dependence_type::READ_AFTER_WRITE:
-            //        case jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME:
-            //        case jeecs::game_system_function::dependence_type::WRITE:
-            //            if (mayhave_set.find(depend.first) == mayhave_set.end())
-            //                need_set.insert(depend.first); break;
-            //        case jeecs::game_system_function::dependence_type::MAY_NOT_HAVE:
-            //            // Remove 'MAYHAVE' component need-requirement from need-set; 
-            //            mayhave_set.insert(depend.first);
-            //            need_set.erase(depend.first);
-            //            break;
-            //        default:
-            //            assert(false); //  Unknown type
-            //        }
-            //    }
-            //}
+            types_set contain_set, anyof_set, except_set /*, maynot_set*/;
+            for (auto& requirement : dependence->m_requirements)
+            {
+                switch (requirement.m_require)
+                {
+                case jeecs::requirement::type::CONTAIN:
+                    contain_set.insert(requirement.m_type); break;
+                case jeecs::requirement::type::MAYNOT:
+                    /*maynot_set.insert(requirement.m_type);*/ break;
+                case jeecs::requirement::type::ANYOF:
+                    anyof_set.insert(requirement.m_type); break;
+                case jeecs::requirement::type::EXCEPT:
+                    except_set.insert(requirement.m_type); break;
+                }
+            }
 
-            //static auto contain = [](const types_set& a, const types_set& b)
-            //{
-            //    for (auto type_id : b)
-            //        if (a.find(type_id) == a.end())
-            //            return false;
-            //    return true;
-            //};
-            //static auto contain_any = [](const types_set& a, const types_set& b)
-            //{
-            //    for (auto type_id : b)
-            //        if (a.find(type_id) != a.end())
-            //            return true;
-            //    return b.empty();
-            //};
-            //static auto except = [](const types_set& a, const types_set& b)
-            //{
-            //    for (auto type_id : b)
-            //        if (a.find(type_id) != a.end())
-            //            return false;
-            //    return true;
-            //};
+            static auto contain = [](const types_set& a, const types_set& b)
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) == a.end())
+                        return false;
+                return true;
+            };
+            static auto contain_any = [](const types_set& a, const types_set& b)
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) != a.end())
+                        return true;
+                return b.empty();
+            };
+            static auto except = [](const types_set& a, const types_set& b)
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) != a.end())
+                        return false;
+                return true;
+            };
 
-            //// OK Get fetched arch_types;
-            //modify_sys_func->m_arch_types.clear();
-
-            //do
-            //{
-            //    std::shared_lock sg1(_m_arch_types_mapping_mx);
-            //    for (auto& [typeset, arch] : _m_arch_types_mapping)
-            //    {
-            //        if (contain(typeset, need_set)
-            //            && contain_any(typeset, any_set)
-            //            && except(typeset, except_set))
-            //        {
-            //            modify_sys_func->m_arch_types.push_back(arch);
-            //        }
-            //    }
-            //} while (0);
-
-            //// Update game_system..
-            //if (modify_sys_func->m_game_system_function->m_rw_component_count)
-            //{
-            //    if (modify_sys_func->m_game_system_function->m_archs
-            //        && modify_sys_func->m_game_system_function->m_arch_count)
-            //    {
-            //        // Free old arch infos
-            //        for (size_t aindex = 0; aindex < modify_sys_func->m_game_system_function->m_arch_count; aindex++)
-            //        {
-            //            auto& ainfo = modify_sys_func->m_game_system_function->m_archs[aindex];
-            //            je_mem_free(ainfo.m_component_sizes);
-            //            je_mem_free(ainfo.m_component_mem_begin_offsets);
-            //        }
-
-            //        je_mem_free(modify_sys_func->m_game_system_function->m_archs);
-            //    }
-
-            //    modify_sys_func->m_game_system_function->m_arch_count = modify_sys_func->m_arch_types.size();
-            //    if (modify_sys_func->m_game_system_function->m_arch_count)
-            //    {
-            //        modify_sys_func->m_game_system_function->m_archs = (jeecs::game_system_function::arch_index_info*)je_mem_alloc(
-            //            modify_sys_func->m_game_system_function->m_arch_count * sizeof(jeecs::game_system_function::arch_index_info));
-
-            //        for (size_t aindex = 0; aindex < modify_sys_func->m_game_system_function->m_arch_count; aindex++)
-            //        {
-            //            auto& ainfo = modify_sys_func->m_game_system_function->m_archs[aindex];
-            //            ainfo.m_archtype = modify_sys_func->m_arch_types[aindex];
-            //            ainfo.m_entity_count_per_arch_chunk = modify_sys_func->m_arch_types[aindex]->get_entity_count_per_chunk();
-
-            //            ainfo.m_component_sizes = (size_t*)je_mem_alloc(modify_sys_func->m_game_system_function->m_rw_component_count * sizeof(size_t));
-            //            ainfo.m_component_mem_begin_offsets = (size_t*)je_mem_alloc(modify_sys_func->m_game_system_function->m_rw_component_count * sizeof(size_t));
-            //            for (size_t cindex = 0; cindex < modify_sys_func->m_game_system_function->m_rw_component_count; cindex++)
-            //            {
-            //                auto* arch_typeinfo = modify_sys_func->m_arch_types[aindex]->get_arch_type_info_by_type_id(
-            //                    modify_sys_func->m_game_system_function->m_dependence[cindex].m_tid
-            //                );
-            //                if (arch_typeinfo)
-            //                {
-            //                    ainfo.m_component_sizes[cindex] = arch_typeinfo->m_typeinfo->m_chunk_size;
-            //                    ainfo.m_component_mem_begin_offsets[cindex] = arch_typeinfo->m_begin_offset_in_chunk;
-            //                }
-            //                else
-            //                    ainfo.m_component_sizes[cindex] = ainfo.m_component_mem_begin_offsets[cindex] = 0;
-            //                // end of one component datas
-            //            }
-            //        }
-            //    }
-
-            //}
+            dependence->m_archs.clear();
+            do
+            {
+                std::shared_lock sg1(_m_arch_types_mapping_mx);
+                for (auto& [typeset, arch] : _m_arch_types_mapping)
+                {
+                    if (contain(typeset, contain_set)
+                        && contain_any(typeset, anyof_set)
+                        && except(typeset, except_set))
+                    {
+                        // Current arch is matched!
+                        dependence->m_archs.push_back(arch->create_chunk_info(dependence));
+                    }
+                }
+            } while (0);
         }
 
         inline void close_all_entity(ecs_world* by_world)
@@ -844,6 +813,12 @@ namespace jeecs_impl
             return _m_arch_manager;
         }
 
+        const arch_manager& _get_arch_mgr() const noexcept
+        {
+            // NOTE: This function used for editor
+            return _m_arch_manager;
+        }
+
         const std::string& _name() const noexcept
         {
             // NOTE: This function used for editor
@@ -863,7 +838,7 @@ namespace jeecs_impl
 
         void update_dependence_archinfo(jeecs::dependence* require)const noexcept
         {
-
+            _get_arch_mgr().update_dependence_archinfo(require);
         }
 
         bool update()
@@ -1486,7 +1461,7 @@ namespace jeecs_impl
 
         inline void register_pre_call_once_job(je_job_call_once_t job)noexcept
         {
-            universe_action * action = new universe_action;
+            universe_action* action = new universe_action;
             action->m_type = universe_action::action_type::ADD_PRE_JOB_CALL_ONCE;
             action->m_call_once_job = job;
 
@@ -1712,6 +1687,13 @@ bool je_ecs_world_archmgr_updated(void* world)
 void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence)
 {
     ((jeecs_impl::ecs_world*)world)->update_dependence_archinfo(dependence);
+}
+
+void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence)
+{
+    for (auto* archinfo : dependence->m_archs)
+        jeecs_impl::arch_type::free_chunk_info(archinfo);
+    dependence->m_archs.clear();
 }
 
 void* je_ecs_world_entity_add_component(

@@ -126,9 +126,9 @@ namespace jeecs
             template<typename T>
             using _origin_t =
                 typename std::remove_cv<
-                    typename std::remove_reference<
-                        typename std::remove_pointer<T>::type
-                    >::type
+                typename std::remove_reference<
+                typename std::remove_pointer<T>::type
+                >::type
                 >::type;
 
             static auto _type_selector() // -> T*
@@ -145,9 +145,73 @@ namespace jeecs
 
             using type = typename std::remove_pointer<decltype(_type_selector())>::type;
         };
-        
+
         template<typename T>
         using origin_t = typename _origin_type<T>::type;
+
+        template<class F>
+        struct function_traits
+        {
+        private:
+            using call_type = function_traits <decltype(&F::operator()) >;
+        public:
+            using return_type = typename call_type::return_type;
+            using flat_func_t = typename call_type::flat_func_t;
+
+            static const std::size_t arity = call_type::arity - 1;
+
+            template <std::size_t N>
+            struct argument
+            {
+                static_assert(N < arity, "error: invalid parameter index.");
+                using type = typename call_type::template argument<N + 1>::type;
+            };
+        };
+
+        template<class R, class... Args>
+        struct function_traits<R(*)(Args...)> : public function_traits < R(Args...) >
+        {};
+
+        template<class R, class... Args>
+        struct function_traits < R(Args...) >
+        {
+            using return_type = R;
+            using flat_func_t = R(Args...);
+
+            static const std::size_t arity = sizeof...(Args);
+
+            template <std::size_t N>
+            struct argument
+            {
+                static_assert(N < arity, "error: invalid parameter index.");
+                using type = typename std::tuple_element<N, std::tuple<Args...>>::type;
+            };
+
+
+        };
+
+        // member function pointer
+        template<class C, class R, class... Args>
+        struct function_traits<R(C::*)(Args...)> : public function_traits < R(C&, Args...) >
+        {};
+
+        // const member function pointer
+        template<class C, class R, class... Args>
+        struct function_traits<R(C::*)(Args...) const> : public function_traits < R(C&, Args...) >
+        {};
+
+        // member object pointer
+        template<class C, class R>
+        struct function_traits<R(C::*)> : public function_traits < R(C&) >
+        {};
+
+        template<class F>
+        struct function_traits<F&> : public function_traits < F >
+        {};
+
+        template<class F>
+        struct function_traits<F&&> : public function_traits < F >
+        {};
     }
 
     class game_system;
@@ -347,6 +411,7 @@ JE_API void je_ecs_world_destroy(void* world);
 
 JE_API bool je_ecs_world_archmgr_updated(void* world);
 JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
+JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
 
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
@@ -1900,11 +1965,50 @@ namespace jeecs
 
     struct dependence
     {
-        jeecs::vector<requirement> m_dependences;
+        jeecs::vector<requirement> m_requirements;
 
         // Store archtypes here?
-        game_world                 m_world;
+        game_world                 m_world = nullptr;
 
+
+        // archs of dependences:
+        struct arch_chunks_info
+        {
+            const void* m_arch;
+            size_t m_entity_count;
+
+            /* An arch will contain a chain of chunks
+            --------------------------------------
+            | ArchType
+            | chunk5->chunk4->chunk3->chunk2...
+            --------------------------------------
+
+            Components data buf will store at chunk' head.
+            --------------------------------------
+            | Chunk
+            | [COMPONENT_BUFFER 64KByte] [OTHER DATAS ..Byte]
+            --------------------------------------
+
+            In buffer, components will store like this:
+            --------------------------------------
+            | Buffer
+            | [COMPONENT_1 0 1 2...] [COMPONENT_2 0 1 2...]...
+            --------------------------------------
+
+            Each type of components will have a size, and begin-offset in buffer.
+            We can use these informations to get all components to walk through.
+            */
+            size_t m_component_count;
+            size_t* m_component_sizes;
+            size_t* m_component_offsets;
+
+        };
+        jeecs::vector<arch_chunks_info*>       m_archs;
+
+        void clear_archs()noexcept
+        {
+            je_ecs_clear_dependence_archinfos(this);
+        }
         bool need_update(const game_world& aim_world) const noexcept
         {
             assert(aim_world.handle() != nullptr);
@@ -1917,39 +2021,57 @@ namespace jeecs
 
     struct selector
     {
-        bool                        m_enabled = false;
         size_t                      m_curstep = 0;
         game_world                  m_current_world = nullptr;
         jeecs::vector<dependence>   m_steps;
 
     private:
-        template<typename CurRequireT, typename ... OtherRequirementTs>
+        template<size_t ArgN, typename FT>
         void _apply_dependence(dependence& dep)
         {
-            if constexpr (std::is_reference<CurRequireT>::value)
-                // Reference, means CONTAIN
-                dep.m_dependences.push_back(
-                    requirement(requirement::type::CONTAIN,
-                        typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
-            else if constexpr (std::is_pointer<CurRequireT>::value)
-                // Pointer, means MAYNOT
-                dep.m_dependences.push_back(
-                    requirement(requirement::type::MAYNOT,
-                        typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
-            else
+            using f = typing::function_traits<FT>;
+            if constexpr (ArgN < f::arity)
             {
-                static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value
-                   "'exec' of selector only accept ref or ptr type of Components.");
+                using CurRequireT = typename f::argument<ArgN>::type;
+
+                if constexpr (std::is_reference<CurRequireT>::value)
+                    // Reference, means CONTAIN
+                    dep.m_requirements.push_back(
+                        requirement(requirement::type::CONTAIN,
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+                else if constexpr (std::is_pointer<CurRequireT>::value)
+                    // Pointer, means MAYNOT
+                    dep.m_requirements.push_back(
+                        requirement(requirement::type::MAYNOT,
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+                else
+                {
+                    static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value,
+                        "'exec' of selector only accept ref or ptr type of Components.");
+                }
+
+                _apply_dependence<ArgN + 1, FT>(dep);
             }
-
-            if (sizeof...(OtherRequirementTs) != 0)
-                _update_dependence<OtherRequirementTs...>();
         }
+        
+        template<typename FT>
+        struct _executor_extracting_agent : std::false_type
+        { };
 
-        template<typename ... RequirementTs>
-        bool _update()
+        template<typename RT, typename ... ArgTs>
+        struct _executor_extracting_agent<RT(ArgTs...)> : std::true_type
+        { 
+            template<typename FT>
+            inline static void exec(selector* selector_instance, FT&& f) noexcept
+            {
+                // TODO;
+            }
+        };
+
+        template<typename FT>
+        bool _update(FT && exec)
         {
-            if (!m_enabled)
+            if (!m_current_world)
             {
                 jeecs::debug::log_warn("Failed to execute current jobs(%p). Game world not specify!");
                 return false;
@@ -1962,35 +2084,53 @@ namespace jeecs
                 m_steps.push_back(dependence());
                 dependence& dep = m_steps.back();
 
-                assert(dep.m_dependences.size() == 0);
-                _apply_dependence<RequirementTs...>();
+                assert(dep.m_requirements.size() == 0);
+                _apply_dependence<0, FT>(dep);
             }
 
             dependence& cur_dependence = m_steps.back();
             if (cur_dependence.need_update(m_current_world))
             {
+                cur_dependence.m_world = m_current_world;
+
                 // TODO: Update new arch/chunk informations.
                 je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
             }
 
+            // OK! Execute step function!
+            static_assert(
+                _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
+                "Fail to extract types of arguments from 'FT'.");
+
+            _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(this, exec);
+
             return true;
         }
-
     public:
+        selector()
+        {
+            jeecs::debug::log_info("New selector(%p) created.", this);
+        }
+        ~selector()
+        {
+            for (auto& step : m_steps)
+                step.clear_archs();
+            m_steps.clear();
+
+            jeecs::debug::log_info("Selector(%p) closed.", this);
+        }
 
         selector& at(game_world w)
         {
-            if (w)
-                m_enabled = true;
             m_curstep = 0;
             m_current_world = w;
             return *this;
         }
 
-        template<typename RT, typename ... RequirementTs>
-        selector& exec(std::function<RT(RequirementTs...)>&& _exec)
+        template<typename FT>
+        selector& exec(FT&& _exec)
         {
-            if (_update<RequirementTs...>())
+            if (_update(_exec))
             {
                 // TODO: Execute actions.
                 //

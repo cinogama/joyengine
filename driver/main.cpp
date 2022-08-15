@@ -26,7 +26,7 @@ int main(int argc, char** argv)
 
     // jedbg_editor();
     game_universe u(je_ecs_universe_create());
-
+    auto woo = u.create_world();
     while (true)
     {
         for (int i = 0; i < 10; ++i)
@@ -34,7 +34,13 @@ int main(int argc, char** argv)
             auto w = u.create_world();
             w.close();
         }
+
+        jeecs::selector s;
+        s.at(woo)
+            .exec([](jeecs::Transform::Translation& trans) {});
+
         je_clock_sleep_for(0.5);
+        woo.add_entity<jeecs::Transform::Translation>();
     }
 
     u.wait();
