@@ -126,9 +126,9 @@ namespace jeecs
             template<typename U>
             using _origin_t =
                 typename std::remove_cv<
-                    typename std::remove_reference<
-                        typename std::remove_pointer<U>::type
-                    >::type
+                typename std::remove_reference<
+                typename std::remove_pointer<U>::type
+                >::type
                 >::type;
 
             static auto _type_selector() // -> T*
@@ -402,6 +402,21 @@ JE_API void je_ecs_universe_stop(void* universe);
 
 typedef double(*je_job_for_worlds_t)(void* world);
 typedef double(*je_job_call_once_t)(void);
+
+/*
+Jobs in universe have 2*3 types:
+2: For all worlds / Call once job;
+3: Pre/Normal/After job;
+
+For all worlds job will be execute with each world in universe.
+Call once job only execute 1 time per frame.
+
+Pre job used for timing sensitive tasks, such as frame-update
+Normal job used for normal tasks.
+After job used to update some data based on normal job.
+
+For example, graphic update will be pre-callonce-job.
+*/
 
 JE_API void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
 JE_API void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job);
@@ -1877,85 +1892,8 @@ namespace jeecs
         }
     };
 
-    class game_system
-    {
-    private:
-        game_world _m_game_world;
-
-    public:
-        game_system(game_world world)
-            : _m_game_world(world)
-        {
-
-        }
-
-        ~game_system()
-        {
-        }
-
-        // Get binded world or attached world
-        game_world get_world() const noexcept
-        {
-            if (_m_game_world)
-                return _m_game_world;
-
-            // May be shared system, try get world from chain
-            void* chain_world = nullptr;
-
-            assert(false); // TODO
-            return chain_world;
-        }
-    };
-
-    class game_universe
-    {
-        void* _m_universe_addr;
-    public:
-
-        game_universe(void* universe_addr)
-            :_m_universe_addr(universe_addr)
-        {
-
-        }
-
-        inline void* handle()const noexcept
-        {
-            return _m_universe_addr;
-        }
-
-        game_world create_world()
-        {
-            return je_ecs_world_create(_m_universe_addr);
-        }
-
-        inline void wait()const noexcept
-        {
-            je_universe_loop(handle());
-        }
-
-        inline void stop() const noexcept
-        {
-            je_ecs_universe_stop(handle());
-        }
-
-        inline operator bool() const noexcept
-        {
-            return _m_universe_addr;
-        }
-
-    public:
-        static game_universe create_universe()
-        {
-            return game_universe(je_ecs_universe_create());
-        }
-        static void destroy_universe(game_universe universe)
-        {
-            return je_ecs_universe_destroy(universe.handle());
-        }
-    };
 
     // Used for select the components of entities which match spcify requirements.
-
     struct requirement
     {
         enum type : uint8_t
@@ -2204,6 +2142,99 @@ namespace jeecs
         }
     };
 
+    class game_system
+    {
+        JECS_DISABLE_MOVE_AND_COPY(game_system);
+    private:
+        game_world _m_game_world;
+        selector   _m_default_selector;
+
+    public:
+        game_system(game_world world)
+            : _m_game_world(world)
+        { }
+
+        // Get binded world or attached world
+        game_world get_world() const noexcept
+        {
+            assert(_m_game_world);
+            return _m_game_world;
+        }
+
+        // Select from default selector
+        // ATTENTION: Not thread safe!
+        inline selector& select_from(game_world w) noexcept
+        {
+            return _m_default_selector.at(w);
+        }
+        inline selector& select() noexcept
+        {
+            return select_from(get_world());
+        }
+
+        // void PreUpdate()
+        // void Update()
+        // void AfterUpdate()
+        /*
+        struct TranslationUpdater : game_system
+        {
+            void LateUpdate()
+            {
+                select()
+                    .exec(...);
+                    .exec(...);
+            }
+        }     
+        */
+    };
+
+    class game_universe
+    {
+        void* _m_universe_addr;
+    public:
+
+        game_universe(void* universe_addr)
+            :_m_universe_addr(universe_addr)
+        {
+
+        }
+
+        inline void* handle()const noexcept
+        {
+            return _m_universe_addr;
+        }
+
+        game_world create_world()
+        {
+            return je_ecs_world_create(_m_universe_addr);
+        }
+
+        inline void wait()const noexcept
+        {
+            je_universe_loop(handle());
+        }
+
+        inline void stop() const noexcept
+        {
+            je_ecs_universe_stop(handle());
+        }
+
+        inline operator bool() const noexcept
+        {
+            return _m_universe_addr;
+        }
+
+    public:
+        static game_universe create_universe()
+        {
+            return game_universe(je_ecs_universe_create());
+        }
+        static void destroy_universe(game_universe universe)
+        {
+            return je_ecs_universe_destroy(universe.handle());
+        }
+    };
+
     namespace editor
     {
         static std::string dump_entity_editor_information(const jeecs::game_entity& e)
@@ -2243,8 +2274,8 @@ namespace jeecs
             debug::log_error("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
 #endif
             return "";
-            }
         }
+    }
 
     template<typename T>
     inline T* game_entity::get_component()const noexcept
@@ -4314,6 +4345,6 @@ namespace jeecs
 #define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
     }
-    }
+}
 
 #endif
