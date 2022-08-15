@@ -138,7 +138,7 @@ namespace jeecs
                     || std::is_pointer<T>::value
                     || std::is_const<T>::value
                     || std::is_volatile<T>::value)
-                    return _origin_type<typename _origin_t<T>>::_type_selector();
+                    return _origin_type<_origin_t<T>>::_type_selector();
                 else
                     return (T*) nullptr;
             }
