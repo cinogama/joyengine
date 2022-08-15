@@ -37,7 +37,10 @@ int main(int argc, char** argv)
 
         jeecs::selector s;
         s.at(woo)
-            .exec([](jeecs::Transform::Translation& trans) {});
+            .exec([](jeecs::Transform::Translation& trans, jeecs::Transform::ChildAnchor* anch) {
+            printf("");
+
+                });
 
         je_clock_sleep_for(0.5);
         woo.add_entity<jeecs::Transform::Translation>();

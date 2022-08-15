@@ -437,7 +437,7 @@ namespace jeecs_impl
         inline jeecs::dependence::arch_chunks_info* create_chunk_info(const jeecs::dependence* depend) const noexcept
         {
             jeecs::dependence::arch_chunks_info* info = new jeecs::dependence::arch_chunks_info;
-            info->m_arch = this;
+            info->m_arch = const_cast<arch_type*>(this);
             info->m_entity_count = get_entity_count_per_chunk();
 
             info->m_component_count = depend->m_requirements.size();

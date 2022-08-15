@@ -75,6 +75,9 @@ namespace jeecs_impl
             tinfo->m_typename = jeecs::basic::make_new_string(_name);
             tinfo->m_size = _size;
             tinfo->m_chunk_size = jeecs::basic::allign_size(_size, jeecs::typing::ALLIGN_BASE);
+
+            assert(tinfo->m_size != 0 && tinfo->m_chunk_size != 0);
+
             tinfo->m_hash = _hash;
             tinfo->m_constructor = _constructor;
             tinfo->m_destructor = _destructor;
@@ -255,7 +258,7 @@ void je_register_member(
 ///////////////////////////////////////////////////////////////////////////
 
 // NOTE: need free the return result by 'je_mem_free'
-const jeecs::typing::type_info * *jedbg_get_all_registed_types(void)
+const jeecs::typing::type_info** jedbg_get_all_registed_types(void)
 {
     auto&& types = jeecs_impl::type_info_holder::holder()->get_all_registed_types();
     auto result = (const jeecs::typing::type_info**)je_mem_alloc(sizeof(const jeecs::typing::type_info*) * (types.size() + 1));

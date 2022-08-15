@@ -154,9 +154,21 @@ namespace jeecs
         {
         private:
             using call_type = function_traits <decltype(&F::operator()) >;
+
+            template<typename FT>
+            struct _this_call_extracting_agent
+            {
+                using type = FT;
+            };
+
+            template<typename R, typename C, typename ... ArgTs>
+            struct _this_call_extracting_agent<R(C&, ArgTs...)>
+            {
+                using type = R(ArgTs...);
+            };
         public:
             using return_type = typename call_type::return_type;
-            using flat_func_t = typename call_type::flat_func_t;
+            using flat_func_t = typename _this_call_extracting_agent<typename call_type::flat_func_t>::type;
 
             static const std::size_t arity = call_type::arity - 1;
 
@@ -1974,7 +1986,7 @@ namespace jeecs
         // archs of dependences:
         struct arch_chunks_info
         {
-            const void* m_arch;
+            void* m_arch;
             size_t m_entity_count;
 
             /* An arch will contain a chain of chunks
@@ -2053,23 +2065,75 @@ namespace jeecs
                 _apply_dependence<ArgN + 1, FT>(dep);
             }
         }
-        
+
         template<typename FT>
         struct _executor_extracting_agent : std::false_type
         { };
 
         template<typename RT, typename ... ArgTs>
         struct _executor_extracting_agent<RT(ArgTs...)> : std::true_type
-        { 
-            template<typename FT>
-            inline static void exec(selector* selector_instance, FT&& f) noexcept
+        {
+            template<typename ComponentT>
+            struct _const_type_index
             {
-                // TODO;
+                using f_t = typing::function_traits<RT(ArgTs...)>;
+                template<size_t id = 0>
+                static constexpr size_t _index()
+                {
+                    if constexpr (std::is_same<typename f_t::argument<id>::type, ComponentT>::value)
+                        return id;
+                    else
+                        return _index<id + 1>();
+                }
+                static constexpr size_t index = _index();
+            };
+
+            template<typename ComponentT>
+            inline static ComponentT _get_component(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+            {
+                constexpr size_t cid = _const_type_index<ComponentT>::index;
+                size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
+                if (archinfo->m_component_sizes[cid])
+                {
+                    if constexpr (std::is_reference<ComponentT>::value)
+                        return *reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    else
+                    {
+                        static_assert(std::is_pointer<ComponentT>::value);
+                        return reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    }
+                }
+                if constexpr (std::is_reference<ComponentT>::value)
+                {
+                    assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
+                    return *(typename typing::origin_t<ComponentT>*)nullptr;
+                }
+                else
+                    return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+            }
+
+            template<typename FT>
+            inline static void exec(dependence* depend, FT&& f) noexcept
+            {
+                for (auto* archinfo : depend->m_archs)
+                {
+                    auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
+                    while (cur_chunk)
+                    {
+                        for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
+                        {
+                            // TODO: IF ENTITY IN CHUNK NOT VALID, SKIP IT!
+                            f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                        }
+
+                        cur_chunk = je_arch_next_chunk(cur_chunk);
+                    }
+                }
             }
         };
 
         template<typename FT>
-        bool _update(FT && exec)
+        bool _update(FT&& exec)
         {
             if (!m_current_world)
             {
@@ -2102,7 +2166,7 @@ namespace jeecs
                 _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
                 "Fail to extract types of arguments from 'FT'.");
 
-            _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(this, exec);
+            _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(&cur_dependence, exec);
 
             return true;
         }
@@ -2179,8 +2243,8 @@ namespace jeecs
             debug::log_error("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
 #endif
             return "";
+            }
         }
-    }
 
     template<typename T>
     inline T* game_entity::get_component()const noexcept
@@ -4250,6 +4314,6 @@ namespace jeecs
 #define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
     }
-}
+    }
 
 #endif
