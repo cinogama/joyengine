@@ -46,6 +46,9 @@ namespace jeecs_impl
             jeecs::typing::move_func_t      _mover,
             jeecs::typing::to_string_func_t _to_string,
             jeecs::typing::parse_func_t     _parse,
+            jeecs::typing::update_func_t    _pre_update,
+            jeecs::typing::update_func_t    _update,
+            jeecs::typing::update_func_t    _late_update,
             je_typing_class                 _typecls) noexcept
         {
             std::lock_guard g1(_m_type_holder_mx);
@@ -86,6 +89,9 @@ namespace jeecs_impl
             tinfo->m_to_string = _to_string;
             tinfo->m_parse = _parse;
             tinfo->m_type_class = _typecls;
+            tinfo->m_pre_update = _pre_update;
+            tinfo->m_update = _update;
+            tinfo->m_late_update = _late_update;
             tinfo->m_member_types = nullptr;
 
             // Ok Find a place to store~
@@ -210,6 +216,9 @@ bool je_typing_find_or_register(
     jeecs::typing::move_func_t      _mover,
     jeecs::typing::to_string_func_t _to_string,
     jeecs::typing::parse_func_t     _parse,
+    jeecs::typing::update_func_t    _pre_update,
+    jeecs::typing::update_func_t    _update,
+    jeecs::typing::update_func_t    _late_update,
     je_typing_class                 _typecls)
 {
     return
@@ -224,6 +233,9 @@ bool je_typing_find_or_register(
             _mover,
             _to_string,
             _parse,
+            _pre_update,
+            _update,
+            _late_update,
             _typecls);
 }
 

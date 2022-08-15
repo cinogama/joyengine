@@ -75,6 +75,7 @@ namespace jeecs
         using to_string_func_t = const char* (*)(const void*);
         using parse_func_t = void(*)(void*, const char*);
 
+        using update_func_t = void(*)(void*);
 
         using entity_id_in_chunk_t = size_t;
         using version_t = size_t;
@@ -227,7 +228,6 @@ namespace jeecs
     }
 
     class game_system;
-    class game_shared_system;
     class game_world;
 
     struct game_entity
@@ -353,7 +353,6 @@ typedef enum je_typing_class
     JE_BASIC_TYPE,
     JE_COMPONENT,
     JE_SYSTEM,
-    JE_SHARED_SYSTEM,
 } je_typing_class;
 // You should promise: different type should have different name.
 JE_API bool je_typing_find_or_register(
@@ -367,6 +366,9 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::move_func_t      _mover,
     jeecs::typing::to_string_func_t _to_string,
     jeecs::typing::parse_func_t     _parse,
+    jeecs::typing::update_func_t    _pre_update,
+    jeecs::typing::update_func_t    _update,
+    jeecs::typing::update_func_t    _late_update,
     je_typing_class                 _typecls);
 
 JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
@@ -439,6 +441,9 @@ JE_API void je_ecs_world_destroy(void* world);
 JE_API bool je_ecs_world_archmgr_updated(void* world);
 JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
 JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
+
+JE_API jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::typing::type_info* type);
+JE_API void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type);
 
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
@@ -1445,6 +1450,51 @@ namespace jeecs
                     }();
                 }
             }
+
+
+            template<typename U, typename VoidT = void>
+            struct has_update_function : std::false_type
+            {
+                static_assert(std::is_void<VoidT>::value);
+            };
+            template<typename U>
+            struct has_update_function<U, std::void_t<decltype(&U::Update)>> : std::true_type
+            {};
+
+            template<typename U, typename VoidT = void>
+            struct has_pre_update_function : std::false_type
+            {
+                static_assert(std::is_void<VoidT>::value);
+            };
+            template<typename U>
+            struct has_pre_update_function<U, std::void_t<decltype(&U::PreUpdate)>> : std::true_type
+            {};
+
+            template<typename U, typename VoidT = void>
+            struct has_late_update_function : std::false_type
+            {
+                static_assert(std::is_void<VoidT>::value);
+            };
+            template<typename U>
+            struct has_late_update_function<U, std::void_t<decltype(&U::LateUpdate)>> : std::true_type
+            {};
+
+            static void pre_update(void* _ptr)
+            {
+                if constexpr (has_pre_update_function<T>::value)
+                    reinterpret_cast<T*>(_ptr)->PreUpdate();
+
+            }
+            static void update(void* _ptr)
+            {
+                if constexpr (has_update_function<T>::value)
+                    reinterpret_cast<T*>(_ptr)->Update();
+            }
+            static void late_update(void* _ptr)
+            {
+                if constexpr (has_late_update_function<T>::value)
+                    reinterpret_cast<T*>(_ptr)->LateUpdate();
+            }
         };
 
         template<typename T>
@@ -1660,6 +1710,10 @@ namespace jeecs
             to_string_func_t    m_to_string;
             parse_func_t        m_parse;
 
+            update_func_t       m_pre_update;
+            update_func_t       m_update;
+            update_func_t       m_late_update;
+
             je_typing_class     m_type_class;
 
             const member_info* m_member_types;
@@ -1697,11 +1751,9 @@ namespace jeecs
                     je_typing_class current_type =
                         is_basic_type
                         ? je_typing_class::JE_BASIC_TYPE
-                        : (std::is_base_of<game_shared_system, T>::value
-                            ? je_typing_class::JE_SHARED_SYSTEM
-                            : (std::is_base_of<game_system, T>::value
-                                ? je_typing_class::JE_SYSTEM
-                                : je_typing_class::JE_COMPONENT));
+                        : (std::is_base_of<game_system, T>::value
+                            ? je_typing_class::JE_SYSTEM
+                            : je_typing_class::JE_COMPONENT);
 
                     typeid_t id = INVALID_TYPE_ID;
 
@@ -1716,6 +1768,9 @@ namespace jeecs
                         basic::default_functions<T>::mover,
                         basic::default_functions<T>::to_string,
                         basic::default_functions<T>::parse,
+                        basic::default_functions<T>::pre_update,
+                        basic::default_functions<T>::update,
+                        basic::default_functions<T>::late_update,
                         current_type))
                     {
                         *first_init = true;
@@ -1796,13 +1851,26 @@ namespace jeecs
             {
                 return m_type_class == je_typing_class::JE_SYSTEM;
             }
-            inline bool is_shared_system() const noexcept
-            {
-                return m_type_class == je_typing_class::JE_SHARED_SYSTEM;
-            }
+
             inline bool is_component() const noexcept
             {
                 return m_type_class == je_typing_class::JE_COMPONENT;
+            }
+
+            inline void pre_update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_pre_update(addr);
+            }
+            inline void update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_update(addr);
+            }
+            inline void late_update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_late_update(addr);
             }
         };
 
@@ -1863,6 +1931,29 @@ namespace jeecs
 
             return gentity;
         }
+
+        inline jeecs::game_system* add_system(const jeecs::typing::type_info* type)
+        {
+            return je_ecs_world_add_system_instance(handle(), type);
+        }
+
+        template<typename SystemT>
+        inline SystemT* add_system(const jeecs::typing::type_info* type)
+        {
+            return (SystemT*)add_system(typing::type_info::of<SystemT>());
+        }
+
+        inline void remove_system(const jeecs::typing::type_info* type)
+        {
+            je_ecs_world_remove_system_instance(handle(), type);
+        }
+
+        template<typename SystemT>
+        inline void remove_system(const jeecs::typing::type_info* type)
+        {
+            remove_system(typing::type_info::of<SystemT>());
+        }
+
 
         // This function only used for editor.
         inline game_entity _add_entity(std::vector<typing::typeid_t> components)
@@ -2094,8 +2185,6 @@ namespace jeecs
             if (cur_dependence.need_update(m_current_world))
             {
                 cur_dependence.m_world = m_current_world;
-
-                // TODO: Update new arch/chunk informations.
                 je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
             }
 
@@ -2184,7 +2273,7 @@ namespace jeecs
                     .exec(...);
                     .exec(...);
             }
-        }     
+        }
         */
     };
 

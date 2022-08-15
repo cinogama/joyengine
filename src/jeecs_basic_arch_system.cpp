@@ -680,7 +680,26 @@ namespace jeecs_impl
 
         struct _world_command_buffer
         {
+            JECS_DISABLE_MOVE_AND_COPY(_world_command_buffer);
+            struct typed_system
+            {
+                const jeecs::typing::type_info* m_typeinfo;
+                jeecs::game_system* m_add_system_instance; // if m_add_system_instance == nullptr, remove spcify sys
+
+                typed_system* last;
+
+                typed_system(const jeecs::typing::type_info* id, jeecs::game_system* addr)
+                    : m_typeinfo(id)
+                    , m_add_system_instance(addr)
+                {
+                    // Do nothing else
+                }
+            };
+
+            jeecs::basic::atomic_list<typed_system> m_adding_or_removing_components;
             bool m_destroy_world;
+
+            _world_command_buffer() = default;
         };
 
         std::shared_mutex _m_command_buffer_mx;
@@ -780,6 +799,30 @@ namespace jeecs_impl
             _find_or_create_buffer_for(w).m_destroy_world = true;
         }
 
+        void add_system_instance(ecs_world* w, const jeecs::typing::type_info* type, jeecs::game_system* sys_instance)
+        {
+            std::shared_lock sl(_m_command_executer_guard_mx);
+
+            DEBUG_ARCH_LOG("World: %p want to add system(%p) named '%s', operation has been committed to the command buffer.",
+                w, sys_instance, type->m_typename);
+
+            _find_or_create_buffer_for(w).m_adding_or_removing_components.add_one(
+                new _world_command_buffer::typed_system(type, sys_instance)
+            );
+        }
+
+        void remove_system_instance(ecs_world* w, const jeecs::typing::type_info* type)
+        {
+            std::shared_lock sl(_m_command_executer_guard_mx);
+
+            DEBUG_ARCH_LOG("World: %p want to remove system named '%s', operation has been committed to the command buffer.",
+                w, type->m_typename);
+
+            _find_or_create_buffer_for(w).m_adding_or_removing_components.add_one(
+                new _world_command_buffer::typed_system(type, nullptr)
+            );
+        }
+
     public:
         void update();
     };
@@ -787,6 +830,7 @@ namespace jeecs_impl
     class ecs_world
     {
         JECS_DISABLE_MOVE_AND_COPY(ecs_world);
+    private:
 
         ecs_universe* _m_universe;
 
@@ -798,6 +842,8 @@ namespace jeecs_impl
         std::atomic_bool _m_destroying_flag = false;
         std::atomic_bool _m_archmgr_updated = false;
 
+        std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*> m_systems;
+
     public:
         ecs_world(ecs_universe* universe)
             :_m_universe(universe)
@@ -805,6 +851,31 @@ namespace jeecs_impl
             , _m_arch_manager(this)
         {
 
+        }
+
+        void append_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys) noexcept
+        {
+            if (m_systems.find(type) != m_systems.end())
+            {
+                jeecs::debug::log_warn("Current system(%p) named '%s' already contained in world(%p), old one will be removed.",
+                    m_systems[type], type->m_typename, this);
+
+                remove_system_instance(type);
+            }
+            m_systems[type] = sys;
+        }
+        void remove_system_instance(const jeecs::typing::type_info* type) noexcept
+        {
+            if (m_systems.find(type) == m_systems.end())
+                jeecs::debug::log_warn("System named '%s' not contained in world(%p) and failed to remove.",
+                    type->m_typename, this);
+            else
+            {
+                type->destruct(m_systems[type]);
+                je_mem_free(m_systems[type]);
+
+                m_systems.erase(m_systems.find(type));
+            }
         }
 
         arch_manager& _get_arch_mgr() noexcept
@@ -846,10 +917,13 @@ namespace jeecs_impl
             if (!is_destroying())
             {
                 _m_archmgr_updated = _m_arch_manager._arch_modified();
-                // Ok, execute JOBS here.
             }
             else
             {
+                // Remove all system from world.
+                for (auto& sys : m_systems)
+                    remove_system_instance(sys.first);
+
                 // Find all entity to close.
                 _m_arch_manager.close_all_entity(this);
 
@@ -1103,6 +1177,30 @@ namespace jeecs_impl
 
                 if (_buf_in_world.second.m_destroy_world)
                     world->ready_to_destroy();
+
+                auto* append_or_remove_system = _buf_in_world.second.m_adding_or_removing_components.pick_all();
+                while (append_or_remove_system)
+                {
+                    auto* cur_append_or_remove_system = append_or_remove_system;
+                    append_or_remove_system = append_or_remove_system->last;
+
+                    if (cur_append_or_remove_system->m_add_system_instance)
+                    {
+                        // add
+                        world->append_system_instance(
+                            cur_append_or_remove_system->m_typeinfo,
+                            cur_append_or_remove_system->m_add_system_instance);
+                    }
+                    else
+                    {
+                        // remove
+                        world->remove_system_instance(
+                            cur_append_or_remove_system->m_typeinfo);
+                    }
+
+
+                    delete cur_append_or_remove_system;
+                }
             });
 
         // Finish! clear buffer.
@@ -1662,6 +1760,21 @@ void* je_ecs_world_create(void* in_universe)
 void je_ecs_world_destroy(void* world)
 {
     ((jeecs_impl::ecs_world*)world)->get_command_buffer().close_world((jeecs_impl::ecs_world*)world);
+}
+
+jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::typing::type_info* type)
+{
+    jeecs::game_system* sys = (jeecs::game_system*)je_mem_alloc(type->m_size);
+    type->construct(sys, world);
+
+    ((jeecs_impl::ecs_world*)world)->get_command_buffer().add_system_instance((jeecs_impl::ecs_world*)world, type, sys);
+
+    return sys;
+}
+
+void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type)
+{
+    ((jeecs_impl::ecs_world*)world)->get_command_buffer().add_system_instance((jeecs_impl::ecs_world*)world, type, nullptr);
 }
 
 void je_ecs_world_create_entity_with_components(
