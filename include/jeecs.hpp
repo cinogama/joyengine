@@ -123,12 +123,12 @@ namespace jeecs
         template<typename T>
         struct _origin_type
         {
-            template<typename T>
+            template<typename U>
             using _origin_t =
                 typename std::remove_cv<
-                typename std::remove_reference<
-                typename std::remove_pointer<T>::type
-                >::type
+                    typename std::remove_reference<
+                        typename std::remove_pointer<U>::type
+                    >::type
                 >::type;
 
             static auto _type_selector() // -> T*
