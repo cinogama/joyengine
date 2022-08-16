@@ -15,10 +15,10 @@
 #   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::log_warn( __VA_ARGS__ );
 #endif
 
-#ifdef __cpp_lib_execution
+#ifdef __cpp_lib_executionxx
 #   define ParallelForeach(...) std::for_each( std::execution::par_unseq, __VA_ARGS__ )
 #else
-#   define ParallelForeach(...) std::for_each( __VA_ARGS__ )
+#   define ParallelForeach std::for_each
 #endif
 
 #define CHECK(A,B)((A-B>=-0.0001))
@@ -830,6 +830,26 @@ namespace jeecs_impl
     class ecs_world
     {
         JECS_DISABLE_MOVE_AND_COPY(ecs_world);
+    public:
+        struct storage_system
+        {
+            jeecs::game_system* m_system_instance;
+            double m_next_pre_update_time;
+            double m_next_update_time;
+            double m_next_late_update_time;
+            double              m_execute_interval;
+
+            void set_system_instance(jeecs::game_system* sys)noexcept
+            {
+                m_system_instance = sys;
+                m_next_pre_update_time
+                    = m_next_update_time
+                    = m_next_late_update_time
+                    = 0.;
+                m_execute_interval = sys->delta_time();
+            }
+        };
+        using system_container_t = std::unordered_map<const jeecs::typing::type_info*, storage_system>;
     private:
 
         ecs_universe* _m_universe;
@@ -842,7 +862,7 @@ namespace jeecs_impl
         std::atomic_bool _m_destroying_flag = false;
         std::atomic_bool _m_archmgr_updated = false;
 
-        std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*> m_systems;
+        system_container_t m_systems;
 
     public:
         ecs_world(ecs_universe* universe)
@@ -852,7 +872,10 @@ namespace jeecs_impl
         {
 
         }
-
+        system_container_t& get_system_instances() noexcept
+        {
+            return m_systems;
+        }
         void append_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys) noexcept
         {
             if (m_systems.find(type) != m_systems.end())
@@ -862,7 +885,7 @@ namespace jeecs_impl
 
                 remove_system_instance(type);
             }
-            m_systems[type] = sys;
+            m_systems[type].set_system_instance(sys);
         }
         void remove_system_instance(const jeecs::typing::type_info* type) noexcept
         {
@@ -871,8 +894,8 @@ namespace jeecs_impl
                     type->m_typename, this);
             else
             {
-                type->destruct(m_systems[type]);
-                je_mem_free(m_systems[type]);
+                type->destruct(m_systems[type].m_system_instance);
+                je_mem_free(m_systems[type].m_system_instance);
 
                 m_systems.erase(m_systems.find(type));
             }
@@ -921,8 +944,14 @@ namespace jeecs_impl
             else
             {
                 // Remove all system from world.
+                std::vector<const jeecs::typing::type_info*> _removing_sys_types;
+                _removing_sys_types.reserve(m_systems.size());
+
                 for (auto& sys : m_systems)
-                    remove_system_instance(sys.first);
+                    _removing_sys_types.push_back(sys.first);
+
+                for (auto type : _removing_sys_types)
+                    remove_system_instance(type);
 
                 // Find all entity to close.
                 _m_arch_manager.close_all_entity(this);
@@ -968,6 +997,10 @@ namespace jeecs_impl
         }
 
     };
+
+    double default_job_for_execute_sys_pre_update_for_worlds(void* _ecs_world);
+    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world);
+    double default_job_for_execute_sys_late_update_for_worlds(void* _ecs_world);
 
     void command_buffer::update()
     {
@@ -1278,7 +1311,7 @@ namespace jeecs_impl
         }
         inline double next_execute_time_allign(double exec_intv)const noexcept
         {
-            return ((double)(int)(0.5 + current_time() / exec_intv) + 1) * exec_intv;
+           return ((double)(((int)(current_time() / exec_intv + 0.5)) + 1)) * exec_intv;
         }
 
         void update()
@@ -1327,7 +1360,10 @@ namespace jeecs_impl
                         jeecs::debug::log_error("Cannot find pre-job(%p) in universe(%p), remove failed.",
                             cur_action->m_for_worlds_job, this);
                     else
+                    {
+                        delete* fnd;
                         _m_shared_pre_jobs.erase(fnd);
+                    }
                     break;
                 }
                 case universe_action::action_type::REMOVE_PRE_JOB_CALL_ONCE:
@@ -1342,7 +1378,11 @@ namespace jeecs_impl
                         jeecs::debug::log_error("Cannot find pre-callonce-job(%p) in universe(%p), remove failed.",
                             cur_action->m_call_once_job, this);
                     else
+                    {
+                        delete* fnd;
                         _m_shared_pre_jobs.erase(fnd);
+                    }
+
                     break;
                 }
                 case universe_action::action_type::REMOVE_NORMAL_JOB_FOR_WORLDS:
@@ -1357,7 +1397,10 @@ namespace jeecs_impl
                         jeecs::debug::log_error("Cannot find job(%p) in universe(%p), remove failed.",
                             cur_action->m_for_worlds_job, this);
                     else
+                    {
+                        delete* fnd;
                         _m_shared_jobs.erase(fnd);
+                    }
                     break;
                 }
                 case universe_action::action_type::REMOVE_NORMAL_JOB_CALL_ONCE:
@@ -1372,7 +1415,10 @@ namespace jeecs_impl
                         jeecs::debug::log_error("Cannot find callonce-job(%p) in universe(%p), remove failed.",
                             cur_action->m_call_once_job, this);
                     else
+                    {
+                        delete* fnd;
                         _m_shared_jobs.erase(fnd);
+                    }
                     break;
                 }
                 case universe_action::action_type::REMOVE_AFTER_JOB_FOR_WORLDS:
@@ -1387,7 +1433,10 @@ namespace jeecs_impl
                         jeecs::debug::log_error("Cannot find after-job(%p) in universe(%p), remove failed.",
                             cur_action->m_for_worlds_job, this);
                     else
+                    {
+                        delete* fnd;
                         _m_shared_after_jobs.erase(fnd);
+                    }
                     break;
                 }
                 case universe_action::action_type::REMOVE_AFTER_JOB_CALL_ONCE:
@@ -1402,7 +1451,10 @@ namespace jeecs_impl
                         jeecs::debug::log_error("Cannot find after-callonce-job(%p) in universe(%p), remove failed.",
                             cur_action->m_call_once_job, this);
                     else
+                    {
+                        delete* fnd;
                         _m_shared_after_jobs.erase(fnd);
+                    }
                     break;
                 }
                 default:
@@ -1440,14 +1492,7 @@ namespace jeecs_impl
                 delete removed_world;
             }
 
-            _m_current_time = je_clock_time();
-            double next_update_time = _m_current_time + 0.1f;
-
-            double next_shared_jobs_update_time = _m_current_time;
-            double next_world_update_time = _m_current_time;
-
-            je_clock_sleep_until(_m_current_time + _m_next_execute_interval);
-            _m_current_time += _m_next_execute_interval;
+            je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
 
             if (je_clock_time() - _m_current_time >= 2.0)
                 _m_current_time = je_clock_time();
@@ -1516,6 +1561,11 @@ namespace jeecs_impl
         {
             DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
+            // Append default jobs for updating systems.
+            je_ecs_universe_register_pre_for_worlds_job(this, default_job_for_execute_sys_pre_update_for_worlds);
+            je_ecs_universe_register_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds);
+            je_ecs_universe_register_after_for_worlds_job(this, default_job_for_execute_sys_late_update_for_worlds);
+
             _m_universe_update_thread_stop_flag.test_and_set();
             _m_universe_update_thread = std::move(std::thread(
                 [this]() {
@@ -1526,6 +1576,18 @@ namespace jeecs_impl
                             // If there is no world alive, and exit flag is setten, exit this thread.
                             break;
                     }
+
+                    // Make sure universe action empty.
+                    update();
+                    assert(_m_universe_actions.peek() == nullptr);
+
+                    // Free all ecs_jobs.
+                    for (ecs_job* pre_job : _m_shared_pre_jobs)
+                        delete pre_job;
+                    for (ecs_job* job : _m_shared_jobs)
+                        delete job;
+                    for (ecs_job* after_job : _m_shared_after_jobs)
+                        delete after_job;
 
                     // invoke callback
                     auto* callback_func_node = m_exit_callback_list.pick_all();
@@ -1703,7 +1765,106 @@ namespace jeecs_impl
         if (CHECK(m_universe->current_time(), m_next_execute_time)
             || (nextTime > 0 && nextTime < m_next_execute_time))
             m_next_execute_time = nextTime;
+    }
 
+    double default_job_for_execute_sys_pre_update_for_worlds(void* _ecs_world)
+    {
+        ecs_world* cur_world = (ecs_world*)_ecs_world;
+
+        ecs_world::system_container_t& active_systems = cur_world->get_system_instances();
+
+        ParallelForeach(
+            active_systems.begin(), active_systems.end(),
+            [cur_world](ecs_world::system_container_t::value_type& val)
+            {
+                auto& system_info = val.second;
+                const double current_time = cur_world->get_universe()->current_time();
+
+                // Make sure pre-update can happend as same frame as update & late-update
+                if (CHECK(current_time, system_info.m_next_late_update_time))
+                {
+                    val.first->pre_update(system_info.m_system_instance);
+                    system_info.m_next_pre_update_time = current_time + system_info.m_execute_interval;
+                }               
+            }
+        );
+
+        double next_time_to_exec_system = 1.0f;
+
+        for (auto& cur_system : active_systems)
+        {
+            double waittime = (cur_system.second.m_next_pre_update_time - cur_world->get_universe()->current_time());
+            if (waittime < next_time_to_exec_system)
+                next_time_to_exec_system = waittime;
+        }
+        return next_time_to_exec_system;
+    }
+
+    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world)
+    {
+        ecs_world* cur_world = (ecs_world*)_ecs_world;
+
+        ecs_world::system_container_t& active_systems = cur_world->get_system_instances();
+
+        ParallelForeach(
+            active_systems.begin(), active_systems.end(),
+            [cur_world](ecs_world::system_container_t::value_type& val)
+            {
+                auto& system_info = val.second;
+                const double current_time = cur_world->get_universe()->current_time();
+
+                // Make sure pre-update can happend as same frame as update & late-update
+                if (CHECK(current_time, system_info.m_next_late_update_time))
+                {
+                    val.first->update(system_info.m_system_instance);
+                    system_info.m_next_update_time = current_time + system_info.m_execute_interval;
+                }
+            }
+        );
+
+        double next_time_to_exec_system = 1.0f;
+
+        for (auto& cur_system : active_systems)
+        {
+            double waittime = (cur_system.second.m_next_update_time - cur_world->get_universe()->current_time());
+            if (waittime < next_time_to_exec_system)
+                next_time_to_exec_system = waittime;
+        }
+        return next_time_to_exec_system;
+    }
+
+    double default_job_for_execute_sys_late_update_for_worlds(void* _ecs_world)
+    {
+        ecs_world* cur_world = (ecs_world*)_ecs_world;
+
+        ecs_world::system_container_t& active_systems = cur_world->get_system_instances();
+
+        ParallelForeach(
+            active_systems.begin(), active_systems.end(),
+            [cur_world](ecs_world::system_container_t::value_type& val)
+            {
+                auto& system_info = val.second;
+                const double current_time = cur_world->get_universe()->current_time();
+                if (CHECK(current_time, system_info.m_next_late_update_time))
+                {
+                    val.first->late_update(system_info.m_system_instance);
+                    system_info.m_next_late_update_time = current_time + system_info.m_execute_interval;
+
+                    assert(system_info.m_next_pre_update_time == system_info.m_next_update_time
+                        && system_info.m_next_update_time == system_info.m_next_late_update_time);
+                }
+            }
+        );
+
+        double next_time_to_exec_system = 1.0f;
+
+        for (auto& cur_system : active_systems)
+        {
+            double waittime = (cur_system.second.m_next_late_update_time - cur_world->get_universe()->current_time());
+            if (waittime < next_time_to_exec_system)
+                next_time_to_exec_system = waittime;
+        }
+        return next_time_to_exec_system;
     }
 }
 

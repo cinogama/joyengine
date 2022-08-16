@@ -37,7 +37,7 @@ void je_clock_sleep_for(double time)
     using namespace std;
     auto current_time_point = je_clock_time();
 
-    std::this_thread::sleep_for((time - _sleep_suppression) * 1s);
+    std::this_thread::sleep_for((time - _sleep_suppression) * 1.0s);
 
     while (je_clock_time() < current_time_point + time);
 }

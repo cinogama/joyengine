@@ -1938,7 +1938,7 @@ namespace jeecs
         }
 
         template<typename SystemT>
-        inline SystemT* add_system(const jeecs::typing::type_info* type)
+        inline SystemT* add_system()
         {
             return (SystemT*)add_system(typing::type_info::of<SystemT>());
         }
@@ -1949,7 +1949,7 @@ namespace jeecs
         }
 
         template<typename SystemT>
-        inline void remove_system(const jeecs::typing::type_info* type)
+        inline void remove_system()
         {
             remove_system(typing::type_info::of<SystemT>());
         }
@@ -2235,12 +2235,15 @@ namespace jeecs
     {
         JECS_DISABLE_MOVE_AND_COPY(game_system);
     private:
+        double _m_delta_time;
+
         game_world _m_game_world;
         selector   _m_default_selector;
 
     public:
-        game_system(game_world world)
+        game_system(game_world world, double delta_tm = 1./60.)
             : _m_game_world(world)
+            , _m_delta_time(delta_tm)
         { }
 
         // Get binded world or attached world
@@ -2261,9 +2264,18 @@ namespace jeecs
             return select_from(get_world());
         }
 
+        inline float delta_time() const noexcept
+        {
+            return (float)_m_delta_time;
+        }
+
+#define PreUpdate PreUpdate
+#define Update Update
+#define LateUpdate LateUpdate
+
         // void PreUpdate()
         // void Update()
-        // void AfterUpdate()
+        // void LateUpdate()
         /*
         struct TranslationUpdater : game_system
         {

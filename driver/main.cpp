@@ -10,6 +10,33 @@
 
 #include <iostream>
 
+#include <future>
+
+struct mysys : jeecs::game_system
+{
+    mysys(jeecs::game_world w)
+        : jeecs::game_system(w)
+    {
+
+    }
+    void PreUpdate()
+    {
+        static double last_tm = 0.;
+        double cur = je_clock_time();
+
+        jeecs::debug::log_fatal("CUR TIME pre= %f(cur=%f)", cur - last_tm, cur);
+        last_tm = cur;
+    }
+    void Update()
+    {
+        //jeecs::debug::log_fatal("CUR TIME cur= %f", je_clock_time());
+    }
+    void LateUpdate()
+    {
+        //jeecs::debug::log_fatal("CUR TIME lat= %f", je_clock_time());
+    }
+};
+
 int main(int argc, char** argv)
 {
     je_init(argc, argv);
@@ -27,27 +54,9 @@ int main(int argc, char** argv)
     // jedbg_editor();
     game_universe u(je_ecs_universe_create());
     auto woo = u.create_world();
-    while (true)
-    {
-        for (int i = 0; i < 10; ++i)
-        {
-            auto w = u.create_world();
-            w.close();
-        }
-
-        jeecs::selector s;
-        s.at(woo)
-            .exec([](jeecs::Transform::Translation& trans, jeecs::Transform::ChildAnchor* anch) {
-            printf("");
-
-                });
-
-        je_clock_sleep_for(0.5);
-        woo.add_entity<jeecs::Transform::Translation>();
-    }
-
+    woo.add_system<mysys>();
+   
     u.wait();
-
 
     je_clock_sleep_for(1);
 }
