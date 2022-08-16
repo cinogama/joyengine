@@ -1493,7 +1493,6 @@ namespace jeecs_impl
             }
 
             je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
-
             if (je_clock_time() - _m_current_time >= 2.0)
                 _m_current_time = je_clock_time();
             _m_next_execute_interval = 1.0;

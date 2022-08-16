@@ -6,9 +6,6 @@
 #   include "jeecs.hpp"
 #endif
 
-
-#if 0
-
 namespace jeecs
 {
     struct TranslationUpdatingSystem :public game_system
@@ -27,53 +24,8 @@ namespace jeecs
             const Translation* m_translation;
         };
 
-        std::unordered_map<typing::uid_t, anchor> m_anchor_list;
-
-        TranslationUpdatingSystem(game_world world) :game_system(world)
-        {
-            register_system_func(&TranslationUpdatingSystem::PreUpdateChildAnchor,
-                {
-                    system_write(&m_anchor_list),
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateChildAnchorTranslation,
-                {
-                    system_write(&m_anchor_list),
-                    after(&TranslationUpdatingSystem::PreUpdateChildAnchor),
-                });
-            /////////////////////////////////////////////////////////////////////////////////
-            register_system_func(&TranslationUpdatingSystem::UpdateLocalToWorld,
-                {
-                    except<LocalToParent>(),
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateWorldToTranslation,
-                {
-                    except<LocalToParent>(),
-                });
-            /////////////////////////////////////////////////////////////////////////////////
-            register_system_func(&TranslationUpdatingSystem::UpdateLocalToParent,
-                {
-                    except<LocalToWorld>(),
-                });
-            register_system_func(&TranslationUpdatingSystem::UpdateParentToTranslation,
-                {
-                    after(&TranslationUpdatingSystem::UpdateWorldToTranslation),
-                    except<LocalToWorld>(),
-                    system_read_updated(&m_anchor_list)
-                });
-        }
-        void PreUpdateChildAnchor()
-        {
-            m_anchor_list.clear();
-        }
-
-        void UpdateChildAnchorTranslation(read<ChildAnchor> anchor, read<Translation> trans)
-        {
-            m_anchor_list[anchor->anchor_uid].m_translation = trans;
-        }
-
-        ///////////////////////////////////////////////////////////////////////////////////
         template<typename T>
-        void _generate_mat_from_local(float(*out_mat)[4], const T* local)
+        static void _generate_mat_from_local(float(*out_mat)[4], const T* local)
         {
             float temp_mat_trans[4][4] = {};
             temp_mat_trans[0][0]
@@ -99,57 +51,75 @@ namespace jeecs
             math::mat4xmat4(out_mat, temp_mat_trans_rot, temp_mat_scale);
         }
 
-        void UpdateLocalToWorld(
-            maynot<const LocalPosition*> position,
-            maynot<const LocalRotation*> rotation,
-            maynot<const LocalScale*>    scale,
-            LocalToWorld* l2w)
-        {
-            l2w->pos = position ? position->pos : math::vec3();
-            l2w->rot = rotation ? rotation->rot : math::quat();
-            l2w->scale = scale ? scale->scale : math::vec3(1, 1, 1);
-        }
-        void UpdateWorldToTranslation(const LocalToWorld* l2w, Translation* trans)
-        {
-            trans->set_rotation(l2w->rot);
-            trans->set_position(l2w->pos);
-            trans->set_scale(l2w->scale);
+        std::unordered_map<typing::uid_t, anchor> m_anchor_list;
 
-            _generate_mat_from_local(trans->object2world, l2w);
-        }
-        ///////////////////////////////////////////////////////////////////////////////////
-        void UpdateLocalToParent(
-            maynot<const LocalPosition*> position,
-            maynot<const LocalRotation*> rotation,
-            maynot<const LocalScale*>    scale,
-            LocalToParent* l2P)
+        TranslationUpdatingSystem(game_world world) :game_system(world)
         {
-            l2P->pos = position ? position->pos : math::vec3();
-            l2P->rot = rotation ? rotation->rot : math::quat();
-            l2P->scale = scale ? scale->scale : math::vec3(1, 1, 1);
         }
-        void UpdateParentToTranslation(const LocalToParent* l2p, Translation* trans)
-        {
-            // Get parent's translation, then apply them.
-            auto fnd = m_anchor_list.find(l2p->parent_uid);
-            if (fnd != m_anchor_list.end())
-            {
-                const Translation* parent_trans = fnd->second.m_translation;
-                trans->set_rotation(parent_trans->world_rotation * l2p->rot);
-                trans->set_position(parent_trans->world_rotation * l2p->pos + parent_trans->world_position);
-                trans->set_scale(l2p->scale); // TODO: need apply scale? 
 
-                float local_trans[4][4];
-                _generate_mat_from_local(local_trans, l2p);
-                math::mat4xmat4(trans->object2world, parent_trans->object2world, local_trans);
-            }
-            else
-            {
-                // Parent is not exist, treate it as l2w
-                UpdateWorldToTranslation(reinterpret_cast<const LocalToWorld*>(l2p), trans);
-            }
+        void PreUpdate()
+        {
+            m_anchor_list.clear();
+
+            select()
+                .exec([this](ChildAnchor& anchor, Translation& trans)
+                    {
+                        m_anchor_list[anchor.anchor_uid].m_translation = &trans;
+                    });
+        }
+        void Update()
+        {
+            // Do nothing here.
+        }
+
+        void LateUpdate()
+        {
+            select()
+                .exec([](LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToWorld& l2w)
+                    {
+                        l2w.pos = position ? position->pos : math::vec3();
+                        l2w.rot = rotation ? rotation->rot : math::quat();
+                        l2w.scale = scale ? scale->scale : math::vec3(1, 1, 1);
+                    })
+                .exec([](LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToParent& l2p)
+                    {
+                        l2p.pos = position ? position->pos : math::vec3();
+                        l2p.rot = rotation ? rotation->rot : math::quat();
+                        l2p.scale = scale ? scale->scale : math::vec3(1, 1, 1);
+                    })
+                .exec([](LocalToWorld& l2w, Translation& trans)
+                    {
+                        trans.set_rotation(l2w.rot);
+                        trans.set_position(l2w.pos);
+                        trans.set_scale(l2w.scale);
+
+                        _generate_mat_from_local(trans.object2world, &l2w);
+                    })
+                .exec([this](LocalToParent& l2p, Translation& trans)
+                    {
+                        // Get parent's translation, then apply them.
+                        auto fnd = m_anchor_list.find(l2p.parent_uid);
+                        if (fnd != m_anchor_list.end())
+                        {
+                            const Translation* parent_trans = fnd->second.m_translation;
+                            trans.set_rotation(parent_trans->world_rotation * l2p.rot);
+                            trans.set_position(parent_trans->world_rotation * l2p.pos + parent_trans->world_position);
+                            trans.set_scale(l2p.scale); // TODO: need apply scale? 
+
+                            float local_trans[4][4];
+                            _generate_mat_from_local(local_trans, &l2p);
+                            math::mat4xmat4(trans.object2world, parent_trans->object2world, local_trans);
+                        }
+                        else
+                        {
+                            // Parent is not exist, treate it as l2w
+                            trans.set_rotation(l2p.rot);
+                            trans.set_position(l2p.pos);
+                            trans.set_scale(l2p.scale);
+
+                            _generate_mat_from_local(trans.object2world, &l2p);
+                        }
+                    });
         }
     };
 }
-
-#endif
