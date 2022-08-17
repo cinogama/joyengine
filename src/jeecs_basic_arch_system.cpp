@@ -2260,6 +2260,27 @@ void jedbg_set_editing_entity(const jeecs::game_entity* _entity)
         _editor_entity._m_in_chunk = nullptr;
 }
 
+const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world)
+{
+    jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)_world;
+    auto& syss = world->get_system_instances();
+
+    std::vector<const jeecs::typing::type_info*> attached_result;
+    attached_result.reserve(syss.size());
+
+    for (auto& attached_sys : syss)
+        attached_result.push_back(attached_sys.first);
+
+    size_t bufsz = attached_result.size() * sizeof(const jeecs::typing::type_info*);
+    const jeecs::typing::type_info** result = (const jeecs::typing::type_info**)je_mem_alloc(bufsz + sizeof(const jeecs::typing::type_info*));
+
+    memcpy(result, attached_result.data(), bufsz);
+    result[bufsz] = nullptr;
+
+    return result;
+
+}
+
 const jeecs::game_entity* jedbg_get_editing_entity()
 {
     if (_editor_entity.valid())

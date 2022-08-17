@@ -18,14 +18,12 @@ namespace editor::Project
         // 1. 创建引擎的基本上下文
         let universe = je::universe::editor::create();
         universe->editor::set_current_universe();
-        universe->add_shared_system(proj.config.graphic_system);
-        universe->add_shared_system(proj.config.editor_system);
 
         // 2. 创建默认的世界
         let default_world = proj->CreateWorld().instance->val();
         default_world->editor::name("Default");
-        default_world->attach_shared_system(proj.config.graphic_system);
-        default_world->attach_shared_system(proj.config.editor_system);
+        // default_world->attach_shared_system(proj.config.graphic_system);
+        // default_world->attach_shared_system(proj.config.editor_system);
         default_world->add_system(default_translation_sys_type);
     }
 
