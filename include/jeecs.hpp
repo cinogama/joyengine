@@ -438,6 +438,8 @@ JE_API void* je_ecs_world_in_universe(void* world);
 JE_API void* je_ecs_world_create(void* in_universe);
 JE_API void je_ecs_world_destroy(void* world);
 
+JE_API bool je_ecs_world_is_valid(void* world);
+
 JE_API bool je_ecs_world_archmgr_updated(void* world);
 JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
 JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
@@ -1900,6 +1902,8 @@ namespace jeecs
         }
     }
 
+    class game_universe;
+
     class game_world
     {
         void* _m_ecs_world_addr;
@@ -1981,6 +1985,13 @@ namespace jeecs
         {
             je_ecs_world_destroy(_m_ecs_world_addr);
         }
+
+        bool is_valid() const noexcept
+        {
+            return je_ecs_world_is_valid(handle());
+        }
+
+        inline game_universe get_universe() const noexcept;
     };
 
 
@@ -2335,6 +2346,11 @@ namespace jeecs
             return je_ecs_universe_destroy(universe.handle());
         }
     };
+
+    inline game_universe game_world::get_universe() const noexcept
+    {
+        return game_universe(je_ecs_world_in_universe(handle()));
+    }
 
     namespace editor
     {

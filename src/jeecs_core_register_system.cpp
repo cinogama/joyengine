@@ -8,8 +8,8 @@
 
 void jeecs_entry_register_core_systems()
 {
-    //jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
-    //jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
+    jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
+    jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
 
     //jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
     //jeecs::typing::type_info::of<jeecs::Editor::Invisable>("Editor::Invisable");

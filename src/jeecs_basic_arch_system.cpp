@@ -839,7 +839,7 @@ namespace jeecs_impl
             double m_next_late_update_time;
             double              m_execute_interval;
 
-            void set_system_instance(jeecs::game_system* sys)noexcept
+            storage_system& set_system_instance(jeecs::game_system* sys)noexcept
             {
                 m_system_instance = sys;
                 m_next_pre_update_time
@@ -847,11 +847,13 @@ namespace jeecs_impl
                     = m_next_late_update_time
                     = 0.;
                 m_execute_interval = sys->delta_time();
+                return *this;
             }
         };
         using system_container_t = std::unordered_map<const jeecs::typing::type_info*, storage_system>;
+        using system_delay_container_t = std::unordered_multimap<const jeecs::typing::type_info*, storage_system>;
+        using system_removing_container_t = std::unordered_map<const jeecs::typing::type_info*, size_t>;
     private:
-
         ecs_universe* _m_universe;
 
         command_buffer _m_command_buffer;
@@ -863,6 +865,11 @@ namespace jeecs_impl
         std::atomic_bool _m_archmgr_updated = false;
 
         system_container_t m_systems;
+        system_delay_container_t m_delay_appending_systems;
+        system_removing_container_t m_delay_removing_systems;
+    private:
+        inline static std::shared_mutex _m_alive_worlds_mx;
+        inline static std::unordered_set<ecs_world*> _m_alive_worlds;
 
     public:
         ecs_world(ecs_universe* universe)
@@ -870,33 +877,85 @@ namespace jeecs_impl
             , _m_name("anonymous")
             , _m_arch_manager(this)
         {
-
+            std::lock_guard g1(_m_alive_worlds_mx);
+            _m_alive_worlds.insert(this);
         }
+        ~ecs_world()
+        {
+            assert(is_valid(this));
+
+            std::lock_guard g1(_m_alive_worlds_mx);
+            _m_alive_worlds.erase(this);
+        }
+        static bool is_valid(ecs_world* world) noexcept
+        {
+            std::shared_lock sg1(_m_alive_worlds_mx);
+            return _m_alive_worlds.find(world) != _m_alive_worlds.end();
+        }
+
         system_container_t& get_system_instances() noexcept
         {
             return m_systems;
         }
+
+        static void _destroy_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys)noexcept
+        {
+            type->destruct(sys);
+            je_mem_free(sys);
+        }
+
+        void append_system_instance_delay(const jeecs::typing::type_info* type, jeecs::game_system* sys)noexcept
+        {
+            m_delay_appending_systems.insert(std::make_pair(type, storage_system().set_system_instance(sys)));
+        }
+        void remove_system_instance_delay(const jeecs::typing::type_info* type)
+        {
+            auto fnd = m_delay_appending_systems.find(type);
+            if (fnd == m_delay_appending_systems.end())
+            {
+                // Not found in delay appending system. try add removing flag
+                ++m_delay_removing_systems[type];
+            }
+            else
+            {
+                jeecs::debug::log_warn("Current system(%p) named '%s' ready to append later, but in same frame it has been request to remove, canceled.",
+                    fnd->second.m_system_instance, type->m_typename);
+                _destroy_system_instance(type, fnd->second.m_system_instance);
+                m_delay_appending_systems.erase(fnd);
+            }
+
+        }
+
         void append_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys) noexcept
         {
-            if (m_systems.find(type) != m_systems.end())
+            if (m_delay_removing_systems[type])
             {
-                jeecs::debug::log_warn("Current system(%p) named '%s' already contained in world(%p), old one will be removed.",
-                    m_systems[type], type->m_typename, this);
+                --m_delay_removing_systems[type];
+                jeecs::debug::log_warn("Current system(%p) named '%s' ready to append, but in same frame it has been request to remove, canceled.",
+                    sys, type->m_typename);
 
-                remove_system_instance(type);
+                _destroy_system_instance(type, sys);
             }
-            m_systems[type].set_system_instance(sys);
+            else if (m_systems.find(type) != m_systems.end())
+            {
+                jeecs::debug::log_warn("Current system(%p) named '%s' already contained in world(%p), try add it(%p) later.",
+                    m_systems[type], type->m_typename, this, sys);
+
+                append_system_instance_delay(type, sys);
+            }
+            else
+                m_systems[type].set_system_instance(sys);
         }
         void remove_system_instance(const jeecs::typing::type_info* type) noexcept
         {
             if (m_systems.find(type) == m_systems.end())
-                jeecs::debug::log_warn("System named '%s' not contained in world(%p) and failed to remove.",
-                    type->m_typename, this);
+            {
+                // System not contained in alive-systems list, try remove delay-systems
+                remove_system_instance_delay(type);
+            }
             else
             {
-                type->destruct(m_systems[type].m_system_instance);
-                je_mem_free(m_systems[type].m_system_instance);
-
+                _destroy_system_instance(type, m_systems[type].m_system_instance);
                 m_systems.erase(m_systems.find(type));
             }
         }
@@ -940,6 +999,37 @@ namespace jeecs_impl
             if (!is_destroying())
             {
                 _m_archmgr_updated = _m_arch_manager._arch_modified();
+
+                if (!m_delay_appending_systems.empty())
+                {
+                    // append delay systems?
+                    for (auto& delay_appending_system : m_delay_appending_systems)
+                    {
+                        if (m_systems.find(delay_appending_system.first) == m_systems.end())
+                            // Append it as normal.
+                            append_system_instance(delay_appending_system.first, delay_appending_system.second.m_system_instance);
+                        else
+                        {
+                            jeecs::debug::log_error("Trying to append system(%p) with type of '%s', but the system has same type already appended.",
+                                delay_appending_system.second.m_system_instance, delay_appending_system.first->m_typename);
+                            _destroy_system_instance(delay_appending_system.first, delay_appending_system.second.m_system_instance);
+                        }
+                    }
+                    m_delay_appending_systems.clear();
+                }
+
+                if (!m_delay_removing_systems.empty())
+                {
+                    for (auto& delay_removing_system : m_delay_removing_systems)
+                    {
+                        if (delay_removing_system.second)
+                        {
+                            jeecs::debug::log_error("Trying to remove system with type of '%s', but the specified type of system does not exists.",
+                                delay_removing_system.first->m_typename);
+                        }
+                    }
+                    m_delay_removing_systems.clear();
+                }
             }
             else
             {
@@ -1311,10 +1401,9 @@ namespace jeecs_impl
         }
         inline double next_execute_time_allign(double exec_intv)const noexcept
         {
-           return ((double)(((int)(current_time() / exec_intv + 0.5)) + 1)) * exec_intv;
+            return ((double)(((int)(current_time() / exec_intv + 0.5)) + 1)) * exec_intv;
         }
-
-        void update()
+        void update_universe_action_and_worlds()noexcept
         {
             // After a round of update, execute universe actions
             auto* universe_act = _m_universe_actions.pick_all();
@@ -1492,6 +1581,12 @@ namespace jeecs_impl
                 delete removed_world;
             }
 
+        }
+        void update() noexcept
+        {
+            // 0. update actions & worlds
+            update_universe_action_and_worlds();
+
             je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
             if (je_clock_time() - _m_current_time >= 2.0)
                 _m_current_time = je_clock_time();
@@ -1518,6 +1613,7 @@ namespace jeecs_impl
                     }
                     set_next_execute_interval(shared_job->m_next_execute_time - current_time());
                 });
+
             // 2. Do normal jobs.
             ParallelForeach(
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
@@ -1784,7 +1880,7 @@ namespace jeecs_impl
                 {
                     val.first->pre_update(system_info.m_system_instance);
                     system_info.m_next_pre_update_time = current_time + system_info.m_execute_interval;
-                }               
+                }
             }
         );
 
@@ -2035,6 +2131,11 @@ void je_ecs_world_destroy_entity(
 void* je_ecs_world_in_universe(void* world)
 {
     return  ((jeecs_impl::ecs_world*)world)->get_universe();
+}
+
+bool je_ecs_world_is_valid(void* world)
+{
+    return jeecs_impl::ecs_world::is_valid((jeecs_impl::ecs_world*)world);
 }
 
 void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
