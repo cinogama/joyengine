@@ -1968,7 +1968,16 @@ void* je_ecs_universe_create()
     return jeecs::basic::create_new<jeecs_impl::ecs_universe>();
 }
 
-void je_universe_loop(void* ecs_universe)
+void je_ecs_universe_register_exit_callback(void* universe, void(* callback)(void*), void* arg)
+{
+    ((jeecs_impl::ecs_universe*)universe)->register_exit_callback(
+        [callback, arg]() 
+        {
+            callback(arg);
+        });
+}
+
+void je_ecs_universe_loop(void* ecs_universe)
 {
     std::condition_variable exit_cv;
     std::mutex exit_mx;
@@ -2026,6 +2035,16 @@ jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::t
     ((jeecs_impl::ecs_world*)world)->get_command_buffer().add_system_instance((jeecs_impl::ecs_world*)world, type, sys);
 
     return sys;
+}
+
+jeecs::game_system* je_ecs_world_get_system_instance(void* world, const jeecs::typing::type_info* type)
+{
+    auto& syss = ((jeecs_impl::ecs_world*)world)->get_system_instances();
+
+    auto fnd = syss.find(type);
+    if (fnd == syss.end())
+        return nullptr;
+    return fnd->second.m_system_instance;
 }
 
 void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type)

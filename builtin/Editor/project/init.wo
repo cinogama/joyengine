@@ -22,8 +22,8 @@ namespace editor::Project
         // 2. 创建默认的世界
         let default_world = proj->CreateWorld().instance->val();
         default_world->editor::name("Default");
-        // default_world->attach_shared_system(proj.config.graphic_system);
-        // default_world->attach_shared_system(proj.config.editor_system);
+        default_world->add_system(proj.config.graphic_system);
+        default_world->add_system(proj.config.editor_system);
         default_world->add_system(default_translation_sys_type);
     }
 

@@ -37,7 +37,9 @@ namespace editor::WorldList
                 let worlds = je::universe::current()->editor::worlds_list();
                 for (let world : worlds)
                 {
-                    if (Selectable(world->editor::name() + "##" + world: string))
+                    if (Selectable(world->editor::name() + "##" + world: string, 
+                            je::world::rend()->map(\rw:je::world = rw == world;)
+                                             ->valor(false)))
                     {
                         match (je::world::rend())
                         {

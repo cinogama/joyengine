@@ -61,7 +61,7 @@ namespace jeecs
         {
             m_anchor_list.clear();
 
-            select()
+            select_from(get_world())
                 .exec([this](ChildAnchor& anchor, Translation& trans)
                     {
                         m_anchor_list[anchor.anchor_uid].m_translation = &trans;

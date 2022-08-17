@@ -398,9 +398,11 @@ JE_API size_t je_arch_entity_meta_version_offset(void);
 ////////////////////// ECS //////////////////////
 
 JE_API void* je_ecs_universe_create(void);
-JE_API void je_universe_loop(void* universe);
+JE_API void je_ecs_universe_loop(void* universe);
 JE_API void je_ecs_universe_destroy(void* universe);
 JE_API void je_ecs_universe_stop(void* universe);
+
+JE_API void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg);
 
 typedef double(*je_job_for_worlds_t)(void* world);
 typedef double(*je_job_call_once_t)(void);
@@ -445,6 +447,7 @@ JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::depende
 JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
 
 JE_API jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::typing::type_info* type);
+JE_API jeecs::game_system* je_ecs_world_get_system_instance(void* world, const jeecs::typing::type_info* type);
 JE_API void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type);
 
 JE_API void je_ecs_world_create_entity_with_components(
@@ -1951,6 +1954,22 @@ namespace jeecs
             return (SystemT*)add_system(typing::type_info::of<SystemT>());
         }
 
+        // ATTENTION: 
+        // This function is not thread safe, only useable for in-engine-runtime, do not use it in other thread.
+        inline jeecs::game_system* get_system(const jeecs::typing::type_info* type)
+        {
+            assert(type->m_type_class == je_typing_class::JE_SYSTEM);
+            return je_ecs_world_get_system_instance(handle(), type);
+        }
+
+        // ATTENTION: 
+        // This function is not thread safe, only useable for in-engine-runtime, do not use it in other thread.
+        template<typename SystemT>
+        inline SystemT* get_system()
+        {
+            return (SystemT*)has_system(typing::type_info::of<SystemT>());
+        }
+
         inline void remove_system(const jeecs::typing::type_info* type)
         {
             assert(type->m_type_class == je_typing_class::JE_SYSTEM);
@@ -2137,7 +2156,10 @@ namespace jeecs
             inline static ComponentT _get_component(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
             {
                 constexpr size_t cid = _const_type_index<ComponentT>::index;
+
+                assert(cid < archinfo->m_component_count);
                 size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
+
                 if (archinfo->m_component_sizes[cid])
                 {
                     if constexpr (std::is_reference<ComponentT>::value)
@@ -2157,6 +2179,15 @@ namespace jeecs
                     return nullptr; // Only maynot/anyof can be here, no need to cast the type;
             }
 
+            inline static bool get_entity_avaliable(const void* entity_meta, size_t eid)noexcept
+            {
+                static const size_t meta_size = je_arch_entity_meta_size();
+                static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
+
+                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_stat_offset;
+                return jeecs::game_entity::entity_stat::READY == *(const jeecs::game_entity::entity_stat*)_addr;
+            }
+
             template<typename FT>
             inline static void exec(dependence* depend, FT&& f) noexcept
             {
@@ -2165,10 +2196,12 @@ namespace jeecs
                     auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
                     while (cur_chunk)
                     {
+                        auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
                         for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
                         {
                             // TODO: IF ENTITY IN CHUNK NOT VALID, SKIP IT!
-                            f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                            if (get_entity_avaliable(entity_meta_addr, eid))
+                                f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
                         }
 
                         cur_chunk = je_arch_next_chunk(cur_chunk);
@@ -2197,7 +2230,7 @@ namespace jeecs
                 _apply_dependence<0, FT>(dep);
             }
 
-            dependence& cur_dependence = m_steps.back();
+            dependence& cur_dependence = m_steps[m_curstep];
             if (cur_dependence.need_update(m_current_world))
             {
                 cur_dependence.m_world = m_current_world;
@@ -2209,7 +2242,8 @@ namespace jeecs
                 _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
                 "Fail to extract types of arguments from 'FT'.");
 
-            _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(&cur_dependence, exec);
+            _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
+                &cur_dependence, exec);
 
             return true;
         }
@@ -2257,7 +2291,7 @@ namespace jeecs
         selector   _m_default_selector;
 
     public:
-        game_system(game_world world, double delta_tm = 1./60.)
+        game_system(game_world world, double delta_tm = 1. / 60.)
             : _m_game_world(world)
             , _m_delta_time(delta_tm)
         { }
@@ -2277,7 +2311,7 @@ namespace jeecs
         }
         inline selector& select() noexcept
         {
-            return select_from(get_world());
+            return _m_default_selector;
         }
 
         inline float delta_time() const noexcept
@@ -2328,7 +2362,7 @@ namespace jeecs
 
         inline void wait()const noexcept
         {
-            je_universe_loop(handle());
+            je_ecs_universe_loop(handle());
         }
 
         inline void stop() const noexcept

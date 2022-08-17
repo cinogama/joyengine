@@ -14,8 +14,11 @@
 
 namespace jeecs
 {
-    struct DefaultGraphicPipelineSystem : public game_system
+    struct DefaultGraphicPipelineSystem;
+    struct DefaultGraphicPipeline
     {
+        JECS_DISABLE_MOVE_AND_COPY(DefaultGraphicPipeline);
+
         using Translation = Transform::Translation;
 
         using Rendqueue = Renderer::Rendqueue;
@@ -37,10 +40,8 @@ namespace jeecs
         basic::resource<graphic::texture> default_texture;
         jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
 
-        DefaultGraphicPipelineSystem(game_world w)
-            : game_system(w)
+        DefaultGraphicPipeline()
         {
-            // GraphicSystem is a public system and not belong to any world.
             default_shape_quad =
                 new graphic::vertex(jegl_vertex::QUADS,
                     { -0.5f, -0.5f, 0.0f,     0.0f, 1.0f,
@@ -88,12 +89,35 @@ let frag = \f: v2f = fout{ color = float4(t, 0, t, 1) }
                 config,
                 jegl_using_opengl_apis,
                 [](void* ptr, jegl_thread* glthread)
-                {((DefaultGraphicPipelineSystem*)ptr)->Frame(glthread); }, this);
+                {((DefaultGraphicPipeline*)ptr)->Frame(glthread); }, this);
         }
-        ~DefaultGraphicPipelineSystem()
+
+        ~DefaultGraphicPipeline()
         {
+            assert(this == _m_instance);
+            _m_instance = nullptr;
             if (glthread)
                 jegl_terminate_graphic_thread(glthread);
+        }
+
+        inline static std::atomic<DefaultGraphicPipeline*> _m_instance = nullptr;
+        inline static std::atomic<void*> _m_rending_world = nullptr;
+
+        static DefaultGraphicPipeline* get_default_graphic_pipeline_instance(game_universe universe)
+        {
+            if (nullptr == _m_instance)
+            {
+                _m_instance = new DefaultGraphicPipeline();
+                je_ecs_universe_register_exit_callback(universe.handle(),
+                    [](void* instance)
+                    {
+                        delete (DefaultGraphicPipeline*)instance;
+                    },
+                    _m_instance);
+            }
+
+            assert(_m_instance);
+            return _m_instance;
         }
 
         struct camera_arch
@@ -130,80 +154,6 @@ let frag = \f: v2f = fout{ color = float4(t, 0, t, 1) }
 
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
-
-        void PreUpdate()
-        {
-            select()
-                .exec(
-                    [this](Projection& projection, Translation& translation, OrthoProjection* ortho, PerspectiveProjection* perspec, Clip* clip)
-                    {
-                        float mat_inv_rotation[4][4];
-                        translation.world_rotation.create_inv_matrix(mat_inv_rotation);
-                        float mat_inv_position[4][4] = {};
-                        mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
-                        mat_inv_position[3][0] = -translation.world_position.x;
-                        mat_inv_position[3][1] = -translation.world_position.y;
-                        mat_inv_position[3][2] = -translation.world_position.z;
-
-                        // TODO: Optmize
-                        math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
-
-                        assert(ortho || perspec);
-                        float znear = clip ? clip->znear : 0.3f;
-                        float zfar = clip ? clip->zfar : 1000.0f;
-                        if (ortho)
-                        {
-                            graphic::ortho_projection(projection.projection,
-                                (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
-                                ortho->scale, znear, zfar);
-                            graphic::ortho_inv_projection(projection.inv_projection,
-                                (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
-                                ortho->scale, znear, zfar);
-                        }
-                        else
-                        {
-                            graphic::perspective_projection(projection.projection,
-                                (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
-                                perspec->angle, znear, zfar);
-                            graphic::perspective_inv_projection(projection.inv_projection,
-                                (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
-                                perspec->angle, znear, zfar);
-                        }
-                    }
-                )
-                .exec(
-                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport)
-                    {
-                        // Calc camera proj matrix
-                        m_camera_list.emplace(
-                            camera_arch{
-                                rendqueue, &projection, cameraviewport
-                            }
-                        );
-                    })
-                .exec(
-                    [this](Translation& trans,Shaders* shads,Textures* texs,Shape* shape,Rendqueue* rendqueue) 
-                    {
-                        // TODO: Need Impl AnyOf
-                          // RendOb will be input to a chain and used for swap
-                        m_renderer_list.emplace(
-                            renderer_arch{
-                                rendqueue, &trans, shape, shads, texs
-                            });
-                    });
-        }
-        void LateUpdate()
-        {
-            if (glthread)
-                if (!jegl_update(glthread))
-                {
-                    // update is not work now, means graphic thread want to exit..
-                    // ready to shutdown current universe
-
-                    if (game_universe universe = get_world().get_universe())
-                        universe.stop();
-                }
-        }
 
         void Frame(jegl_thread* glthread)
         {
@@ -319,5 +269,131 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                 m_camera_list.pop();
             }
         }
+
+        bool IsActive(game_world world)const noexcept
+        {
+            return world.handle() == _m_rending_world;
+        }
+        void DeActive(game_world world)const noexcept
+        {
+            void* excpet_world = world.handle();
+            _m_rending_world.compare_exchange_weak(excpet_world, nullptr);
+        }
+
+        inline void UpdateFrame(game_world world)noexcept
+        {
+            void* _null = nullptr;
+            _m_rending_world.compare_exchange_weak(_null, world.handle());
+
+            if (glthread && IsActive(world))
+                if (!jegl_update(glthread))
+                {
+                    // update is not work now, means graphic thread want to exit..
+                    // ready to shutdown current universe
+
+                    if (game_universe universe = world.get_universe())
+                        universe.stop();
+                }
+        }
+    };
+    struct DefaultGraphicPipelineSystem : public game_system
+    {
+        using Translation = Transform::Translation;
+
+        using Rendqueue = Renderer::Rendqueue;
+
+        using Clip = Camera::Clip;
+        using PerspectiveProjection = Camera::PerspectiveProjection;
+        using OrthoProjection = Camera::OrthoProjection;
+        using Projection = Camera::Projection;
+        using Viewport = Camera::Viewport;
+
+        using Shape = Renderer::Shape;
+        using Shaders = Renderer::Shaders;
+        using Textures = Renderer::Textures;
+
+        DefaultGraphicPipeline* _m_pipeline;
+
+        DefaultGraphicPipelineSystem(game_world w)
+            : game_system(w)
+            , _m_pipeline(DefaultGraphicPipeline::get_default_graphic_pipeline_instance(w.get_universe()))
+        {
+            // GraphicSystem is a public system and not belong to any world.
+        }
+
+        ~DefaultGraphicPipelineSystem()
+        {
+            _m_pipeline->DeActive(get_world());
+        }
+
+        void PreUpdate()
+        {
+            if (!_m_pipeline->IsActive(get_world()))
+                return;
+
+            select_from(get_world())
+                .exec(
+                    [this](Projection& projection, Translation& translation, OrthoProjection* ortho, PerspectiveProjection* perspec, Clip* clip)
+                    {
+                        float mat_inv_rotation[4][4];
+                        translation.world_rotation.create_inv_matrix(mat_inv_rotation);
+                        float mat_inv_position[4][4] = {};
+                        mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
+                        mat_inv_position[3][0] = -translation.world_position.x;
+                        mat_inv_position[3][1] = -translation.world_position.y;
+                        mat_inv_position[3][2] = -translation.world_position.z;
+
+                        // TODO: Optmize
+                        math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
+
+                        assert(ortho || perspec);
+                        float znear = clip ? clip->znear : 0.3f;
+                        float zfar = clip ? clip->zfar : 1000.0f;
+                        if (ortho)
+                        {
+                            graphic::ortho_projection(projection.projection,
+                                (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
+                                ortho->scale, znear, zfar);
+                            graphic::ortho_inv_projection(projection.inv_projection,
+                                (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
+                                ortho->scale, znear, zfar);
+                        }
+                        else
+                        {
+                            graphic::perspective_projection(projection.projection,
+                                (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
+                                perspec->angle, znear, zfar);
+                            graphic::perspective_inv_projection(projection.inv_projection,
+                                (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
+                                perspec->angle, znear, zfar);
+                        }
+                    }
+                )
+                .exec(
+                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport)
+                    {
+                        // Calc camera proj matrix
+                        _m_pipeline->m_camera_list.emplace(
+                            DefaultGraphicPipeline::camera_arch{
+                                rendqueue, &projection, cameraviewport
+                            }
+                        );
+                    })
+                        .exec(
+                            [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                            {
+                                // TODO: Need Impl AnyOf
+                                    // RendOb will be input to a chain and used for swap
+                                _m_pipeline->m_renderer_list.emplace(
+                                    DefaultGraphicPipeline::renderer_arch{
+                                        rendqueue, &trans, shape, shads, texs
+                                    });
+                            });
+        }
+        void LateUpdate()
+        {
+            _m_pipeline->UpdateFrame(get_world());
+        }
+
     };
 }

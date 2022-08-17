@@ -97,6 +97,14 @@ WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, false);
 }
 
+WO_API wo_api wojeapi_get_system_from_world(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world gworld = wo_pointer(args + 0);
+    const jeecs::typing::type_info* system_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+
+    return wo_ret_option_ptr(vm, gworld.get_system(system_type));
+}
+
 WO_API wo_api wojeapi_remove_system_from_world(wo_vm vm, wo_value args, size_t argc)
 {
     /*
@@ -1187,16 +1195,27 @@ namespace je
 
         func rend(self: world)
         {
-            // ATTENTION: Built-in components or systems's typeinfo will not unregister
-            //            so I can let them static here, but you should pay attention to
-            //            the life-cycle of custom type / woolang vm.
             static let const graphic_typeinfo = typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
+
+            // Remove GraphicPipelineSystem immediately.
+            universe::current()->editor::worlds_list()
+                ->forall(\w:world = w->editor::get_system(graphic_typeinfo)->has();)
+                ->trans(\w:world = w->editor::remove_system(graphic_typeinfo););
+
+            self->add_system(graphic_typeinfo);
+
             return self;
         }
 
         func rend()=> option<world>
         {
             static let const graphic_typeinfo = typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
+
+            let rending_world = universe::current()->editor::worlds_list()
+                                    ->forall(\w:world = w->editor::get_system(graphic_typeinfo)->has(););
+            if (!rending_world->empty())
+                return option::value(rending_world[0]);
+
             return option::none;
         }
 
@@ -1205,6 +1224,9 @@ namespace je
 
         namespace editor
         {
+            extern("libjoyecs", "wojeapi_get_system_from_world")
+            func get_system(self: world, systype: typeinfo)=> option<handle>;
+
             extern("libjoyecs", "wojeapi_remove_system_from_world")
             func remove_system(self: world, sysinfo: typeinfo)=> void;
 
