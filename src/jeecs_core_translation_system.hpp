@@ -65,7 +65,52 @@ namespace jeecs
                 .exec([this](ChildAnchor& anchor, Translation& trans)
                     {
                         m_anchor_list[anchor.anchor_uid].m_translation = &trans;
-                    });
+                    })
+                .exec([](LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToWorld& l2w)
+                    {
+                        l2w.pos = position ? position->pos : math::vec3();
+                        l2w.rot = rotation ? rotation->rot : math::quat();
+                        l2w.scale = scale ? scale->scale : math::vec3(1, 1, 1);
+                    })
+                        .exec([](LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToParent& l2p)
+                            {
+                                l2p.pos = position ? position->pos : math::vec3();
+                                l2p.rot = rotation ? rotation->rot : math::quat();
+                                l2p.scale = scale ? scale->scale : math::vec3(1, 1, 1);
+                            })
+                        .exec([](LocalToWorld& l2w, Translation& trans)
+                            {
+                                trans.set_rotation(l2w.rot);
+                                trans.set_position(l2w.pos);
+                                trans.set_scale(l2w.scale);
+
+                                _generate_mat_from_local(trans.object2world, &l2w);
+                            })
+                                .exec([this](LocalToParent& l2p, Translation& trans)
+                                    {
+                                        // Get parent's translation, then apply them.
+                                        auto fnd = m_anchor_list.find(l2p.parent_uid);
+                                        if (fnd != m_anchor_list.end())
+                                        {
+                                            const Translation* parent_trans = fnd->second.m_translation;
+                                            trans.set_rotation(parent_trans->world_rotation * l2p.rot);
+                                            trans.set_position(parent_trans->world_rotation * l2p.pos + parent_trans->world_position);
+                                            trans.set_scale(l2p.scale); // TODO: need apply scale? 
+
+                                            float local_trans[4][4];
+                                            _generate_mat_from_local(local_trans, &l2p);
+                                            math::mat4xmat4(trans.object2world, parent_trans->object2world, local_trans);
+                                        }
+                                        else
+                                        {
+                                            // Parent is not exist, treate it as l2w
+                                            trans.set_rotation(l2p.rot);
+                                            trans.set_position(l2p.pos);
+                                            trans.set_scale(l2p.scale);
+
+                                            _generate_mat_from_local(trans.object2world, &l2p);
+                                        }
+                                    });
         }
         void Update()
         {
@@ -74,52 +119,7 @@ namespace jeecs
 
         void LateUpdate()
         {
-            select()
-                .exec([](LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToWorld& l2w)
-                    {
-                        l2w.pos = position ? position->pos : math::vec3();
-                        l2w.rot = rotation ? rotation->rot : math::quat();
-                        l2w.scale = scale ? scale->scale : math::vec3(1, 1, 1);
-                    })
-                .exec([](LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToParent& l2p)
-                    {
-                        l2p.pos = position ? position->pos : math::vec3();
-                        l2p.rot = rotation ? rotation->rot : math::quat();
-                        l2p.scale = scale ? scale->scale : math::vec3(1, 1, 1);
-                    })
-                .exec([](LocalToWorld& l2w, Translation& trans)
-                    {
-                        trans.set_rotation(l2w.rot);
-                        trans.set_position(l2w.pos);
-                        trans.set_scale(l2w.scale);
-
-                        _generate_mat_from_local(trans.object2world, &l2w);
-                    })
-                .exec([this](LocalToParent& l2p, Translation& trans)
-                    {
-                        // Get parent's translation, then apply them.
-                        auto fnd = m_anchor_list.find(l2p.parent_uid);
-                        if (fnd != m_anchor_list.end())
-                        {
-                            const Translation* parent_trans = fnd->second.m_translation;
-                            trans.set_rotation(parent_trans->world_rotation * l2p.rot);
-                            trans.set_position(parent_trans->world_rotation * l2p.pos + parent_trans->world_position);
-                            trans.set_scale(l2p.scale); // TODO: need apply scale? 
-
-                            float local_trans[4][4];
-                            _generate_mat_from_local(local_trans, &l2p);
-                            math::mat4xmat4(trans.object2world, parent_trans->object2world, local_trans);
-                        }
-                        else
-                        {
-                            // Parent is not exist, treate it as l2w
-                            trans.set_rotation(l2p.rot);
-                            trans.set_position(l2p.pos);
-                            trans.set_scale(l2p.scale);
-
-                            _generate_mat_from_local(trans.object2world, &l2p);
-                        }
-                    });
+            // Do nothing here.
         }
     };
 }

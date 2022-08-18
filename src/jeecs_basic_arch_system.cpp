@@ -2294,7 +2294,7 @@ const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _w
     const jeecs::typing::type_info** result = (const jeecs::typing::type_info**)je_mem_alloc(bufsz + sizeof(const jeecs::typing::type_info*));
 
     memcpy(result, attached_result.data(), bufsz);
-    result[bufsz] = nullptr;
+    result[attached_result.size()] = nullptr;
 
     return result;
 
