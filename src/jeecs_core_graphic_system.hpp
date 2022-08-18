@@ -368,7 +368,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 perspec->angle, znear, zfar);
                         }
                     }
-                )
+                ).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport)
                     {
@@ -379,16 +379,16 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             }
                         );
                     })
-                        .exec(
-                            [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
-                            {
-                                // TODO: Need Impl AnyOf
-                                    // RendOb will be input to a chain and used for swap
-                                _m_pipeline->m_renderer_list.emplace(
-                                    DefaultGraphicPipeline::renderer_arch{
-                                        rendqueue, &trans, shape, shads, texs
-                                    });
+                .exec(
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    {
+                        // TODO: Need Impl AnyOf
+                            // RendOb will be input to a chain and used for swap
+                        _m_pipeline->m_renderer_list.emplace(
+                            DefaultGraphicPipeline::renderer_arch{
+                                rendqueue, &trans, shape, shads, texs
                             });
+                    }).anyof<Shaders, Textures, Shape, Rendqueue>();
         }
         void LateUpdate()
         {

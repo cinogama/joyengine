@@ -225,6 +225,23 @@ namespace jeecs
         template<class F>
         struct function_traits<F&&> : public function_traits < F >
         {};
+
+        template<size_t n, typename T, typename ... Ts>
+        struct _variadic_type_indexer
+        {
+            static auto _type_selector() // -> T*
+            {
+                if constexpr (n != 0)
+                    return _variadic_type_indexer<n - 1, Ts...>::_type_selector();
+                else
+                    return (T*) nullptr;
+            }
+
+            using type = typename std::remove_pointer<decltype(_type_selector())>::type;
+        };
+
+        template<size_t n, typename ... Ts>
+        using index_types_t = typename _variadic_type_indexer<n, Ts...>::type;
     }
 
     class game_system;
@@ -1037,6 +1054,18 @@ namespace jeecs
         inline size_t size() const noexcept
         {
             return _elems_ptr_end - _elems_ptr_begin;
+        }
+        inline bool empty() const noexcept
+        {
+            return _elems_ptr_end == _elems_ptr_begin;
+        }
+        inline ElemT& front() noexcept
+        {
+            return *_elems_ptr_begin;
+        }
+        inline ElemT& back() noexcept
+        {
+            return *(_elems_ptr_end - 1);
         }
         inline size_t reserved_size() const noexcept
         {
@@ -2031,10 +2060,12 @@ namespace jeecs
         };
 
         type m_require;
+        size_t m_require_group_id;
         typing::typeid_t m_type;
 
-        requirement(type _require, typing::typeid_t _type)
+        requirement(type _require, size_t group_id, typing::typeid_t _type)
             : m_require(_require)
+            , m_require_group_id(group_id)
             , m_type(_type)
         { }
     };
@@ -2045,7 +2076,7 @@ namespace jeecs
 
         // Store archtypes here?
         game_world                 m_world = nullptr;
-
+        bool                       m_requirements_inited = false;
 
         // archs of dependences:
         struct arch_chunks_info
@@ -2098,6 +2129,7 @@ namespace jeecs
     struct selector
     {
         size_t                      m_curstep = 0;
+        size_t                      m_any_id = 0;
         game_world                  m_current_world = nullptr;
         jeecs::vector<dependence>   m_steps;
 
@@ -2113,12 +2145,12 @@ namespace jeecs
                 if constexpr (std::is_reference<CurRequireT>::value)
                     // Reference, means CONTAIN
                     dep.m_requirements.push_back(
-                        requirement(requirement::type::CONTAIN,
+                        requirement(requirement::type::CONTAIN, 0,
                             typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
                 else if constexpr (std::is_pointer<CurRequireT>::value)
                     // Pointer, means MAYNOT
                     dep.m_requirements.push_back(
-                        requirement(requirement::type::MAYNOT,
+                        requirement(requirement::type::MAYNOT, 0,
                             typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
                 else
                 {
@@ -2128,6 +2160,59 @@ namespace jeecs
 
                 _apply_dependence<ArgN + 1, FT>(dep);
             }
+        }
+
+        template<typename CurRequireT, typename ... Ts>
+        void _apply_except(dependence& dep)
+        {
+            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
+
+            auto id = typing::type_info::id<CurRequireT>();
+
+#ifndef NDEBUG
+            for (const requirement& req : dep.m_requirements)
+                if (req.m_type == id)
+                    debug::log_warn("Repeat or conflict when excepting component '%s'.",
+                        typing::type_info::of<CurRequireT>()->m_typename);
+#endif
+            dep.m_requirements.push_back(requirement(requirement::type::EXCEPT, 0, id));
+            if constexpr (sizeof...(Ts) > 0)
+                _apply_except<Ts...>(dep);
+        }
+
+        template<typename CurRequireT, typename ... Ts>
+        void _apply_contain(dependence& dep)
+        {
+            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
+
+            auto id = typing::type_info::id<CurRequireT>();
+
+#ifndef NDEBUG
+            for (const requirement& req : dep.m_requirements)
+                if (req.m_type == id)
+                    debug::log_warn("Repeat or conflict when containing component '%s'.",
+                        typing::type_info::of<CurRequireT>()->m_typename);
+#endif
+            dep.m_requirements.push_back(requirement(requirement::type::CONTAIN, 0, id));
+            if constexpr (sizeof...(Ts) > 0)
+                _apply_contain<Ts...>(dep);
+        }
+
+        template<typename CurRequireT, typename ... Ts>
+        void _apply_anyof(dependence& dep, size_t any_group)
+        {
+            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
+
+            auto id = typing::type_info::id<CurRequireT>();
+#ifndef NDEBUG
+            for (const requirement& req : dep.m_requirements)
+                if (req.m_type == id && req.m_require != requirement::type::MAYNOT)
+                    debug::log_warn("Repeat or conflict when require any of component '%s'.",
+                        typing::type_info::of<CurRequireT>()->m_typename);
+#endif
+            dep.m_requirements.push_back(requirement(requirement::type::ANYOF, any_group, id));
+            if constexpr (sizeof...(Ts) > 0)
+                _apply_anyof<Ts...>(dep, any_group);
         }
 
         template<typename FT>
@@ -2219,6 +2304,10 @@ namespace jeecs
                 return false;
             }
 
+            // Let last step finished!
+            if (m_curstep)
+                m_steps[m_curstep - 1].m_requirements_inited = true;
+
             assert(m_curstep <= m_steps.size());
             if (m_curstep == m_steps.size())
             {
@@ -2226,7 +2315,7 @@ namespace jeecs
                 m_steps.push_back(dependence());
                 dependence& dep = m_steps.back();
 
-                assert(dep.m_requirements.size() == 0);
+                assert(dep.m_requirements.size() == 0 && dep.m_requirements_inited == false);
                 _apply_dependence<0, FT>(dep);
             }
 
@@ -2242,8 +2331,11 @@ namespace jeecs
                 _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
                 "Fail to extract types of arguments from 'FT'.");
 
-            _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
-                &cur_dependence, exec);
+            // NOTE: Only execute when current dependence has been inited.
+            // Because some requirement might append after exec(...)
+            if (cur_dependence.m_requirements_inited)
+                _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
+                    &cur_dependence, exec);
 
             return true;
         }
@@ -2263,6 +2355,11 @@ namespace jeecs
 
         selector& at(game_world w)
         {
+            if (!m_steps.empty())
+            {
+                assert(m_curstep == m_steps.size());
+                m_steps[m_curstep - 1].m_requirements_inited = true;
+            }
             m_curstep = 0;
             m_current_world = w;
             return *this;
@@ -2272,10 +2369,52 @@ namespace jeecs
         selector& exec(FT&& _exec)
         {
             if (_update(_exec))
-            {
-                // TODO: Execute actions.
-                //
                 ++m_curstep;
+
+            return *this;
+        }
+
+        template<typename ... Ts>
+        inline selector& except() noexcept
+        {
+            assert(m_curstep > 0);
+            const size_t last_step = m_curstep - 1;
+
+            auto& depend = m_steps[last_step];
+
+            if (!depend.m_requirements_inited)
+            {
+                _apply_except<Ts>(depend)...;
+            }
+            return *this;
+        }
+        template<typename ... Ts>
+        inline selector& contain() noexcept
+        {
+            assert(m_curstep > 0);
+            const size_t last_step = m_curstep - 1;
+
+            auto& depend = m_steps[last_step];
+
+            if (!depend.m_requirements_inited)
+            {
+                for (size_t i = 0; i < sizeof...(Ts); ++i)
+                    _apply_contain<Ts...>(depend);
+            }
+            return *this;
+        }
+        template<typename ... Ts>
+        inline selector& anyof() noexcept
+        {
+            assert(m_curstep > 0);
+            const size_t last_step = m_curstep - 1;
+
+            auto& depend = m_steps[last_step];
+
+            if (!depend.m_requirements_inited)
+            {
+                _apply_anyof<Ts...>(depend, m_any_id);
+                ++m_any_id;
             }
             return *this;
         }
