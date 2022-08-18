@@ -2384,7 +2384,7 @@ namespace jeecs
 
             if (!depend.m_requirements_inited)
             {
-                _apply_except<Ts>(depend)...;
+                _apply_except<Ts...>(depend);
             }
             return *this;
         }
@@ -2398,8 +2398,7 @@ namespace jeecs
 
             if (!depend.m_requirements_inited)
             {
-                for (size_t i = 0; i < sizeof...(Ts); ++i)
-                    _apply_contain<Ts...>(depend);
+                _apply_contain<Ts...>(depend);
             }
             return *this;
         }
