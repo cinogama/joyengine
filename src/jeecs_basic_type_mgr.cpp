@@ -46,6 +46,9 @@ namespace jeecs_impl
             jeecs::typing::move_func_t      _mover,
             jeecs::typing::to_string_func_t _to_string,
             jeecs::typing::parse_func_t     _parse,
+            jeecs::typing::update_func_t    _pre_update,
+            jeecs::typing::update_func_t    _update,
+            jeecs::typing::update_func_t    _late_update,
             je_typing_class                 _typecls) noexcept
         {
             std::lock_guard g1(_m_type_holder_mx);
@@ -75,6 +78,9 @@ namespace jeecs_impl
             tinfo->m_typename = jeecs::basic::make_new_string(_name);
             tinfo->m_size = _size;
             tinfo->m_chunk_size = jeecs::basic::allign_size(_size, jeecs::typing::ALLIGN_BASE);
+
+            assert(tinfo->m_size != 0 && tinfo->m_chunk_size != 0);
+
             tinfo->m_hash = _hash;
             tinfo->m_constructor = _constructor;
             tinfo->m_destructor = _destructor;
@@ -83,6 +89,9 @@ namespace jeecs_impl
             tinfo->m_to_string = _to_string;
             tinfo->m_parse = _parse;
             tinfo->m_type_class = _typecls;
+            tinfo->m_pre_update = _pre_update;
+            tinfo->m_update = _update;
+            tinfo->m_late_update = _late_update;
             tinfo->m_member_types = nullptr;
 
             // Ok Find a place to store~
@@ -207,6 +216,9 @@ bool je_typing_find_or_register(
     jeecs::typing::move_func_t      _mover,
     jeecs::typing::to_string_func_t _to_string,
     jeecs::typing::parse_func_t     _parse,
+    jeecs::typing::update_func_t    _pre_update,
+    jeecs::typing::update_func_t    _update,
+    jeecs::typing::update_func_t    _late_update,
     je_typing_class                 _typecls)
 {
     return
@@ -221,6 +233,9 @@ bool je_typing_find_or_register(
             _mover,
             _to_string,
             _parse,
+            _pre_update,
+            _update,
+            _late_update,
             _typecls);
 }
 
@@ -255,7 +270,7 @@ void je_register_member(
 ///////////////////////////////////////////////////////////////////////////
 
 // NOTE: need free the return result by 'je_mem_free'
-const jeecs::typing::type_info * *jedbg_get_all_registed_types(void)
+const jeecs::typing::type_info** jedbg_get_all_registed_types(void)
 {
     auto&& types = jeecs_impl::type_info_holder::holder()->get_all_registed_types();
     auto result = (const jeecs::typing::type_info**)je_mem_alloc(sizeof(const jeecs::typing::type_info*) * (types.size() + 1));

@@ -19,6 +19,8 @@ void je_init(int argc, char** argv)
     je_log_strat();
 
     wo_init(argc, argv);
+    wo_enable_jit(false);
+
     wo_virtual_source(jeecs_woolang_api_path, jeecs_woolang_api_src, false);
     wo_virtual_source(shader_wrapper_path, shader_wrapper_src, false);
     wo_virtual_source(gui_api_path, gui_api_src, false);

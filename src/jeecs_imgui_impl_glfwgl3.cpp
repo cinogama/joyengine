@@ -882,8 +882,6 @@ WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)
 struct gui_wo_job_coroutine
 {
     wo_vm work_vm;
-    wo_integer_t job_handle;
-
     gui_wo_job_coroutine* last;
 };
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
@@ -892,19 +890,18 @@ jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
 {
     wo_integer_t loopfunc = wo_int(args + 0);
-    wo_integer_t jobfunc = wo_int(args + 1);
+    wo_value jobfunc = args + 1;
     wo_value argpacks = args + 2;
 
     wo_vm vmm = wo_sub_vm(vm, 1024);
 
     wo_push_val(vmm, argpacks);
-    wo_push_int(vmm, jobfunc);
+    wo_push_val(vmm, jobfunc);
 
     wo_dispatch_rsfunc(vmm, loopfunc, 2);
 
     gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
     guico->work_vm = vmm;
-    guico->job_handle = jobfunc;
     _wo_new_job_list.add_one(guico);
 
     return wo_ret_void(vm);

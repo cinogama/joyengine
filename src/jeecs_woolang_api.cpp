@@ -50,21 +50,6 @@ WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args, size_t a
         jeecs::game_universe(wo_pointer(args + 0)).create_world().handle());
 }
 
-
-WO_API wo_api wojeapi_add_shared_system_to_universe(wo_vm vm, wo_value args, size_t argc)
-{
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
-
-    return wo_ret_bool(vm,
-        nullptr != jeecs::game_universe(wo_pointer(args + 0)).add_shared_system(type));
-}
-
-WO_API wo_api wojeapi_get_shared_system_attached_world(wo_vm vm, wo_value args, size_t argc)
-{
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
-    return wo_ret_option_ptr(vm, jedbg_get_shared_system_attached_world(wo_pointer(args + 0), type));
-}
-
 WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t argc)
 {
     void* universe = wo_pointer(args + 0);
@@ -98,25 +83,56 @@ WO_API wo_api wojeapi_set_world_name(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_attach_shared_system_to_world(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_world gworld = wo_pointer(args + 0);
-    gworld.attach_shared_system((const jeecs::typing::type_info*)wo_pointer(args + 1));
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args, size_t argc)
 {
+    /*
+    extern("libjoyecs", "wojeapi_add_system_to_world")
+    func add_system(self: world, systype : typeinfo) = > bool;
+    */
     jeecs::game_world gworld = wo_pointer(args + 0);
-    return wo_ret_bool(vm
-        , nullptr != gworld.add_system((const jeecs::typing::type_info*)wo_pointer(args + 1)));
+    const jeecs::typing::type_info* system_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+
+    if (gworld.add_system(system_type))
+        return wo_ret_bool(vm, true);
+    return wo_ret_bool(vm, false);
+}
+
+WO_API wo_api wojeapi_get_system_from_world(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world gworld = wo_pointer(args + 0);
+    const jeecs::typing::type_info* system_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+
+    return wo_ret_option_ptr(vm, gworld.get_system(system_type));
 }
 
 WO_API wo_api wojeapi_remove_system_from_world(wo_vm vm, wo_value args, size_t argc)
 {
+    /*
+    extern("libjoyecs", "wojeapi_remove_system_from_world")
+    func remove_system(self: world, sysinfo: typeinfo)=> void;
+    */
     jeecs::game_world gworld = wo_pointer(args + 0);
-    gworld.remove_system((const jeecs::typing::type_info*)wo_pointer(args + 1));
+    const jeecs::typing::type_info* system_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+
+    gworld.remove_system(system_type);
     return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args, size_t argc)
+{
+    /*
+    extern("libjoyecs", "wojeapi_get_all_systems_from_world")
+    private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
+    */
+    const jeecs::typing::type_info** types = jedbg_get_all_system_attached_in_world(wo_pointer(args + 0));
+    wo_value result = args + 1;
+
+    auto* cur_type = types;
+    while (*cur_type)
+       wo_set_pointer(wo_arr_add(result, nullptr), (void*)*(cur_type++));
+    je_mem_free(types);
+
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value args, size_t argc)
@@ -146,20 +162,6 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
             });
     }
     je_mem_free(entities);
-
-    return wo_ret_val(vm, out_arr);
-}
-
-WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args, size_t argc)
-{
-    wo_value out_arr = args + 1;
-
-    auto systems = jedbg_get_attached_system_types_in_world(wo_pointer(args + 0));
-    auto system_iter = systems;
-    while (*system_iter)
-        wo_set_pointer(wo_arr_add(out_arr, nullptr), (void*)*(system_iter++));
-
-    je_mem_free(systems);
 
     return wo_ret_val(vm, out_arr);
 }
@@ -491,13 +493,6 @@ WO_API wo_api wojeapi_type_is_system(wo_vm vm, wo_value args, size_t argc)
     const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
     return wo_ret_bool(vm, type->is_system());
 }
-
-WO_API wo_api wojeapi_type_is_shared_system(wo_vm vm, wo_value args, size_t argc)
-{
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, type->is_shared_system());
-}
-
 
 WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args, size_t argc)
 {
@@ -991,9 +986,6 @@ namespace je
         extern("libjoyecs", "wojeapi_type_is_system")
         func is_system(self: typeinfo)=> bool;
 
-        extern("libjoyecs", "wojeapi_type_is_shared_system")
-        func is_shared_system(self: typeinfo)=> bool;
-
         namespace editor
         {
             func get_all_registed_types()
@@ -1165,9 +1157,6 @@ namespace je
         extern("libjoyecs", "wojeapi_create_world_in_universe")
         func create_world(self: universe)=> world;
 
-        extern("libjoyecs", "wojeapi_add_shared_system_to_universe")
-        func add_shared_system(self:universe, systype:typeinfo)=> bool;
-
         namespace editor
         {
             extern("libjoyecs", "wojeapi_create_universe")
@@ -1192,9 +1181,6 @@ namespace je
 
                 return _get_all_worlds(self, []:array<world>);
             }
-
-            extern("libjoyecs", "wojeapi_get_shared_system_attached_world")
-            func get_shared_system_attached_world(self:universe, systype:typeinfo)=> option<world>;
         }
     }
 
@@ -1204,25 +1190,33 @@ namespace je
         extern("libjoyecs", "wojeapi_close_world")
         func close(self: world) => void;
 
-        extern("libjoyecs", "wojeapi_attach_shared_system_to_world")
-        func attach_shared_system(self: world, systype: typeinfo)=> void;
-
         extern("libjoyecs", "wojeapi_add_system_to_world")
         func add_system(self: world, systype: typeinfo)=> bool;
 
         func rend(self: world)
         {
-            // ATTENTION: Built-in components or systems's typeinfo will not unregister
-            //            so I can let them static here, but you should pay attention to
-            //            the life-cycle of custom type / woolang vm.
             static let const graphic_typeinfo = typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
-            return self->attach_shared_system(graphic_typeinfo);
+
+            // Remove GraphicPipelineSystem immediately.
+            universe::current()->editor::worlds_list()
+                ->forall(\w:world = w->editor::get_system(graphic_typeinfo)->has();)
+                ->trans(\w:world = w->editor::remove_system(graphic_typeinfo););
+
+            self->add_system(graphic_typeinfo);
+
+            return self;
         }
 
         func rend()=> option<world>
         {
             static let const graphic_typeinfo = typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
-            return universe::current()->editor::get_shared_system_attached_world(graphic_typeinfo);
+
+            let rending_world = universe::current()->editor::worlds_list()
+                                    ->forall(\w:world = w->editor::get_system(graphic_typeinfo)->has(););
+            if (!rending_world->empty())
+                return option::value(rending_world[0]);
+
+            return option::none;
         }
 
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
@@ -1230,6 +1224,9 @@ namespace je
 
         namespace editor
         {
+            extern("libjoyecs", "wojeapi_get_system_from_world")
+            func get_system(self: world, systype: typeinfo)=> option<handle>;
+
             extern("libjoyecs", "wojeapi_remove_system_from_world")
             func remove_system(self: world, sysinfo: typeinfo)=> void;
 
@@ -1248,17 +1245,11 @@ namespace je
                 return _get_all_entities_from_world(self, result);
             }
 
-            extern("libjoyecs", "wojeapi_get_all_systems_from_world")
-                private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
-
             func get_systems_types(self: world)=> array<typeinfo>
             {
+                extern("libjoyecs", "wojeapi_get_all_systems_from_world")
+                    private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
                 return _get_systems_from_world(self, []: array<typeinfo>);
-            }
-
-            func get_shared_systems_types()=> array<typeinfo>
-            {
-                return _get_systems_from_world(0x0000H: world, []: array<typeinfo>);
             }
 
             func top_entity_iter(self: world)=> entity::editor::entity_iter

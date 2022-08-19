@@ -17,14 +17,10 @@ namespace editor::Browser
         {
             match (self)
             {
-                path(t)?
-                    return t;
-                image(t)?
-                    return t;
-                shader(t)?
-                    return t;
-                others(t)?
-                    return t;
+                path(t)? return t;
+                image(t)? return t;
+                shader(t)? return t;
+                others(t)? return t;
             }
         }
     }

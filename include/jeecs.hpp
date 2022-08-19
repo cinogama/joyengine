@@ -75,6 +75,7 @@ namespace jeecs
         using to_string_func_t = const char* (*)(const void*);
         using parse_func_t = void(*)(void*, const char*);
 
+        using update_func_t = void(*)(void*);
 
         using entity_id_in_chunk_t = size_t;
         using version_t = size_t;
@@ -119,11 +120,129 @@ namespace jeecs
 
         using uid_t = uuid;
         using ms_stamp_t = uint64_t;
+
+        template<typename T>
+        struct _origin_type
+        {
+            template<typename U>
+            using _origin_t =
+                typename std::remove_cv<
+                typename std::remove_reference<
+                typename std::remove_pointer<U>::type
+                >::type
+                >::type;
+
+            static auto _type_selector() // -> T*
+            {
+                if constexpr (
+                    std::is_reference<T>::value
+                    || std::is_pointer<T>::value
+                    || std::is_const<T>::value
+                    || std::is_volatile<T>::value)
+                    return _origin_type<_origin_t<T>>::_type_selector();
+                else
+                    return (T*) nullptr;
+            }
+
+            using type = typename std::remove_pointer<decltype(_type_selector())>::type;
+        };
+
+        template<typename T>
+        using origin_t = typename _origin_type<T>::type;
+
+        template<class F>
+        struct function_traits
+        {
+        private:
+            using call_type = function_traits<decltype(&F::operator())>;
+
+        public:
+            using return_type = typename call_type::return_type;
+            using flat_func_t = typename call_type::flat_func_t;
+            using this_t = void;
+
+            static const std::size_t arity = call_type::arity;
+
+            template <std::size_t N>
+            struct argument
+            {
+                static_assert(N < arity, "error: invalid parameter index.");
+                using type = typename call_type::template argument<N>::type;
+            };
+        };
+
+        template<class R, class... Args>
+        struct function_traits<R(*)(Args...)> : public function_traits < R(Args...) >
+        {
+        };
+
+        template<class R, class... Args>
+        struct function_traits < R(Args...) >
+        {
+            using return_type = R;
+            using flat_func_t = R(Args...);
+            using this_t = void;
+
+            static const std::size_t arity = sizeof...(Args);
+
+            template <std::size_t N>
+            struct argument
+            {
+                static_assert(N < arity, "error: invalid parameter index.");
+                using type = typename std::tuple_element<N, std::tuple<Args...>>::type;
+            };
+
+
+        };
+
+        // member function pointer
+        template<class C, class R, class... Args>
+        struct function_traits<R(C::*)(Args...)> : public function_traits < R(Args...) >
+        {
+            using this_t = C;
+        };
+
+        // const member function pointer
+        template<class C, class R, class... Args>
+        struct function_traits<R(C::*)(Args...) const> : public function_traits < R(Args...) >
+        {
+            using this_t = C;
+        };
+
+        // member object pointer
+        template<class C, class R>
+        struct function_traits<R(C::*)> : public function_traits < R(void) >
+        {
+            using this_t = C;
+        };
+
+        template<class F>
+        struct function_traits<F&> : public function_traits < F >
+        {};
+
+        template<class F>
+        struct function_traits<F&&> : public function_traits < F >
+        {};
+
+        template<size_t n, typename T, typename ... Ts>
+        struct _variadic_type_indexer
+        {
+            static auto _type_selector() // -> T*
+            {
+                if constexpr (n != 0)
+                    return _variadic_type_indexer<n - 1, Ts...>::_type_selector();
+                else
+                    return (T*) nullptr;
+            }
+
+            using type = typename std::remove_pointer<decltype(_type_selector())>::type;
+        };
+
+        template<size_t n, typename ... Ts>
+        using index_types_t = typename _variadic_type_indexer<n, Ts...>::type;
     }
 
-    struct game_system_function;
     class game_system;
-    class game_shared_system;
     class game_world;
 
     struct game_entity
@@ -138,7 +257,7 @@ namespace jeecs
         jeecs::typing::entity_id_in_chunk_t   _m_id;
         jeecs::typing::version_t              _m_version;
 
-        inline void _set_arch_chunk_info(
+        inline game_entity& _set_arch_chunk_info(
             void* chunk,
             jeecs::typing::entity_id_in_chunk_t index,
             jeecs::typing::version_t ver) noexcept
@@ -146,6 +265,8 @@ namespace jeecs
             _m_in_chunk = chunk;
             _m_id = index;
             _m_version = ver;
+
+            return *this;
         }
 
         template<typename T>
@@ -176,6 +297,8 @@ namespace jeecs
             return _m_in_chunk != e._m_in_chunk || _m_id != e._m_id || _m_version != e._m_version;
         }
     };
+
+    struct dependence;
 
     namespace input
     {
@@ -247,7 +370,6 @@ typedef enum je_typing_class
     JE_BASIC_TYPE,
     JE_COMPONENT,
     JE_SYSTEM,
-    JE_SHARED_SYSTEM,
 } je_typing_class;
 // You should promise: different type should have different name.
 JE_API bool je_typing_find_or_register(
@@ -261,6 +383,9 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::move_func_t      _mover,
     jeecs::typing::to_string_func_t _to_string,
     jeecs::typing::parse_func_t     _parse,
+    jeecs::typing::update_func_t    _pre_update,
+    jeecs::typing::update_func_t    _update,
+    jeecs::typing::update_func_t    _late_update,
     je_typing_class                 _typecls);
 
 JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
@@ -290,28 +415,57 @@ JE_API size_t je_arch_entity_meta_version_offset(void);
 ////////////////////// ECS //////////////////////
 
 JE_API void* je_ecs_universe_create(void);
-JE_API void je_universe_loop(void* universe);
+JE_API void je_ecs_universe_loop(void* universe);
 JE_API void je_ecs_universe_destroy(void* universe);
 JE_API void je_ecs_universe_stop(void* universe);
-JE_API void* je_ecs_universe_instance_system(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type
-);
-JE_API void je_ecs_universe_remove_system(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type);
-JE_API void je_ecs_universe_attach_shared_system_to(
-    void* universe,
-    void* aim_world,
-    const jeecs::typing::type_info* system_type
-);
+
+JE_API void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg);
+
+typedef double(*je_job_for_worlds_t)(void* world);
+typedef double(*je_job_call_once_t)(void);
+
+/*
+Jobs in universe have 2*3 types:
+2: For all worlds / Call once job;
+3: Pre/Normal/After job;
+
+For all worlds job will be execute with each world in universe.
+Call once job only execute 1 time per frame.
+
+Pre job used for timing sensitive tasks, such as frame-update
+Normal job used for normal tasks.
+After job used to update some data based on normal job.
+
+For example, graphic update will be pre-callonce-job.
+*/
+
+JE_API void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job);
+
+JE_API void je_ecs_universe_unregister_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_pre_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_unregister_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_unregister_after_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_once_t job);
+
 JE_API void* je_ecs_world_in_universe(void* world);
 JE_API void* je_ecs_world_create(void* in_universe);
 JE_API void je_ecs_world_destroy(void* world);
-JE_API void je_ecs_world_register_system_func(void* world, jeecs::game_system_function* game_system_function);
-JE_API void je_ecs_world_unregister_system_func(void* world, jeecs::game_system_function* game_system_function);
+
+JE_API bool je_ecs_world_is_valid(void* world);
+
+JE_API bool je_ecs_world_archmgr_updated(void* world);
+JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
+JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
+
+JE_API jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::typing::type_info* type);
+JE_API jeecs::game_system* je_ecs_world_get_system_instance(void* world, const jeecs::typing::type_info* type);
+JE_API void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type);
 
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
@@ -741,21 +895,19 @@ JE_API const char* jedbg_get_world_name(void* _world);
 
 JE_API void jedbg_set_world_name(void* _world, const char* name);
 
-JE_API void* jedbg_get_shared_system_attached_world(void* _universe, const jeecs::typing::type_info* tinfo);
-
 JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
 
 // NOTE: need free the return result by 'je_mem_free'(and elem with jedbg_free_entity)
 JE_API jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_attached_system_types_in_world(void* _world);
-
-// NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
 
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_registed_types(void);
+
+// NOTE: need free the return result by 'je_mem_free'
+JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world);
 
 JE_API void jedbg_set_editor_universe(void* universe_handle);
 
@@ -903,6 +1055,18 @@ namespace jeecs
         {
             return _elems_ptr_end - _elems_ptr_begin;
         }
+        inline bool empty() const noexcept
+        {
+            return _elems_ptr_end == _elems_ptr_begin;
+        }
+        inline ElemT& front() noexcept
+        {
+            return *_elems_ptr_begin;
+        }
+        inline ElemT& back() noexcept
+        {
+            return *(_elems_ptr_end - 1);
+        }
         inline size_t reserved_size() const noexcept
         {
             return _elems_buffer_end - _elems_ptr_begin;
@@ -933,6 +1097,16 @@ namespace jeecs
         inline auto end() const noexcept->ElemT*
         {
             return _elems_ptr_end;
+        }
+
+        inline auto front() const noexcept->ElemT&
+        {
+            return *_elems_ptr_begin;
+        }
+
+        inline auto back() const noexcept->ElemT&
+        {
+            return *(_elems_ptr_end - 1);
         }
 
         inline void erase(size_t index)
@@ -1313,6 +1487,51 @@ namespace jeecs
                     }();
                 }
             }
+
+
+            template<typename U, typename VoidT = void>
+            struct has_update_function : std::false_type
+            {
+                static_assert(std::is_void<VoidT>::value);
+            };
+            template<typename U>
+            struct has_update_function<U, std::void_t<decltype(&U::Update)>> : std::true_type
+            {};
+
+            template<typename U, typename VoidT = void>
+            struct has_pre_update_function : std::false_type
+            {
+                static_assert(std::is_void<VoidT>::value);
+            };
+            template<typename U>
+            struct has_pre_update_function<U, std::void_t<decltype(&U::PreUpdate)>> : std::true_type
+            {};
+
+            template<typename U, typename VoidT = void>
+            struct has_late_update_function : std::false_type
+            {
+                static_assert(std::is_void<VoidT>::value);
+            };
+            template<typename U>
+            struct has_late_update_function<U, std::void_t<decltype(&U::LateUpdate)>> : std::true_type
+            {};
+
+            static void pre_update(void* _ptr)
+            {
+                if constexpr (has_pre_update_function<T>::value)
+                    reinterpret_cast<T*>(_ptr)->PreUpdate();
+
+            }
+            static void update(void* _ptr)
+            {
+                if constexpr (has_update_function<T>::value)
+                    reinterpret_cast<T*>(_ptr)->Update();
+            }
+            static void late_update(void* _ptr)
+            {
+                if constexpr (has_late_update_function<T>::value)
+                    reinterpret_cast<T*>(_ptr)->LateUpdate();
+            }
         };
 
         template<typename T>
@@ -1528,6 +1747,10 @@ namespace jeecs
             to_string_func_t    m_to_string;
             parse_func_t        m_parse;
 
+            update_func_t       m_pre_update;
+            update_func_t       m_update;
+            update_func_t       m_late_update;
+
             je_typing_class     m_type_class;
 
             const member_info* m_member_types;
@@ -1565,11 +1788,9 @@ namespace jeecs
                     je_typing_class current_type =
                         is_basic_type
                         ? je_typing_class::JE_BASIC_TYPE
-                        : (std::is_base_of<game_shared_system, T>::value
-                            ? je_typing_class::JE_SHARED_SYSTEM
-                            : (std::is_base_of<game_system, T>::value
-                                ? je_typing_class::JE_SYSTEM
-                                : je_typing_class::JE_COMPONENT));
+                        : (std::is_base_of<game_system, T>::value
+                            ? je_typing_class::JE_SYSTEM
+                            : je_typing_class::JE_COMPONENT);
 
                     typeid_t id = INVALID_TYPE_ID;
 
@@ -1584,6 +1805,9 @@ namespace jeecs
                         basic::default_functions<T>::mover,
                         basic::default_functions<T>::to_string,
                         basic::default_functions<T>::parse,
+                        basic::default_functions<T>::pre_update,
+                        basic::default_functions<T>::update,
+                        basic::default_functions<T>::late_update,
                         current_type))
                     {
                         *first_init = true;
@@ -1664,13 +1888,26 @@ namespace jeecs
             {
                 return m_type_class == je_typing_class::JE_SYSTEM;
             }
-            inline bool is_shared_system() const noexcept
-            {
-                return m_type_class == je_typing_class::JE_SHARED_SYSTEM;
-            }
+
             inline bool is_component() const noexcept
             {
                 return m_type_class == je_typing_class::JE_COMPONENT;
+            }
+
+            inline void pre_update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_pre_update(addr);
+            }
+            inline void update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_update(addr);
+            }
+            inline void late_update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_late_update(addr);
             }
         };
 
@@ -1700,139 +1937,7 @@ namespace jeecs
         }
     }
 
-    struct game_system_function
-    {
-        enum dependence_type : uint8_t
-        {
-            NOTHING,
-
-            // Operation
-            READ_FROM_LAST_FRAME,
-            WRITE,
-            READ_AFTER_WRITE,
-
-            // Constraint
-            EXCEPT,
-            CONTAIN,
-            ANY,
-            MAY_NOT_HAVE,
-        };
-
-        using system_function_pak_t = std::function<void(const game_system_function*)>;
-        using destructor_t = void(*)(game_system_function*);
-        using invoker_t = void(*)(const game_system_function*, system_function_pak_t*);
-
-        struct arch_index_info
-        {
-            void* m_archtype;
-            size_t m_entity_count_per_arch_chunk;
-
-            size_t* m_component_mem_begin_offsets;
-            size_t* m_component_sizes;
-
-            template<typename T>
-            inline T get_component_accessor(void* chunk_addr, size_t eid, size_t cid) const noexcept
-            {
-                static_assert(sizeof(T) == sizeof(uint8_t*));
-                uint8_t* ptr = nullptr;
-                if (m_component_sizes[cid])
-                {
-                    ptr = (uint8_t*)chunk_addr
-                        + m_component_mem_begin_offsets[cid]
-                        + m_component_sizes[cid] * eid;
-                }
-                return *(T*)(&ptr);
-            }
-
-            //template<typename T, typename IndexerT>
-            //inline T get_component_accessor_expander(void* chunk_addr, size_t eid, IndexerT & indexer) const noexcept
-            //{
-            //    return get_component_accessor<T>(chunk_addr, eid,  indexer.template index_of<T>());
-            //}
-
-            inline static jeecs::game_entity::entity_stat get_entity_state(const void* entity_meta, size_t eid)
-            {
-                static const size_t meta_size = je_arch_entity_meta_size();
-                static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
-
-                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_stat_offset;
-                return *(const jeecs::game_entity::entity_stat*)_addr;
-            }
-
-            inline static jeecs::typing::version_t get_entity_version(const void* entity_meta, size_t eid)
-            {
-                static const size_t meta_size = je_arch_entity_meta_size();
-                static const size_t meta_entity_version_offset = je_arch_entity_meta_version_offset();
-
-                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_version_offset;
-                return *(const jeecs::typing::version_t*)_addr;
-            }
-        };
-
-        struct typeid_dependence_pair
-        {
-            typing::typeid_t m_tid;
-            dependence_type  m_depend;
-        };
-
-        void* m_ecs_world_addr;     // Will be set in
-        arch_index_info* m_archs;
-        size_t m_arch_count;
-        typeid_dependence_pair* m_dependence;
-        size_t m_dependence_count;
-        system_function_pak_t* m_function;
-        invoker_t m_invoker;
-        size_t m_rw_component_count;
-
-        std::atomic_flag m_attached_flag; // NOTE: Shared system attach will fail if this flag not reset.
-                                          //       It will be reset while jeecs_impl::ecs_system_function destruct.
-
-        game_system_function* last;
-
-    private:
-        static void _updater(const game_system_function* _this, system_function_pak_t* pak)
-        {
-            (*pak)(_this);
-        }
-    public:
-        game_system_function(const system_function_pak_t& sys_function, size_t rw_func_count)
-            : m_archs(nullptr)
-            , m_arch_count(0)
-            , m_function(basic::create_new<system_function_pak_t>(sys_function))
-            , m_invoker(_updater)
-            , m_dependence(nullptr)
-            , m_dependence_count(0)
-            , m_rw_component_count(rw_func_count)
-        {
-            m_attached_flag.clear();
-        }
-
-        ~game_system_function()
-        {
-            basic::destroy_free(m_function);
-
-            if (m_dependence)
-            {
-                je_mem_free(m_dependence);
-            }
-        }
-
-        void set_depends(const std::vector<typeid_dependence_pair>& depends)
-        {
-            assert(nullptr == m_dependence && 0 == m_dependence_count);
-            if (!depends.empty())
-            {
-                m_dependence_count = depends.size();
-                m_dependence = (typeid_dependence_pair*)je_mem_alloc(sizeof(typeid_dependence_pair) * m_dependence_count);
-                memcpy(m_dependence, depends.data(), sizeof(typeid_dependence_pair) * m_dependence_count);
-            }
-        }
-
-        void update() const
-        {
-            m_invoker(this, m_function);
-        }
-    };
+    class game_universe;
 
     class game_world
     {
@@ -1846,52 +1951,10 @@ namespace jeecs
         }
     private:
         friend class game_system;
-        jeecs::game_system_function* register_system_func_to_world(jeecs::game_system_function* sys_func)
-        {
-            je_ecs_world_register_system_func(_m_ecs_world_addr, sys_func);
-            return sys_func;
-        }
     public:
         inline void* handle()const noexcept
         {
             return _m_ecs_world_addr;
-        }
-
-        inline void* add_system(const typing::type_info* sys_type)
-        {
-            if (sys_type->is_system())
-                return je_ecs_universe_instance_system(
-                    je_ecs_world_in_universe(handle()),
-                    handle(),
-                    sys_type
-                );
-            else
-                debug::log_fatal("Cannot add '%s' to world, it is not a system.", sys_type->m_typename);
-            return nullptr;
-        }
-
-        template<typename T>
-        inline T* add_system()
-        {
-            return (T*)add_system(typing::type_info::of<T>());
-        }
-
-        inline void remove_system(const typing::type_info* sys_type)
-        {
-            if (sys_type->is_system())
-                je_ecs_universe_remove_system(
-                    je_ecs_world_in_universe(handle()),
-                    handle(),
-                    sys_type
-                );
-            else
-                debug::log_fatal("Cannot remove '%s' from world, it is not a system.", sys_type->m_typename);
-        }
-
-        template<typename T>
-        inline void remove_system()
-        {
-            remove_system(typing::type_info::of<T>());
         }
 
         template<typename ... CompTs>
@@ -1907,6 +1970,47 @@ namespace jeecs
 
             return gentity;
         }
+
+        inline jeecs::game_system* add_system(const jeecs::typing::type_info* type)
+        {
+            assert(type->m_type_class == je_typing_class::JE_SYSTEM);
+            return je_ecs_world_add_system_instance(handle(), type);
+        }
+
+        template<typename SystemT>
+        inline SystemT* add_system()
+        {
+            return (SystemT*)add_system(typing::type_info::of<SystemT>());
+        }
+
+        // ATTENTION: 
+        // This function is not thread safe, only useable for in-engine-runtime, do not use it in other thread.
+        inline jeecs::game_system* get_system(const jeecs::typing::type_info* type)
+        {
+            assert(type->m_type_class == je_typing_class::JE_SYSTEM);
+            return je_ecs_world_get_system_instance(handle(), type);
+        }
+
+        // ATTENTION: 
+        // This function is not thread safe, only useable for in-engine-runtime, do not use it in other thread.
+        template<typename SystemT>
+        inline SystemT* get_system()
+        {
+            return (SystemT*)has_system(typing::type_info::of<SystemT>());
+        }
+
+        inline void remove_system(const jeecs::typing::type_info* type)
+        {
+            assert(type->m_type_class == je_typing_class::JE_SYSTEM);
+            je_ecs_world_remove_system_instance(handle(), type);
+        }
+
+        template<typename SystemT>
+        inline void remove_system()
+        {
+            remove_system(typing::type_info::of<SystemT>());
+        }
+
 
         // This function only used for editor.
         inline game_entity _add_entity(std::vector<typing::typeid_t> components)
@@ -1925,18 +2029,6 @@ namespace jeecs
             je_ecs_world_destroy_entity(handle(), &entity);
         }
 
-        inline void attach_shared_system(const typing::type_info* sys_type)
-        {
-            if (sys_type->is_shared_system())
-                je_ecs_universe_attach_shared_system_to(
-                    je_ecs_world_in_universe(handle()),
-                    handle(),
-                    sys_type
-                );
-            else
-                debug::log_fatal("Cannot attach '%s' to world, it is not a shared-system.", sys_type->m_typename);
-        }
-
         inline operator bool()const noexcept
         {
             return handle() != nullptr;
@@ -1946,472 +2038,546 @@ namespace jeecs
         {
             je_ecs_world_destroy(_m_ecs_world_addr);
         }
+
+        bool is_valid() const noexcept
+        {
+            return je_ecs_world_is_valid(handle());
+        }
+
+        inline game_universe get_universe() const noexcept;
+    };
+
+
+    // Used for select the components of entities which match spcify requirements.
+    struct requirement
+    {
+        enum type : uint8_t
+        {
+            CONTAIN,        // Must have spcify component
+            MAYNOT,         // May have or not have
+            ANYOF,          // Must have one of 'ANYOF' components
+            EXCEPT,         // Must not contain spcify component
+        };
+
+        type m_require;
+        size_t m_require_group_id;
+        typing::typeid_t m_type;
+
+        requirement(type _require, size_t group_id, typing::typeid_t _type)
+            : m_require(_require)
+            , m_require_group_id(group_id)
+            , m_type(_type)
+        { }
+    };
+
+    struct dependence
+    {
+        jeecs::vector<requirement> m_requirements;
+
+        // Store archtypes here?
+        game_world                 m_world = nullptr;
+        bool                       m_requirements_inited = false;
+
+        // archs of dependences:
+        struct arch_chunks_info
+        {
+            void* m_arch;
+            size_t m_entity_count;
+
+            /* An arch will contain a chain of chunks
+            --------------------------------------
+            | ArchType
+            | chunk5->chunk4->chunk3->chunk2...
+            --------------------------------------
+
+            Components data buf will store at chunk' head.
+            --------------------------------------
+            | Chunk
+            | [COMPONENT_BUFFER 64KByte] [OTHER DATAS ..Byte]
+            --------------------------------------
+
+            In buffer, components will store like this:
+            --------------------------------------
+            | Buffer
+            | [COMPONENT_1 0 1 2...] [COMPONENT_2 0 1 2...]...
+            --------------------------------------
+
+            Each type of components will have a size, and begin-offset in buffer.
+            We can use these informations to get all components to walk through.
+            */
+            size_t m_component_count;
+            size_t* m_component_sizes;
+            size_t* m_component_offsets;
+
+        };
+        jeecs::vector<arch_chunks_info*>       m_archs;
+
+        void clear_archs()noexcept
+        {
+            je_ecs_clear_dependence_archinfos(this);
+        }
+        bool need_update(const game_world& aim_world) const noexcept
+        {
+            assert(aim_world.handle() != nullptr);
+
+            if (m_world != aim_world || je_ecs_world_archmgr_updated(aim_world.handle()))
+                return true;
+            return false;
+        }
+    };
+
+    struct selector
+    {
+        size_t                      m_curstep = 0;
+        size_t                      m_any_id = 0;
+        game_world                  m_current_world = nullptr;
+        jeecs::vector<dependence>   m_steps;
+
+        game_system* m_system_instance = nullptr;
+
+        selector(game_system* game_sys)
+            : m_system_instance(game_sys)
+        {
+        }
+
+    private:
+        template<size_t ArgN, typename FT>
+        void _apply_dependence(dependence& dep)
+        {
+            using f = typing::function_traits<FT>;
+            if constexpr (ArgN < f::arity)
+            {
+                using CurRequireT = typename f::argument<ArgN>::type;
+
+                if constexpr (ArgN == 0 && std::is_same<CurRequireT, game_entity>::value)
+                {
+                    // First argument is game_entity, skip this argument
+                }
+                else if constexpr (std::is_reference<CurRequireT>::value)
+                    // Reference, means CONTAIN
+                    dep.m_requirements.push_back(
+                        requirement(requirement::type::CONTAIN, 0,
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+                else if constexpr (std::is_pointer<CurRequireT>::value)
+                    // Pointer, means MAYNOT
+                    dep.m_requirements.push_back(
+                        requirement(requirement::type::MAYNOT, 0,
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+                else
+                {
+                    static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value,
+                        "'exec' of selector only accept ref or ptr type of Components.");
+                }
+
+                _apply_dependence<ArgN + 1, FT>(dep);
+            }
+        }
+
+        template<typename CurRequireT, typename ... Ts>
+        void _apply_except(dependence& dep)
+        {
+            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
+
+            auto id = typing::type_info::id<CurRequireT>();
+
+#ifndef NDEBUG
+            for (const requirement& req : dep.m_requirements)
+                if (req.m_type == id)
+                    debug::log_warn("Repeat or conflict when excepting component '%s'.",
+                        typing::type_info::of<CurRequireT>()->m_typename);
+#endif
+            dep.m_requirements.push_back(requirement(requirement::type::EXCEPT, 0, id));
+            if constexpr (sizeof...(Ts) > 0)
+                _apply_except<Ts...>(dep);
+        }
+
+        template<typename CurRequireT, typename ... Ts>
+        void _apply_contain(dependence& dep)
+        {
+            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
+
+            auto id = typing::type_info::id<CurRequireT>();
+
+#ifndef NDEBUG
+            for (const requirement& req : dep.m_requirements)
+                if (req.m_type == id)
+                    debug::log_warn("Repeat or conflict when containing component '%s'.",
+                        typing::type_info::of<CurRequireT>()->m_typename);
+#endif
+            dep.m_requirements.push_back(requirement(requirement::type::CONTAIN, 0, id));
+            if constexpr (sizeof...(Ts) > 0)
+                _apply_contain<Ts...>(dep);
+        }
+
+        template<typename CurRequireT, typename ... Ts>
+        void _apply_anyof(dependence& dep, size_t any_group)
+        {
+            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
+
+            auto id = typing::type_info::id<CurRequireT>();
+#ifndef NDEBUG
+            for (const requirement& req : dep.m_requirements)
+                if (req.m_type == id && req.m_require != requirement::type::MAYNOT)
+                    debug::log_warn("Repeat or conflict when require any of component '%s'.",
+                        typing::type_info::of<CurRequireT>()->m_typename);
+#endif
+            dep.m_requirements.push_back(requirement(requirement::type::ANYOF, any_group, id));
+            if constexpr (sizeof...(Ts) > 0)
+                _apply_anyof<Ts...>(dep, any_group);
+        }
+
+        template<typename FT>
+        struct _executor_extracting_agent : std::false_type
+        { };
+
+        template<typename RT, typename ... ArgTs>
+        struct _executor_extracting_agent<RT(ArgTs...)> : std::true_type
+        {
+            template<typename ComponentT>
+            struct _const_type_index
+            {
+                using f_t = typing::function_traits<RT(ArgTs...)>;
+                template<size_t id = 0>
+                static constexpr size_t _index()
+                {
+                    if constexpr (std::is_same<typename f_t::argument<id>::type, ComponentT>::value)
+                        return id;
+                    else
+                        return _index<id + 1>();
+                }
+                static constexpr size_t index = _index();
+            };
+
+            template<typename ComponentT>
+            inline static ComponentT _get_component(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+            {
+                constexpr size_t cid = _const_type_index<ComponentT>::index;
+
+                assert(cid < archinfo->m_component_count);
+                size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
+
+                if (archinfo->m_component_sizes[cid])
+                {
+                    if constexpr (std::is_reference<ComponentT>::value)
+                        return *reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    else
+                    {
+                        static_assert(std::is_pointer<ComponentT>::value);
+                        return reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    }
+                }
+                if constexpr (std::is_reference<ComponentT>::value)
+                {
+                    assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
+                    return *(typename typing::origin_t<ComponentT>*)nullptr;
+                }
+                else
+                    return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+            }
+
+            inline static bool get_entity_avaliable(const void* entity_meta, size_t eid)noexcept
+            {
+                static const size_t meta_size = je_arch_entity_meta_size();
+                static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
+
+                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_stat_offset;
+                return jeecs::game_entity::entity_stat::READY == *(const jeecs::game_entity::entity_stat*)_addr;
+            }
+
+            template<typename FT>
+            inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
+            {
+                for (auto* archinfo : depend->m_archs)
+                {
+                    auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
+                    while (cur_chunk)
+                    {
+                        auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
+                        for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
+                        {
+                            if (get_entity_avaliable(entity_meta_addr, eid))
+                            {
+                                if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
+                                    f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                else
+                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                            }
+                        }
+
+                        cur_chunk = je_arch_next_chunk(cur_chunk);
+                    }
+                }
+            }
+        };
+
+        template<typename RT, typename ... ArgTs>
+        struct _executor_extracting_agent<RT(game_entity, ArgTs...)> : std::true_type
+        {
+            template<typename ComponentT>
+            struct _const_type_index
+            {
+                using f_t = typing::function_traits<RT(ArgTs...)>;
+                template<size_t id = 0>
+                static constexpr size_t _index()
+                {
+                    if constexpr (std::is_same<typename f_t::argument<id>::type, ComponentT>::value)
+                        return id;
+                    else
+                        return _index<id + 1>();
+                }
+                static constexpr size_t index = _index();
+            };
+
+            template<typename ComponentT>
+            inline static ComponentT _get_component(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+            {
+                constexpr size_t cid = _const_type_index<ComponentT>::index;
+
+                assert(cid < archinfo->m_component_count);
+                size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
+
+                if (archinfo->m_component_sizes[cid])
+                {
+                    if constexpr (std::is_reference<ComponentT>::value)
+                        return *reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    else
+                    {
+                        static_assert(std::is_pointer<ComponentT>::value);
+                        return reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    }
+                }
+                if constexpr (std::is_reference<ComponentT>::value)
+                {
+                    assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
+                    return *(typename typing::origin_t<ComponentT>*)nullptr;
+                }
+                else
+                    return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+            }
+
+            inline static typing::version_t get_entity_avaliable(const void* entity_meta, size_t eid, typing::version_t* out_version)noexcept
+            {
+                static const size_t meta_size = je_arch_entity_meta_size();
+                static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
+                static const size_t meta_entity_vers_offset = je_arch_entity_meta_version_offset();
+
+                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_stat_offset;
+                if (jeecs::game_entity::entity_stat::READY == *(const jeecs::game_entity::entity_stat*)_addr)
+                {
+                    *out_version = *(typing::version_t*)(((uint8_t*)entity_meta) + eid * meta_size + meta_entity_vers_offset);
+                    return true;
+                }
+                return false;
+            }
+
+            template<typename FT>
+            inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
+            {
+                for (auto* archinfo : depend->m_archs)
+                {
+                    auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
+                    while (cur_chunk)
+                    {
+                        auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
+                        typing::version_t version;
+                        for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
+                        {
+                            if (get_entity_avaliable(entity_meta_addr, eid, &version))
+                            {
+                                if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
+                                    f(game_entity()._set_arch_chunk_info(cur_chunk, eid, version), _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                else
+                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(game_entity()._set_arch_chunk_info(cur_chunk, eid, version), _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                            }
+                        }
+
+                        cur_chunk = je_arch_next_chunk(cur_chunk);
+                    }
+                }
+            }
+        };
+
+        template<typename FT>
+        bool _update(FT&& exec)
+        {
+            if (!m_current_world)
+            {
+                jeecs::debug::log_warn("Failed to execute current jobs(%p). Game world not specify!");
+                return false;
+            }
+
+            // Let last step finished!
+            if (m_curstep)
+                m_steps[m_curstep - 1].m_requirements_inited = true;
+
+            assert(m_curstep <= m_steps.size());
+            if (m_curstep == m_steps.size())
+            {
+                // First times to execute this job or arch/world changed, register requirements
+                m_steps.push_back(dependence());
+                dependence& dep = m_steps.back();
+
+                assert(dep.m_requirements.size() == 0 && dep.m_requirements_inited == false);
+                _apply_dependence<0, FT>(dep);
+            }
+
+            dependence& cur_dependence = m_steps[m_curstep];
+            if (cur_dependence.need_update(m_current_world))
+            {
+                cur_dependence.m_world = m_current_world;
+                je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
+            }
+
+            // OK! Execute step function!
+            static_assert(
+                _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
+                "Fail to extract types of arguments from 'FT'.");
+
+            // NOTE: Only execute when current dependence has been inited.
+            // Because some requirement might append after exec(...)
+            if (cur_dependence.m_requirements_inited)
+                _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
+                    &cur_dependence, exec, m_system_instance);
+
+            return true;
+        }
+    public:
+        selector()
+        {
+            jeecs::debug::log_info("New selector(%p) created.", this);
+        }
+        ~selector()
+        {
+            for (auto& step : m_steps)
+                step.clear_archs();
+            m_steps.clear();
+
+            jeecs::debug::log_info("Selector(%p) closed.", this);
+        }
+
+        selector& at(game_world w)
+        {
+            if (!m_steps.empty())
+            {
+                assert(m_curstep == m_steps.size());
+                m_steps[m_curstep - 1].m_requirements_inited = true;
+            }
+            m_curstep = 0;
+            m_current_world = w;
+            return *this;
+        }
+
+        template<typename FT>
+        selector& exec(FT&& _exec)
+        {
+            if (_update(_exec))
+                ++m_curstep;
+
+            return *this;
+        }
+
+        template<typename ... Ts>
+        inline selector& except() noexcept
+        {
+            assert(m_curstep > 0);
+            const size_t last_step = m_curstep - 1;
+
+            auto& depend = m_steps[last_step];
+
+            if (!depend.m_requirements_inited)
+            {
+                _apply_except<Ts...>(depend);
+            }
+            return *this;
+        }
+        template<typename ... Ts>
+        inline selector& contain() noexcept
+        {
+            assert(m_curstep > 0);
+            const size_t last_step = m_curstep - 1;
+
+            auto& depend = m_steps[last_step];
+
+            if (!depend.m_requirements_inited)
+            {
+                _apply_contain<Ts...>(depend);
+            }
+            return *this;
+        }
+        template<typename ... Ts>
+        inline selector& anyof() noexcept
+        {
+            assert(m_curstep > 0);
+            const size_t last_step = m_curstep - 1;
+
+            auto& depend = m_steps[last_step];
+
+            if (!depend.m_requirements_inited)
+            {
+                _apply_anyof<Ts...>(depend, m_any_id);
+                ++m_any_id;
+            }
+            return *this;
+        }
     };
 
     class game_system
     {
-        struct accessor_base {};
-
-        struct read_last_frame_base :accessor_base {};
-        struct read_updated_base :accessor_base {};
-        struct write_base :accessor_base {};
-
-        struct describe_base {};
-
-    public:
-
-        template<typename T>
-        struct read : read_last_frame_base {
-        public:
-            using component_access_ptr_t = const T*;
-            using component_access_ref_t = const T&;
-            void* _m_component_addr;
-        public:
-            inline component_access_ptr_t operator ->() const noexcept { return (component_access_ptr_t)_m_component_addr; }
-            inline component_access_ref_t operator * () const noexcept { return *(component_access_ptr_t)_m_component_addr; }
-            inline component_access_ptr_t operator &() const noexcept { return (component_access_ptr_t)_m_component_addr; };
-            inline operator component_access_ptr_t() const noexcept { return (component_access_ptr_t)_m_component_addr; };
-        };
-        template<typename T>
-        struct read_updated : read_updated_base {
-        public:
-            using component_access_ptr_t = const T*;
-            using component_access_ref_t = const T&;
-            void* _m_component_addr;
-        public:
-            inline component_access_ptr_t operator ->() const noexcept { return (component_access_ptr_t)_m_component_addr; }
-            inline component_access_ref_t operator * () const noexcept { return *(component_access_ptr_t)_m_component_addr; }
-            inline component_access_ptr_t operator &() const noexcept { return (component_access_ptr_t)_m_component_addr; };
-            inline operator component_access_ptr_t () const noexcept { return (component_access_ptr_t)_m_component_addr; };
-        };
-        template<typename T>
-        struct write : write_base {
-        public:
-            using component_access_ptr_t = T*;
-            using component_access_ref_t = T&;
-            void* _m_component_addr;
-        public:
-            inline component_access_ptr_t operator ->() const noexcept { return (component_access_ptr_t)_m_component_addr; }
-            inline component_access_ref_t operator * () const noexcept { return *(component_access_ptr_t)_m_component_addr; }
-            inline component_access_ptr_t operator &() const noexcept { return (component_access_ptr_t)_m_component_addr; };
-            inline operator component_access_ptr_t () const noexcept { return (component_access_ptr_t)_m_component_addr; };
-        };
-
-        template<typename T>
-        struct maynot : describe_base {
-        public:
-            using component_accessor_t = T;
-            constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
-
-            static_assert(std::is_base_of<accessor_base, T>::value, "maynot<T>: T should be component's pointer or accessor.");
-
-            T _m_component_accessor;
-        public:
-            inline typename T::component_access_ptr_t operator ->() const noexcept { return &_m_component_accessor; }
-            inline typename T::component_access_ref_t operator * () const noexcept { return *_m_component_accessor; }
-            inline typename T::component_access_ptr_t operator &() const noexcept { return &_m_component_accessor; };
-            inline operator typename T::component_access_ptr_t() const noexcept { return &_m_component_accessor; };
-        };
-        template<typename T>
-        struct maynot<T*> : describe_base {
-        public:
-            using component_accessor_t = T*;
-            constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
-
-            static_assert(!std::is_const<T>::value);
-
-            T* _m_component_addr;
-        public:
-            inline T* operator ->() const noexcept { return _m_component_addr; }
-            inline T& operator * () const noexcept { return *_m_component_addr; }
-            inline T* operator &() const noexcept { return _m_component_addr; };
-            inline operator T* () const noexcept { return _m_component_addr; };
-        };
-        template<typename T>
-        struct maynot<const T*> : describe_base {
-        public:
-            using component_accessor_t = const T*;
-            constexpr static game_system_function::dependence_type describe = game_system_function::dependence_type::MAY_NOT_HAVE;
-
-            static_assert(!std::is_const<T>::value);
-
-            const T* _m_component_addr;
-        public:
-            inline const T* operator ->() const noexcept { return _m_component_addr; }
-            inline const T& operator * () const noexcept { return *_m_component_addr; }
-            inline const T* operator &() const noexcept { return _m_component_addr; };
-            inline operator const T* () const noexcept { return _m_component_addr; };
-        };
-
+        JECS_DISABLE_MOVE_AND_COPY(game_system);
     private:
+        double _m_delta_time;
+
         game_world _m_game_world;
-        basic::atomic_list<game_system_function> _m_registed_system_func;
+        selector   _m_default_selector;
 
     public:
-        game_system(game_world world)
+        game_system(game_world world, double delta_tm = 1. / 60.)
             : _m_game_world(world)
-        {
-
-        }
-
-        ~game_system()
-        {
-            auto chain = _m_registed_system_func.pick_all();
-            while (chain)
-            {
-                auto current_chain = chain;
-                chain = chain->last;
-
-                basic::destroy_free(current_chain);
-            }
-        }
+            , _m_delta_time(delta_tm)
+            , _m_default_selector(this)
+        { }
 
         // Get binded world or attached world
         game_world get_world() const noexcept
         {
-            if (_m_game_world)
-                return _m_game_world;
-
-            // May be shared system, try get world from chain
-            void* chain_world = nullptr;
-
-            auto* sys = get_registed_function_chain();
-            while (sys)
-            {
-                if (chain_world && chain_world != sys->m_ecs_world_addr)
-                    return nullptr;
-                else
-                    chain_world = sys->m_ecs_world_addr;
-                sys = sys->last;
-            }
-            return chain_world;
+            assert(_m_game_world);
+            return _m_game_world;
         }
 
-        game_system_function* get_registed_function_chain() const noexcept
+        // Select from default selector
+        // ATTENTION: Not thread safe!
+        inline selector& select_from(game_world w) noexcept
         {
-            return _m_registed_system_func.peek();
+            return _m_default_selector.at(w);
+        }
+        inline selector& select() noexcept
+        {
+            return _m_default_selector;
         }
 
-    public:
-        template<typename T>
-        static constexpr jeecs::game_system_function::dependence_type describe_type()
+        inline float delta_time() const noexcept
         {
-            if constexpr (std::is_pointer<T>::value || std::is_base_of<accessor_base, T>::value)
+            return (float)_m_delta_time;
+        }
+
+#define PreUpdate PreUpdate
+#define Update Update
+#define LateUpdate LateUpdate
+
+        // void PreUpdate()
+        // void Update()
+        // void LateUpdate()
+        /*
+        struct TranslationUpdater : game_system
+        {
+            void LateUpdate()
             {
-                return jeecs::game_system_function::dependence_type::NOTHING;
-            }
-            else if constexpr (std::is_base_of<describe_base, T>::value)
-            {
-                return T::describe;
-            }
-            else
-            {
-                static_assert(std::is_pointer<T>::value || std::is_base_of<accessor_base, T>::value,
-                    "Unknown accessor type: should be accessor(pointer/read/write/read_newest) or describe(maynot).");
+                select()
+                    .exec(...);
+                    .exec(...);
             }
         }
-
-        template<typename T>
-        static constexpr jeecs::game_system_function::dependence_type depend_type()
-        {
-            static_assert(std::is_pod<T>::value);
-            if constexpr (std::is_pointer<T>::value || std::is_base_of<accessor_base, T>::value)
-            {
-                if constexpr (std::is_pointer<T>::value)
-                {
-                    if constexpr (std::is_const<typename std::remove_pointer<T>::type>::value)
-                        return jeecs::game_system_function::dependence_type::READ_AFTER_WRITE;
-                    else
-                        return jeecs::game_system_function::dependence_type::WRITE;
-                }
-                else
-                {
-                    if constexpr (std::is_base_of<read_last_frame_base, T>::value)
-                        return jeecs::game_system_function::dependence_type::READ_FROM_LAST_FRAME;
-                    else if constexpr (std::is_base_of<write_base, T>::value)
-                        return jeecs::game_system_function::dependence_type::WRITE;
-                    else /* if constexpr (std::is_base_of<read_updated_base, T>::value) */
-                        return jeecs::game_system_function::dependence_type::READ_AFTER_WRITE;
-                }
-            }
-            else if constexpr (std::is_base_of<describe_base, T>::value)
-            {
-                // Skip the describe, only get accessor type.
-                return depend_type<typename T::component_accessor_t>();
-            }
-            else
-            {
-                static_assert(std::is_pointer<T>::value || std::is_base_of<accessor_base, T>::value,
-                    "Unknown accessor type: should be pointer/read/write/read_newest.");
-            }
-        }
-
-        template<typename T>
-        struct origin_component
-        {
-
-        };
-
-        template<typename T>
-        struct origin_component<T*>
-        {
-            using type = typename std::remove_cv<T>::type;
-        };
-
-        template<typename T>
-        struct origin_component<read<T>>
-        {
-            using type = typename std::remove_cv<T>::type;
-        };
-
-        template<typename T>
-        struct origin_component<write<T>>
-        {
-            using type = typename std::remove_cv<T>::type;
-        };
-
-        template<typename T>
-        struct origin_component<read_updated<T>>
-        {
-            using type = typename std::remove_cv<T>::type;
-        };
-
-        template<typename T>
-        struct origin_component<maynot<T>>
-        {
-            using type = typename origin_component<T>::type;
-        };
-
-        template<typename ... ArgTs>
-        struct is_need_game_entity
-        {
-            template<typename T, typename ... Ts>
-            struct is_game_entity
-            {
-                static constexpr bool value = std::is_same<T, jeecs::game_entity>::value;
-            };
-
-            static constexpr bool value =
-                0 != sizeof...(ArgTs) && is_game_entity<ArgTs...>::value;
-        };
-
-        struct requirement
-        {
-            game_system_function::dependence_type m_depend;
-            typing::typeid_t m_required_id;
-        };
-
-        template<typename T>
-        inline static constexpr requirement except()
-        {
-            return requirement{ game_system_function::dependence_type::EXCEPT, jeecs::typing::type_info::id<T>() };
-        }
-
-        template<typename T>
-        inline static constexpr requirement contain()
-        {
-            return requirement{ game_system_function::dependence_type::CONTAIN, jeecs::typing::type_info::id<T>() };
-        }
-
-        template<typename T>
-        inline static constexpr requirement may_not_have()
-        {
-            return requirement{ game_system_function::dependence_type::MAY_NOT_HAVE, jeecs::typing::type_info::id<T>() };
-        }
-
-        template<typename T>
-        inline static constexpr requirement any_of()
-        {
-            return requirement{ game_system_function::dependence_type::ANY, jeecs::typing::type_info::id<T>() };
-        }
-
-        inline static requirement system_read(const void* offset)
-        {
-            return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME,
-                typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
-        }
-
-        inline static requirement system_write(void* offset)
-        {
-            return requirement{ game_system_function::dependence_type::WRITE,
-                typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
-        }
-
-        inline static requirement system_read_updated(const void* offset)
-        {
-            return requirement{ game_system_function::dependence_type::READ_AFTER_WRITE,
-                typing::NOT_TYPEID_FLAG | reinterpret_cast<typing::typeid_t>(offset) };
-        }
-
-        template<typename T>
-        inline static constexpr requirement before(T val)
-        {
-            return requirement{ game_system_function::dependence_type::READ_FROM_LAST_FRAME,
-                typing::NOT_TYPEID_FLAG | *reinterpret_cast<typing::typeid_t*>(&val) };
-        }
-
-        template<typename T>
-        inline static constexpr requirement after(T val)
-        {
-            return requirement{ game_system_function::dependence_type::READ_AFTER_WRITE,
-                typing::NOT_TYPEID_FLAG | *reinterpret_cast<typing::typeid_t*>(&val) };
-        }
-
-        template<typename T>
-        inline static constexpr requirement current(T val)
-        {
-            return requirement{ game_system_function::dependence_type::WRITE,
-                typing::NOT_TYPEID_FLAG | *reinterpret_cast<typing::typeid_t*>(&val) };
-        }
-
-        template<typename ... ArgTs>
-        std::vector<jeecs::game_system_function::typeid_dependence_pair> generate_depend_list(const std::vector<requirement>& requirements)
-        {
-            std::vector<jeecs::game_system_function::typeid_dependence_pair> depends
-                = { {
-                        jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
-                        depend_type<ArgTs>(),
-                    }...
-            };
-            std::vector<jeecs::game_system_function::typeid_dependence_pair> describe
-                = { {
-                        jeecs::typing::type_info::id<typename origin_component<ArgTs>::type>(),
-                        describe_type<ArgTs>(),
-                    }...
-            };
-            for (auto& desc : describe)
-            {
-                if (desc.m_depend != jeecs::game_system_function::dependence_type::NOTHING)
-                    depends.push_back(desc);
-            }
-            for (auto& req : requirements)
-                depends.push_back({ req.m_required_id,req.m_depend });
-
-            return depends;
-        }
-
-        template<typename ReturnT, typename ThisT, typename ... ArgTs>
-        inline auto pack_normal_invoker(ReturnT(ThisT::* system_func)(ArgTs ...), const std::vector<requirement>& requirement)
-        {
-            auto invoker = [this, system_func](const jeecs::game_system_function* sysfunc) {
-
-                if constexpr (0 == sizeof...(ArgTs))
-                {
-                    ((static_cast<ThisT*>(this))->*system_func)();
-                }
-                else
-                {
-                    jeecs::basic::type_index_in_varargs<ArgTs...> tindexer;
-
-                    for (size_t arch_index = 0; arch_index < sysfunc->m_arch_count; ++arch_index)
-                    {
-                        void* current_chunk = je_arch_get_chunk(sysfunc->m_archs[arch_index].m_archtype);
-                        while (current_chunk)
-                        {
-                            auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(current_chunk);
-
-                            for (size_t entity_index = 0;
-                                entity_index < sysfunc->m_archs[arch_index].m_entity_count_per_arch_chunk;
-                                entity_index++)
-                            {
-                                if (jeecs::game_entity::entity_stat::READY
-                                    == jeecs::game_system_function::arch_index_info::get_entity_state(entity_meta_addr, entity_index))
-                                {
-                                    ((static_cast<ThisT*>(this))->*system_func)(
-
-                                        sysfunc->m_archs[arch_index].get_component_accessor<ArgTs>(
-                                            current_chunk, entity_index, tindexer.template index_of<ArgTs>()
-                                            )...
-                                        );
-                                }
-                            }
-                            current_chunk = je_arch_next_chunk(current_chunk);
-                        }
-                    }
-                }
-            };
-
-            auto* gsys = basic::create_new<jeecs::game_system_function>(invoker, sizeof...(ArgTs));
-
-            std::vector<jeecs::game_system_function::typeid_dependence_pair> depends = generate_depend_list<ArgTs...>(requirement);
-            depends.push_back({ current(system_func).m_required_id, current(system_func).m_depend });
-
-            gsys->set_depends(depends);
-
-            return gsys;
-        }
-
-        template<typename ReturnT, typename ThisT, typename ET, typename ... ArgTs>
-        inline auto pack_normal_invoker_with_entity(ReturnT(ThisT::* system_func)(ET, ArgTs ...), const std::vector<requirement>& requirement)
-        {
-            auto invoker = [this, system_func](const jeecs::game_system_function* sysfunc) {
-
-                jeecs::basic::type_index_in_varargs<ArgTs...> tindexer;
-
-                for (size_t arch_index = 0; arch_index < sysfunc->m_arch_count; ++arch_index)
-                {
-                    void* current_chunk = je_arch_get_chunk(sysfunc->m_archs[arch_index].m_archtype);
-                    while (current_chunk)
-                    {
-                        auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(current_chunk);
-
-                        for (size_t entity_index = 0;
-                            entity_index < sysfunc->m_archs[arch_index].m_entity_count_per_arch_chunk;
-                            entity_index++)
-                        {
-                            if (jeecs::game_entity::entity_stat::READY
-                                == jeecs::game_system_function::arch_index_info::get_entity_state(entity_meta_addr, entity_index))
-                            {
-                                jeecs::game_entity gentity;
-                                gentity._m_id = entity_index;
-                                gentity._m_in_chunk = current_chunk;
-                                gentity._m_version = jeecs::game_system_function::arch_index_info::get_entity_version(entity_meta_addr, entity_index);
-
-                                ((static_cast<ThisT*>(this))->*system_func)(
-                                    gentity,
-                                    sysfunc->m_archs[arch_index].get_component_accessor<ArgTs>(
-                                        current_chunk, entity_index, tindexer.template index_of<ArgTs>()
-                                        )...
-                                    );
-                            }
-                        }
-                        current_chunk = je_arch_next_chunk(current_chunk);
-                    }
-                }
-            };
-
-            auto* gsys = basic::create_new<jeecs::game_system_function>(invoker, sizeof...(ArgTs));
-
-            std::vector<jeecs::game_system_function::typeid_dependence_pair> depends = generate_depend_list<ArgTs...>(requirement);
-            depends.push_back({ current(system_func).m_required_id, current(system_func).m_depend });
-
-            gsys->set_depends(depends);
-
-            return gsys;
-        }
-
-        template<typename ReturnT, typename ThisT, typename ... ArgTs>
-        inline jeecs::game_system_function* register_system_func(ReturnT(ThisT::* sysf)(ArgTs ...), const std::vector<requirement>& requirement = {})
-        {
-            game_system_function* game_system_function = nullptr;
-            if constexpr (0 != sizeof...(ArgTs))
-            {
-                if constexpr (is_need_game_entity<ArgTs...>::value)
-                    game_system_function = pack_normal_invoker_with_entity(sysf, requirement);
-                else
-                    game_system_function = pack_normal_invoker(sysf, requirement);
-            }
-            else
-                game_system_function = pack_normal_invoker(sysf, requirement);
-
-
-            _m_registed_system_func.add_one(game_system_function);
-
-            if (_m_game_world)
-                _m_game_world.register_system_func_to_world(game_system_function);
-
-            return game_system_function;
-        }
+        */
     };
 
     class game_universe
@@ -2435,27 +2601,9 @@ namespace jeecs
             return je_ecs_world_create(_m_universe_addr);
         }
 
-        inline void* add_shared_system(const typing::type_info* sys_type)
-        {
-            if (sys_type->is_shared_system())
-                return je_ecs_universe_instance_system(
-                    handle(),
-                    nullptr,
-                    sys_type
-                );
-            else
-                debug::log_fatal("Cannot add '%s' to universe, it is not a shared-system.", sys_type->m_typename);
-            return nullptr;
-        }
-
-        inline void attach_shared_system_to(const typing::type_info* typeinfo, game_world world)
-        {
-            je_ecs_universe_attach_shared_system_to(handle(), world.handle(), typeinfo);
-        }
-
         inline void wait()const noexcept
         {
-            je_universe_loop(handle());
+            je_ecs_universe_loop(handle());
         }
 
         inline void stop() const noexcept
@@ -2479,22 +2627,10 @@ namespace jeecs
         }
     };
 
-    class game_shared_system : public game_system
+    inline game_universe game_world::get_universe() const noexcept
     {
-    private:
-        game_universe _m_current_universe = nullptr;
-    public:
-        game_universe get_universe() const noexcept
-        {
-            return _m_current_universe;
-        }
-
-        game_shared_system(game_universe universe)
-            : game_system(nullptr)
-            , _m_current_universe(universe)
-        {
-        }
-    };
+        return game_universe(je_ecs_world_in_universe(handle()));
+    }
 
     namespace editor
     {
@@ -4226,13 +4362,13 @@ namespace jeecs
             {
 
             }
-            ray(const Transform::Translation* camera_trans, const Camera::Projection* camera_proj, const vec2& screen_pos, bool ortho)
+            ray(const Transform::Translation& camera_trans, const Camera::Projection& camera_proj, const vec2& screen_pos, bool ortho)
             {
                 //根据摄像机和屏幕坐标创建射线
                 float ray_eye[4] = { screen_pos.x, screen_pos.y, 1.0f, 1.0f };
 
                 float ray_world[4];
-                mat4xvec4(ray_world, camera_proj->inv_projection, ray_eye);
+                mat4xvec4(ray_world, camera_proj.inv_projection, ray_eye);
 
                 if (ray_world[3] != 0.0f)
                 {
@@ -4245,14 +4381,14 @@ namespace jeecs
                 if (ortho)
                 {
                     // not perspective
-                    orgin = camera_trans->world_position + camera_trans->world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
+                    orgin = camera_trans.world_position + camera_trans.world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
                     direction = vec3(0, 0, 1);
                 }
                 else
                 {
                     vec3 ray_dir(ray_world[0], ray_world[1], ray_world[2]);
-                    orgin = camera_trans->world_position;
-                    direction = (camera_trans->world_rotation * ray_dir).unit();
+                    orgin = camera_trans.world_position;
+                    direction = (camera_trans.world_rotation * ray_dir).unit();
                 }
             }
 
@@ -4424,7 +4560,7 @@ namespace jeecs
 
                 return minResult;
             }
-            intersect_result intersect_entity(const Transform::Translation* translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
+            intersect_result intersect_entity(const Transform::Translation& translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
             {
                 vec3 entity_box_sz;
                 if (entity_shape && entity_shape->vertex && entity_shape->vertex->enabled())
@@ -4449,7 +4585,7 @@ namespace jeecs
 
                 //rot and transform
                 for (int i = 0; i < 8; i++)
-                    finalBoxPos[i] = mat4trans(translation->object2world, finalBoxPos[i]);
+                    finalBoxPos[i] = mat4trans(translation.object2world, finalBoxPos[i]);
 
                 {
                     //front

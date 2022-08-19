@@ -12,6 +12,15 @@ import builtin.Editor.project.config;
 
 namespace editor::WorldList
 {
+    func SwitchEditingWorld(aim_world: je::world)
+    {
+        static let const editor_system_type = je::typeinfo("Editor::DefaultEditorSystem")->val();
+        je::world::rend()->map(\old: je::world = old->editor::remove_system(editor_system_type););
+
+        aim_world->rend();
+        aim_world->add_system(editor_system_type);
+    }
+
     private func menu()
     {
         using je::gui;
@@ -37,7 +46,9 @@ namespace editor::WorldList
                 let worlds = je::universe::current()->editor::worlds_list();
                 for (let world : worlds)
                 {
-                    if (Selectable(world->editor::name() + "##" + world: string))
+                    if (Selectable(world->editor::name() + "##" + world: string, 
+                            je::world::rend()->map(\rw:je::world = rw == world;)
+                                             ->valor(false)))
                     {
                         match (je::world::rend())
                         {
@@ -45,11 +56,11 @@ namespace editor::WorldList
                                 if (rend_world != world)
                                     launch(generic::AskFor, ("切换渲染世界",
                                                 F"即将切换到{world->editor::name()}，是否继续？",
-                                                \=world->rend();));
+                                                \=SwitchEditingWorld(world);));
                             none?
                                 launch(generic::AskFor, ("切换渲染世界",
                                             F"即将切换到{world->editor::name()}，是否继续？",
-                                            \=world->rend();));
+                                            \=SwitchEditingWorld(world);));
                         }
                     }
                     context_menu(world);

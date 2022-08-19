@@ -55,23 +55,10 @@ namespace utils
         let systems_list = []: array<string>;
         for (let system_type : w->editor::get_systems_types())
             systems_list->add(system_type->name());
-
-        let shared_systems_list = []: array<string>;
-        for (let shared_system_type : je::world::editor::get_shared_systems_types())
-            match(je::universe::current()->editor::get_shared_system_attached_world(shared_system_type))
-            {
-                value(attached_world)?
-                    if (w == attached_world)
-                        shared_systems_list->add(shared_system_type->name());
-                none?
-                    ; /* 这个共享系统没有附加到任何世界，一样跳过 */
-            }
-            
-
+        
         return {
             {"entities",    entities_list},
             {"systems",        systems_list},
-            {"shareds",        shared_systems_list}
         };
     }
 }
