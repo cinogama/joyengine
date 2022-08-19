@@ -154,7 +154,7 @@ namespace jeecs
         struct function_traits
         {
         private:
-            using call_type = typename function_traits<decltype(&F::operator())>;
+            using call_type = function_traits<decltype(&F::operator())>;
 
         public:
             using return_type = typename call_type::return_type;
