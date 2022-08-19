@@ -129,7 +129,7 @@ WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args, size_t
 
     auto* cur_type = types;
     while (*cur_type)
-       wo_set_pointer(wo_arr_add(result, nullptr), (void*)*(cur_type++));
+        wo_set_pointer(wo_arr_add(result, nullptr), (void*)*(cur_type++));
     je_mem_free(types);
 
     return wo_ret_val(vm, result);
@@ -396,6 +396,11 @@ WO_API wo_api wojeapi_member_iterator_next(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, true);
 }
 
+// INPUTS
+WO_API wo_api wojeapi_input_keydown(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, jeecs::input::keydown((jeecs::input::keycode)wo_int(args + 0)));
+}
 
 // ECS OTHER
 WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
@@ -973,6 +978,31 @@ namespace je
     func logwarn(...)=> void;
     extern("libjoyecs", "wojeapi_logfatal")
     func logfatal(...)=> void;
+
+    enum keycode
+    {
+        A = 65 , B, C, D, E, F, G, H, I, J, K, L,
+        M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+        _1 = 49 , _2, _3, _4, _5, _6, _7, _8, _9,
+        _0, _ = 32,
+
+        L_SHIFT = 256,
+        L_CTRL,
+        L_ALT,
+        TAB, ENTER, ECS, BACKSPACE,
+
+        MOUSE_L_BUTTION = 512,
+        MOUSE_M_BUTTION,
+        MOUSE_R_BUTTION,
+
+        MAX_KEY_CODE = 1024,
+    };
+
+    namespace input
+    {
+        extern("libjoyecs", "wojeapi_input_keydown")
+        func keydown(kcode: keycode)=> bool;
+    }
 
     extern("libjoyecs", "wojeapi_exit")
     func exit()=> void;

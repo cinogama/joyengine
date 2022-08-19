@@ -55,14 +55,14 @@ func Editor_MainMenuBar()
         static let mut active_inspector_shown = false;
         static let mut active_browser_shown = false;
 
-        if (MenuItem("世界列表", ref active_worlds_shown, true) && active_worlds_shown)
+        if (MenuItem("世界列表", "ctrl + w", ref active_worlds_shown, true) && active_worlds_shown)
             launch(editor::WorldList::show, (ref active_worlds_shown,));
-        if (MenuItem("层级面板", ref active_world_entities_shown, true) && active_world_entities_shown)
+        if (MenuItem("层级面板", "ctrl + e", ref active_world_entities_shown, true) && active_world_entities_shown)
             launch(editor::EntityList::show, (ref active_world_entities_shown,));
-        if (MenuItem("检视面板", ref active_inspector_shown, true) && active_inspector_shown)
+        if (MenuItem("检视面板", "ctrl + c", ref active_inspector_shown, true) && active_inspector_shown)
             launch(editor::Inspector::show, (ref active_inspector_shown,));
         Separator();
-        if (MenuItem("文件管理器", ref active_browser_shown, true) && active_browser_shown)
+        if (MenuItem("文件管理器", "ctrl + f", ref active_browser_shown, true) && active_browser_shown)
             launch(editor::Browser::show, (ref active_browser_shown,));
 
 

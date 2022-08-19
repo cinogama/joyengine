@@ -59,7 +59,6 @@ namespace editor::Project
         // 摄像机，同时负责x轴旋转
         let editor_camera = world_instance->add_entity([
             // Transform 族组件
-            je::typeinfo("Transform::LocalPosition")->val(),
             je::typeinfo("Transform::LocalRotation")->val(),
             je::typeinfo("Transform::LocalToParent")->val(),
             je::typeinfo("Transform::Translation")->val(),

@@ -2422,23 +2422,23 @@ namespace jeecs
             }
 
             dependence& cur_dependence = m_steps[m_curstep];
-            if (cur_dependence.need_update(m_current_world))
-            {
-                cur_dependence.m_world = m_current_world;
-                je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
-            }
-
-            // OK! Execute step function!
-            static_assert(
-                _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
-                "Fail to extract types of arguments from 'FT'.");
-
             // NOTE: Only execute when current dependence has been inited.
             // Because some requirement might append after exec(...)
             if (cur_dependence.m_requirements_inited)
+            {
+                if (cur_dependence.need_update(m_current_world))
+                {
+                    cur_dependence.m_world = m_current_world;
+                    je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
+                }
+
+                // OK! Execute step function!
+                static_assert(
+                    _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
+                    "Fail to extract types of arguments from 'FT'.");
                 _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
                     &cur_dependence, exec, m_system_instance);
-
+            }
             return true;
         }
     public:

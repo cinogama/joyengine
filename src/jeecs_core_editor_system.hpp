@@ -117,7 +117,6 @@ namespace jeecs
         }
 
         void CameraWalker(
-            Transform::LocalPosition& position,
             Transform::LocalRotation& rotation,
             Camera::Projection& proj,
             Transform::Translation& trans)
