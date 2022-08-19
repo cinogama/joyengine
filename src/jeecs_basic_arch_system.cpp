@@ -456,7 +456,8 @@ namespace jeecs_impl
                 else
                 {
                     assert(depend->m_requirements[reqid].m_require == jeecs::requirement::ANYOF
-                        || depend->m_requirements[reqid].m_require == jeecs::requirement::MAYNOT);
+                        || depend->m_requirements[reqid].m_require == jeecs::requirement::MAYNOT
+                        || depend->m_requirements[reqid].m_require == jeecs::requirement::EXCEPT);
                     info->m_component_sizes[reqid] = info->m_component_offsets[reqid] = 0;
                 }
             }
@@ -805,6 +806,8 @@ namespace jeecs_impl
 
             DEBUG_ARCH_LOG("World: %p want to add system(%p) named '%s', operation has been committed to the command buffer.",
                 w, sys_instance, type->m_typename);
+
+            assert(sys_instance);
 
             _find_or_create_buffer_for(w).m_adding_or_removing_components.add_one(
                 new _world_command_buffer::typed_system(type, sys_instance)
@@ -2049,7 +2052,7 @@ jeecs::game_system* je_ecs_world_get_system_instance(void* world, const jeecs::t
 
 void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type)
 {
-    ((jeecs_impl::ecs_world*)world)->get_command_buffer().add_system_instance((jeecs_impl::ecs_world*)world, type, nullptr);
+    ((jeecs_impl::ecs_world*)world)->get_command_buffer().remove_system_instance((jeecs_impl::ecs_world*)world, type);
 }
 
 void je_ecs_world_create_entity_with_components(

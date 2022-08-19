@@ -185,8 +185,8 @@ namespace editor::EntityList
             
             // 如果实体有 Editor::Invisable 这个组件，就跳过显示
             static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
-            if (entity->editor::get_component(INVISABLE)->has())
-                continue;
+            //if (entity->editor::get_component(INVISABLE)->has())
+            //    continue;
 
             let mut entity_name = entity->editor::name();
             if (entity_name == "")

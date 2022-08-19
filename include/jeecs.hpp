@@ -154,42 +154,34 @@ namespace jeecs
         struct function_traits
         {
         private:
-            using call_type = function_traits <decltype(&F::operator()) >;
+            using call_type = typename function_traits<decltype(&F::operator())>;
 
-            template<typename FT>
-            struct _this_call_extracting_agent
-            {
-                using type = FT;
-            };
-
-            template<typename R, typename C, typename ... ArgTs>
-            struct _this_call_extracting_agent<R(C&, ArgTs...)>
-            {
-                using type = R(ArgTs...);
-            };
         public:
             using return_type = typename call_type::return_type;
-            using flat_func_t = typename _this_call_extracting_agent<typename call_type::flat_func_t>::type;
+            using flat_func_t = typename call_type::flat_func_t;
+            using this_t = void;
 
-            static const std::size_t arity = call_type::arity - 1;
+            static const std::size_t arity = call_type::arity;
 
             template <std::size_t N>
             struct argument
             {
                 static_assert(N < arity, "error: invalid parameter index.");
-                using type = typename call_type::template argument<N + 1>::type;
+                using type = typename call_type::template argument<N>::type;
             };
         };
 
         template<class R, class... Args>
         struct function_traits<R(*)(Args...)> : public function_traits < R(Args...) >
-        {};
+        {
+        };
 
         template<class R, class... Args>
         struct function_traits < R(Args...) >
         {
             using return_type = R;
             using flat_func_t = R(Args...);
+            using this_t = void;
 
             static const std::size_t arity = sizeof...(Args);
 
@@ -205,18 +197,24 @@ namespace jeecs
 
         // member function pointer
         template<class C, class R, class... Args>
-        struct function_traits<R(C::*)(Args...)> : public function_traits < R(C&, Args...) >
-        {};
+        struct function_traits<R(C::*)(Args...)> : public function_traits < R(Args...) >
+        {
+            using this_t = C;
+        };
 
         // const member function pointer
         template<class C, class R, class... Args>
-        struct function_traits<R(C::*)(Args...) const> : public function_traits < R(C&, Args...) >
-        {};
+        struct function_traits<R(C::*)(Args...) const> : public function_traits < R(Args...) >
+        {
+            using this_t = C;
+        };
 
         // member object pointer
         template<class C, class R>
-        struct function_traits<R(C::*)> : public function_traits < R(C&) >
-        {};
+        struct function_traits<R(C::*)> : public function_traits < R(void) >
+        {
+            using this_t = C;
+        };
 
         template<class F>
         struct function_traits<F&> : public function_traits < F >
@@ -259,7 +257,7 @@ namespace jeecs
         jeecs::typing::entity_id_in_chunk_t   _m_id;
         jeecs::typing::version_t              _m_version;
 
-        inline void _set_arch_chunk_info(
+        inline game_entity& _set_arch_chunk_info(
             void* chunk,
             jeecs::typing::entity_id_in_chunk_t index,
             jeecs::typing::version_t ver) noexcept
@@ -267,6 +265,8 @@ namespace jeecs
             _m_in_chunk = chunk;
             _m_id = index;
             _m_version = ver;
+
+            return *this;
         }
 
         template<typename T>
@@ -2133,6 +2133,13 @@ namespace jeecs
         game_world                  m_current_world = nullptr;
         jeecs::vector<dependence>   m_steps;
 
+        game_system* m_system_instance = nullptr;
+
+        selector(game_system* game_sys)
+            : m_system_instance(game_sys)
+        {
+        }
+
     private:
         template<size_t ArgN, typename FT>
         void _apply_dependence(dependence& dep)
@@ -2142,7 +2149,11 @@ namespace jeecs
             {
                 using CurRequireT = typename f::argument<ArgN>::type;
 
-                if constexpr (std::is_reference<CurRequireT>::value)
+                if constexpr (ArgN == 0 && std::is_same<CurRequireT, game_entity>::value)
+                {
+                    // First argument is game_entity, skip this argument
+                }
+                else if constexpr (std::is_reference<CurRequireT>::value)
                     // Reference, means CONTAIN
                     dep.m_requirements.push_back(
                         requirement(requirement::type::CONTAIN, 0,
@@ -2274,7 +2285,7 @@ namespace jeecs
             }
 
             template<typename FT>
-            inline static void exec(dependence* depend, FT&& f) noexcept
+            inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
             {
                 for (auto* archinfo : depend->m_archs)
                 {
@@ -2284,9 +2295,100 @@ namespace jeecs
                         auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
                         for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
                         {
-                            // TODO: IF ENTITY IN CHUNK NOT VALID, SKIP IT!
                             if (get_entity_avaliable(entity_meta_addr, eid))
-                                f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                            {
+                                if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
+                                    f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                else
+                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                            }
+                        }
+
+                        cur_chunk = je_arch_next_chunk(cur_chunk);
+                    }
+                }
+            }
+        };
+
+        template<typename RT, typename ... ArgTs>
+        struct _executor_extracting_agent<RT(game_entity, ArgTs...)> : std::true_type
+        {
+            template<typename ComponentT>
+            struct _const_type_index
+            {
+                using f_t = typing::function_traits<RT(ArgTs...)>;
+                template<size_t id = 0>
+                static constexpr size_t _index()
+                {
+                    if constexpr (std::is_same<typename f_t::argument<id>::type, ComponentT>::value)
+                        return id;
+                    else
+                        return _index<id + 1>();
+                }
+                static constexpr size_t index = _index();
+            };
+
+            template<typename ComponentT>
+            inline static ComponentT _get_component(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+            {
+                constexpr size_t cid = _const_type_index<ComponentT>::index;
+
+                assert(cid < archinfo->m_component_count);
+                size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
+
+                if (archinfo->m_component_sizes[cid])
+                {
+                    if constexpr (std::is_reference<ComponentT>::value)
+                        return *reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    else
+                    {
+                        static_assert(std::is_pointer<ComponentT>::value);
+                        return reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    }
+                }
+                if constexpr (std::is_reference<ComponentT>::value)
+                {
+                    assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
+                    return *(typename typing::origin_t<ComponentT>*)nullptr;
+                }
+                else
+                    return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+            }
+
+            inline static typing::version_t get_entity_avaliable(const void* entity_meta, size_t eid, typing::version_t* out_version)noexcept
+            {
+                static const size_t meta_size = je_arch_entity_meta_size();
+                static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
+                static const size_t meta_entity_vers_offset = je_arch_entity_meta_version_offset();
+
+                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_stat_offset;
+                if (jeecs::game_entity::entity_stat::READY == *(const jeecs::game_entity::entity_stat*)_addr)
+                {
+                    *out_version = *(typing::version_t*)(((uint8_t*)entity_meta) + eid * meta_size + meta_entity_vers_offset);
+                    return true;
+                }
+                return false;
+            }
+
+            template<typename FT>
+            inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
+            {
+                for (auto* archinfo : depend->m_archs)
+                {
+                    auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
+                    while (cur_chunk)
+                    {
+                        auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
+                        typing::version_t version;
+                        for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
+                        {
+                            if (get_entity_avaliable(entity_meta_addr, eid, &version))
+                            {
+                                if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
+                                    f(game_entity()._set_arch_chunk_info(cur_chunk, eid, version), _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                else
+                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(game_entity()._set_arch_chunk_info(cur_chunk, eid, version), _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                            }
                         }
 
                         cur_chunk = je_arch_next_chunk(cur_chunk);
@@ -2335,7 +2437,7 @@ namespace jeecs
             // Because some requirement might append after exec(...)
             if (cur_dependence.m_requirements_inited)
                 _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
-                    &cur_dependence, exec);
+                    &cur_dependence, exec, m_system_instance);
 
             return true;
         }
@@ -2432,6 +2534,7 @@ namespace jeecs
         game_system(game_world world, double delta_tm = 1. / 60.)
             : _m_game_world(world)
             , _m_delta_time(delta_tm)
+            , _m_default_selector(this)
         { }
 
         // Get binded world or attached world
@@ -4259,13 +4362,13 @@ namespace jeecs
             {
 
             }
-            ray(const Transform::Translation* camera_trans, const Camera::Projection* camera_proj, const vec2& screen_pos, bool ortho)
+            ray(const Transform::Translation& camera_trans, const Camera::Projection& camera_proj, const vec2& screen_pos, bool ortho)
             {
                 //根据摄像机和屏幕坐标创建射线
                 float ray_eye[4] = { screen_pos.x, screen_pos.y, 1.0f, 1.0f };
 
                 float ray_world[4];
-                mat4xvec4(ray_world, camera_proj->inv_projection, ray_eye);
+                mat4xvec4(ray_world, camera_proj.inv_projection, ray_eye);
 
                 if (ray_world[3] != 0.0f)
                 {
@@ -4278,14 +4381,14 @@ namespace jeecs
                 if (ortho)
                 {
                     // not perspective
-                    orgin = camera_trans->world_position + camera_trans->world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
+                    orgin = camera_trans.world_position + camera_trans.world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
                     direction = vec3(0, 0, 1);
                 }
                 else
                 {
                     vec3 ray_dir(ray_world[0], ray_world[1], ray_world[2]);
-                    orgin = camera_trans->world_position;
-                    direction = (camera_trans->world_rotation * ray_dir).unit();
+                    orgin = camera_trans.world_position;
+                    direction = (camera_trans.world_rotation * ray_dir).unit();
                 }
             }
 
@@ -4457,7 +4560,7 @@ namespace jeecs
 
                 return minResult;
             }
-            intersect_result intersect_entity(const Transform::Translation* translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
+            intersect_result intersect_entity(const Transform::Translation& translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
             {
                 vec3 entity_box_sz;
                 if (entity_shape && entity_shape->vertex && entity_shape->vertex->enabled())
@@ -4482,7 +4585,7 @@ namespace jeecs
 
                 //rot and transform
                 for (int i = 0; i < 8; i++)
-                    finalBoxPos[i] = mat4trans(translation->object2world, finalBoxPos[i]);
+                    finalBoxPos[i] = mat4trans(translation.object2world, finalBoxPos[i]);
 
                 {
                     //front

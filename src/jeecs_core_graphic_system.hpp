@@ -326,49 +326,49 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             _m_pipeline->DeActive(get_world());
         }
 
+        void PrepareCameras(Projection& projection, Translation& translation, OrthoProjection* ortho, PerspectiveProjection* perspec, Clip* clip)
+        {
+            float mat_inv_rotation[4][4];
+            translation.world_rotation.create_inv_matrix(mat_inv_rotation);
+            float mat_inv_position[4][4] = {};
+            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
+            mat_inv_position[3][0] = -translation.world_position.x;
+            mat_inv_position[3][1] = -translation.world_position.y;
+            mat_inv_position[3][2] = -translation.world_position.z;
+
+            // TODO: Optmize
+            math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
+
+            assert(ortho || perspec);
+            float znear = clip ? clip->znear : 0.3f;
+            float zfar = clip ? clip->zfar : 1000.0f;
+            if (ortho)
+            {
+                graphic::ortho_projection(projection.projection,
+                    (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
+                    ortho->scale, znear, zfar);
+                graphic::ortho_inv_projection(projection.inv_projection,
+                    (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
+                    ortho->scale, znear, zfar);
+            }
+            else
+            {
+                graphic::perspective_projection(projection.projection,
+                    (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
+                    perspec->angle, znear, zfar);
+                graphic::perspective_inv_projection(projection.inv_projection,
+                    (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
+                    perspec->angle, znear, zfar);
+            }
+        }
+
         void PreUpdate()
         {
             if (!_m_pipeline->IsActive(get_world()))
                 return;
 
             select_from(get_world())
-                .exec(
-                    [this](Projection& projection, Translation& translation, OrthoProjection* ortho, PerspectiveProjection* perspec, Clip* clip)
-                    {
-                        float mat_inv_rotation[4][4];
-                        translation.world_rotation.create_inv_matrix(mat_inv_rotation);
-                        float mat_inv_position[4][4] = {};
-                        mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
-                        mat_inv_position[3][0] = -translation.world_position.x;
-                        mat_inv_position[3][1] = -translation.world_position.y;
-                        mat_inv_position[3][2] = -translation.world_position.z;
-
-                        // TODO: Optmize
-                        math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
-
-                        assert(ortho || perspec);
-                        float znear = clip ? clip->znear : 0.3f;
-                        float zfar = clip ? clip->zfar : 1000.0f;
-                        if (ortho)
-                        {
-                            graphic::ortho_projection(projection.projection,
-                                (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
-                                ortho->scale, znear, zfar);
-                            graphic::ortho_inv_projection(projection.inv_projection,
-                                (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
-                                ortho->scale, znear, zfar);
-                        }
-                        else
-                        {
-                            graphic::perspective_projection(projection.projection,
-                                (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
-                                perspec->angle, znear, zfar);
-                            graphic::perspective_inv_projection(projection.inv_projection,
-                                (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
-                                perspec->angle, znear, zfar);
-                        }
-                    }
-                ).anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport)
                     {
@@ -388,7 +388,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             DefaultGraphicPipeline::renderer_arch{
                                 rendqueue, &trans, shape, shads, texs
                             });
-                    }).anyof<Shaders, Textures, Shape, Rendqueue>();
+                    }).anyof<Shaders, Textures, Shape>();
         }
         void LateUpdate()
         {
