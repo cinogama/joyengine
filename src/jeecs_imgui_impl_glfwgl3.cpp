@@ -275,10 +275,10 @@ namespace je::gui
     extern("libjoyecs", "je_gui_image")
     func Image(tex: je::graphic::texture, scale: real)=> void;
 
-    extern("libjoyecs", "je_gui_imagebuttom")
-    func ImageButtom(tex: je::graphic::texture)=> bool;
-    extern("libjoyecs", "je_gui_imagebuttom")
-    func ImageButtom(tex: je::graphic::texture, scale: real)=> bool;
+    extern("libjoyecs", "je_gui_imagebutton")
+    func ImageButton(tex: je::graphic::texture)=> bool;
+    extern("libjoyecs", "je_gui_imagebutton")
+    func ImageButton(tex: je::graphic::texture, scale: real)=> bool;
 
     extern("libjoyecs", "je_gui_content_region_avail")
     func GetContentRegionAvail(ref x: real, ref y: real)=> void;
@@ -714,7 +714,7 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_imagebuttom(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 

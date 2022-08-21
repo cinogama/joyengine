@@ -1,5 +1,9 @@
 import woo.std;
+import woo.vm;
+
 import je.gui;
+
+import builtin.Editor.generic.form.msgbox;
 
 func Editor_ScriptEditor(ref open:bool)
 {
@@ -8,11 +12,26 @@ func Editor_ScriptEditor(ref open:bool)
 
     Begin("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
 
-    static let textbuf = TextBuffer("");
-    if (InputTextMultiline("##", textbuf, 500.0, 300.0))
+    static let textbuf = TextBuffer(
+@"import woo.std;
+import je;
+
+je::log("Helloworld, JoyEngine.");
+"@);
+
+    if (Button("执行"))
     {
-        std::println(textbuf->get());
+        let src = textbuf->get();
+        let vm = std::vm();
+        if (!vm->load_source("je/editor_runtime/editor_script.wo", src))
+            // Msgout!
+            launch(generic::MsgBox, ("编译脚本失败", vm->error_msg(std::vm::info_style::WO_NOTHING),));      
+        else
+            vm->run();
+        vm->close();
     }
+
+    InputTextMultiline("##", textbuf, 500.0, 300.0);
 
     End();
 

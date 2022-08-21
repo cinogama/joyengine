@@ -29,6 +29,10 @@ WO_API wo_api wojeapi_filesys_is_dir(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, fs::is_directory(wo_string(args + 0)));
 }
 
+WO_API wo_api wojeapi_filesys_path_parent(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm, fs::path(wo_string(args + 0)).parent_path().string().c_str());
+}
 
 const char* jeecs_filesys_woolang_api_path = "je/filesys.wo";
 const char* jeecs_filesys_woolang_api_src = R"(
@@ -37,6 +41,15 @@ import woo.std;
 namespace je::filesys
 {
     using path = gchandle;
+
+    func parent(_path: string)
+    {
+        extern("libjoyecs", "wojeapi_filesys_path_parent")
+        func _parent_path(_path: string)=> string;
+
+        return _parent_path(_path);
+    }
+
     namespace path
     {
         extern("libjoyecs", "wojeapi_filesys_path")

@@ -69,7 +69,7 @@ namespace editor::EntityCreator
 
         BeginGroup();
             PushID(typename);
-                ImageButtom(icon_image, 0.075);
+                ImageButton(icon_image, 0.075);
             PopID();
             if (BeginDragDropSource())
             {

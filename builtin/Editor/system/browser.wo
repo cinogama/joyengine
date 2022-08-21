@@ -90,7 +90,7 @@ namespace editor::Browser
             
         BeginGroup();
             PushID(path.path);
-                let clicked = ImageButtom(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
+                let clicked = ImageButton(get_file_icon_by_extern_name(path)->get_texture(), 0.125);
             PopID();
             if (BeginDragDropSource())
             {
@@ -155,7 +155,8 @@ namespace editor::Browser
                         // 双击的是一个目录，进入这个目录
                         current_work_path = subpath.path; 
                     file?
-                        ; // TODO: 在资源管理器中打开文件
+                        // TODO: 在资源管理器中打开文件
+                        launch(generic::MsgBox, ("打开文件失败", "无法打开未知类型的文件")); 
                     }
                 }
                 else
@@ -247,9 +248,12 @@ namespace editor::Browser
             path_tree();
             SameLine();
             BeginGroup();
-                BeginChild("tools_bar", 0., 30.);
+                BeginChild("tools_bar", 0., 40.);
                     // TODO 此处放一些返回上一层之类的按钮
-
+                    if (Button("U"))
+                        current_work_path = je::filesys::parent(current_work_path);
+                    SameLine();
+                    Text(current_work_path);
                 EndChild();
                 files_group();
             EndGroup();
