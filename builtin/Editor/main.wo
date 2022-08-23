@@ -48,6 +48,8 @@ shortcut::register([je::keycode::L_CTRL, je::keycode::B,], func(){
     if (shown)
         je::gui::launch(editor::Browser::show, (ref shown,));
 });
+shortcut::register([je::keycode::L_CTRL, je::keycode::A,], \=je::logfatal("TODO: 添加实体菜单尚未实现"););
+shortcut::register([je::keycode::L_CTRL, je::keycode::S,], \=je::logfatal("TODO: 保存工程尚未实现"););
 
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
