@@ -14,7 +14,8 @@ import system.browser;
 import script_editor;
 
 import generic.form.askfor;
-import generic.serialize;
+import generic.serialize;                    
+import generic.shortcut;
 
 import project.config;
 import project.init;
@@ -22,13 +23,41 @@ import project.init;
 import test.memleak_component_modify;
 import test.memleak_world_lifecycle;
 import test.memleak_graphic_resource;
-                    
+
+shortcut::register([je::keycode::L_CTRL, je::keycode::W,], func(){
+    static let mut shown = false;
+    shown = !shown;
+    if (shown)
+        je::gui::launch(editor::WorldList::show, (ref shown,));
+});
+shortcut::register([je::keycode::L_CTRL, je::keycode::E,], func(){
+    static let mut shown = false;
+    shown = !shown;
+    if (shown)
+        je::gui::launch(editor::EntityList::show, (ref shown,));
+});
+shortcut::register([je::keycode::L_CTRL, je::keycode::C,], func(){
+    static let mut shown = false;
+    shown = !shown;
+    if (shown)
+        je::gui::launch(editor::Inspector::show, (ref shown,));
+});
+shortcut::register([je::keycode::L_CTRL, je::keycode::B,], func(){
+    static let mut shown = false;
+    shown = !shown;
+    if (shown)
+        je::gui::launch(editor::Browser::show, (ref shown,));
+});
+
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
 {
     using je::gui;
 
     let mut show_main_menu = true;
+
+    // 刷新检测热键
+    shortcut::update();
 
     BeginMainMenuBar();
     if (BeginMenu("JoyEngine"))
@@ -50,20 +79,15 @@ func Editor_MainMenuBar()
     }
     if (BeginMenu("视图"))
     {
-        static let mut active_worlds_shown = false;
-        static let mut active_world_entities_shown = false;
-        static let mut active_inspector_shown = false;
-        static let mut active_browser_shown = false;
-
-        if (MenuItem("世界列表", "ctrl + w", ref active_worlds_shown, true) && active_worlds_shown)
-            launch(editor::WorldList::show, (ref active_worlds_shown,));
-        if (MenuItem("层级面板", "ctrl + e", ref active_world_entities_shown, true) && active_world_entities_shown)
-            launch(editor::EntityList::show, (ref active_world_entities_shown,));
-        if (MenuItem("检视面板", "ctrl + c", ref active_inspector_shown, true) && active_inspector_shown)
-            launch(editor::Inspector::show, (ref active_inspector_shown,));
+        if (MenuItem("世界列表", "ctrl + w"))
+            shortcut::active([je::keycode::L_CTRL, je::keycode::W]);
+        if (MenuItem("层级面板", "ctrl + e"))
+            shortcut::active([je::keycode::L_CTRL, je::keycode::E]);
+        if (MenuItem("检视面板", "ctrl + c"))
+            shortcut::active([je::keycode::L_CTRL, je::keycode::C]);
         Separator();
-        if (MenuItem("文件管理器", "ctrl + f", ref active_browser_shown, true) && active_browser_shown)
-            launch(editor::Browser::show, (ref active_browser_shown,));
+        if (MenuItem("文件管理器", "ctrl + b"))
+            shortcut::active([je::keycode::L_CTRL, je::keycode::B]);
 
 
         EndMenu();
