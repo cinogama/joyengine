@@ -321,6 +321,11 @@ namespace jeecs
             MAX_KEY_CODE = 1024,
         };
     }
+
+    namespace graphic
+    {
+        struct character;
+    }
 }
 
 namespace std
@@ -842,6 +847,12 @@ JE_API jegl_resource* jegl_create_vertex(
     size_t                      format_length);
 
 JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
+
+typedef struct je_stb_font_data je_font;
+
+JE_API je_font* je_font_load(const char* fontPath, float scalex, float scaley);
+JE_API void         je_font_free(je_font* font);
+JE_API jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode);
 
 JE_API void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
 JE_API void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
@@ -3707,6 +3718,16 @@ namespace jeecs
                 assert(enabled());
                 return pixel(*this, x, y);
             }
+
+            inline math::vec2 size() const noexcept
+            {
+                if (enabled())
+                {
+                    assert(resouce()->m_raw_texture_data != nullptr);
+                    return math::vec2(resouce()->m_raw_texture_data->m_width, resouce()->m_raw_texture_data->m_height);
+                }
+                return math::vec2(0.f, 0.f);
+            }
         };
 
         class shader : public resouce_basic
@@ -4043,6 +4064,43 @@ namespace jeecs
             m[3][2] = 1;
             m[3][3] = (zfar + znear) / (2 * zfar * znear);
         }
+
+        struct character
+        {
+            basic::resource<texture> m_texture;
+            wchar_t                  m_char = 0;
+            int                      m_width = 0;
+            int                      m_height = 0;
+            int                      m_adv_x = 0;
+            int                      m_adv_y = 0;
+            int                      m_delta_x = 0;
+            int                      m_delta_y = 0;
+        };
+
+        class font
+        {
+            JECS_DISABLE_MOVE_AND_COPY(font);
+
+            je_font* m_font;
+
+        public:
+            font(const std::string& fontfile, int w, int h)noexcept
+            {
+                m_font = je_font_load(fontfile.c_str(), (float)w, (float)h);
+            }
+            ~font()
+            {
+                je_font_free(m_font);
+            }
+            character* get_character(unsigned int wcharacter) const noexcept
+            {
+                return je_font_get_char(m_font, wcharacter);
+            }
+            inline bool enabled() const noexcept
+            {
+                return nullptr != m_font;
+            }
+        };
     }
 
     namespace Transform

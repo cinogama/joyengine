@@ -3,7 +3,7 @@ import je.gui;
 import je;
 
 import builtin.Editor.generic.form.inputbox;
-import builtin.Editor.generic.form.askfor;
+import builtin.Editor.generic.form.askbox;
 import builtin.Editor.generic.form.msgbox;
 
 import worldcreator;
@@ -54,11 +54,11 @@ namespace editor::WorldList
                         {
                             value(rend_world)?
                                 if (rend_world != world)
-                                    launch(generic::AskFor, ("切换渲染世界",
+                                    launch(generic::AskBox, ("切换渲染世界",
                                                 F"即将切换到{world->editor::name()}，是否继续？",
                                                 \=SwitchEditingWorld(world);));
                             none?
-                                launch(generic::AskFor, ("切换渲染世界",
+                                launch(generic::AskBox, ("切换渲染世界",
                                             F"即将切换到{world->editor::name()}，是否继续？",
                                             \=SwitchEditingWorld(world);));
                         }
@@ -90,14 +90,14 @@ namespace editor::WorldList
                 else
                 {
                     let delete_world_form = 
-                        \ = generic::AskFor("确认删除世界",
+                        \ = generic::AskBox("确认删除世界",
                                 F"确定要删除世界{world->editor::name()}吗？未保存的世界将永久丢失！",
                                 func(){
                                     EntityList::set_current_entity(option::none);
                                     world->close();
                                 });;
                     let save_world_form = 
-                        \ saving_path: string = generic::AskFor("确认关闭世界",
+                        \ saving_path: string = generic::AskBox("确认关闭世界",
                                 F"确定要关闭世界{world->editor::name()}吗？世界将被保存到默认路径！",
                                 func(){
                                     EntityList::set_current_entity(option::none);

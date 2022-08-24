@@ -19,6 +19,7 @@ jeecs_file* jeecs_file_open(const char* path)
 
         return jefhandle;
     }
+    jeecs::debug::log_error("Fail to open file: '%s'.", path);
     return nullptr;
 }
 void jeecs_file_close(jeecs_file* file)

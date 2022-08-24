@@ -3,7 +3,7 @@ import je.gui;
 import je;
 
 import builtin.Editor.generic.form.inputbox;
-import builtin.Editor.generic.form.askfor;
+import builtin.Editor.generic.form.askbox;
 
 import entitycreator;
 
@@ -33,7 +33,7 @@ namespace editor::EntityList
             Separator();
             if (MenuItem(F"删除 {entity->editor::name()}"))
             {
-                launch(generic::AskFor, ("删除实体",
+                launch(generic::AskBox, ("删除实体",
                                         F"确认要删除实体{entity->editor::name()}吗？",
                                         \ = entity->close();));
             }

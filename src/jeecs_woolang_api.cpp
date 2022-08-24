@@ -751,6 +751,42 @@ WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 /////////////////////////////////////////////////////////////
+WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_font = new jeecs::graphic::font(wo_string(args + 0), wo_int(args + 1), wo_int(args + 2));
+    if (loaded_font->enabled())
+    {
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::font>(loaded_font), nullptr,
+            [](void* ptr) {
+                delete (jeecs::basic::resource<jeecs::graphic::font>*)ptr;
+            });
+    }
+    delete loaded_font;
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_font = (jeecs::basic::resource<jeecs::graphic::font>*)wo_pointer(args + 0);
+    assert(loaded_font->get()->enabled());
+
+    return wo_ret_gchandle(vm, loaded_font->get()->get_character(wo_str_get_char(wo_string(args + 1), 0)), args + 0, nullptr);
+}
+
+WO_API wo_api wojeapi_character_get_texture(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* charac = (jeecs::graphic::character*)wo_pointer(args + 0);
+
+    return wo_ret_gchandle(vm,
+        new jeecs::basic::resource<jeecs::graphic::texture>(charac->m_texture), nullptr,
+        [](void* ptr) {
+            delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
+        });
+}
+
+
+/////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_shader = new jeecs::graphic::shader(wo_string(args + 0));
@@ -950,8 +986,19 @@ WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_texture_is_valid(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, (*shader)->enabled());
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, (*texture)->enabled());
+}
+
+WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    auto sz = texture->get()->size();
+
+    wo_set_int(args + 1, (wo_int_t)sz.x);
+    wo_set_int(args + 2, (wo_int_t)sz.y);
+
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args, size_t argc)
@@ -1089,7 +1136,18 @@ namespace je
             func path(self: texture)=> string;
 
             extern("libjoyecs", "wojeapi_texture_is_valid")
-            func isvalid(self: shader)=> bool;
+            func isvalid(self: texture)=> bool;
+
+            func size(self: texture)=> (int, int)
+            {
+                extern("libjoyecs", "wojeapi_texture_get_size")
+                func _size(self: texture, ref x: int, ref y: int)=> void;
+
+                let mut x = 0, mut y = 0;
+                _size(self, ref x, ref y);
+
+                return (x, y);
+            }
 
             extern("libjoyecs", "wojeapi_texture_get_pixel")
             func pix(self: texture, x: int, y: int)=> pixel;
@@ -1099,7 +1157,32 @@ namespace je
             {
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
                 func color(self: pixel, ref r: real, ref g: real, ref b: real, ref a: real)=> void;
+
+                func color(self: pixel)
+                {
+                    let mut r = 0., mut g = 0., mut b = 0., mut a = 0.;
+                    self->color(ref r, ref g, ref b, ref a);
+
+                    return (r, g, b, a);
+                }
             }
+        }
+
+        using character = gchandle;
+        namespace character
+        {
+            extern("libjoyecs", "wojeapi_character_get_texture")
+            func get_texture(self: character)=> texture;
+        }
+
+        using font = gchandle;
+        namespace font
+        {
+            extern("libjoyecs", "wojeapi_font_open")
+            func create(path: string, font_width: int, font_height: int)=> option<font>;
+
+            extern("libjoyecs", "wojeapi_font_load_char")
+            func load_char(self: font, ch: string)=> character;
         }
 
         using shader = gchandle;

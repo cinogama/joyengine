@@ -1185,28 +1185,23 @@ enum ZConfig
     GREATER_EQUAL,
     ALWAYS,
 }
-using ZConfig;
-func ZTEST(zconfig: ZConfig)
-{
-    shader::configs.ztest = zconfig;
-}
+let const OFF = ZConfig::OFF;
+let const NEVER = ZConfig::NEVER;
+let const LESS = ZConfig::LESS;
+let const EQUAL = ZConfig::EQUAL;
+let const GREATER = ZConfig::GREATER;
+let const LESS_EQUAL = ZConfig::LESS_EQUAL;
+let const NOT_EQUAL = ZConfig::NOT_EQUAL;
+let const GREATER_EQUAL = ZConfig::GREATER_EQUAL;
+let const ALWAYS = ZConfig::ALWAYS;
 
 enum GConfig
 {
     DISABLE = 0,
     ENABLE
 }
-using GConfig;
-func ZWRITE(zwrite: GConfig)
-{
-    shader::configs.zwrite = zwrite;
-}
-
-func ALPHA(aenable: GConfig)
-{
-    shader::configs.alpha = aenable;
-    std::println("'ALPHA' option for alpha-test is obsoleted, please use 'alphatest' function instead.");
-}
+let const DISABLE = GConfig::DISABLE;
+let const ENABLE = GConfig::ENABLE;
 
 enum BlendConfig
 {
@@ -1231,12 +1226,21 @@ enum BlendConfig
     CONST_ALPHA,
     ONE_MINUS_CONST_ALPHA,
 }
-using BlendConfig;
-func BLEND(src: BlendConfig, dst: BlendConfig)
-{
-    shader::configs.blend_src = src;
-    shader::configs.blend_dst = dst;
-}
+
+let const ZERO = BlendConfig::ZERO;
+let const ONE = BlendConfig::ONE;
+let const SRC_COLOR = BlendConfig::SRC_COLOR;
+let const SRC_ALPHA = BlendConfig::SRC_ALPHA;
+let const ONE_MINUS_SRC_ALPHA = BlendConfig::ONE_MINUS_SRC_ALPHA;
+let const ONE_MINUS_SRC_COLOR = BlendConfig::ONE_MINUS_SRC_COLOR;
+let const DST_COLOR = BlendConfig::DST_COLOR;
+let const DST_ALPHA = BlendConfig::DST_ALPHA;
+let const ONE_MINUS_DST_ALPHA = BlendConfig::ONE_MINUS_DST_ALPHA;
+let const ONE_MINUS_DST_COLOR = BlendConfig::ONE_MINUS_DST_COLOR;
+let const CONST_COLOR = BlendConfig::CONST_COLOR;
+let const ONE_MINUS_CONST_COLOR = BlendConfig::ONE_MINUS_CONST_COLOR;
+let const CONST_ALPHA = BlendConfig::CONST_ALPHA;
+let const ONE_MINUS_CONST_ALPHA = BlendConfig::ONE_MINUS_CONST_ALPHA;
 
 enum CullConfig
 {
@@ -1245,7 +1249,35 @@ enum CullConfig
     BACK,
     ALL,
 }
-using CullConfig;
+
+let const NONE = CullConfig::NONE;
+let const FRONT = CullConfig::FRONT;
+let const BACK = CullConfig::BACK;
+let const ALL = CullConfig::ALL;
+
+func ZTEST(zconfig: ZConfig)
+{
+    shader::configs.ztest = zconfig;
+}
+
+func ZWRITE(zwrite: GConfig)
+{
+    shader::configs.zwrite = zwrite;
+}
+
+func ALPHA(aenable: GConfig)
+{
+    shader::configs.alpha = aenable;
+    std::println("'ALPHA' option for alpha-test is obsoleted, please use 'alphatest' function instead.");
+}
+
+func BLEND(src: BlendConfig, dst: BlendConfig)
+{
+    shader::configs.blend_src = src;
+    shader::configs.blend_dst = dst;
+}
+
+
 func CULL(cull: CullConfig)
 {
     shader::configs.cull = cull;

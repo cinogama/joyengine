@@ -5,7 +5,7 @@ import je;
 import builtin.Editor.generic.functions;
 
 import builtin.Editor.generic.form.inputbox;
-import builtin.Editor.generic.form.askfor;
+import builtin.Editor.generic.form.askbox;
 import builtin.Editor.generic.form.msgbox;
 import builtin.Editor.generic.widget.dragfile;
 
