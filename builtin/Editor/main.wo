@@ -70,11 +70,7 @@ func Editor_MainMenuBar()
         MenuItem("打开");
         Separator();
         if (MenuItem("退出"))
-            launch(generic::AskBox, ("确认退出", "即将关闭JoyEngine，是否继续？", 
-                        func()
-                        {
-                            je::exit();
-                        }));
+            launch(generic::AskBox, ("确认退出", "即将关闭JoyEngine，是否继续？", je::exit));
 
         EndMenu();
     }
