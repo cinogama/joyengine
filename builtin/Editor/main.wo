@@ -166,12 +166,12 @@ func test_font()
 {
     using je::graphic;
 
-    let font = font(@"E:\CINOGAMA_PROJECTS\joyengineecs\build\builtin\cino_ipix_12px.ttf"@, 16, 16);
+    let font = font(@"builtin/cino_ipix_12px.ttf"@, 16, 16);
     match(font)
     {
     value(f)?
     {
-        let chtex = f->load_char("w")->get_texture();
+        let chtex = f->load_char("J")->get_texture();
         let (width, height) = chtex->size();
 
         for (let mut y = 0; y < height; y += 1)

@@ -40,6 +40,7 @@ je_font* je_font_load(const char* fontPath, float scalex, float scaley)
     {
         assert(fontdata->m_font_file_buf == nullptr);
         delete fontdata;
+        fontdata = nullptr;
     }
 
     return fontdata;
