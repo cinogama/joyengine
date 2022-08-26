@@ -173,22 +173,23 @@ func display_icon_in_console()
 
         let mut display_bar = "--";
         for (let mut x = 0; x < width; x += 1)
-            display_bar += "-";
+            display_bar += "--";
 
         je::log(display_bar);
         for (let mut y = 0; y < height; y += 1)
         {
             let mut out_line = "";
             for (let mut x = 0; x < width; x += 1)
-                out_line += chtex->pix(x, y)->color()[3] <= 0.1 ? " " | "*";
+                out_line += chtex->pix(x, y)->color()[3] <= 0.175 ? "  " | "■";
 
             je::log(F"|{out_line}|");
         }
         je::log(display_bar);
     }
 
-    font(@"builtin/cino_ipix_12px.ttf"@, 16)
-        ->map(\f: font = display_text(f, "JoyEngine"););
+    font(@"builtin/cino_ipix_12px.ttf"@, 14)
+        ->map(\f: font = display_text(f, "Joy{scale:0.75}{offset:(0.2, -0.1)}4.0{scale:1}\nEngine"););
+    je::log("");
     je::log("JoyEngine 4.x (C)Cinogama project. 2022.");
     je::log("Powered by woolang, (C)Cinogama project. 2021-2022.");
 }

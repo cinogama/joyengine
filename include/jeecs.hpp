@@ -31,6 +31,7 @@
 #include <thread>
 #include <type_traits>
 #include <sstream>
+#include <climits>
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -4156,7 +4157,7 @@ namespace jeecs
                     bool IgnoreEscapeSign = false;
                 next_ch_sign:
                     wchar_t ch = text[ti];
-                    auto gcs = used_font->get_character((unsigned int)ch);
+                    auto gcs = used_font->get_character(unsigned int(ch));
 
                     if (gcs)
                     {
@@ -4211,10 +4212,10 @@ namespace jeecs
                         else if (ch != L'\n')
                         {
                             int px_min = next_ch_x + 0 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
-                            int py_min = next_ch_y + 0 + gcs->m_delta_y + gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
+                            int py_min = -next_ch_y + 0 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
 
                             int px_max = next_ch_x + gcs->m_texture->width() - 1 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
-                            int py_max = next_ch_y + gcs->m_texture->height() - 1 + gcs->m_delta_y + gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
+                            int py_max = -next_ch_y + gcs->m_texture->height() - 1 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
 
                             min_px = min_px > px_min ? px_min : min_px;
                             min_py = min_py > py_min ? py_min : min_py;
@@ -4228,7 +4229,7 @@ namespace jeecs
                         if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
                         {
                             next_ch_x = 0;
-                            next_ch_y += gcs->m_adv_y;
+                            next_ch_y -= gcs->m_adv_y;
                             line_count++;
                         }
                         if (line_count >= max_line_count)
@@ -4256,7 +4257,7 @@ namespace jeecs
                     bool IgnoreEscapeSign = false;
                 next_ch_sign_display:
                     wchar_t ch = text[ti];
-                    auto gcs = used_font->get_character((unsigned int)ch);
+                    auto gcs = used_font->get_character(unsigned int(ch));
 
                     if (gcs)
                     {
@@ -4372,7 +4373,7 @@ namespace jeecs
 
                                             auto pdst = new_texture->pix(
                                                 correct_x + next_ch_x + int(fx) + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size),
-                                                correct_y + next_ch_y + int(fy) + gcs->m_delta_y + gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size)
+                                                correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size)
                                             );
 
                                             auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
@@ -4396,7 +4397,7 @@ namespace jeecs
                         if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
                         {
                             next_ch_x = 0;
-                            next_ch_y += gcs->m_adv_y;
+                            next_ch_y -= gcs->m_adv_y;
                             line_count++;
                         }
                         if (line_count >= max_line_count)
