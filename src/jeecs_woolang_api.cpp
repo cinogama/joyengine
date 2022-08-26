@@ -753,7 +753,7 @@ WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args, size_t argc)
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_font = new jeecs::graphic::font(wo_string(args + 0), wo_int(args + 1), wo_int(args + 2));
+    auto* loaded_font = new jeecs::graphic::font(wo_string(args + 0), wo_int(args + 1));
     if (loaded_font->enabled())
     {
         return wo_ret_option_gchandle(vm,
@@ -772,6 +772,16 @@ WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args, size_t argc)
     assert(loaded_font->get()->enabled());
 
     return wo_ret_gchandle(vm, loaded_font->get()->get_character(wo_str_get_char(wo_string(args + 1), 0)), args + 0, nullptr);
+}
+
+WO_API wo_api wojeapi_font_string_texture(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_font = (jeecs::basic::resource<jeecs::graphic::font>*)wo_pointer(args + 0);
+    auto* text_texture = new jeecs::basic::resource<jeecs::graphic::texture>(loaded_font->get()->text_texture(wo_string(args + 1)));
+
+    return wo_ret_gchandle(vm, text_texture, nullptr, [](void* ptr) {
+        delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
+        });
 }
 
 WO_API wo_api wojeapi_character_get_texture(wo_vm vm, wo_value args, size_t argc)
@@ -1179,10 +1189,13 @@ namespace je
         namespace font
         {
             extern("libjoyecs", "wojeapi_font_open")
-            func create(path: string, font_width: int, font_height: int)=> option<font>;
+            func create(path: string, font_width: int)=> option<font>;
 
             extern("libjoyecs", "wojeapi_font_load_char")
             func load_char(self: font, ch: string)=> character;
+
+            extern("libjoyecs", "wojeapi_font_string_texture")
+            func load_string(self: font, str: string)=> texture;
         }
 
         using shader = gchandle;

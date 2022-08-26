@@ -2726,7 +2726,8 @@ namespace jeecs
 
     namespace math
     {
-        static float clamp(float src, float min, float max)
+        template<typename T>
+        static T clamp(T src, T min, T max)
         {
             return (src < min) ? (
                 min
@@ -2738,13 +2739,13 @@ namespace jeecs
                     );
         }
         template<typename T>
-        T lerp(const T& va, const T& vb, float deg)
+        inline T lerp(T va, T vb, float deg)
         {
             return va * (1.0f - deg) + vb * deg;
         }
 
         template<typename T>
-        T random(T from, T to)
+        inline T random(T from, T to)
         {
             static std::random_device rd;
             static std::mt19937 gen(rd());
@@ -3683,18 +3684,18 @@ namespace jeecs
                     switch (_m_texture->m_format)
                     {
                     case jegl_texture::texture_format::MONO:
-                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(value.x * 255.0f);
+                        _m_pixel[0] = math::clamp((jegl_texture::pixel_data_t)round(value.x * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
                         break;
                     case jegl_texture::texture_format::RGB:
-                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(value.x * 255.0f);
-                        _m_pixel[1] = (jegl_texture::pixel_data_t)round(value.y * 255.0f);
-                        _m_pixel[2] = (jegl_texture::pixel_data_t)round(value.z * 255.0f);
+                        _m_pixel[0] = math::clamp((jegl_texture::pixel_data_t)round(value.x * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
+                        _m_pixel[1] = math::clamp((jegl_texture::pixel_data_t)round(value.y * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
+                        _m_pixel[2] = math::clamp((jegl_texture::pixel_data_t)round(value.z * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
                         break;
                     case jegl_texture::texture_format::RGBA:
-                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(value.x * 255.0f);
-                        _m_pixel[1] = (jegl_texture::pixel_data_t)round(value.y * 255.0f);
-                        _m_pixel[2] = (jegl_texture::pixel_data_t)round(value.z * 255.0f);
-                        _m_pixel[3] = (jegl_texture::pixel_data_t)round(value.w * 255.0f);
+                        _m_pixel[0] = math::clamp((jegl_texture::pixel_data_t)round(value.x * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
+                        _m_pixel[1] = math::clamp((jegl_texture::pixel_data_t)round(value.y * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
+                        _m_pixel[2] = math::clamp((jegl_texture::pixel_data_t)round(value.z * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
+                        _m_pixel[3] = math::clamp((jegl_texture::pixel_data_t)round(value.w * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
                         break;
                     default:
                         assert(0); break;
@@ -3718,7 +3719,24 @@ namespace jeecs
                 assert(enabled());
                 return pixel(*this, x, y);
             }
-
+            inline size_t height() const noexcept
+            {
+                if (enabled())
+                {
+                    assert(resouce()->m_raw_texture_data != nullptr);
+                    return resouce()->m_raw_texture_data->m_height;
+                }
+                return 0;
+            }
+            inline size_t width() const noexcept
+            {
+                if (enabled())
+                {
+                    assert(resouce()->m_raw_texture_data != nullptr);
+                    return resouce()->m_raw_texture_data->m_width;
+                }
+                return 0;
+            }
             inline math::vec2 size() const noexcept
             {
                 if (enabled())
@@ -4082,11 +4100,14 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY(font);
 
             je_font* m_font;
-
+            size_t          m_size;
+            jeecs::string   m_path;
         public:
-            font(const std::string& fontfile, int w, int h)noexcept
+            font(const std::string& fontfile, size_t size)noexcept
+                : m_size(size)
+                , m_path(fontfile)
             {
-                m_font = je_font_load(fontfile.c_str(), (float)w, (float)h);
+                m_font = je_font_load(fontfile.c_str(), (float)size, (float)size);
             }
             ~font()
             {
@@ -4100,6 +4121,291 @@ namespace jeecs
             {
                 return nullptr != m_font;
             }
+
+            basic::resource<texture> text_texture(const std::wstring& text, float one_line_size = 10000.0f, int max_line_count = INT_MAX)
+            {
+                return text_texture(*this, text, one_line_size, max_line_count);
+            }
+            basic::resource<texture> text_texture(const std::string& text, float one_line_size = 10000.0f, int max_line_count = INT_MAX)
+            {
+                return text_texture(*this, wo_str_to_wstr(text.c_str()), one_line_size, max_line_count);
+            }
+        private:
+            inline static basic::resource<texture> text_texture(
+                font& font_base,
+                const std::wstring& text,
+                float max_line_character_size,
+                int max_line_count) noexcept
+            {
+                std::map<std::string, std::map<int, basic::resource<font>>> FONT_POOL;
+                math::vec4 TEXT_COLOR = { 1,1,1,1 };
+                float TEXT_SCALE = 1.0f;
+                math::vec2 TEXT_OFFSET = { 0,0 };
+
+                //计算文字所需要纹理的大小
+                int next_ch_x = 0;
+                int next_ch_y = 0;
+                int line_count = 0;
+
+                int min_px = INT_MAX, min_py = INT_MAX, max_px = INT_MIN, max_py = INT_MIN;
+
+                font* used_font = &font_base;
+
+                for (size_t ti = 0; ti < text.size(); ti++)
+                {
+                    bool IgnoreEscapeSign = false;
+                next_ch_sign:
+                    wchar_t ch = text[ti];
+                    auto gcs = used_font->get_character(unsigned int(ch));
+
+                    if (gcs)
+                    {
+                        if (ch == L'\\' && ti + 1 < text.size() && !IgnoreEscapeSign)
+                        {
+                            ti++;
+                            IgnoreEscapeSign = true;
+                            goto next_ch_sign;
+                        }
+                        else if (ch == L'{' && !IgnoreEscapeSign)
+                        {
+                            std::string item_name;
+                            std::string value;
+
+                            for (size_t ei = ti + 1; ei < text.size(); ei++)
+                            {
+                                if (text[ei] == L':')
+                                {
+                                    item_name = wo_wstr_to_str(text.substr(ti + 1, ei - ti - 1).c_str());
+                                    ti = ei;
+                                }
+                                else if (text[ei] == L'}')
+                                {
+                                    value = wo_wstr_to_str(text.substr(ti + 1, ei - ti - 1).c_str());
+                                    ti = ei;
+
+                                    if (item_name == "scale")
+                                    {
+                                        TEXT_SCALE = std::stof(value);
+                                        if (TEXT_SCALE == 1.0f)
+                                            used_font = &font_base;
+                                        else
+                                        {
+                                            auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f)/*四舍五入*/];
+                                            if (new_font == nullptr)
+                                                new_font = new font(font_base.m_path, int(TEXT_SCALE * font_base.m_size + 0.5f));
+
+                                            used_font = new_font.get();
+                                        }
+                                    }
+                                    else if (item_name == "offset")
+                                    {
+                                        math::vec2 offset;
+                                        offset.parse(value);
+                                        TEXT_OFFSET += offset;
+                                    }
+
+                                    break;
+                                }
+                            }
+                        }
+                        else if (ch != L'\n')
+                        {
+                            int px_min = next_ch_x + 0 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
+                            int py_min = -next_ch_y + 0 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
+
+                            int px_max = next_ch_x + gcs->m_texture->width() - 1 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
+                            int py_max = -next_ch_y + gcs->m_texture->height() - 1 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
+
+                            min_px = min_px > px_min ? px_min : min_px;
+                            min_py = min_py > py_min ? py_min : min_py;
+
+                            max_px = max_px < px_max ? px_max : max_px;
+                            max_py = max_py < py_max ? py_max : max_py;
+
+                            next_ch_x += gcs->m_adv_x;
+                        }
+
+                        if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
+                        {
+                            next_ch_x = 0;
+                            next_ch_y -= gcs->m_adv_y;
+                            line_count++;
+                        }
+                        if (line_count >= max_line_count)
+                            break;
+                    }
+                }
+                int size_x = max_px - min_px;
+                int size_y = max_py - min_py;
+
+                int correct_x = -min_px;
+                int correct_y = -min_py;
+
+                next_ch_x = 0;
+                next_ch_y = 0;
+                line_count = 0;
+                TEXT_SCALE = 1.0f;
+                TEXT_OFFSET = { 0,0 };
+                used_font = &font_base;
+
+                auto new_texture = new texture(size_x + 1, size_y + 1, jegl_texture::texture_format::RGBA);
+                std::memset(new_texture->resouce()->m_raw_texture_data->m_pixels, 0, new_texture->width() * new_texture->size().y * 4);
+
+                for (size_t ti = 0; ti < text.size(); ti++)
+                {
+                    bool IgnoreEscapeSign = false;
+                next_ch_sign_display:
+                    wchar_t ch = text[ti];
+                    auto gcs = used_font->get_character(unsigned int(ch));
+
+                    if (gcs)
+                    {
+                        if (ch == L'\\' && ti + 1 < text.size() && !IgnoreEscapeSign)
+                        {
+                            ti++;
+                            IgnoreEscapeSign = true;
+                            goto next_ch_sign_display;
+                        }
+                        else if (ch == L'{' && !IgnoreEscapeSign)
+                        {
+                            std::string item_name;
+                            std::string value;
+
+                            for (size_t ei = ti + 1; ei < text.size(); ei++)
+                            {
+                                if (text[ei] == L':')
+                                {
+                                    item_name = wo_wstr_to_str(text.substr(ti + 1, ei - ti - 1).c_str());
+                                    ti = ei;
+
+                                }
+                                else if (text[ei] == L'}')
+                                {
+                                    value = wo_wstr_to_str(text.substr(ti + 1, ei - ti - 1).c_str());
+                                    ti = ei;
+
+                                    if (item_name == "color")
+                                    {
+                                        char color[9] = "00000000";
+                                        for (size_t i = 0; i < 8 && i < value.size(); i++)
+                                            color[i] = (char)value[i];
+
+                                        unsigned int colordata = strtoul(color, NULL, 16);
+
+                                        unsigned char As = (*(unsigned char*)(&colordata));
+                                        unsigned char Bs = (*(((unsigned char*)(&colordata)) + 1));
+                                        unsigned char Gs = (*(((unsigned char*)(&colordata)) + 2));
+                                        unsigned char Rs = (*(((unsigned char*)(&colordata)) + 3));
+
+                                        TEXT_COLOR = { Rs / 255.0f,Gs / 255.0f ,Bs / 255.0f ,As / 255.0f };
+                                    }
+                                    else if (item_name == "scale")
+                                    {
+                                        TEXT_SCALE = std::stof(value);
+                                        if (TEXT_SCALE == 1.0f)
+                                            used_font = &font_base;
+                                        else
+                                        {
+                                            auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f)/*四舍五入*/];
+                                            assert(new_font != nullptr);
+                                            used_font = new_font.get();
+                                        }
+                                    }
+                                    else if (item_name == "offset")
+                                    {
+                                        math::vec2 offset;
+                                        offset.parse(value);
+                                        TEXT_OFFSET = TEXT_OFFSET + offset;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        else if (ch != L'\n')
+                        {
+                            struct p_index
+                            {
+                                size_t id;
+                                p_index operator ++()
+                                {
+                                    return { ++id };
+                                }
+                                p_index operator ++(int)
+                                {
+                                    return { id++ };
+                                }
+                                bool operator ==(const p_index& pindex)const
+                                {
+                                    return id == pindex.id;
+                                }
+                                bool operator !=(const p_index& pindex)const
+                                {
+                                    return id != pindex.id;
+                                }
+                                size_t& operator *()
+                                {
+                                    return id;
+                                }
+                                ptrdiff_t operator-(const p_index& another)const
+                                {
+                                    return ptrdiff_t(id - another.id);
+                                }
+
+                                typedef std::forward_iterator_tag iterator_category;
+                                typedef size_t value_type;
+                                typedef ptrdiff_t difference_type;
+                                typedef const size_t* pointer;
+                                typedef const size_t& reference;
+                            };
+                            std::for_each(
+#ifdef __cpp_lib_execution
+                                std::execution::par_unseq,
+#endif
+                                p_index{ 0 }, p_index{ size_t(gcs->m_texture->size().y) },
+                                [&](size_t fy) {
+                                    std::for_each(
+#ifdef __cpp_lib_execution
+                                        std::execution::par_unseq,
+#endif
+                                        p_index{ 0 }, p_index{ size_t(gcs->m_texture->width()) },
+                                        [&](size_t fx) {
+
+                                            auto pdst = new_texture->pix(
+                                                correct_x + next_ch_x + int(fx) + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size),
+                                                correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size)
+                                            );
+
+                                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
+
+                                            float src_alpha = psrc.w * TEXT_COLOR.w;
+
+                                            pdst.set(
+                                                math::vec4(
+                                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
+                                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
+                                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
+                                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
+                                                )
+                                            );
+                                        }
+                                    ); // end of  for each
+                                }
+                            );
+                            next_ch_x += gcs->m_adv_x;
+                        }
+                        if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
+                        {
+                            next_ch_x = 0;
+                            next_ch_y -= gcs->m_adv_y;
+                            line_count++;
+                        }
+                        if (line_count >= max_line_count)
+                            break;
+                    }
+                }
+                return new_texture;
+            }
+
         };
     }
 

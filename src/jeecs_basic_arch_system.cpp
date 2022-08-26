@@ -15,7 +15,7 @@
 #   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::log_warn( __VA_ARGS__ );
 #endif
 
-#ifdef __cpp_lib_executionxx
+#ifdef __cpp_lib_execution
 #   define ParallelForeach(...) std::for_each( std::execution::par_unseq, __VA_ARGS__ )
 #else
 #   define ParallelForeach std::for_each

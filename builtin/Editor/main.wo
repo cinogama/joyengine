@@ -162,23 +162,23 @@ func Editor_Welcome(ref open: bool)
 
 /////////////////////
 
-func test_font()
+func display_icon_in_console()
 {
     using je::graphic;
 
-    let font = font(@"builtin/cino_ipix_12px.ttf"@, 16, 16);
+    let font = font(@"builtin/cino_ipix_12px.ttf"@, 12);
     match(font)
     {
     value(f)?
     {
-        let chtex = f->load_char("J")->get_texture();
+        let chtex = f->load_string("Joy\nEngine");
         let (width, height) = chtex->size();
 
         for (let mut y = 0; y < height; y += 1)
         {
             let mut out_line = "";
             for (let mut x = 0; x < width; x += 1)
-                out_line += chtex->pix(x, y)->color()[3] <= 0.5 ? "  " | "* ";
+                out_line += chtex->pix(x, y)->color()[3] <= 0.1 ? "  " | "* ";
 
             je::log(out_line);
         }
@@ -187,7 +187,7 @@ func test_font()
         std::panic("Failed to load font...");
     }
 }
-test_font();
+display_icon_in_console();
 
 /////////////////////
 editor::Project::Start(Editor_MainMenuBar, ());

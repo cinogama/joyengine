@@ -1,3 +1,4 @@
+#define JE_IMPL
 #include "jeecs.hpp"
 
 #define STB_TRUETYPE_IMPLEMENTATION  // force following include to generate implementation
@@ -93,7 +94,7 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
     ch.m_adv_x = real_scalex * advance;
     ch.m_adv_y = font->m_scale_y;
     ch.m_delta_x = x0;
-    ch.m_delta_y = -y0 - pixel_h;
+    ch.m_delta_y = y0;
 
     jeecs::graphic::texture* tex =
         new jeecs::graphic::texture(pixel_w, pixel_h, jegl_texture::texture_format::RGBA);
@@ -112,3 +113,4 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 
     return &ch;
 }
+
