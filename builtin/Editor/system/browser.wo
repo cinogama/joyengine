@@ -2,6 +2,8 @@ import woo.std;
 import je.gui;
 import je.filesys;
 
+import openfile;
+
 namespace editor::Browser
 {
     union FileType
@@ -149,14 +151,15 @@ namespace editor::Browser
                     ;
                 else if (action == Action::DoubleClick)
                 {
+                    
                     match (subpath.type)
                     {
                     dir(_)?
                         // 双击的是一个目录，进入这个目录
                         current_work_path = subpath.path; 
                     file?
-                        // TODO: 在资源管理器中打开文件
-                        launch(generic::MsgBox, ("打开文件失败", "无法打开未知类型的文件")); 
+                        // 用注册好的方式打开文件
+                        OpenFile::open(subpath);
                     }
                 }
                 else

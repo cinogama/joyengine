@@ -4157,7 +4157,7 @@ namespace jeecs
                     bool IgnoreEscapeSign = false;
                 next_ch_sign:
                     wchar_t ch = text[ti];
-                    auto gcs = used_font->get_character(unsigned int(ch));
+                    auto gcs = used_font->get_character((unsigned int)ch);
 
                     if (gcs)
                     {
@@ -4257,7 +4257,7 @@ namespace jeecs
                     bool IgnoreEscapeSign = false;
                 next_ch_sign_display:
                     wchar_t ch = text[ti];
-                    auto gcs = used_font->get_character(unsigned int(ch));
+                    auto gcs = used_font->get_character((unsigned int)ch);
 
                     if (gcs)
                     {

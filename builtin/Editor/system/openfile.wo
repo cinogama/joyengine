@@ -1,0 +1,26 @@
+// openfile.wo
+// 用于管理指定类型的文件/目录的打开方式
+
+import woo.std;
+import je.gui;
+
+import builtin.Editor.generic.form.msgbox;
+
+using je::gui;
+using generic;
+
+namespace editor::OpenFile
+{
+	private let registed_open_method = {}: map<string, (Browser::PathInfo)=>void>;
+
+	func open(file: Browser::PathInfo)
+	{
+		match(registed_open_method->get(file.externname))
+		{
+		value(action)?
+			action(file);
+		none?
+			launch(MsgBox, ("打开文件失败", F"无法打开未知类型({file.externname})的文件")); 
+		}
+	}
+}
