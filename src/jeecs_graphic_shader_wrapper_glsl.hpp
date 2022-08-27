@@ -214,6 +214,7 @@ std::string _generate_code_for_glsl_impl(
 uniform_information get_uniform_info(const std::string& name, jegl_shader_value* value)
 {
     jegl_shader::uniform_type uniform_type = jegl_shader::uniform_type::INT;
+    auto* init_value = value->m_uniform_init_val_may_nil;
     switch (value->get_type())
     {
     case jegl_shader_value::type::INTEGER:
@@ -229,11 +230,12 @@ uniform_information get_uniform_info(const std::string& name, jegl_shader_value*
     case jegl_shader_value::type::FLOAT4x4:
         uniform_type = jegl_shader::uniform_type::FLOAT4X4; break;
     case jegl_shader_value::type::TEXTURE2D:
+        init_value = value; // Texture2d need init-value(itself) for channel id;
         uniform_type = jegl_shader::uniform_type::TEXTURE2D; break;
     default:
         jeecs::debug::log_error("Unsupport uniform variable type."); break;
     }
-    return std::make_tuple(name, uniform_type, value->m_uniform_init_val_may_nil);
+    return std::make_tuple(name, uniform_type, init_value);
 }
 
 std::string _generate_code_for_glsl_vertex(shader_wrapper* wrap)

@@ -10,7 +10,7 @@ namespace editor::Project
         // 必须在编辑器初始化时运行，负责创建默认项目环境
 
         // -1. 创建项目上下文
-        let proj = CreateDefaultProject();
+        let proj = GetCurrentProject();
 
         // 0. 准备需要用到的常量
         let default_translation_sys_type  = je::typeinfo("Translation::TranslationUpdatingSystem")->val();

@@ -249,6 +249,7 @@ void jegl_using_resource(jegl_resource* resource)
                     jegl_uniform_float4(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
                     break;
                 case jegl_shader::uniform_type::INT:
+                case jegl_shader::uniform_type::TEXTURE2D:
                     jegl_uniform_int(resource, uniform_vars->m_index, uniform_vars->n);
                     break;
                 default:

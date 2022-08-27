@@ -10,6 +10,10 @@ namespace jeecs
 {
     namespace Editor
     {
+        struct Name
+        {
+            jeecs::string name;
+        };
         struct Invisable
         {
             // Entity with this component will not display in editor, and will not be saved.

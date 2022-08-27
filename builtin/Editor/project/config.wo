@@ -100,6 +100,7 @@ namespace editor::Project
 
     func FindWorld(self: Project, world: je::world)=> option<World>
     {
+        je::log(self.worlds);
         for (let project_world : self.worlds)
             match(project_world.instance)
             {
@@ -120,7 +121,7 @@ namespace editor::Project
         return self;
     }
 
-    func CreateDefaultProject()
+    private func CreateDefaultProject()
     {
         return SetCurrentProject(Project{
             config = Config {

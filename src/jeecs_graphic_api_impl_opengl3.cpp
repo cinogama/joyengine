@@ -270,28 +270,8 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         }
         else
         {
-            /*
-var je_mt = uniform:<float4x4>("JOYENGINE_TRANS_M_TRANSLATE");
-var je_mr = uniform:<float4x4>("JOYENGINE_TRANS_M_ROTATION");
-
-var je_vt = uniform:<float4x4>("JOYENGINE_TRANS_V_TRANSLATE");
-var je_vr = uniform:<float4x4>("JOYENGINE_TRANS_V_ROTATION");
-
-var je_m = uniform:<float4x4>("JOYENGINE_TRANS_M");
-var je_v = uniform:<float4x4>("JOYENGINE_TRANS_V");
-var je_p = uniform:<float4x4>("JOYENGINE_TRANS_P");
-
-var je_mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
-var je_mv = uniform:<float4x4>("JOYENGINE_TRANS_MV");
-var je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
-*/
             resource->m_uint1 = shader_program;
             auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
-            builtin_uniforms.m_builtin_uniform_m_t = gl_get_uniform_location(resource, "JOYENGINE_TRANS_M_TRANSLATE");
-            builtin_uniforms.m_builtin_uniform_m_r = gl_get_uniform_location(resource, "JOYENGINE_TRANS_M_ROTATION");
-
-            builtin_uniforms.m_builtin_uniform_v_t = gl_get_uniform_location(resource, "JOYENGINE_TRANS_V_TRANSLATE");
-            builtin_uniforms.m_builtin_uniform_v_r = gl_get_uniform_location(resource, "JOYENGINE_TRANS_V_ROTATION");
 
             builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(resource, "JOYENGINE_TRANS_M");
             builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(resource, "JOYENGINE_TRANS_V");

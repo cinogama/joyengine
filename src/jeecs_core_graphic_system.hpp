@@ -204,7 +204,8 @@ let frag = \f: v2f = fout{ color = float4(t, 0, t, 1) }
                     const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
                     const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
 
-                    float MAT4_VP[4][4]; math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
+                    float MAT4_MV[4][4], MAT4_VP[4][4];  
+                    math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
                     // TODO: Update camera shared uniform.
 
                     for (auto& rendentity : m_renderer_entities)
@@ -215,10 +216,9 @@ let frag = \f: v2f = fout{ color = float4(t, 0, t, 1) }
 
                         const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
 
-                        float MAT4_MVP[4][4];  math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                        // TODO: Calc needed matrix and update uniform
-
-                        // float MAT4_MV[4][4]; math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL); ?
+                        float MAT4_MVP[4][4];  
+                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                         auto& drawing_shape =
                             (rendentity.shape && rendentity.shape->vertex)
@@ -257,6 +257,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
                             NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
 
+                            NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 

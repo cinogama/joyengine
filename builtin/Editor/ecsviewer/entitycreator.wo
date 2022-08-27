@@ -9,7 +9,6 @@ import builtin.Editor.generic.form.msgbox;
 namespace editor::EntityCreator
 {
     private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png")->val();
-    
     using EntityContext = struct {
         name  : string,
         edit_entity      : option<je::entity>,
@@ -304,5 +303,3 @@ namespace editor::EntityCreator
         return FormAction::Nothing;
     }
 }
-
-import woo.debug;

@@ -29,6 +29,13 @@ WO_API wo_api wojeapi_filesys_is_dir(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, fs::is_directory(wo_string(args + 0)));
 }
 
+WO_API wo_api wojeapi_filesys_open_file_by_browser(wo_vm vm, wo_value args, size_t argc)
+{
+    system(wo_string(args + 0));
+    return wo_ret_void(vm);
+}
+
+
 WO_API wo_api wojeapi_filesys_path_parent(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_string(vm, fs::path(wo_string(args + 0)).parent_path().string().c_str());
@@ -92,5 +99,8 @@ namespace je::filesys
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
     func isdir(_path: string)=> bool;
+
+    extern("libjoyecs", "wojeapi_filesys_open_file_by_browser")
+    func open(_path: string)=> void;
 }
 )";

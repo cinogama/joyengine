@@ -6,11 +6,30 @@
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_editor_system.hpp"
 
+const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
+{
+    jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();
+    if (c_name)
+        return c_name->name.c_str();
+    return "";
+}
+const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name)
+{
+    jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();
+    if (!c_name)
+        c_name = entity->add_component<jeecs::Editor::Name>();
+
+    if (c_name)
+        return (c_name->name = name).c_str();
+    return "";
+}
+
 void jeecs_entry_register_core_systems()
 {
     jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
     jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
 
+    jeecs::typing::type_info::of<jeecs::Editor::Name>("Editor::Name");
     jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
     jeecs::typing::type_info::of<jeecs::Editor::Invisable>("Editor::Invisable");
     jeecs::typing::type_info::of<jeecs::Editor::EditorLife>("Editor::EditorLife");

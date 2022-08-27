@@ -1,0 +1,91 @@
+// 序列化，提供对实体/世界的序列化
+// 实体不保存所有Editor组件，有额外的字段保存实体的Editor::Name
+// 世界不保存Invisable的实体，不保存Editor系统和Graphic系统，此系统由编辑器负责重新创建和附加
+
+import woo.std;
+import je;
+import config;
+
+using je;
+
+namespace editor::Serialize
+{
+	func save_entity(saving_entity: entity)=> option<map<string, dynamic>>
+	{	
+		let components_json = {}: map<string, map<string, string>>;
+
+		// 遍历全部所有组件类型
+        for (let component_type : saving_entity->editor::get_components_types())
+        {
+            let component_type_name = component_type->name();
+
+            // 跳过编辑器组件
+            if (component_type_name->beginwith("Editor::"))
+                continue;
+
+            // 遍历组件的所有成员，保存起来
+            let component_members_json = {}: map<string, string>;
+            let component_instance = saving_entity->editor::get_component(component_type)->val();
+            for (let member_name, member_type, member_addr : 
+                component_instance->editor::iter_member(component_type))
+            {
+                component_members_json[member_name] = member_addr->to_string(member_type);
+            }
+
+            // 写入组件信息
+            components_json[component_type_name] = component_members_json;
+        }
+
+        // 不接受没有组件的实体，实际上不应该遇到这种蛋疼的实体（这种纱布实体一般只包含Editor::Name）
+        if (components_json->empty())
+            return option::none;
+
+		let entity_json = {
+			{"name", saving_entity->editor::name(): dynamic},
+			{"components", components_json: dynamic}
+		};
+
+        return option::value(entity_json);
+	}
+
+    func save_project_world(world: Project::World)=> option<map<string, dynamic>>
+    {
+        match(world.instance)
+        {
+        value(w)?
+        {
+            static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
+
+            alias entity_info_t = map<string, dynamic>;
+
+            let entities_json_list = []: array<entity_info_t>;
+            for (let entity : w->editor::get_all_entities())
+                // 跳过含有Editor::Invisable组件的实体
+                if (!entity->editor::get_component(INVISABLE)->has())
+                    save_entity(entity)->map(\e: entity_info_t = entities_json_list->add(e););
+
+            let editing_systems_type_list = []: array<string>;
+            for (let system_type : w->editor::get_systems_types())
+                if (!system_type->name()->beginwith("Graphic::") && !system_type->name()->beginwith("Editor::"))
+                    editing_systems_type_list->add(system_type->name());
+        
+            let runtime_systems_type_list = []: array<string>;
+            for (let system_type : world.runtime_systems)
+                if (!system_type->name()->beginwith("Graphic::") && !system_type->name()->beginwith("Editor::"))
+                    runtime_systems_type_list->add(system_type->name());
+
+            return option::value({
+                {"name", w->editor::name(): dynamic},
+                {"entities", entities_json_list: dynamic},
+                {"edit_systems", editing_systems_type_list: dynamic},
+                {"runtime_systems", runtime_systems_type_list: dynamic},
+            });
+        }
+        none?
+            // 你是来找茬的吧？没有实例化的项目世界也拿来保存？直接给你炸掉！
+            // je::exit();
+            // 开玩笑开玩笑……
+            return option::none;
+        }
+    }
+}

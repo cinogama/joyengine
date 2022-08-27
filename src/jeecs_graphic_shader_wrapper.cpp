@@ -69,6 +69,7 @@ struct jegl_shader_value
         struct
         {
             const char* m_unifrom_varname;
+            int m_uniform_texture_channel;
             jegl_shader_value* m_uniform_init_val_may_nil;
         };
     };
@@ -183,6 +184,7 @@ struct jegl_shader_value
     jegl_shader_value(type resulttype, const char* uniform_name, jegl_shader_value* init_val, bool is_predef)
         : m_type((type)(resulttype | type::CALC_VALUE | (is_predef ? type::UNIFORM_BLOCK_VARIABLE : type::UNIFORM_VARIABLE)))
         , m_unifrom_varname(jeecs::basic::make_new_string(uniform_name))
+        , m_uniform_texture_channel(0)
         , m_ref_count(0)
         , m_uniform_init_val_may_nil(init_val)
     {
@@ -299,6 +301,14 @@ WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_gchandle(vm,
         new jegl_shader_value(data, jegl_shader_value::FLOAT4x4),
         nullptr, _free_shader_value);
+}
+WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args, size_t argc)
+{
+    jegl_shader_value* texture2d_val = (jegl_shader_value*)wo_pointer(args + 0);
+    assert(texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D);
+
+    texture2d_val->m_uniform_texture_channel = (int)wo_int(args + 1);
+    return wo_ret_val(vm, args+0);
 }
 WO_API wo_api jeecs_shader_create_rot_mat4x4(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1136,19 +1146,22 @@ namespace shader
     }
 }
 
+namespace texture2d
+{
+    extern("libjoyecs", "jeecs_shader_texture2d_set_channel")
+    func channel(self: texture2d, pass: int)=> texture2d;
+}
+
 // Default unifrom
 let je_time = shared_uniform:<float4>("JOYENGINE_TIMES");
-
-let je_mt = uniform:<float4x4>("JOYENGINE_TRANS_M_TRANSLATE");
-let je_mr = uniform:<float4x4>("JOYENGINE_TRANS_M_ROTATION");
-
-let je_vt = uniform:<float4x4>("JOYENGINE_TRANS_V_TRANSLATE");
-let je_vr = uniform:<float4x4>("JOYENGINE_TRANS_V_ROTATION");
 
 let je_m = uniform:<float4x4>("JOYENGINE_TRANS_M");
 let je_v = uniform:<float4x4>("JOYENGINE_TRANS_V");
 let je_p = uniform:<float4x4>("JOYENGINE_TRANS_P");
 
+// je_mvp = je_p * je_v * je_m;
+// je_mv  = je_v * je_m;
+// je_vp  = je_p * je_v;
 let je_mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
 let je_mv = uniform:<float4x4>("JOYENGINE_TRANS_MV");
 let je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
@@ -1427,6 +1440,8 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
                 variable->w = init_val->m_float4[3]; break;
             case jegl_shader_value::type::INTEGER:
                 variable->n = init_val->m_integer; break;
+            case jegl_shader_value::type::TEXTURE2D:
+                variable->n = init_val->m_uniform_texture_channel; break;
             default:
                 jeecs::debug::log_error("Unsupport uniform variable type."); break;
             }
@@ -1438,7 +1453,6 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             variable->n = 0;
             variable->m_updated = false;
         }
-
 
         *last = variable;
         last = &variable->m_next;

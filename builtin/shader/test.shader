@@ -22,8 +22,6 @@ let vert = \v: vin = v2f{ pos = trans(v.vertex), uv = v.uv }
     where 
         trans = \v3: float3 = je_mvp *  float4(v3, 1.);;;
 
-let frag = \f: v2f = fout{ color = inverse_col(texture(main_texture, f.uv)) }
+let frag = \f: v2f = fout{ color = texture(main_texture, f.uv) }
     where
-        main_texture = uniform:<texture2d>("main_texture"),
-        inverse_col = \col: float4 = float4((white - col)->xyz(), col->w());,
-        white = float4(1., 1., 1., 1.);;
+        main_texture = uniform:<texture2d>("main_texture");;

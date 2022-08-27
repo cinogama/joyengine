@@ -491,11 +491,10 @@ JE_API void je_ecs_world_entity_remove_component(
 JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
-
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
-
 JE_API bool je_ecs_world_validate_entity(const jeecs::game_entity* entity);
-
+JE_API const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity);
+JE_API const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
 
 JE_API double je_clock_time();
@@ -618,10 +617,6 @@ struct jegl_shader
     };
     struct builtin_uniform_location
     {
-        uint32_t m_builtin_uniform_m_t = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_m_r = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_v_t = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_v_r = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_m = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_v = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_p = jeecs::typing::INVALID_UINT32;
@@ -4675,34 +4670,15 @@ namespace jeecs
             }
         };
     }
-    namespace Editor
-    {
-        struct Name
-        {
-            jeecs::string name;
-            static void JERefRegsiter()
-            {
-                typing::register_member(&Name::name, "name");
-            }
-        };
-    }
 
     inline std::string game_entity::name()
     {
-        Editor::Name* c_name = get_component<Editor::Name>();
-        if (c_name)
-            return c_name->name;
-        return "";
+        return je_ecs_get_name_of_entity(this);
     }
 
     inline std::string game_entity::name(const std::string& _name)
     {
-        Editor::Name* c_name = get_component<Editor::Name>();
-        if (!c_name)
-            c_name = add_component<Editor::Name>();
-
-        assert(c_name);
-        return c_name->name = _name;
+        return je_ecs_set_name_of_entity(this, _name.c_str());
     }
 
     namespace math
@@ -5001,7 +4977,6 @@ namespace jeecs
         inline void module_entry()
         {
             // 0. register built-in components
-            jeecs::typing::type_info::of<Editor::Name>("Editor::Name");
 
             jeecs::typing::type_info::of<Transform::LocalPosition>("Transform::LocalPosition");
             jeecs::typing::type_info::of<Transform::LocalRotation>("Transform::LocalRotation");
