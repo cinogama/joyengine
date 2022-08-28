@@ -13,27 +13,15 @@ namespace editor::Project
 {
     // 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
     using World = struct {
-        name : option<string>, // 世界名称，保存项目/加载项目才有，新建世界没有这个值
-        path : option<string>,    // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
-        instance : option<je::world>, // 世界实例，只有正在编辑器里的世界会有这个值
+        path : option<string>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
+        instance : je::world,  // 世界实例
         runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     };
-
-    namespace World
-    {
-        func get_instance(self: World)
-        {
-            match(self.instance)
-            {
-                value(ins)? return ins;
-                none? std::panic("Not impl now!"); // TODO: 当前World还没有实例，从path对应的文件加载出来
-            }
-        }
-    }
 
     // 用于储存项目的配置信息
     using Config = struct {
         name : string,                    // 项目的名称
+        path : option<string>,            // 
         graphic_system : je::typeinfo,    // 默认使用的图形系统类型
         editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
     };
@@ -90,7 +78,7 @@ namespace editor::Project
         let world = World{
             name = option::none,
             path = option::none,
-            instance = option::value(world_instance),
+            instance = world_instance,
             runtime_system = [],
         };
 
@@ -102,13 +90,9 @@ namespace editor::Project
     {
         je::log(self.worlds);
         for (let project_world : self.worlds)
-            match(project_world.instance)
-            {
-                value(w)?
-                    if (w == world)
-                        return option::value(project_world);
-                none?;
-            }
+            if (project_world.instance == world)
+                return option::value(project_world);
+
         je::logwarn("发现一个未被列入项目中的游离世界：", world->editor::name());
         return option::none;
     }
@@ -117,15 +101,48 @@ namespace editor::Project
 
     func SetCurrentProject(self: Project)
     {
+        // 不可以重复设置当前项目，设置前应当清除旧的项目
+        assert(false == _current_project->has());
+
         _current_project = option::value(self);
         return self;
+    }
+
+    func RemoveCurrentProject()
+    {
+        assert(_current_project->has());
+
+        let proj = _current_project->val();
+        je::loginfo(F"关闭当前项目: {proj.config.name}");
+        for (let w : proj.worlds)
+        {
+            je::loginfo(F"关闭项目中所属的世界：{w.instance->editor::name()}");
+            w.instance->close();
+        }
+
+        _current_project = option::none;
     }
 
     private func CreateDefaultProject()
     {
         return SetCurrentProject(Project{
             config = Config {
-                name = "Empty project",
+                name = "Default project",
+                path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
+                // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
+                graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
+                editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
+            },
+            worlds = [],
+        });
+    }
+
+    func CreateProject(name: string, path: string)=> Project
+    {
+        return SetCurrentProject(Project{
+            config = Config {
+                name = name,
+                path = option::value(path), // 默认项目不带有path信息，这种项目是不可以被用于保存的
                 // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
                 graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
                 editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
@@ -142,9 +159,25 @@ namespace editor::Project
                 return proj;
             none?
             {
-                je::logwarn("没有正在编辑中的项目，将创建默认的项目上下文");
+                je::logwarn("没有正在编辑中的项目，将创建默认的项目上下文，此项目上下文不可以用于保存");
                 return CreateDefaultProject();
             }
+        }
+    }
+
+    func SaveProject(self: Project)=>result<typeof(nil), string>
+    {
+        match(self.config.path)
+        {
+        value(path)?
+        {
+            // TODO;
+            std::panic("TODO");
+            return result::ok(nil);
+        }
+        none?
+            // 没有保存路径，直接抛点东西让外边处理
+            return result::err("当前项目是编辑器创建的默认项目，无法保存");
         }
     }
 }

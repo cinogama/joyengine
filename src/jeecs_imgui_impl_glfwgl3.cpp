@@ -99,6 +99,8 @@ namespace je::gui
 
     extern("libjoyecs", "je_gui_button")
     func Button(msg:string)=> bool;
+    extern("libjoyecs", "je_gui_button")
+    func Button(msg:string, sizex: real, sizey: real)=> bool;
 
     extern("libjoyecs", "je_gui_begin_main_menu_bar")
     func BeginMainMenuBar()=> bool;
@@ -634,7 +636,10 @@ WO_API wo_api je_gui_text(wo_vm vm, wo_value args, size_t argc)
 }
 WO_API wo_api je_gui_button(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_bool(vm, ImGui::Button(wo_string(args)));
+    if (argc == 3)
+        return wo_ret_bool(vm, ImGui::Button(wo_string(args + 0),
+            ImVec2(wo_float(args + 1), wo_float(args + 2))));
+    return wo_ret_bool(vm, ImGui::Button(wo_string(args + 0)));
 }
 WO_API wo_api je_gui_begin_main_menu_bar(wo_vm vm, wo_value args, size_t argc)
 {

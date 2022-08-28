@@ -244,7 +244,7 @@ namespace editor::WorldCreator
                     none?
                     {
                         let project_world = Project::GetCurrentProject()->CreateWorld();
-                        let created_world = project_world.instance->val();
+                        let created_world = project_world.instance;
 
                         created_world->editor::name(context.name);
 

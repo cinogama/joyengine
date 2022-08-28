@@ -3,8 +3,43 @@ import je;
 import je.gui;
 import config;
 
+import builtin.Editor.generic.form.msgbox;
+
+using je::gui;
+using generic;
+
 namespace editor::Project
 {
+    func _AskCreateOrLoadProject<FT, ArgTs>(form: FT, args: ArgTs)
+    {
+        let mut close_form = false;
+        Begin("加载或新建项目", 
+            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+            let mut cur_width = 0.;
+            GetContentRegionAvail(ref cur_width, 0./* 不关心高度 */);
+
+            Text("欢迎使用JoyEngine4.0，让我们先从这里开始：");
+
+            if (Button("加载已有的项目", cur_width, 0.))
+            {
+                // TODO;
+                close_form = true;
+            }
+            if (Button("新建一个项目", cur_width, 0.))
+            {
+                // TODO;
+                close_form = true;
+            }
+        End();
+
+        if (close_form)
+        {
+            launch(form, args);
+            return FormAction::Close;
+        }
+        return FormAction::Nothing;
+    }
+
     func Init()
     {
         // 必须在编辑器初始化时运行，负责创建默认项目环境
@@ -20,7 +55,7 @@ namespace editor::Project
         universe->editor::set_current_universe();
 
         // 2. 创建默认的世界
-        let default_world = proj->CreateWorld().instance->val();
+        let default_world = proj->CreateWorld().instance;
         default_world->editor::name("Default");
         default_world->add_system(proj.config.graphic_system);
         default_world->add_system(proj.config.editor_system);
@@ -28,10 +63,14 @@ namespace editor::Project
     }
 
     func Start<FT, ArgTs>(form: FT, args: ArgTs)
-        where form(args...) is je::gui::FormAction;
+        where form(args...) is FormAction;
     {
         Init();
-        je::gui::launch(form, args);
+
+        // 创建默认的运行环境之后，先不要启动主菜单，也不要做任何事情，
+        // 先要求打开或新建项目，记得销毁全部默认世界，否则玩个锤子
+
+        je::gui::launch(_AskCreateOrLoadProject:<FT, ArgTs>, (form, args));
 
         je::universe::current()->editor::wait();
         je::universe::current()->editor::close();

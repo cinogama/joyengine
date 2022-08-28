@@ -50,42 +50,33 @@ namespace editor::Serialize
 
     func save_project_world(world: Project::World)=> option<map<string, dynamic>>
     {
-        match(world.instance)
-        {
-        value(w)?
-        {
-            static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
+        static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
 
-            alias entity_info_t = map<string, dynamic>;
+        alias entity_info_t = map<string, dynamic>;
 
-            let entities_json_list = []: array<entity_info_t>;
-            for (let entity : w->editor::get_all_entities())
-                // 跳过含有Editor::Invisable组件的实体
-                if (!entity->editor::get_component(INVISABLE)->has())
-                    save_entity(entity)->map(\e: entity_info_t = entities_json_list->add(e););
+        let w = world.instance;
 
-            let editing_systems_type_list = []: array<string>;
-            for (let system_type : w->editor::get_systems_types())
-                if (!system_type->name()->beginwith("Graphic::") && !system_type->name()->beginwith("Editor::"))
-                    editing_systems_type_list->add(system_type->name());
+        let entities_json_list = []: array<entity_info_t>;
+        for (let entity : w->editor::get_all_entities())
+            // 跳过含有Editor::Invisable组件的实体
+            if (!entity->editor::get_component(INVISABLE)->has())
+                save_entity(entity)->map(\e: entity_info_t = entities_json_list->add(e););
+
+        let editing_systems_type_list = []: array<string>;
+        for (let system_type : w->editor::get_systems_types())
+            if (!system_type->name()->beginwith("Graphic::") && !system_type->name()->beginwith("Editor::"))
+                editing_systems_type_list->add(system_type->name());
         
-            let runtime_systems_type_list = []: array<string>;
-            for (let system_type : world.runtime_systems)
-                if (!system_type->name()->beginwith("Graphic::") && !system_type->name()->beginwith("Editor::"))
-                    runtime_systems_type_list->add(system_type->name());
+        let runtime_systems_type_list = []: array<string>;
+        for (let system_type : world.runtime_systems)
+            if (!system_type->name()->beginwith("Graphic::") && !system_type->name()->beginwith("Editor::"))
+                runtime_systems_type_list->add(system_type->name());
 
-            return option::value({
-                {"name", w->editor::name(): dynamic},
-                {"entities", entities_json_list: dynamic},
-                {"edit_systems", editing_systems_type_list: dynamic},
-                {"runtime_systems", runtime_systems_type_list: dynamic},
-            });
-        }
-        none?
-            // 你是来找茬的吧？没有实例化的项目世界也拿来保存？直接给你炸掉！
-            // je::exit();
-            // 开玩笑开玩笑……
-            return option::none;
-        }
+        return option::value({
+            {"name", w->editor::name(): dynamic},
+            {"entities", entities_json_list: dynamic},
+            {"edit_systems", editing_systems_type_list: dynamic},
+            {"runtime_systems", runtime_systems_type_list: dynamic},
+        });
     }
 }
