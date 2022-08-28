@@ -5,30 +5,159 @@ import config;
 
 import builtin.Editor.generic.form.msgbox;
 
+using std;
 using je::gui;
 using generic;
 
 namespace editor::Project
 {
+    enum CreateOrLoadProjectState
+    {
+        OpenOrCreate,
+        OpenProject,
+        CreateProject,
+    }
+
+    private func _GetAvailableRootPaths()
+    {
+        // TODO: 这里先只考虑Windows的情况，unix系统那套先不管
+        //       而且只考虑A-Z的盘符，什么AA AB AC，就算windows未来支持也给爷滚
+        let arr = []: array<int>;
+        for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1)
+            arr->add(ch);
+
+        return arr->trans(\ch: int = string::ascii([ch]) + ":/";)
+           ->forall(\path: string = je::filesys::isdir(path););
+    }
+
+    using Path = struct {
+        name: string,       // 仅用于显示
+        path: string,
+        childs: option<array<Path>>,
+    };
+    private func _GetRootPaths()
+    {
+        return _GetAvailableRootPaths()
+            ->trans(\rootpath: string = Path{
+                name = rootpath,
+                path = rootpath,
+                childs = option::none};);
+    }
+    private func _GetChildPaths(path: Path, update: bool)
+    {
+        if (update || !path.childs->has())
+        {
+            let arr = []: array<Path>;
+            for (let child_path : je::filesys::path(path.path))
+                // 只允许放入目录，文件不能放进来嗝
+                if (je::filesys::isdir(child_path))
+                    arr->add(Path{
+                        name = je::filesys::filename(child_path),
+                        path = child_path,
+                        childs = option::none});
+            path.childs = option::value(arr);            
+        }
+
+        return path.childs->val();
+    }
+    private func _ListPath(path: Path, ref selected_path: option<string>)
+    {
+        let show_child = TreeNodeEx(path.name, 
+                TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                + selected_path
+                    ->map(\p: string = p == path.path;, \ = false;)
+                    ->\b: bool = 
+                        b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
+                            | TreeNodeAttribute::ImGuiTreeNodeFlags_None;());
+
+        if (IsItemClicked() && !IsItemToggledOpen())
+            selected_path = option::value(path.path);
+
+        if (show_child)
+        {
+            for (let child_path : path->_GetChildPaths(false))
+                child_path->_ListPath(ref selected_path);
+
+            TreePop();
+        }
+    }
+    private func _ListAndSelectPathToCreateProject()=> option<string>
+    {
+        static let mut selected_path = option::none: option<string>;
+
+        static let roots = _GetRootPaths();
+        for(let root_path : roots)
+            root_path->_ListPath(ref selected_path);
+
+        selected_path = selected_path
+            ->map(\p: string = je::filesys::isdir(p) ? option::value(p) | option::none: option<string>;)
+            ->reduce();
+
+        return selected_path;
+    }
+
     func _AskCreateOrLoadProject<FT, ArgTs>(form: FT, args: ArgTs)
     {
+        // 反正这个窗口就创建一次，所以就搞个静态变量保存状态，也不用还原了
+        static let mut state = CreateOrLoadProjectState::OpenOrCreate;
+        
         let mut close_form = false;
         Begin("加载或新建项目", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             let mut cur_width = 0.;
             GetContentRegionAvail(ref cur_width, 0./* 不关心高度 */);
 
-            Text("欢迎使用JoyEngine4.0，让我们先从这里开始：");
+            if (state == CreateOrLoadProjectState::OpenOrCreate)
+            {
+                Text("欢迎使用JoyEngine4.0，让我们先从这里开始：");
 
-            if (Button("加载已有的项目", cur_width, 0.))
-            {
-                // TODO;
-                close_form = true;
+                if (Button("加载已有的项目", cur_width, 0.))
+                    state = CreateOrLoadProjectState::OpenProject;
+                if (Button("新建一个项目", cur_width, 0.))
+                    state = CreateOrLoadProjectState::CreateProject;
             }
-            if (Button("新建一个项目", cur_width, 0.))
+            else if (state == CreateOrLoadProjectState::OpenProject)
             {
-                // TODO;
-                close_form = true;
+                panic("TODO");
+            }
+            else if (state == CreateOrLoadProjectState::CreateProject)
+            {
+                Text("请输入新建项目名称：");
+
+                static let mut project_name = "";
+                InputText("项目名称", ref project_name);
+                
+                BeginChild("SelectPathToCreateProject", 0., 300.);
+                    _ListAndSelectPathToCreateProject();
+                EndChild();
+
+                if (Button("开始项目！", cur_width, 0.))
+                {
+                    if (project_name->trim() == "")
+                        // 不允许项目名为空
+                        launch(MsgBox, ("创建项目失败", "项目名不可以为空，请输入项目名"));
+                    else
+                    {
+                        // 移除默认的项目，创建新的项目上下文
+                        RemoveCurrentProject();
+                        let proj = CreateProject(project_name, "TODO");
+                        panic("TODO");
+
+                        // 在这个项目里创建一个默认的世界，并且渲染这个世界
+                        let default_world = proj->CreateWorld().instance;
+                        default_world->editor::name("Root");
+                        default_world->add_system(proj.config.graphic_system);
+                        default_world->add_system(proj.config.editor_system);
+                        default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
+
+                        // 关闭窗口，打开主菜单开始编辑
+                        close_form = true;
+                    }
+                }
+                if (Button("取消", cur_width, 0.))
+                    state = CreateOrLoadProjectState::OpenOrCreate;
             }
         End();
 
@@ -44,22 +173,17 @@ namespace editor::Project
     {
         // 必须在编辑器初始化时运行，负责创建默认项目环境
 
-        // -1. 创建项目上下文
+        // 0. 创建项目上下文
         let proj = GetCurrentProject();
-
-        // 0. 准备需要用到的常量
-        let default_translation_sys_type  = je::typeinfo("Translation::TranslationUpdatingSystem")->val();
 
         // 1. 创建引擎的基本上下文
         let universe = je::universe::editor::create();
         universe->editor::set_current_universe();
 
-        // 2. 创建默认的世界
+        // 2. 创建默认的世界，用于支持启动编辑器的一些gui活动
         let default_world = proj->CreateWorld().instance;
         default_world->editor::name("Default");
         default_world->add_system(proj.config.graphic_system);
-        default_world->add_system(proj.config.editor_system);
-        default_world->add_system(default_translation_sys_type);
     }
 
     func Start<FT, ArgTs>(form: FT, args: ArgTs)
@@ -69,7 +193,6 @@ namespace editor::Project
 
         // 创建默认的运行环境之后，先不要启动主菜单，也不要做任何事情，
         // 先要求打开或新建项目，记得销毁全部默认世界，否则玩个锤子
-
         je::gui::launch(_AskCreateOrLoadProject:<FT, ArgTs>, (form, args));
 
         je::universe::current()->editor::wait();

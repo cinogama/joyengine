@@ -26,7 +26,16 @@ WO_API wo_api wojeapi_filesys_path_next(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_filesys_is_dir(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_bool(vm, fs::is_directory(wo_string(args + 0)));
+    std::error_code ec;
+    if (fs::exists(wo_string(args + 0), ec))
+        return wo_ret_bool(vm, fs::is_directory(wo_string(args + 0), ec));
+    return wo_ret_bool(vm, false);
+}
+
+WO_API wo_api wojeapi_filesys_exist(wo_vm vm, wo_value args, size_t argc)
+{
+    std::error_code ec;
+    return wo_ret_bool(vm, fs::exists(wo_string(args + 0), ec));
 }
 
 WO_API wo_api wojeapi_filesys_open_file_by_browser(wo_vm vm, wo_value args, size_t argc)
@@ -35,15 +44,52 @@ WO_API wo_api wojeapi_filesys_open_file_by_browser(wo_vm vm, wo_value args, size
     return wo_ret_void(vm);
 }
 
-
 WO_API wo_api wojeapi_filesys_path_parent(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_string(vm, fs::path(wo_string(args + 0)).parent_path().string().c_str());
 }
 
+WO_API wo_api wojeapi_filesys_file_readall(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* file = jeecs_file_open(wo_string(args + 0));
+    if (file)
+    {
+        char* buf = (char*)je_mem_alloc(file->m_file_length + 1);
+        jeecs_file_read(buf, sizeof(char), file->m_file_length, file);
+        buf[file->m_file_length] = 0;
+
+        jeecs_file_close(file);
+        return wo_ret_option_string(vm, jeecs::basic::make_cpp_string(buf).c_str());
+    }
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_filesys_file_writeall(wo_vm vm, wo_value args, size_t argc)
+{
+    FILE* f = fopen(wo_string(args + 0), "w");
+    if (f)
+    {
+        wo_string_t str = wo_string(args + 1);
+        fwrite(str, sizeof(char), strlen(str), f);
+
+        fclose(f);
+        return wo_ret_bool(vm, true);
+    }
+    return wo_ret_bool(vm, false);
+}
+
 const char* jeecs_filesys_woolang_api_path = "je/filesys.wo";
 const char* jeecs_filesys_woolang_api_src = R"(
 import woo.std;
+
+namespace je::file
+{
+    extern("libjoyecs", "wojeapi_filesys_file_readall")
+    func readall(path: string)=> option<string>;
+
+    extern("libjoyecs", "wojeapi_filesys_file_writeall")
+    func writeall(path: string, data: string)=> bool;
+}
 
 namespace je::filesys
 {
@@ -73,7 +119,10 @@ namespace je::filesys
             func _next(self: path, ref out_path: string)=> bool;
 
             let result = _next(self, ref out_path);
-            out_path = out_path->replace("\\", "/");
+
+            if (result)
+                out_path = out_path->replace("\\", "/");
+
             return result;
         }
     }
@@ -99,6 +148,9 @@ namespace je::filesys
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
     func isdir(_path: string)=> bool;
+
+    extern("libjoyecs", "wojeapi_filesys_exist")
+    func exist(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_open_file_by_browser")
     func open(_path: string)=> void;
