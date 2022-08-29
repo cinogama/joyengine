@@ -120,7 +120,37 @@ namespace editor::Project
             }
             else if (state == CreateOrLoadProjectState::OpenProject)
             {
-                panic("TODO");
+                Text("请选择项目文件所在的目录：");
+
+                BeginChild("SelectPathToCreateProject", 0., 300.);
+                    let select_path_to_create = _ListAndSelectPathToCreateProject();
+                EndChild();
+
+                if (Button("确认", cur_width, 0.))
+                {
+                    match (select_path_to_create)
+                    {
+                    none?
+                        launch(MsgBox, ("打开项目失败", "请选择项目文件所在的目录"));
+                    value(create_proj_in)?
+                        {
+                            let projname = je::filesys::filename(create_proj_in);
+                            let proj_dat = je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
+                                ->map(\json: string = json: map<string, dynamic>;);
+
+                            match (proj_dat)
+                            {
+                            value(dat)?
+                                panic("TODO;");
+                            none?
+                                launch(MsgBox, ("打开项目失败", F"无法读取项目文件：'{create_proj_in}/{projname}.jeproj4'"));
+                            }
+
+                        }
+                    }// end of match select_path_to_create
+                }
+                if (Button("取消", cur_width, 0.))
+                    state = CreateOrLoadProjectState::OpenOrCreate;
             }
             else if (state == CreateOrLoadProjectState::CreateProject)
             {
@@ -147,7 +177,7 @@ namespace editor::Project
                         value(create_proj_in)?
                             {
                                 // 移除默认的项目，创建新的项目上下文
-                                match(CreateProject(project_name, create_proj_in))
+                                match(CreateProject(project_name->trim(), create_proj_in))
                                 {
                                     err(msg)?
                                         launch(MsgBox, ("创建项目失败", msg));
