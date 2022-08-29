@@ -23,13 +23,16 @@ namespace editor::OpenFile
 		value(action)?
 			action(file);
 		none?
-			// launch(MsgBox, ("打开文件失败", F"无法打开未知类型({file.externname})的文件")); 
+			// je::filesys::open本质上是一个system("...")函数
+			// 后续考虑一下是否要求所有文件必须提前注册打开方法，
+			// 否则 launch(MsgBox, ("打开文件失败", F"无法打开未知类型({file.externname})的文件")); 
 			je::filesys::open(file.path);
 		}
 	}
 
 	func open(file: Browser::PathInfo)
 	{
-		std::thread(_open_impl, file);
+		// 单独起一个线程来处理文件打开事务
+		std::thread(_open_impl, (file,));
 	}
 }
