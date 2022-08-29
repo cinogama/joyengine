@@ -156,6 +156,8 @@ namespace editor::Project
             return result::err(msg);
         }
 
+        // ok 创建完成，销毁之前的项目上下文
+        RemoveCurrentProject();
         return result::ok(SetCurrentProject(created_project));
     }
 
@@ -173,7 +175,7 @@ namespace editor::Project
         }
     }
 
-    func SaveProject(self: Project)=>result<typeof(nil), string>
+    func SaveProject(self: Project)=>result<map<string, dynamic>, string>
     {
         match(self.path)
         {
@@ -186,21 +188,27 @@ namespace editor::Project
                     ->forall(\data: option<map<string, dynamic>> = data->has();)
                     ->trans(\data: option<map<string, dynamic>> = data->val(););
 
-            std::println(worlds_dumped_data);
-
             // 1. 检查所有世界是否已经有路径信息，如果没有则说明有新建的世界没有保存过，要求保存
+            let worlds = []: array<string>;
             for (let world_data : worlds_dumped_data)
             {
                 if (world_data["path"] is typeof(nil))
                 {
-                    std::panic("TODO: 弹出要求保存世界和选择路径的框，如果保存失败则返回错误：仍有未保存的世界");
-                     return result::err(F"存在尚未保存的世界: {world_data["name"]}");
+                    // TODO:
+                    return result::err(F"存在尚未保存的世界: {world_data["name"]}");
                 }
+                worlds->add(world_data["path"] as string);
             }
 
-            // TODO;
-            std::panic("TODO");
-            return result::ok(nil);
+            let project_dat = {
+                // 这仨字段必须存在，其他的都是可选的，之后再说
+                {"name", self.name: dynamic},
+                {"path", path: dynamic},
+                {"worlds", worlds: dynamic},
+                // {"graphic_system", TODO},
+                // {"editor_system", TODO},
+            };
+            return result::ok(project_dat);
         }
         none?
             // 没有保存路径，直接抛点东西让外边处理

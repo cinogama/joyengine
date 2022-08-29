@@ -147,20 +147,25 @@ namespace editor::Project
                         value(create_proj_in)?
                             {
                                 // 移除默认的项目，创建新的项目上下文
-                                let proj = CreateProject(project_name, create_proj_in);
-                                panic("TODO");
+                                match(CreateProject(project_name, create_proj_in))
+                                {
+                                    err(msg)?
+                                        launch(MsgBox, ("创建项目失败", msg));
+                                    ok(proj)?
+                                    {
+                                        // 在这个项目里创建一个默认的世界，并且渲染这个世界
+                                        let default_world = proj->CreateWorld().instance;
+                                        default_world->editor::name("Root");
+                                        default_world->add_system(proj.graphic_system);
+                                        default_world->add_system(proj.editor_system);
+                                        default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
 
-                                // 在这个项目里创建一个默认的世界，并且渲染这个世界
-                                let default_world = proj->CreateWorld().instance;
-                                default_world->editor::name("Root");
-                                default_world->add_system(proj.graphic_system);
-                                default_world->add_system(proj.editor_system);
-                                default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
-
-                                // 关闭窗口，打开主菜单开始编辑
-                                close_form = true;
+                                        // 关闭窗口，打开主菜单开始编辑
+                                        close_form = true;
+                                    }
+                                } // end of match CreateProject
                             }
-                        }
+                        }// end of match select_path_to_create
                     }
                 }
                 if (Button("取消", cur_width, 0.))
