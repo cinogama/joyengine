@@ -130,7 +130,7 @@ namespace editor::Project
                 InputText("项目名称", ref project_name);
                 
                 BeginChild("SelectPathToCreateProject", 0., 300.);
-                    _ListAndSelectPathToCreateProject();
+                    let select_path_to_create = _ListAndSelectPathToCreateProject();
                 EndChild();
 
                 if (Button("开始项目！", cur_width, 0.))
@@ -140,20 +140,27 @@ namespace editor::Project
                         launch(MsgBox, ("创建项目失败", "项目名不可以为空，请输入项目名"));
                     else
                     {
-                        // 移除默认的项目，创建新的项目上下文
-                        RemoveCurrentProject();
-                        let proj = CreateProject(project_name, "TODO");
-                        panic("TODO");
+                        match (select_path_to_create)
+                        {
+                        none?
+                            launch(MsgBox, ("创建项目失败", "请选择创建项目的路径"));
+                        value(create_proj_in)?
+                            {
+                                // 移除默认的项目，创建新的项目上下文
+                                let proj = CreateProject(project_name, create_proj_in);
+                                panic("TODO");
 
-                        // 在这个项目里创建一个默认的世界，并且渲染这个世界
-                        let default_world = proj->CreateWorld().instance;
-                        default_world->editor::name("Root");
-                        default_world->add_system(proj.graphic_system);
-                        default_world->add_system(proj.editor_system);
-                        default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
+                                // 在这个项目里创建一个默认的世界，并且渲染这个世界
+                                let default_world = proj->CreateWorld().instance;
+                                default_world->editor::name("Root");
+                                default_world->add_system(proj.graphic_system);
+                                default_world->add_system(proj.editor_system);
+                                default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
 
-                        // 关闭窗口，打开主菜单开始编辑
-                        close_form = true;
+                                // 关闭窗口，打开主菜单开始编辑
+                                close_form = true;
+                            }
+                        }
                     }
                 }
                 if (Button("取消", cur_width, 0.))

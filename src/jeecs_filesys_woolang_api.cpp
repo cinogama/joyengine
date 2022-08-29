@@ -32,6 +32,12 @@ WO_API wo_api wojeapi_filesys_is_dir(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, false);
 }
 
+WO_API wo_api wojeapi_filesys_mkdir(wo_vm vm, wo_value args, size_t argc)
+{
+    std::error_code ec;
+    return wo_ret_bool(vm, fs::create_directories(wo_string(args + 0), ec));
+}
+
 WO_API wo_api wojeapi_filesys_exist(wo_vm vm, wo_value args, size_t argc)
 {
     std::error_code ec;
@@ -148,6 +154,9 @@ namespace je::filesys
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
     func isdir(_path: string)=> bool;
+
+    extern("libjoyecs", "wojeapi_filesys_mkdir")
+    func mkdir(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_exist")
     func exist(_path: string)=> bool;
