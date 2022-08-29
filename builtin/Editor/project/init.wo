@@ -148,8 +148,8 @@ namespace editor::Project
                         // 在这个项目里创建一个默认的世界，并且渲染这个世界
                         let default_world = proj->CreateWorld().instance;
                         default_world->editor::name("Root");
-                        default_world->add_system(proj.config.graphic_system);
-                        default_world->add_system(proj.config.editor_system);
+                        default_world->add_system(proj.graphic_system);
+                        default_world->add_system(proj.editor_system);
                         default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
 
                         // 关闭窗口，打开主菜单开始编辑
@@ -183,7 +183,7 @@ namespace editor::Project
         // 2. 创建默认的世界，用于支持启动编辑器的一些gui活动
         let default_world = proj->CreateWorld().instance;
         default_world->editor::name("Default");
-        default_world->add_system(proj.config.graphic_system);
+        default_world->add_system(proj.graphic_system);
     }
 
     func Start<FT, ArgTs>(form: FT, args: ArgTs)

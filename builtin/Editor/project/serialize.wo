@@ -74,6 +74,8 @@ namespace editor::Serialize
 
         return option::value({
             {"name", w->editor::name(): dynamic},
+            // 不是所有world都有path值，如果没有说明这个world不是从文件中载入的，塞一个nil进去意思一下
+            {"path", world.path->has() ? world.path->val(): dynamic | nil: dynamic},
             {"entities", entities_json_list: dynamic},
             {"edit_systems", editing_systems_type_list: dynamic},
             {"runtime_systems", runtime_systems_type_list: dynamic},

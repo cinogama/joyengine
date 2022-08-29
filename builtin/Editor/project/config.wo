@@ -1,10 +1,15 @@
 import woo.std;
 import je;
 
+import serialize;
+
 namespace editor
 {
     using Project = struct {
-        config : Project::Config,
+        name : string,          // 项目名称
+        path : option<string>,  // 项目文件的路径，默认项目没有这个值
+        graphic_system : je::typeinfo,    // 默认使用的图形系统类型
+        editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
         worlds : array<Project::World>,
     };
 }
@@ -16,14 +21,6 @@ namespace editor::Project
         path : option<string>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
         instance : je::world,  // 世界实例
         runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
-    };
-
-    // 用于储存项目的配置信息
-    using Config = struct {
-        name : string,                    // 项目的名称
-        path : option<string>,            // 
-        graphic_system : je::typeinfo,    // 默认使用的图形系统类型
-        editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
     };
 
     // 在当前项目中创建一个世界，世界会被保存进项目的世界列表中
@@ -112,7 +109,7 @@ namespace editor::Project
         assert(_current_project->has());
 
         let proj = _current_project->val();
-        je::loginfo(F"关闭当前项目: {proj.config.name}");
+        je::loginfo(F"关闭当前项目: {proj.name}");
         for (let w : proj.worlds)
         {
             je::loginfo(F"关闭项目中所属的世界：{w.instance->editor::name()}");
@@ -125,13 +122,11 @@ namespace editor::Project
     private func CreateDefaultProject()
     {
         return SetCurrentProject(Project{
-            config = Config {
-                name = "Default project",
-                path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
-                // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
-                graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
-                editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
-            },
+            name = "Default project",
+            path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
+            // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
+            graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
+            editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
             worlds = [],
         });
     }
@@ -139,13 +134,10 @@ namespace editor::Project
     func CreateProject(name: string, path: string)=> Project
     {
         return SetCurrentProject(Project{
-            config = Config {
-                name = name,
-                path = option::value(path), // 默认项目不带有path信息，这种项目是不可以被用于保存的
-                // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
-                graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
-                editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
-            },
+            name = name,
+            path = option::value(path),
+            graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
+            editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
             worlds = [],
         });
     }
@@ -166,10 +158,29 @@ namespace editor::Project
 
     func SaveProject(self: Project)=>result<typeof(nil), string>
     {
-        match(self.config.path)
+        match(self.path)
         {
         value(path)?
         {
+            using Serialize;
+            let worlds_dumped_data = 
+                self.worlds
+                    ->trans(\w: World = save_project_world(w);)
+                    ->forall(\data: option<map<string, dynamic>> = data->has();)
+                    ->trans(\data: option<map<string, dynamic>> = data->val(););
+
+            std::println(worlds_dumped_data);
+
+            // 1. 检查所有世界是否已经有路径信息，如果没有则说明有新建的世界没有保存过，要求保存
+            for (let world_data : worlds_dumped_data)
+            {
+                if (world_data["path"] is typeof(nil))
+                {
+                    std::panic("TODO: 弹出要求保存世界和选择路径的框，如果保存失败则返回错误：仍有未保存的世界");
+                     return result::err(F"存在尚未保存的世界: {world_data["name"]}");
+                }
+            }
+
             // TODO;
             std::panic("TODO");
             return result::ok(nil);
