@@ -88,7 +88,6 @@ namespace editor::Project
 
     func FindWorld(self: Project, world: je::world)=> option<World>
     {
-        je::log(self.worlds);
         for (let project_world : self.worlds)
             if (project_world.instance == world)
                 return option::value(project_world);

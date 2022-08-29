@@ -32,8 +32,8 @@ namespace editor::WorldCreator
         context.not_append_types = [];
     
         for (let comp : comps)
-            // 不显示所有编辑器系统
-            if (!comp->name()->beginwith("Editor::"))
+            // 不显示所有编辑器/图形系统
+            if (!comp->name()->beginwith("Editor::") && !comp->name()->beginwith("Graphic::"))
                 if (comp->name()->beginwith("Translation::"))
                     // 默认添加Translation相关系统
                     context.has_active_types->add(comp);
@@ -53,18 +53,19 @@ namespace editor::WorldCreator
             not_append_types = je::typeinfo::editor::get_all_systems_types(),
         };
 
-        let comps = context.not_append_types;
+        let all_systems = context.not_append_types;
         context.not_append_types = [];
     
-        for (let comp : comps)
-            // 不显示所有编辑器系统
-            if (!comp->name()->beginwith("Editor::"))
-                if (comp->name()->beginwith("Translation::"))
-                    context.not_append_types->add(comp);
+        for (let sys : all_systems)
+            // 不显示所有编辑器/图形系统
+            if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
+                if (sys->name()->beginwith("Translation::"))
+                    context.not_append_types->add(sys);
 
         // 处理一下已经创建/添加的系统
         for (let actived_sys : world->editor::get_systems_types())
-            active_systems(context, actived_sys->name());
+            if (!actived_sys->name()->beginwith("Editor::") && !actived_sys->name()->beginwith("Graphic::"))
+                active_systems(context, actived_sys->name());
 
         match(Project::GetCurrentProject()->FindWorld(world))
         {
@@ -273,7 +274,8 @@ namespace editor::WorldCreator
 
                         // 系统被移除
                         active_systems
-                            ->forall(\t: je::typeinfo=context.has_active_types->find(t) == -1;)
+                            ->forall(\t: je::typeinfo = context.not_append_types->find(t) != -1 
+                                                     || context.has_append_types->find(t) != -1;)
                             ->trans(\t: je::typeinfo=world->editor::remove_system(t););
                         world->editor::name(context.name);
                     }
