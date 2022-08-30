@@ -4,6 +4,7 @@ import je.gui;
 import config;
 
 import builtin.Editor.generic.form.msgbox;
+import history;
 
 using std;
 using je::gui;
@@ -136,12 +137,16 @@ namespace editor::Project
                         {
                             let projname = je::filesys::filename(create_proj_in);
                             let proj_dat = je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
-                                ->map(\json: string = json: map<string, dynamic>;);
+                                ->map(\json: string = json->tomap(););
 
                             match (proj_dat)
                             {
                             value(dat)?
+                            {
+                                // 更新一下项目历史
+                                // update_project_history(proj.path);
                                 panic("TODO;");
+                            }
                             none?
                                 launch(MsgBox, ("打开项目失败", F"无法读取项目文件：'{create_proj_in}/{projname}.jeproj4'"));
                             }
@@ -189,6 +194,9 @@ namespace editor::Project
                                         default_world->add_system(proj.graphic_system);
                                         default_world->add_system(proj.editor_system);
                                         default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
+
+                                        // 更新一下项目历史
+                                        update_project_history(proj.path->val());
 
                                         // 关闭窗口，打开主菜单开始编辑
                                         close_form = true;

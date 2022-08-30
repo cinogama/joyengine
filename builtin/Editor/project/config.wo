@@ -133,9 +133,10 @@ namespace editor::Project
 
     func CreateProject(name: string, path: string)=> result<Project, string>
     {
+        let proj_path = F"{path}/{name}";
         let created_project = Project{
             name = name,
-            path = option::value(path),
+            path = option::value(proj_path),
             graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
             editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
             worlds = [],
@@ -143,14 +144,14 @@ namespace editor::Project
 
         assert(je::filesys::isdir(path));
         // 1. 创建项目目录，把所需的文件拷贝进去
-        if (!je::filesys::mkdir(F"{path}/{name}"))
+        if (!je::filesys::mkdir(proj_path))
             return result::err("创建项目目录失败");
 
         // 2. 写入项目数据文件
         match (created_project->SaveProject())
         {
         ok(projdat)?
-            if (!je::file::writeall(F"{path}/{name}/{name}.jeproj4", projdat: string))
+            if (!je::file::writeall(F"{proj_path}/{name}.jeproj4", projdat: string))
                 return result::err("项目工程文件创建失败");
         err(msg)?
             return result::err(msg);
