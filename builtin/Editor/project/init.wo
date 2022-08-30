@@ -23,12 +23,13 @@ namespace editor::Project
     {
         // TODO: 这里先只考虑Windows的情况，unix系统那套先不管
         //       而且只考虑A-Z的盘符，什么AA AB AC，就算windows未来支持也给爷滚
-        let arr = []: array<int>;
-        for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1)
+        let arr = []: array<char>;
+        for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1: char)
             arr->add(ch);
 
-        return arr->trans(\ch: int = string::ascii([ch]) + ":/";)
-           ->forall(\path: string = je::filesys::isdir(path););
+        return arr
+            ->trans(\ch: char = [ch]->str + ":/";)
+            ->forall(\path: string = je::filesys::isdir(path););
     }
 
     using Path = struct {
@@ -71,7 +72,7 @@ namespace editor::Project
                     ->map(\p: string = p == path.path;, \ = false;)
                     ->\b: bool = 
                         b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
-                            | TreeNodeAttribute::ImGuiTreeNodeFlags_None;());
+                            | TreeNodeAttribute::ImGuiTreeNodeFlags_None;);
 
         if (IsItemClicked() && !IsItemToggledOpen())
             selected_path = option::value(path.path);
