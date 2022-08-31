@@ -15,11 +15,12 @@ namespace editor::Project
 	func get_project_histroy()=> array<string>
 	{
 		return 
-			readall(HISTORY_FILE)
-				->map(\str: string = str->toarray()
-					->map(\arr: array = arr
-						->trans(\d: dynamic = d as string;););)
-				->reduce()	// to_array的结果是option<array>，这里要压平一下
+			HISTORY_FILE
+				->readall()
+				->map(\str: string = str->toarray();)
+				->reduce()	// toarray的结果是option<array>，这里要压平一下
+				->map(\arr: array = arr
+					->trans(\d: dynamic = d as string;);)			
 				->valor([]);
 	}
 
@@ -27,12 +28,10 @@ namespace editor::Project
 	func update_project_history(proj_path: string)
 	{
 		let historys = get_project_histroy();
-		let idx = historys->find(proj_path);
 
-		if (idx != -1)
-			historys->remove(idx);
-
+		historys->remove(historys->find(proj_path));
 		historys->insert(0, proj_path);
+
 		writeall(HISTORY_FILE, historys: string);
 	}
 }
