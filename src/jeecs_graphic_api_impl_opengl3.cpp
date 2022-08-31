@@ -31,6 +31,8 @@ void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
 {
     WINDOWS_SIZE_WIDTH = (size_t)x;
     WINDOWS_SIZE_HEIGHT = (size_t)y;
+
+    je_io_set_windowsize(x, y);
 }
 
 void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
@@ -96,6 +98,9 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
 
     WINDOWS_SIZE_WIDTH = config->m_windows_width ? config->m_windows_width : config->m_resolution_x;
     WINDOWS_SIZE_HEIGHT = config->m_windows_height ? config->m_windows_height : config->m_resolution_y;
+
+    je_io_set_windowsize(WINDOWS_SIZE_WIDTH, WINDOWS_SIZE_HEIGHT);
+
     WINDOWS_TITLE = config->m_title ? config->m_title : WINDOWS_TITLE;
 
     WINDOWS_HANDLE = glfwCreateWindow((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT, WINDOWS_TITLE,
@@ -142,6 +147,10 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 
     if (je_io_should_lock_mouse())
         glfwSetCursorPos(WINDOWS_HANDLE, round(WINDOWS_SIZE_WIDTH / 2.0f), round(WINDOWS_SIZE_HEIGHT / 2.0f));
+
+    int window_width, window_height;
+    if (je_io_should_update_windowsize(&window_width, &window_height))
+        glfwSetWindowSize(WINDOWS_HANDLE, window_width, window_height);
 
     if (glfwWindowShouldClose(WINDOWS_HANDLE))
     {

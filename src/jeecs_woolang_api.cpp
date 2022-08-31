@@ -402,6 +402,23 @@ WO_API wo_api wojeapi_input_keydown(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, jeecs::input::keydown((jeecs::input::keycode)wo_int(args + 0)));
 }
 
+WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
+{
+    auto winsz = jeecs::input::windowsize();
+    wo_set_int(args + 0, (wo_int_t)winsz.x);
+    wo_set_int(args + 1, (wo_int_t)winsz.y);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t argc)
+{
+    je_io_update_windowsize(wo_int(args + 0), wo_int(args + 1));
+    auto winsz = jeecs::input::windowsize();
+    wo_set_int(args + 0, (wo_int_t)winsz.x);
+    wo_set_int(args + 1, (wo_int_t)winsz.y);
+    return wo_ret_void(vm);
+}
+
 // ECS OTHER
 WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1059,6 +1076,25 @@ namespace je
     {
         extern("libjoyecs", "wojeapi_input_keydown")
         func keydown(kcode: keycode)=> bool;
+
+        func windowsize(x: int, y: int)
+        {
+            extern("libjoyecs", "wojeapi_input_update_window_size")
+            func _windowsize(width: int, height: int)=> void;
+
+            _windowsize(x, y);
+        }  
+
+        func windowsize()
+        {
+            extern("libjoyecs", "wojeapi_input_window_size")
+            func _windowsize(ref width: int, ref height: int)=> void;
+
+            let mut x = 0, mut y = 0;
+            _windowsize(ref x, ref y);
+    
+            return (x, y);
+        }
     }
 
     extern("libjoyecs", "wojeapi_exit")

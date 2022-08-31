@@ -185,7 +185,7 @@ func display_icon_in_console()
     func display_text(f: font, msg: string)
     {
         let chtex = f->load_string(msg);
-        let (width, height) = chtex->size();
+        let (width, height) = chtex->size;
 
         let mut display_bar = "-";
         for (let mut x = 0; x < width; x += 1)
@@ -196,7 +196,7 @@ func display_icon_in_console()
         {
             let mut out_line = "";
             for (let mut x = 0; x < width; x += 1)
-                out_line += chtex->pix(x, y)->color()[3] <= 0.175 ? "  " | "■";
+                out_line += chtex->pix(x, y)->color[3] <= 0.175 ? "  " | "■";
 
             je::log(F"{out_line}|");
         }

@@ -8,7 +8,7 @@ import builtin.Editor.generic.form.msgbox;
 
 namespace editor::EntityCreator
 {
-    private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png")->val();
+    private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png")->val;
     using EntityContext = struct {
         name  : string,
         edit_entity      : option<je::entity>,
@@ -19,7 +19,7 @@ namespace editor::EntityCreator
     func edit_context(entity: je::entity)=> EntityContext
     {
         let context = EntityContext{
-            name = entity->editor::name(),
+            name = entity->editor::name,
             edit_entity = option::value(entity),
             has_append_types = [],
             not_append_types = je::typeinfo::editor::get_all_components_types(),
@@ -36,8 +36,8 @@ namespace editor::EntityCreator
         // 把当前已有的组件处理一下
         let all_comps = context.not_append_types->dup();
         for (let comp : all_comps)
-            if (entity->editor::get_component(comp)->has())
-                add_components(context, comp->name());
+            if (entity->editor::get_component(comp)->has)
+                add_components(context, comp->name);
 
         return context;
     }
@@ -56,7 +56,7 @@ namespace editor::EntityCreator
 
         // 不显示所有编辑器组件
         for (let comp : comps)
-            if (!comp->name()->beginwith("Editor::"))
+            if (!comp->name->beginwith("Editor::"))
                 context.not_append_types->add(comp);
 
         return context;
@@ -167,10 +167,10 @@ namespace editor::EntityCreator
 
         if (BeginMenuBar())
         {
-            let menu_button_text = context.edit_entity->has()?"应用"|"创建";
+            let menu_button_text = context.edit_entity->has ? "应用" | "创建";
 
             if (MenuItem(menu_button_text, context.name != "" 
-                            && !context.has_append_types->empty()))
+                            && !context.has_append_types->empty))
             {
                 // TODO: 实例化实体，至少要有一个组件
                 create_entity = true;
@@ -247,8 +247,7 @@ namespace editor::EntityCreator
         using je::gui;
 
         let mut open = true;
-        Begin(context.edit_entity->has() 
-            ? F"编辑实体{context.edit_entity->val()->editor::name()}##{JobID()}"
+        Begin(context.edit_entity->has ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
             | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
    
             if (menu_bar(context))
@@ -261,10 +260,10 @@ namespace editor::EntityCreator
 
                     // 0. 获取准备新增的组件
                     let add_components = context.has_append_types->forall(
-                            \type: je::typeinfo = !e->editor::get_component(type)->has(););
+                            \type: je::typeinfo = !e->editor::get_component(type)->has;);
                     // 1. 获取即将移除的组件
                     let removing_components = context.not_append_types->forall(
-                            \type: je::typeinfo = e->editor::get_component(type)->has(););
+                            \type: je::typeinfo = e->editor::get_component(type)->has;);
 
                     add_components->trans(\t: je::typeinfo = e->editor::add_component(t););
                     removing_components->trans(\t: je::typeinfo = e->editor::remove_component(t););

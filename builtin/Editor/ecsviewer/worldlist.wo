@@ -14,7 +14,7 @@ namespace editor::WorldList
 {
     func SwitchEditingWorld(aim_world: je::world)
     {
-        static let const editor_system_type = je::typeinfo("Editor::DefaultEditorSystem")->val();
+        static let const editor_system_type = je::typeinfo("Editor::DefaultEditorSystem")->val;
         je::world::rend()->map(\old: je::world = old->editor::remove_system(editor_system_type););
 
         aim_world->rend();
@@ -43,10 +43,10 @@ namespace editor::WorldList
             menu();
             if (BeginListBox("##", 200.0, 400.0))
             {
-                let worlds = je::universe::current()->editor::worlds_list();
+                let worlds = je::universe::current()->editor::worlds_list;
                 for (let world : worlds)
                 {
-                    if (Selectable(world->editor::name() + "##" + world: string, 
+                    if (Selectable(world->editor::name + "##" + world: string, 
                             je::world::rend()->map(\rw:je::world = rw == world;)
                                              ->valor(false)))
                     {
@@ -55,11 +55,11 @@ namespace editor::WorldList
                             value(rend_world)?
                                 if (rend_world != world)
                                     launch(generic::AskBox, ("切换渲染世界",
-                                                F"即将切换到{world->editor::name()}，是否继续？",
+                                                F"即将切换到{world->editor::name}，是否继续？",
                                                 \=SwitchEditingWorld(world);));
                             none?
                                 launch(generic::AskBox, ("切换渲染世界",
-                                            F"即将切换到{world->editor::name()}，是否继续？",
+                                            F"即将切换到{world->editor::name}，是否继续？",
                                             \=SwitchEditingWorld(world);));
                         }
                     }
@@ -79,11 +79,11 @@ namespace editor::WorldList
         using je::gui;
         if (BeginPopupContextItem())
         {
-            MenuItem(F"世界 {world->editor::name()}", false);
+            MenuItem(F"世界 {world->editor::name}", false);
             Separator();
-            if (MenuItem(F"删除 {world->editor::name()}"))
+            if (MenuItem(F"删除 {world->editor::name}"))
             {
-                if (je::world::rend()->val() == world)
+                if (je::world::rend()->val == world)
                     // 不允许删除渲染中的世界
                     launch(generic::MsgBox, ("删除世界失败",
                                             "不能删除正在渲染的世界"));
@@ -91,17 +91,17 @@ namespace editor::WorldList
                 {
                     let delete_world_form = 
                         \ = generic::AskBox("确认删除世界",
-                                F"确定要删除世界{world->editor::name()}吗？未保存的世界将永久丢失！",
+                                F"确定要删除世界{world->editor::name}吗？未保存的世界将永久丢失！",
                                 func(){
                                     EntityList::set_current_entity(option::none);
-                                    world->close();
+                                    world->close;
                                 });;
                     let save_world_form = 
                         \ saving_path: string = generic::AskBox("确认关闭世界",
-                                F"确定要关闭世界{world->editor::name()}吗？世界将被保存到默认路径！",
+                                F"确定要关闭世界{world->editor::name}吗？世界将被保存到默认路径！",
                                 func(){
                                     EntityList::set_current_entity(option::none);
-                                    world->close();
+                                    world->close;
                                     std::panic("TODO: savine not impl");
                                 });;
                     match(Project::GetCurrentProject()->FindWorld(world))

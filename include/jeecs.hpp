@@ -881,14 +881,19 @@ JE_API jegl_thread* jegl_current_thread();
 
 JE_API void je_io_set_keystate(jeecs::input::keycode keycode, bool keydown);
 JE_API void je_io_set_mousepos(int group, float x, float y);
+JE_API void je_io_set_windowsize(int x, int y);
 JE_API void je_io_set_wheel(float count);
-JE_API void je_io_lock_mouse(bool lock);
 
 JE_API bool je_io_is_keydown(jeecs::input::keycode keycode);
 JE_API void je_io_mouse_pos(int group, float* x, float* y);
+JE_API void je_io_windowsize(int* x, int* y);
 JE_API float je_io_wheel();
+
+JE_API void je_io_lock_mouse(bool lock);
 JE_API bool je_io_should_lock_mouse();
 
+JE_API void je_io_update_windowsize(int x, int y);
+JE_API bool je_io_should_update_windowsize(int* x, int* y);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
@@ -5023,6 +5028,12 @@ namespace jeecs
             float x, y;
             je_io_mouse_pos(group, &x, &y);
             return { x,y };
+        }
+        inline math::vec2 windowsize()
+        {
+            int x, y;
+            je_io_windowsize(&x, &y);
+            return { (float)x,(float)y };
         }
 
         template<typing::typehash_t hash_v1, int v2>

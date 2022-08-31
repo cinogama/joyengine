@@ -47,7 +47,7 @@ namespace editor::Project
     }
     private func _GetChildPaths(path: Path, update: bool)
     {
-        if (update || !path.childs->has())
+        if (update || !path.childs->has)
         {
             let arr = []: array<Path>;
             for (let child_path : je::filesys::path(path.path))
@@ -60,7 +60,7 @@ namespace editor::Project
             path.childs = option::value(arr);            
         }
 
-        return path.childs->val();
+        return path.childs->val;
     }
     private func _ListPath(path: Path, ref selected_path: option<string>)
     {
@@ -95,7 +95,7 @@ namespace editor::Project
 
         selected_path = selected_path
             ->map(\p: string = je::filesys::isdir(p) ? option::value(p) | option::none: option<string>;)
-            ->reduce();
+            ->reduce;
 
         return selected_path;
     }
@@ -137,16 +137,51 @@ namespace editor::Project
                     value(create_proj_in)?
                         {
                             let projname = je::filesys::filename(create_proj_in);
-                            let proj_dat = je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
-                                ->map(\json: string = json->tomap(););
+                            let proj_data = 
+                                je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
+                                    ->map(\json: string = json->tomap;)
+                                    ->reduce;
 
-                            match (proj_dat)
+                            match (proj_data)
                             {
-                            value(dat)?
+                            value(data)?
                             {
-                                // 更新一下项目历史
-                                // update_project_history(proj.path);
-                                panic("TODO;");
+                                match(CreateProject((data["name": dynamic] as string)->trim, 
+                                    data["path": dynamic] as string,
+                                    false))
+                                {
+                                ok(proj)?
+                                {
+                                    // 更新一下项目历史
+                                    update_project_history(data["path": dynamic] as string);
+                                    let runtime_worlds = data["worlds": dynamic] as array<dynamic>;
+
+                                    let window_info = data["window": dynamic] as map<dynamic, dynamic>;
+                                    let window_size = window_info["size": dynamic] as array<dynamic>;
+
+                                    je::input::windowsize(window_size[0]: int, window_size[1]: int);
+
+                                    if (runtime_worlds->empty)
+                                    {
+                                        // 没有正在编辑的世界，给他创建一个
+                                        let default_world = proj->CreateWorld().instance;
+                                        default_world->editor::name("Root");
+                                        default_world->add_system(proj.graphic_system);
+                                        default_world->add_system(proj.editor_system);
+                                        default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val);
+                                    }
+                                    else
+                                    {
+                                        // TODO; 加载每一个世界，感觉还是得把加载这套做在Project里
+                                        panic("TODO;");
+                                    }
+
+                                    // 关闭窗口
+                                    close_form = true;
+                                }
+                                err(msg)?
+                                    launch(MsgBox, ("创建项目失败", msg));
+                                }
                             }
                             none?
                                 launch(MsgBox, ("打开项目失败", F"无法读取项目文件：'{create_proj_in}/{projname}.jeproj4'"));
@@ -171,7 +206,7 @@ namespace editor::Project
 
                 if (Button("开始项目！", cur_width, 0.))
                 {
-                    if (project_name->trim() == "")
+                    if (project_name->trim == "")
                         // 不允许项目名为空
                         launch(MsgBox, ("创建项目失败", "项目名不可以为空，请输入项目名"));
                     else
@@ -183,7 +218,7 @@ namespace editor::Project
                         value(create_proj_in)?
                             {
                                 // 移除默认的项目，创建新的项目上下文
-                                match(CreateProject(project_name->trim(), create_proj_in))
+                                match(CreateProject(project_name->trim, create_proj_in, true))
                                 {
                                     err(msg)?
                                         launch(MsgBox, ("创建项目失败", msg));
@@ -194,10 +229,10 @@ namespace editor::Project
                                         default_world->editor::name("Root");
                                         default_world->add_system(proj.graphic_system);
                                         default_world->add_system(proj.editor_system);
-                                        default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val());
+                                        default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val);
 
                                         // 更新一下项目历史
-                                        update_project_history(proj.path->val());
+                                        update_project_history(proj.path->val);
 
                                         // 关闭窗口，打开主菜单开始编辑
                                         close_form = true;

@@ -32,27 +32,27 @@ namespace editor::Project
         // 父对象，负责带着摄像机运动，同时负责y轴旋转
         let camera_walker = world_instance->add_entity([
             // Transform 族组件
-            je::typeinfo("Transform::LocalPosition")->val(),
-            je::typeinfo("Transform::LocalRotation")->val(),
-            je::typeinfo("Transform::LocalToWorld")->val(),
-            je::typeinfo("Transform::Translation")->val(),
-            je::typeinfo("Transform::ChildAnchor")->val(),
+            je::typeinfo("Transform::LocalPosition")->val,
+            je::typeinfo("Transform::LocalRotation")->val,
+            je::typeinfo("Transform::LocalToWorld")->val,
+            je::typeinfo("Transform::Translation")->val,
+            je::typeinfo("Transform::ChildAnchor")->val,
             // Editor 族组件
-            je::typeinfo("Editor::Invisable")->val(),
-            je::typeinfo("Editor::EditorWalker")->val(),
+            je::typeinfo("Editor::Invisable")->val,
+            je::typeinfo("Editor::EditorWalker")->val,
         ]);
         // 摄像机，同时负责x轴旋转
         let editor_camera = world_instance->add_entity([
             // Transform 族组件
-            je::typeinfo("Transform::LocalRotation")->val(),
-            je::typeinfo("Transform::LocalToParent")->val(),
-            je::typeinfo("Transform::Translation")->val(),
+            je::typeinfo("Transform::LocalRotation")->val,
+            je::typeinfo("Transform::LocalToParent")->val,
+            je::typeinfo("Transform::Translation")->val,
             // Editor 族组件
-            je::typeinfo("Editor::Invisable")->val(),
-            je::typeinfo("Editor::EditorWalker")->val(),
+            je::typeinfo("Editor::Invisable")->val,
+            je::typeinfo("Editor::EditorWalker")->val,
             // Camera 族组件
-            je::typeinfo("Camera::PerspectiveProjection")->val(),
-            je::typeinfo("Camera::Projection")->val(),
+            je::typeinfo("Camera::PerspectiveProjection")->val,
+            je::typeinfo("Camera::Projection")->val,
         ]);
         editor_camera->editor::set_parent(camera_walker);
         camera_walker->editor::name("调试摄像机组");
@@ -61,15 +61,15 @@ namespace editor::Project
         // 移动器，这里只创建根实体，具体的轴由编辑器系统生成
         let entity_mover = world_instance->add_entity([
             // Transform 族组件
-            je::typeinfo("Transform::LocalPosition")->val(),
-            je::typeinfo("Transform::LocalRotation")->val(),
-            je::typeinfo("Transform::LocalScale")->val(),
-            je::typeinfo("Transform::ChildAnchor")->val(),
-            je::typeinfo("Transform::Translation")->val(),
-            je::typeinfo("Transform::LocalToWorld")->val(),
+            je::typeinfo("Transform::LocalPosition")->val,
+            je::typeinfo("Transform::LocalRotation")->val,
+            je::typeinfo("Transform::LocalScale")->val,
+            je::typeinfo("Transform::ChildAnchor")->val,
+            je::typeinfo("Transform::Translation")->val,
+            je::typeinfo("Transform::LocalToWorld")->val,
             // Editor 族组件
-            je::typeinfo("Editor::Invisable")->val(),
-            je::typeinfo("Editor::EntityMoverRoot")->val(),
+            je::typeinfo("Editor::Invisable")->val,
+            je::typeinfo("Editor::EntityMoverRoot")->val,
         ]);
 
         let world = World{
@@ -98,7 +98,7 @@ namespace editor::Project
     func SetCurrentProject(self: Project)
     {
         // 不可以重复设置当前项目，设置前应当清除旧的项目
-        assert(false == _current_project->has());
+        assert(false == _current_project->has);
 
         _current_project = option::value(self);
         return self;
@@ -106,14 +106,14 @@ namespace editor::Project
 
     func RemoveCurrentProject()
     {
-        assert(_current_project->has());
+        assert(_current_project->has);
 
-        let proj = _current_project->val();
+        let proj = _current_project->val;
         je::loginfo(F"关闭当前项目: {proj.name}");
         for (let w : proj.worlds)
         {
-            je::loginfo(F"关闭项目中所属的世界：{w.instance->editor::name()}");
-            w.instance->close();
+            je::loginfo(F"关闭项目中所属的世界：{w.instance->editor::name}");
+            w.instance->close;
         }
 
         _current_project = option::none;
@@ -125,38 +125,41 @@ namespace editor::Project
             name = "Default project",
             path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
             // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
-            graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
-            editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
+            graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val,
+            editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
             worlds = [],
         });
     }
 
-    func CreateProject(name: string, path: string)=> result<Project, string>
+    func CreateProject(name: string, path: string, create_file: bool)=> result<Project, string>
     {
         let proj_path = F"{path}/{name}";
         let created_project = Project{
             name = name,
             path = option::value(proj_path),
-            graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val(),
-            editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val(),
+            graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val,
+            editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
             worlds = [],
         };
 
         assert(je::filesys::isdir(path));
-        // 1. 创建项目目录，把所需的文件拷贝进去
-        if (!je::filesys::mkdir(proj_path))
-            return result::err("创建项目目录失败");
 
-        // 2. 写入项目数据文件
-        match (created_project->SaveProject())
+        if (create_file)
         {
-        ok(projdat)?
-            if (!je::file::writeall(F"{proj_path}/{name}.jeproj4", projdat: string))
-                return result::err("项目工程文件创建失败");
-        err(msg)?
-            return result::err(msg);
-        }
+            // 1. 创建项目目录，把所需的文件拷贝进去
+            if (!je::filesys::mkdir(proj_path))
+                return result::err("创建项目目录失败");
 
+            // 2. 写入项目数据文件
+            match (created_project->SaveProject)
+            {
+            ok(projdat)?
+                if (!je::file::writeall(F"{proj_path}/{name}.jeproj4", projdat: string))
+                    return result::err("项目工程文件创建失败");
+            err(msg)?
+                return result::err(msg);
+            }
+        }
         // ok 创建完成，销毁之前的项目上下文
         RemoveCurrentProject();
         return result::ok(SetCurrentProject(created_project));
@@ -186,8 +189,8 @@ namespace editor::Project
             let worlds_dumped_data = 
                 self.worlds
                     ->trans(\w: World = save_project_world(w);)
-                    ->forall(\data: option<map<string, dynamic>> = data->has();)
-                    ->trans(\data: option<map<string, dynamic>> = data->val(););
+                    ->forall(\data: option<map<string, dynamic>> = data->has;)
+                    ->trans(\data: option<map<string, dynamic>> = data->val;);
 
             // 1. 检查所有世界是否已经有路径信息，如果没有则说明有新建的世界没有保存过，要求保存
             let worlds = []: array<string>;
@@ -201,10 +204,17 @@ namespace editor::Project
                 worlds->add(world_data["path"] as string);
             }
 
+            let (win_width, win_height) = je::input::windowsize();
+
+            let window_info = {
+                {"size", [win_width, win_height]}
+            };
+
             let project_dat = {
-                // 这仨字段必须存在，其他的都是可选的，之后再说
+                // 这四个字段必须存在，其他的都是可选的，之后再说
                 {"name", self.name: dynamic},
                 {"path", path: dynamic},
+                {"window", window_info: dynamic},
                 {"worlds", worlds: dynamic},
                 // {"graphic_system", TODO},
                 // {"editor_system", TODO},
