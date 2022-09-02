@@ -56,23 +56,23 @@ namespace editor::Serialize
 
         let w = world.instance;
 
-        let entities_json_list = []: array<entity_info_t>;
-        w->editor::get_all_entities()
-            // 跳过编辑器上的不可见实体
-            ->forall(\e: entity = !e->editor::get_component(INVISABLE)->has;)
-            ->trans(\e: entity = save_entity(e)
-                ->map(\e: entity_info_t = entities_json_list->add(e);););
+        let entities_json_list = 
+            w->editor::get_all_entities()
+                // 跳过编辑器上的不可见实体
+                ->forall(\e: entity = !e->editor::get_component(INVISABLE)->has;)
+                ->trans(\e: entity = save_entity(e);)
+                ->collect(\oe: option<entity_info_t> = oe->has ? [oe->val] | [];);
 
-        let editing_systems_type_list = []: array<string>;
-        for (let system_type : w->editor::get_systems_types())
-            if (!system_type->name()->beginwith("Graphic::") && !system_type->name()->beginwith("Editor::"))
-                editing_systems_type_list->add(system_type->name());
+        let editing_systems_type_list = 
+            w->editor::get_systems_types()
+                ->trans(\st: typeinfo = st->name;)
+                ->forall(\n: string = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
         
-        let runtime_systems_type_list = []: array<string>;
-        for (let system_type : world.runtime_systems)
-            if (!system_type->name()->beginwith("Graphic::") && !system_type->name()->beginwith("Editor::"))
-                runtime_systems_type_list->add(system_type->name());
-
+        let runtime_systems_type_list = 
+            world.runtime_systems
+                ->trans(\st: typeinfo = st->name;)
+                ->forall(\n: string = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
+ 
         return option::value({
             {"name", w->editor::name(): dynamic},
             // 不是所有world都有path值，如果没有说明这个world不是从文件中载入的，塞一个nil进去意思一下
