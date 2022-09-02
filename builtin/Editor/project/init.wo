@@ -4,6 +4,7 @@ import je.gui;
 import config;
 
 import builtin.Editor.generic.form.msgbox;
+import builtin.Editor.generic.form.openfile;
 import history;
 
 using std;

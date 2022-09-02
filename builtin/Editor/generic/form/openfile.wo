@@ -1,0 +1,18 @@
+// OpenFile Dialog
+// 传统意义上的打开文件对话框，但是是用imgui实现的
+// 
+import woo.std;
+import je.gui;
+
+using je::gui;
+
+namespace generic
+{
+	// 从指定的目录作为根目录，只显示符合类型的文件，如果符合类型为空，则只显示目录
+	func OpenFile(root_path: string, accept_type: option<array<string>>)
+	{
+		Begin("打开");
+		TODO;
+		End();
+	}
+}
