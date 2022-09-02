@@ -53,7 +53,8 @@ shortcut::register([je::keycode::L_CTRL, je::keycode::B,], func(){
     if (shown)
         launch(Browser::show, (ref shown,));
 });
-shortcut::register([je::keycode::L_CTRL, je::keycode::A,], \=je::logfatal("TODO: 添加实体菜单尚未实现"););
+shortcut::register([je::keycode::L_CTRL, je::keycode::A,], 
+    \=je::logfatal("TODO: 添加实体菜单尚未实现"););
 shortcut::register([je::keycode::L_CTRL, je::keycode::S,], func(){
     match(Project::GetCurrentProject()->SaveProject())
     {

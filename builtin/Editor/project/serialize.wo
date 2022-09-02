@@ -57,10 +57,11 @@ namespace editor::Serialize
         let w = world.instance;
 
         let entities_json_list = []: array<entity_info_t>;
-        for (let entity : w->editor::get_all_entities())
-            // 跳过含有Editor::Invisable组件的实体
-            if (!entity->editor::get_component(INVISABLE)->has())
-                save_entity(entity)->map(\e: entity_info_t = entities_json_list->add(e););
+        w->editor::get_all_entities()
+            // 跳过编辑器上的不可见实体
+            ->forall(\e: entity = !e->editor::get_component(INVISABLE)->has;)
+            ->trans(\e: entity = save_entity(e)
+                ->map(\e: entity_info_t = entities_json_list->add(e);););
 
         let editing_systems_type_list = []: array<string>;
         for (let system_type : w->editor::get_systems_types())
