@@ -5,7 +5,7 @@ import je.gui;
 
 import builtin.Editor.generic.form.msgbox;
 
-func Editor_ScriptEditor(ref open:bool)
+public func Editor_ScriptEditor(ref open:bool)
 {
     using je::gui;
     if(!open) return FormAction::Close;

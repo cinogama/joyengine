@@ -73,7 +73,7 @@ namespace test::memory_leak::ComponentModify
 		return je::gui::FormAction::Close;
 	}
 
-	func show()
+	public func show()
 	{
 		using je::gui;
 

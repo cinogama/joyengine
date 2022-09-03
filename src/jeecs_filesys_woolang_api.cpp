@@ -99,17 +99,17 @@ import woo.std;
 namespace je::file
 {
     extern("libjoyecs", "wojeapi_filesys_file_readall")
-    func readall(path: string)=> option<string>;
+    public func readall(path: string)=> option<string>;
 
     extern("libjoyecs", "wojeapi_filesys_file_writeall")
-    func writeall(path: string, data: string)=> bool;
+    public func writeall(path: string, data: string)=> bool;
 }
 
 namespace je::filesys
 {
-    using path = gchandle;
+    public using path = gchandle;
 
-    func parent(_path: string)
+    public func parent(_path: string)
     {
         extern("libjoyecs", "wojeapi_filesys_path_parent")
         func _parent_path(_path: string)=> string;
@@ -120,14 +120,14 @@ namespace je::filesys
     namespace path
     {
         extern("libjoyecs", "wojeapi_filesys_path")
-        func create(_path: string)=> path;
+        public func create(_path: string)=> path;
 
-        func iter(self: path)
+        public func iter(self: path)
         {
             return self;
         }
         
-        func next(self: path, ref out_path: string)
+        public func next(self: path, ref out_path: string)
         {
             extern("libjoyecs", "wojeapi_filesys_path_next")
             func _next(self: path, ref out_path: string)=> bool;
@@ -140,8 +140,23 @@ namespace je::filesys
             return result;
         }
     }
+    
+    public func childs(_path: string)=> result<array<string>, string>
+    {
+        using result;
 
-    func filename(mut _path: string)
+        if (isdir(_path))
+        {
+            let result = []: array<string>;
+            for (let child : path(_path))
+                result->add(child);
+
+            return ok(result);
+        }
+        return err(F"{_path} not a valid directory.");
+    }
+
+    public func filename(mut _path: string)
     {
         _path = _path->replace("\\", "/");
         while (_path!= "" && _path->endwith("/"))
@@ -151,7 +166,7 @@ namespace je::filesys
         return _path->sub(find_place + 1);
     }
 
-    func externname(_path: string)
+    public func externname(_path: string)
     {
         let fname = filename(_path);
         let fndplace = fname->rfind(".");
@@ -161,18 +176,18 @@ namespace je::filesys
     }
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
-    func isdir(_path: string)=> bool;
+    public func isdir(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_is_file")
-    func isfile(_path: string)=> bool;
+    public func isfile(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_mkdir")
-    func mkdir(_path: string)=> bool;
+    public func mkdir(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_exist")
-    func exist(_path: string)=> bool;
+    public func exist(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_open_file_by_browser")
-    func open(_path: string)=> void;
+    public func open(_path: string)=> void;
 }
 )";

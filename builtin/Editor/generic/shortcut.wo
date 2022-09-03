@@ -12,7 +12,8 @@ namespace shortcut
 	};
 
 	private let registered_keys = []: array<ShortcutKeyStateAndAction>;
-	func register(hotkeys : array<je::keycode>, action: ()=>void)
+
+	public func register(hotkeys : array<je::keycode>, action: ()=>void)
 	{
 		let hotkey = ShortcutKeyStateAndAction { 
 			keys = hotkeys, 
@@ -23,7 +24,7 @@ namespace shortcut
 		return hotkey;
 	}
 
-	func active(hotkeys : array<je::keycode>)
+	public func active(hotkeys : array<je::keycode>)
 	{
 		func operator == (a: array<je::keycode>, b: array<je::keycode>)
 		{
@@ -42,7 +43,7 @@ namespace shortcut
 		}
 	}
 
-	func update()
+	public func update()
 	{
 		using je;
 		using je::input;

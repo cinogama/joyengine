@@ -14,9 +14,9 @@ using generic;
 
 namespace editor::OpenFile
 {
-	private let registed_open_method = {}: map<string, (Browser::PathInfo)=>void>;
+	let registed_open_method = {}: map<string, (Browser::PathInfo)=>void>;
 
-	private func _open_impl(file: Browser::PathInfo)
+	func _open_impl(file: Browser::PathInfo)
 	{
 		match(registed_open_method->get(file.externname))
 		{
@@ -30,7 +30,7 @@ namespace editor::OpenFile
 		}
 	}
 
-	func open(file: Browser::PathInfo)
+	public func open(file: Browser::PathInfo)
 	{
 		// 单独起一个线程来处理文件打开事务
 		std::thread(_open_impl, (file,));

@@ -215,5 +215,3 @@ func display_icon_in_console()
 
 display_icon_in_console();
 editor::Project::Start(Editor_MainMenuBar, ());
-
-

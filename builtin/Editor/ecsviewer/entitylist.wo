@@ -52,7 +52,7 @@ namespace editor::EntityList
         }
     }
 
-    func show(ref open: bool)
+    public func show(ref open: bool)
     {
         using je::gui;
         if(!open) return FormAction::Close;
@@ -84,12 +84,12 @@ namespace editor::EntityList
         return FormAction::Nothing;
     }
 
-    func set_current_entity(current_entity: option<je::entity>)
+    public func set_current_entity(current_entity: option<je::entity>)
     {
         je::entity::editor::set_editing(current_entity);
     }
 
-    func get_current_entity()
+    public func get_current_entity()
     {
         return je::entity::editor::editing();
     }

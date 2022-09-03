@@ -273,7 +273,7 @@ namespace editor::Project
         default_world->add_system(proj.graphic_system);
     }
 
-    func Start<FT, ArgTs>(form: FT, args: ArgTs)
+    public func Start<FT, ArgTs>(form: FT, args: ArgTs)
         where form(args...) is FormAction;
     {
         Init();

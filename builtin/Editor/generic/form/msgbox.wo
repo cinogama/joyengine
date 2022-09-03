@@ -3,7 +3,7 @@ import je.gui;
 
 namespace generic
 {
-    func MsgBox(title:string, shown:string)
+    public func MsgBox(title:string, shown:string)
     {
         using je::gui;
 

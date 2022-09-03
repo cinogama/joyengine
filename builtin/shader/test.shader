@@ -4,7 +4,7 @@ import je.shader;
 ZTEST   (OFF);
 ZWRITE  (DISABLE);
 
-using VAO_STRUCT vin = struct {
+VAO_STRUCT vin {
     vertex  : float3,
     uv      : float2,
 };
@@ -18,10 +18,12 @@ using fout = struct {
     color: float4
 };
 
-let vert = \v: vin = v2f{ pos = trans(v.vertex), uv = v.uv }
+public let vert = 
+\v: vin = v2f{ pos = trans(v.vertex), uv = v.uv }
     where 
         trans = \v3: float3 = je_mvp *  float4(v3, 1.);;;
 
-let frag = \f: v2f = fout{ color = texture(main_texture, f.uv) }
+public let frag = 
+\f: v2f = fout{ color = texture(main_texture, f.uv) }
     where
         main_texture = uniform:<texture2d>("main_texture");;

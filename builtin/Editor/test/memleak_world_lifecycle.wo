@@ -93,7 +93,7 @@ namespace test::memory_leak::WorldLifecycle
 		return je::gui::FormAction::Close;
 	}
 
-	func show()
+	public func show()
 	{
 		using je::gui;
 

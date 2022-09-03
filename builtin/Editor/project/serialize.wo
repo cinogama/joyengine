@@ -10,7 +10,7 @@ using je;
 
 namespace editor::Serialize
 {
-	func save_entity(saving_entity: entity)=> option<map<string, dynamic>>
+	public func save_entity(saving_entity: entity)=> option<map<string, dynamic>>
 	{	
 		let components_json = {}: map<string, map<string, string>>;
 
@@ -48,7 +48,7 @@ namespace editor::Serialize
         return option::value(entity_json);
 	}
 
-    func save_project_world(world: Project::World)=> option<map<string, dynamic>>
+    public func save_project_world(world: Project::World)=> option<map<string, dynamic>>
     {
         static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
 

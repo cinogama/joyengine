@@ -5,7 +5,7 @@ import serialize;
 
 namespace editor
 {
-    using Project = struct {
+    public using Project = struct {
         name : string,          // 项目名称
         path : option<string>,  // 项目文件的路径，默认项目没有这个值
         graphic_system : je::typeinfo,    // 默认使用的图形系统类型
@@ -17,14 +17,14 @@ namespace editor
 namespace editor::Project
 {
     // 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
-    using World = struct {
+    public using World = struct {
         path : option<string>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
         instance : je::world,  // 世界实例
         runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     };
 
     // 在当前项目中创建一个世界，世界会被保存进项目的世界列表中
-    func CreateWorld(self: Project)
+    public func CreateWorld(self: Project)
     {
         let world_instance = je::universe::current()->create_world();
 
@@ -83,7 +83,7 @@ namespace editor::Project
         return world;
     }
 
-    func FindWorld(self: Project, world: je::world)=> option<World>
+    public func FindWorld(self: Project, world: je::world)=> option<World>
     {
         for (let project_world : self.worlds)
             if (project_world.instance == world)
@@ -95,7 +95,7 @@ namespace editor::Project
 
     private let mut _current_project = option::none : option<Project>;
 
-    func SetCurrentProject(self: Project)
+    public func SetCurrentProject(self: Project)
     {
         // 不可以重复设置当前项目，设置前应当清除旧的项目
         assert(false == _current_project->has);
@@ -131,7 +131,7 @@ namespace editor::Project
         });
     }
 
-    func CreateProject(name: string, path: string, create_file: bool)=> result<Project, string>
+    public func CreateProject(name: string, path: string, create_file: bool)=> result<Project, string>
     {
         let proj_path = F"{path}/{name}";
         let created_project = Project{
@@ -165,7 +165,7 @@ namespace editor::Project
         return result::ok(SetCurrentProject(created_project));
     }
 
-    func GetCurrentProject()=> Project
+    public func GetCurrentProject()=> Project
     {
         match(_current_project)
         {
@@ -179,7 +179,7 @@ namespace editor::Project
         }
     }
 
-    func SaveProject(self: Project)=>result<map<string, dynamic>, string>
+    public func SaveProject(self: Project)=>result<map<string, dynamic>, string>
     {
         match(self.path)
         {

@@ -70,7 +70,7 @@ namespace editor::Browser
         dir(SubPath),
         file,
     }
-    using PathInfo = struct {
+    public using PathInfo = struct {
         path        : string,   // 当前目录/文件的目录
         name        : string,
         externname  : string,
@@ -241,7 +241,7 @@ namespace editor::Browser
         EndChild();
     }
 
-    func show(ref open: bool)
+    public func show(ref open: bool)
     {
         using je::gui;
 

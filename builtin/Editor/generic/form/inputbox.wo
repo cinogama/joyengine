@@ -3,7 +3,7 @@ import je.gui;
 
 namespace generic
 {
-    func InputBox(title:string, shown:string, default_value: string, trigger: (string)=>void)
+    public func InputBox(title:string, shown:string, default_value: string, trigger: (string)=>void)
     {
         using je::gui;
 
@@ -28,7 +28,7 @@ namespace generic
                     open = false;
             End();
 
-            std::break_yield();
+            std::yield();
         }
         return FormAction::Close;
     }

@@ -39,7 +39,7 @@ namespace editor::Inspector::Component
         }
     }
 
-    func show(cur_entity: option<je::entity>, max_height: real)
+    public func show(cur_entity: option<je::entity>, max_height: real)
     {
         using je::gui;
 

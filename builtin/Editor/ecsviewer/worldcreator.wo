@@ -18,7 +18,7 @@ namespace editor::WorldCreator
         not_append_types : array<je::typeinfo>,
     };
 
-    func create_context()=> WorldContext
+    public func create_context()=> WorldContext
     {
         let context = WorldContext{
             name = "New world",
@@ -43,7 +43,7 @@ namespace editor::WorldCreator
         return context;
     }
 
-    func edit_context(world: je::world)=> WorldContext
+    public func edit_context(world: je::world)=> WorldContext
     {
         let context = WorldContext{
             name = world->editor::name(),
@@ -230,7 +230,7 @@ namespace editor::WorldCreator
         return create_world;
     }
 
-    func show(context: WorldContext)
+    public func show(context: WorldContext)
     {
         using je::gui;
 

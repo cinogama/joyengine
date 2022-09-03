@@ -19,7 +19,7 @@ namespace test::memory_leak::GraphicResource
 					ZTEST   (OFF);
 					ZWRITE  (DISABLE);
 
-					using VAO_STRUCT vin = struct {
+					VAO_STRUCT vin {
 						vertex  : float3,
 						uv      : float2,
 					};
@@ -29,7 +29,7 @@ namespace test::memory_leak::GraphicResource
 						uv      : float2,
 					};
 
-					func vert(vdata : vin)
+					public func vert(vdata : vin)
 					{
 						return v2f{
 							pos = je_mvp * float4(float3(0.5, 0.5, 0.5) * vdata.vertex, 1.),
@@ -43,7 +43,7 @@ namespace test::memory_leak::GraphicResource
 
 					let main_texture = uniform:<texture2d>("main_texture");
 
-					func frag(v2f : v2f)
+					public func frag(v2f : v2f)
 					{
 						return fout{
 							color = texture(main_texture, v2f.uv),
@@ -58,7 +58,7 @@ namespace test::memory_leak::GraphicResource
 		return je::gui::FormAction::Close;
 	}
 
-	func show()
+	public func show()
 	{
 		using je::gui;
 

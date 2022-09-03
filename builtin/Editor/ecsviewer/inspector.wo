@@ -11,7 +11,7 @@ import inspector.component;
 
 namespace editor::Inspector
 {
-    func show(ref open: bool)
+    public func show(ref open: bool)
     {
         using je::gui;
         if(!open) return FormAction::Close;

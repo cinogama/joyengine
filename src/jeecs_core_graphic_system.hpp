@@ -60,7 +60,7 @@ namespace jeecs
 // Default shader
 import je.shader;
 
-using VAO_STRUCT vin = struct {
+VAO_STRUCT vin {
     vertex : float3,
 };
 using v2f = struct {
@@ -70,11 +70,13 @@ using fout = struct {
     color : float4
 };
 
-let vert = \v: vin = v2f{ pos = je_mvp * vertex_pos }
-                where vertex_pos = float4(v.vertex, 1.);;
+public let vert = 
+\v: vin = v2f{ pos = je_mvp * vertex_pos }
+    where vertex_pos = float4(v.vertex, 1.);;
 
-let frag = \f: v2f = fout{ color = float4(t, 0, t, 1) }
-                where t = je_time->y();;
+public let frag = 
+\f: v2f = fout{ color = float4(t, 0, t, 1) }
+    where t = je_time->y();;
 
 )");
             default_shaders_list.push_back(default_shader);

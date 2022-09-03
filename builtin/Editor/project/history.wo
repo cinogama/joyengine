@@ -12,7 +12,7 @@ namespace editor::Project
 	let const HISTORY_FILE = F"{exepath()}history.txt";
 
 	// 获取历史记录
-	func get_project_histroy()=> array<string>
+	public func get_project_histroy()=> array<string>
 	{
 		return 
 			HISTORY_FILE
@@ -26,7 +26,7 @@ namespace editor::Project
 	}
 
 	// 更新历史记录
-	func update_project_history(proj_path: string)
+	public func update_project_history(proj_path: string)
 	{
 		let historys = get_project_histroy();
 

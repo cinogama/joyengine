@@ -16,7 +16,7 @@ namespace editor::EntityCreator
         not_append_types : array<je::typeinfo>,
     };
     
-    func edit_context(entity: je::entity)=> EntityContext
+    public func edit_context(entity: je::entity)=> EntityContext
     {
         let context = EntityContext{
             name = entity->editor::name,
@@ -42,7 +42,7 @@ namespace editor::EntityCreator
         return context;
     }
 
-    func create_context()=> EntityContext
+    public func create_context()=> EntityContext
     {
         let context = EntityContext{
             name = "New entity",
@@ -242,7 +242,7 @@ namespace editor::EntityCreator
         return create_entity;
     }
 
-    func show(context: EntityContext)
+    public func show(context: EntityContext)
     {
         using je::gui;
 

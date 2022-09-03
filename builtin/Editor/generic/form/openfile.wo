@@ -8,11 +8,49 @@ using je::gui;
 
 namespace generic
 {
-	// 从指定的目录作为根目录，只显示符合类型的文件，如果符合类型为空，则只显示目录
-	func OpenFile(root_path: string, accept_type: option<array<string>>)
+	using Path = struct	{
+		path: string,
+		child: option<array<Path>>
+	};
+
+	func show_path_trees(context: Path)
+	{	
+		func display_tree_nodes(context: Path)
+		{
+		}
+		// 从指定目录开始展开显示树状图
+		BeginChild("paths");
+
+		EndChild();
+	}
+
+	// 从指定的目录作为根目录，只显示符合类型的文件，如果符合类型为空，则意思是选择打开目录
+	public func OpenFile(root_path: string, type: string,  accept_type: option<array<string>>, action: (string)=>void)
 	{
-		Begin("打开");
-		TODO;
-		End();
+		let context = Path{ path=root_path, child=option::none};
+		while (true)
+		{
+			Begin(F"打开{type}");
+
+			// 显示一下子目录
+			show_path_trees(context);
+
+			match (accept_type)
+			{
+			none?
+			{
+				// 仅显示目录
+			}
+			value(filetypes)?
+			{
+				// 显示指定类型的文件
+			}
+			} // End of match
+			End();
+
+			std::yield();
+		}
+
+		return FormAction::Close;
 	}
 }

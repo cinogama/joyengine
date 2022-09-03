@@ -143,7 +143,7 @@ namespace jeecs
                 static basic::resource<graphic::shader> shad = new graphic::shader("je/debug/drawline.shader", R"(
         import je.shader;
         
-        using VAO_STRUCT vin = struct {
+        VAO_STRUCT vin {
             vertex : float3,
         };
         using v2f = struct {
@@ -153,9 +153,12 @@ namespace jeecs
             color : float4
         };
         
-        let vert = \v: vin = v2f{ pos = je_mvp * vertex_pos }
-                        where vertex_pos = float4(v.vertex, 1.);;
-        let frag = \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
+        public let vert = 
+        \v: vin = v2f{ pos = je_mvp * vertex_pos }
+            where vertex_pos = float4(v.vertex, 1.);;
+
+        public let frag = 
+        \f: v2f = fout{ color = float4(1, 1, 1, 1) };;
         
         )");
 
@@ -248,7 +251,7 @@ namespace jeecs
         
         ZTEST (ALWAYS);
         
-        using VAO_STRUCT vin = struct {
+        VAO_STRUCT vin {
             vertex : float3,
             color  : float3
         };
@@ -260,14 +263,16 @@ namespace jeecs
             color : float4
         };
         
-        let vert = \v: vin = v2f { pos = je_mvp * vertex_pos, 
-                                   color = v.color } 
-                        where vertex_pos = float4(v.vertex, 1.);;
+        public let vert = 
+        \v: vin = v2f { pos = je_mvp * vertex_pos, 
+                        color = v.color } 
+            where vertex_pos = float4(v.vertex, 1.);;
         
-        let frag = \f: v2f = fout{ color = float4(show_color, 1) }
-                        where show_color = lerp(f.color, float3(1., 1., 1.), ratio),
-                                   ratio = step(float(0.5), high_light),
-                              high_light = uniform("high_light", float(0.0));;
+        public let frag = 
+        \f: v2f = fout{ color = float4(show_color, 1) }
+            where show_color = lerp(f.color, float3(1., 1., 1.), ratio),
+                        ratio = step(float(0.5), high_light),
+                    high_light = uniform("high_light", float(0.0));;
         
         )");
                 game_world current_world = mover_entity.game_world();
