@@ -205,11 +205,14 @@ func display_icon_in_console()
     }
 
     font(@"builtin/cino_ipix_12px.ttf"@, 14)
-        ->map(\f: font = display_text(f, "Joy{scale:0.75}{offset:(0.2, -0.1)}4.x{scale:1}\nEngine"););
+        ->map(\f: font = display_text(f, text)
+                where text = "Joy{scale:0.75}{offset:(0.2, -0.1)}4.x{scale:1}\nEngine";);
     je::log("");
     je::log("JoyEngine 4.x (C)Cinogama project. 2022.");
     je::log("Powered by woolang, (C)Cinogama project. 2021-2022.");
 }
+
+/////////////////////
 
 /////////////////////
 

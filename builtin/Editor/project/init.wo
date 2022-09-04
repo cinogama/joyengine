@@ -147,36 +147,13 @@ namespace editor::Project
                             {
                             value(data)?
                             {
-                                match(CreateProject((data["name": dynamic] as string)->trim, 
-                                    data["path": dynamic] as string,
-                                    false))
+                                match(LoadProject(data))
                                 {
                                 ok(proj)?
                                 {
                                     // 更新一下项目历史
-                                    update_project_history(data["path": dynamic] as string);
-                                    let runtime_worlds = data["worlds": dynamic] as array<dynamic>;
-
-                                    let window_info = data["window": dynamic] as map<dynamic, dynamic>;
-                                    let window_size = window_info["size": dynamic] as array<dynamic>;
-
-                                    je::input::windowsize(window_size[0]: int, window_size[1]: int);
-
-                                    if (runtime_worlds->empty)
-                                    {
-                                        // 没有正在编辑的世界，给他创建一个
-                                        let default_world = proj->CreateWorld().instance;
-                                        default_world->editor::name("Root");
-                                        default_world->add_system(proj.graphic_system);
-                                        default_world->add_system(proj.editor_system);
-                                        default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val);
-                                    }
-                                    else
-                                    {
-                                        // TODO; 加载每一个世界，感觉还是得把加载这套做在Project里
-                                        panic("TODO;");
-                                    }
-
+                                    update_project_history(proj.path->val);
+                                    
                                     // 关闭窗口
                                     close_form = true;
                                 }
