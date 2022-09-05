@@ -70,6 +70,24 @@ namespace editor::Browser
 
     namespace PathInfo
     {
+        func indir(self : PathInfo, functor: (option<array<PathInfo>>)=>void)
+        {
+            match (self.type)
+            {
+            dir(subdirs)? functor(subdirs);
+            file?;
+            }
+            return self;
+        }
+        func infile(self : PathInfo, functor: ()=>void)
+        {
+            match (self.type)
+            {
+            dir(subdirs)?;
+            file? functor();
+            }
+            return self;
+        }
         func childs(self : PathInfo, force_update: bool)
         {
             // 如果没有要求强制更新，有现成的就用现成的
@@ -105,6 +123,12 @@ namespace editor::Browser
     }
 
     static let mut current_work_path = "";        
+
+    func set_current_work_path(path: string)
+    {
+        assert(je::filesys::isdir(path));
+        current_work_path = path;
+    }
 
     enum Action
     {
@@ -172,27 +196,17 @@ namespace editor::Browser
         }
 
         BeginChild("files_list");
-            for (let subpath : now_item_in_path)
-            {
-                let action = FileIcon(subpath);
-
-                if (action == Action::Click)
-                    ;
-                else if (action == Action::DoubleClick)
-                { 
-                    match (subpath.type)
-                    {
-                    dir(_)?
-                        // 双击的是一个目录，进入这个目录
-                        current_work_path = subpath.path; 
-                    file?
-                        // 用注册好的方式打开文件
-                        OpenFile::open(subpath);
-                    }
-                }
-                else if (action == Action::RightClick)
-                    std::panic("TODO;");
-            }               
+            now_item_in_path
+                ->trans(\subpath: PathInfo = 
+                    action == Action::Click ? 0
+                    | action == Action::DoubleClick ? 
+                        subpath
+                            ->indir(\_:void = set_current_work_path(subpath.path);)
+                            ->infile(\= OpenFile::open(subpath);)   
+                    | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单")
+                    | 0
+                    where action = FileIcon(subpath);
+                );       
         EndChild();
     }
 

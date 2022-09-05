@@ -141,7 +141,7 @@ namespace je::filesys
         }
     }
     
-    public func childs(_path: string)=> result<array<string>, string>
+    public func childs(_path: string)
     {
         using result;
 

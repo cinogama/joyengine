@@ -131,7 +131,7 @@ namespace editor::Project
         });
     }
 
-    public func CreateProject(name: string, path: string, create_file: bool)=> result<Project, string>
+    public func CreateProject(name: string, path: string, create_file: bool)
     {
         let proj_path = F"{path}/{name}";
         let created_project = Project{
@@ -165,7 +165,7 @@ namespace editor::Project
         return result::ok(SetCurrentProject(created_project));
     }
 
-    public func LoadProject(data: map<dynamic, dynamic>)=> result<Project, string>
+    public func LoadProject(data: map<dynamic, dynamic>)
     {
         // 从项目信息加载并创建项目
         let proj_name = (data["name": dynamic] as string)->trim;
