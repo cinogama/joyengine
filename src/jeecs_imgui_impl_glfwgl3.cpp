@@ -71,6 +71,14 @@ namespace je::gui
         // ImGuiTreeNodeFlags_CollapsingHeader     = ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_NoAutoOpenOnLog
     };
 
+    public enum ImGuiMouseButton
+    {
+        ImGuiMouseButton_Left = 0,
+        ImGuiMouseButton_Right = 1,
+        ImGuiMouseButton_Middle = 2,
+        ImGuiMouseButton_COUNT = 5
+    };
+
     extern("libjoyecs", "je_gui_job_vm_handle")
     public func JobID()=> handle;
 
@@ -168,7 +176,13 @@ namespace je::gui
     public func TreePop()=>void;
 
     extern("libjoyecs", "je_gui_is_itemclicked")
-    public func IsItemClicked()=> bool;
+    public func IsItemClicked(button: ImGuiMouseButton)=> bool;
+
+    public func IsItemClicked()
+    {
+        return IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Left);
+    }
+
     extern("libjoyecs", "je_gui_is_itemtoggledopen")
     public func IsItemToggledOpen()=> bool;
     extern("libjoyecs", "je_gui_is_itemhovered")
@@ -513,7 +527,7 @@ WO_API wo_api je_gui_endgroup(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_is_itemclicked(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_bool(vm, ImGui::IsItemClicked());
+    return wo_ret_bool(vm, ImGui::IsItemClicked((ImGuiMouseButton)wo_int(args + 0)));
 }
 
 WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args, size_t argc)

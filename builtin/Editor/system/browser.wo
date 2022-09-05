@@ -4,6 +4,8 @@ import je.filesys;
 
 import openfile;
 
+using je::gui;
+
 namespace editor::Browser
 {
     union FileType
@@ -26,56 +28,81 @@ namespace editor::Browser
             }
         }
     }
+    
+    // 用于储存文件拓展名和图标的对应关系
+    let FILE_TYPE_ICONS = {
+        {"png", FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val)},
+        {"jpg", FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val)},
+        {"bmp", FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val)},
+        {"psd", FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val)},
+        {"shader", FileType::shader(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")->val)},
+    };
 
-    let FILE_TYPE_ICONS = {} : map<string, FileType>;
-
-    func _load_default_icons()
-    {
-        FILE_TYPE_ICONS["png"] = 
-        FILE_TYPE_ICONS["jpg"] = 
-        FILE_TYPE_ICONS["bmp"] = 
-        FILE_TYPE_ICONS["psd"] = 
-            FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val);
-
-        FILE_TYPE_ICONS["shader"] = 
-            FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")->val);
-    }
-    _load_default_icons();
-
+    // 根据文件拓展名返回文件的类型
     private func get_file_icon_by_extern_name(_path: PathInfo)=> FileType
     {
         static let default_path_icon 
-            = FileType::path(
-                je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/FilePath.png")->val);
+            = FileType::path(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/FilePath.png")->val);
         static let default_file_icon 
-            = FileType::others(
-                je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/File.png")->val);
+            = FileType::others(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/File.png")->val);
 
         match (_path.type)
         {
-            dir(_)?
-                return default_path_icon;
-            file?
-                return FILE_TYPE_ICONS->get_or_default(_path.externname, default_file_icon);
+        dir(_)?
+            return default_path_icon;
+        file?
+            return FILE_TYPE_ICONS->get(_path.externname, default_file_icon);
         }
     }
 
-    union SubPath
-    {
-        subpath(array<PathInfo>),
-        notfetch,
-    }
     union PathType
     {
-        dir(SubPath),
+        dir(option<array<PathInfo>>),
         file,
     }
+
     public using PathInfo = struct {
         path        : string,   // 当前目录/文件的目录
         name        : string,
         externname  : string,
         type        : PathType, // 类型，如果是目录，则还包含目录内的子项    
     };
+
+    namespace PathInfo
+    {
+        func childs(self : PathInfo, force_update: bool)
+        {
+            // 如果没有要求强制更新，有现成的就用现成的
+            match (self.type)
+            {
+            dir(_dir)?
+                match(_dir)
+                {
+                value(subdirs)?
+                    if (!force_update)
+                        return subdirs;
+                none?;
+                }
+            file? // 文件也来获取子目录，搁这儿找茬呢？
+                std::panic("Failed to get subpath: is a file.");
+            }
+
+            // 当前目录的子项目尚未获取，在这里获取一下塞进去
+            let sublist = []: array<PathInfo>;
+            for (let current_subpath : je::filesys::path(self.path))
+                sublist->add(
+                    PathInfo{
+                        path = current_subpath, 
+                        name = je::filesys::filename(current_subpath),
+                        externname = je::filesys::externname(current_subpath),
+                        type = 
+                            je::filesys::isdir(current_subpath)?
+                                PathType::dir(option::none) | PathType::file,
+                    });
+            self.type =  PathType::dir(option::value(sublist));
+            return sublist;
+        }
+    }
 
     static let mut current_work_path = "";        
 
@@ -84,16 +111,17 @@ namespace editor::Browser
         Nothing,
         Click,
         DoubleClick,
+        RightClick,
     }
 
+    // 带图标的文件按钮
     func FileIcon(path: PathInfo)=> Action
     {
-        using je::gui;
-            
         BeginGroup();
             PushID(path.path);
                 let clicked = ImageButton(get_file_icon_by_extern_name(path)->get_texture, 0.125);
             PopID();
+            let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             if (BeginDragDropSource())
             {
                 SetDragDropPayload("JEDITOR_FILE_PATH", path.path);
@@ -116,14 +144,15 @@ namespace editor::Browser
             _last_click_time = _current_click_time;
             return Action::Click;
         }
-
+        else if (right_click)
+            return Action::RightClick;
+        
         return Action::Nothing;
     }
 
+    // 右边的文件详情等信息
     func files_group()
     {
-        using je::gui;
-
         static let mut new_showing_path = "";
         static let now_item_in_path = []: array<PathInfo>;
         if (new_showing_path != current_work_path)
@@ -137,7 +166,7 @@ namespace editor::Browser
                         name = je::filesys::filename(subpath),
                         externname = je::filesys::externname(subpath),
                         type =  je::filesys::isdir(subpath)?
-                            PathType::dir(SubPath::notfetch) | PathType::file,
+                            PathType::dir(option::none) | PathType::file,
                         }
                 );
         }
@@ -150,8 +179,7 @@ namespace editor::Browser
                 if (action == Action::Click)
                     ;
                 else if (action == Action::DoubleClick)
-                {
-                    
+                { 
                     match (subpath.type)
                     {
                     dir(_)?
@@ -162,16 +190,15 @@ namespace editor::Browser
                         OpenFile::open(subpath);
                     }
                 }
-                else
-                    ;
+                else if (action == Action::RightClick)
+                    std::panic("TODO;");
             }               
         EndChild();
     }
 
+    // 左侧的目录概况
     func path_tree()
     {
-        using je::gui;
-    
         if (current_work_path == "")
             current_work_path = std::exepath();
 
@@ -179,72 +206,49 @@ namespace editor::Browser
                 path = std::exepath(),
                 name = je::filesys::filename(std::exepath()),
                 externname = je::filesys::externname(std::exepath()),
-                type = PathType::dir(SubPath::notfetch),
+                type = PathType::dir(option::none),
             };
 
-        func _show_paths(path: PathInfo, noself :bool)
+        // 用于递归展示所有子目录等
+        func _show_paths(path: PathInfo)
         {
             match (path.type)
             {
-                PathType::dir(subpath)?
-                {
-                    let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
-                                    + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
-                                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
-                    if (current_work_path == path.path)
-                        attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
+            PathType::dir(subpath)?
+            {
+                let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                if (current_work_path == path.path)
+                    attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                         
-                    let show_child = TreeNodeEx(path.name, attribute);
-                    if (IsItemClicked() && !IsItemToggledOpen())
-                        current_work_path = path.path;
+                let show_child = TreeNodeEx(path.name, attribute);
+                if (IsItemClicked() && !IsItemToggledOpen())
+                    current_work_path = path.path;
 
-                    if (show_child)
-                    {
-                        match (subpath)
-                        {
-                            SubPath::subpath(itemlist)?
-                            {
-                                for (let subpath : itemlist)
-                                    _show_paths(subpath, false);
-                            }    
-                            SubPath::notfetch?
-                            {
-                                // 当前目录的子项目尚未获取，在这里获取一下塞进去
-                                let sublist = []: array<PathInfo>;
-                                for (let current_subpath : je::filesys::path(path.path))
-                                    sublist->add(
-                                        PathInfo{
-                                            path = current_subpath, 
-                                            name = je::filesys::filename(current_subpath),
-                                            externname = je::filesys::externname(current_subpath),
-                                            type = 
-                                                je::filesys::isdir(current_subpath)?
-                                                    PathType::dir(SubPath::notfetch) | PathType::file,
-                                        });
-                                path.type =  PathType::dir(SubPath::subpath(sublist));
-                            }
-                        }
-                        TreePop();
-                    }
-                    else
-                        path.type = PathType::dir(SubPath::notfetch);
+                if (show_child)
+                {
+                    for (let subpath : path->childs(false))
+                        _show_paths(subpath);
+
+                    TreePop();
                 }
-                PathType::file?
-                    ; // path_tree只显示目录，跳过文件
+                else
+                    // 如果目录被折叠起来，则删除缓存，等待下次展开时重新获取
+                    path.type = PathType::dir(option::none);
             }
-                
-
+            PathType::file?
+                ; // path_tree只显示目录，跳过文件
+            }
         }
 
         BeginChild("path_tree", 200., 0.);
-            _show_paths(_root, true);
+            _show_paths(_root);
         EndChild();
     }
 
     public func show(ref open: bool)
     {
-        using je::gui;
-
         if (!open) return FormAction::Close;
 
         Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
