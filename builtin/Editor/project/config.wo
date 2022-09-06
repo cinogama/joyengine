@@ -54,7 +54,7 @@ namespace editor::Project
             je::typeinfo("Camera::PerspectiveProjection")->val,
             je::typeinfo("Camera::Projection")->val,
         ]);
-        editor_camera->editor::set_parent(camera_walker);
+        editor_camera->editor::set_parent(camera_walker, true);
         camera_walker->editor::name("调试摄像机组");
         editor_camera->editor::name("调试摄像机");
 
@@ -73,10 +73,9 @@ namespace editor::Project
         ]);
 
         let world = World{
-            name = option::none,
             path = option::none,
             instance = world_instance,
-            runtime_system = [],
+            runtime_systems = [],
         };
 
         self.worlds->add(world);

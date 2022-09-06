@@ -24,11 +24,11 @@ je_font* je_font_load(const char* fontPath, float scalex, float scaley)
     if (auto* file = jeecs_file_open(fontPath))
     {
         fontdata->m_font_file_buf = (uint8_t*)malloc(file->m_file_length);
-        assert(file->m_file_length == jeecs_file_read(
+        jeecs_file_read(
             fontdata->m_font_file_buf,
             sizeof(uint8_t),
             file->m_file_length,
-            file));
+            file);
 
         jeecs_file_close(file);
 

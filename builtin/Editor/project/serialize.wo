@@ -67,7 +67,7 @@ namespace editor::Serialize
             w->editor::get_systems_types()
                 ->trans(\st: typeinfo = st->name;)
                 ->forall(\n: string = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
-        
+
         let runtime_systems_type_list = 
             world.runtime_systems
                 ->trans(\st: typeinfo = st->name;)
