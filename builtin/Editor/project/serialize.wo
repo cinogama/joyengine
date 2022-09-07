@@ -10,61 +10,55 @@ using je;
 
 namespace editor::Serialize
 {
-	public func save_entity(saving_entity: entity)=> option<map<string, dynamic>>
+	public func save_entity(saving_entity: entity)
 	{	
-		let components_json = {}: map<string, map<string, string>>;
-
-		// 遍历全部所有组件类型
-        for (let component_type : saving_entity->editor::get_components_types())
-        {
-            let component_type_name = component_type->name();
-
-            // 跳过编辑器组件
-            if (component_type_name->beginwith("Editor::"))
-                continue;
-
-            // 遍历组件的所有成员，保存起来
-            let component_members_json = {}: map<string, string>;
-            let component_instance = saving_entity->editor::get_component(component_type)->val();
-            for (let member_name, member_type, member_addr : 
-                component_instance->editor::iter_member(component_type))
-            {
-                component_members_json[member_name] = member_addr->to_string(member_type);
-            }
-
-            // 写入组件信息
-            components_json[component_type_name] = component_members_json;
-        }
+		let components_data = 
+            saving_entity
+                ->editor::get_components_types()
+                ->forall(\t: typeinfo = !t->name->beginwith("Editor::");)
+                ->collect(\t: typeinfo = component->has ? [(t, component->val)] | []
+                    where
+                        component = saving_entity->editor::get_component(t);)
+                ->trans(\tc: (typeinfo, component) = (t->name, collect_members())
+                    where 
+                        collect_members = func(){
+                            let result = {}: map<string, string>; 
+                            for (let name, type, addr : c->editor::iter_member(t))
+                                result[name] = addr->to_string(type);
+                            return result;
+                            },
+                        (t, c) = tc;)
+                ->map::create;
 
         // 不接受没有组件的实体，实际上不应该遇到这种蛋疼的实体（这种纱布实体一般只包含Editor::Name）
-        if (components_json->empty())
+        if (components_data->empty)
             return option::none;
 
 		let entity_json = {
-			{"name", saving_entity->editor::name(): dynamic},
-			{"components", components_json: dynamic}
+			{"name", saving_entity->editor::name: dynamic},
+			{"components", components_data: dynamic}
 		};
 
         return option::value(entity_json);
 	}
 
-    public func save_project_world(world: Project::World)=> option<map<string, dynamic>>
+    public func save_project_world(world: Project::World)
     {
-        static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
+        static let INVISABLE = je::typeinfo("Editor::Invisable")->val;
 
         alias entity_info_t = map<string, dynamic>;
 
         let w = world.instance;
 
         let entities_json_list = 
-            w->editor::get_all_entities()
+            w->editor::get_all_entities
                 // 跳过编辑器上的不可见实体
                 ->forall(\e: entity = !e->editor::get_component(INVISABLE)->has;)
                 ->trans(\e: entity = save_entity(e);)
                 ->collect(\oe: option<entity_info_t> = oe->has ? [oe->val] | [];);
 
         let editing_systems_type_list = 
-            w->editor::get_systems_types()
+            w->editor::get_systems_types
                 ->trans(\st: typeinfo = st->name;)
                 ->forall(\n: string = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
 
@@ -74,9 +68,9 @@ namespace editor::Serialize
                 ->forall(\n: string = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
  
         return option::value({
-            {"name", w->editor::name(): dynamic},
+            {"name", w->editor::name: dynamic},
             // 不是所有world都有path值，如果没有说明这个world不是从文件中载入的，塞一个nil进去意思一下
-            {"path", world.path->has() ? world.path->val(): dynamic | nil: dynamic},
+            {"path", world.path->has ? world.path->val: dynamic | nil: dynamic},
             {"entities", entities_json_list: dynamic},
             {"edit_systems", editing_systems_type_list: dynamic},
             {"runtime_systems", runtime_systems_type_list: dynamic},
