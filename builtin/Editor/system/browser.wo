@@ -31,11 +31,11 @@ namespace editor::Browser
     
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
-        {"png", FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val)},
-        {"jpg", FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val)},
-        {"bmp", FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val)},
-        {"psd", FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val)},
-        {"shader", FileType::shader(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")->val)},
+        ["png"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
+        ["jpg"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
+        ["bmp"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
+        ["psd"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
+        ["shader"] = FileType::shader(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")->val),
     };
 
     // 根据文件拓展名返回文件的类型

@@ -244,17 +244,17 @@ namespace editor::Project
             let (win_width, win_height) = je::input::windowsize();
 
             let window_info = {
-                {"size", [win_width, win_height]}
+                ["size"] = [win_width, win_height]
             };
 
             let project_dat = {
                 // 这四个字段必须存在，其他的都是可选的，之后再说
-                {"name", self.name: dynamic},
-                {"path", path: dynamic},
-                {"window", window_info: dynamic},
-                {"worlds", worlds: dynamic},
-                // {"graphic_system", TODO},
-                // {"editor_system", TODO},
+                ["name"] = self.name: dynamic,
+                ["path"] = path: dynamic,
+                ["window"] = window_info: dynamic,
+                ["worlds"] = worlds: dynamic,
+                // [graphic_system] = TODO,
+                // [editor_system] = TODO,
             };
             return result::ok(project_dat);
         }
