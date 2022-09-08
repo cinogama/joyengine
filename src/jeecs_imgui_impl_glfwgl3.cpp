@@ -319,27 +319,42 @@ R"(
 
     extern("libjoyecs", "je_gui_begin_drag_drop_source")
     public func BeginDragDropSource()=> bool;
-
     extern("libjoyecs", "je_gui_begin_drag_drop_source")
     public func BeginDragDropSource(attrib: DragAttribute)=> bool;
-
-    
     extern("libjoyecs", "je_gui_set_drag_drop_payload")
     public func SetDragDropPayload(type: string, data: string)=> bool;
-    
-
     extern("libjoyecs", "je_gui_end_drag_drop_source")
     public func EndDragDropSource()=> void;
 
+    public func DragItem(type: string, payload: string, holddo: ()=>void)
+    {
+        if (BeginDragDropSource())
+        {
+            SetDragDropPayload(type, payload);
+                holddo();
+            EndDragDropSource();
+        }
+    }
 
     extern("libjoyecs", "je_gui_begin_drag_drop_target")
     public func BeginDragDropTarget()=> bool;
-
     extern("libjoyecs", "je_gui_accept_drag_drop_payload")
     public func AcceptDragDropPayload(type: string, ref data: string)=> bool;
-
     extern("libjoyecs", "je_gui_end_accept_drop_source")
     public func EndDragDropTarget()=> bool;
+
+    public func AcceptDrag(types: array<string>)=> option<(string, string)>
+    {
+        if (BeginDragDropTarget())
+        {
+            let mut data = "";
+            for (let accept_type : types)
+                if (AcceptDragDropPayload(accept_type, ref data))
+                    return option::value((accept_type, data));
+            EndDragDropTarget();
+        }
+        return option::none;
+    }
 
     extern("libjoyecs", "je_gui_set_next_item_open")
     public func SetNextItemOpen(open: bool)=> void;

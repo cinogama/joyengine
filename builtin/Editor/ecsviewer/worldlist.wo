@@ -63,6 +63,7 @@ namespace editor::WorldList
                                             \=SwitchEditingWorld(world);));
                         }
                     }
+                    DragItem("JEEDITOR_WORLD", world: string, \=Text(F"World:{world->editor::name}"););
                     context_menu(world);
                 }
                 EndListBox();

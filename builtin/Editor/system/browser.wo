@@ -208,6 +208,11 @@ namespace editor::Browser
                     where action = FileIcon(subpath);
                 );       
         EndChild();
+        AcceptDrag(["JEEDITOR_WORLD"])
+            ->map(\msg: (string, string) = 
+                    type == "JEEDITOR_WORLD" ? je::logfatal(F"TODO Saving world '{data}'")
+                    | std::panic(F"Unhandler drag type: '{type}'.")
+                    where (type, data) = msg;);
     }
 
     // 左侧的目录概况
@@ -216,8 +221,6 @@ namespace editor::Browser
         let root_path = 
             Project::GetCurrentProject().path
                 ->valor(std::exepath());
-
-        je::logfatal(root_path);
 
         if (current_work_path == "")
             current_work_path = root_path;
