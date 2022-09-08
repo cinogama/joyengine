@@ -8,11 +8,16 @@ namespace editor
     public using Project = struct {
         name : string,          // 项目名称
         path : option<string>,  // 项目文件的路径，默认项目没有这个值
+        worlds : array<Project::World>,
+
         graphic_system : je::typeinfo,    // 默认使用的图形系统类型
         editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
-        worlds : array<Project::World>,
     };
 }
+
+const let  
+    DEFAULT_GRAPHIC_SYSTEM_NAME = "Graphic::DefaultGraphicPipelineSystem",
+    DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
 
 namespace editor::Project
 {
@@ -124,7 +129,7 @@ namespace editor::Project
             name = "Default project",
             path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
             // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
-            graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val,
+            graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
             worlds = [],
         });
@@ -132,33 +137,35 @@ namespace editor::Project
 
     public func CreateProject(name: string, path: string, create_file: bool)
     {
-        let proj_path = F"{path}/{name}";
         let created_project = Project{
             name = name,
-            path = option::value(proj_path),
-            graphic_system = je::typeinfo("Graphic::DefaultGraphicPipelineSystem")->val,
-            editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
+            path = option::value(path),
+            graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
+            editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = [],
         };
 
-        assert(je::filesys::isdir(path));
-
         if (create_file)
-        {
+        {        
+            assert(!je::filesys::exist(path));
+
             // 1. 创建项目目录，把所需的文件拷贝进去
-            if (!je::filesys::mkdir(proj_path))
+            if (!je::filesys::mkdir(path))
                 return result::err("创建项目目录失败");
 
             // 2. 写入项目数据文件
             match (created_project->SaveProject)
             {
             ok(projdat)?
-                if (!je::file::writeall(F"{proj_path}/{name}.jeproj4", projdat: string))
+                if (!je::file::writeall(F"{path}/{name}.jeproj4", projdat: string))
                     return result::err("项目工程文件创建失败");
             err(msg)?
                 return result::err(msg);
             }
         }
+        else
+            assert(je::filesys::isdir(path));
+
         // ok 创建完成，销毁之前的项目上下文
         RemoveCurrentProject();
         return result::ok(SetCurrentProject(created_project));
@@ -166,6 +173,8 @@ namespace editor::Project
 
     public func LoadProject(data: map<dynamic, dynamic>)
     {
+        using je;
+
         // 从项目信息加载并创建项目
         let proj_name = (data["name": dynamic] as string)->trim;
         let proj_path = data["path": dynamic] as string;
@@ -178,6 +187,20 @@ namespace editor::Project
 
             let window_info = data->get("window": dynamic, {}: dynamic) as map<dynamic, dynamic>;
             let window_size = window_info->get("size": dynamic, [640, 480]: dynamic) as array<dynamic>;
+
+            // 加载自定义的图形和编辑时系统
+            let graphic_system = data
+                ->get("graphic_system": dynamic)
+                ->map(\n: dynamic = typeinfo(n as string);)
+                ->or(\ = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME);)
+                ->reduce
+                ->val;
+            let editor_system = data
+                ->get("editor_system": dynamic)
+                ->map(\n: dynamic = typeinfo(n as string);)
+                ->or(\ = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME);)
+                ->reduce
+                ->val;
 
             je::input::windowsize(window_size[0]: int, window_size[1]: int);
 
@@ -251,10 +274,12 @@ namespace editor::Project
                 // 这四个字段必须存在，其他的都是可选的，之后再说
                 ["name"] = self.name: dynamic,
                 ["path"] = path: dynamic,
-                ["window"] = window_info: dynamic,
                 ["worlds"] = worlds: dynamic,
-                // [graphic_system] = TODO,
-                // [editor_system] = TODO,
+
+                // 可选的项目信息
+                ["window"] = window_info: dynamic,
+                ["graphic_system"] = self.graphic_system->name: dynamic,
+                ["editor_system"] = self.editor_system->name: dynamic,
             };
             return result::ok(project_dat);
         }

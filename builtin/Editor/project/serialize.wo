@@ -26,7 +26,7 @@ namespace editor::Serialize
                             for (let name, type, addr : c->editor::iter_member(t))
                                 result[name] = addr->to_string(type);
                             return result;
-                            },
+                        },
                         (t, c) = tc;)
                 ->map::create
                 ->\m : map<string, map<string, string>> = m->empty? option::none | option::value(m);

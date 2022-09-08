@@ -213,13 +213,19 @@ namespace editor::Browser
     // 左侧的目录概况
     func path_tree()
     {
+        let root_path = 
+            Project::GetCurrentProject().path
+                ->valor(std::exepath());
+
+        je::logfatal(root_path);
+
         if (current_work_path == "")
-            current_work_path = std::exepath();
+            current_work_path = root_path;
 
         static let _root = PathInfo {
-                path = std::exepath(),
-                name = je::filesys::filename(std::exepath()),
-                externname = je::filesys::externname(std::exepath()),
+                path = root_path,
+                name = je::filesys::filename(root_path),
+                externname = je::filesys::externname(root_path),
                 type = PathType::dir(option::none),
             };
 
