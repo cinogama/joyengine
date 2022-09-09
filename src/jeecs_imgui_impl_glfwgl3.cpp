@@ -361,11 +361,9 @@ R"(
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    public using job_handle_t = gchandle;
-
     extern("libjoyecs", "je_gui_launch")
-    private func _launch<LT, FT, ATs>(coloop:LT, job_func:FT, args: ATs)=> job_handle_t
-        where coloop(job_func, args) is job_handle_t;
+    private func _launch<LT, FT, ATs>(coloop:LT, job_func:FT, args: ATs)=> void
+        where coloop(job_func, args) is anything;
 
     public union FormAction
     {
@@ -373,7 +371,7 @@ R"(
         Close,
     }
 
-    private func dialog<FT, ATs>(job_func:FT, args: ATs)=> job_handle_t
+    private func dialog<FT, ATs>(job_func:FT, args: ATs)=> void
         where job_func(args...) is FormAction;
     {
         while (true)
@@ -389,7 +387,7 @@ R"(
         }
     }
 
-    public func launch<FT, ATs>(job_func: FT, args: ATs)=> job_handle_t
+    public func launch<FT, ATs>(job_func: FT, args: ATs)=> void
         where job_func(args...) is FormAction;
     {
         return _launch(dialog:<FT, ATs>, job_func, args);

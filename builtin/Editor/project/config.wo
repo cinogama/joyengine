@@ -26,7 +26,13 @@ namespace editor::Project
         path : option<string>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
         instance : je::world,  // 世界实例
         runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
-    };
+    }
+    {
+        public func SaveTo(self: World, path: string)
+        {
+            std::panic("TODO;");
+        }
+    }
 
     // 在当前项目中创建一个世界，世界会被保存进项目的世界列表中
     public func CreateWorld(self: Project)

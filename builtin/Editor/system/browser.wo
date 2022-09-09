@@ -210,9 +210,15 @@ namespace editor::Browser
                     where action = FileIcon(subpath);
                 );       
         EndChild();
+       
+        // 允许各种乱七八糟的东西拖到这里
         AcceptDrag(["JEEDITOR_WORLD"])
             ->map(\msg: (string, string) = 
-                    type == "JEEDITOR_WORLD" ? je::logfatal(F"TODO Saving world '{data}'")
+                    type == "JEEDITOR_WORLD" 
+                    ? Project::GetCurrentProject()
+                        ->FindWorld(data: handle: je::world)
+                        ->map(\w: Project::World = w->SaveTo(new_showing_path);)
+                        ->or(\=launch(generic::MsgBox, ("保存世界失败", "没有在项目中找到此实例对应的信息"));)
                     | std::panic(F"Unhandler drag type: '{type}'.")
                     where (type, data) = msg;);
     }
