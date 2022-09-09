@@ -107,7 +107,7 @@ namespace je::file
 
 namespace je::filesys
 {
-    public using path = gchandle;
+    
 
     public func parent(_path: string)
     {
@@ -117,17 +117,17 @@ namespace je::filesys
         return _parent_path(_path);
     }
 
-    namespace path
+    using path = gchandle
     {
         extern("libjoyecs", "wojeapi_filesys_path")
         public func create(_path: string)=> path;
 
-        public func iter(self: path)
+        func iter(self: path)
         {
             return self;
         }
         
-        public func next(self: path, ref out_path: string)
+        func next(self: path, ref out_path: string)
         {
             extern("libjoyecs", "wojeapi_filesys_path_next")
             func _next(self: path, ref out_path: string)=> bool;

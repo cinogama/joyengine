@@ -4,7 +4,6 @@ import je.gui;
 import config;
 
 import builtin.Editor.generic.form.msgbox;
-import builtin.Editor.generic.form.openfile;
 import history;
 
 using std;
@@ -50,14 +49,16 @@ namespace editor::Project
     {
         if (update || !path.childs->has)
         {
-            let arr = []: array<Path>;
-            for (let child_path : je::filesys::path(path.path))
-                // 只允许放入目录，文件不能放进来嗝
-                if (je::filesys::isdir(child_path))
-                    arr->add(Path{
+            let arr = 
+                je::filesys::childs(path.path)
+                    ->unwarp
+                    ->forall(\child_path: string = je::filesys::isdir(child_path);)
+                    ->trans(\child_path: string = Path{
                         name = je::filesys::filename(child_path),
                         path = child_path,
-                        childs = option::none});
+                        childs = option::none
+                    };);
+
             path.childs = option::value(arr);            
         }
 

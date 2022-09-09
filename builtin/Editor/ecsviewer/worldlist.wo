@@ -5,7 +5,6 @@ import je;
 import builtin.Editor.generic.form.inputbox;
 import builtin.Editor.generic.form.askbox;
 import builtin.Editor.generic.form.msgbox;
-import builtin.Editor.generic.form.openfile;
 
 import worldcreator;
 
@@ -129,14 +128,6 @@ namespace editor::WorldList
             {
                 // 在此处打开世界变更界面，山寨一下实体组件变更界面
                 launch(WorldCreator::show, (WorldCreator::edit_context(world),));
-            }
-            if (MenuItem("保存"))
-            {
-                // TODO: 启动保存文件窗口
-                launch(generic::OpenFile, (std::exepath(), 
-                    F"保存世界{world->editor::name}", 
-                    option::value([".jeworld"]),
-                    \worldfile: string = 0;));
             }
             EndPopup();
         }

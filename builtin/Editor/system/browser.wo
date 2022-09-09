@@ -106,17 +106,18 @@ namespace editor::Browser
             }
 
             // 当前目录的子项目尚未获取，在这里获取一下塞进去
-            let sublist = []: array<PathInfo>;
-            for (let current_subpath : je::filesys::path(self.path))
-                sublist->add(
-                    PathInfo{
+            let sublist = 
+                je::filesys::childs(self.path)
+                    ->unwarp
+                    ->trans(\current_subpath: string = PathInfo{
                         path = current_subpath, 
                         name = je::filesys::filename(current_subpath),
                         externname = je::filesys::externname(current_subpath),
                         type = 
                             je::filesys::isdir(current_subpath)?
                                 PathType::dir(option::none) | PathType::file,
-                    });
+                    };);
+
             self.type =  PathType::dir(option::value(sublist));
             return sublist;
         }
@@ -178,21 +179,22 @@ namespace editor::Browser
     func files_group()
     {
         static let mut new_showing_path = "";
-        static let now_item_in_path = []: array<PathInfo>;
+        static let mut now_item_in_path = []: array<PathInfo>;
         if (new_showing_path != current_work_path)
         {
             new_showing_path = current_work_path;
-            now_item_in_path->clear();
-            for (let subpath : je::filesys::path(current_work_path))
-                now_item_in_path->add(
-                    PathInfo{ 
+
+            now_item_in_path =
+                je::filesys::childs(current_work_path)
+                    ->unwarp
+                    ->trans(\subpath: string = PathInfo{ 
                         path = subpath,
                         name = je::filesys::filename(subpath),
                         externname = je::filesys::externname(subpath),
-                        type =  je::filesys::isdir(subpath)?
-                            PathType::dir(option::none) | PathType::file,
-                        }
-                );
+                        type =  je::filesys::isdir(subpath)
+                            ? PathType::dir(option::none) 
+                            | PathType::file,
+                    };);
         }
 
         BeginChild("files_list");
