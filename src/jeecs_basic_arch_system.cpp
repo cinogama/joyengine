@@ -837,10 +837,10 @@ namespace jeecs_impl
         struct storage_system
         {
             jeecs::game_system* m_system_instance;
-            double m_next_pre_update_time;
-            double m_next_update_time;
-            double m_next_late_update_time;
-            double              m_execute_interval;
+            double m_next_pre_update_time;  // USED FOR DEBUG
+            double m_next_update_time;      // USED FOR DEBUG
+            double m_next_late_update_time; 
+            double m_execute_interval;
 
             storage_system& set_system_instance(jeecs::game_system* sys)noexcept
             {
@@ -1091,9 +1091,7 @@ namespace jeecs_impl
 
     };
 
-    double default_job_for_execute_sys_pre_update_for_worlds(void* _ecs_world);
     double default_job_for_execute_sys_update_for_worlds(void* _ecs_world);
-    double default_job_for_execute_sys_late_update_for_worlds(void* _ecs_world);
 
     void command_buffer::update()
     {
@@ -1349,7 +1347,7 @@ namespace jeecs_impl
         std::vector<ecs_job*> _m_shared_after_jobs;
 
         std::mutex _m_next_execute_interval_mx;
-        double _m_current_time = 0.;
+        volatile double _m_current_time = 0.;
         double _m_next_execute_interval = 0.5;
 
         struct universe_action
@@ -1660,9 +1658,7 @@ namespace jeecs_impl
             DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
             // Append default jobs for updating systems.
-            je_ecs_universe_register_pre_for_worlds_job(this, default_job_for_execute_sys_pre_update_for_worlds);
             je_ecs_universe_register_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds);
-            je_ecs_universe_register_after_for_worlds_job(this, default_job_for_execute_sys_late_update_for_worlds);
 
             _m_universe_update_thread_stop_flag.test_and_set();
             _m_universe_update_thread = std::move(std::thread(
@@ -1865,7 +1861,7 @@ namespace jeecs_impl
             m_next_execute_time = nextTime;
     }
 
-    double default_job_for_execute_sys_pre_update_for_worlds(void* _ecs_world)
+    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world)
     {
         ecs_world* cur_world = (ecs_world*)_ecs_world;
 
@@ -1886,24 +1882,6 @@ namespace jeecs_impl
                 }
             }
         );
-
-        double next_time_to_exec_system = 1.0f;
-
-        for (auto& cur_system : active_systems)
-        {
-            double waittime = (cur_system.second.m_next_pre_update_time - cur_world->get_universe()->current_time());
-            if (waittime < next_time_to_exec_system)
-                next_time_to_exec_system = waittime;
-        }
-        return next_time_to_exec_system;
-    }
-
-    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world)
-    {
-        ecs_world* cur_world = (ecs_world*)_ecs_world;
-
-        ecs_world::system_container_t& active_systems = cur_world->get_system_instances();
-
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
@@ -1916,27 +1894,11 @@ namespace jeecs_impl
                 {
                     val.first->update(system_info.m_system_instance);
                     system_info.m_next_update_time = current_time + system_info.m_execute_interval;
+
+                    assert(system_info.m_next_pre_update_time == system_info.m_next_update_time);
                 }
             }
         );
-
-        double next_time_to_exec_system = 1.0f;
-
-        for (auto& cur_system : active_systems)
-        {
-            double waittime = (cur_system.second.m_next_update_time - cur_world->get_universe()->current_time());
-            if (waittime < next_time_to_exec_system)
-                next_time_to_exec_system = waittime;
-        }
-        return next_time_to_exec_system;
-    }
-
-    double default_job_for_execute_sys_late_update_for_worlds(void* _ecs_world)
-    {
-        ecs_world* cur_world = (ecs_world*)_ecs_world;
-
-        ecs_world::system_container_t& active_systems = cur_world->get_system_instances();
-
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
@@ -1958,7 +1920,7 @@ namespace jeecs_impl
 
         for (auto& cur_system : active_systems)
         {
-            double waittime = (cur_system.second.m_next_late_update_time - cur_world->get_universe()->current_time());
+            double waittime = (cur_system.second.m_next_update_time - cur_world->get_universe()->current_time());
             if (waittime < next_time_to_exec_system)
                 next_time_to_exec_system = waittime;
         }
@@ -1971,10 +1933,10 @@ void* je_ecs_universe_create()
     return jeecs::basic::create_new<jeecs_impl::ecs_universe>();
 }
 
-void je_ecs_universe_register_exit_callback(void* universe, void(* callback)(void*), void* arg)
+void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg)
 {
     ((jeecs_impl::ecs_universe*)universe)->register_exit_callback(
-        [callback, arg]() 
+        [callback, arg]()
         {
             callback(arg);
         });

@@ -47,8 +47,7 @@ namespace editor::Inspector::Component
 
         let _display_entity_changed = 
             _last_display_entity
-                ->map(\e: je::entity = cur_entity->map(\ce: je::entity = e != ce;);)
-                ->reduce()
+                ->bind(\e: je::entity = cur_entity->map(\ce: je::entity = e != ce;);)
                 ->valor(true);
 
         _last_display_entity = cur_entity; // 

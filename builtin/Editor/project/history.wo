@@ -17,9 +17,7 @@ namespace editor::Project
 		return 
 			HISTORY_FILE
 				->readall
-				->map(\str: string = str->toarray;)
-				// toarray的结果是option<array>，这里要压平一下
-				->reduce
+				->bind(\str: string = str->toarray;)
 				->map(\arr: array = arr
 					->trans(\d: dynamic = d as string;);)			
 				->valor([]);

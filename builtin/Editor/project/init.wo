@@ -96,8 +96,7 @@ namespace editor::Project
             root_path->_ListPath(ref selected_path);
 
         selected_path = selected_path
-            ->map(\p: string = je::filesys::isdir(p) ? option::value(p) | option::none: option<string>;)
-            ->reduce;
+            ->bind(\p: string = je::filesys::isdir(p) ? option::value(p) | option::none;);
 
         return selected_path;
     }
@@ -141,8 +140,7 @@ namespace editor::Project
                             let projname = je::filesys::filename(create_proj_in);
                             let proj_data = 
                                 je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
-                                    ->map(\json: string = json->tomap;)
-                                    ->reduce;
+                                    ->bind(\json: string = json->tomap;);
 
                             match (proj_data)
                             {
@@ -263,4 +261,11 @@ namespace editor::Project
         je::universe::current()->editor::wait();
         je::universe::current()->editor::close();
     }
+}
+
+func is_not_ok()
+{
+    if (is_ok())
+        return false;
+    return true;
 }

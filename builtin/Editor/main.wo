@@ -218,3 +218,12 @@ func display_icon_in_console()
 
 display_icon_in_console();
 editor::Project::Start(Editor_MainMenuBar, ());
+
+let a = 25;
+
+if (a: real < 3.214)
+{
+}
+
+
+a:real <TYPE> 
