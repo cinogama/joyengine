@@ -28,7 +28,7 @@ namespace editor::Serialize
                             return result;
                         },
                         (t, c) = tc;)
-                ->map::create
+                ->mapping
                 ->\m : map<string, map<string, string>> = m->empty? option::none | option::value(m);
                 ->map(\m: map<string, map<string, string>> = 
                     {

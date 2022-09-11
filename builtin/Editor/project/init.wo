@@ -262,10 +262,3 @@ namespace editor::Project
         je::universe::current()->editor::close();
     }
 }
-
-func is_not_ok()
-{
-    if (is_ok())
-        return false;
-    return true;
-}
