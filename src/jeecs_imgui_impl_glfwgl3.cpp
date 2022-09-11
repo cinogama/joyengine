@@ -104,6 +104,8 @@ namespace je::gui
 
     extern("libjoyecs", "je_gui_text")
     public func Text(msg:string)=> void;
+    extern("libjoyecs", "je_gui_text_disabled")
+    public func TextDisabled(msg:string)=> void;
 
     extern("libjoyecs", "je_gui_button")
     public func Button(msg:string)=> bool;
@@ -661,6 +663,13 @@ WO_API wo_api je_gui_text(wo_vm vm, wo_value args, size_t argc)
     ImGui::Text(wo_string(args));
     return wo_ret_void(vm);
 }
+
+WO_API wo_api je_gui_text_disabled(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::TextDisabled(wo_string(args));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api je_gui_button(wo_vm vm, wo_value args, size_t argc)
 {
     if (argc == 3)

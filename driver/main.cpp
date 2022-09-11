@@ -12,7 +12,6 @@
 
 #include <future>
 
-
 int main(int argc, char** argv)
 {
     je_init(argc, argv);

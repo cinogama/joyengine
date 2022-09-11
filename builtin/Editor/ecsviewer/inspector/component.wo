@@ -118,7 +118,7 @@ namespace editor::Inspector::Component
                                     }
 
                                     if (0 == member_count)
-                                        Text("<此组件没有可编辑字段>");
+                                        TextDisabled("<此组件没有可编辑字段>");
                                 }
                                 none?
                                     ; // 如果实体出现更新，这里会很麻烦
