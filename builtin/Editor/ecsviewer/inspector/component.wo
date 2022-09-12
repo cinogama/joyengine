@@ -109,19 +109,19 @@ namespace editor::Inspector::Component
                             let mut member_count = 0;
                             match (entity->editor::get_component(type))
                             {
-                                value(component_addr)?
+                            value(component_addr)?
+                            {
+                                for (let name, type, addr : component_addr->editor::iter_member(type))
                                 {
-                                    for (let name, type, addr : component_addr->editor::iter_member(type))
-                                    {
-                                        member_count += 1;
-                                        _show_edit_widget(name, type, addr);
-                                    }
-
-                                    if (0 == member_count)
-                                        TextDisabled("<此组件没有可编辑字段>");
+                                    member_count += 1;
+                                    _show_edit_widget(name, type, addr);
                                 }
-                                none?
-                                    ; // 如果实体出现更新，这里会很麻烦
+
+                                if (0 == member_count)
+                                    TextDisabled("<此组件没有可编辑字段>");
+                            }
+                            none?
+                                ; // 如果实体出现更新，这里会很麻烦
                             }
                         }
                         none?

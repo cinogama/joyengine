@@ -8,10 +8,6 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
-#include <iostream>
-
-#include <future>
-
 int main(int argc, char** argv)
 {
     je_init(argc, argv);

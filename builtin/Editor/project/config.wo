@@ -1,5 +1,6 @@
 import woo.std;
 import je;
+import je.gui;
 
 import serialize;
 
@@ -28,9 +29,53 @@ namespace editor::Project
         runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     }
     {
+        private func Save(self: World)
+        {
+            // Saving 
+            // 肯定要有路径，不然直接爆炸
+            if (!je::file::writeall(self.path->val, 
+                Serialize::save_project_world(self): string))
+            {
+                je::gui::launch(generic::MsgBox, 
+                    (F"保存世界{self.instance->editor::name()}失败",
+                     F"无法写入世界数据到{self.path->val}"));
+                return;
+            }
+        }
         public func SaveTo(self: World, path: string)
         {
-            std::panic("TODO;");
+            let real_saving_path = F"{path}/{self.instance->editor::name()}.jeworld";
+            let save_request =
+                self.path      
+                    ->map(\oldpath: string = 
+                        oldpath == real_saving_path 
+                        ? result::ok(oldpath)
+                        | result::err((oldpath, real_saving_path));)
+                    ->or(\=result::ok(real_saving_path);)
+                    ->val;
+
+            let mut ask_msg = "";
+
+            match(save_request)
+            {
+            ok(saving_path)?
+            {
+                // 目录符合或者干脆是尚未保存的世界，简单询问一下
+                ask_msg = F"正在将世界{self.instance->editor::name()}保存到{
+                     saving_path}\n是否继续？";
+            }
+            err((oldpath, saving_path))?
+                // 目录存疑，弹个框框问一下
+                ask_msg = 
+                     F"正在将世界{self.instance->editor::name()}保存到{
+                     saving_path}\n但此前这个世界已被保存到{
+                     oldpath}\n是否继续？";
+            }
+
+            je::gui::launch(generic::AskBox, ("保存世界？", ask_msg, func(){
+                self.path = option::value(real_saving_path);
+                self->Save();
+            }));
         }
     }
 
@@ -91,6 +136,47 @@ namespace editor::Project
 
         self.worlds->add(world);
         return world;
+    }
+
+    // 从文件中读取世界数据
+    public func LoadWorld(self: Project, path: string)=> option<World>
+    {
+        func ApplyWorld(self: Project, path: string, dat: map<dynamic, dynamic>)
+        {
+            match (dat->get("name": dynamic))
+            {
+            value(name)?
+            {
+                let world = self->CreateWorld();
+                world.instance->editor::name(name as string);
+                world.path = value(path);
+                world.runtime_systems = 
+                    dat->get("runtime_systems": dynamic)
+                        ->map(\d: dynamic = d as array<dynamic>;)
+                        ->map(\rtsyss: array<dynamic> = rtsyss
+                            ->trans(\tname: dynamic = je::typeinfo(tname as string);)
+                            ->forall(\t: option<je::typeinfo> = t->has;)  // TODO: 类型没找到弹个框
+                            ->trans(\t: option<je::typeinfo> = t->val;);)
+                        ->valor([]);
+                dat->get("edit_systems": dynamic)
+                    ->map(\d: dynamic = (d as array<dynamic>)
+                        ->trans(\tname: dynamic = je::typeinfo(tname as string);)
+                        ->forall(\t: option<je::typeinfo> = t->has;)
+                        ->trans(\t: option<je::typeinfo> = world.instance->add_system(t->val);););
+
+                dat->get("entities": dynamic)
+                    ->map(\es: dynamic = (es as array<dynamic>)
+                        ->trans(\edat: dynamic = std::panic("TODO;");););
+
+                return value(world);
+            }
+            none?
+                return none;
+            }
+        }
+        return je::file::readall(path)
+            ->bind(\d: string = d->tomap;)
+            ->bind(\d: map<dynamic, dynamic> =  ApplyWorld(self, path, d););
     }
 
     public func FindWorld(self: Project, world: je::world)=> option<World>
@@ -163,8 +249,7 @@ namespace editor::Project
             match (created_project->SaveProject)
             {
             ok(projdat)?
-                if (!je::file::writeall(F"{path}/{name}.jeproj4", projdat: string))
-                    return result::err("项目工程文件创建失败");
+                ;
             err(msg)?
                 return result::err(msg);
             }
@@ -210,20 +295,23 @@ namespace editor::Project
 
             je::input::windowsize(window_size[0]: int, window_size[1]: int);
 
-            if (runtime_worlds->empty)
+            runtime_worlds
+                ->trans(\p: dynamic = p as string;)
+                ->trans(\path: string = proj->LoadWorld(path););
+
+            if (proj.worlds->empty)
             {
-                // 没有正在编辑的世界，给他创建一个
+                // 无论何种原因导致没有正在编辑的世界，给他创建一个
                 let default_world = proj->CreateWorld().instance;
                 default_world->editor::name("Root");
-                default_world->add_system(proj.graphic_system);
-                default_world->add_system(proj.editor_system);
                 default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val);
             }
-            else
-            {
-                // TODO; 加载每一个编辑中世界
-                std::panic("TODO;");
-            }
+
+            // 选一个世界去渲染， TODO: 在项目里记录一下？
+            let rendworld = proj.worlds[0].instance;
+            rendworld->add_system(proj.graphic_system);
+            rendworld->add_system(proj.editor_system);
+
             return ok(proj);
         }
         err(msg)?
@@ -254,9 +342,7 @@ namespace editor::Project
             using Serialize;
             let worlds_dumped_data = 
                 self.worlds
-                    ->trans(\w: World = save_project_world(w);)
-                    ->forall(\data: option<map<string, dynamic>> = data->has;)
-                    ->trans(\data: option<map<string, dynamic>> = data->val;);
+                    ->trans(\w: World = save_project_world(w););
 
             // 1. 检查所有世界是否已经有路径信息，如果没有则说明有新建的世界没有保存过，要求保存
             let worlds = []: array<string>;
@@ -287,6 +373,10 @@ namespace editor::Project
                 ["graphic_system"] = self.graphic_system->name: dynamic,
                 ["editor_system"] = self.editor_system->name: dynamic,
             };
+
+            if (!je::file::writeall(F"{path}/{self.name}.jeproj4", project_dat: string))
+                return result::err(F"项目工程文件'{path}/{self.name}.jeproj4'写入失败");
+
             return result::ok(project_dat);
         }
         none?
