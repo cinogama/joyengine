@@ -13,6 +13,7 @@ namespace editor::Serialize
 	public func save_entity(saving_entity: entity)
 	{	
 		return
+        // TODO: 实体使用的shader和纹理路径亦需要额外做一下保存
             saving_entity
                 ->editor::get_components_types()
                 ->forall(\t: typeinfo = !t->name->beginwith("Editor::");)

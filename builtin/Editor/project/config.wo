@@ -29,7 +29,7 @@ namespace editor::Project
         runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     }
     {
-        private func Save(self: World)
+        public func Save(self: World)
         {
             // Saving 
             // 肯定要有路径，不然直接爆炸
@@ -349,12 +349,14 @@ namespace editor::Project
             for (let world_data : worlds_dumped_data)
             {
                 if (world_data["path"] is typeof(nil))
-                {
-                    // TODO:
                     return result::err(F"存在尚未保存的世界: {world_data["name"]}");
-                }
+
                 worlds->add(world_data["path"] as string);
             }
+
+            // OK，看上去该保存的都保存上了，调World的Save方法写入世界数据
+            self.worlds
+                ->trans(\w: World = w->Save(););
 
             let (win_width, win_height) = je::input::windowsize();
 
