@@ -65,7 +65,8 @@ namespace editor::Browser
         path        : string,   // 当前目录/文件的目录
         name        : string,
         externname  : string,
-        type        : PathType, // 类型，如果是目录，则还包含目录内的子项    
+        // TODO: 这个玩意儿其实不应该是mut的 后面干掉
+        mut type    : PathType, // 类型，如果是目录，则还包含目录内的子项    
     };
 
     namespace PathInfo

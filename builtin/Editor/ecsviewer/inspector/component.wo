@@ -13,7 +13,7 @@ namespace editor::Inspector::Component
             
     using component_chain = struct{
         m_map:              map<string, component_chain>,
-        m_component_type:   option<je::typeinfo>,
+        mut m_component_type:   option<je::typeinfo>,
     };
 
     func show_component_menu(entity: je::entity, component_type: option<je::typeinfo>)

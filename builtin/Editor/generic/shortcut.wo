@@ -7,7 +7,7 @@ namespace shortcut
 	private using ShortcutKeyStateAndAction = struct
 	{
 		keys : array<je::keycode>,
-		state : bool,
+		mut state : bool,
 		action : ()=>void,
 	};
 

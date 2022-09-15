@@ -5,7 +5,7 @@ import je;
 namespace test::memory_leak::GraphicResource
 {
 	using test_context = struct {
-		count : int,
+		mut count : int,
 	};
 	func _test_co(context: test_context, ref run: bool)
 	{

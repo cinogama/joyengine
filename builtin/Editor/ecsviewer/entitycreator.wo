@@ -25,8 +25,8 @@ namespace editor::EntityCreator
             not_append_types = je::typeinfo::editor::get_all_components_types(),
         };
 
-        let comps = context.not_append_types;
-        context.not_append_types = [];
+        let comps = []: typeof(context.not_append_types);
+        context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
         for (let comp : comps)
@@ -51,8 +51,8 @@ namespace editor::EntityCreator
             not_append_types = je::typeinfo::editor::get_all_components_types(),
         };
 
-        let comps = context.not_append_types;
-        context.not_append_types = [];
+        let comps = []: typeof(context.not_append_types);
+        context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
         for (let comp : comps)

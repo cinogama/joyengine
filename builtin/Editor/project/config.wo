@@ -24,7 +24,7 @@ namespace editor::Project
 {
     // 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
     public using World = struct {
-        path : option<string>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
+        mut path : option<string>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
         instance : je::world,  // 世界实例
         runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     }
@@ -150,14 +150,14 @@ namespace editor::Project
                 let world = self->CreateWorld();
                 world.instance->editor::name(name as string);
                 world.path = value(path);
-                world.runtime_systems = 
+                world.runtime_systems->copy(
                     dat->get("runtime_systems": dynamic)
                         ->map(\d: dynamic = d as array<dynamic>;)
                         ->map(\rtsyss: array<dynamic> = rtsyss
                             ->trans(\tname: dynamic = je::typeinfo(tname as string);)
                             ->forall(\t: option<je::typeinfo> = t->has;)  // TODO: 类型没找到弹个框
                             ->trans(\t: option<je::typeinfo> = t->val;);)
-                        ->valor([]);
+                        ->valor([]));
                 dat->get("edit_systems": dynamic)
                     ->map(\d: dynamic = (d as array<dynamic>)
                         ->trans(\tname: dynamic = je::typeinfo(tname as string);)

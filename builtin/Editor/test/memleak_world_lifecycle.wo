@@ -5,7 +5,7 @@ import je;
 namespace test::memory_leak::WorldLifecycle
 {
 	using test_context = struct {
-		count : int,
+		mut count : int,
 		worlds : array<je::world>,
 	};
 	func _test_co(context: test_context, ref run: bool)

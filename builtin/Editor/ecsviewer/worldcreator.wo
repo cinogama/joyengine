@@ -28,17 +28,17 @@ namespace editor::WorldCreator
             not_append_types = je::typeinfo::editor::get_all_systems_types(),
         };
 
-        let comps = context.not_append_types;
-        context.not_append_types = [];
+        let all_systems = []: typeof(context.not_append_types);
+        context.not_append_types->swap(all_systems);
     
-        for (let comp : comps)
+        for (let sys : all_systems)
             // 不显示所有编辑器/图形系统
-            if (!comp->name()->beginwith("Editor::") && !comp->name()->beginwith("Graphic::"))
-                if (comp->name()->beginwith("Translation::"))
+            if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
+                if (sys->name()->beginwith("Translation::"))
                     // 默认添加Translation相关系统
-                    context.has_active_types->add(comp);
+                    context.has_active_types->add(sys);
                 else
-                    context.not_append_types->add(comp);
+                    context.not_append_types->add(sys);
 
         return context;
     }
@@ -53,8 +53,8 @@ namespace editor::WorldCreator
             not_append_types = je::typeinfo::editor::get_all_systems_types(),
         };
 
-        let all_systems = context.not_append_types;
-        context.not_append_types = [];
+        let all_systems = []: typeof(context.not_append_types);
+        context.not_append_types->swap(all_systems);
     
         for (let sys : all_systems)
             // 不显示所有编辑器/图形系统
@@ -260,7 +260,7 @@ namespace editor::WorldCreator
                         match(Project::GetCurrentProject()->FindWorld(world))
                         {
                         value(project_world)?
-                            project_world.runtime_systems = context.has_append_types;
+                            project_world.runtime_systems->copy(context.has_append_types);
                         none?
                             ;
                         }

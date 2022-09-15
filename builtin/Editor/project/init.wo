@@ -35,7 +35,7 @@ namespace editor::Project
     using Path = struct {
         name: string,       // 仅用于显示
         path: string,
-        childs: option<array<Path>>,
+        mut childs: option<array<Path>>,
     };
     private func _GetRootPaths()
     {

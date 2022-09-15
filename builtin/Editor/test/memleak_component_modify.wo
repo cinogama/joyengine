@@ -6,7 +6,7 @@ namespace test::memory_leak::ComponentModify
 {
 	using test_context = struct {
 		e     : je::entity,
-		count : int
+		mut count : int
 	};
 	func _test_co(context: test_context, ref run: bool)
 	{
