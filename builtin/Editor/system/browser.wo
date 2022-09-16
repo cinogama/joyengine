@@ -46,7 +46,7 @@ namespace editor::Browser
         static let default_file_icon 
             = FileType::others(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/File.png")->val);
 
-        match (_path.type)
+        match (_path.type->get)
         {
         dir(_)?
             return default_path_icon;
@@ -65,15 +65,14 @@ namespace editor::Browser
         path        : string,   // 当前目录/文件的目录
         name        : string,
         externname  : string,
-        // TODO: 这个玩意儿其实不应该是mut的 后面干掉
-        mut type    : PathType, // 类型，如果是目录，则还包含目录内的子项    
+        type        : mutable<PathType>, // 类型，如果是目录，则还包含目录内的子项    
     };
 
     namespace PathInfo
     {
         func indir(self : PathInfo, functor: (option<array<PathInfo>>)=>void)
         {
-            match (self.type)
+            match (self.type->get)
             {
             dir(subdirs)? functor(subdirs);
             file?;
@@ -82,7 +81,7 @@ namespace editor::Browser
         }
         func infile(self : PathInfo, functor: ()=>void)
         {
-            match (self.type)
+            match (self.type->get)
             {
             dir(subdirs)?;
             file? functor();
@@ -92,7 +91,7 @@ namespace editor::Browser
         func childs(self : PathInfo, force_update: bool)
         {
             // 如果没有要求强制更新，有现成的就用现成的
-            match (self.type)
+            match (self.type->get)
             {
             dir(_dir)?
                 match(_dir)
@@ -114,12 +113,11 @@ namespace editor::Browser
                         path = current_subpath, 
                         name = je::filesys::filename(current_subpath),
                         externname = je::filesys::externname(current_subpath),
-                        type = 
-                            je::filesys::isdir(current_subpath)?
-                                PathType::dir(option::none) | PathType::file,
+                        type = mutable(je::filesys::isdir(current_subpath)?
+                                PathType::dir(option::none) | PathType::file),
                     };);
 
-            self.type =  PathType::dir(option::value(sublist));
+            self.type->set(PathType::dir(option::value(sublist)));
             return sublist;
         }
     }
@@ -192,9 +190,9 @@ namespace editor::Browser
                         path = subpath,
                         name = je::filesys::filename(subpath),
                         externname = je::filesys::externname(subpath),
-                        type =  je::filesys::isdir(subpath)
+                        type = mutable(je::filesys::isdir(subpath)
                             ? PathType::dir(option::none) 
-                            | PathType::file,
+                            | PathType::file),
                     };);
         }
 
@@ -238,13 +236,13 @@ namespace editor::Browser
                 path = root_path,
                 name = je::filesys::filename(root_path),
                 externname = je::filesys::externname(root_path),
-                type = PathType::dir(option::none),
+                type = mutable(PathType::dir(option::none)),
             };
 
         // 用于递归展示所有子目录等
         func _show_paths(path: PathInfo)
         {
-            match (path.type)
+            match (path.type->get)
             {
             PathType::dir(subpath)?
             {
@@ -267,7 +265,7 @@ namespace editor::Browser
                 }
                 else
                     // 如果目录被折叠起来，则删除缓存，等待下次展开时重新获取
-                    path.type = PathType::dir(option::none);
+                    path.type->set(PathType::dir(option::none));
             }
             PathType::file?
                 ; // path_tree只显示目录，跳过文件

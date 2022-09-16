@@ -267,7 +267,7 @@ namespace editor::Project
         using je;
 
         // 从项目信息加载并创建项目
-        let proj_name = (data["name": dynamic] as string)->trim;
+        let proj_name = data["name": dynamic] as string->trim;
         let proj_path = data["path": dynamic] as string;
 
         match (CreateProject(proj_name, proj_path, false))
