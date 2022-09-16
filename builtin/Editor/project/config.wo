@@ -141,42 +141,9 @@ namespace editor::Project
     // 从文件中读取世界数据
     public func LoadWorld(self: Project, path: string)=> option<World>
     {
-        func ApplyWorld(self: Project, path: string, dat: map<dynamic, dynamic>)
-        {
-            match (dat->get("name": dynamic))
-            {
-            value(name)?
-            {
-                let world = self->CreateWorld();
-                world.instance->editor::name(name as string);
-                world.path = value(path);
-                world.runtime_systems->copy(
-                    dat->get("runtime_systems": dynamic)
-                        ->map(\d: dynamic = d as array<dynamic>;)
-                        ->map(\rtsyss: array<dynamic> = rtsyss
-                            ->trans(\tname: dynamic = je::typeinfo(tname as string);)
-                            ->forall(\t: option<je::typeinfo> = t->has;)  // TODO: 类型没找到弹个框
-                            ->trans(\t: option<je::typeinfo> = t->val;);)
-                        ->valor([]));
-                dat->get("edit_systems": dynamic)
-                    ->map(\d: dynamic = (d as array<dynamic>)
-                        ->trans(\tname: dynamic = je::typeinfo(tname as string);)
-                        ->forall(\t: option<je::typeinfo> = t->has;)
-                        ->trans(\t: option<je::typeinfo> = world.instance->add_system(t->val);););
-
-                dat->get("entities": dynamic)
-                    ->map(\es: dynamic = es as array<dynamic>
-                        ->trans(\edat: dynamic = std::panic("TODO;");););
-
-                return value(world);
-            }
-            none?
-                return none;
-            }
-        }
         return je::file::readall(path)
             ->bind(\d: string = d->tomap;)
-            ->bind(\d: map<dynamic, dynamic> =  ApplyWorld(self, path, d););
+            ->bind(\d: map<dynamic, dynamic> = Serialize::restore_world(self, d););
     }
 
     public func FindWorld(self: Project, world: je::world)=> option<World>
