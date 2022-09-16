@@ -165,7 +165,7 @@ namespace editor::Project
                         ->trans(\t: option<je::typeinfo> = world.instance->add_system(t->val);););
 
                 dat->get("entities": dynamic)
-                    ->map(\es: dynamic = (es as array<dynamic>)
+                    ->map(\es: dynamic = es as array<dynamic>
                         ->trans(\edat: dynamic = std::panic("TODO;");););
 
                 return value(world);
