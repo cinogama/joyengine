@@ -111,7 +111,7 @@ namespace editor::Inspector::Component
                             {
                             value(component_addr)?
                             {
-                                for (let name, type, addr : component_addr->editor::iter_member(type))
+                                for (let name, type, addr : component_addr->editor::iter_member())
                                 {
                                     member_count += 1;
                                     _show_edit_widget(name, type, addr);

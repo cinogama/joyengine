@@ -97,18 +97,19 @@ namespace editor::WorldList
                                     world->close;
                                 });;
                     let save_world_form = 
-                        \ saving_path: string = generic::AskBox("确认关闭世界",
-                                F"确定要关闭世界{world->editor::name}吗？世界将被保存到默认路径！",
+                        \ proj_world: Project::World, saving_path: string = 
+                            generic::AskBox("确认关闭世界",
+                                F"确定要关闭世界{world->editor::name}吗？世界将被保存到{saving_path}！",
                                 func(){
                                     EntityList::set_current_entity(option::none);
+                                    proj_world->Save();
                                     world->close;
-                                    std::panic("TODO: savine not impl");
                                 });;
                     match(Project::GetCurrentProject()->FindWorld(world))
                     {
                     value(proj_world)?
                         proj_world.path
-                            ->map(\p: string = launch(save_world_form, (p,));) // 如果当前项目有路径，则询问是否关闭
+                            ->map(\p: string = launch(save_world_form, (proj_world, p));) // 如果当前项目有路径，则询问是否关闭
                             ->or(\ = launch(delete_world_form, ()););    
                     none?
                         launch(delete_world_form, ());

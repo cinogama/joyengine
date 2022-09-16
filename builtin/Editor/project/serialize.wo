@@ -24,7 +24,7 @@ namespace editor::Serialize
                     where 
                         collect_members = func(){
                             let result = {}: map<string, string>; 
-                            for (let name, type, addr : c->editor::iter_member(t))
+                            for (let name, type, addr : c->editor::iter_member())
                                 result[name] = addr->to_string(type);
                             return result;
                         },
@@ -57,8 +57,26 @@ namespace editor::Serialize
             return option::none;
 
         let entity = world->add_entity(component_types_dat->trans(\tp: (je::typeinfo,anything) = tp[0];));
+        
+        // 如果数据里面有name字段，那就设置一下实体名字
+        entity_dat
+            ->get("name": dynamic)
+            ->map(\n:dynamic = entity->editor::name(n as string););
 
-        std::panic("TODO; Apply attributes");
+        // 开始应用数据
+        component_types_dat
+            ->trans(\cdata: (je::typeinfo, map<string, string>) = 
+                comp
+                    ->map(\comp: je::component = 
+                        comp->editor::members
+                            ->unmapping
+                            ->trans(\pair: (string,(je::typeinfo, je::native_value)) = 
+                                dat->get(mname)
+                                    ->map(\mdat: string = mvalue->parse(mtype, mdat);)
+                                where (mname,(mtype, mvalue)) = pair;)
+                    ;)
+                where comp = entity->editor::get_component(type)
+                    , (type, dat) = cdata;);
 
         return option::value(entity);
     }

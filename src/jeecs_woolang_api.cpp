@@ -1497,11 +1497,23 @@ R"(
                 return _get_components_types_from_entity(self, []: array<typeinfo>);
             }
 
-            extern("libjoyecs", "wojeapi_get_component_from_entity")
-            public func get_component(self: entity, type: typeinfo)=> option<component>;
+            public func get_component(self: entity, type: typeinfo)=> option<component>
+            {
+                extern("libjoyecs", "wojeapi_get_component_from_entity")
+                func _get_component(self: entity, type: typeinfo)=> option<handle>;
+    
+                return _get_component(self, type)->map(\addr:handle = component{
+                    addr = addr, type = type,
+                };);
+            };
 
-            extern("libjoyecs", "wojeapi_add_component_from_entity")
-            public func add_component(self: entity, type: typeinfo)=> option<component>;
+            public func add_component(self: entity, type: typeinfo)=> component
+            {
+                extern("libjoyecs", "wojeapi_add_component_from_entity")
+                func _add_component(self: entity, type: typeinfo)=> handle;
+    
+                return component{addr = _add_component(self, type), type = type,};
+            };
 
             extern("libjoyecs", "wojeapi_remove_component_from_entity")
             public func remove_component(self: entity, type: typeinfo)=> void;
@@ -1654,7 +1666,6 @@ R"(
         extern("libjoyecs", "wojeapi_native_value_je_string")
         public func string(self: native_value, ref val: string)=> void;
 
-
         extern("libjoyecs", "wojeapi_native_value_je_to_string")
         public func to_string(self: native_value, types: typeinfo)=> string; 
 
@@ -1662,8 +1673,7 @@ R"(
         public func parse(self: native_value, types: typeinfo, str: string)=> void; 
     }
 
-    public using component = handle;
-    namespace component
+    public using component = struct{addr: handle, type: typeinfo}
     {
         namespace editor
         {
@@ -1679,8 +1689,22 @@ R"(
                 public func next(self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value)=> bool;
             }
 
-            extern("libjoyecs", "wojeapi_iter_components_member")
-            public func iter_member(self: component, type: typeinfo) => member_iterator;
+            func iter_member(self: component)
+            {
+                extern("libjoyecs", "wojeapi_iter_components_member")
+                func _iter_member(self: handle, type: typeinfo) => member_iterator;
+
+                return _iter_member(self.addr, self.type);
+            }
+            
+            public func members(self: component)
+            {
+                let result = {}: map<string, (typeinfo, native_value)>;
+                for (let name, type, addr : self->iter_member())
+                    result[name] = (type, addr);
+
+                return result; 
+            }
         }
     }
 }

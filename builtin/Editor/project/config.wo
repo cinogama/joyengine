@@ -39,12 +39,15 @@ namespace editor::Project
                 je::gui::launch(generic::MsgBox, 
                     (F"保存世界{self.instance->editor::name()}失败",
                      F"无法写入世界数据到{self.path->val}"));
-                return;
+                return false;
             }
+            return true;
         }
         public func SaveTo(self: World, path: string)
         {
-            let real_saving_path = F"{path}/{self.instance->editor::name()}.jeworld";
+            let real_saving_path = je::filesys::isdir(path) 
+                ? F"{path}/{self.instance->editor::name()}.jeworld" 
+                | path ;
             let save_request =
                 self.path      
                     ->map(\oldpath: string = 
