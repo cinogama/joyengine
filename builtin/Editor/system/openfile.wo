@@ -14,7 +14,11 @@ using generic;
 
 namespace editor::OpenFile
 {
-	let registed_open_method = {}: map<string, (Browser::PathInfo)=>void>;
+	let registed_open_method = {
+		["jeworld"] = \p: Browser::PathInfo = Project::GetCurrentProject()
+			->LoadWorld(p.path)
+			->map(\w: Project::World = w.instance->WorldList::SwitchEditingWorld;);,
+	}: map<string, (Browser::PathInfo)=>void>;
 
 	func _open_impl(file: Browser::PathInfo)
 	{

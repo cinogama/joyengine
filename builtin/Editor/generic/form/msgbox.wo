@@ -1,12 +1,12 @@
 import woo.std;
 import je.gui;
 
+using je::gui;
+
 namespace generic
 {
     public func MsgBox(title:string, shown:string)
     {
-        using je::gui;
-
         let mut open = true;
 
         Begin(F"{title}##{JobID()}"
@@ -21,5 +21,10 @@ namespace generic
         if (!open)
             return FormAction::Close;
         return FormAction::Nothing;
+    }
+
+    public func msgbox(title: string, shown: string)
+    {
+        return launch(MsgBox, (title, shown));
     }
 }

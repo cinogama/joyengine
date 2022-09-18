@@ -24,7 +24,7 @@ namespace editor::Project
 {
     // 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
     public using World = struct {
-        mut path : option<string>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
+        path : mutable<option<string>>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
         instance : je::world,  // 世界实例
         runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     }
@@ -33,12 +33,12 @@ namespace editor::Project
         {
             // Saving 
             // 肯定要有路径，不然直接爆炸
-            if (!je::file::writeall(self.path->val, 
+            if (!je::file::writeall(self.path->get->val, 
                 Serialize::save_project_world(self): string))
             {
                 je::gui::launch(generic::MsgBox, 
                     (F"保存世界{self.instance->editor::name()}失败",
-                     F"无法写入世界数据到{self.path->val}"));
+                     F"无法写入世界数据到{self.path->get->val}"));
                 return false;
             }
             return true;
@@ -50,6 +50,7 @@ namespace editor::Project
                 | path ;
             let save_request =
                 self.path      
+                    ->get
                     ->map(\oldpath: string = 
                         oldpath == real_saving_path 
                         ? result::ok(oldpath)
@@ -76,7 +77,7 @@ namespace editor::Project
             }
 
             je::gui::launch(generic::AskBox, ("保存世界？", ask_msg, func(){
-                self.path = option::value(real_saving_path);
+                self.path->set(option::value(real_saving_path));
                 self->Save();
             }));
         }
@@ -132,7 +133,7 @@ namespace editor::Project
         ]);
 
         let world = World{
-            path = option::none,
+            path = mutable(option::none),
             instance = world_instance,
             runtime_systems = [],
         };
@@ -144,9 +145,27 @@ namespace editor::Project
     // 从文件中读取世界数据
     public func LoadWorld(self: Project, path: string)=> option<World>
     {
+        // 检查一下项目里是不是已经有同路径的世界在运行了
+        let index = self.worlds->findif(\w: World = w.path->get->has 
+            ? w.path->get->val == path
+            | false;);
+        if (index != -1)
+        {
+            generic::msgbox("加载世界失败", F"世界'{path}'已在编辑中，不能重复加载");
+            return option::none;
+        }
+
         return je::file::readall(path)
             ->bind(\d: string = d->tomap;)
             ->bind(\d: map<dynamic, dynamic> = Serialize::restore_world(self, d););
+    }
+
+    public func CloseWorld(self: Project, world: je::world)
+    {
+        self->FindWorld(world)
+            ->map(\w: World = self.worlds->remove(self.worlds->find(w)););
+
+        world->close;
     }
 
     public func FindWorld(self: Project, world: je::world)=> option<World>

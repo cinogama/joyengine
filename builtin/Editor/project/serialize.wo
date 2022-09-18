@@ -109,7 +109,7 @@ namespace editor::Serialize
         return {
             ["name"] = w->editor::name: dynamic,
             // 不是所有world都有path值，如果没有说明这个world不是从文件中载入的，塞一个nil进去意思一下
-            ["path"] = world.path->has ? world.path->val: dynamic | nil: dynamic,
+            ["path"] = world.path->get->has ? world.path->get->val: dynamic | nil: dynamic,
             ["entities"] = entities_json_list: dynamic,
             ["edit_systems"] = editing_systems_type_list: dynamic,
             ["runtime_systems"] = runtime_systems_type_list: dynamic,
@@ -123,11 +123,11 @@ namespace editor::Serialize
         {
             let world = project->CreateWorld();
             world.instance->editor::name(name as string);
-            world.path = dat
+            world.path->set(dat
                 ->get("path": dynamic)
                 ->bind(\s:dynamic = s is string 
                     ? option::value(s as string) 
-                    | option::none;);
+                    | option::none;));
             world.runtime_systems->copy(
                 dat->get("runtime_systems": dynamic)
                     ->map(\d: dynamic = d as array<dynamic>;)

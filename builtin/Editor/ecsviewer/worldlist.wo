@@ -12,7 +12,7 @@ import builtin.Editor.project.config;
 
 namespace editor::WorldList
 {
-    func SwitchEditingWorld(aim_world: je::world)
+    public func SwitchEditingWorld(aim_world: je::world)
     {
         je::world::rend()->map(\old: je::world = old->editor::remove_system(Project::GetCurrentProject().editor_system););
 
@@ -62,11 +62,11 @@ namespace editor::WorldList
                                             \=SwitchEditingWorld(world);));
                         }
                     }
-                    DragItem("JEEDITOR_WORLD", world: string, \=Text(F"World:{world->editor::name}"););
                     context_menu(world);
                 }
                 EndListBox();
             }
+            AcceptDrag(["JEEDITOR_WORLD"]);
         End();
 
         if (!open)
@@ -94,7 +94,7 @@ namespace editor::WorldList
                                 F"确定要删除世界{world->editor::name}吗？未保存的世界将永久丢失！",
                                 func(){
                                     EntityList::set_current_entity(option::none);
-                                    world->close;
+                                    Project::GetCurrentProject()->CloseWorld(world);
                                 });;
                     let save_world_form = 
                         \ proj_world: Project::World, saving_path: string = 
@@ -103,12 +103,12 @@ namespace editor::WorldList
                                 func(){
                                     EntityList::set_current_entity(option::none);
                                     proj_world->Save();
-                                    world->close;
+                                    Project::GetCurrentProject()->CloseWorld(world);
                                 });;
                     match(Project::GetCurrentProject()->FindWorld(world))
                     {
                     value(proj_world)?
-                        proj_world.path
+                        proj_world.path->get
                             ->map(\p: string = launch(save_world_form, (proj_world, p));) // 如果当前项目有路径，则询问是否关闭
                             ->or(\ = launch(delete_world_form, ()););    
                     none?
