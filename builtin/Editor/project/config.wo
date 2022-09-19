@@ -9,7 +9,7 @@ namespace editor
     public using Project = struct {
         name : string,          // 项目名称
         path : option<string>,  // 项目文件的路径，默认项目没有这个值
-        worlds : array<Project::World>,
+        worlds : vec<Project::World>,
 
         graphic_system : je::typeinfo,    // 默认使用的图形系统类型
         editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
@@ -26,7 +26,7 @@ namespace editor::Project
     public using World = struct {
         path : mutable<option<string>>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
         instance : je::world,  // 世界实例
-        runtime_systems : array<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
+        runtime_systems : vec<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     }
     {
         public func Save(self: World)
@@ -135,7 +135,7 @@ namespace editor::Project
         let world = World{
             path = mutable(option::none),
             instance = world_instance,
-            runtime_systems = [],
+            runtime_systems = mut[],
         };
 
         self.worlds->add(world);
@@ -156,8 +156,8 @@ namespace editor::Project
         }
 
         return je::file::readall(path)
-            ->bind(\d: string = d->tomap;)
-            ->bind(\d: map<dynamic, dynamic> = Serialize::restore_world(self, d););
+            ->bind(\d: string = d->todict;)
+            ->bind(\d: dict<dynamic, dynamic> = Serialize::restore_world(self, d););
     }
 
     public func CloseWorld(self: Project, world: je::world)
@@ -212,7 +212,7 @@ namespace editor::Project
             // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
             graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
-            worlds = [],
+            worlds = mut[],
         });
     }
 
@@ -223,7 +223,7 @@ namespace editor::Project
             path = option::value(path),
             graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
-            worlds = [],
+            worlds = mut[],
         };
 
         if (create_file)
@@ -251,7 +251,7 @@ namespace editor::Project
         return result::ok(SetCurrentProject(created_project));
     }
 
-    public func LoadProject(data: map<dynamic, dynamic>)
+    public func LoadProject(data: dict<dynamic, dynamic>)
     {
         using je;
 
@@ -322,7 +322,7 @@ namespace editor::Project
         }
     }
 
-    public func SaveProject(self: Project)=>result<map<string, dynamic>, string>
+    public func SaveProject(self: Project)=>result<dict<string, dynamic>, string>
     {
         match(self.path)
         {
@@ -334,7 +334,7 @@ namespace editor::Project
                     ->trans(\w: World = save_project_world(w););
 
             // 1. 检查所有世界是否已经有路径信息，如果没有则说明有新建的世界没有保存过，要求保存
-            let worlds = []: array<string>;
+            let worlds = mut[]: vec<string>;
             for (let world_data : worlds_dumped_data)
             {
                 if (world_data["path"] is typeof(nil))

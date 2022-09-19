@@ -23,15 +23,15 @@ namespace editor::Serialize
                 ->trans(\tc: (typeinfo, component) = (t->name, collect_members())
                     where 
                         collect_members = func(){
-                            let result = {}: map<string, string>; 
+                            let result = mut{}: map<string, string>; 
                             for (let name, type, addr : c->editor::iter_member())
                                 result[name] = addr->to_string(type);
-                            return result;
+                            return result->unsafe::asdict;
                         },
                         (t, c) = tc;)
                 ->mapping
-                ->\m : map<string, map<string, string>> = m->empty? option::none | option::value(m);
-                ->map(\m: map<string, map<string, string>> = 
+                ->\m : dict<string, dict<string, string>> = m->empty? option::none | option::value(m);
+                ->map(\m: dict<string, dict<string, string>> = 
                     {
                         ["name"] = saving_entity->editor::name: dynamic, 
                         ["components"] = m: dynamic
@@ -48,10 +48,10 @@ namespace editor::Serialize
                             ->unmapping
                             ->trans(\p:(dynamic, dynamic) = (p[0] as string, p[1] as string);)
                             ->mapping);)
-                    ->forall(\td:(option<je::typeinfo>, map<string, string>) = td[0]->has;)
-                    ->trans(\td:(option<je::typeinfo>, map<string, string>) = (td[0]->val, td[1]);)
+                    ->forall(\td:(option<je::typeinfo>, dict<string, string>) = td[0]->has;)
+                    ->trans(\td:(option<je::typeinfo>, dict<string, string>) = (td[0]->val, td[1]);)
                     ;)
-                ->valor([]) as array<(je::typeinfo, map<string, string>)>;
+                ->valor([]) as array<(je::typeinfo, dict<string, string>)>;
 
         if (component_types_dat->empty)
             return option::none;
@@ -65,7 +65,7 @@ namespace editor::Serialize
 
         // 开始应用数据
         component_types_dat
-            ->trans(\cdata: (je::typeinfo, map<string, string>) = 
+            ->trans(\cdata: (je::typeinfo, dict<string, string>) = 
                 comp
                     ->map(\comp: je::component = 
                         comp->editor::members
@@ -85,7 +85,7 @@ namespace editor::Serialize
     {
         static let INVISABLE = je::typeinfo("Editor::Invisable")->val;
 
-        alias entity_info_t = map<string, dynamic>;
+        alias entity_info_t = dict<string, dynamic>;
 
         let w = world.instance;
 
@@ -115,7 +115,7 @@ namespace editor::Serialize
             ["runtime_systems"] = runtime_systems_type_list: dynamic,
         };
     }
-    public func restore_world(project: Project, dat: map)
+    public func restore_world(project: Project, dat: dict)
     {
         match (dat->get("name": dynamic))
         {

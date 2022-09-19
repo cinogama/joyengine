@@ -13,9 +13,9 @@ namespace editor::WorldCreator
     using WorldContext  = struct {
         name  : string,
         edit_world : option<je::world>,
-        has_append_types : array<je::typeinfo>,
-        has_active_types : array<je::typeinfo>,
-        not_append_types : array<je::typeinfo>,
+        has_append_types : vec<je::typeinfo>,
+        has_active_types : vec<je::typeinfo>,
+        not_append_types : vec<je::typeinfo>,
     };
 
     public func create_context()=> WorldContext
@@ -23,12 +23,12 @@ namespace editor::WorldCreator
         let context = WorldContext{
             name = "New world",
             edit_world = option::none,
-            has_append_types = [],
-            has_active_types = [],
-            not_append_types = je::typeinfo::editor::get_all_systems_types(),
+            has_append_types = mut[],
+            has_active_types = mut[],
+            not_append_types = je::typeinfo::editor::get_all_systems_types()->tovec,
         };
 
-        let all_systems = []: typeof(context.not_append_types);
+        let all_systems = mut[]: typeof(context.not_append_types);
         context.not_append_types->swap(all_systems);
     
         for (let sys : all_systems)
@@ -48,12 +48,12 @@ namespace editor::WorldCreator
         let context = WorldContext{
             name = world->editor::name(),
             edit_world = option::value(world),
-            has_append_types = [],
-            has_active_types = [],
-            not_append_types = je::typeinfo::editor::get_all_systems_types(),
+            has_append_types = mut[],
+            has_active_types = mut[],
+            not_append_types = je::typeinfo::editor::get_all_systems_types()->tovec,
         };
 
-        let all_systems = []: typeof(context.not_append_types);
+        let all_systems = mut[]: typeof(context.not_append_types);
         context.not_append_types->swap(all_systems);
     
         for (let sys : all_systems)

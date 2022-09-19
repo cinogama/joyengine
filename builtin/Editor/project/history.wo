@@ -28,9 +28,8 @@ namespace editor::Project
 	{
 		let historys = get_project_histroy();
 
-		historys->remove(historys->find(proj_path));
-		historys->insert(0, proj_path);
-
-		writeall(HISTORY_FILE, historys: string);
+		writeall(HISTORY_FILE, historys
+			->erase(historys->find(proj_path))
+			->inlay(0, proj_path): string);
 	}
 }

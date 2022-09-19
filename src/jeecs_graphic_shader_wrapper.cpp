@@ -1321,7 +1321,7 @@ public func CULL(cull: CullConfig)
     eat_token("{", std::token_type::l_left_curly_braces);
     
     // 1. Get struct item name.
-    let struct_infos = []: array<(string, string)>;
+    let struct_infos = mut[]: vec<(string, string)>;
     while (true)
     {
         if (try_eat_token(std::token_type::l_right_curly_braces)->has())

@@ -147,11 +147,11 @@ namespace je::filesys
 
         if (isdir(_path))
         {
-            let result = []: array<string>;
+            let result = mut []: vec<string>;
             for (let child : path(_path))
                 result->add(child);
 
-            return ok(result);
+            return ok(result->unsafe::asarray);
         }
         return err(F"{_path} not a valid directory.");
     }

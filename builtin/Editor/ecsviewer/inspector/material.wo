@@ -146,7 +146,7 @@ namespace editor::Inspector::Material
                     {
                         value(shaders)?
                         {
-                            let shaders = current_entity->editor::graphic::get_shaders();
+                            let mut shaders = current_entity->editor::graphic::get_shaders();
 
                             let mut index = 0, mut shaders_has_updated = false;
                             for (let shader : shaders->dup())
@@ -155,12 +155,12 @@ namespace editor::Inspector::Material
                                 {
                                     AddShader(shad)?
                                     {
-                                        shaders->insert(index, shad);
+                                        shaders = shaders->inlay(index, shad);
                                         shaders_has_updated = true;
                                     }
                                     DelShader?
                                     {
-                                        shaders->remove(index);
+                                        shaders = shaders->erase(index);
                                         shaders_has_updated = true;
                                     }
                                     DoNothing? /* 没有动作 */;
@@ -181,7 +181,7 @@ namespace editor::Inspector::Material
                                         // 强行让编辑器展开所有shader
                                         _last_display_entity = option::none;
 
-                                        shaders->add(drag_append_new_shader->val());
+                                        shaders = shaders->append(drag_append_new_shader->val());
                                         shaders_has_updated = true;
                                     }
                                 }

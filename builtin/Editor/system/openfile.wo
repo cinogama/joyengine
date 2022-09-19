@@ -18,7 +18,7 @@ namespace editor::OpenFile
 		["jeworld"] = \p: Browser::PathInfo = Project::GetCurrentProject()
 			->LoadWorld(p.path)
 			->map(\w: Project::World = w.instance->WorldList::SwitchEditingWorld;);,
-	}: map<string, (Browser::PathInfo)=>void>;
+	}: dict<string, (Browser::PathInfo)=>void>;
 
 	func _open_impl(file: Browser::PathInfo)
 	{

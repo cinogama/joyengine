@@ -6,7 +6,7 @@ namespace test::memory_leak::WorldLifecycle
 {
 	using test_context = struct {
 		mut count : int,
-		worlds : array<je::world>,
+		worlds : vec<je::world>,
 	};
 	func _test_co(context: test_context, ref run: bool)
 	{
@@ -108,7 +108,7 @@ namespace test::memory_leak::WorldLifecycle
 		if (!testing)
 		{
 			testing = true;
-			launch(_test_co, (test_context{count = 0, worlds = []}, ref testing));
+			launch(_test_co, (test_context{count = 0, worlds = mut[]}, ref testing));
 		}
 
 		if (!open)

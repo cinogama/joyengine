@@ -23,7 +23,7 @@ namespace editor::Project
     {
         // TODO: 这里先只考虑Windows的情况，unix系统那套先不管
         //       而且只考虑A-Z的盘符，什么AA AB AC，就算windows未来支持也给爷滚
-        let arr = []: array<char>;
+        let arr = mut[]: vec<char>;
         for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1: char)
             arr->add(ch);
 
@@ -140,7 +140,7 @@ namespace editor::Project
                             let projname = je::filesys::filename(create_proj_in);
                             let proj_data = 
                                 je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
-                                    ->bind(\json: string = json->tomap;);
+                                    ->bind(\json: string = json->todict;);
 
                             match (proj_data)
                             {

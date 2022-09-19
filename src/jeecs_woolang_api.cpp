@@ -53,7 +53,7 @@ WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args, size_t a
 WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t argc)
 {
     void* universe = wo_pointer(args + 0);
-    wo_value out_array = args + 1;
+    wo_value out_array = wo_push_arr(vm, 0);
 
     auto result = jedbg_get_all_worlds_in_universe(universe);
     {
@@ -125,7 +125,7 @@ WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args, size_t
     private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
     */
     const jeecs::typing::type_info** types = jedbg_get_all_system_attached_in_world(wo_pointer(args + 0));
-    wo_value result = args + 1;
+    wo_value result = wo_push_arr(vm, 0);;
 
     auto* cur_type = types;
     while (*cur_type)
@@ -150,7 +150,7 @@ WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value arg
 
 WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_t argc)
 {
-    wo_value out_arr = args + 1;
+    wo_value out_arr = wo_push_arr(vm, 0);
 
     auto entities = jedbg_get_all_entities_in_world(wo_pointer(args + 0));
     auto entity_iter = entities;
@@ -300,7 +300,7 @@ WO_API wo_api wojeapi_is_entity_valid(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_get_all_components_types_from_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    wo_value out_arr = args + 1;
+    wo_value out_arr = wo_push_arr(vm, 0);
 
     auto types = jedbg_get_all_components_from_entity(entity);
     auto typeindex = types;
@@ -493,7 +493,8 @@ WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_get_all_registed_types(wo_vm vm, wo_value args, size_t argc)
 {
-    wo_value out_array = args + 0;
+    wo_value out_array = wo_push_arr(vm, 0);
+
     auto** types = jedbg_get_all_registed_types();
 
     auto** cur_type = types;
@@ -848,7 +849,7 @@ WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    wo_value out_map = args + 1;
+    wo_value out_map = wo_push_map(vm);
 
     if (entity->valid())
     {
@@ -887,7 +888,7 @@ WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args, size_t ar
 WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    wo_value out_array = args + 1;
+    wo_value out_array = wo_push_arr(vm, 0);
 
     if (entity->valid())
     {
@@ -942,12 +943,11 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
     /*
     extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
                 func _get_uniforms_from_shader(
-                    shad: shader,
-                    out_datas: map<string, (typeinfo, uniform_value_data)>
+                    shad: shader
                 )=> map<string, (typeinfo, uniform_value_data)>;
     */
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
-    wo_value out_map = args + 1;
+    wo_value out_map = wo_push_map(vm);
 
     if ((*shader)->enabled())
     {
@@ -1114,27 +1114,21 @@ namespace je
             public func get_all_registed_types()
             {
                 extern("libjoyecs", "wojeapi_get_all_registed_types")
-                func _get_all_registed_types(out_result: array<typeinfo>)=> array<typeinfo>;
+                func _get_all_registed_types()=> array<typeinfo>;
 
-                return _get_all_registed_types([]);
+                return _get_all_registed_types();
             }
 
             public func get_all_components_types()
             {
-                let result = []: array<typeinfo>;
-                for (let type : get_all_registed_types())
-                    if (type->is_component())
-                        result->add(type);
-                return result;
+                return get_all_registed_types()
+                    ->forall(\type: typeinfo = type->is_component(););
             }
 
             public func get_all_systems_types()
             {
-                let result = []: array<typeinfo>;
-                for (let type : get_all_registed_types())
-                    if (type->is_system())
-                        result->add(type);
-                return result;
+                return get_all_registed_types()
+                    ->forall(\type: typeinfo = type->is_system(););
             }
         }
         extern("libjoyecs", "wojeapi_type_of")
@@ -1271,32 +1265,27 @@ namespace je
             public func get_uniforms(self: shader)=> map<string, uniform_variable>
             {
                 extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
-                public func _get_uniforms_from_shader(
-                    shad: shader, 
-                    out_datas: map<string, (typeinfo, uniform_value_data)>
-                )=> map<string, (typeinfo, uniform_value_data)>;
-                
-                let result = {}: map<string, uniform_variable>;
+                public func _get_uniforms_from_shader(shad: shader)=> map<string, (typeinfo, uniform_value_data)>;
 
-                for(let name, (type, val) : _get_uniforms_from_shader(self, {}: map<string, (typeinfo, uniform_value_data)>))
-                {
-                    if (type == typeinfo::int)
-                        result[name] = uniform_variable::integer(val.n);
-                    else if (type == typeinfo::float)
-                        result[name] = uniform_variable::float(val.x);
-                    else if (type == typeinfo::float2)
-                        result[name] = uniform_variable::float2((val.x, val.y));
-                    else if (type == typeinfo::float3)
-                        result[name] = uniform_variable::float3((val.x, val.y, val.z));
-                    else if (type == typeinfo::float4)
-                        result[name] = uniform_variable::float4((val.x, val.y, val.z, val.w));
-                    else if (type == typeinfo::texture)
-                        result[name] = uniform_variable::texture(val.n);
-                    else
-                        result[name] = uniform_variable::others;
-                }
-
-                return result;
+                return
+                    _get_uniforms_from_shader(self)
+                        ->trans(\name: string, tv: (typeinfo, uniform_value_data) = (name, 
+                            type == typeinfo::int
+                            ? uniform_variable::integer(val.n)
+                            | type == typeinfo::float
+                                ? uniform_variable::float(val.x)
+                                | type == typeinfo::float2
+                                    ? uniform_variable::float2((val.x, val.y))
+                                    | type == typeinfo::float3
+                                        ? uniform_variable::float3((val.x, val.y, val.z))
+                                        | type == typeinfo::float4
+                                            ? uniform_variable::float4((val.x, val.y, val.z, val.w))
+                                            | type == typeinfo::texture
+                                                ? uniform_variable::texture(val.n)
+                                                | uniform_variable::others
+                            )
+                            where (type, val) = tv;
+                        );
             }
             public func set_uniform<T>(self: shader, name: string, val: T)
                 where nil:dynamic:T is int
@@ -1339,9 +1328,9 @@ namespace je
             public func worlds_list(self: universe)
             {
                 extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
-                public func _get_all_worlds(universe:universe, out_arrs:array<world>) => array<world>;
+                public func _get_all_worlds(universe:universe) => array<world>;
 
-                return _get_all_worlds(self, []:array<world>);
+                return _get_all_worlds(self);
             }
         }
     }
@@ -1401,17 +1390,16 @@ namespace je
             public func get_all_entities(self: world)=> array<entity>
             {
                 extern("libjoyecs", "wojeapi_get_all_entities_from_world")
-                public func _get_all_entities_from_world(world: world, out_result: array<entity>)=> array<entity>;
+                public func _get_all_entities_from_world(world: world)=> array<entity>;
 
-                let result = []: array<entity>;
-                return _get_all_entities_from_world(self, result);
+                return _get_all_entities_from_world(self);
             }
 
             public func get_systems_types(self: world)=> array<typeinfo>
             {
                 extern("libjoyecs", "wojeapi_get_all_systems_from_world")
-                    private public func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
-                return _get_systems_from_world(self, []: array<typeinfo>);
+                    private public func _get_systems_from_world(self: world)=> array<typeinfo>;
+                return _get_systems_from_world(self);
             }
 
             public func top_entity_iter(self: world)=> entity::editor::entity_iter
@@ -1491,10 +1479,9 @@ R"(
             public func get_components_types(self: entity)=> array<typeinfo>
             {
                 extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")
-                public func _get_components_types_from_entity(
-                    entity: entity, out_result: array<typeinfo>)=> array<typeinfo>;
+                public func _get_components_types_from_entity(entity: entity)=> array<typeinfo>;
 
-                return _get_components_types_from_entity(self, []: array<typeinfo>);
+                return _get_components_types_from_entity(self);
             }
 
             public func get_component(self: entity, type: typeinfo)=> option<component>
@@ -1530,14 +1517,14 @@ R"(
                 mut m_current_entity: option<entity>,
 
                 m_all_entity_list   : array<entity>,
-                m_not_top_entities  : array<entity>,
-                m_outed_entities    : array<entity>,
+                m_not_top_entities  : vec<entity>,
+                m_outed_entities    : vec<entity>,
             };
             namespace entity_iter
             {
                 private public func create(entitys: array<entity>)
                 {
-                    let not_top_entities = []: array<entity>;
+                    let not_top_entities = mut[]: vec<entity>;
                     return entity_iter{
                         m_cur_iter = entitys->iter(),
                         m_judge_func = public func(e: entity)
@@ -1550,7 +1537,7 @@ R"(
                         m_current_entity = option::none:<entity>,
                         m_all_entity_list = entitys,
                         m_not_top_entities = not_top_entities,
-                        m_outed_entities = []: array<entity>,
+                        m_outed_entities = mut[]: vec<entity>,
                     };
                 }
 
@@ -1565,7 +1552,7 @@ R"(
                                        },
                         m_current_entity = option::none:<entity>,
                         m_all_entity_list = self.m_all_entity_list,
-                        m_not_top_entities = []: array<entity>,
+                        m_not_top_entities = mut[]: vec<entity>,
                         m_outed_entities = self.m_outed_entities,
                     };
                 }
@@ -1620,9 +1607,9 @@ R"(
                 public func get_shaders(self: entity)=> array<graphic::shader>
                 {
                     extern("libjoyecs", "wojeapi_shaders_of_entity")
-                    public func get_shaders_from_entity(e: entity, out_array: array<graphic::shader>)=> array<graphic::shader>;
+                    public func get_shaders_from_entity(e: entity)=> array<graphic::shader>;
 
-                    return get_shaders_from_entity(self, []: array<graphic::shader>);
+                    return get_shaders_from_entity(self);
                 }
 
                 extern("libjoyecs", "wojeapi_set_shaders_of_entity")
@@ -1631,9 +1618,9 @@ R"(
                 public func get_textures(self: entity)=> map<int, graphic::texture>
                 {
                     extern("libjoyecs", "wojeapi_textures_of_entity")
-                    public func get_textures_from_entity(e: entity, textures: map<int, graphic::texture>)=> map<int, graphic::texture>;
+                    public func get_textures_from_entity(e: entity)=> map<int, graphic::texture>;
 
-                    return get_textures_from_entity(self, {}: map<int, graphic::texture>);
+                    return get_textures_from_entity(self);
                 }
 
                 extern("libjoyecs", "wojeapi_bind_texture_for_entity")
@@ -1699,11 +1686,11 @@ R"(
             
             public func members(self: component)
             {
-                let result = {}: map<string, (typeinfo, native_value)>;
+                let result = mut {}: map<string, (typeinfo, native_value)>;
                 for (let name, type, addr : self->iter_member())
                     result[name] = (type, addr);
 
-                return result; 
+                return result->unsafe::asdict; 
             }
         }
     }

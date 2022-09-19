@@ -12,8 +12,8 @@ namespace editor::EntityCreator
     using EntityContext = struct {
         name  : string,
         edit_entity      : option<je::entity>,
-        has_append_types : array<je::typeinfo>,
-        not_append_types : array<je::typeinfo>,
+        has_append_types : vec<je::typeinfo>,
+        not_append_types : vec<je::typeinfo>,
     };
     
     public func edit_context(entity: je::entity)=> EntityContext
@@ -21,11 +21,11 @@ namespace editor::EntityCreator
         let context = EntityContext{
             name = entity->editor::name,
             edit_entity = option::value(entity),
-            has_append_types = [],
-            not_append_types = je::typeinfo::editor::get_all_components_types(),
+            has_append_types = mut[],
+            not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
         };
 
-        let comps = []: typeof(context.not_append_types);
+        let comps = mut[]: typeof(context.not_append_types);
         context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
@@ -47,11 +47,11 @@ namespace editor::EntityCreator
         let context = EntityContext{
             name = "New entity",
             edit_entity = option::none,
-            has_append_types = [],
-            not_append_types = je::typeinfo::editor::get_all_components_types(),
+            has_append_types = mut[],
+            not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
         };
 
-        let comps = []: typeof(context.not_append_types);
+        let comps = mut[]: typeof(context.not_append_types);
         context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
@@ -275,7 +275,7 @@ namespace editor::EntityCreator
                     {
                         value(rworld)?
                         {
-                            rworld->add_entity(context.has_append_types)
+                            rworld->add_entity(context.has_append_types->toarray)
                                   ->editor::name(context.name);
                         }
                         none?
