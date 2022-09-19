@@ -1690,7 +1690,7 @@ R"(
                 for (let name, type, addr : self->iter_member())
                     result[name] = (type, addr);
 
-                return result->unsafe::asdict; 
+                return result->todict; 
             }
         }
     }

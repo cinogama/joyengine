@@ -151,7 +151,7 @@ namespace je::filesys
             for (let child : path(_path))
                 result->add(child);
 
-            return ok(result->unsafe::asarray);
+            return ok(result->toarray);
         }
         return err(F"{_path} not a valid directory.");
     }

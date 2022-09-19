@@ -77,7 +77,7 @@ namespace editor::Inspector::Component
                         // 从根开始，找到最终组件所在的节点
                         for (let name: scope_names)
                         {
-                            current_types = current_types.m_map->get(name, 
+                            current_types = current_types.m_map->get_or_set_default(name, 
                                 component_chain{
                                     m_map = mut{},
                                     m_component_type = option::none:<je::typeinfo>
