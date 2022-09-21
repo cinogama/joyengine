@@ -9,7 +9,7 @@ import builtin.Editor.ecsviewer.entitycreator;
 
 namespace editor::Inspector::Component
 {
-    let _type_widget_methods = {}mut: map<je::typeinfo, (string, je::native_value)=>void>;
+    let _type_widget_methods = {}mut: map<je::typeinfo, mut (string, je::native_value)=>void>;
             
     using component_chain = struct{
         m_map:              map<string, component_chain>,

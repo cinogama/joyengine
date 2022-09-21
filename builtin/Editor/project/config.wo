@@ -45,8 +45,6 @@ namespace editor::Project
         }
         public func SaveTo(self: World, path: string)
         {
-            std::panic("TODO;");
-        /*
             let real_saving_path = je::filesys::isdir(path) 
                 ? F"{path}/{self.instance->editor::name()}.jeworld" 
                 | path ;
@@ -81,7 +79,6 @@ namespace editor::Project
                 self.path = option::value(real_saving_path);
                 self->Save();
             }));
-        */
         }
     }
 

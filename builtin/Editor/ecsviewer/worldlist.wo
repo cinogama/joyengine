@@ -108,7 +108,7 @@ namespace editor::WorldList
                     match(Project::GetCurrentProject()->FindWorld(world))
                     {
                     value(proj_world)?
-                        proj_world.path->get
+                        proj_world.path
                             ->map(\p: string = launch(save_world_form, (proj_world, p));) // 如果当前项目有路径，则询问是否关闭
                             ->or(\ = launch(delete_world_form, ()););    
                     none?
