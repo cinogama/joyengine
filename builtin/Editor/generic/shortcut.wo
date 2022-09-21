@@ -11,7 +11,7 @@ namespace shortcut
 		action : ()=>void,
 	};
 
-	private let registered_keys = mut []: vec<ShortcutKeyStateAndAction>;
+	private let registered_keys = []mut: vec<ShortcutKeyStateAndAction>;
 
 	public func register(hotkeys : array<je::keycode>, action: ()=>void)
 	{

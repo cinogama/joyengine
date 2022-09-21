@@ -9,7 +9,7 @@ import builtin.Editor.ecsviewer.entitycreator;
 
 namespace editor::Inspector::Component
 {
-    let _type_widget_methods = mut{}: map<je::typeinfo, (string, je::native_value)=>void>;
+    let _type_widget_methods = {}mut: map<je::typeinfo, (string, je::native_value)=>void>;
             
     using component_chain = struct{
         m_map:              map<string, component_chain>,
@@ -60,7 +60,7 @@ namespace editor::Inspector::Component
                     // TODO: 在此处显示一下实体信息
                     let current_component_types = 
                         component_chain{ 
-                            m_map = mut{}, 
+                            m_map = {}mut, 
                             m_component_type = option::none:<je::typeinfo> 
                         };
                     for (let component_type : current_entity->editor::get_components_types())
@@ -79,7 +79,7 @@ namespace editor::Inspector::Component
                         {
                             current_types = current_types.m_map->get_or_set_default(name, 
                                 component_chain{
-                                    m_map = mut{},
+                                    m_map = {}mut,
                                     m_component_type = option::none:<je::typeinfo>
                                 });
                         }

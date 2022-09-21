@@ -10,7 +10,7 @@ namespace editor::EntityCreator
 {
     private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png")->val;
     using EntityContext = struct {
-        name  : string,
+        mut name  : string,
         edit_entity      : option<je::entity>,
         has_append_types : vec<je::typeinfo>,
         not_append_types : vec<je::typeinfo>,
@@ -21,11 +21,11 @@ namespace editor::EntityCreator
         let context = EntityContext{
             name = entity->editor::name,
             edit_entity = option::value(entity),
-            has_append_types = mut[],
+            has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
         };
 
-        let comps = mut[]: typeof(context.not_append_types);
+        let comps = []mut: typeof(context.not_append_types);
         context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
@@ -47,11 +47,11 @@ namespace editor::EntityCreator
         let context = EntityContext{
             name = "New entity",
             edit_entity = option::none,
-            has_append_types = mut[],
+            has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
         };
 
-        let comps = mut[]: typeof(context.not_append_types);
+        let comps = []mut: typeof(context.not_append_types);
         context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件

@@ -24,7 +24,7 @@ namespace editor::Project
 {
     // 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
     public using World = struct {
-        path : mutable<option<string>>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
+        mut path : option<string>, // 已经保存的世界会有路径，在关闭世界时，如果一个世界没有路径，那么这个世界会从项目里移除
         instance : je::world,  // 世界实例
         runtime_systems : vec<je::typeinfo>, // 运行时系统列表，世界载入作为游戏运行时就会把里面的系统实例化出来
     }
@@ -33,24 +33,25 @@ namespace editor::Project
         {
             // Saving 
             // 肯定要有路径，不然直接爆炸
-            if (!je::file::writeall(self.path->get->val, 
+            if (!je::file::writeall(self.path->val, 
                 Serialize::save_project_world(self): string))
             {
                 je::gui::launch(generic::MsgBox, 
                     (F"保存世界{self.instance->editor::name()}失败",
-                     F"无法写入世界数据到{self.path->get->val}"));
+                     F"无法写入世界数据到{self.path->val}"));
                 return false;
             }
             return true;
         }
         public func SaveTo(self: World, path: string)
         {
+            std::panic("TODO;");
+        /*
             let real_saving_path = je::filesys::isdir(path) 
                 ? F"{path}/{self.instance->editor::name()}.jeworld" 
                 | path ;
             let save_request =
-                self.path      
-                    ->get
+                self.path
                     ->map(\oldpath: string = 
                         oldpath == real_saving_path 
                         ? result::ok(oldpath)
@@ -77,9 +78,10 @@ namespace editor::Project
             }
 
             je::gui::launch(generic::AskBox, ("保存世界？", ask_msg, func(){
-                self.path->set(option::value(real_saving_path));
+                self.path = option::value(real_saving_path);
                 self->Save();
             }));
+        */
         }
     }
 
@@ -133,9 +135,9 @@ namespace editor::Project
         ]);
 
         let world = World{
-            path = mutable(option::none),
+            path = option::none,
             instance = world_instance,
-            runtime_systems = mut[],
+            runtime_systems = []mut,
         };
 
         self.worlds->add(world);
@@ -146,8 +148,8 @@ namespace editor::Project
     public func LoadWorld(self: Project, path: string)=> option<World>
     {
         // 检查一下项目里是不是已经有同路径的世界在运行了
-        let index = self.worlds->findif(\w: World = w.path->get->has 
-            ? w.path->get->val == path
+        let index = self.worlds->findif(\w: World = w.path->has 
+            ? w.path->val == path
             | false;);
         if (index != -1)
         {
@@ -212,7 +214,7 @@ namespace editor::Project
             // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
             graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
-            worlds = mut[],
+            worlds = []mut,
         });
     }
 
@@ -223,7 +225,7 @@ namespace editor::Project
             path = option::value(path),
             graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
-            worlds = mut[],
+            worlds = []mut,
         };
 
         if (create_file)
@@ -334,7 +336,7 @@ namespace editor::Project
                     ->trans(\w: World = save_project_world(w););
 
             // 1. 检查所有世界是否已经有路径信息，如果没有则说明有新建的世界没有保存过，要求保存
-            let worlds = mut[]: vec<string>;
+            let worlds = []mut: vec<string>;
             for (let world_data : worlds_dumped_data)
             {
                 if (world_data["path"] is typeof(nil))

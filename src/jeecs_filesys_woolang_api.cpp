@@ -147,7 +147,7 @@ namespace je::filesys
 
         if (isdir(_path))
         {
-            let result = mut []: vec<string>;
+            let result = []mut: vec<string>;
             for (let child : path(_path))
                 result->add(child);
 

@@ -1524,7 +1524,7 @@ R"(
             {
                 private public func create(entitys: array<entity>)
                 {
-                    let not_top_entities = mut[]: vec<entity>;
+                    let not_top_entities = []mut: vec<entity>;
                     return entity_iter{
                         m_cur_iter = entitys->iter(),
                         m_judge_func = public func(e: entity)
@@ -1537,7 +1537,7 @@ R"(
                         m_current_entity = option::none:<entity>,
                         m_all_entity_list = entitys,
                         m_not_top_entities = not_top_entities,
-                        m_outed_entities = mut[]: vec<entity>,
+                        m_outed_entities = []mut: vec<entity>,
                     };
                 }
 
@@ -1552,7 +1552,7 @@ R"(
                                        },
                         m_current_entity = option::none:<entity>,
                         m_all_entity_list = self.m_all_entity_list,
-                        m_not_top_entities = mut[]: vec<entity>,
+                        m_not_top_entities = []mut: vec<entity>,
                         m_outed_entities = self.m_outed_entities,
                     };
                 }
@@ -1686,9 +1686,9 @@ R"(
             
             public func members(self: component)
             {
-                let result = mut {}: map<string, (typeinfo, native_value)>;
+                let result = {}mut: map<string, (typeinfo, native_value)>;
                 for (let name, type, addr : self->iter_member())
-                    result[name] = (type, addr);
+                    result->set(name, (type, addr));
 
                 return result->todict; 
             }

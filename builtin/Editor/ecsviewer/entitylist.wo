@@ -95,7 +95,7 @@ namespace editor::EntityList
     }
 
     // 实体的UID表，根据uid获取实体实例
-    private let mut uid_entity_map = mut{}: map<string, je::entity>;
+    private let mut uid_entity_map = {}mut: map<string, je::entity>;
 
     // 检查给定checking实体是否是cur实体的祖实体
     private func is_ancestor(cur: je::entity, checking: je::entity)
@@ -168,7 +168,7 @@ namespace editor::EntityList
     {
         using je::gui;
 
-        let mut current_uid_entity_map = mut{}: map<string, je::entity>;
+        let mut current_uid_entity_map = {}mut: map<string, je::entity>;
         
         let mut display_count = 0;
         for (let entity : entity_iter)
