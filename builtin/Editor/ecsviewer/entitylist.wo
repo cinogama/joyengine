@@ -176,7 +176,7 @@ namespace editor::EntityList
             // 如果当前实体有uid组件，那么添加一下
             entity
                 ->editor::get_uid()
-                ->map(\x: string = current_uid_entity_map[x] = entity;);
+                ->map(\x: string = current_uid_entity_map->set(x, entity););
 
             display_count += 1;
             
