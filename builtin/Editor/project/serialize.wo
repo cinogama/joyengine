@@ -10,6 +10,50 @@ using je;
 
 namespace editor::Serialize
 {
+    alias texture_inform = string;
+    func get_entity_texture_passes(saving_entity: entity)=> dict<int, texture_inform>
+    {
+        // 获取实体绑定的通道和纹理信息
+        return saving_entity
+            ->editor::graphic::get_textures
+            ->trans(\pass: int, tex: graphic::texture = (pass, tex->path););
+    }
+
+    alias shader_inform = dict<string, array<dynamic>>;
+    //                          uniform_name uniform_vals
+    func get_entity_shaders_informs(saving_entity: entity)=> array<array/*(string, shader_inform)*/>
+    {
+        // 获取实体绑定的shader和uniform信息, uniform 信息仅包括int/float/float2，3，4类型的信息
+        // {[shader_path] = shader_inform}
+        return saving_entity
+            ->editor::graphic::get_shaders
+            ->trans(\shad: graphic::shader = [shad->path: dynamic, shad_uniforms_dats(): dynamic]
+                where shad_uniforms_dats = func(){
+                    for(let name, uniform_val : shad->get_uniforms())
+                    {
+                        let result = {}mut: map<string, array<dynamic>>;
+                        if (name->beginwith("JOYENGINE_"))
+                            continue; // 引擎的内置shader-uniform变量，跳过
+                        match (uniform_val)
+                        {
+                            integer(n)? 
+                                result->set(name, [n: dynamic]);
+                            float(x)?
+                                result->set(name, [x: dynamic]);
+                            float2((x, y))?
+                                result->set(name, [x: dynamic, y: dynamic]);
+                            float3((x, y, z))?
+                                result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
+                            float4((x, y, z, w))?
+                                result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
+                            texture(id)? /* do nothing */;
+                            others? /* do nothing */;
+                        }
+                        return result->todict;
+                    }
+                };)
+    }
+
 	public func save_entity(saving_entity: entity)
 	{	
 		return
@@ -34,7 +78,9 @@ namespace editor::Serialize
                 ->map(\m: dict<string, dict<string, mut string>> = 
                     {
                         ["name"] = saving_entity->editor::name: dynamic, 
-                        ["components"] = m: dynamic
+                        ["components"] = m: dynamic,
+                        ["textures"] = saving_entity->get_entity_texture_passes: dynamic,
+                        ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
                     };);
 	}
     public func restore_entity(world: je::world, entity_dat: map)
@@ -77,6 +123,38 @@ namespace editor::Serialize
                     ;)
                 where comp = entity->editor::get_component(type)
                     , (type, dat) = cdata;);
+
+        // 考虑一下异步加载？
+        // 开始加载shader
+        entity_dat->get("shaders": dynamic)
+            ->map(func(shaders: dynamic)
+                {
+                    let shads = []mut: vec<graphic::shader>;
+                    for (let shader_path_dat_pair : shaders: array)
+                    {
+                        let s = graphic::shader(shader_path_dat_pair: array[0] as string);
+                        for (let uname, uval : shader_path_dat_pair: array[1] as dict)
+                        {
+                            // TODO;
+                            logfatal("实现一下设置uniform变量");
+                        }
+                        shads->add(s);
+                    }
+                    return shads->toarray;
+                })
+            ->map(\shads: array<graphic::shader> = 
+                entity->editor::graphic::set_shaders(shads););
+
+        logfatal("此处需要数据写入entity的shader-uniform缓存组件，以便错误时恢复uniform数据");
+
+        // 开始加载texture
+        entity_dat->get("textures": dynamic)
+            ->map(func(textures: dynamic)
+                {
+                    for (let passid, path : textures: dict)
+                        entity->editor::graphic::bind_texture(passid as int,
+                            graphic::texture(path as string));
+                });
 
         return option::value(entity);
     }

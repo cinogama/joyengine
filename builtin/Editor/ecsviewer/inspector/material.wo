@@ -56,11 +56,7 @@ namespace editor::Inspector::Material
         {
             Drag(shader_path)?
             {
-                let drag_append_new_shader = je::graphic::shader(shader_path);
-                if (!drag_append_new_shader->has())
-                    launch(generic::MsgBox, ("加载着色器失败", F"无法加载着色器: {shader_path}"));
-                else
-                    shader_operation = shader_option::AddShader(drag_append_new_shader->val());
+                shader_operation = shader_option::AddShader(je::graphic::shader(shader_path));
             }
             None? /* 没有文件拖入，不干任何事情 */;
         }
@@ -100,14 +96,7 @@ namespace editor::Inspector::Material
                             Drag(path)?
                             {
                                 // 拖动文件到这里，加载这个纹理，然后绑定
-                                let new_texture = je::graphic::texture(path);
-                                match (new_texture)
-                                {
-                                    value(tex)?
-                                        entity->editor::graphic::bind_texture(id, tex);
-                                    none?
-                                        launch(generic::MsgBox, ("加载纹理失败", F"无法加载纹理: {path}"));
-                                }
+                                entity->editor::graphic::bind_texture(id, je::graphic::texture(path));
                             }
                             None?
                                 ; // 没任何变化，啥也不干
@@ -173,17 +162,8 @@ namespace editor::Inspector::Material
                             {
                                 Drag(shader_path)?
                                 {
-                                    let drag_append_new_shader = je::graphic::shader(shader_path);
-                                    if (!drag_append_new_shader->has())
-                                        launch(generic::MsgBox, ("加载着色器失败", F"无法加载着色器: {shader_path}"));
-                                    else
-                                    {
-                                        // 强行让编辑器展开所有shader
-                                        _last_display_entity = option::none;
-
-                                        shaders = shaders->append(drag_append_new_shader->val());
-                                        shaders_has_updated = true;
-                                    }
+                                    shaders = shaders->append(je::graphic::shader(shader_path));
+                                    shaders_has_updated = true;
                                 }
                                 None? /* 没有文件拖入，不干任何事情 */;
                             }

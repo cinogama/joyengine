@@ -370,7 +370,7 @@ JE_API void je_log_shutdown(void);
 #define JE_LOG_ERROR 3
 #define JE_LOG_FATAL 4
 
-JE_API size_t je_log_register_callback(void(*func)(int level, const char* msg, void* custom), void * custom);
+JE_API size_t je_log_register_callback(void(*func)(int level, const char* msg, void* custom), void* custom);
 JE_API void* je_log_unregister_callback(size_t regid);
 JE_API void je_log(int level, const char* format, ...);
 
@@ -577,7 +577,6 @@ struct jegl_texture
     };
     // NOTE: Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
     pixel_data_t* m_pixels;
-    const char* m_path;
     size_t          m_width;
     size_t          m_height;
 
@@ -715,7 +714,6 @@ struct jegl_shader
 
     const char* m_vertex_glsl_src;
     const char* m_fragment_glsl_src;
-    const char* m_path;
     unifrom_variables* m_custom_uniforms;
     builtin_uniform_location m_builtin_uniforms;
 
@@ -755,7 +753,7 @@ struct jegl_resource
             uint32_t m_uint2;
         };
     };
-
+    const char* m_path;
     int* m_raw_ref_count;
     union
     {
@@ -3616,11 +3614,12 @@ namespace jeecs
         public:
             inline operator bool() const noexcept
             {
-                return nullptr != _m_resouce;
+                return enabled();
             }
             inline bool enabled() const noexcept
             {
-                return nullptr != _m_resouce;
+                return nullptr != _m_resouce 
+                    && nullptr != _m_resouce->m_custom_resource;
             }
             inline operator jegl_resource* () const noexcept
             {

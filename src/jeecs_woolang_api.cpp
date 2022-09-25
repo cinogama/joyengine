@@ -2,6 +2,8 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
+#include <list>
+
 std::atomic_flag log_buffer_mx = {};
 std::list<std::pair<int, std::string>> log_buffer;
 
@@ -753,16 +755,11 @@ WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = new jeecs::graphic::texture(wo_string(args + 0));
-    if (loaded_texture->enabled())
-    {
-        return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
-            [](void* ptr) {
-                delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
-            });
-    }
-    delete loaded_texture;
-    return wo_ret_option_none(vm);
+    return wo_ret_gchandle(vm,
+        new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
+        [](void* ptr) {
+            delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
+        });
 }
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 {
@@ -866,16 +863,11 @@ WO_API wo_api wojeapi_character_get_texture(wo_vm vm, wo_value args, size_t argc
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_shader = new jeecs::graphic::shader(wo_string(args + 0));
-    if (loaded_shader->enabled())
-    {
-        return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
-            [](void* ptr) {
-                delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
-            });
-    }
-    delete loaded_shader;
-    return wo_ret_option_none(vm);
+    return wo_ret_gchandle(vm,
+        new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
+        [](void* ptr) {
+            delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+        });
 
 }
 
@@ -1045,7 +1037,7 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
     }
     return wo_ret_val(vm, out_map);
 
-    if (auto str = (*shader)->resouce()->m_raw_shader_data->m_path)
+    if (auto str = (*shader)->resouce()->m_path)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in shader >");
 }
@@ -1054,7 +1046,7 @@ WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
 {
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
 
-    if (auto str = (*shader)->resouce()->m_raw_shader_data->m_path)
+    if (auto str = (*shader)->resouce()->m_path)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in shader >");
 }
@@ -1078,9 +1070,9 @@ WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
-    if (auto str = (*shader)->resouce()->m_raw_texture_data->m_path)
+    if (auto str = (*texture)->resouce()->m_path)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in texture >");
 }
@@ -1232,11 +1224,10 @@ namespace je
 
     namespace graphic
     {
-        public using texture = gchandle;
-        namespace texture
+        public using texture = gchandle
         {
             extern("libjoyecs", "wojeapi_texture_open")
-            public func create(path: string)=> option<texture>;
+            public func create(path: string)=> texture;
 
             extern("libjoyecs", "wojeapi_texture_create")
             public func create(width: int, height: int)=> texture;
@@ -1277,15 +1268,13 @@ namespace je
             }
         }
 
-        public using character = gchandle;
-        namespace character
+        public using character = gchandle
         {
             extern("libjoyecs", "wojeapi_character_get_texture")
             public func get_texture(self: character)=> texture;
         }
 
-        public using font = gchandle;
-        namespace font
+        public using font = gchandle
         {
             extern("libjoyecs", "wojeapi_font_open")
             public func create(path: string, font_width: int)=> option<font>;
@@ -1297,11 +1286,10 @@ namespace je
             public func load_string(self: font, str: string)=> texture;
         }
 
-        public using shader = gchandle;
-        namespace shader
+        public using shader = gchandle
         {
             extern("libjoyecs", "wojeapi_shader_open")
-            public func create(path: string)=> option<shader>;
+            public func create(path: string)=> shader;
             
             extern("libjoyecs", "wojeapi_shader_create")
             public func create(vpath: string, src: string)=> option<shader>;
@@ -1363,7 +1351,7 @@ namespace je
                    || nil:dynamic:T is (real, real, real)
                    || nil:dynamic:T is (real, real, real, real);
             {
-                
+                std::panic("TODO;");
             }
         }
     }
@@ -1684,10 +1672,10 @@ R"(
                 extern("libjoyecs", "wojeapi_set_shaders_of_entity")
                 public func set_shaders(self: entity, shaders: array<graphic::shader>)=> void;
 
-                public func get_textures(self: entity)=> map<int, graphic::texture>
+                public func get_textures(self: entity)=> dict<int, graphic::texture>
                 {
                     extern("libjoyecs", "wojeapi_textures_of_entity")
-                    public func get_textures_from_entity(e: entity)=> map<int, graphic::texture>;
+                    public func get_textures_from_entity(e: entity)=> dict<int, graphic::texture>;
 
                     return get_textures_from_entity(self);
                 }

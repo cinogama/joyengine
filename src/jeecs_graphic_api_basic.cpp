@@ -29,7 +29,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
         auto custom_interface = thread->m_apis->init_interface(thread, &thread->_m_thread_notifier->m_interface_config);
         ++thread->m_version;
         while (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
-        {   
+        {
             do
             {
                 std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
@@ -76,7 +76,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                 thread->m_stop_update = true;
             else
                 frame_rend_work(arg, thread);
-            
+
             if (!thread->m_apis->late_update_interface(thread, custom_interface))
                 thread->m_stop_update = true;
 
@@ -220,45 +220,50 @@ void jegl_using_resource(jegl_resource* resource)
         need_init_resouce = true;
         resource->m_graphic_thread_version = _current_graphic_thread->m_version;
     }
-    if (need_init_resouce)
-        _current_graphic_thread->m_apis->init_resource(_current_graphic_thread, resource);
-    _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
-    if (resource->m_type == jegl_resource::SHADER)
+
+    // If resource is died, ignore it.
+    if (nullptr != resource->m_custom_resource)
     {
-        auto uniform_vars = resource->m_raw_shader_data->m_custom_uniforms;
-        while (uniform_vars)
+        if (need_init_resouce)
+            _current_graphic_thread->m_apis->init_resource(_current_graphic_thread, resource);
+        _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
+        if (resource->m_type == jegl_resource::SHADER)
         {
-            if (uniform_vars->m_index == jeecs::typing::INVALID_UINT32)
-                uniform_vars->m_index = jegl_uniform_location(resource, uniform_vars->m_name);
-
-            if (uniform_vars->m_updated)
+            auto uniform_vars = resource->m_raw_shader_data->m_custom_uniforms;
+            while (uniform_vars)
             {
-                uniform_vars->m_updated = false;
-                switch (uniform_vars->m_uniform_type)
-                {
-                case jegl_shader::uniform_type::FLOAT:
-                    jegl_uniform_float(resource, uniform_vars->m_index, uniform_vars->x);
-                    break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    jegl_uniform_float2(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
-                    break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    jegl_uniform_float3(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
-                    break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    jegl_uniform_float4(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
-                    break;
-                case jegl_shader::uniform_type::INT:
-                case jegl_shader::uniform_type::TEXTURE2D:
-                    jegl_uniform_int(resource, uniform_vars->m_index, uniform_vars->n);
-                    break;
-                default:
-                    jeecs::debug::log_error("Unsupport uniform variable type."); break;
-                    break;
-                }
-            }
+                if (uniform_vars->m_index == jeecs::typing::INVALID_UINT32)
+                    uniform_vars->m_index = jegl_uniform_location(resource, uniform_vars->m_name);
 
-            uniform_vars = uniform_vars->m_next;
+                if (uniform_vars->m_updated)
+                {
+                    uniform_vars->m_updated = false;
+                    switch (uniform_vars->m_uniform_type)
+                    {
+                    case jegl_shader::uniform_type::FLOAT:
+                        jegl_uniform_float(resource, uniform_vars->m_index, uniform_vars->x);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT2:
+                        jegl_uniform_float2(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT3:
+                        jegl_uniform_float3(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4:
+                        jegl_uniform_float4(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
+                        break;
+                    case jegl_shader::uniform_type::INT:
+                    case jegl_shader::uniform_type::TEXTURE2D:
+                        jegl_uniform_int(resource, uniform_vars->m_index, uniform_vars->n);
+                        break;
+                    default:
+                        jeecs::debug::log_error("Unsupport uniform variable type."); break;
+                        break;
+                    }
+                }
+
+                uniform_vars = uniform_vars->m_next;
+            }
         }
     }
 }
@@ -267,34 +272,34 @@ void jegl_close_resource(jegl_resource* resource)
 {
     if (0 == -- * resource->m_raw_ref_count)
     {
-        switch (resource->m_type)
+        // Free raw data here, if resource is died, ignore!
+        if (resource->m_custom_resource)
         {
-        case jegl_resource::TEXTURE:
-            // close resource's raw data, then send this resource to closing-queue
-            stbi_image_free(resource->m_raw_texture_data->m_pixels);
-            if (resource->m_raw_texture_data->m_path)
-                je_mem_free((void*)resource->m_raw_texture_data->m_path);
-            delete resource->m_raw_texture_data;
-            break;
-        case jegl_resource::SHADER:
-            // close resource's raw data, then send this resource to closing-queue
-            jegl_shader_free_generated_glsl(resource->m_raw_shader_data);
-            if (resource->m_raw_shader_data->m_path)
-                je_mem_free((void*)resource->m_raw_shader_data->m_path);
-            delete resource->m_raw_shader_data;
-            break;
-        case jegl_resource::VERTEX:
-            // close resource's raw data, then send this resource to closing-queue
-            je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_datas);
-            je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_formats);
-            if (resource->m_raw_vertex_data->m_path)
-                je_mem_free((void*)resource->m_raw_vertex_data->m_path);
-            delete resource->m_raw_vertex_data;
-            break;
-        default:
-            jeecs::debug::log_error("Unknown resource type to close.");
-            return;
+            switch (resource->m_type)
+            {
+            case jegl_resource::TEXTURE:
+                // close resource's raw data, then send this resource to closing-queue
+                stbi_image_free(resource->m_raw_texture_data->m_pixels);
+                delete resource->m_raw_texture_data;
+                break;
+            case jegl_resource::SHADER:
+                // close resource's raw data, then send this resource to closing-queue
+                jegl_shader_free_generated_glsl(resource->m_raw_shader_data);
+                delete resource->m_raw_shader_data;
+                break;
+            case jegl_resource::VERTEX:
+                // close resource's raw data, then send this resource to closing-queue
+                je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_datas);
+                je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_formats);
+                delete resource->m_raw_vertex_data;
+                break;
+            default:
+                jeecs::debug::log_error("Unknown resource type to close.");
+                return;
+            }
         }
+        if (resource->m_path)
+            je_mem_free((void*)resource->m_path);
     }
     else
     {
@@ -312,13 +317,23 @@ void jegl_close_resource(jegl_resource* resource)
             delete resource->m_raw_shader_data;
         }
     }
-    resource->m_custom_resource = nullptr;
 
-    // Send this resource to destroing list;
-    auto* del_res = new jegl_resource::jegl_destroy_resouce;
-    del_res->m_retry_times = 15;
-    del_res->m_destroy_resource = resource;
-    _destroing_graphic_resources.add_one(del_res);
+    // If raw_data is nullptr, ignore it
+    if (resource->m_custom_resource != nullptr)
+    {
+        resource->m_custom_resource = nullptr;
+
+        // Send this resource to destroing list;
+        auto* del_res = new jegl_resource::jegl_destroy_resouce;
+        del_res->m_retry_times = 15;
+        del_res->m_destroy_resource = resource;
+        _destroing_graphic_resources.add_one(del_res);
+    }
+    else
+    {
+        // if resource is died, delete it here.
+        delete resource;
+    }
 }
 
 JE_API void jegl_get_windows_size(size_t* x, size_t* y)
@@ -370,13 +385,28 @@ jegl_resource* jegl_copy_resource(jegl_resource* resource)
     return res;
 }
 
+jegl_resource* _jegl_create_died_texture(const char* path)
+{
+    // NOTE: Used for generate a died texture.
+    assert(path != nullptr);
+
+    jegl_resource* shader = _create_resource();
+    shader->m_type = jegl_resource::TEXTURE;
+    shader->m_graphic_thread = nullptr;
+    shader->m_raw_shader_data = nullptr;
+    shader->m_path = jeecs::basic::make_new_string(path);
+    shader->m_ptr = INVALID_RESOURCE;
+
+    return shader;
+}
+
 jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::texture_format format)
 {
     jegl_resource* texture = _create_resource();
     texture->m_graphic_thread = nullptr;
     texture->m_type = jegl_resource::TEXTURE;
     texture->m_raw_texture_data = new jegl_texture();
-    texture->m_raw_texture_data->m_path = nullptr;
+    texture->m_path = nullptr;
     texture->m_ptr = INVALID_RESOURCE;
 
     texture->m_raw_texture_data->m_pixels = (jegl_texture::pixel_data_t*)stbi__malloc(width * height * format);
@@ -398,7 +428,7 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_graphic_thread = nullptr;
         texture->m_type = jegl_resource::TEXTURE;
         texture->m_raw_texture_data = new jegl_texture();
-        texture->m_raw_texture_data->m_path = jeecs::basic::make_new_string(path);
+        texture->m_path = jeecs::basic::make_new_string(path);
         texture->m_ptr = INVALID_RESOURCE;
 
         unsigned char* fbuf = new unsigned char[texfile->m_file_length];
@@ -420,7 +450,7 @@ jegl_resource* jegl_load_texture(const char* path)
             jeecs::debug::log_error("Fail to load texture form file: '%s'", path);
             delete texture->m_raw_texture_data;
             delete texture;
-            return nullptr;
+            return _jegl_create_died_texture(path);
         }
 
         texture->m_raw_texture_data->m_width = (size_t)w;
@@ -432,7 +462,7 @@ jegl_resource* jegl_load_texture(const char* path)
     }
 
     jeecs::debug::log_error("Fail to open file: '%s'", path);
-    return nullptr;
+    return _jegl_create_died_texture(path);
 }
 
 jegl_resource* jegl_load_vertex(const char* path)
@@ -518,6 +548,20 @@ jegl_resource* jegl_create_vertex(
     return vertex;
 }
 
+jegl_resource* _jegl_create_died_shader(const char* path)
+{
+    // NOTE: Used for generate a died shader.
+
+    jegl_resource* shader = _create_resource();
+    shader->m_type = jegl_resource::SHADER;
+    shader->m_graphic_thread = nullptr;
+    shader->m_raw_shader_data = nullptr;
+    shader->m_path = jeecs::basic::make_new_string(path);
+    shader->m_ptr = INVALID_RESOURCE;
+
+    return shader;
+}
+
 jegl_resource* jegl_load_shader_source(const char* path, const char* src)
 {
     wo_vm vmm = wo_create_vm();
@@ -526,7 +570,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
         // Compile error
         jeecs::debug::log_error("Fail to load shader: %s.\n%s", path, wo_get_compile_error(vmm, WO_NOTHING));
         wo_close_vm(vmm);
-        return nullptr;
+        return _jegl_create_died_shader(path);
     }
 
     wo_run(vmm);
@@ -536,7 +580,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
     {
         jeecs::debug::log_error("Fail to load shader: %s. you should import je.shader.", path);
         wo_close_vm(vmm);
-        return nullptr;
+        return _jegl_create_died_shader(path);
     }
     if (wo_value retval = wo_invoke_rsfunc(vmm, generate_shader_func, 0))
     {
@@ -549,7 +593,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
         shader->m_graphic_thread = nullptr;
         shader->m_type = jegl_resource::SHADER;
         shader->m_raw_shader_data = _shader;
-        shader->m_raw_shader_data->m_path = jeecs::basic::make_new_string(path);
+        shader->m_path = jeecs::basic::make_new_string(path);
         shader->m_ptr = INVALID_RESOURCE;
 
         wo_close_vm(vmm);
@@ -577,7 +621,7 @@ jegl_resource* jegl_load_shader(const char* path)
         return jegl_load_shader_source(path, src);
     }
     jeecs::debug::log_error("Fail to open file: '%s'", path);
-    return nullptr;
+    return _jegl_create_died_shader(path);
 }
 
 jegl_thread* jegl_current_thread()
