@@ -98,6 +98,31 @@ void je_log_shutdown()
     _gbar_log_thread.join();
 }
 
+std::atomic_size_t registered_id = 0;
+std::shared_mutex registered_callbacks_mx;
+std::unordered_map<size_t, std::pair<void(*)(int, const char*, void*), void*>> registered_callbacks;
+
+size_t je_log_register_callback(void(*func)(int level, const char* msg, void* custom), void* custom)
+{
+    size_t id = registered_id++;
+
+    std::lock_guard lg(registered_callbacks_mx);
+    assert(registered_callbacks.find(id) == registered_callbacks.end());
+    registered_callbacks[id] = std::make_pair(func, custom);
+
+    return id;
+}
+
+void* je_log_unregister_callback(size_t regid)
+{
+    std::lock_guard lg(registered_callbacks_mx);
+    assert(registered_callbacks.find(regid) != registered_callbacks.end());
+
+    auto * cus = registered_callbacks[regid].second;
+    registered_callbacks.erase(regid);
+
+    return cus;
+}
 
 void je_log(int level, const char* format, ...)
 {
@@ -113,6 +138,16 @@ void je_log(int level, const char* format, ...)
     va_end(vb);
 
     bool need_notify = false;
+
+    do
+    {
+        // Invoke callbacks
+        std::shared_lock sg(registered_callbacks_mx);
+        for (auto& [_, f] : registered_callbacks)
+        {
+            f.first(level, buf, f.second);
+        }
+    } while (0);
 
     _gbar_log_list.add_one(new GBarLogmsg{ level, buf });
     _gbar_log_thread_cv.notify_one();

@@ -65,6 +65,89 @@ shortcut::register([je::keycode::L_CTRL, je::keycode::S,], func(){
     }
 });
 
+namespace logmgr
+{
+    let log_buffers = {
+        [je::editor::loglevel::NORMAL]  = []mut,
+        [je::editor::loglevel::INFO]    = []mut,
+        [je::editor::loglevel::WARNING] = []mut,
+        [je::editor::loglevel::ERROR]   = []mut,
+        [je::editor::loglevel::FATAL]   = []mut,
+    }: dict<je::editor::loglevel, vec<string>>;
+
+    let log_level_name = {
+        [je::editor::loglevel::NORMAL]  = "普通",
+        [je::editor::loglevel::INFO]    = "信息",
+        [je::editor::loglevel::WARNING] = "警告",
+        [je::editor::loglevel::ERROR]   = "错误",
+        [je::editor::loglevel::FATAL]   = "致命",
+    };
+
+    let mut last_log = option::none: option<(je::editor::loglevel, string)>;
+
+    // 拉取日志，更新到buffers里面
+    func update_buffers()
+    {
+        let this_time_log = je::editor::getlogs();
+        for (let (t, s) : this_time_log)
+            log_buffers[t]->insert(0, s);
+
+        if (!this_time_log->empty)
+            return last_log = option::value(this_time_log[this_time_log->len - 1]);
+
+        return last_log;
+    }
+    // 获取日志的数量
+    func get_log_count()=> (int, int, int, int, int)
+    {
+        let result = [mut 0, 0, 0, 0, 0];
+
+        // 如果level超出0-5的范围，直接panic
+        log_buffers
+            ->unmapping
+            ->trans(\logs: (je::editor::loglevel, vec<string>) = 
+                result[logs[0]:int] = logs[1]->len;);
+
+        return (result[0], result[1], result[2], result[3], result[4]);
+    }
+
+    // log显示菜单，仅用于展示log列表信息
+    func show_log()
+    {
+        if (MenuItem("清除所有"))
+        {
+            last_log = option::none;
+            log_buffers
+                ->vals
+                ->trans(\v: vec<anything> = v->clear;);
+        }
+        Separator();
+        for (let k, v : log_buffers)
+        {
+            if (BeginMenu(F"{log_level_name[k]}({v->len})", !v->empty))
+            {
+                func get_title_of_error(msg: string)
+                {
+                    let switch_line_place = msg->find("\n");
+                    if (switch_line_place !=- 1)
+                        return msg->sub(0, switch_line_place);
+                    return msg;
+                }
+                for (let msg : v)
+                {
+                    MenuItem(msg->get_title_of_error->utils::ShortStringCutEnd(60));
+                    if (IsItemHovered())
+                        SetTooltip(msg);
+                }
+                EndMenu();
+            }
+        }
+
+        
+        return FormAction::Nothing;
+    }
+}
+
 // 这个是编辑器上方的主菜单栏
 func Editor_MainMenuBar()
 {
@@ -74,6 +157,9 @@ func Editor_MainMenuBar()
 
     // 刷新检测热键
     shortcut::update();
+
+    // 拉取一下log信息
+    let last_log_info = logmgr::update_buffers();
 
     BeginMainMenuBar();
     if (BeginMenu("JoyEngine"))
@@ -149,6 +235,25 @@ func Editor_MainMenuBar()
             
         EndMenu();
     }
+    let (normal, info, warning, error, fatal) = logmgr::get_log_count();
+
+    // todo 这个返回一个元组的设计太蠢了
+    let msg = [("普通", normal), ("信息", info), ("警告", warning), ("错误", error), ("致命", fatal)]
+        ->forall(\msg: (string, int) = msg[1] > 0;)
+        ->trans(\msg: (string, int) = F"{msg[0]}:{msg[1]} ";)
+        ->reduce(\lmsg: string, rmsg: string = lmsg + rmsg;);
+
+    if (BeginMenu(msg->valor("暂无日志")->trim 
+        + last_log_info
+            ->map(\loginfo:(je::editor::loglevel, string)=
+                F" [{logmgr::log_level_name[loginfo[0]]}: {loginfo[1]}]";)
+            ->valor("")
+            ->utils::ShortStringCutEnd(60)))
+    {
+        logmgr::show_log();
+        EndMenu();
+    } 
+
     EndMainMenuBar();
 
     if (!show_main_menu)

@@ -168,7 +168,7 @@ namespace editor::Inspector::Material
                                 index += 1;
                             } // end show shader.
 
-                            Text("[拖动shader文件到此处添加新的pass]");
+                            TextDisabled("[拖动shader文件到此处添加新的pass]");
                             match (generic::AcceptFileForCurrentWidget())
                             {
                                 Drag(shader_path)?

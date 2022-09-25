@@ -252,30 +252,30 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &errmsg_len);
         if (errmsg_len > 0)
         {
-            jeecs::debug::log_error("Some error happend when tring compile shader %p, please check.", resource);
+            std::string error_informations;
             glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
             if (errmsg_len > 0)
             {
                 std::vector<char> errmsg_buf(errmsg_len + 1);
                 glGetShaderInfoLog(vertex_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
-                jeecs::debug::log_error("In vertex shader: \n%s", errmsg_buf.data());
+                error_informations = error_informations + "In vertex shader: \n" + errmsg_buf.data();
             }
             glGetShaderiv(fragment_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
             if (errmsg_len > 0)
             {
                 std::vector<char> errmsg_buf(errmsg_len + 1);
                 glGetShaderInfoLog(fragment_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
-                jeecs::debug::log_error("In fragment shader: \n%s", errmsg_buf.data());
+                error_informations = error_informations + "In fragment shader: \n" + errmsg_buf.data();
             }
             glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &errmsg_len);
             if (errmsg_len > 0)
             {
                 std::vector<char> errmsg_buf(errmsg_len + 1);
                 glGetProgramInfoLog(shader_program, errmsg_len, &errmsg_written_len, errmsg_buf.data());
-                jeecs::debug::log_error("In shader program link: \n%s", errmsg_buf.data());
+                error_informations = error_informations + "In shader program link: \n" + errmsg_buf.data();
             }
-
-            jeecs::debug::log_error("Failed to compile shader %p, please check.", resource);
+            jeecs::debug::log_error("Some error happend when tring compile shader %p, please check.\n %s", 
+                resource, error_informations.c_str());
         }
         else
         {

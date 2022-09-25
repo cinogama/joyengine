@@ -2,6 +2,54 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
+std::atomic_flag log_buffer_mx = {};
+std::list<std::pair<int, std::string>> log_buffer;
+
+WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc)
+{
+    std::function<void(int, const char*)>* callbacks =
+        new std::function<void(int, const char*)>([&](int level, const char* msg) {
+        while (log_buffer_mx.test_and_set());
+        log_buffer.push_back({ level, msg });
+        log_buffer_mx.clear();
+            });
+
+    return wo_ret_handle(vm,
+        je_log_register_callback(+[](int level, const char* msg, void* func)
+            {
+                (*(std::function<void(int, const char*)>*)func)(level, msg);
+            }, callbacks));
+}
+
+WO_API wo_api wojeapi_unregister_log_callback(wo_vm vm, wo_value args, size_t argc)
+{
+    auto func = (std::function<void(int, const char*)>*) je_log_unregister_callback(wo_handle(args + 0));
+    delete func;
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value result = wo_push_arr(vm, 0);
+    std::list<std::pair<int, std::string>> logs;
+
+    while (log_buffer_mx.test_and_set());
+    logs.swap(log_buffer);
+    assert(log_buffer.empty());
+    log_buffer_mx.clear();
+
+    for (auto& [i, s] : logs)
+    {
+        wo_value a = wo_arr_add(result, nullptr);
+        wo_set_struct(a, 2);
+        wo_set_int(wo_struct_get(a, 0), i);
+        wo_set_string(wo_struct_get(a, 1), s.c_str());
+    }
+    return wo_ret_val(vm, result);
+}
+
+
 // ECS UNIVERSE
 WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1042,6 +1090,27 @@ const char* jeecs_woolang_api_src = R"(
 import woo.std;
 namespace je
 {
+    namespace editor
+    {
+        public enum loglevel
+        {
+            NORMAL = 0,
+            INFO,
+            WARNING,
+            ERROR,
+            FATAL,
+        }
+
+        extern("libjoyecs", "wojeapi_register_log_callback")
+        public func hooklog()=> handle;
+
+        extern("libjoyecs", "wojeapi_unregister_log_callback")
+        public func unhooklog(i: handle)=> void;
+
+        extern("libjoyecs", "wojeapi_get_all_logs")
+        public func getlogs()=> array<(loglevel, string)>;
+    }
+
     extern("libjoyecs", "wojeapi_log")
     public func log(...)=> void;
     extern("libjoyecs", "wojeapi_loginfo")

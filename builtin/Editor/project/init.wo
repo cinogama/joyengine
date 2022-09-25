@@ -258,7 +258,11 @@ namespace editor::Project
         // 先要求打开或新建项目，记得销毁全部默认世界，否则玩个锤子
         je::gui::launch(_AskCreateOrLoadProject:<FT, ArgTs>, (form, args));
 
+        let logger = je::editor::hooklog();
+
         je::universe::current()->editor::wait();
         je::universe::current()->editor::close();
+
+        je::editor::unhooklog(logger);
     }
 }

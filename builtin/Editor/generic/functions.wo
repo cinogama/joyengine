@@ -11,4 +11,11 @@ namespace utils
             return "..." + str->sub(str->len - (maxlen - 3));
         return str;
     }
+
+    public func ShortStringCutEnd(str: string, maxlen: int)
+    {
+        if (str->len > maxlen)
+            return str->sub(0, maxlen - 3) + "...";
+        return str;
+    }
 }

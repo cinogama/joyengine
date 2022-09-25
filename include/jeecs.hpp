@@ -369,6 +369,9 @@ JE_API void je_log_shutdown(void);
 #define JE_LOG_WARNING 2
 #define JE_LOG_ERROR 3
 #define JE_LOG_FATAL 4
+
+JE_API size_t je_log_register_callback(void(*func)(int level, const char* msg, void* custom), void * custom);
+JE_API void* je_log_unregister_callback(size_t regid);
 JE_API void je_log(int level, const char* format, ...);
 
 typedef enum je_typing_class

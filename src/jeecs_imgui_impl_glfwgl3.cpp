@@ -190,6 +190,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_is_itemhovered")
     public func IsItemHovered()=> bool;
 
+    extern("libjoyecs", "je_gui_set_tooltip")
+    public func SetTooltip(msg: string)=> bool;
+
     extern("libjoyecs", "je_gui_beginpopup_contextitem")
     public func BeginPopupContextItem(label:string)=>bool;
     extern("libjoyecs", "je_gui_beginpopup_contextitem")
@@ -553,6 +556,12 @@ WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_bool(vm, ImGui::IsItemHovered());
+}
+
+WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::SetTooltip("%s", wo_string(args + 0));
+        return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args, size_t argc)
