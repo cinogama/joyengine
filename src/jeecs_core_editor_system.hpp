@@ -36,7 +36,7 @@ namespace jeecs
         {
             int life;
         };
-        // Used for store uniform vars of failed-shader in entity
+        // Used for store uniform vars of failed-shader in entity. used for 'update' shaders
         struct BadShadersUniform
         {
             using uniform_inform = std::map<std::string, jegl_shader::unifrom_variables>;

@@ -1081,7 +1081,6 @@ WO_API wo_api wojeapi_set_uniforms_float4(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-
 WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
 {
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
@@ -1565,6 +1564,16 @@ R"(
 
         namespace editor
         {
+            public func store_uniform_dat_for_bad_shader_update<T>(self: entity, shad: graphic::shader, name: string, val: T)
+                where std::declval:<T>() is int
+                       || std::declval:<T>() is real
+                       || std::declval:<T>() is (real, real)
+                       || std::declval:<T>() is (real, real, real)
+                       || std::declval:<T>() is (real, real, real, real);
+            {
+                std::panic("TODO;");
+            }
+
             extern("libjoyecs", "wojeapi_get_editing_entity")
             public func editing()=> option<entity>;
 

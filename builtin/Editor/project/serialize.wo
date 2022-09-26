@@ -29,9 +29,9 @@ namespace editor::Serialize
             ->editor::graphic::get_shaders
             ->trans(\shad: graphic::shader = [shad->path: dynamic, shad_uniforms_dats(): dynamic]
                 where shad_uniforms_dats = func(){
+                    let result = {}mut: map<string, array<dynamic>>;
                     for(let name, uniform_val : shad->get_uniforms())
                     {
-                        let result = {}mut: map<string, array<dynamic>>;
                         if (name->beginwith("JOYENGINE_"))
                             continue; // 引擎的内置shader-uniform变量，跳过
                         match (uniform_val)
@@ -49,8 +49,8 @@ namespace editor::Serialize
                             texture(id)? /* do nothing */;
                             others? /* do nothing */;
                         }
-                        return result->todict;
                     }
+                    return result->todict;
                 };)
     }
 
@@ -83,6 +83,43 @@ namespace editor::Serialize
                         ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
                     };);
 	}
+
+    // 用于设置实体中shader的uniform参数，如果shader是挂掉的，那么设置uniform到BadShadersUniform里等待更新
+    func restore_shader_of_entity(e: je::entity, shad: je::graphic::shader, uname: string, val: array)
+    {
+        assert(val->len > 0);
+        if (val[0] is int)
+        {
+            assert(val->len == 1);
+            shad->isvalid
+                ? shad->set_uniform(uname, val[0] as int)
+                | e->editor::store_uniform_dat_for_bad_shader_update(shad, uname, val[0] as int);
+        }
+        else if (val[0] is real)
+        {
+            if (val->len == 1)
+                 shad->isvalid
+                    ? shad->set_uniform(uname, val[0] as real)
+                    | e->editor::store_uniform_dat_for_bad_shader_update(shad, uname,  val[0] as real);
+            else if (val->len == 2)
+                shad->isvalid
+                    ? shad->set_uniform(uname, (val[0] as real, val[1] as real))
+                    | e->editor::store_uniform_dat_for_bad_shader_update(shad, uname, (val[0] as real, val[1] as real));
+            else if (val->len == 3)
+                shad->isvalid
+                    ? shad->set_uniform(uname, (val[0] as real, val[1] as real, val[2] as real))
+                    | e->editor::store_uniform_dat_for_bad_shader_update(shad, uname, (val[0] as real, val[1] as real, val[2] as real));
+            else if (val->len == 4)
+                shad->isvalid
+                    ? shad->set_uniform(uname, (val[0] as real, val[1] as real, val[2] as real, val[3] as real))
+                    | e->editor::store_uniform_dat_for_bad_shader_update(shad, uname, (val[0] as real, val[1] as real, val[2] as real, val[3] as real));
+            else
+                std::panic("invalid uniform value length when restore.");
+        }
+        else
+            std::panic("invalid uniform type when restore.");
+    }
+
     public func restore_entity(world: je::world, entity_dat: map)
     {      
         let component_types_dat = entity_dat
@@ -102,7 +139,30 @@ namespace editor::Serialize
         if (component_types_dat->empty)
             return option::none;
 
-        let entity = world->add_entity(component_types_dat->trans(\tp: (je::typeinfo,anything) = tp[0];));
+         // 开始加载shader
+        let shaders_and_dat = entity_dat->get("shaders": dynamic)
+            ->map(func(shaders: dynamic)
+                {
+                    let shads = []mut: vec<(graphic::shader, dict)>;
+                    for (let shader_path_dat_pair : shaders: array)
+                    {
+                        let s = graphic::shader(shader_path_dat_pair: array[0] as string);
+                        shads->add((s, shader_path_dat_pair: array[1] as dict));
+                    }
+                    return shads->toarray;
+                });
+
+        // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
+        let entity_has_bad_shader = shaders_and_dat
+            ->bind(\sds: array<(graphic::shader, dict)> = sds
+                ->trans(\sd: (graphic::shader, dict) = sd[0]->isvalid;)
+                ->reduce(\l: bool, r: bool = l?r|l;);)
+            ->valor(false);
+
+        let entity = world->add_entity(
+            component_types_dat
+                ->trans(\tp: (je::typeinfo,anything) = tp[0];)
+                ->connect(entity_has_bad_shader ? [je::typeinfo("Editor::BadShadersUniform")->val] | []));
         
         // 如果数据里面有name字段，那就设置一下实体名字
         entity_dat
@@ -126,46 +186,17 @@ namespace editor::Serialize
 
         // 考虑一下异步加载？
         // 开始加载shader
-        entity_dat->get("shaders": dynamic)
-            ->map(func(shaders: dynamic)
-                {
-                    let shads = []mut: vec<graphic::shader>;
-                    for (let shader_path_dat_pair : shaders: array)
+        entity->editor::graphic::set_shaders(
+            shaders_and_dat
+                ->valor([])
+                ->trans(func(sd: (graphic::shader, dict))
                     {
-                        let s = graphic::shader(shader_path_dat_pair: array[0] as string);
-                        for (let uname, uval : shader_path_dat_pair: array[1] as dict)
-                        {
-                            let a = uval as array;
-                            assert(a->len > 0);
-                            if (a[0] is int)
-                            {
-                                assert(a->len == 1);
-                                s->set_uniform(uname as string, a[0] as int);
-                            }
-                            else if (a[0] is real)
-                            {
-                                if (a->len == 1)
-                                    s->set_uniform(uname as string, a[0] as real);
-                                else if (a->len == 2)
-                                    s->set_uniform(uname as string, (a[0] as real, a[1] as real));
-                                else if (a->len == 3)
-                                    s->set_uniform(uname as string, (a[0] as real, a[1] as real, a[2] as real));
-                                else if (a->len == 4)
-                                    s->set_uniform(uname as string, (a[0] as real, a[1] as real, a[2] as real, a[3] as real));
-                                else
-                                    std::panic("invalid uniform value length when restore.");
-                            }
-                            else
-                                std::panic("invalid uniform type when restore.");
-                        }
-                        shads->add(s);
-                    }
-                    return shads->toarray;
-                })
-            ->map(\shads: array<graphic::shader> = 
-                entity->editor::graphic::set_shaders(shads););
-
-        logfatal("此处需要数据写入entity的编辑时shader-uniform缓存组件，以便错误时恢复uniform数据");
+                        let s = sd[0];
+                        for (let uname, uval : sd[1])
+                            restore_shader_of_entity(entity, s, uname as string, uval as array);
+                        return s;
+                    })
+            );
 
         // 开始加载texture
         entity_dat->get("textures": dynamic)
