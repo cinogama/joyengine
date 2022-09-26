@@ -1059,7 +1059,7 @@ WO_API wo_api wojeapi_set_uniforms_float(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_set_uniforms_float2(wo_vm vm, wo_value args, size_t argc)
 {
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
-    (*shader)->set_uniform(wo_string(args + 1), 
+    (*shader)->set_uniform(wo_string(args + 1),
         jeecs::math::vec2(wo_float(args + 2), wo_float(args + 3)));
 
     return wo_ret_void(vm);

@@ -36,6 +36,12 @@ namespace jeecs
         {
             int life;
         };
+        // Used for store uniform vars of failed-shader in entity
+        struct BadShadersUniform
+        {
+            using uniform_inform = std::map<std::string, jegl_shader::unifrom_variables>;
+            std::map<graphic::shader*, uniform_inform> uniforms;
+        };
     }
 
     struct DefaultEditorSystem : public game_system

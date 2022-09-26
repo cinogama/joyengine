@@ -165,7 +165,7 @@ namespace editor::Serialize
             ->map(\shads: array<graphic::shader> = 
                 entity->editor::graphic::set_shaders(shads););
 
-        logfatal("此处需要数据写入entity的shader-uniform缓存组件，以便错误时恢复uniform数据");
+        logfatal("此处需要数据写入entity的编辑时shader-uniform缓存组件，以便错误时恢复uniform数据");
 
         // 开始加载texture
         entity_dat->get("textures": dynamic)
