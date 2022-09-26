@@ -135,8 +135,28 @@ namespace editor::Serialize
                         let s = graphic::shader(shader_path_dat_pair: array[0] as string);
                         for (let uname, uval : shader_path_dat_pair: array[1] as dict)
                         {
-                            // TODO;
-                            logfatal("实现一下设置uniform变量");
+                            let a = uval as array;
+                            assert(a->len > 0);
+                            if (a[0] is int)
+                            {
+                                assert(a->len == 1);
+                                s->set_uniform(uname as string, a[0] as int);
+                            }
+                            else if (a[0] is real)
+                            {
+                                if (a->len == 1)
+                                    s->set_uniform(uname as string, a[0] as real);
+                                else if (a->len == 2)
+                                    s->set_uniform(uname as string, (a[0] as real, a[1] as real));
+                                else if (a->len == 3)
+                                    s->set_uniform(uname as string, (a[0] as real, a[1] as real, a[2] as real));
+                                else if (a->len == 4)
+                                    s->set_uniform(uname as string, (a[0] as real, a[1] as real, a[2] as real, a[3] as real));
+                                else
+                                    std::panic("invalid uniform value length when restore.");
+                            }
+                            else
+                                std::panic("invalid uniform type when restore.");
                         }
                         shads->add(s);
                     }

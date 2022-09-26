@@ -66,8 +66,7 @@ namespace editor::Inspector::Material
         }
         if (show_uniforms)
         {
-            let uniforms = shader->get_uniforms();
-            for(let name, uniform_val : uniforms)
+            for(let name, uniform_val : shader->get_uniforms())
             {
                 if (name->beginwith("JOYENGINE_"))
                     continue; // 引擎的内置shader-uniform变量，跳过显示
@@ -75,15 +74,20 @@ namespace editor::Inspector::Material
                 match (uniform_val)
                 {
                     integer(n)?
-                        ;
+                        if (InputInt(name, ref n))
+                            shader->set_uniform(name, n);
                     float(x)?
-                        ;
+                        if (InputFloat(name, ref x))
+                            shader->set_uniform(name, x);
                     float2((x, y))?
-                        ;
+                        if (InputFloat2(name, ref x, ref y))
+                            shader->set_uniform(name, (x, y));
                     float3((x, y, z))?
-                        ;
+                        if (InputFloat3(name, ref x, ref y, ref z))
+                            shader->set_uniform(name, (x, y, z));
                     float4((x, y, z, w))?
-                        ;
+                        if (InputFloat4(name, ref x, ref y, ref z, ref w))
+                            shader->set_uniform(name, (x, y, z, w));
                     texture(id)?
                     {
                         let texture_path = 
