@@ -768,8 +768,8 @@ struct jegl_graphic_api
 {
     using custom_interface_info_t = void*;
 
-    using startup_interface_func_t = custom_interface_info_t(*)(jegl_thread*, const jegl_interface_config*);
-    using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t);
+    using startup_interface_func_t = custom_interface_info_t(*)(jegl_thread*, const jegl_interface_config*, bool);
+    using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t, bool);
     using update_interface_func_t = bool(*)(jegl_thread*, custom_interface_info_t);
 
     using get_windows_size_func_t = void(*)(jegl_thread*, size_t*, size_t*);
@@ -931,6 +931,9 @@ JE_API bool jedbg_editor(void);
 JE_API void jedbg_set_editing_entity(const jeecs::game_entity* _entity);
 
 JE_API const jeecs::game_entity* jedbg_get_editing_entity();
+
+// NOTE: Get graphic thread
+JE_API jegl_thread* jedbg_get_editing_graphic_thread(void * universe);
 
 #endif
 

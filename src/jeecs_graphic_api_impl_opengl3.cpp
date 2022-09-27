@@ -87,7 +87,7 @@ void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int st
 
 }
 
-jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config)
+jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
 {
     jeecs::debug::log("Graphic thread start!");
 
@@ -134,7 +134,7 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
         sizeof(jeecs::math::vec4)
     );
 
-    jegui_init(WINDOWS_HANDLE);
+    jegui_init(WINDOWS_HANDLE, reboot);
 
     return nullptr;
 }
@@ -177,13 +177,13 @@ bool gl_lateupdate(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
     return true;
 }
 
-void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
+void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t, bool reboot)
 {
     assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
 
     jeecs::debug::log("Graphic thread shutdown!");
 
-    jegui_shutdown();
+    jegui_shutdown(reboot);
     glfwDestroyWindow(WINDOWS_HANDLE);
 
 }

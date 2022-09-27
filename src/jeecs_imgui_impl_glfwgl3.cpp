@@ -957,7 +957,7 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-void jegui_init(void* window_handle)
+void jegui_init(void* window_handle, bool reboot)
 {
     ImGui::CreateContext();
 
@@ -1073,28 +1073,30 @@ void jegui_update()
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void jegui_shutdown()
+void jegui_shutdown(bool reboot)
 {
-    auto chain = _wo_job_list.pick_all();
-    while (chain)
+    if (!reboot)
     {
-        auto cur_job = chain;
-        chain = chain->last;
+        auto chain = _wo_job_list.pick_all();
+        while (chain)
+        {
+            auto cur_job = chain;
+            chain = chain->last;
 
-        wo_close_vm(cur_job->work_vm);
-        delete cur_job;
+            wo_close_vm(cur_job->work_vm);
+            delete cur_job;
+        }
+
+        auto new_job_chain = _wo_new_job_list.pick_all();
+        while (new_job_chain)
+        {
+            auto cur_job = new_job_chain;
+            new_job_chain = new_job_chain->last;
+
+            wo_close_vm(cur_job->work_vm);
+            delete cur_job;
+        }
     }
-
-    auto new_job_chain = _wo_new_job_list.pick_all();
-    while (new_job_chain)
-    {
-        auto cur_job = new_job_chain;
-        new_job_chain = new_job_chain->last;
-
-        wo_close_vm(cur_job->work_vm);
-        delete cur_job;
-    }
-
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

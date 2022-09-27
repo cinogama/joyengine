@@ -281,7 +281,9 @@ namespace editor::Project
                 ->reduce
                 ->val;
 
-            je::input::windowsize(window_size[0]: int, window_size[1]: int);
+            je::editor::restart_graphic_interface(F"JoyEngine 4.0 - {proj_name}",
+                window_size[0]: int, window_size[1]: int, 60, false);
+            // je::input::windowsize(window_size[0]: int, window_size[1]: int);
 
             runtime_worlds
                 ->trans(\p: dynamic = p as string;)

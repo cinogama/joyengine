@@ -23,10 +23,13 @@ void* const INVALID_RESOURCE = (void*)(size_t)-1;
 jeecs::basic::atomic_list<jegl_resource::jegl_destroy_resouce> _destroing_graphic_resources;
 void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jegl_thread*), void* arg)
 {
+    bool first_bootup = true;
     _current_graphic_thread = thread;
     do
     {
-        auto custom_interface = thread->m_apis->init_interface(thread, &thread->_m_thread_notifier->m_interface_config);
+        auto custom_interface = thread->m_apis->init_interface(thread, 
+            &thread->_m_thread_notifier->m_interface_config, !first_bootup);
+        first_bootup = false;
         ++thread->m_version;
         while (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
         {
@@ -87,7 +90,8 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             } while (0);
         }
 
-        thread->m_apis->shutdown_interface(thread, custom_interface);
+        thread->m_apis->shutdown_interface(thread, custom_interface, 
+            thread->_m_thread_notifier->m_reboot_flag);
 
         if (!thread->_m_thread_notifier->m_reboot_flag)
             break;

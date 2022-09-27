@@ -400,3 +400,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
     };
 }
+
+jegl_thread* jedbg_get_editing_graphic_thread(void* universe)
+{
+    return jeecs::DefaultGraphicPipeline::get_default_graphic_pipeline_instance(universe)->glthread;
+}

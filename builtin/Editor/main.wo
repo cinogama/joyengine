@@ -244,6 +244,12 @@ func Editor_MainMenuBar()
             launch(test::memory_leak::WorldLifecycle::show, ());
         if (MenuItem("内存泄漏测试（图形系统资源）"))
             launch(test::memory_leak::GraphicResource::show, ());
+        if (MenuItem("启用全屏"))
+            je::editor::restart_graphic_interface("DEBUG",
+                1920, 1080, 60, true);
+        if (MenuItem("还原窗口"))
+            je::editor::restart_graphic_interface("DEBUG",
+                1920, 1080, 60, false);
             
         EndMenu();
     }
