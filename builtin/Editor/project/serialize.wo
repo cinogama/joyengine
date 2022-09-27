@@ -155,8 +155,8 @@ namespace editor::Serialize
         // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
         let entity_has_bad_shader = shaders_and_dat
             ->bind(\sds: array<(graphic::shader, dict)> = sds
-                ->trans(\sd: (graphic::shader, dict) = sd[0]->isvalid;)
-                ->reduce(\l: bool, r: bool = l?r|l;);)
+                ->trans(\sd: (graphic::shader, dict) = !sd[0]->isvalid;)
+                ->reduce(\l: bool, r: bool = l?l|r;);)
             ->valor(false);
 
         let entity = world->add_entity(

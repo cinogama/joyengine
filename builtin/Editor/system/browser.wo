@@ -138,6 +138,32 @@ namespace editor::Browser
         RightClick,
     }
 
+    func context_menu(path: PathInfo)
+    {
+        if (BeginPopupContextItem())
+        {
+            if (path.externname == "shader")
+            {
+                if (MenuItem(F"更新此着色器"))
+                {
+                    // 从universe中获取所有world，更新world中所有实体的shader
+                    je::universe::current()
+                        ->editor::worlds_list
+                        ->trans(\w: je::world = w
+                            ->editor::get_all_entities
+                            ->trans(\e: je::entity = 
+                                e->editor::graphic::try_reload_shaders(path.path, path.path)
+                            ;)
+                        ;);
+                }
+                
+                Separator();
+            }
+
+            EndPopup();
+        }
+    }
+
     // 带图标的文件按钮
     func FileIcon(path: PathInfo)=> Action
     {
@@ -146,6 +172,7 @@ namespace editor::Browser
                 let clicked = ImageButton(get_file_icon_by_extern_name(path)->get_texture, 0.125);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
+            context_menu(path);
             if (BeginDragDropSource())
             {
                 SetDragDropPayload("JEDITOR_FILE_PATH", path.path);
@@ -204,8 +231,8 @@ namespace editor::Browser
                         subpath
                             ->indir(\_:void = set_current_work_path(subpath.path);)
                             ->infile(\= OpenFile::open(subpath);)   
-                    | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单")
-                    | 0
+                    /* | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单") */
+                    | func(){}() // get void
                     where action = FileIcon(subpath);
                 );       
         EndChild();

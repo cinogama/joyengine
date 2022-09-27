@@ -948,6 +948,9 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
     }
     return wo_ret_val(vm, out_array);
 }
+
+WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t argc);
+
 WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -1080,6 +1083,13 @@ WO_API wo_api wojeapi_set_uniforms_float4(wo_vm vm, wo_value args, size_t argc)
 
     return wo_ret_void(vm);
 }
+
+// defined in 'jeecs_core_editor_system.hpp'
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, size_t argc);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args, size_t argc);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args, size_t argc);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args, size_t argc);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args, size_t argc);
 
 WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1571,7 +1581,43 @@ R"(
                        || std::declval:<T>() is (real, real, real)
                        || std::declval:<T>() is (real, real, real, real);
             {
-                std::panic("TODO;");
+                if (std::declval:<T>() is int)
+                {
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
+                    func _set_uniform_int(e: entity, shad: graphic::shader, name: string, val: int)=> void;
+
+                    _set_uniform_int(self, shad, name, val);
+                }
+                else if (std::declval:<T>() is real)
+                {
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
+                    func _set_uniform_float(e: entity, shad: graphic::shader, name: string, val: real)=> void;
+
+                    _set_uniform_float(self, shad, name, val);
+                }
+                else if (std::declval:<T>() is (real, real))
+                {
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
+                    func _set_uniform_float2(e: entity, shad: graphic::shader, name: string, x: real, y: real)=> void;
+                    let (x, y) = val;
+                    _set_uniform_float2(self, shad, name, x, y);
+                }
+                else if (std::declval:<T>() is (real, real, real))
+                {
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
+                    func _set_uniform_float3(e: entity, shad: graphic::shader, name: string, x: real, y: real, z: real)=> void;
+                    let (x, y, z) = val;
+                    _set_uniform_float3(self, shad, name, x, y, z);
+                }
+                else if (std::declval:<T>() is (real, real, real, real))
+                {
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
+                    func _set_uniform_float4(e: entity, shad: graphic::shader, name: string, x: real, y: real, z: real, w: real)=> void;
+                    let (x, y, z, w) = val;
+                    _set_uniform_float4(self, shad, name, x, y, z, w);
+                }
+                else
+                    std::panic("Here should not been exec.");
             }
 
             extern("libjoyecs", "wojeapi_get_editing_entity")
@@ -1746,6 +1792,11 @@ R"(
 
             namespace graphic
             {
+                // Used for reload specify shader; called when shader updated or moved;
+                // RETURN TRUE MEANS OK
+                extern("libjoyecs", "wojeapi_reload_shader_of_entity")
+                public func try_reload_shaders(self: entity, old_shad: string, new_shad: string)=> bool;
+
                 public func get_shaders(self: entity)=> array<graphic::shader>
                 {
                     extern("libjoyecs", "wojeapi_shaders_of_entity")
