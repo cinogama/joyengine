@@ -33,9 +33,9 @@ namespace editor::EntityList
             Separator();
             if (MenuItem(F"删除 {entity->editor::name()}"))
             {
-                launch(generic::AskBox, ("删除实体",
-                                        F"确认要删除实体{entity->editor::name()}吗？",
-                                        \ = entity->close();));
+                generic::askbox("删除实体",
+                    F"确认要删除实体{entity->editor::name()}吗？",
+                    \ = entity->close(););
             }
             if (MenuItem("重命名"))
             {

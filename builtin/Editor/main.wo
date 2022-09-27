@@ -171,7 +171,19 @@ func Editor_MainMenuBar()
 
         Separator();
         if (MenuItem("退出"))
-            launch(AskBox, ("确认退出", "即将关闭JoyEngine，是否继续？", je::exit));
+            checkbox("确认退出", "即将关闭JoyEngine，是否需要保存项目？", 
+            // 选择是，执行保存操作，完成后退出
+            func(){
+                match(Project::GetCurrentProject()->SaveProject())
+                {
+                ok(_)?
+                    je::exit();
+                err(msg)?
+                    launch(MsgBox, ("保存项目失败", msg));
+                }
+            }, 
+            // 选择否，直接退出
+            je::exit);
 
         EndMenu();
     }

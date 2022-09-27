@@ -53,13 +53,13 @@ namespace editor::WorldList
                         {
                             value(rend_world)?
                                 if (rend_world != world)
-                                    launch(generic::AskBox, ("切换渲染世界",
+                                    generic::askbox("切换渲染世界",
                                                 F"即将切换到{world->editor::name}，是否继续？",
-                                                \=SwitchEditingWorld(world);));
+                                                \=SwitchEditingWorld(world););
                             none?
-                                launch(generic::AskBox, ("切换渲染世界",
+                                generic::askbox("切换渲染世界",
                                             F"即将切换到{world->editor::name}，是否继续？",
-                                            \=SwitchEditingWorld(world);));
+                                            \=SwitchEditingWorld(world););
                         }
                     }
                     context_menu(world);
@@ -90,7 +90,7 @@ namespace editor::WorldList
                 else
                 {
                     let delete_world_form = 
-                        \ = generic::AskBox("确认删除世界",
+                        \ = generic::askbox("确认删除世界",
                                 F"确定要删除世界{world->editor::name}吗？未保存的世界将永久丢失！",
                                 func(){
                                     EntityList::set_current_entity(option::none);
@@ -98,7 +98,7 @@ namespace editor::WorldList
                                 });;
                     let save_world_form = 
                         \ proj_world: Project::World, saving_path: string = 
-                            generic::AskBox("确认关闭世界",
+                            generic::askbox("确认关闭世界",
                                 F"确定要关闭世界{world->editor::name}吗？世界将被保存到{saving_path}！",
                                 func(){
                                     EntityList::set_current_entity(option::none);
@@ -109,10 +109,10 @@ namespace editor::WorldList
                     {
                     value(proj_world)?
                         proj_world.path
-                            ->map(\p: string = launch(save_world_form, (proj_world, p));) // 如果当前项目有路径，则询问是否关闭
-                            ->or(\ = launch(delete_world_form, ()););    
+                            ->map(\p: string = save_world_form(proj_world, p);) // 如果当前项目有路径，则询问是否关闭
+                            ->or(\ = delete_world_form(););    
                     none?
-                        launch(delete_world_form, ());
+                        delete_world_form();
                     }
                     
                 }

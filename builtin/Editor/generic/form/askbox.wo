@@ -3,7 +3,7 @@ import je.gui;
 
 namespace generic
 {
-    public func AskBox(title:string, shown:string, trigger:()=>void)
+    func AskBox(title:string, shown:string, trigger:()=>void)
     {
         using je::gui;
 
@@ -26,5 +26,39 @@ namespace generic
         if (!open)
             return FormAction::Close;
         return FormAction::Nothing;
+    }
+    public func askbox(title: string, shown: string, trigger: ()=>void)
+    {
+        je::gui::launch(AskBox, (title, shown, trigger));
+    }
+    public func checkbox(title: string, shown: string, yesf:()=>anything, nof:()=>void)
+    {
+        using je::gui;
+        launch(func(){
+            let mut open = true;
+            Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+            {
+                Text(shown);
+                if (Button("是"))
+                {
+                    yesf();
+                    open = false;
+                }
+                SameLine();
+                if (Button("否"))
+                {
+                    nof();
+                    open = false;
+                }
+                SameLine();
+                if (Button("取消"))
+                    open = false;
+            }
+            End();
+
+            if (!open)
+                return FormAction::Close;
+            return FormAction::Nothing;
+        }, ());
     }
 }

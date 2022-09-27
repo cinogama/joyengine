@@ -75,10 +75,10 @@ namespace editor::Project
                      oldpath}\n是否继续？";
             }
 
-            je::gui::launch(generic::AskBox, ("保存世界？", ask_msg, func(){
+            generic::askbox("保存世界？", ask_msg, func(){
                 self.path = option::value(real_saving_path);
                 self->Save();
-            }));
+            });
         }
     }
 
