@@ -104,7 +104,7 @@ std::unordered_map<size_t, std::pair<void(*)(int, const char*, void*), void*>> r
 
 size_t je_log_register_callback(void(*func)(int level, const char* msg, void* custom), void* custom)
 {
-    size_t id = registered_id++;
+    size_t id = ++registered_id;
 
     std::lock_guard lg(registered_callbacks_mx);
     assert(registered_callbacks.find(id) == registered_callbacks.end());

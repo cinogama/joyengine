@@ -20,6 +20,8 @@ const let
     DEFAULT_GRAPHIC_SYSTEM_NAME = "Graphic::DefaultGraphicPipelineSystem",
     DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
 
+let mut hooked_log_handle = (-1): handle;
+
 namespace editor::Project
 {
     // 用于储存项目中的世界信息，包括世界所在的路径和运行时系统信息
@@ -247,9 +249,17 @@ namespace editor::Project
 
         // ok 创建完成，销毁之前的项目上下文
         RemoveCurrentProject();
+
+        if (hooked_log_handle == (-1): handle)
+            hooked_log_handle = je::editor::hooklog();
         return result::ok(SetCurrentProject(created_project));
     }
-
+    public func UnhookLogWhenExit()
+    {
+        if (hooked_log_handle != (-1): handle)
+            je::editor::unhooklog(hooked_log_handle);
+        hooked_log_handle = (-1): handle;
+    }
     public func LoadProject(data: dict<dynamic, dynamic>)
     {
         using je;

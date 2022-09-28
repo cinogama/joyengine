@@ -328,6 +328,9 @@ func display_icon_in_console()
             je::log(F"{out_line}|");
         }
         je::log(display_bar);
+
+        chtex: gchandle->close();
+        f: gchandle->close();
     }
 
     font(@"builtin/cino_ipix_12px.ttf"@, 14)
