@@ -221,7 +221,7 @@ namespace editor::Project
     {
         let created_project = Project{
             name = name,
-            path = option::value(path),
+            path = option::value(je::filesys::normalize(path)),
             graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,

@@ -156,10 +156,14 @@ namespace editor::Browser
                             ;)
                         ;);
                 }
-                
                 Separator();
             }
+            if (MenuItem(F"在资源管理器中显示"))
+            {
+                let command = F"explorer \"{je::filesys::parent(path.path)->replace("/", "\\")}\"";
 
+                je::filesys::open(command);
+            }
             EndPopup();
         }
     }

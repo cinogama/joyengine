@@ -5,6 +5,24 @@
 
 namespace fs = std::filesystem;
 
+std::string normalize_path_str(const fs::path& p)
+{
+    std::string path = p.lexically_normal().string();
+    if (fs::is_directory(p) && !path.empty()
+        && path.back() != '/' && path.back() != '\\')
+    {
+        path +=
+#ifdef WIN32
+            "\\"
+#else
+            "/"
+#endif
+            ;
+    }
+    std::replace(path.begin(), path.end(), '\\', '/');
+    return path;
+}
+
 WO_API wo_api wojeapi_filesys_path(wo_vm vm, wo_value args, size_t argc)
 {
     auto* result = new fs::directory_iterator(wo_string(args + 0));
@@ -20,7 +38,7 @@ WO_API wo_api wojeapi_filesys_path_next(wo_vm vm, wo_value args, size_t argc)
     if (*result == fs::directory_iterator())
         return wo_ret_bool(vm, false);
 
-    wo_set_string(args + 1, (*((*result)++)).path().string().c_str());
+    wo_set_string(args + 1, normalize_path_str((*((*result)++)).path()).c_str());
     return wo_ret_bool(vm, true);
 }
 
@@ -60,7 +78,15 @@ WO_API wo_api wojeapi_filesys_open_file_by_browser(wo_vm vm, wo_value args, size
 
 WO_API wo_api wojeapi_filesys_path_parent(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_string(vm, fs::path(wo_string(args + 0)).parent_path().string().c_str());
+    std::string p = wo_string(args + 0);
+    if (!p.empty() && p.back() == '/' || p.back() == '\\')
+        p = p.substr(0, p.size() - 1);
+    return wo_ret_string(vm, normalize_path_str(fs::path(p).parent_path()).c_str());
+}
+
+WO_API wo_api wojeapi_filesys_normalize_path(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm, normalize_path_str(fs::path(wo_string(args + 0))).c_str());
 }
 
 WO_API wo_api wojeapi_filesys_file_readall(wo_vm vm, wo_value args, size_t argc)
@@ -107,8 +133,6 @@ namespace je::file
 
 namespace je::filesys
 {
-    
-
     public func parent(_path: string)
     {
         extern("libjoyecs", "wojeapi_filesys_path_parent")
@@ -174,6 +198,9 @@ namespace je::filesys
             return "";
         return fname->sub(fname->rfind(".") + 1);
     }
+
+    extern("libjoyecs", "wojeapi_filesys_normalize_path")
+    public func normalize(_path: string)=> string;
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
     public func isdir(_path: string)=> bool;
