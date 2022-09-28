@@ -239,7 +239,7 @@ void jegl_using_resource(jegl_resource* resource)
                 if (uniform_vars->m_index == jeecs::typing::INVALID_UINT32)
                     uniform_vars->m_index = jegl_uniform_location(resource, uniform_vars->m_name);
 
-                if (uniform_vars->m_updated)
+                if (uniform_vars->m_updated || need_init_resouce)
                 {
                     uniform_vars->m_updated = false;
                     switch (uniform_vars->m_uniform_type)
@@ -255,6 +255,9 @@ void jegl_using_resource(jegl_resource* resource)
                         break;
                     case jegl_shader::uniform_type::FLOAT4:
                         jegl_uniform_float4(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4X4:
+                        jegl_uniform_float4x4(resource, uniform_vars->m_index, uniform_vars->mat4x4);
                         break;
                     case jegl_shader::uniform_type::INT:
                     case jegl_shader::uniform_type::TEXTURE2D:

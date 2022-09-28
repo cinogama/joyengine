@@ -640,6 +640,7 @@ struct jegl_shader
                 float x, y, z, w;
             };
             int n;
+            float mat4x4[4][4];
         };
 
         unifrom_variables* m_next;

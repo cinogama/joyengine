@@ -308,7 +308,7 @@ WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args, size_t
     assert(texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D);
 
     texture2d_val->m_uniform_texture_channel = (int)wo_int(args + 1);
-    return wo_ret_val(vm, args+0);
+    return wo_ret_val(vm, args + 0);
 }
 WO_API wo_api jeecs_shader_create_rot_mat4x4(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1437,6 +1437,9 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
                 variable->y = init_val->m_float4[1];
                 variable->z = init_val->m_float4[2];
                 variable->w = init_val->m_float4[3]; break;
+            case jegl_shader_value::type::FLOAT4x4:
+                memcpy(variable->mat4x4, init_val->m_float4x4, 4 * 4 * sizeof(float));
+                break;
             case jegl_shader_value::type::INTEGER:
                 variable->n = init_val->m_integer; break;
             case jegl_shader_value::type::TEXTURE2D:

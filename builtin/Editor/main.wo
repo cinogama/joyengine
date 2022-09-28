@@ -248,8 +248,11 @@ func Editor_MainMenuBar()
             je::editor::restart_graphic_interface("DEBUG",
                 1920, 1080, 60, true);
         if (MenuItem("还原窗口"))
+        {
+            let (win_width, win_height) = je::input::windowsize();
             je::editor::restart_graphic_interface("DEBUG",
-                1920, 1080, 60, false);
+                win_width, win_height, 60, false);
+        }
             
         EndMenu();
     }
