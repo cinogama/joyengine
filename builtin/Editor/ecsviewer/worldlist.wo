@@ -98,13 +98,15 @@ namespace editor::WorldList
                                 });;
                     let save_world_form = 
                         \ proj_world: Project::World, saving_path: string = 
-                            generic::askbox("确认关闭世界",
-                                F"确定要关闭世界{world->editor::name}吗？世界将被保存到{saving_path}！",
+                            generic::checkbox("确认关闭世界",
+                                F"正在关闭世界{world->editor::name}，是否需要保存？世界将被保存到{saving_path}！",
                                 func(){
                                     EntityList::set_current_entity(option::none);
                                     proj_world->Save();
                                     Project::GetCurrentProject()->CloseWorld(world);
-                                });;
+                                },
+                                \ = Project::GetCurrentProject()->CloseWorld(world);
+                                );;
                     match(Project::GetCurrentProject()->FindWorld(world))
                     {
                     value(proj_world)?

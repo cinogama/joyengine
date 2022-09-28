@@ -89,6 +89,13 @@ WO_API wo_api wojeapi_filesys_normalize_path(wo_vm vm, wo_value args, size_t arg
     return wo_ret_string(vm, normalize_path_str(fs::path(wo_string(args + 0))).c_str());
 }
 
+WO_API wo_api wojeapi_filesys_delete(wo_vm vm, wo_value args, size_t argc)
+{
+    std::error_code ec;
+    return wo_ret_bool(vm, fs::remove_all(fs::path(wo_string(args + 0)), ec));
+}
+
+
 WO_API wo_api wojeapi_filesys_file_readall(wo_vm vm, wo_value args, size_t argc)
 {
     auto* file = jeecs_file_open(wo_string(args + 0));
@@ -133,13 +140,8 @@ namespace je::file
 
 namespace je::filesys
 {
-    public func parent(_path: string)
-    {
-        extern("libjoyecs", "wojeapi_filesys_path_parent")
-        func _parent_path(_path: string)=> string;
-
-        return _parent_path(_path);
-    }
+    extern("libjoyecs", "wojeapi_filesys_path_parent")
+    public func parent(_path: string)=> string;
 
     using path = gchandle
     {
@@ -201,6 +203,9 @@ namespace je::filesys
 
     extern("libjoyecs", "wojeapi_filesys_normalize_path")
     public func normalize(_path: string)=> string;
+
+    extern("libjoyecs", "wojeapi_filesys_delete")
+    public func delete(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
     public func isdir(_path: string)=> bool;

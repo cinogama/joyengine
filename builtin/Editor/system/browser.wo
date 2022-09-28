@@ -158,11 +158,14 @@ namespace editor::Browser
                 }
                 Separator();
             }
-            if (MenuItem(F"在资源管理器中显示"))
+            if (MenuItem("在资源管理器中显示"))
             {
                 let command = F"explorer \"{je::filesys::parent(path.path)->replace("/", "\\")}\"";
-
                 je::filesys::open(command);
+            }
+            if (MenuItem("删除"))
+            {
+                generic::askbox(F"删除文件{path.path}", F"是否继续删除文件{path.path}",\=je::filesys::delete(path.path););
             }
             EndPopup();
         }
