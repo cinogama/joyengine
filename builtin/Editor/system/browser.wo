@@ -149,6 +149,9 @@ namespace editor::Browser
         {
             path->map(\p: PathInfo = file_item_menu(p);)
                 ->map(\_: anything = Separator(););
+            
+            if (MenuItem(F"刷新"))
+                force_update();
 
             if (BeginMenu(F"新建..."))
             {
@@ -201,14 +204,14 @@ namespace editor::Browser
         Separator();
         if (MenuItem("重命名", is_modifiable_file))
         {
-            generic::inputbox("重命名", F"请输入文件{path.path}的新名称", F"{path.name}", 
+            generic::inputbox("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
                 \newname: string = je::filesys::move(path.path, je::filesys::parent(path.path) + newname)
                     ->map(\_: anything = force_update();)
                     ->or(\reason: string = generic::msgbox("重命名失败", reason);););
         }
         if (MenuItem("删除", is_modifiable_file))
         {
-            generic::askbox(F"删除文件{path.path}", F"是否继续删除文件{path.path}",
+            generic::askbox(F"删除{path.path}", F"是否继续删除{path.path}",
                 \=je::filesys::delete(path.path)
                     ->map(\_: anything = force_update();)
                     ->or(\reason: string = generic::msgbox("删除失败", reason);););
