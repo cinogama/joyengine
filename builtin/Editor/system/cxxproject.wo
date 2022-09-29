@@ -1,0 +1,19 @@
+// 这个倒霉文件用于管理项目中使用的C++模块，负责指导模块元数据读取载入编辑等
+
+import woo.std;
+import je.filesys;
+
+using CxxProject = struct {
+	name: string, // 模块的名称
+	path: string, // 模块所在路径，仅此而已
+}
+{
+	public func start(name: string, locpath: string)
+	{
+		// 在指定目录下创建Cxx项目目录
+	}
+	public func load(path: string)
+	{
+		// 加载指定路径的 CXX 项目信息
+	}
+}

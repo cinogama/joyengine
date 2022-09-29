@@ -3,6 +3,7 @@ import je.gui;
 import je.filesys;
 
 import openfile;
+import cxxproject;
 
 using je::gui;
 
@@ -147,12 +148,6 @@ namespace editor::Browser
             ->or(\ = BeginPopupContextWindow();)
             ->val)
         {
-            path->map(\p: PathInfo = file_item_menu(p);)
-                ->map(\_: anything = Separator(););
-            
-            if (MenuItem(F"刷新"))
-                force_update();
-
             if (BeginMenu(F"新建..."))
             {
                 if (MenuItem(F"目录"))
@@ -160,7 +155,16 @@ namespace editor::Browser
                         \dirname: string = je::filesys::mkdir(je::filesys::normalize(current_work_path) + dirname)
                             ->map(\_:anything = force_update();)
                             ->or(\reason: string = generic::msgbox("创建目录失败", reason);););
-
+                if (MenuItem(F"空文件"))
+                {
+                    generic::inputbox("新建空文件", F"在{current_work_path}新建空文件", "NewFile.txt",
+                        \filename: string = je::filesys::exist(file_path)
+                            ? generic::msgbox("创建空文件失败", "同名文件已经存在")
+                            | je::file::writeall(file_path, "") 
+                                ? force_update()
+                                | generic::msgbox("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                        where file_path = je::filesys::normalize(current_work_path) + filename;);
+                }
                 Separator();
                 if (BeginMenu(F"着色器脚本"))
                 {
@@ -169,8 +173,24 @@ namespace editor::Browser
                         std::panic("TODO;");
                     EndMenu();
                 }
+                if (MenuItem(F"C++模块"))
+                {
+                    // 创建C++模块，就跟JoyEngineCSP差不多
+                    std::panic("TODO;");
+                }
                 EndMenu();
             }
+
+            Separator();
+
+            path->map(\p: PathInfo = file_item_menu(p);)
+            ->map(\_: anything = Separator(););
+                        
+            if (MenuItem("在资源管理器中显示"))
+                je::filesys::open(F"explorer \"{je::filesys::normalize(current_work_path)->replace("/", "\\")}\"");
+
+            if (MenuItem(F"刷新"))
+                force_update();
 
             EndPopup();
         }
@@ -196,12 +216,6 @@ namespace editor::Browser
             }
             Separator();
         }
-        if (MenuItem("在资源管理器中显示"))
-        {
-            let command = F"explorer \"{je::filesys::parent(path.path)->replace("/", "\\")}\"";
-            je::filesys::open(command);
-        }
-        Separator();
         if (MenuItem("重命名", is_modifiable_file))
         {
             generic::inputbox("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
@@ -334,6 +348,8 @@ namespace editor::Browser
         if (force_update_dir_tree_flag)
         {
             force_update_dir_tree_flag = false;
+
+            // 强制更新，直接把缓存的子目录全部干掉
             _root.type->set(PathType::dir(option::none));
         }
 
