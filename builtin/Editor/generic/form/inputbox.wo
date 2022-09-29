@@ -1,12 +1,12 @@
 import woo.std;
 import je.gui;
 
+using je::gui;
+
 namespace generic
 {
     public func InputBox(title:string, shown:string, default_value: string, trigger: (string)=>void)
     {
-        using je::gui;
-
         let mut open = true;
 
         let text_buffer = TextBuffer(default_value);
@@ -31,5 +31,9 @@ namespace generic
             std::yield();
         }
         return FormAction::Close;
+    }
+    public func inputbox(title:string, shown:string, default_value: string, trigger: (string)=>void)
+    {
+        launch(InputBox, (title, shown, default_value, trigger));
     }
 }

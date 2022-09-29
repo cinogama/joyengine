@@ -138,36 +138,92 @@ namespace editor::Browser
         RightClick,
     }
 
-    func context_menu(path: PathInfo)
+    union FileOrForm
     {
-        if (BeginPopupContextItem())
+        File(PathInfo),
+        Form(string),
+    }
+
+    func context_menu(path: FileOrForm)
+    {
+        let mut shown_context = false;
+        match (path)
         {
-            if (path.externname == "shader")
+        File(_)? shown_context = BeginPopupContextItem();
+        Form(id)? shown_context = BeginPopupContextItem(id);
+        }
+        if (shown_context)
+        {
+            match (path)
             {
-                if (MenuItem(F"更新此着色器"))
-                {
-                    // 从universe中获取所有world，更新world中所有实体的shader
-                    je::universe::current()
-                        ->editor::worlds_list
-                        ->trans(\w: je::world = w
-                            ->editor::get_all_entities
-                            ->trans(\e: je::entity = 
-                                e->editor::graphic::try_reload_shaders(path.path, path.path)
-                            ;)
-                        ;);
-                }
+            File(p)?
+            {
+                file_item_menu(p);
                 Separator();
             }
-            if (MenuItem("在资源管理器中显示"))
-            {
-                let command = F"explorer \"{je::filesys::parent(path.path)->replace("/", "\\")}\"";
-                je::filesys::open(command);
+            Form(id)? ;
             }
-            if (MenuItem("删除"))
+
+            if (BeginMenu(F"新建..."))
             {
-                generic::askbox(F"删除文件{path.path}", F"是否继续删除文件{path.path}",\=je::filesys::delete(path.path););
+                if (MenuItem(F"目录"))
+                    generic::inputbox("新建目录", F"在{current_work_path}新建目录", "NewDir",
+                        \dirname: string = je::filesys::mkdir(dirname)
+                            ->map(\_:anything = force_update_file_group();)
+                            ->or(\reason: string = generic::msgbox("创建目录失败", reason);););
+
+                Separator();
+                if (BeginMenu(F"着色器脚本"))
+                {
+                    // TODO;
+                    EndMenu();
+                }
+                EndMenu();
             }
+
             EndPopup();
+        }
+    }
+    func file_item_menu(path: PathInfo)
+    {
+        let NOT_MODIFIABLE_FILES = ["jeproj4"];
+        let is_modifiable_file = NOT_MODIFIABLE_FILES->find(path.externname) == -1;
+
+        if (path.externname == "shader")
+        {
+            if (MenuItem(F"更新此着色器"))
+            {
+                // 从universe中获取所有world，更新world中所有实体的shader
+                je::universe::current()
+                    ->editor::worlds_list
+                    ->trans(\w: je::world = w
+                        ->editor::get_all_entities
+                        ->trans(\e: je::entity = 
+                            e->editor::graphic::try_reload_shaders(path.path, path.path)
+                        ;)
+                    ;);
+            }
+            Separator();
+        }
+        if (MenuItem("在资源管理器中显示"))
+        {
+            let command = F"explorer \"{je::filesys::parent(path.path)->replace("/", "\\")}\"";
+            je::filesys::open(command);
+        }
+        Separator();
+        if (MenuItem("重命名", is_modifiable_file))
+        {
+            generic::inputbox("重命名", F"请输入文件{path.path}的新名称", F"{path.name}", 
+                \newname: string = je::filesys::move(path.path, je::filesys::parent(path.path) + newname)
+                    ->map(\_: anything = force_update_file_group();)
+                    ->or(\reason: string = generic::msgbox("重命名失败", reason);););
+        }
+        if (MenuItem("删除", is_modifiable_file))
+        {
+            generic::askbox(F"删除文件{path.path}", F"是否继续删除文件{path.path}",
+                \=je::filesys::delete(path.path)
+                    ->map(\_: anything = force_update_file_group();)
+                    ->or(\reason: string = generic::msgbox("删除失败", reason);););
         }
     }
 
@@ -179,7 +235,7 @@ namespace editor::Browser
                 let clicked = ImageButton(get_file_icon_by_extern_name(path)->get_texture, 0.125);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
-            context_menu(path);
+            context_menu(FileOrForm::File(path));
             if (BeginDragDropSource())
             {
                 SetDragDropPayload("JEDITOR_FILE_PATH", path.path);
@@ -208,14 +264,22 @@ namespace editor::Browser
         return Action::Nothing;
     }
 
+    static let mut force_update_file_group_flag = false;
+    // 刷新显示的目录信息等...
+    func force_update_file_group()
+    {
+        force_update_file_group_flag = true;
+    }
+
     // 右边的文件详情等信息
     func files_group()
     {
         static let mut new_showing_path = "";
         static let mut now_item_in_path = []: array<PathInfo>;
-        if (new_showing_path != current_work_path)
+        if (new_showing_path != current_work_path || force_update_file_group_flag)
         {
             new_showing_path = current_work_path;
+            force_update_file_group_flag = false;
 
             now_item_in_path =
                 je::filesys::childs(current_work_path)
@@ -243,7 +307,7 @@ namespace editor::Browser
                     where action = FileIcon(subpath);
                 );       
         EndChild();
-       
+        context_menu(FileOrForm::Form("files_list"));
         // 允许各种乱七八糟的东西拖到这里
         AcceptDrag(["JEEDITOR_WORLD"])
             ->map(\msg: (string, string) = 
@@ -327,6 +391,7 @@ namespace editor::Browser
                     Text(current_work_path);
                 EndChild();
                 files_group();
+                
             EndGroup();
         End();
 

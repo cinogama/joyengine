@@ -61,7 +61,12 @@ WO_API wo_api wojeapi_filesys_is_file(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_filesys_mkdir(wo_vm vm, wo_value args, size_t argc)
 {
     std::error_code ec;
-    return wo_ret_bool(vm, fs::create_directories(wo_string(args + 0), ec));
+    bool created = fs::create_directories(wo_string(args + 0), ec);
+    if (ec)
+        return wo_ret_err_string(vm, ec.message().c_str());
+    if(!created)
+        return wo_ret_err_string(vm, "Failed to create dirctory.");
+    return wo_ret_ok_string(vm, normalize_path_str(wo_string(args + 0)).c_str());
 }
 
 WO_API wo_api wojeapi_filesys_exist(wo_vm vm, wo_value args, size_t argc)
@@ -92,7 +97,27 @@ WO_API wo_api wojeapi_filesys_normalize_path(wo_vm vm, wo_value args, size_t arg
 WO_API wo_api wojeapi_filesys_delete(wo_vm vm, wo_value args, size_t argc)
 {
     std::error_code ec;
-    return wo_ret_bool(vm, fs::remove_all(fs::path(wo_string(args + 0)), ec));
+    auto remove_count = fs::remove_all(fs::path(wo_string(args + 0)), ec);
+    if (ec)
+        return wo_ret_err_string(vm, ec.message().c_str());
+    return wo_ret_ok_int(vm, remove_count);
+}
+
+WO_API wo_api wojeapi_filesys_copy(wo_vm vm, wo_value args, size_t argc)
+{
+    std::error_code ec;
+    fs::copy(fs::path(wo_string(args + 0)), fs::path(wo_string(args + 1)), fs::copy_options::recursive, ec);
+    if (ec) // has error?
+        return wo_ret_err_string(vm, ec.message().c_str());
+    return wo_ret_ok_string(vm, normalize_path_str(wo_string(args + 1)).c_str());
+}
+WO_API wo_api wojeapi_filesys_rename(wo_vm vm, wo_value args, size_t argc)
+{
+    std::error_code ec;
+    fs::rename(fs::path(wo_string(args + 0)), fs::path(wo_string(args + 1)), ec);
+    if (ec) // has error?
+        return wo_ret_err_string(vm, ec.message().c_str());
+    return wo_ret_ok_string(vm, normalize_path_str(wo_string(args + 1)).c_str());
 }
 
 
@@ -205,7 +230,27 @@ namespace je::filesys
     public func normalize(_path: string)=> string;
 
     extern("libjoyecs", "wojeapi_filesys_delete")
-    public func delete(_path: string)=> bool;
+    public func delete(_path: string)=> result<int, string>;
+
+    public func copy(_frompath: string, _aimpath: string)=> result<string, string>
+    {
+        extern("libjoyecs", "wojeapi_filesys_copy")
+        func _copy(_frompath: string, _aimpath: string)=> result<string, string>;
+
+        if (exist(_aimpath))
+            return result::err(F"There is already a file/dir named '{_aimpath}'");
+        return _copy(_frompath, _aimpath);
+    }
+
+    public func move(_frompath: string, _aimpath: string)=> result<string, string>
+    {
+        extern("libjoyecs", "wojeapi_filesys_rename")
+        func _move(_frompath: string, _aimpath: string)=> result<string, string>;
+
+        if (exist(_aimpath))
+            return result::err(F"There is already a file/dir named '{_aimpath}'");
+        return _move(_frompath, _aimpath);
+    }
 
     extern("libjoyecs", "wojeapi_filesys_is_dir")
     public func isdir(_path: string)=> bool;
@@ -214,7 +259,7 @@ namespace je::filesys
     public func isfile(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_mkdir")
-    public func mkdir(_path: string)=> bool;
+    public func mkdir(_path: string)=> result<string, string>;
 
     extern("libjoyecs", "wojeapi_filesys_exist")
     public func exist(_path: string)=> bool;

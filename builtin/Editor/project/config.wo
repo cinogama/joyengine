@@ -228,12 +228,14 @@ namespace editor::Project
         };
 
         if (create_file)
-        {        
-            assert(!je::filesys::exist(path));
-
+        {
             // 1. 创建项目目录，把所需的文件拷贝进去
-            if (!je::filesys::mkdir(path))
-                return result::err("创建项目目录失败");
+            match (je::filesys::mkdir(path))
+            {
+            err(reason)?
+                return result::err(F"创建项目目录失败: {reason}");
+            ok(_)?;
+            }
 
             // 2. 写入项目数据文件
             match (created_project->SaveProject)
