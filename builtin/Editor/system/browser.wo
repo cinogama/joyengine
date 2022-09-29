@@ -138,44 +138,32 @@ namespace editor::Browser
         RightClick,
     }
 
-    union FileOrForm
-    {
-        File(PathInfo),
-        Form(string),
-    }
-
-    func context_menu(path: FileOrForm)
+    func context_menu(path: option<PathInfo>)
     {
         let mut shown_context = false;
-        match (path)
+
+        if (path
+            ->map(\_: anything = BeginPopupContextItem();)
+            ->or(\ = BeginPopupContextWindow();)
+            ->val)
         {
-        File(_)? shown_context = BeginPopupContextItem();
-        Form(id)? shown_context = BeginPopupContextItem(id);
-        }
-        if (shown_context)
-        {
-            match (path)
-            {
-            File(p)?
-            {
-                file_item_menu(p);
-                Separator();
-            }
-            Form(id)? ;
-            }
+            path->map(\p: PathInfo = file_item_menu(p);)
+                ->map(\_: anything = Separator(););
 
             if (BeginMenu(F"新建..."))
             {
                 if (MenuItem(F"目录"))
                     generic::inputbox("新建目录", F"在{current_work_path}新建目录", "NewDir",
-                        \dirname: string = je::filesys::mkdir(dirname)
-                            ->map(\_:anything = force_update_file_group();)
+                        \dirname: string = je::filesys::mkdir(je::filesys::normalize(current_work_path) + dirname)
+                            ->map(\_:anything = force_update();)
                             ->or(\reason: string = generic::msgbox("创建目录失败", reason);););
 
                 Separator();
                 if (BeginMenu(F"着色器脚本"))
                 {
                     // TODO;
+                    if (MenuItem(F"TODO;"))
+                        std::panic("TODO;");
                     EndMenu();
                 }
                 EndMenu();
@@ -215,14 +203,14 @@ namespace editor::Browser
         {
             generic::inputbox("重命名", F"请输入文件{path.path}的新名称", F"{path.name}", 
                 \newname: string = je::filesys::move(path.path, je::filesys::parent(path.path) + newname)
-                    ->map(\_: anything = force_update_file_group();)
+                    ->map(\_: anything = force_update();)
                     ->or(\reason: string = generic::msgbox("重命名失败", reason);););
         }
         if (MenuItem("删除", is_modifiable_file))
         {
             generic::askbox(F"删除文件{path.path}", F"是否继续删除文件{path.path}",
                 \=je::filesys::delete(path.path)
-                    ->map(\_: anything = force_update_file_group();)
+                    ->map(\_: anything = force_update();)
                     ->or(\reason: string = generic::msgbox("删除失败", reason);););
         }
     }
@@ -235,7 +223,7 @@ namespace editor::Browser
                 let clicked = ImageButton(get_file_icon_by_extern_name(path)->get_texture, 0.125);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
-            context_menu(FileOrForm::File(path));
+            context_menu(option::value(path));
             if (BeginDragDropSource())
             {
                 SetDragDropPayload("JEDITOR_FILE_PATH", path.path);
@@ -265,9 +253,11 @@ namespace editor::Browser
     }
 
     static let mut force_update_file_group_flag = false;
+    static let mut force_update_dir_tree_flag = false;
     // 刷新显示的目录信息等...
-    func force_update_file_group()
+    func force_update()
     {
+        force_update_dir_tree_flag = true;
         force_update_file_group_flag = true;
     }
 
@@ -295,6 +285,7 @@ namespace editor::Browser
         }
 
         BeginChild("files_list");
+            context_menu(option::none);
             now_item_in_path
                 ->trans(\subpath: PathInfo = 
                     action == Action::Click ? 0
@@ -305,9 +296,9 @@ namespace editor::Browser
                     /* | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单") */
                     | func(){}() // get void
                     where action = FileIcon(subpath);
-                );       
+                ); 
         EndChild();
-        context_menu(FileOrForm::Form("files_list"));
+
         // 允许各种乱七八糟的东西拖到这里
         AcceptDrag(["JEEDITOR_WORLD"])
             ->map(\msg: (string, string) = 
@@ -336,6 +327,12 @@ namespace editor::Browser
                 externname = je::filesys::externname(root_path),
                 type = mutable(PathType::dir(option::none)),
             };
+
+        if (force_update_dir_tree_flag)
+        {
+            force_update_dir_tree_flag = false;
+            _root.type->set(PathType::dir(option::none));
+        }
 
         // 用于递归展示所有子目录等
         func _show_paths(path: PathInfo)
