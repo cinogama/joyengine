@@ -3,17 +3,90 @@
 import woo.std;
 import je.filesys;
 
+
 using CxxProject = struct {
-	name: string, // 模块的名称
-	path: string, // 模块所在路径，仅此而已
+    name: string, // 模块的名称
+    path: string, // 模块所在路径，仅此而已
 }
 {
-	public func start(name: string, locpath: string)
-	{
-		// 在指定目录下创建Cxx项目目录
-	}
-	public func load(path: string)
-	{
-		// 加载指定路径的 CXX 项目信息
-	}
+    // Cmake所在路径，项目会使用此路径指示的cmake
+    let CMAKE_PATH = F"{std::exepath()}builtin/cmake/win32/cmake.exe";
+
+    // C++模块样例，创建项目文件时会复制这个目录
+    let CXX_PROJECT_EXAMPLE_PATH = F"{std::exepath()}builtin/cxxproject/";
+
+    // 引擎的头文件路径
+    let ENGINE_HEADER_PATH = F"{std::exepath()}builtin/include/";
+
+    // 引擎的库目录
+    let ENGINE_CORE_LIBRARYS_LOCATE_PATH = std::exepath();
+    let ENGINE_CORE_LIBRARYS_PATHS =
+        {
+            ["win32_debug_x86"] = [
+                F"libwoo32_debug.dll",
+                F"libwoo32_debug.lib",
+                F"libjoyecs32_debug.dll",
+                F"libjoyecs32_debug.lib",
+            ],
+            ["win32_release_x86"] = [
+                F"libwoo32.dll",
+                F"libwoo32.lib",
+                F"libjoyecs32.dll",
+                F"libjoyecs32.lib",
+            ],
+            ["win32_debug_x64"] = [
+                F"libwoo_debug.dll",
+                F"libwoo_debug.lib",
+                F"libjoyecs_debug.dll",
+                F"libjoyecs_debug.lib",
+            ],
+            ["win32_release_x64"] = [
+                F"libwoo.dll",
+                F"libwoo.lib",
+                F"libjoyecs.dll",
+                F"libjoyecs.lib",
+            ],
+        };
+
+    // 测试一下，别无它用
+    public func display_cmake_info()
+    {
+        je::filesys::open(F"\"{CMAKE_PATH}\" --version");
+    }
+
+    public func start(name: string, locpath: string)=> result<anything, string>
+    {
+        using je::filesys;
+
+        // 在指定目录下创建Cxx项目目录
+        let cxx_proj_path = normalize(F"{normalize(locpath)}{name}");
+        if (exist(cxx_proj_path))
+            return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
+
+        let r = 
+            // 0. 把项目所需的预设文件结构复制到指定目录
+            copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
+            // 1. 继续，把引擎的头文件复制过来
+            ->bind(\_: anything = copy(ENGINE_HEADER_PATH, F"{cxx_proj_path}engine/include"););
+
+        if (r->iserr)
+            return r;
+
+        // 2. 开始复制文件, 顺便确认支持的平台
+        alias platform_t = string;
+        let platform_support = {}mut : map<platform_t, bool>;
+        for (let platform, files : ENGINE_CORE_LIBRARYS_PATHS)
+        {
+            files
+                ->trans(\name: string = copy(F"{ENGINE_CORE_LIBRARYS_LOCATE_PATH}{name}", F"{cxx_proj_path}engine/library/{name}");)
+                ->trans(\r: result<anything, anything> = r->isok;)
+                ->reduce(\l: bool, r: bool = l ? r | l;)
+                ->map(\r: bool = platform_support->set(platform, r););
+        }
+        return result::ok(nil);
+    }
+    public func load(path: string)
+    {
+        // 加载指定路径的 CXX 项目信息
+    }
 }
