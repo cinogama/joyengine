@@ -177,7 +177,10 @@ namespace editor::Browser
                 if (MenuItem(F"C++模块"))
                 {
                     // 创建C++模块，就跟JoyEngineCSP差不多
-                    std::panic("TODO;");
+                    generic::inputbox("创建C++模块", F"将在{current_work_path}创建，请为项目命名：", "CppModule", 
+                        \module_name: string = CxxProject::start(module_name, current_work_path)
+                            ->map(\_: anything = force_update();)
+                            ->or(\reason: string = generic::msgbox("创建C++模块失败", reason););)
                 }
                 EndMenu();
             }

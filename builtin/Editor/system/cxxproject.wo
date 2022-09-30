@@ -2,7 +2,9 @@
 
 import woo.std;
 import je.filesys;
+import je.gui;
 
+using je::gui;
 
 using CxxProject = struct {
     name: string, // 模块的名称
@@ -16,7 +18,7 @@ using CxxProject = struct {
     let CXX_PROJECT_EXAMPLE_PATH = F"{std::exepath()}builtin/cxxproject/";
 
     // 引擎的头文件路径
-    let ENGINE_HEADER_PATH = F"{std::exepath()}builtin/include/";
+    let ENGINE_HEADER_PATH = F"{std::exepath()}builtin/include";
 
     // 引擎的库目录
     let ENGINE_CORE_LIBRARYS_LOCATE_PATH = std::exepath();
@@ -83,10 +85,12 @@ using CxxProject = struct {
                 ->reduce(\l: bool, r: bool = l ? r | l;)
                 ->map(\r: bool = platform_support->set(platform, r););
         }
+
         return result::ok(nil);
     }
     public func load(path: string)
     {
         // 加载指定路径的 CXX 项目信息
     }
+
 }

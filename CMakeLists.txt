@@ -30,7 +30,7 @@ if(WIN32)
         COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/\" /Y /E /I)
 else()
     add_custom_target(COPY_ENGINE_FILES 
-        COMMAND mkdir -p \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/include/\" && cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin/include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\" -r)
+        COMMAND mkdir -p \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/include/\" && cp \"${CMAKE_CURRENT_SOURCE_DIR}/include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\" -r)
     add_custom_target(COPY_BUILTIN_FILES 
         COMMAND mkdir -p \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/\" && cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\" -r)
 endif()

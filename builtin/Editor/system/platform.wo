@@ -1,0 +1,70 @@
+// 这个更倒霉的玩意儿用于获取当前引擎工作的平台，包括是不是以debug模式编译产生的
+import je;
+
+enum Arch
+{
+	X86,
+	X64,
+	ARM,
+	ARM64,
+}
+namespace Arch
+{
+	func name(self: Arch)
+	{
+		if (self == X86)
+			return "x86";
+		if (self == X64)
+			return "x64";
+		if (self == ARM)
+			return "arm";
+		if (self == ARM64)
+			return "arm64";
+		return "unknown";
+	}
+}
+
+enum OperatingSystem
+{
+	WINDOWS,
+	LINUX,
+	OSX,
+	ANDROID,
+	IOS,
+}
+namespace OperatingSystem
+{
+	func name(self: OperatingSystem)
+	{
+		if (self == WINDOWS)
+			return "windows";
+		if (self == LINUX)
+			return "linux";
+		if (self == OSX)
+			return "osx";
+		if (self == ANDROID)
+			return "android";
+		if (self == IOS)
+			return "ios";
+		return "unknown";
+	}
+}
+
+enum BuildType
+{
+	RELEASE,
+	DEBUG
+}
+
+using Platform = struct {
+	os	:	OperatingSystem
+	arch:   Arch
+	
+
+}
+{
+	func current()
+	{
+		std::panic("TODO;");
+	}
+}
