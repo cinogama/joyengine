@@ -18,7 +18,7 @@ using CxxProject = struct {
     let CXX_PROJECT_EXAMPLE_PATH = F"{std::exepath()}builtin/cxxproject/";
 
     // 引擎的头文件路径
-    let ENGINE_HEADER_PATH = F"{std::exepath()}builtin/include";
+    let ENGINE_HEADER_PATH = F"{std::exepath()}builtin/include/";
 
     // 引擎的库目录
     let ENGINE_CORE_LIBRARYS_LOCATE_PATH = std::exepath();
@@ -56,12 +56,12 @@ using CxxProject = struct {
         je::filesys::open(F"\"{CMAKE_PATH}\" --version");
     }
 
-    public func start(name: string, locpath: string)=> result<anything, string>
+    public func start(name: string, locpath: string)=> result<CxxProject, string>
     {
         using je::filesys;
 
         // 在指定目录下创建Cxx项目目录
-        let cxx_proj_path = normalize(F"{normalize(locpath)}{name}");
+        let cxx_proj_path = F"{normalize(locpath)}{name}/";
         if (exist(cxx_proj_path))
             return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
 
@@ -72,9 +72,11 @@ using CxxProject = struct {
             ->bind(\_: anything = copy(ENGINE_HEADER_PATH, F"{cxx_proj_path}engine/include"););
 
         if (r->iserr)
+        {
+            delete(cxx_proj_path);
             return r;
-
-        // 2. 开始复制文件, 顺便确认支持的平台
+        }
+        // 2. 开始复制库文件, 顺便确认支持的平台
         alias platform_t = string;
         let platform_support = {}mut : map<platform_t, bool>;
         for (let platform, files : ENGINE_CORE_LIBRARYS_PATHS)
@@ -86,11 +88,17 @@ using CxxProject = struct {
                 ->map(\r: bool = platform_support->set(platform, r););
         }
 
-        return result::ok(nil);
+        // 3. 需要的时候再生成CMake文档（直接生成到/builder里面）
+        return result::ok(CxxProject{ name = name, path = normalize(cxx_proj_path) });
     }
     public func load(path: string)
     {
         // 加载指定路径的 CXX 项目信息
+    }
+    public func update_compile()
+    {
+        // 输入所需的配置，自动生成CMake文档，然后编译模块
+        std::panic("TODO;");
     }
 
 }
