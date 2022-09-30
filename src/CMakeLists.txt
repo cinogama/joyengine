@@ -58,7 +58,7 @@ elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
 	set_target_properties(joyecs PROPERTIES RELEASE_POSTFIX "32")
 	set_target_properties(joyecs PROPERTIES DEBUG_POSTFIX "32_debug")
 else()
-	message(FATAL "Unknown platform")
+	message(FATAL_ERROR "Unknown platform")
 endif()
 
 target_link_libraries(joyecs ${jeecs_system_libs})
