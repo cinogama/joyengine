@@ -37,7 +37,7 @@ namespace editor::Browser
         ["bmp"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
         ["psd"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
         ["shader"] = FileType::shader(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")),
-        ["jeproj4"] = FileType::shader(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/JoyEngineCSP.png")),
+        // ["jeproj4"] = FileType::shader(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/JoyEngineCSP.png")),
     };
 
     // 根据文件拓展名返回文件的类型

@@ -165,8 +165,8 @@ using CxxProject = struct {
 cmake_minimum_required (VERSION 3.8)
 
 project ("$$JEMODULE_PROJECT_NAME")
-
 set(CMAKE_CXX_STANDARD 17)
+
 if(MSVC) 
     add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/source-charset:utf-8>")
     add_compile_options("$<$<C_COMPILER_ID:MSVC>:/source-charset:utf-8>")
@@ -216,19 +216,20 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 cmake_minimum_required (VERSION 3.8)
 
 include_directories("../../engine/include")
-link_directories("../../engine/library")
+find_library(joyengine_lib $$JE_ENGINE_LIB ../../engine/library)
+find_library(woolang_lib $$JE_WOOLANG_LIB ../../engine/library)
 
 file(GLOB_RECURSE module_sources systems/*.cpp)
 file(GLOB_RECURSE module_headers components/*.hpp)        
 
-add_library($$JEMODULE_PROJECT_NAME SHARED ${module_sources} ${module_headers} main.cpp)
+add_library($$JEMODULE_PROJECT_NAME SHARED ${module_sources} ${module_headers} ../../main.cpp)
 set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME)
 set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES PREFIX "")
 
 set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES RELEASE_POSTFIX "$$JEMODULE_BUILD_CONFIG")
 set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES DEBUG_POSTFIX "$$JEMODULE_BUILD_CONFIG")
 
-target_link_libraries($$JEMODULE_PROJECT_NAME -l$$JE_ENGINE_LIB, -l$$JE_WOOLANG_LIB)
+target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
         "@;
         
         // 根据给定的配置和项目路径等信息，生成CMake文档
@@ -236,10 +237,34 @@ target_link_libraries($$JEMODULE_PROJECT_NAME -l$$JE_ENGINE_LIB, -l$$JE_WOOLANG_
             ["win32_debug_x86"] = CxxProjectBuildConfig{ 
                 config = "win32_debug_x86",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB",  "joyecs32_debug")
-                    ->replace("$$JE_WOOLANG_LIB", "woo32_debug"),
+                    ->replace("$$JE_ENGINE_LIB",  "libjoyecs32_debug")
+                    ->replace("$$JE_WOOLANG_LIB", "libwoo32_debug"),
                 cmake_option = "",
-                built_command = "TODO;",
+                built_command = "",
+            },
+            ["win32_release_x86"] = CxxProjectBuildConfig{ 
+                config = "win32_release_x86",
+                cmake = win32_cmake
+                    ->replace("$$JE_ENGINE_LIB",  "libjoyecs32")
+                    ->replace("$$JE_WOOLANG_LIB", "libwoo32"),
+                cmake_option = "",
+                built_command = "",
+            },
+            ["win32_debug_x64"] = CxxProjectBuildConfig{ 
+                config = "win32_debug_x64",
+                cmake = win32_cmake
+                    ->replace("$$JE_ENGINE_LIB",  "libjoyecs_debug")
+                    ->replace("$$JE_WOOLANG_LIB", "libwoo_debug"),
+                cmake_option = "",
+                built_command = "",
+            },
+            ["win32_release_x64"] = CxxProjectBuildConfig{ 
+                config = "win32_release_x64",
+                cmake = win32_cmake
+                    ->replace("$$JE_ENGINE_LIB",  "libjoyecs")
+                    ->replace("$$JE_WOOLANG_LIB", "libwoo"),
+                cmake_option = "",
+                built_command = "",
             } 
         };
 

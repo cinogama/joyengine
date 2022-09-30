@@ -2164,7 +2164,7 @@ namespace jeecs
             using f = typing::function_traits<FT>;
             if constexpr (ArgN < f::arity)
             {
-                using CurRequireT = typename f::argument<ArgN>::type;
+                using CurRequireT = typename f::template argument<ArgN>::type;
 
                 if constexpr (ArgN == 0 && std::is_same<CurRequireT, game_entity>::value)
                 {
@@ -2257,7 +2257,7 @@ namespace jeecs
                 template<size_t id = 0>
                 static constexpr size_t _index()
                 {
-                    if constexpr (std::is_same<typename f_t::argument<id>::type, ComponentT>::value)
+                    if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
                         return id;
                     else
                         return _index<id + 1>();
@@ -2337,7 +2337,7 @@ namespace jeecs
                 template<size_t id = 0>
                 static constexpr size_t _index()
                 {
-                    if constexpr (std::is_same<typename f_t::argument<id>::type, ComponentT>::value)
+                    if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
                         return id;
                     else
                         return _index<id + 1>();

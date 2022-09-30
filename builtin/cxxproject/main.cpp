@@ -1,4 +1,4 @@
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 JE_EXPORT void jeecs_module_entry()
 {
