@@ -226,8 +226,8 @@ add_library($$JEMODULE_PROJECT_NAME SHARED ${module_sources} ${module_headers} .
 set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME)
 set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES PREFIX "")
 
-set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES RELEASE_POSTFIX "$$JEMODULE_BUILD_CONFIG")
-set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES DEBUG_POSTFIX "$$JEMODULE_BUILD_CONFIG")
+set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES RELEASE_POSTFIX "$$JE_POSTFIX")
+set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES DEBUG_POSTFIX "$$JE_POSTFIX")
 
 target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
         "@;
@@ -239,6 +239,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 cmake = win32_cmake
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs32_debug")
                     ->replace("$$JE_WOOLANG_LIB", "libwoo32_debug"),
+                    ->replace("$$JE_POSTFIX", "32_debug"),
                 cmake_option = "",
                 built_command = "",
             },
@@ -247,6 +248,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 cmake = win32_cmake
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs32")
                     ->replace("$$JE_WOOLANG_LIB", "libwoo32"),
+                    ->replace("$$JE_POSTFIX", "32"),
                 cmake_option = "",
                 built_command = "",
             },
@@ -255,6 +257,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 cmake = win32_cmake
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs_debug")
                     ->replace("$$JE_WOOLANG_LIB", "libwoo_debug"),
+                    ->replace("$$JE_POSTFIX", "_debug"),
                 cmake_option = "",
                 built_command = "",
             },
@@ -263,6 +266,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 cmake = win32_cmake
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs")
                     ->replace("$$JE_WOOLANG_LIB", "libwoo"),
+                    ->replace("$$JE_POSTFIX", ""),
                 cmake_option = "",
                 built_command = "",
             } 
