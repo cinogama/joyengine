@@ -77,8 +77,12 @@ WO_API wo_api wojeapi_filesys_exist(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_filesys_open_file_by_browser(wo_vm vm, wo_value args, size_t argc)
 {
-    system(wo_string(args + 0));
-    return wo_ret_void(vm);
+    return wo_ret_int(vm, system(wo_string(args + 0)));
+}
+
+WO_API wo_api wojeapi_filesys_get_env(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm, getenv(wo_string(args + 0)));
 }
 
 WO_API wo_api wojeapi_filesys_path_parent(wo_vm vm, wo_value args, size_t argc)
@@ -265,6 +269,9 @@ namespace je::filesys
     public func exist(_path: string)=> bool;
 
     extern("libjoyecs", "wojeapi_filesys_open_file_by_browser")
-    public func open(_path: string)=> void;
+    public func open(_path: string)=> int;
+
+    extern("libjoyecs", "wojeapi_filesys_get_env")
+    public func env(_path: string)=> string;
 }
 )";

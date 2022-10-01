@@ -29,7 +29,8 @@ using CxxProject = struct {
 }
 {
     // Cmake所在路径，项目会使用此路径指示的cmake
-    let CMAKE_PATH = F"{std::exepath()}builtin/cmake/win32/cmake.exe";
+    let CMAKE_PATH = F"{je::filesys::env("CMAKE_PATH")}/cmake.exe";
+    let MSVC_PATH = F"{je::filesys::env("MSBUILD")}/devenv.exe";
 
     // C++模块样例，创建项目文件时会复制这个目录
     let CXX_PROJECT_EXAMPLE_PATH = F"{std::exepath()}builtin/cxxproject/";
@@ -70,7 +71,7 @@ using CxxProject = struct {
     // 测试一下，别无它用
     public func display_cmake_info()
     {
-        je::filesys::open(F"\"{CMAKE_PATH}\" --version");
+        je::filesys::open(F"{CMAKE_PATH} --version");
     }
 
     public func start(name: string, locpath: string)=> result<CxxProject, string>
@@ -79,7 +80,7 @@ using CxxProject = struct {
         using je::filesys;
 
         // 在指定目录下创建Cxx项目目录
-        let cxx_proj_path = F"{normalize(locpath)}{name}/";
+        let cxx_proj_path = F"{normalize(locpath)}{name}.jemodule4/";
         if (exist(cxx_proj_path))
             return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
 
@@ -188,9 +189,9 @@ if(MSVC)
     add_compile_options("$<$<C_COMPILER_ID:MSVC>:/source-charset:utf-8>")
 endif()
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${JEMODULE_BUILT_AIM}")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${JEMODULE_BUILT_AIM}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${JEMODULE_BUILT_AIM}")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 "@;
         let cmake_subdirs = enabled_generating
@@ -218,14 +219,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         }
 
         // 最后，编译一下当前平台
-        let current_platform_compile_result = 
-            created_module->update_compile(je::editor::platform());
-
-        if (current_platform_compile_result->iserr)
-        {
-            delete(cxx_proj_path);
-            return current_platform_compile_result->fail;
-        }
+        created_module->update_compile(je::editor::platform());
 
         return result::ok(created_module);
     }
@@ -265,8 +259,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs32_debug")
                     ->replace("$$JE_WOOLANG_LIB", "libwoo32_debug")
                     ->replace("$$JE_POSTFIX", "32_debug"),
-                cmake_option = "",
-                built_command = "",
+                cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=DEBUG",
+                built_command = "/Build Debug",
             },
             ["win32_release_x86"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x86",
@@ -274,8 +268,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs32")
                     ->replace("$$JE_WOOLANG_LIB", "libwoo32")
                     ->replace("$$JE_POSTFIX", "32"),
-                cmake_option = "",
-                built_command = "",
+                cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=RELEASE",
+                built_command = "/Build Release",
             },
             ["win32_debug_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_debug_x64",
@@ -283,8 +277,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs_debug")
                     ->replace("$$JE_WOOLANG_LIB", "libwoo_debug")
                     ->replace("$$JE_POSTFIX", "_debug"),
-                cmake_option = "",
-                built_command = "",
+                cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=DEBUG",
+                built_command = "/Build Debug",
             },
             ["win32_release_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x64",
@@ -292,8 +286,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs")
                     ->replace("$$JE_WOOLANG_LIB", "libwoo")
                     ->replace("$$JE_POSTFIX", ""),
-                cmake_option = "",
-                built_command = "",
+                cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=RELEASE",
+                built_command = "/Build Release",
             } 
         };
 
@@ -303,17 +297,145 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 ->valor(result::err(F"未知的配置{conf}"));
     }
 
-    public func update_compile(self: CxxProject, config: string)
+    func fuck_windows_cmd(path: string)
+    {
+        if (path->find(" ") != -1 || path->find("\t") != -1)
+            return F"\"{path}\"";
+        return path;
+    }
+
+    using compile_context = struct {
+        mut display_msg : string,
+        mut progress    : int,
+        mut show        : bool,
+    };
+    func update_compile(self: CxxProject, config: string)
+    {
+        // 起个线程跑编译，然后弄个窗口显示一下进度
+
+        let context = compile_context{display_msg = "正在开始编译，请稍等……", progress = 0, show = true};
+        je::gui::launch(func(){
+            Begin(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref context.show);
+                Text(F"正在编译C++模块：{self.name}");
+                Text(context.display_msg);
+                Text(F"进度：{context.progress}%");
+            End();
+            if (context.show)
+                return FormAction::Nothing;
+            return FormAction::Close;
+        }, ());
+        std::thread(_update_compile, (self, config, context));
+    }
+    func _update_compile(self: CxxProject, config: string, context: compile_context)
     {
         // 输入所需的配置，如果项目支持这个配置，则编译模块
-        if (!self.configs->find(config))
+
+        let conf = self.configs->get(config);
+        if (!conf->has)
+        {
+            context.show = false;
             return result::err("不支持的配置");
+        }
 
         using je::file;
         using je::filesys;
-        open(F"\"{CMAKE_PATH}\" ");
 
-        return result::err("fuck");
+        context.display_msg = "正在检查工具链";
+        context.progress = 5;
+
+        if (!exist(CMAKE_PATH))
+        {
+            context.display_msg = F"无法找到{CMAKE_PATH}，请检查CMake配置和环境变量";
+            delete(self.path);
+            return result::err(context.display_msg);
+        }
+        if (!exist(MSVC_PATH))
+        {
+            context.display_msg = F"无法找到{MSVC_PATH}，请检查工具链环境变量";
+            delete(self.path);
+            return result::err(context.display_msg);
+        }
+
+        assert(self.path->endwith("/"));
+
+        let cmake_command = F"{fuck_windows_cmd(CMAKE_PATH)} \"{fuck_windows_cmd(self.path)}\" -B \"{fuck_windows_cmd(self.path + "msvcbuild")}\" {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
+        
+        context.display_msg = F"正在使用CMake生成编译配置\n{cmake_command}";
+        context.progress = 15;
+
+        if (open(cmake_command) != 0)
+        {
+            context.display_msg = "CMake生成失败";
+            delete(self.path);
+            return result::err(context.display_msg);
+        }
+
+        let msvc_proj_path = fuck_windows_cmd(F"{self.path}msvcbuild/builder/{config}/{self.name}.vcxproj");
+        let msvc_compile_result_path = F"{self.path}msvcbuild/compile.log";
+
+        delete(msvc_compile_result_path);
+
+        let build_command = F"{fuck_windows_cmd(MSVC_PATH)} {msvc_proj_path} {conf->val.built_command} /out {fuck_windows_cmd(msvc_compile_result_path)} && echo Finished";
+
+        context.display_msg = F"正在构建二进制文件\n{build_command}";
+        context.progress = 45;
+
+        if (open(build_command) != 0)
+        {
+            context.display_msg = "C++编译失败";
+            delete(self.path);
+            return result::err(context.display_msg);
+        }
+
+        while(true)
+        {
+            std::sleep(1.);
+
+            let compile_result = readall(msvc_compile_result_path);
+            if (!compile_result->has)
+                continue;
+
+            context.progress = 100;
+
+            if (compile_result->val->find("error") == -1)
+            {
+                // 获取编译出来的二进制，移动到一个统一的位置
+                if (!exist(F"{self.path}runtime/{config}"))
+                    mkdir(F"{self.path}runtime/{config}");
+
+                assert(exist(F"{self.path}runtime/{config}"));
+
+                func search_dll_in(dir: string)=> option<string>
+                {
+                    for (let p : childs(dir)->okay->val)
+                    {
+                        if (isdir(p))
+                        {
+                            let r = search_dll_in(p);
+                            if (r->has)
+                                return r;
+                        }
+                        else if (externname(p) == "dll")
+                            return option::value(p);
+                    }
+                    return option::none;
+                }
+
+                // TODO; 在这个地方保存编辑环境，然后卸载模块，变更二进制，然后恢复上下文
+
+                match (search_dll_in(F"{self.path}build/{config}"))
+                {
+                value(p)? assert(copy(p, F"{self.path}runtime/{config}/{filename(p)}")->isok);
+                none? std::panic("Binary file not found;");
+                }
+
+                context.display_msg = F"编译完成\n{compile_result->val}";
+                return result::ok(result::ok(context.display_msg));
+            }
+            context.display_msg = F"编译失败\n{compile_result->val}";
+            return result::ok(result::err(context.display_msg));
+        }
+        std::panic("Should not be here.");
     }
 
 }
