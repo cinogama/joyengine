@@ -13,6 +13,8 @@ namespace editor
 
         graphic_system : je::typeinfo,    // 默认使用的图形系统类型
         editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
+
+        native_modules : map<string /* path */, CxxProject>,
     };
 }
 
@@ -214,6 +216,7 @@ namespace editor::Project
             graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
             worlds = []mut,
+            native_modules = {}mut,
         });
     }
 
@@ -225,6 +228,7 @@ namespace editor::Project
             graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,
+            native_modules = {}mut,
         };
 
         if (create_file)
@@ -314,6 +318,19 @@ namespace editor::Project
             rendworld->add_system(proj.graphic_system);
             rendworld->add_system(proj.editor_system);
 
+            data->get("native_module": dynamic, []: dynamic) as array
+                ->trans(\d: dynamic = d as string;)
+                ->trans(\p: string = (p, CxxProject::load(p));)
+                ->trans(\r: (string, result<anything, string>)
+                    = r[1]->or(
+                        \ reason: string
+                            = generic::askbox("模块加载失败",
+                                F"加载模块{r[0]}发生错误：\n{reason}\n选择‘是’立即退出以防止信息丢失",
+                                \=je::exit(););
+                    );
+                );
+            
+
             return ok(proj);
         }
         err(msg)?
@@ -376,6 +393,9 @@ namespace editor::Project
                 ["window"] = window_info: dynamic,
                 ["graphic_system"] = self.graphic_system->name: dynamic,
                 ["editor_system"] = self.editor_system->name: dynamic,
+
+                ["native_module"] = self.native_modules->unmapping
+                    ->trans(\m: (string, anything) = m[0];): dynamic,
             };
 
             if (!je::file::writeall(F"{path}/{self.name}.jeproj4", project_dat: string))

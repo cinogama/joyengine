@@ -22,7 +22,7 @@ using CxxProjectBuildConfig = struct {
     built_command: string,
 };
 
-using CxxProject = struct {
+public using CxxProject = struct {
     name: string, // 模块的名称
     path: string, // 模块所在路径，仅此而已
     configs: dict<string, CxxProjectBuildConfig> // 可用的生成配置
@@ -67,12 +67,6 @@ using CxxProject = struct {
                 F"libjoyecs.lib",
             ],
         }: dict<string, array<string>>;
-
-    // 测试一下，别无它用
-    public func display_cmake_info()
-    {
-        je::filesys::open(F"{CMAKE_PATH} --version");
-    }
 
     public func start(name: string, locpath: string)=> result<CxxProject, string>
     {
@@ -225,7 +219,37 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     }
     public func load(path: string)
     {
+        using je::filesys;
+        using je::file;
+
         // 加载指定路径的 CXX 项目信息
+        if (!exist(path))
+            return result::err(F"找不到模块{path}，请检查文件是否丢失");
+        if (!exist(F"{normalize(path)}config.inf"))
+            return result::err(F"找不到配置文件{normalize(path)}config.inf，请检查文件是否丢失");
+
+        let readdat = readall(F"{normalize(path)}config.inf")
+            ->bind(\d: string = d->todict;);
+        if (!readdat->has)
+            return result::err(F"模块{path}的配置文件无法读取或格式不正确");
+
+        let created_module = CxxProject{ 
+            name = readdat->val["name": dynamic] as string, 
+            path = normalize(readdat->val["path": dynamic] as string), 
+            configs = readdat
+                ->val["conf": dynamic] as array
+                ->trans(\d: dynamic = d as string;)
+                // 如果文件打不开，直接在这里爆炸
+                ->trans(\conf: string = (conf, generate_cmake_doc(conf)->okay->val);)
+                ->mapping
+            };
+        
+        let current_je_proj = editor::Project::GetCurrentProject();
+        current_je_proj.native_modules->get(created_module.path)
+                    ->or(\ = current_je_proj.native_modules->set(created_module.path, created_module););
+
+        // TODO; 在这里准备加载一下动态库
+        return result::ok(created_module);
     }
 
     func generate_cmake_doc(conf: string)=> result<CxxProjectBuildConfig, string>
@@ -318,7 +342,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
             Begin(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref context.show);
                 Text(F"正在编译C++模块：{self.name}");
                 Text(context.display_msg);
-                Text(F"进度：{context.progress}%");
+                ProgressBar(context.progress: real / 100.);
             End();
             if (context.show)
                 return FormAction::Nothing;
@@ -329,6 +353,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
     func _update_compile(self: CxxProject, config: string, context: compile_context)
     {
         // 输入所需的配置，如果项目支持这个配置，则编译模块
+        let current_je_proj = editor::Project::GetCurrentProject();
 
         let conf = self.configs->get(config);
         if (!conf->has)
@@ -399,6 +424,9 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
 
             if (compile_result->val->find("error") == -1)
             {
+                current_je_proj.native_modules->get(self.path)
+                    ->or(\ = current_je_proj.native_modules->set(self.path, self););
+
                 // 获取编译出来的二进制，移动到一个统一的位置
                 if (!exist(F"{self.path}runtime/{config}"))
                     mkdir(F"{self.path}runtime/{config}");
@@ -425,7 +453,11 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
 
                 match (search_dll_in(F"{self.path}build/{config}"))
                 {
-                value(p)? assert(copy(p, F"{self.path}runtime/{config}/{filename(p)}")->isok);
+                value(p)? 
+                {
+                    delete(F"{self.path}runtime/{config}/{filename(p)}");
+                    assert(copy(p, F"{self.path}runtime/{config}/{filename(p)}")->isok);
+                }
                 none? std::panic("Binary file not found;");
                 }
 

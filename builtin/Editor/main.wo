@@ -339,7 +339,6 @@ func display_icon_in_console()
     je::log("");
     je::log("JoyEngine 4.x (C)Cinogama project. 2022.");
     je::log("Powered by woolang, (C)Cinogama project. 2021-2022.");
-    CxxProject::display_cmake_info();
 }
 
 /////////////////////

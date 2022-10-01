@@ -229,6 +229,22 @@ namespace editor::Browser
             }
             Separator();
         }
+        if (path.externname == "jemodule4")
+        {
+            if (MenuItem(F"重新编译此模块"))
+            {
+                match(Project::GetCurrentProject().native_modules
+                    ->get(je::filesys::normalize(path.path)))
+                {
+                value(mod)?
+                    mod->update_compile(je::editor::platform());
+                none?
+                    je::logerr("此模块未被加载，TODO; 现场加载");
+                }
+                    
+            }
+            Separator();
+        }
         if (MenuItem("重命名", is_modifiable_file))
         {
             generic::inputbox("重命名", F"请输入{path.path}的新名称", F"{path.name}", 

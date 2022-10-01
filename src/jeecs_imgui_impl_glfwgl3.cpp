@@ -102,6 +102,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_end_child")
     public func EndChild()=> void;
 
+    extern("libjoyecs", "je_gui_progress_bar")
+    public func ProgressBar(f: real)=> void;
+
     extern("libjoyecs", "je_gui_text")
     public func Text(msg:string)=> void;
     extern("libjoyecs", "je_gui_text_disabled")
@@ -561,7 +564,7 @@ WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::SetTooltip("%s", wo_string(args + 0));
-        return wo_ret_void(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args, size_t argc)
@@ -667,9 +670,16 @@ WO_API wo_api je_gui_end_child(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_progress_bar(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::ProgressBar(wo_float(args + 0));
+    return wo_ret_void(vm);
+}
+
+
 WO_API wo_api je_gui_text(wo_vm vm, wo_value args, size_t argc)
 {
-    ImGui::Text("%s",wo_string(args));
+    ImGui::Text("%s", wo_string(args));
     return wo_ret_void(vm);
 }
 
