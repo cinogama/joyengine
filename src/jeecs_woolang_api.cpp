@@ -68,6 +68,43 @@ WO_API wo_api wojeapi_restart_graphic_interface(wo_vm vm, wo_value args, size_t 
     return wo_ret_void();
 }
 
+WO_API wo_api wojeapi_current_platform_config(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm,
+#if defined(JE_OS_WINDOWS)
+        "win32_"
+#elif defined(JE_OS_ANDROID)
+        "android_"
+#elif defined(JE_OS_LINUX)
+        "linux_"
+#elif defined(JE_OS_UNKNOWN)
+        "unknown_"
+#else
+#error "Known os type."
+#endif
+
+#if defined(NDEBUG)
+        "release_"
+#else
+        "debug_"
+#endif
+
+#if defined (JE_PLATFORM_X86)
+        "x86"
+#elif defined (JE_PLATFORM_X64)
+        "x64"
+#elif defined (JE_PLATFORM_ARM)
+        "arm"
+#elif defined (JE_PLATFORM_ARM64)
+        "arm64"
+#elif defined (JE_PLATFORM_UNKNOWN)
+        "unknown"
+#else
+#error "Known os type."
+#endif
+    );
+}
+
 // ECS UNIVERSE
 WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1174,6 +1211,9 @@ namespace je
             reso_y: int,
             fps:    int,
             fullscreen: bool)=> void;
+
+        extern("libjoyecs", "wojeapi_current_platform_config")
+        public func platform()=> string;
     }
 
     extern("libjoyecs", "wojeapi_log")

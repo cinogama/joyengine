@@ -25,7 +25,7 @@ using CxxProjectBuildConfig = struct {
 using CxxProject = struct {
     name: string, // 模块的名称
     path: string, // 模块所在路径，仅此而已
-    // configs: array<string> // 可用的生成配置
+    configs: dict<string, CxxProjectBuildConfig> // 可用的生成配置
 }
 {
     // Cmake所在路径，项目会使用此路径指示的cmake
@@ -106,36 +106,52 @@ using CxxProject = struct {
                 ->map(\r: bool = platform_support->set(platform, r););
         }
 
-        // 3. 给支持的平台生成CMake文件，并且把配置信息存档
-        writeall(F"{cxx_proj_path}config.inf", platform_support: string);
-
-        let created_module = CxxProject{ name = name, path = normalize(cxx_proj_path) };
-
         let enabled_generating = platform_support
             ->forall(\_: anything, enable: bool = enable;)
             ->unmapping
             ->trans(\conf_enab: (string, anything) = conf_enab[0];);
             
         let generating_results = enabled_generating
-            ->trans(\conf: string = created_module->generate_cmake_doc(conf););
+            ->trans(\conf: string = (conf, generate_cmake_doc(conf)););
 
         let failed_generating = generating_results
-            ->forall(\r: result<anything, anything> = r->iserr;);
+            ->forall(\r: (anything, result<anything, anything>) = r[1]->iserr;);
 
         if (!failed_generating->empty)
         {
-            for (let r : failed_generating->trans(\r: result<anything, string> = r->error->val;))
+            for (let r : failed_generating->trans(\r: (anything, result<anything, string>)
+                = r[1]->error->val;))
                 je::logerr(r);
+
             delete(cxx_proj_path);
             return result::err(F"创建模块的CMake文件时失败：\n{
                 failed_generating
-                    ->trans(\r: result<anything, string> = r->error->val;)
+                    ->trans(\r: (anything, result<anything, string>) = r[1]->error->val;)
                     ->reduce(\l: string, r: string = l + "\n" + r;)
                     ->val
             }");
         }
 
-        for (let config : generating_results->trans(\c: result<CxxProjectBuildConfig, anything> = c->okay->val;))
+        let created_module = CxxProject{ 
+            name = name, 
+            path = normalize(cxx_proj_path), 
+            configs = generating_results
+                ->mapping
+                ->trans(\k: string, v: result<CxxProjectBuildConfig, string> 
+                    = (k, v->okay->val);),
+            };
+
+        // 3. 给支持的平台生成CMake文件，并且把配置信息存档
+        writeall(F"{cxx_proj_path}config.inf", {
+            ["name"] = created_module.name: dynamic,
+            ["path"] = created_module.path: dynamic,
+            ["conf"] = created_module.configs
+                ->unmapping
+                ->trans(\conf: (string, anything) = conf[0];): dynamic
+        }: string);
+
+        for (let config : generating_results->trans(
+            \c: (anything, result<CxxProjectBuildConfig, anything>) = c[1]->okay->val;))
         {
             // 3.1 把生成出来的CMake保存起来
             let aim_cmake_dir = F"{cxx_proj_path}builder/{config.config}";
@@ -193,14 +209,23 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             return result::err("没有可用的配置，请检查引擎目录相关文件是否丢失");
         }
 
-        // TODO; 写入主CMakeLists
         if (!writeall(F"{cxx_proj_path}CMakeLists.txt", 
                 F"{cmake_head}\n{cmake_subdirs->val}\n"
                     ->replace("$$JEMODULE_PROJECT_NAME", name)))
-            {
-                delete(cxx_proj_path);
-                return result::err(F"无法写入'{cxx_proj_path}CMakeLists.txt'");
-            }
+        {
+            delete(cxx_proj_path);
+            return result::err(F"无法写入'{cxx_proj_path}CMakeLists.txt'");
+        }
+
+        // 最后，编译一下当前平台
+        let current_platform_compile_result = 
+            created_module->update_compile(je::editor::platform());
+
+        if (current_platform_compile_result->iserr)
+        {
+            delete(cxx_proj_path);
+            return current_platform_compile_result->fail;
+        }
 
         return result::ok(created_module);
     }
@@ -209,7 +234,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         // 加载指定路径的 CXX 项目信息
     }
 
-    func generate_cmake_doc(self: CxxProject, conf: string)=> result<CxxProjectBuildConfig, string>
+    func generate_cmake_doc(conf: string)=> result<CxxProjectBuildConfig, string>
     {
         let win32_cmake = @"
 # Build config for $$JEMODULE_PROJECT_NAME
@@ -238,7 +263,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 config = "win32_debug_x86",
                 cmake = win32_cmake
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs32_debug")
-                    ->replace("$$JE_WOOLANG_LIB", "libwoo32_debug"),
+                    ->replace("$$JE_WOOLANG_LIB", "libwoo32_debug")
                     ->replace("$$JE_POSTFIX", "32_debug"),
                 cmake_option = "",
                 built_command = "",
@@ -247,7 +272,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 config = "win32_release_x86",
                 cmake = win32_cmake
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs32")
-                    ->replace("$$JE_WOOLANG_LIB", "libwoo32"),
+                    ->replace("$$JE_WOOLANG_LIB", "libwoo32")
                     ->replace("$$JE_POSTFIX", "32"),
                 cmake_option = "",
                 built_command = "",
@@ -256,7 +281,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 config = "win32_debug_x64",
                 cmake = win32_cmake
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs_debug")
-                    ->replace("$$JE_WOOLANG_LIB", "libwoo_debug"),
+                    ->replace("$$JE_WOOLANG_LIB", "libwoo_debug")
                     ->replace("$$JE_POSTFIX", "_debug"),
                 cmake_option = "",
                 built_command = "",
@@ -265,7 +290,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 config = "win32_release_x64",
                 cmake = win32_cmake
                     ->replace("$$JE_ENGINE_LIB",  "libjoyecs")
-                    ->replace("$$JE_WOOLANG_LIB", "libwoo"),
+                    ->replace("$$JE_WOOLANG_LIB", "libwoo")
                     ->replace("$$JE_POSTFIX", ""),
                 cmake_option = "",
                 built_command = "",
@@ -278,10 +303,17 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 ->valor(result::err(F"未知的配置{conf}"));
     }
 
-    public func update_compile(self: CxxProject)
+    public func update_compile(self: CxxProject, config: string)
     {
         // 输入所需的配置，如果项目支持这个配置，则编译模块
-        std::panic("TODO;");
+        if (!self.configs->find(config))
+            return result::err("不支持的配置");
+
+        using je::file;
+        using je::filesys;
+        open(F"\"{CMAKE_PATH}\" ");
+
+        return result::err("fuck");
     }
 
 }

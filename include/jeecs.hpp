@@ -55,6 +55,32 @@
 
 #define JE_API JE_IMPORT_OR_EXPORT
 
+#ifdef _WIN32
+#		define JE_OS_WINDOWS
+#elif defined(__ANDROID__)
+#		define JE_OS_ANDROID
+#elif defined(__linux__)
+#		define JE_OS_LINUX
+#else
+#		define JE_OS_UNKNOWN
+#endif
+
+#if defined(_X86_)||defined(__i386)||(defined(_WIN32)&&!defined(_WIN64))
+#		define JE_PLATFORM_X86
+#		define JE_PLATFORM_M32
+#elif defined(__x86_64)||defined(_M_X64)
+#		define JE_PLATFORM_X64
+#		define JE_PLATFORM_M64
+#elif defined(__arm)
+#		define JE_PLATFORM_ARM
+#		define JE_PLATFORM_M32
+#elif defined(__aarch64__)
+#		define JE_PLATFORM_ARM64
+#		define JE_PLATFORM_M64
+#else
+#		define JE_PLATFORM_UNKNOWN
+#endif
+
 namespace jeecs
 {
     namespace typing
