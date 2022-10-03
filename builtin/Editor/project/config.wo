@@ -49,6 +49,8 @@ namespace editor::Project
         }
         public func SaveTo(self: World, path: string)
         {
+            using je::filesys;
+
             let real_saving_path = je::filesys::isdir(path) 
                 ? F"{path}/{self.instance->editor::name()}.jeworld" 
                 | path ;
@@ -56,9 +58,9 @@ namespace editor::Project
                 self.path
                     ->map(\oldpath: string = 
                         oldpath == real_saving_path 
-                        ? result::ok(oldpath)
-                        | result::err((oldpath, real_saving_path));)
-                    ->or(\=result::ok(real_saving_path);)
+                        ? result::ok(normalize(oldpath))
+                        | result::err((normalize(oldpath), normalize(real_saving_path)));)
+                    ->or(\=result::ok(normalize(real_saving_path));)
                     ->val;
 
             let mut ask_msg = "";
