@@ -171,6 +171,28 @@ namespace editor::Project
         world->close;
     }
 
+    public func DumpAllWorlds(self: Project)
+    {
+        return
+            self.worlds
+                ->trans(\w: World = Serialize::save_project_world(w);): string;
+    }
+
+    public func CloseAllWorlds(self: Project)
+    {
+        EntityList::set_current_entity(option::none);
+        self.worlds
+            ->dup
+            ->trans(\w: World = self->CloseWorld(w.instance););
+    }
+
+    public func RestoreAllWorlds(self: Project, worlds: string)
+    {
+        worlds->toarray->val->trans(\d: dynamic = Serialize::restore_world(self, d as dict););
+        if (!self.worlds->empty)
+            self.worlds[0].instance->WorldList::SwitchEditingWorld;
+    }
+
     public func FindWorld(self: Project, world: je::world)=> option<World>
     {
         for (let project_world : self.worlds)

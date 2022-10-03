@@ -49,3 +49,34 @@ void je_finish()
     je_log_shutdown();
     wo_finish();
 }
+
+void* je_module_load(const char* name, const char* path)
+{
+    if (void* lib = wo_load_lib(name, path))
+    {
+        if (auto entry = (jeecs::typing::module_entry_t)
+            wo_load_func(lib, "jeecs_module_entry"))
+            entry();
+
+        jeecs::debug::log_info("Module: '%s' loaded", path);
+        return lib;
+    }
+    jeecs::debug::log_error("Failed to load module: '%s'", path);
+    return nullptr;
+}
+
+void* je_module_func(void* lib, const char* funcname)
+{
+    assert(lib);
+    return wo_load_func(lib, funcname);
+}
+
+void je_module_unload(void* lib)
+{
+    assert(lib);
+    if (auto leave = (jeecs::typing::module_leave_t)
+        wo_load_func(lib, "jeecs_module_leave"))
+        leave();
+
+    return wo_unload_lib(lib);
+}

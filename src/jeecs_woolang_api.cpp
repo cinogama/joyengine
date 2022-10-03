@@ -59,13 +59,13 @@ WO_API wo_api wojeapi_restart_graphic_interface(wo_vm vm, wo_value args, size_t 
 
     jegl_interface_config config;
     config.m_title = wo_string(args + 0);
-    config.m_resolution_x = config.m_windows_width = wo_int(args+1);
+    config.m_resolution_x = config.m_windows_width = wo_int(args + 1);
     config.m_resolution_y = config.m_windows_height = wo_int(args + 2);
     config.m_fps = wo_int(args + 3);
     config.m_fullscreen = wo_bool(args + 4);
     jegl_reboot_graphic_thread(jedbg_get_editing_graphic_thread(cur_universe), config);
 
-    return wo_ret_void();
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_current_platform_config(wo_vm vm, wo_value args, size_t argc)
@@ -103,6 +103,17 @@ WO_API wo_api wojeapi_current_platform_config(wo_vm vm, wo_value args, size_t ar
 #error "Known os type."
 #endif
     );
+}
+
+WO_API wo_api wojeapi_load_module(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_option_ptr(vm, je_module_load(wo_string(args + 0), wo_string(args + 1)));
+}
+
+WO_API wo_api wojeapi_unload_module(wo_vm vm, wo_value args, size_t argc)
+{
+    je_module_unload(wo_pointer(args + 0));
+    return wo_ret_void(vm);
 }
 
 // ECS UNIVERSE
@@ -1214,6 +1225,12 @@ namespace je
 
         extern("libjoyecs", "wojeapi_current_platform_config")
         public func platform()=> string;
+
+        extern("libjoyecs", "wojeapi_load_module")
+        public func load_module(name: string, path: string)=> option<handle>;
+
+        extern("libjoyecs", "wojeapi_unload_module")
+        public func unload_module(module: handle)=> void;
     }
 
     extern("libjoyecs", "wojeapi_log")

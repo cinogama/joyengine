@@ -95,6 +95,9 @@ namespace jeecs
 
         struct type_info;
 
+        using module_entry_t = void(*)(void);
+        using module_leave_t = void(*)(void);
+
         using construct_func_t = void(*)(void*, void*);
         using destruct_func_t = void(*)(void*);
         using copy_func_t = void(*)(void*, const void*);
@@ -923,6 +926,11 @@ JE_API bool je_io_should_lock_mouse();
 JE_API void je_io_update_windowsize(int x, int y);
 JE_API bool je_io_should_update_windowsize(int* x, int* y);
 
+// Library / Module loader
+JE_API void* je_module_load(const char* name, const char* path);
+JE_API void* je_module_func(void* lib, const char* funcname);
+JE_API void je_module_unload(void* lib);
+
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
 
@@ -961,7 +969,6 @@ JE_API const jeecs::game_entity* jedbg_get_editing_entity();
 
 // NOTE: Get graphic thread
 JE_API jegl_thread* jedbg_get_editing_graphic_thread(void * universe);
-
 #endif
 
 WO_FORCE_CAPI_END

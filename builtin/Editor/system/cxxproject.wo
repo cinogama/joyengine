@@ -25,7 +25,8 @@ using CxxProjectBuildConfig = struct {
 public using CxxProject = struct {
     name: string, // 模块的名称
     path: string, // 模块所在路径，仅此而已
-    configs: dict<string, CxxProjectBuildConfig> // 可用的生成配置
+    configs: dict<string, CxxProjectBuildConfig>, // 可用的生成配置
+    mut module_instance: option<handle>,
 }
 {
     // Cmake所在路径，项目会使用此路径指示的cmake
@@ -134,6 +135,7 @@ public using CxxProject = struct {
                 ->mapping
                 ->trans(\k: string, v: result<CxxProjectBuildConfig, string> 
                     = (k, v->okay->val);),
+            module_instance = option::none,
             };
 
         // 3. 给支持的平台生成CMake文件，并且把配置信息存档
@@ -217,6 +219,56 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         return result::ok(created_module);
     }
+
+    func search_dll_in(dir: string)=> option<string>
+    {
+        using je::filesys;
+
+        for (let p : childs(dir)->okay->val)
+        {
+            if (isdir(p))
+            {
+                let r = search_dll_in(p);
+                if (r->has)
+                    return r;
+            }
+            else if (externname(p) == "dll")
+                return option::value(p);
+        }
+        return option::none;
+    }
+    func load_library_of_platform(self: CxxProject, platform: string)
+    {
+        assert(!self.module_instance->has);
+        match (search_dll_in(F"{self.path}runtime/{platform}"))
+        {
+        value(p)? 
+            return self.module_instance = je::editor::load_module(self.name, p);
+        none? 
+            return self.module_instance = option::none;
+        }
+    }
+    func update_library_of_platform(self: CxxProject, config: string)
+    {
+        using je::filesys;
+
+        // 获取编译出来的二进制，移动到一个统一的位置
+        if (!exist(F"{self.path}runtime/{config}"))
+            mkdir(F"{self.path}runtime/{config}");
+
+        assert(exist(F"{self.path}runtime/{config}"));
+
+        match (search_dll_in(F"{self.path}build/{config}"))
+        {
+        value(p)? 
+        {
+            delete(F"{self.path}runtime/{config}/{filename(p)}");
+            assert(copy(p, F"{self.path}runtime/{config}/{filename(p)}")->isok);
+        }
+        none? std::panic("Output binary file not found;");
+        }
+
+    }
     public func load(path: string)
     {
         using je::filesys;
@@ -241,14 +293,17 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                 ->trans(\d: dynamic = d as string;)
                 // 如果文件打不开，直接在这里爆炸
                 ->trans(\conf: string = (conf, generate_cmake_doc(conf)->okay->val);)
-                ->mapping
+                ->mapping,
+            module_instance = option::none,
             };
         
         let current_je_proj = editor::Project::GetCurrentProject();
         current_je_proj.native_modules->get(created_module.path)
                     ->or(\ = current_je_proj.native_modules->set(created_module.path, created_module););
 
-        // TODO; 在这里准备加载一下动态库
+        if (!created_module->load_library_of_platform(je::editor::platform())->has)
+            return result::err(F"无法为当前运行时{je::editor::platform()}加载模块，请检查");
+
         return result::ok(created_module);
     }
 
@@ -332,12 +387,20 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
         mut display_msg : string,
         mut progress    : int,
         mut show        : bool,
+        mut compile_thread  : option<std::thread>,
+        mut compile_result  : option<result<result<string, string>, string>>,
     };
     func update_compile(self: CxxProject, config: string)
     {
         // 起个线程跑编译，然后弄个窗口显示一下进度
 
-        let context = compile_context{display_msg = "正在开始编译，请稍等……", progress = 0, show = true};
+        let context = compile_context{
+            display_msg = "正在开始编译，请稍等……", 
+            progress = 0, 
+            show = true,
+            compile_thread = option::none,
+            compile_result = option::none,
+            };
         je::gui::launch(func(){
             Begin(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref context.show);
                 Text(F"正在编译C++模块：{self.name}");
@@ -348,9 +411,49 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 return FormAction::Nothing;
             return FormAction::Close;
         }, ());
-        std::thread(_update_compile, (self, config, context));
+
+        context.compile_thread = 
+            option::value(std::thread(func ()
+            {
+                match (self->_compile(config, context))
+                {
+                ok(compile_result)?
+                    match(compile_result)
+                    {
+                    ok(_)?
+                    {
+                        // 起个协程同步去更新一下
+                        je::gui::launch(
+                            func(){
+                                let proj = editor::Project::GetCurrentProject();
+                                let dump_worlds = proj->DumpAllWorlds();
+
+                                proj->CloseAllWorlds();
+
+                                self.module_instance = 
+                                    self.module_instance
+                                        ->map(\m: handle = je::editor::unload_module(m);)
+                                        ->bind(\_: anything = option::none;);
+
+                                // 编译成功，更新文件到runtime
+                                self->update_library_of_platform(config);
+
+                                // 加载模块！
+                                assert(self->load_library_of_platform(config)->has);
+
+                                proj->RestoreAllWorlds(dump_worlds);
+
+                                return FormAction::Close;
+                            },() );
+                        
+                    }
+                    err(_)?;
+                    }
+                err(_)?;
+                }
+            }));
     }
-    func _update_compile(self: CxxProject, config: string, context: compile_context)
+    func _compile(self: CxxProject, config: string, context: compile_context)
     {
         // 输入所需的配置，如果项目支持这个配置，则编译模块
         let current_je_proj = editor::Project::GetCurrentProject();
@@ -426,40 +529,6 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
             {
                 current_je_proj.native_modules->get(self.path)
                     ->or(\ = current_je_proj.native_modules->set(self.path, self););
-
-                // 获取编译出来的二进制，移动到一个统一的位置
-                if (!exist(F"{self.path}runtime/{config}"))
-                    mkdir(F"{self.path}runtime/{config}");
-
-                assert(exist(F"{self.path}runtime/{config}"));
-
-                func search_dll_in(dir: string)=> option<string>
-                {
-                    for (let p : childs(dir)->okay->val)
-                    {
-                        if (isdir(p))
-                        {
-                            let r = search_dll_in(p);
-                            if (r->has)
-                                return r;
-                        }
-                        else if (externname(p) == "dll")
-                            return option::value(p);
-                    }
-                    return option::none;
-                }
-
-                // TODO; 在这个地方保存编辑环境，然后卸载模块，变更二进制，然后恢复上下文
-
-                match (search_dll_in(F"{self.path}build/{config}"))
-                {
-                value(p)? 
-                {
-                    delete(F"{self.path}runtime/{config}/{filename(p)}");
-                    assert(copy(p, F"{self.path}runtime/{config}/{filename(p)}")->isok);
-                }
-                none? std::panic("Binary file not found;");
-                }
 
                 context.display_msg = F"编译完成\n{compile_result->val}";
                 return result::ok(result::ok(context.display_msg));

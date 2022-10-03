@@ -253,7 +253,14 @@ func Editor_MainMenuBar()
             je::editor::restart_graphic_interface("DEBUG",
                 win_width, win_height, 60, false);
         }
-            
+        if (MenuItem("重载全部世界"))
+        {
+            let proj = Project::GetCurrentProject();
+            let dat = proj->DumpAllWorlds();
+            proj->CloseAllWorlds();
+            proj->RestoreAllWorlds(dat);
+        }
+
         EndMenu();
     }
     let (normal, info, warning, error, fatal) = logmgr::get_log_count();
