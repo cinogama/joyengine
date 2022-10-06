@@ -220,7 +220,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         return result::ok(created_module);
     }
 
-    func search_dll_in(dir: string)=> option<string>
+    func search_file_in(dir: string, exname: string)=> option<string>
     {
         using je::filesys;
 
@@ -228,11 +228,11 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         {
             if (isdir(p))
             {
-                let r = search_dll_in(p);
+                let r = search_file_in(p, exname);
                 if (r->has)
                     return r;
             }
-            else if (externname(p) == "dll")
+            else if (externname(p) == exname)
                 return option::value(p);
         }
         return option::none;
@@ -240,7 +240,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     func load_library_of_platform(self: CxxProject, platform: string)
     {
         assert(!self.module_instance->has);
-        match (search_dll_in(F"{self.path}runtime/{platform}"))
+        match (search_file_in(F"{self.path}runtime/{platform}", "dll"))
         {
         value(p)? 
             return self.module_instance = je::editor::load_module(self.name, p);
@@ -258,7 +258,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         assert(exist(F"{self.path}runtime/{config}"));
 
-        match (search_dll_in(F"{self.path}build/{config}"))
+        match (search_file_in(F"{self.path}build/{config}", "dll"))
         {
         value(p)? 
         {
@@ -268,6 +268,18 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         none? std::panic("Output binary file not found;");
         }
 
+        // 调试时，vs调试器可能会自动附加pdb，导致重新编译失败
+        // 为了避免蠢蛋vs干蠢事，这里直接把pdb文件移到runtime目录下
+        // 为了避免蠢蛋vs附加pdb，直接干掉这个pdb文件
+        match (search_file_in(F"{self.path}build/{config}", "pdb"))
+        {
+        value(p)?
+        {
+            delete(F"{self.path}runtime/{config}/{filename(p)}");
+            assert(move(p, F"{self.path}runtime/{config}/{filename(p)}.backup")->isok);
+        }
+        none? std::panic("Output PDB file not found;");
+        }
     }
     public func load(path: string)
     {
