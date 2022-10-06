@@ -58,7 +58,7 @@ void* je_module_load(const char* name, const char* path)
             wo_load_func(lib, "jeecs_module_entry"))
             entry();
 
-        jeecs::debug::log_info("Module: '%s' loaded", path);
+        jeecs::debug::log_info("Module: '%s'(%p) loaded", path, lib);
         return lib;
     }
     jeecs::debug::log_error("Failed to load module: '%s'", path);
@@ -77,6 +77,6 @@ void je_module_unload(void* lib)
     if (auto leave = (jeecs::typing::module_leave_t)
         wo_load_func(lib, "jeecs_module_leave"))
         leave();
-
+    jeecs::debug::log_info("Module: '%p' unloaded", lib);
     return wo_unload_lib(lib);
 }

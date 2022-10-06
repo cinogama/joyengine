@@ -375,7 +375,96 @@ namespace $$MODULE_NAME
             }
             if (MenuItem(F"添加或删除组件"))
             {
-                
+                let components = je::filesys::childs(F"{path.path}components")
+                    ->okay
+                    ->map(\s: array<string> = s
+                         ->forall(\f: string = je::filesys::externname(f) == "hpp";)
+                         ->trans(\f: string = fname->sub(0, fname->len - 4)
+                            where fname = je::filesys::filename(f);)
+                        ;)
+                    ->valor([])
+                    ->tovec;
+
+                let display_usable_component = func(s: string)
+                {
+                    Selectable(s);
+                    if (BeginPopupContextItem())
+                    {
+                        if (MenuItem("移除此组件"))
+                            generic::askbox("确认移除组件？", F"是否从模块{je::filesys::filename(path.path)}中移除组件{s}?",
+                                func(){
+                                    components->remove(components->find(s));
+                                    je::filesys::delete(F"{path.path}components/{s}.hpp");
+                                });
+                        EndPopup();
+                    }
+                };
+
+                launch(func(mut open: bool)
+                {
+                    Begin(F"模块{je::filesys::filename(path.path)}可用组件", 
+                        WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+                    if (BeginMenuBar())
+                    {
+                        if (MenuItem("创建新组件"))
+                            generic::inputbox("创建新组件", F"为模块{je::filesys::filename(path.path)}创建组件", "NewComponent",
+                                func(name: string)
+                                {
+                                    if (components->find(name) != -1)
+                                    {
+                                        generic::msgbox("创建组件失败", F"模块{je::filesys::filename(path.path)}已经存在一个同名组件");
+                                        return;
+                                    }
+
+                                    let component_header = 
+@"#include "jeecs.hpp"
+
+namespace $$MODULE_NAME
+{
+    struct $$COMPONENT_NAME
+    {
+        static void JERefRegsiter()
+        {
+            // Register member in this function.
+            // e.g. typing::register_member(&$$COMPONENT_NAME::member, "member");
+        }
+    };
+}
+"@;
+                                    let module_name = je::filesys::purename(path.path);
+                                    let component_name = name;
+
+                                    if (!je::file::writeall(F"{path.path}components/{component_name}.hpp", 
+                                        component_header
+                                            ->replace("$$MODULE_NAME", module_name)
+                                            ->replace("$$COMPONENT_NAME", component_name))
+                                        )
+                                    {
+                                        je::filesys::delete(F"{path.path}components/{component_name}.hpp");
+                                        generic::msgbox("创建组件失败", "无法创建和写入组件源文件");
+                                    }
+                                    else
+                                    {
+                                        generic::msgbox("创建组件成功", "组件已创建到\n" 
+                                            + F"{path.path}components/{component_name}.hpp");
+                                        components->add(component_name);
+                                    }
+                                });
+
+                        EndMenuBar();
+                    }
+                    if (BeginListBox("##", 350.0, 400.0))
+                    {
+                        components->trans(\s: string = display_usable_component(s););
+                        EndListBox();
+                    }
+                    End();
+
+                    if (open)
+                        return FormAction::Nothing;
+                    return FormAction::Close;
+                }, (true,));
             }
             Separator();
         }
