@@ -302,6 +302,18 @@ namespace editor::Project
         {
         ok(proj)?
         {
+            data->get("native_module": dynamic, []: dynamic) as array
+                ->trans(\d: dynamic = d as string;)
+                ->trans(\p: string = (p, CxxProject::load(p));)
+                ->trans(\r: (string, result<anything, string>)
+                    = r[1]->or(
+                        \ reason: string
+                            = generic::askbox("模块加载失败",
+                                F"加载模块{r[0]}发生错误：\n{reason}\n选择‘是’立即退出以防止信息丢失",
+                                \=je::exit(););
+                    );
+                );
+            
             let runtime_worlds = data["worlds": dynamic] as array<dynamic>;
 
             let window_info = data->get("window": dynamic, {}: dynamic) as map<dynamic, dynamic>;
@@ -341,19 +353,6 @@ namespace editor::Project
             let rendworld = proj.worlds[0].instance;
             rendworld->add_system(proj.graphic_system);
             rendworld->add_system(proj.editor_system);
-
-            data->get("native_module": dynamic, []: dynamic) as array
-                ->trans(\d: dynamic = d as string;)
-                ->trans(\p: string = (p, CxxProject::load(p));)
-                ->trans(\r: (string, result<anything, string>)
-                    = r[1]->or(
-                        \ reason: string
-                            = generic::askbox("模块加载失败",
-                                F"加载模块{r[0]}发生错误：\n{reason}\n选择‘是’立即退出以防止信息丢失",
-                                \=je::exit(););
-                    );
-                );
-            
 
             return ok(proj);
         }

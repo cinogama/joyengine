@@ -253,14 +253,21 @@ namespace editor::Browser
                     ->valor([])
                     ->tovec;
 
-                func display_usable_system(s: string)
+                let display_usable_system = func(s: string)
                 {
                     Selectable(s);
                     if (BeginPopupContextItem())
                     {
+                        if (MenuItem("移除此系统"))
+                            generic::askbox("确认移除系统？", F"是否从模块{je::filesys::filename(path.path)}中移除系统{s}?",
+                                func(){
+                                    systems->remove(systems->find(s));
+                                    je::filesys::delete(F"{path.path}systems/{s}.hpp");
+                                    je::filesys::delete(F"{path.path}systems/{s}.cpp");
+                                });
                         EndPopup();
                     }
-                }
+                };
 
                 launch(func(mut open: bool)
                 {
@@ -365,6 +372,10 @@ namespace $$MODULE_NAME
                         return FormAction::Nothing;
                     return FormAction::Close;
                 }, (true,));
+            }
+            if (MenuItem(F"添加或删除组件"))
+            {
+                
             }
             Separator();
         }
