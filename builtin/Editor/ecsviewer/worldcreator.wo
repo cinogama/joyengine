@@ -59,8 +59,7 @@ namespace editor::WorldCreator
         for (let sys : all_systems)
             // 不显示所有编辑器/图形系统
             if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
-                if (sys->name()->beginwith("Translation::"))
-                    context.not_append_types->add(sys);
+                context.not_append_types->add(sys);
 
         // 处理一下已经创建/添加的系统
         for (let actived_sys : world->editor::get_systems_types())

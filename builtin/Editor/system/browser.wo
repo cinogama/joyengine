@@ -77,9 +77,7 @@ namespace editor::Browser
         name        : string,
         externname  : string,
         type        : mutable<PathType>, // 类型，如果是目录，则还包含目录内的子项    
-    };
-
-    namespace PathInfo
+    }
     {
         func indir(self : PathInfo, functor: (option<array<PathInfo>>)=>void)
         {
@@ -210,7 +208,7 @@ namespace editor::Browser
     }
     func file_item_menu(path: PathInfo)
     {
-        let NOT_MODIFIABLE_FILES = ["jeproj4"];
+        let NOT_MODIFIABLE_FILES = ["jeproj4", "jemodule4"];
         let is_modifiable_file = NOT_MODIFIABLE_FILES->find(path.externname) == -1;
 
         if (path.externname == "shader")
@@ -242,6 +240,131 @@ namespace editor::Browser
                     je::logerr("此模块未被加载，TODO; 现场加载");
                 }
                     
+            }
+            if (MenuItem(F"添加或删除系统"))
+            {
+                let systems = je::filesys::childs(F"{path.path}systems")
+                    ->okay
+                    ->map(\s: array<string> = s
+                         ->forall(\f: string = je::filesys::externname(f) == "hpp";)
+                         ->trans(\f: string = fname->sub(0, fname->len - 4)
+                            where fname = je::filesys::filename(f);)
+                        ;)
+                    ->valor([])
+                    ->tovec;
+
+                func display_usable_system(s: string)
+                {
+                    Selectable(s);
+                    if (BeginPopupContextItem())
+                    {
+                        EndPopup();
+                    }
+                }
+
+                launch(func(mut open: bool)
+                {
+                    Begin(F"模块{je::filesys::filename(path.path)}可用系统", 
+                        WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+                    if (BeginMenuBar())
+                    {
+                        if (MenuItem("创建新系统"))
+                            generic::inputbox("创建新系统", F"为模块{je::filesys::filename(path.path)}创建系统", "NewSystem",
+                                func(name: string)
+                                {
+                                    if (systems->find(name) != -1)
+                                    {
+                                        generic::msgbox("创建系统失败", F"模块{je::filesys::filename(path.path)}已经存在一个同名系统");
+                                        return;
+                                    }
+
+                                    let system_header = 
+@"#include "jeecs.hpp"
+
+namespace $$MODULE_NAME
+{
+    struct $$SYSTEM_NAME : public jeecs::game_system
+    {
+        $$SYSTEM_NAME(jeecs::game_world world);
+        void PreUpdate();
+        void Update();
+        void LateUpdate();
+    };
+}
+"@;
+                                    let system_src = 
+@"#include "$$SYSTEM_NAME.hpp"
+
+using namespace std;
+using namespace jeecs;
+
+namespace $$MODULE_NAME
+{
+    $$SYSTEM_NAME::$$SYSTEM_NAME(game_world world)
+        : game_system(world)
+    {
+        
+    }
+
+    void $$SYSTEM_NAME::PreUpdate()
+    {
+
+    }
+
+    void $$SYSTEM_NAME::Update()
+    {
+
+    }
+
+    void $$SYSTEM_NAME::LateUpdate()
+    {
+
+    }
+}
+"@;
+                                    let module_name = je::filesys::purename(path.path);
+                                    let system_name = name;
+
+                                    if (!je::file::writeall(F"{path.path}systems/{system_name}.hpp", 
+                                        system_header
+                                            ->replace("$$MODULE_NAME", module_name)
+                                            ->replace("$$SYSTEM_NAME", system_name))
+                                        ||
+                                        !je::file::writeall(F"{path.path}systems/{system_name}.cpp", 
+                                        system_src
+                                            ->replace("$$MODULE_NAME", module_name)
+                                            ->replace("$$SYSTEM_NAME", system_name))
+                                        )
+                                    {
+                                        je::filesys::delete(F"{path.path}systems/{system_name}.hpp");
+                                        je::filesys::delete(F"{path.path}systems/{system_name}.cpp");
+
+                                        generic::msgbox("创建系统失败", "无法创建和写入系统源文件");
+                                    }
+                                    else
+                                    {
+                                        generic::msgbox("创建系统成功", "系统已创建到\n" 
+                                            + F"{path.path}systems/{system_name}.hpp\n"
+                                            + F"{path.path}systems/{system_name}.cpp");
+                                        systems->add(system_name);
+                                    }
+                                });
+
+                        EndMenuBar();
+                    }
+                    if (BeginListBox("##", 350.0, 400.0))
+                    {
+                        systems->trans(\s: string = display_usable_system(s););
+                        EndListBox();
+                    }
+ 
+                    End();
+
+                    if (open)
+                        return FormAction::Nothing;
+                    return FormAction::Close;
+                }, (true,));
             }
             Separator();
         }

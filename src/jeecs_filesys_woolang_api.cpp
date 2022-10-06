@@ -221,13 +221,28 @@ namespace je::filesys
         return _path->sub(find_place + 1);
     }
 
-    public func externname(_path: string)
+    public func fullexternname(_path: string)
     {
         let fname = filename(_path);
         let fndplace = fname->rfind(".");
         if (fndplace == -1)
             return "";
-        return fname->sub(fname->rfind(".") + 1);
+        return fname->sub(fndplace);
+    }
+
+    public func externname(_path: string)
+    {
+        let fexname = fullexternname(_path);
+        if (fexname->len == 0)
+            return fexname;
+        return fexname->sub(1);
+    }
+
+    public func purename(_path: string)
+    {
+        let fexname = fullexternname(_path);
+        let fname = filename(_path);
+        return fname->sub(0, fname->len - fexname->len);
     }
 
     extern("libjoyecs", "wojeapi_filesys_normalize_path")
