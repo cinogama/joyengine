@@ -1181,6 +1181,33 @@ public func step(a: float, b: float)=> float
     return apply_operation:<float>("step", a, b);
 }
 
+// Math functions
+
+let const is_glvalue<T> = 
+    std::declval:<T>() is float
+    || std::declval:<T>() is float2
+    || std::declval:<T>() is float3
+    || std::declval:<T>() is float4
+;
+
+public func sin<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("sin", a);
+}
+public func cos<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("cos", a);
+}
+public func tan<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("tan", a);
+}
+
+// Engine builtin function
+
 public func alphatest(colf4: float4)=> float4
 {
     return apply_operation:<float4>("JEBUILTIN_AlphaTest", colf4);

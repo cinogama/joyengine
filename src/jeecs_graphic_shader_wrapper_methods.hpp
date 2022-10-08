@@ -312,4 +312,32 @@ reduce_method{return new jegl_shader_value(
 ); }} },
 { "JEBUILTIN_AlphaTest", {jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },
+
+{ "sin", {jegl_shader_value::FLOAT4,
+reduce_method{return nullptr; }} },
+{ "cos", {jegl_shader_value::FLOAT4,
+reduce_method{return nullptr; }} },
+{ "tan", {jegl_shader_value::FLOAT4,
+reduce_method{return nullptr; }} },
+
+{ "sin", {jegl_shader_value::FLOAT3,
+reduce_method{return nullptr; }} },
+{ "cos", {jegl_shader_value::FLOAT3,
+reduce_method{return nullptr; }} },
+{ "tan", {jegl_shader_value::FLOAT3,
+reduce_method{return nullptr; }} },
+
+{ "sin", {jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
+{ "cos", {jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
+{ "tan", {jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
+
+{ "sin", {jegl_shader_value::FLOAT,
+reduce_method{return nullptr; }} },
+{ "cos", {jegl_shader_value::FLOAT,
+reduce_method{return nullptr; }} },
+{ "tan", {jegl_shader_value::FLOAT,
+reduce_method{return nullptr; }} },
 };

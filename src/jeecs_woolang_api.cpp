@@ -1511,7 +1511,7 @@ namespace je
                 }
                 else if (std::declval:<T>() is (real, real, real, real))
                 {
-                    extern("libjoyecs", "wojeapi_set_uniforms_float3")
+                    extern("libjoyecs", "wojeapi_set_uniforms_float4")
                     func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
                     let (x, y, z, w) = val;
                     _set_uniform_float4(self, name, x, y, z, w);

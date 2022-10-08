@@ -12,6 +12,18 @@ namespace editor::EntityList
     // 当前世界列表是否显示有当前选中的实体，如果没有就重设当前实体，防止错误的显示
     private let mut _has_selected_entity = false;
 
+    // TODO; Display entity with Editor::Invisable?
+    let mut enable_display_invisable_entity = false;
+
+    public func set_enable_show_invisable_entity(setting: bool)
+    {
+        enable_display_invisable_entity = setting;
+    }
+    public func get_enable_show_invisable_entity()
+    {
+        return enable_display_invisable_entity;
+    }
+
     private func menu()
     {
         using je::gui;
@@ -182,7 +194,7 @@ namespace editor::EntityList
             
             // 如果实体有 Editor::Invisable 这个组件，就跳过显示
             static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
-            if (entity->editor::get_component(INVISABLE)->has())
+            if (entity->editor::get_component(INVISABLE)->has() && !enable_display_invisable_entity)
                 continue;
 
             let mut entity_name = entity->editor::name();

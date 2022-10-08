@@ -260,7 +260,11 @@ func Editor_MainMenuBar()
             proj->CloseAllWorlds();
             proj->RestoreAllWorlds(dat);
         }
-
+        let mut show_hiding_editor_entity = EntityList::get_enable_show_invisable_entity();
+        if (MenuItem("显示编辑器隐藏实体", ref show_hiding_editor_entity, true))
+        {
+            EntityList::set_enable_show_invisable_entity(show_hiding_editor_entity);
+        }
         EndMenu();
     }
     let (normal, info, warning, error, fatal) = logmgr::get_log_count();

@@ -176,9 +176,94 @@ namespace editor::Browser
                 Separator();
                 if (BeginMenu(F"着色器脚本"))
                 {
-                    // TODO;
-                    if (MenuItem(F"TODO;"))
-                        std::panic("TODO;");
+                    let create_shader_at = func(shader_name: string, shader_src: string)
+                    {
+                        let shader_path = je::filesys::normalize(F"{current_work_path}/{shader_name}.shader");
+                        if (!je::file::writeall(shader_path, shader_src))
+                            generic::msgbox("创建着色器失败", F"无法写入{shader_path}");
+                        else
+                            force_update();
+                    };
+
+                    if (MenuItem(F"空白着色器"))
+                        generic::inputbox("创建着色器", F"将在{current_work_path}创建空白着色器：", "MonoColor",
+                            \shader_name: string = create_shader_at(shader_name, shader_src) 
+                                where shader_src = 
+@"import je.shader;
+
+ZTEST   (LESS);
+ZWRITE  (ENABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
+
+VAO_STRUCT vin {
+    vertex  : float3,
+};
+
+using v2f = struct {
+    pos     : float4,
+};
+
+using fout = struct {
+    color: float4
+};
+
+public func vert(v: vin)
+{
+    return v2f {
+        pos = je_mvp * float4(v.vertex, 1.)
+    };
+}
+
+public func frag(vf: v2f)
+{
+    return fout {
+        color = float4(1., 1., 1., 1.)
+    };
+}
+"@                          ;);
+                    if (MenuItem(F"无光着色器"))
+                        generic::inputbox("创建着色器", F"将在{current_work_path}创建无光着色器：", "Unlit",
+                            \shader_name: string = create_shader_at(shader_name, shader_src) 
+                                where shader_src = 
+@"import je.shader;
+
+ZTEST   (LESS);
+ZWRITE  (ENABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
+
+VAO_STRUCT vin {
+    vertex  : float3,
+    uv      : float2,
+};
+
+using v2f = struct {
+    pos     : float4,
+    uv      : float2,
+};
+
+using fout = struct {
+    color: float4
+};
+
+public func vert(v: vin)
+{
+    return v2f {
+        pos = je_mvp * float4(v.vertex, 1.),
+        uv  = v.uv,
+    };
+}
+
+public func frag(vf: v2f)
+{
+    let tex = uniform:<texture2d>("MainTexture")->channel(0);
+
+    return fout {
+        color = texture(tex, vf.uv),
+    };
+}
+"@                          ;);
                     EndMenu();
                 }
                 if (MenuItem(F"C++模块"))
@@ -426,6 +511,8 @@ namespace $$MODULE_NAME
     {
         static void JERefRegsiter()
         {
+            using namespace jeecs;
+
             // Register member in this function.
             // e.g. typing::register_member(&$$COMPONENT_NAME::member, "member");
         }

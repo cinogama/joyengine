@@ -368,7 +368,8 @@ jegl_resource* jegl_copy_resource(jegl_resource* resource)
     res->m_graphic_thread_version = 0;
 
     ++* res->m_raw_ref_count;
-    if (res->m_type == jegl_resource::type::SHADER)
+    // If copy a shader and current shader is a dead shader, do nothing after clone.
+    if (res->m_type == jegl_resource::type::SHADER && res->m_raw_shader_data)
     {
         // Copy shader raw info to make sure member chain is available for all instance.
         jegl_shader* new_shad_instance = new jegl_shader(*res->m_raw_shader_data);
