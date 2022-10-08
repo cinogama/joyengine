@@ -18,4 +18,12 @@ namespace utils
             return str->sub(0, maxlen - 3) + "...";
         return str;
     }
+
+    public func WrapPath(path: string)
+    {
+        // 根据不同平台，如果路径包含空白分割字符或需要在shell里转义的字符什么的，这里包一下
+        if (path->find(" ") != -1 || path->find("\t") != -1)
+            return F"\"{path}\"";
+        return path;
+    }
 }

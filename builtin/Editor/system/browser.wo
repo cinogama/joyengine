@@ -326,7 +326,7 @@ public func frag(vf: v2f)
                 }
                     
             }
-            if (MenuItem(F"添加或删除系统"))
+            if (MenuItem(F"系统..."))
             {
                 let systems = je::filesys::childs(F"{path.path}systems")
                     ->okay
@@ -343,12 +343,16 @@ public func frag(vf: v2f)
                     Selectable(s);
                     if (BeginPopupContextItem())
                     {
+                        let file_path = F"{path.path}systems/{s}.cpp";
+
+                        if (MenuItem("在VSCode中打开"))
+                            je::filesys::open(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
                         if (MenuItem("移除此系统"))
                             generic::askbox("确认移除系统？", F"是否从模块{je::filesys::filename(path.path)}中移除系统{s}?",
                                 func(){
                                     systems->remove(systems->find(s));
                                     je::filesys::delete(F"{path.path}systems/{s}.hpp");
-                                    je::filesys::delete(F"{path.path}systems/{s}.cpp");
+                                    je::filesys::delete(file_path);
                                 });
                         EndPopup();
                     }
@@ -458,7 +462,7 @@ namespace $$MODULE_NAME
                     return FormAction::Close;
                 }, (true,));
             }
-            if (MenuItem(F"添加或删除组件"))
+            if (MenuItem(F"组件..."))
             {
                 let components = je::filesys::childs(F"{path.path}components")
                     ->okay
@@ -475,11 +479,15 @@ namespace $$MODULE_NAME
                     Selectable(s);
                     if (BeginPopupContextItem())
                     {
+                        let file_path = F"{path.path}components/{s}.hpp";
+
+                        if (MenuItem("在VSCode中打开"))
+                            je::filesys::open(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
                         if (MenuItem("移除此组件"))
                             generic::askbox("确认移除组件？", F"是否从模块{je::filesys::filename(path.path)}中移除组件{s}?",
                                 func(){
                                     components->remove(components->find(s));
-                                    je::filesys::delete(F"{path.path}components/{s}.hpp");
+                                    je::filesys::delete(file_path);
                                 });
                         EndPopup();
                     }

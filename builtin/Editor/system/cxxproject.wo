@@ -398,13 +398,6 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                 ->valor(result::err(F"未知的配置{conf}"));
     }
 
-    func fuck_windows_cmd(path: string)
-    {
-        if (path->find(" ") != -1 || path->find("\t") != -1)
-            return F"\"{path}\"";
-        return path;
-    }
-
     using compile_context = struct {
         mut display_msg : string,
         mut massive_msg : option<string>,
@@ -609,7 +602,7 @@ $$REGISTER_SYSTEM_TYPES
             return result::err(context.display_msg);
         }
 
-        let cmake_command = F"{fuck_windows_cmd(CMAKE_PATH)} \"{fuck_windows_cmd(self.path)}\" -B \"{fuck_windows_cmd(self.path + "msvcbuild")}\" {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
+        let cmake_command = F"{utils::WrapPath(CMAKE_PATH)} \"{utils::WrapPath(self.path)}\" -B \"{utils::WrapPath(self.path + "msvcbuild")}\" {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
         
         context.display_msg = F"正在使用CMake生成编译配置\n{cmake_command}";
         context.progress = 15;
@@ -620,12 +613,12 @@ $$REGISTER_SYSTEM_TYPES
             return result::err(context.display_msg);
         }
 
-        let msvc_proj_path = fuck_windows_cmd(F"{self.path}msvcbuild/builder/{config}/{self.name}.vcxproj");
+        let msvc_proj_path = utils::WrapPath(F"{self.path}msvcbuild/builder/{config}/{self.name}.vcxproj");
         let msvc_compile_result_path = F"{self.path}msvcbuild/compile.log";
 
         delete(msvc_compile_result_path);
 
-        let build_command = F"{fuck_windows_cmd(MSVC_PATH)} {msvc_proj_path} {conf->val.built_command} -v:quiet -fl -flp:logfile={fuck_windows_cmd(msvc_compile_result_path)} && echo Finished";
+        let build_command = F"{utils::WrapPath(MSVC_PATH)} {msvc_proj_path} {conf->val.built_command} -v:quiet -fl -flp:logfile={utils::WrapPath(msvc_compile_result_path)} && echo Finished";
 
         context.display_msg = F"正在构建二进制文件\n{build_command}";
         context.progress = 45;
