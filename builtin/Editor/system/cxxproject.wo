@@ -241,13 +241,48 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     func load_library_of_platform(self: CxxProject, platform: string)
     {
         assert(!self.module_instance->has);
-        match (search_file_in(F"{self.path}runtime/{platform}", "dll"))
+        match (search_file_in(get_current_runtime_path(F"{self.path}runtime/{platform}")->val, "dll"))
         {
         value(p)? 
             return self.module_instance = je::editor::load_module(self.name, p);
         none? 
             return self.module_instance = option::none;
         }
+    }
+    func get_current_runtime_id(runtime_dll_path: string)
+    {
+        using je::filesys;
+
+        return 
+            childs(runtime_dll_path)
+                ->okay
+                ->bind(\child_path: array<string> = child_path
+                    ->forall(\path: string = isdir(path);)
+                    ->trans(\path: string = filename(path): int;)
+                    ->reduce(\l: int, r: int = l > r ? l | r;)
+                ;)
+    }
+    func get_current_runtime_path(runtime_dll_path: string)
+    {
+        using je::filesys;
+        return 
+            get_current_runtime_id(runtime_dll_path)
+                ->map(\id: int = normalize(F"{normalize(runtime_dll_path)}{id}"););
+    }
+    func get_newest_runtime_path(runtime_dll_path: string)
+    {
+        using je::filesys;
+        let newest_path = 
+            get_current_runtime_id(runtime_dll_path)
+                ->map(\id: int = id + 1;)
+                ->valor(0)
+                ->\id: int = F"{normalize(runtime_dll_path)}{id}";
+                ;
+        assert(!exist(newest_path));
+        mkdir(newest_path);
+        assert(exist(newest_path));
+
+        return normalize(newest_path);
     }
     func update_library_of_platform(self: CxxProject, config: string)
     {
@@ -259,13 +294,12 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         assert(exist(F"{self.path}runtime/{config}"));
 
+        let newest_runtime_path = get_newest_runtime_path(F"{self.path}runtime/{config}");
+
         match (search_file_in(F"{self.path}build/{config}", "dll"))
         {
         value(p)? 
-        {
-            delete(F"{self.path}runtime/{config}/{filename(p)}");
-            assert(copy(p, F"{self.path}runtime/{config}/{filename(p)}")->isok);
-        }
+            assert(copy(p, F"{newest_runtime_path}{filename(p)}")->isok);
         none? std::panic("Output binary file not found;");
         }
 
@@ -274,10 +308,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         match (search_file_in(F"{self.path}build/{config}", "pdb"))
         {
         value(p)?
-        {
-            delete(F"{self.path}runtime/{config}/{filename(p)}");
-            assert(move(p, F"{self.path}runtime/{config}/{filename(p)}")->isok);
-        }
+            assert(move(p, F"{newest_runtime_path}{filename(p)}")->isok);
         none? std::panic("Output PDB file not found;");
         }
     }
@@ -312,6 +343,8 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         let current_je_proj = editor::Project::GetCurrentProject();
         current_je_proj.native_modules->get(created_module.path)
                     ->or(\ = current_je_proj.native_modules->set(created_module.path, created_module););
+
+        je::logfatal("TODO; 此处清理之前的编译产物");
 
         if (!created_module->load_library_of_platform(je::editor::platform())->has)
             return result::err(F"无法为当前运行时{je::editor::platform()}加载模块，请检查");
