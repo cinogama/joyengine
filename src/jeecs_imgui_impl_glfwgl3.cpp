@@ -238,26 +238,7 @@ namespace je::gui
     extern("libjoyecs", "je_gui_pop_id")
     public func PopID()=>void;
 
-    public using TextBuffer = gchandle;
-    namespace TextBuffer
-    {
-        extern("libjoyecs", "je_gui_create_text_buffer")
-        public func create(text:string)=>TextBuffer;
-
-        extern("libjoyecs", "je_gui_clear_text_buffer")
-        public func clear(self:TextBuffer)=>void;
-        
-        extern("libjoyecs", "je_gui_get_text_buffer")
-        public func get(self:TextBuffer)=>string;
-
-        extern("libjoyecs", "je_gui_set_text_buffer")
-        public func set(self:TextBuffer, text:string)=>void;
-    }
-
     extern("libjoyecs", "je_gui_input_text_box")
-    public func InputText(label:string, buffer:TextBuffer)=> bool;
-
-    extern("libjoyecs", "je_gui_input_text_box_with_str")
     public func InputText(label:string, ref buffer:string)=> bool;
 
     extern("libjoyecs", "je_gui_input_float_box")
@@ -284,9 +265,9 @@ namespace je::gui
     public func InputFloat4(label: string, ref x: real, ref y: real, ref z: real, ref w: real, format: string)=> bool;
 
     extern("libjoyecs", "je_gui_input_text_multiline")
-    public func InputTextMultiline(label:string, buffer:TextBuffer)=> bool;
+    public func InputTextMultiline(label:string, ref buffer: string)=> bool;
     extern("libjoyecs", "je_gui_input_text_multiline")
-    public func InputTextMultiline(label:string, buffer:TextBuffer, width:real, height:real)=> bool;
+    public func InputTextMultiline(label:string, ref buffer: string, width:real, height:real)=> bool;
 
     extern("libjoyecs", "je_gui_end_menu")
     public func EndMenu()=> void;
@@ -806,39 +787,7 @@ WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_create_text_buffer(wo_vm vm, wo_value args, size_t argc)
-{
-    return wo_ret_gchandle(vm, new std::string(wo_string(args + 0)), nullptr, [](void* ptr) {delete (std::string*)ptr; });
-}
-
-WO_API wo_api je_gui_clear_text_buffer(wo_vm vm, wo_value args, size_t argc)
-{
-    std::string* str = (std::string*)wo_pointer(args + 0);
-    str->clear();
-
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api je_gui_get_text_buffer(wo_vm vm, wo_value args, size_t argc)
-{
-    std::string* str = (std::string*)wo_pointer(args + 0);
-
-    return wo_ret_string(vm, str->c_str());
-}
-
-WO_API wo_api je_gui_set_text_buffer(wo_vm vm, wo_value args, size_t argc)
-{
-    std::string* str = (std::string*)wo_pointer(args + 0);
-    *str = wo_string(args + 1);
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
-{
-    return wo_ret_bool(vm, ImGui::InputText(wo_string(args + 0), (std::string*)wo_pointer(args + 1)));
-}
-
-WO_API wo_api je_gui_input_text_box_with_str(wo_vm vm, wo_value args, size_t argc)
 {
     std::string buf = wo_string(args + 1);
     if (ImGui::InputText(wo_string(args + 0), &buf))
@@ -933,10 +882,19 @@ WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)
 {
+    std::string buf = wo_string(args + 1);
+    bool updated = false;
     if (argc == 4)
-        return wo_ret_bool(vm, ImGui::InputTextMultiline(wo_string(args + 0), (std::string*)wo_pointer(args + 1),
-            ImVec2(wo_float(args + 2), wo_float(args + 3))));
-    return wo_ret_bool(vm, ImGui::InputTextMultiline(wo_string(args + 0), (std::string*)wo_pointer(args + 1)));
+    {
+        updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf,
+            ImVec2(wo_float(args + 2), wo_float(args + 3)));
+    }
+    updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf);
+
+    if (updated)
+        wo_set_string(args + 1, buf.c_str());
+
+    return wo_ret_bool(vm, updated);
 }
 
 struct gui_wo_job_coroutine

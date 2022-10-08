@@ -64,7 +64,7 @@ WO_API wo_api wojeapi_filesys_mkdir(wo_vm vm, wo_value args, size_t argc)
     bool created = fs::create_directories(wo_string(args + 0), ec);
     if (ec)
         return wo_ret_err_string(vm, ec.message().c_str());
-    if(!created)
+    if (!created)
         return wo_ret_err_string(vm, "Failed to create dirctory.");
     return wo_ret_ok_string(vm, normalize_path_str(wo_string(args + 0)).c_str());
 }
@@ -82,7 +82,10 @@ WO_API wo_api wojeapi_filesys_open_file_by_browser(wo_vm vm, wo_value args, size
 
 WO_API wo_api wojeapi_filesys_get_env(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_string(vm, getenv(wo_string(args + 0)));
+    const char* env = getenv(wo_string(args + 0));
+    if (env)
+        return wo_ret_string(vm, env);
+    return wo_ret_string(vm, wo_string(args + 0));
 }
 
 WO_API wo_api wojeapi_filesys_path_parent(wo_vm vm, wo_value args, size_t argc)

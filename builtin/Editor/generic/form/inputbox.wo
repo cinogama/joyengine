@@ -9,20 +9,20 @@ namespace generic
     {
         let mut open = true;
 
-        let text_buffer = TextBuffer(default_value);
+        let mut text_buffer = default_value;
         while (open)
         {
             Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
                 Text(shown);
-                InputText("##", text_buffer);
+                InputText("##", ref text_buffer);
                 if (Button("确定"))
                 {
-                    trigger(text_buffer->get());
+                    trigger(text_buffer);
                     open = false;
                 }
                 SameLine();
                 if (Button("清除"))
-                    text_buffer->clear();
+                    text_buffer = "";
                 SameLine();
                 if (Button("取消"))
                     open = false;

@@ -353,4 +353,8 @@ CTestTestfile.cmake
 _deps
 
 /out/
-/build/
+/build/*
+#!/build/.keepme
+/build/builtin/*
+!/build/builtin/cmake
+!/build/

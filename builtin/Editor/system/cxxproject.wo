@@ -30,8 +30,9 @@ public using CxxProject = struct {
 }
 {
     // Cmake所在路径，项目会使用此路径指示的cmake
-    let CMAKE_PATH = F"{je::filesys::env("CMAKE_PATH")}/cmake.exe";
-    let MSVC_PATH = F"{je::filesys::env("MSBUILD")}/devenv.exe";
+    let CMAKE_PATH = F"{std::exepath()}builtin/cmake/win32/bin/cmake.exe"; 
+        // F"{je::filesys::env("CMAKE")}/cmake.exe";
+    let MSVC_PATH = F"{je::filesys::env("MSBUILD")}/MSBuild.exe";
 
     // C++模块样例，创建项目文件时会复制这个目录
     let CXX_PROJECT_EXAMPLE_PATH = F"{std::exepath()}builtin/cxxproject/";
@@ -360,7 +361,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_WOOLANG_LIB", "libwoo32_debug")
                     ->replace("$$JE_POSTFIX", "32_debug"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=DEBUG",
-                built_command = "/Build Debug",
+                built_command = "-p:Configuration=Debug",
             },
             ["win32_release_x86"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x86",
@@ -369,7 +370,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_WOOLANG_LIB", "libwoo32")
                     ->replace("$$JE_POSTFIX", "32"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=RELEASE",
-                built_command = "/Build Release",
+                built_command = "-p:Configuration=Release",
             },
             ["win32_debug_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_debug_x64",
@@ -378,7 +379,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_WOOLANG_LIB", "libwoo_debug")
                     ->replace("$$JE_POSTFIX", "_debug"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=DEBUG",
-                built_command = "/Build Debug",
+                built_command = "-p:Configuration=Debug",
             },
             ["win32_release_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x64",
@@ -387,7 +388,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_WOOLANG_LIB", "libwoo")
                     ->replace("$$JE_POSTFIX", ""),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=RELEASE",
-                built_command = "/Build Release",
+                built_command = "-p:Configuration=Release",
             } 
         };
 
@@ -406,6 +407,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
 
     using compile_context = struct {
         mut display_msg : string,
+        mut massive_msg : option<string>,
         mut progress    : int,
         mut show        : bool,
         mut compile_thread  : option<std::thread>,
@@ -421,11 +423,24 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
             show = true,
             compile_thread = option::none,
             compile_result = option::none,
+            massive_msg = option::none,
             };
         je::gui::launch(func(){
-            Begin(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref context.show);
+            Begin(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref context.show);
                 Text(F"正在编译C++模块：{self.name}");
                 Text(context.display_msg);
+                
+                match (context.massive_msg)
+                {
+                value(msg)?
+                {
+                    let mut w = 0., mut h = 0.;
+                    GetContentRegionAvail(ref w, ref h);
+                    InputTextMultiline("##", msg, w, h);
+                }
+                none? ;
+                }
+
                 ProgressBar(context.progress: real / 100.);
             End();
             if (context.show)
@@ -438,38 +453,47 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
             {
                 match (self->_compile(config, context))
                 {
-                ok(compile_result)?
-                    match(compile_result)
-                    {
-                    ok(_)?
-                    {
-                        // 起个协程同步去更新一下
-                        je::gui::launch(
-                            func(){
-                                let proj = editor::Project::GetCurrentProject();
-                                let dump_worlds = proj->DumpAllWorlds();
+                ok(_)?
+                {
+                    // 起个协程同步去更新一下
+                    je::gui::launch(
+                        func(){
+                            let proj = editor::Project::GetCurrentProject();
+                            let dump_worlds = proj->DumpAllWorlds();
 
-                                proj->CloseAllWorlds();
+                            proj->CloseAllWorlds();
 
-                                self.module_instance = 
-                                    self.module_instance
-                                        ->map(\m: handle = je::editor::unload_module(m);)
-                                        ->bind(\_: anything = option::none;);
+                            // 这里的操作非常重要，需要确保全部世界已经被完全正确地关闭，
+                            // 否则如果有世界在卸载模块之后才执行清理操作，就有可能发生调用到已经不再有效的析构
+                            // 函数。这玩意儿非常恐怖，因此在这里暂时创建一个临时世界，让gui协程能继续运作，然后
+                            // 这里yield一下，保证一切按部就班
 
-                                // 编译成功，更新文件到runtime
-                                self->update_library_of_platform(config);
+                            let fakeworld = je::universe::current()->create_world();
+                            fakeworld->rend();
 
-                                // 加载模块！
-                                assert(self->load_library_of_platform(config)->has);
+                            std::yield();
+                            std::yield();
+                            std::yield(); // 玄学，来三下
 
-                                proj->RestoreAllWorlds(dump_worlds);
+                            self.module_instance = 
+                                self.module_instance
+                                    ->map(\m: handle = je::editor::unload_module(m);)
+                                    ->bind(\_: anything = option::none;);
 
-                                return FormAction::Close;
-                            },() );
-                        
-                    }
-                    err(_)?;
-                    }
+                            // 编译成功，更新文件到runtime
+                            self->update_library_of_platform(config);
+
+                            // 加载模块！
+                            assert(self->load_library_of_platform(config)->has);
+
+                            // 关掉这个临时的世界
+                            fakeworld->close();
+
+                            proj->RestoreAllWorlds(dump_worlds);
+
+                            return FormAction::Close;
+                        },() );
+                }
                 err(_)?;
                 }
             }));
@@ -601,39 +625,28 @@ $$REGISTER_SYSTEM_TYPES
 
         delete(msvc_compile_result_path);
 
-        let build_command = F"{fuck_windows_cmd(MSVC_PATH)} {msvc_proj_path} {conf->val.built_command} /out {fuck_windows_cmd(msvc_compile_result_path)} && echo Finished";
+        let build_command = F"{fuck_windows_cmd(MSVC_PATH)} {msvc_proj_path} {conf->val.built_command} -v:quiet -fl -flp:logfile={fuck_windows_cmd(msvc_compile_result_path)} && echo Finished";
 
         context.display_msg = F"正在构建二进制文件\n{build_command}";
         context.progress = 45;
 
-        if (open(build_command) != 0)
+        let compile_result_statu_code = open(build_command);
+        let compile_result = readall(msvc_compile_result_path);
+
+        context.massive_msg = option::value(compile_result->valor("没有找到编译日志，查看控制台获取更多信息"));
+
+        if (compile_result_statu_code != 0)
         {
             context.display_msg = "C++编译失败";
             return result::err(context.display_msg);
         }
+        
+        context.display_msg = F"编译完成";
+        context.progress = 100;
 
-        while(true)
-        {
-            std::sleep(1.);
+        current_je_proj.native_modules->get_or_set_default(self.path, self);
 
-            let compile_result = readall(msvc_compile_result_path);
-            if (!compile_result->has)
-                continue;
-
-            context.progress = 100;
-
-            if (compile_result->val->find("error") == -1)
-            {
-                current_je_proj.native_modules->get(self.path)
-                    ->or(\ = current_je_proj.native_modules->set(self.path, self););
-
-                context.display_msg = F"编译完成\n{compile_result->val}";
-                return result::ok(result::ok(context.display_msg));
-            }
-            context.display_msg = F"编译失败\n{compile_result->val}";
-            return result::ok(result::err(context.display_msg));
-        }
-        std::panic("Should not be here.");
+        return result::ok(context.display_msg);
     }
 
 }

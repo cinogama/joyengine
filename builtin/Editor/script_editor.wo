@@ -12,16 +12,16 @@ public func Editor_ScriptEditor(ref open:bool)
 
     Begin("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
 
-    static let textbuf = TextBuffer(
+    static let mut textbuf = 
 @"import woo.std;
 import je;
 
 je::log("Helloworld, JoyEngine.");
-"@);
+"@;
 
     if (Button("执行"))
     {
-        let src = textbuf->get();
+        let src = textbuf;
         let vm = std::vm();
         if (!vm->load_source("je/editor_runtime/editor_script.wo", src))
             // Msgout!
@@ -31,7 +31,7 @@ je::log("Helloworld, JoyEngine.");
         vm->close();
     }
 
-    InputTextMultiline("##", textbuf, 500.0, 300.0);
+    InputTextMultiline("##", ref textbuf, 500.0, 300.0);
 
     End();
 
