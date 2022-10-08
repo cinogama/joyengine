@@ -290,7 +290,15 @@ WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_get_editing_entity(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_option_ptr(vm, (void*)jedbg_get_editing_entity());
+    if (const jeecs::game_entity* cur_entity = jedbg_get_editing_entity())
+    {
+        jeecs::game_entity* entity = new jeecs::game_entity(*cur_entity);
+        return wo_ret_option_gchandle(vm, entity, nullptr,
+            [](void* entity_ptr) {
+                delete (jeecs::game_entity*)entity_ptr;
+            });
+    }
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_set_editing_entity(wo_vm vm, wo_value args, size_t argc)
