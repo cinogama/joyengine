@@ -51,9 +51,9 @@ namespace editor::Project
         {
             using je::filesys;
 
-            let real_saving_path = je::filesys::isdir(path) 
+            let real_saving_path = normalize(je::filesys::isdir(path) 
                 ? F"{path}/{self.instance->editor::name()}.jeworld" 
-                | path ;
+                | path);
             let save_request =
                 self.path
                     ->map(\oldpath: string = 
@@ -84,6 +84,7 @@ namespace editor::Project
             generic::askbox("保存世界？", ask_msg, func(){
                 self.path = option::value(real_saving_path);
                 self->Save();
+                Browser::force_update();
             });
         }
     }

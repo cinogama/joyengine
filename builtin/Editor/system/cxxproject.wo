@@ -426,7 +426,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
             massive_msg = option::none,
             };
         je::gui::launch(func(){
-            Begin(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref context.show);
+            Begin(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None, ref context.show);
                 Text(F"正在编译C++模块：{self.name}");
                 Text(context.display_msg);
                 

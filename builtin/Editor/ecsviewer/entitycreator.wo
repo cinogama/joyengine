@@ -248,7 +248,7 @@ namespace editor::EntityCreator
 
         let mut open = true;
         Begin(context.edit_entity->has ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
-            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
    
             if (menu_bar(context))
             {
