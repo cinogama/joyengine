@@ -889,7 +889,8 @@ WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)
         updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf,
             ImVec2(wo_float(args + 2), wo_float(args + 3)));
     }
-    updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf);
+    else
+        updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf);
 
     if (updated)
         wo_set_string(args + 1, buf.c_str());

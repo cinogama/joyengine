@@ -165,8 +165,8 @@ public using CxxProject = struct {
             }
             if (!writeall(F"{aim_cmake_dir}/CMakeLists.txt", 
                 config.cmake
-                    ->replace("$$JEMODULE_PROJECT_NAME", name)
-                    ->replace("$$JEMODULE_BUILD_CONFIG", config.config)))
+                    ->replace("$$JEMODULE_PROJECT_NAME$$", name)
+                    ->replace("$$JEMODULE_BUILD_CONFIG$$", config.config)))
             {
                 delete(cxx_proj_path);
                 return result::err(F"无法写入'{aim_cmake_dir}/CMakeLists.txt'");
@@ -178,7 +178,7 @@ public using CxxProject = struct {
 @"# C++ Module for JoyECS
 cmake_minimum_required (VERSION 3.8)
 
-project ("$$JEMODULE_PROJECT_NAME")
+project ("$$JEMODULE_PROJECT_NAME$$")
 set(CMAKE_CXX_STANDARD 17)
 
 if(MSVC) 
@@ -209,7 +209,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         if (!writeall(F"{cxx_proj_path}CMakeLists.txt", 
                 F"{cmake_head}\n{cmake_subdirs->val}\n"
-                    ->replace("$$JEMODULE_PROJECT_NAME", name)))
+                    ->replace("$$JEMODULE_PROJECT_NAME$$", name)))
         {
             delete(cxx_proj_path);
             return result::err(F"无法写入'{cxx_proj_path}CMakeLists.txt'");
@@ -238,10 +238,10 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         }
         return option::none;
     }
-    func load_library_of_platform(self: CxxProject, platform: string)
+    func load_library_of_platform(self: CxxProject, config: string)
     {
         assert(!self.module_instance->has);
-        match (search_file_in(get_current_runtime_path(F"{self.path}runtime/{platform}")->val, "dll"))
+        match (search_file_in(get_current_runtime_path(self->get_runtime_path(config))->val, "dll"))
         {
         value(p)? 
             return self.module_instance = je::editor::load_module(self.name, p);
@@ -284,17 +284,21 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         return normalize(newest_path);
     }
+    func get_runtime_path(self: CxxProject, config: string)
+    {
+        return F"{self.path}runtime/{config}/";
+    }
     func update_library_of_platform(self: CxxProject, config: string)
     {
         using je::filesys;
 
         // 获取编译出来的二进制，移动到一个统一的位置
-        if (!exist(F"{self.path}runtime/{config}"))
-            mkdir(F"{self.path}runtime/{config}");
+        if (!exist(self->get_runtime_path(config)))
+            mkdir(self->get_runtime_path(config));
 
-        assert(exist(F"{self.path}runtime/{config}"));
+        assert(exist(self->get_runtime_path(config)));
 
-        let newest_runtime_path = get_newest_runtime_path(F"{self.path}runtime/{config}");
+        let newest_runtime_path = get_newest_runtime_path(self->get_runtime_path(config));
 
         match (search_file_in(F"{self.path}build/{config}", "dll"))
         {
@@ -344,10 +348,30 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         current_je_proj.native_modules->get(created_module.path)
                     ->or(\ = current_je_proj.native_modules->set(created_module.path, created_module););
 
-        je::logfatal("TODO; 此处清理之前的编译产物");
+        let config = je::editor::platform();
 
-        if (!created_module->load_library_of_platform(je::editor::platform())->has)
-            return result::err(F"无法为当前运行时{je::editor::platform()}加载模块，请检查");
+        // 获取最新的模块版本，将其保留并重命名为0，删除其他全部版本
+        get_current_runtime_id(created_module->get_runtime_path(config))
+            ->map(\newest_id: int = 
+                childs(created_module->get_runtime_path(config))
+                    ->map(\child_paths: array<string> =
+                        child_paths
+                            ->forall(\path: string = !isdir(path) || newest_id != filename(path): int;)
+                            ->trans(\path: string = delete(path);)
+                    ;)
+            ;)
+        ;
+        get_current_runtime_path(created_module->get_runtime_path(config))
+            ->map(\dllpath: string = 
+                filename(dllpath) == "0" 
+                ? result::ok("无需清理旧的模块")
+                | move(dllpath, F"{created_module->get_runtime_path(config)}0");)
+            ->or(\ = result::err("清理模块失败，找不到最新的模块");)
+            ->val
+            ->or(\errmsg: string = std::panic(errmsg););
+
+        if (!created_module->load_library_of_platform(config)->has)
+            return result::err(F"无法为当前运行时{config}加载模块，请检查");
 
         return result::ok(created_module);
     }
@@ -355,34 +379,34 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     func generate_cmake_doc(conf: string)=> result<CxxProjectBuildConfig, string>
     {
         let win32_cmake = @"
-# Build config for $$JEMODULE_PROJECT_NAME
+# Build config for $$JEMODULE_PROJECT_NAME$$
 cmake_minimum_required (VERSION 3.8)
 
 include_directories("../../engine/include")
 include_directories("../../systems")
 include_directories("../../components")
 
-find_library(joyengine_lib $$JE_ENGINE_LIB ../../engine/library)
-find_library(woolang_lib $$JE_WOOLANG_LIB ../../engine/library)
+find_library(joyengine_lib $$JE_ENGINE_LIB$$ ../../engine/library)
+find_library(woolang_lib $$JE_WOOLANG_LIB$$ ../../engine/library)
 
 file(GLOB_RECURSE module_systems_sources ../../systems/*.cpp)
 file(GLOB_RECURSE module_systems_headers ../../systems/*.hpp)
 file(GLOB_RECURSE module_components_headers ../../components/*.hpp)        
 
-add_library($$JEMODULE_PROJECT_NAME SHARED 
+add_library($$JEMODULE_PROJECT_NAME$$ SHARED 
     ${module_systems_sources}
     ${module_systems_headers}
     ${module_components_headers}
     ../../main.cpp
     ../../loader.hpp)
 
-set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME)
-set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES PREFIX "")
+set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME$$)
+set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES PREFIX "")
 
-set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES RELEASE_POSTFIX "$$JE_POSTFIX")
-set_target_properties($$JEMODULE_PROJECT_NAME PROPERTIES DEBUG_POSTFIX "$$JE_POSTFIX")
+set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES RELEASE_POSTFIX "$$JE_POSTFIX$$")
+set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES DEBUG_POSTFIX "$$JE_POSTFIX$$")
 
-target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
+target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
         "@;
         
         // 根据给定的配置和项目路径等信息，生成CMake文档
@@ -390,36 +414,36 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
             ["win32_debug_x86"] = CxxProjectBuildConfig{ 
                 config = "win32_debug_x86",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB",  "libjoyecs32_debug")
-                    ->replace("$$JE_WOOLANG_LIB", "libwoo32_debug")
-                    ->replace("$$JE_POSTFIX", "32_debug"),
+                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32_debug")
+                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo32_debug")
+                    ->replace("$$JE_POSTFIX$$", "32_debug"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=DEBUG",
                 built_command = "-p:Configuration=Debug",
             },
             ["win32_release_x86"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x86",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB",  "libjoyecs32")
-                    ->replace("$$JE_WOOLANG_LIB", "libwoo32")
-                    ->replace("$$JE_POSTFIX", "32"),
+                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32")
+                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo32")
+                    ->replace("$$JE_POSTFIX$$", "32"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=RELEASE",
                 built_command = "-p:Configuration=Release",
             },
             ["win32_debug_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_debug_x64",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB",  "libjoyecs_debug")
-                    ->replace("$$JE_WOOLANG_LIB", "libwoo_debug")
-                    ->replace("$$JE_POSTFIX", "_debug"),
+                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs_debug")
+                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo_debug")
+                    ->replace("$$JE_POSTFIX$$", "_debug"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=DEBUG",
                 built_command = "-p:Configuration=Debug",
             },
             ["win32_release_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x64",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB",  "libjoyecs")
-                    ->replace("$$JE_WOOLANG_LIB", "libwoo")
-                    ->replace("$$JE_POSTFIX", ""),
+                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs")
+                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo")
+                    ->replace("$$JE_POSTFIX$$", ""),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=RELEASE",
                 built_command = "-p:Configuration=Release",
             } 
@@ -584,8 +608,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME ${joyengine_lib} ${woolang_lib})
 
 // Headers of components/systems
 // E.G. #include "ExampleComponent.hpp"
-$$INCLUDE_COMPONENT_HEADERS
-$$INCLUDE_SYSTEM_HEADERS
+$$INCLUDE_COMPONENT_HEADERS$$
+$$INCLUDE_SYSTEM_HEADERS$$
 
 namespace jemodule
 {
@@ -593,8 +617,8 @@ namespace jemodule
     {
         // Here to load components/system
         // e.g. jeecs::typing::type_info::of<Module::ExampleComponent>("Module::ExampleComponent");
-$$REGISTER_COMPONENT_TYPES
-$$REGISTER_SYSTEM_TYPES
+$$REGISTER_COMPONENT_TYPES$$
+$$REGISTER_SYSTEM_TYPES$$
     }
 }
         "@;
@@ -624,10 +648,10 @@ $$REGISTER_SYSTEM_TYPES
 
         let loader_src = 
             loader_header
-                ->replace("$$INCLUDE_COMPONENT_HEADERS", import_component_headers)
-                ->replace("$$INCLUDE_SYSTEM_HEADERS", import_system_headers)
-                ->replace("$$REGISTER_COMPONENT_TYPES", register_component_types)
-                ->replace("$$REGISTER_SYSTEM_TYPES", register_system_types);
+                ->replace("$$INCLUDE_COMPONENT_HEADERS$$", import_component_headers)
+                ->replace("$$INCLUDE_SYSTEM_HEADERS$$", import_system_headers)
+                ->replace("$$REGISTER_COMPONENT_TYPES$$", register_component_types)
+                ->replace("$$REGISTER_SYSTEM_TYPES$$", register_system_types);
 
         if (!writeall(F"{self.path}loader.hpp", loader_src))
         {

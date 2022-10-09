@@ -378,11 +378,11 @@ public func frag(vf: v2f)
                                     let system_header = 
 @"#include "jeecs.hpp"
 
-namespace $$MODULE_NAME
+namespace $$MODULE_NAME$$
 {
-    struct $$SYSTEM_NAME : public jeecs::game_system
+    struct $$SYSTEM_NAME$$ : public jeecs::game_system
     {
-        $$SYSTEM_NAME(jeecs::game_world world);
+        $$SYSTEM_NAME$$(jeecs::game_world world);
         void PreUpdate();
         void Update();
         void LateUpdate();
@@ -390,30 +390,30 @@ namespace $$MODULE_NAME
 }
 "@;
                                     let system_src = 
-@"#include "$$SYSTEM_NAME.hpp"
+@"#include "$$SYSTEM_NAME$$.hpp"
 
 using namespace std;
 using namespace jeecs;
 
-namespace $$MODULE_NAME
+namespace $$MODULE_NAME$$
 {
-    $$SYSTEM_NAME::$$SYSTEM_NAME(game_world world)
+    $$SYSTEM_NAME$$::$$SYSTEM_NAME$$(game_world world)
         : game_system(world)
     {
         
     }
 
-    void $$SYSTEM_NAME::PreUpdate()
+    void $$SYSTEM_NAME$$::PreUpdate()
     {
 
     }
 
-    void $$SYSTEM_NAME::Update()
+    void $$SYSTEM_NAME$$::Update()
     {
 
     }
 
-    void $$SYSTEM_NAME::LateUpdate()
+    void $$SYSTEM_NAME$$::LateUpdate()
     {
 
     }
@@ -424,13 +424,13 @@ namespace $$MODULE_NAME
 
                                     if (!je::file::writeall(F"{path.path}systems/{system_name}.hpp", 
                                         system_header
-                                            ->replace("$$MODULE_NAME", module_name)
-                                            ->replace("$$SYSTEM_NAME", system_name))
+                                            ->replace("$$MODULE_NAME$$", module_name)
+                                            ->replace("$$SYSTEM_NAME$$", system_name))
                                         ||
                                         !je::file::writeall(F"{path.path}systems/{system_name}.cpp", 
                                         system_src
-                                            ->replace("$$MODULE_NAME", module_name)
-                                            ->replace("$$SYSTEM_NAME", system_name))
+                                            ->replace("$$MODULE_NAME$$", module_name)
+                                            ->replace("$$SYSTEM_NAME$$", system_name))
                                         )
                                     {
                                         je::filesys::delete(F"{path.path}systems/{system_name}.hpp");
@@ -513,16 +513,16 @@ namespace $$MODULE_NAME
                                     let component_header = 
 @"#include "jeecs.hpp"
 
-namespace $$MODULE_NAME
+namespace $$MODULE_NAME$$
 {
-    struct $$COMPONENT_NAME
+    struct $$COMPONENT_NAME$$
     {
         static void JERefRegsiter()
         {
             using namespace jeecs;
 
             // Register member in this function.
-            // e.g. typing::register_member(&$$COMPONENT_NAME::member, "member");
+            // e.g. typing::register_member(&$$COMPONENT_NAME$$::member, "member");
         }
     };
 }
@@ -532,8 +532,8 @@ namespace $$MODULE_NAME
 
                                     if (!je::file::writeall(F"{path.path}components/{component_name}.hpp", 
                                         component_header
-                                            ->replace("$$MODULE_NAME", module_name)
-                                            ->replace("$$COMPONENT_NAME", component_name))
+                                            ->replace("$$MODULE_NAME$$", module_name)
+                                            ->replace("$$COMPONENT_NAME$$", component_name))
                                         )
                                     {
                                         je::filesys::delete(F"{path.path}components/{component_name}.hpp");
