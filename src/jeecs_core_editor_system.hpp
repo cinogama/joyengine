@@ -46,6 +46,8 @@ namespace jeecs
 
     struct DefaultEditorSystem : public game_system
     {
+        inline static bool _editor_enabled = true;
+
         math::vec3 _begin_drag;
         bool _drag_viewing = false;
 
@@ -437,7 +439,8 @@ namespace jeecs
             _inputs.r_buttom_click = input::first_down(_inputs.r_buttom);
             _inputs.l_buttom_double_click = input::double_click(_inputs.l_buttom);
 
-            select_from(get_world())
+            if (_editor_enabled)
+                select_from(get_world())
                 // Move walker(root)
                 .exec(&DefaultEditorSystem::MoveWalker).contain<Editor::EditorWalker>().except<Camera::Projection>()
                 // Move walker(camera)
@@ -474,8 +477,6 @@ namespace jeecs
 
             selected_list.clear();
         }
-
-
     };
 }
 
@@ -667,4 +668,9 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
         }
     }
     return wo_ret_bool(vm, ok);
+}
+WO_API wo_api wojeapi_setable_editor_system(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::DefaultEditorSystem::_editor_enabled = wo_bool(args + 0);
+    return wo_ret_void(vm);
 }

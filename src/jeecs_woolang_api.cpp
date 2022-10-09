@@ -1239,6 +1239,9 @@ namespace je
 
         extern("libjoyecs", "wojeapi_unload_module")
         public func unload_module(module: handle)=> void;
+
+        extern("libjoyecs", "wojeapi_setable_editor_system")
+        public func enable_editor_system(able: bool)=> void;
     }
 
     extern("libjoyecs", "wojeapi_log")
@@ -1262,7 +1265,7 @@ namespace je
         L_SHIFT = 256,
         L_CTRL,
         L_ALT,
-        TAB, ENTER, ECS, BACKSPACE,
+        TAB, ENTER, ESC, BACKSPACE,
 
         MOUSE_L_BUTTION = 512,
         MOUSE_M_BUTTION,

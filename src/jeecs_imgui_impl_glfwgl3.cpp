@@ -348,6 +348,10 @@ R"(
     extern("libjoyecs", "je_gui_set_next_item_open")
     public func SetNextItemOpen(open: bool)=> void;
 
+    //
+    extern("libjoyecs", "je_gui_focus_on_any_windows")
+    public func AnyWindowsFocused()=> bool;
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     extern("libjoyecs", "je_gui_launch")
@@ -385,6 +389,12 @@ R"(
 
 )";
 
+bool any_window_focused_on = false;
+bool next_frame_any_window_focused_on = false;
+WO_API wo_api je_gui_focus_on_any_windows(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, any_window_focused_on || ImGui::GetFocusID() != 0);
+}
 WO_API wo_api je_gui_begin_drag_drop_source(wo_vm vm, wo_value args, size_t argc)
 {
     bool result;
@@ -615,16 +625,22 @@ WO_API wo_api je_gui_job_vm_handle(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_begin(wo_vm vm, wo_value args, size_t argc)
 {
+    bool windows_flag = false;
     if (argc == 3)
     {
         bool showing = true;
-        ImGui::Begin(wo_string(args), &showing, wo_int(args + 1));
+        windows_flag = ImGui::Begin(wo_string(args), &showing, wo_int(args + 1));
         wo_set_bool(args + 2, showing);
-        return wo_ret_bool(vm, showing);
     }
-    if (argc == 2)
-        return wo_ret_bool(vm, ImGui::Begin(wo_string(args), 0, wo_int(args + 1)));
-    return wo_ret_bool(vm, ImGui::Begin(wo_string(args)));
+    else if (argc == 2)
+        windows_flag = ImGui::Begin(wo_string(args), 0, wo_int(args + 1));
+    else
+        windows_flag = ImGui::Begin(wo_string(args));
+
+    if (ImGui::IsWindowFocused())
+        next_frame_any_window_focused_on = true;
+
+    return wo_ret_bool(vm, windows_flag);
 }
 WO_API wo_api je_gui_end(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1011,6 +1027,9 @@ void jegui_update()
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+    any_window_focused_on = next_frame_any_window_focused_on;
+    next_frame_any_window_focused_on = false;
 
     auto chain = _wo_job_list.pick_all();
     while (chain)

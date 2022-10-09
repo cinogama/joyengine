@@ -64,6 +64,10 @@ shortcut::register([je::keycode::L_CTRL, je::keycode::S,], func(){
         launch(MsgBox, ("保存项目失败", msg));
     }
 });
+shortcut::register([je::keycode::L_CTRL, je::keycode::ESC,], func(){
+    if (GameDebug::is_debugging())
+        GameDebug::stop_debug();
+});
 
 namespace logmgr
 {
@@ -142,9 +146,48 @@ namespace logmgr
                 EndMenu();
             }
         }
-
-        
         return FormAction::Nothing;
+    }
+}
+
+namespace GameDebug
+{
+    let mut edit_context = option::none: 
+        option<typeof(std::declval:<editor::Project>()->DumpAllWorlds)>;
+
+    func is_debugging()
+    {
+        return edit_context->has;
+    }
+    func stop_debug()
+    {
+        match (edit_context)
+        {  
+        value(dump_worlds)?
+        {
+            let p = editor::Project::GetCurrentProject();
+            edit_context = option::none;
+            p->CloseAllWorlds();
+
+            p->RestoreAllWorlds(dump_worlds);
+        }
+        none? 
+            std::panic("编辑器未处于调整状态");
+        }
+    }
+    func start_debug()
+    {
+        match (edit_context)
+        {  
+        none?
+        {
+            let p = editor::Project::GetCurrentProject();
+            edit_context = option::value(p->DumpAllWorlds);
+            p->StartDebug();
+        }
+        value(_)? 
+            std::panic("不可重复调试");
+        }
     }
 }
 
@@ -158,135 +201,142 @@ func Editor_MainMenuBar()
     // 刷新检测热键
     shortcut::update();
 
+    je::editor::enable_editor_system(!AnyWindowsFocused());
+
     // 拉取一下log信息
     let last_log_info = logmgr::update_buffers();
 
-    BeginMainMenuBar();
-    if (BeginMenu("JoyEngine"))
+    if (!GameDebug::is_debugging())
     {
-        MenuItem("新建");
-        MenuItem("打开");
-        if (MenuItem("保存", "Ctrl + S"))
-            shortcut::active([je::keycode::L_CTRL, je::keycode::S]);
+        BeginMainMenuBar();
+        if (BeginMenu("JoyEngine"))
+        {
+            MenuItem("新建");
+            MenuItem("打开");
+            if (MenuItem("保存", "Ctrl + S"))
+                shortcut::active([je::keycode::L_CTRL, je::keycode::S]);
 
-        Separator();
-        if (MenuItem("退出"))
-            checkbox("确认退出", "即将关闭JoyEngine，是否需要保存项目？", 
-            // 选择是，执行保存操作，完成后退出
-            func(){
-                match(Project::GetCurrentProject()->SaveProject())
+            Separator();
+            if (MenuItem("退出"))
+                checkbox("确认退出", "即将关闭JoyEngine，是否需要保存项目？", 
+                // 选择是，执行保存操作，完成后退出
+                func(){
+                    match(Project::GetCurrentProject()->SaveProject())
+                    {
+                    ok(_)?
+                        je::exit();
+                    err(msg)?
+                        launch(MsgBox, ("保存项目失败", msg));
+                    }
+                }, 
+                // 选择否，直接退出
+                je::exit);
+
+            EndMenu();
+        }
+        if (BeginMenu("编辑"))
+        {
+            if (MenuItem("调试运行", "使用Ctrl+Esc终止调试"))
+                GameDebug::start_debug();
+            EndMenu();
+        }
+        if (BeginMenu("视图"))
+        {
+            if (MenuItem("世界列表", "Ctrl + W"))
+                shortcut::active([je::keycode::L_CTRL, je::keycode::W]);
+            if (MenuItem("层级面板", "Ctrl + E"))
+                shortcut::active([je::keycode::L_CTRL, je::keycode::E]);
+            if (MenuItem("检视面板", "Ctrl + I"))
+                shortcut::active([je::keycode::L_CTRL, je::keycode::I]);
+            Separator();
+            if (MenuItem("文件管理器", "Ctrl + B"))
+                shortcut::active([je::keycode::L_CTRL, je::keycode::B]);
+
+
+            EndMenu();
+        }
+         if (BeginMenu("脚本"))
+        {
+            static let mut editor_opened = false;
+
+            if (MenuItem("打开快捷编辑器", ref editor_opened, true) && editor_opened)
+                launch(Editor_ScriptEditor, (ref editor_opened,));
+
+            EndMenu();
+        }
+        if (BeginMenu("帮助"))
+        {
+            static let mut about_shown = false;
+            if (MenuItem("关于", ref about_shown, true) && about_shown)
+                launch(Editor_Welcome, (ref about_shown,));
+
+            EndMenu();
+        }
+        if (BeginMenu("DEBUG"))
+        {
+            if (MenuItem("关闭主菜单栏"))
+                show_main_menu = false;
+
+            if (MenuItem("序列化当前世界"))
+                match (je::world::rend())
                 {
-                ok(_)?
-                    je::exit();
-                err(msg)?
-                    launch(MsgBox, ("保存项目失败", msg));
+                    value(w)?
+                        std::println(
+                            editor::Serialize::save_project_world(
+                                Project::GetCurrentProject()->FindWorld(w)->val()));
+                    none?
+                        std::println("序列化个锤子！没有世界！");
                 }
-            }, 
-            // 选择否，直接退出
-            je::exit);
-
-        EndMenu();
-    }
-    if (BeginMenu("编辑", false))
-    {
-        EndMenu();
-    }
-    if (BeginMenu("视图"))
-    {
-        if (MenuItem("世界列表", "Ctrl + W"))
-            shortcut::active([je::keycode::L_CTRL, je::keycode::W]);
-        if (MenuItem("层级面板", "Ctrl + E"))
-            shortcut::active([je::keycode::L_CTRL, je::keycode::E]);
-        if (MenuItem("检视面板", "Ctrl + I"))
-            shortcut::active([je::keycode::L_CTRL, je::keycode::I]);
-        Separator();
-        if (MenuItem("文件管理器", "Ctrl + B"))
-            shortcut::active([je::keycode::L_CTRL, je::keycode::B]);
-
-
-        EndMenu();
-    }
-     if (BeginMenu("脚本"))
-    {
-        static let mut editor_opened = false;
-
-        if (MenuItem("打开快捷编辑器", ref editor_opened, true) && editor_opened)
-            launch(Editor_ScriptEditor, (ref editor_opened,));
-
-        EndMenu();
-    }
-    if (BeginMenu("帮助"))
-    {
-        static let mut about_shown = false;
-        if (MenuItem("关于", ref about_shown, true) && about_shown)
-            launch(Editor_Welcome, (ref about_shown,));
-
-        EndMenu();
-    }
-    if (BeginMenu("DEBUG"))
-    {
-        if (MenuItem("关闭主菜单栏"))
-            show_main_menu = false;
-
-        if (MenuItem("序列化当前世界"))
-            match (je::world::rend())
+            if (MenuItem("内存泄漏测试（组件增删改查）"))
+                launch(test::memory_leak::ComponentModify::show, ());
+            if (MenuItem("内存泄漏测试（世界生命周期）"))
+                launch(test::memory_leak::WorldLifecycle::show, ());
+            if (MenuItem("内存泄漏测试（图形系统资源）"))
+                launch(test::memory_leak::GraphicResource::show, ());
+            if (MenuItem("启用全屏"))
+                je::editor::restart_graphic_interface("DEBUG",
+                    1920, 1080, 60, true);
+            if (MenuItem("还原窗口"))
             {
-                value(w)?
-                    std::println(
-                        editor::Serialize::save_project_world(
-                            Project::GetCurrentProject()->FindWorld(w)->val()));
-                none?
-                    std::println("序列化个锤子！没有世界！");
+                let (win_width, win_height) = je::input::windowsize();
+                je::editor::restart_graphic_interface("DEBUG",
+                    win_width, win_height, 60, false);
             }
-        if (MenuItem("内存泄漏测试（组件增删改查）"))
-            launch(test::memory_leak::ComponentModify::show, ());
-        if (MenuItem("内存泄漏测试（世界生命周期）"))
-            launch(test::memory_leak::WorldLifecycle::show, ());
-        if (MenuItem("内存泄漏测试（图形系统资源）"))
-            launch(test::memory_leak::GraphicResource::show, ());
-        if (MenuItem("启用全屏"))
-            je::editor::restart_graphic_interface("DEBUG",
-                1920, 1080, 60, true);
-        if (MenuItem("还原窗口"))
-        {
-            let (win_width, win_height) = je::input::windowsize();
-            je::editor::restart_graphic_interface("DEBUG",
-                win_width, win_height, 60, false);
+            if (MenuItem("重载全部世界"))
+            {
+                let proj = Project::GetCurrentProject();
+                let dat = proj->DumpAllWorlds();
+                proj->CloseAllWorlds();
+                proj->RestoreAllWorlds(dat);
+            }
+            let mut show_hiding_editor_entity = EntityList::get_enable_show_invisable_entity();
+            if (MenuItem("显示编辑器隐藏实体", ref show_hiding_editor_entity, true))
+            {
+                EntityList::set_enable_show_invisable_entity(show_hiding_editor_entity);
+            }
+            EndMenu();
         }
-        if (MenuItem("重载全部世界"))
+        let (normal, info, warning, error, fatal) = logmgr::get_log_count();
+
+        // todo 这个返回一个元组的设计太蠢了
+        let msg = [("普通", normal), ("信息", info), ("警告", warning), ("错误", error), ("致命", fatal)]
+            ->forall(\msg: (string, int) = msg[1] > 0;)
+            ->trans(\msg: (string, int) = F"{msg[0]}:{msg[1]} ";)
+            ->reduce(\lmsg: string, rmsg: string = lmsg + rmsg;);
+
+        if (BeginMenu(msg->valor("暂无日志")->trim 
+            + last_log_info
+                ->map(\loginfo:(je::editor::loglevel, string)=
+                    F" [{logmgr::log_level_name[loginfo[0]]}: {loginfo[1]}]";)
+                ->valor("")
+                ->utils::ShortStringCutEnd(60)))
         {
-            let proj = Project::GetCurrentProject();
-            let dat = proj->DumpAllWorlds();
-            proj->CloseAllWorlds();
-            proj->RestoreAllWorlds(dat);
-        }
-        let mut show_hiding_editor_entity = EntityList::get_enable_show_invisable_entity();
-        if (MenuItem("显示编辑器隐藏实体", ref show_hiding_editor_entity, true))
-        {
-            EntityList::set_enable_show_invisable_entity(show_hiding_editor_entity);
-        }
-        EndMenu();
+            logmgr::show_log();
+            EndMenu();
+        } 
+
+        EndMainMenuBar();
     }
-    let (normal, info, warning, error, fatal) = logmgr::get_log_count();
-
-    // todo 这个返回一个元组的设计太蠢了
-    let msg = [("普通", normal), ("信息", info), ("警告", warning), ("错误", error), ("致命", fatal)]
-        ->forall(\msg: (string, int) = msg[1] > 0;)
-        ->trans(\msg: (string, int) = F"{msg[0]}:{msg[1]} ";)
-        ->reduce(\lmsg: string, rmsg: string = lmsg + rmsg;);
-
-    if (BeginMenu(msg->valor("暂无日志")->trim 
-        + last_log_info
-            ->map(\loginfo:(je::editor::loglevel, string)=
-                F" [{logmgr::log_level_name[loginfo[0]]}: {loginfo[1]}]";)
-            ->valor("")
-            ->utils::ShortStringCutEnd(60)))
-    {
-        logmgr::show_log();
-        EndMenu();
-    } 
-
-    EndMainMenuBar();
 
     if (!show_main_menu)
         return FormAction::Close;

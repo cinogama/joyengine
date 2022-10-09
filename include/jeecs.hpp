@@ -342,7 +342,7 @@ namespace jeecs
             L_SHIFT = 256,
             L_CTRL,
             L_ALT,
-            TAB, ENTER, ECS, BACKSPACE,
+            TAB, ENTER, ESC, BACKSPACE,
 
             MOUSE_L_BUTTION = 512,
             MOUSE_M_BUTTION,
