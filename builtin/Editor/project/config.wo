@@ -15,6 +15,7 @@ namespace editor
         editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
 
         native_modules : map<string /* path */, CxxProject>,
+        mut about_info : string,        // 无聊小功能，可以给项目加个关于信息，版权信息也可以写里面
     };
 }
 
@@ -265,6 +266,7 @@ namespace editor::Project
             editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
             worlds = []mut,
             native_modules = {}mut,
+            about_info = "此项目为默认项目，不可用于实际使用\n(C)Cinogama.",
         });
     }
 
@@ -277,6 +279,7 @@ namespace editor::Project
             editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,
             native_modules = {}mut,
+            about_info = "你可以在这里放一些对项目的描述信息\n(C)Copyright.",
         };
 
         if (create_file)
@@ -342,6 +345,9 @@ namespace editor::Project
 
             let window_info = data->get("window": dynamic, {}: dynamic) as map<dynamic, dynamic>;
             let window_size = window_info->get("size": dynamic, [640, 480]: dynamic) as array<dynamic>;
+            
+            proj.about_info = data->get("about_info": dynamic, "": dynamic) as string;
+
 
             // 加载自定义的图形和编辑时系统
             let graphic_system = data
@@ -443,6 +449,8 @@ namespace editor::Project
 
                 ["native_module"] = self.native_modules->unmapping
                     ->trans(\m: (string, anything) = m[0];): dynamic,
+
+                ["about_info"] = self.about_info: dynamic,
             };
 
             if (!je::file::writeall(F"{path}/{self.name}.jeproj4", project_dat: string))

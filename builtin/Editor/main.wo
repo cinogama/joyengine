@@ -267,9 +267,10 @@ func Editor_MainMenuBar()
         if (BeginMenu("帮助"))
         {
             static let mut about_shown = false;
+
             if (MenuItem("关于", ref about_shown, true) && about_shown)
                 launch(Editor_Welcome, (ref about_shown,));
-
+                    
             EndMenu();
         }
         if (BeginMenu("DEBUG"))
@@ -349,12 +350,22 @@ func Editor_Welcome(ref open: bool)
     if (!open)
         return FormAction::Close;
 
-    Begin("欢迎", WindowsAttribute::ImGuiWindowFlags_NoResize);
+    Begin("欢迎", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
     Text("欢迎使用JoyEngineECS.");
     Separator();
     Text("Copyright (C)Cinogama project. 2022.");
     Text("Powered by WooLang (C)Cinogama project. 2022.");
     Text("所使用的第三方库包括glew、glfw、imgui及stb的相关信息见版权页");
+
+    Separator();
+
+    Text("关于项目");
+    
+    let mut available_width = 0.;
+    GetContentRegionAvail(ref available_width, 0. /*不关心高度*/);
+
+    InputTextMultiline("##", editor::Project::GetCurrentProject().about_info, available_width, 200.0);
+
     if (Button("确认"))
         open = false;
     End();

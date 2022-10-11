@@ -174,7 +174,7 @@ namespace editor::Browser
                         where file_path = je::filesys::normalize(current_work_path) + filename;);
                 }
                 Separator();
-                if (BeginMenu(F"着色器脚本"))
+                if (BeginMenu("着色器脚本"))
                 {
                     let create_shader_at = func(shader_name: string, shader_src: string)
                     {
@@ -322,12 +322,32 @@ public func frag(vf: v2f)
                 value(mod)?
                     mod->update_compile(je::editor::platform());
                 none?
-                    je::logerr("此模块未被加载，TODO; 现场加载");
+                    generic::askbox("是否加载此模块？", 
+                        F"正在要求重新编译模块{path.path}，但此模块尚未被加载\n是否现在加载并重新编译？",
+                        func ()
+                        {
+                            match (CxxProject::load(path.path))
+                            {
+                            ok(mod)?
+                                mod->update_compile(je::editor::platform());
+                            err(reason)?
+                                generic::msgbox("加载模块失败", reason);
+                            }
+                        });
                 }
                     
             }
-            if (MenuItem(F"系统..."))
+            if (MenuItem(F"组件/系统..."))
             {
+                let components = je::filesys::childs(F"{path.path}components")
+                        ->okay
+                        ->map(\s: array<string> = s
+                             ->forall(\f: string = je::filesys::externname(f) == "hpp";)
+                             ->trans(\f: string = fname->sub(0, fname->len - 4)
+                                where fname = je::filesys::filename(f);)
+                            ;)
+                        ->valor([])
+                        ->tovec;
                 let systems = je::filesys::childs(F"{path.path}systems")
                     ->okay
                     ->map(\s: array<string> = s
@@ -337,6 +357,25 @@ public func frag(vf: v2f)
                         ;)
                     ->valor([])
                     ->tovec;
+
+                let display_usable_component = func(s: string)
+                {
+                    Selectable(s);
+                    if (BeginPopupContextItem())
+                    {
+                        let file_path = F"{path.path}components/{s}.hpp";
+
+                        if (MenuItem("在VSCode中打开"))
+                            je::filesys::open(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
+                        if (MenuItem("移除此组件"))
+                            generic::askbox("确认移除组件？", F"是否从模块{je::filesys::filename(path.path)}中移除组件{s}?",
+                                func(){
+                                    components->remove(components->find(s));
+                                    je::filesys::delete(file_path);
+                                });
+                        EndPopup();
+                    }
+                };
 
                 let display_usable_system = func(s: string)
                 {
@@ -360,22 +399,24 @@ public func frag(vf: v2f)
 
                 launch(func(mut open: bool)
                 {
-                    Begin(F"模块{je::filesys::filename(path.path)}可用系统", 
+                    Begin(F"模块{je::filesys::filename(path.path)}当前组件和系统", 
                         WindowsAttribute::ImGuiWindowFlags_MenuBar
                         + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
                     if (BeginMenuBar())
                     {
-                        if (MenuItem("创建新系统"))
-                            generic::inputbox("创建新系统", F"为模块{je::filesys::filename(path.path)}创建系统", "NewSystem",
-                                func(name: string)
-                                {
-                                    if (systems->find(name) != -1)
+                        if (BeginMenu("创建..."))
+                        {
+                            if (MenuItem("新系统"))
+                                generic::inputbox("创建新系统", F"为模块{je::filesys::filename(path.path)}创建系统", "NewSystem",
+                                    func(name: string)
                                     {
-                                        generic::msgbox("创建系统失败", F"模块{je::filesys::filename(path.path)}已经存在一个同名系统");
-                                        return;
-                                    }
+                                        if (systems->find(name) != -1)
+                                        {
+                                            generic::msgbox("创建系统失败", F"模块{je::filesys::filename(path.path)}已经存在一个同名系统");
+                                            return;
+                                        }
 
-                                    let system_header = 
+                                        let system_header = 
 @"#include "jeecs.hpp"
 
 namespace $$MODULE_NAME$$
@@ -419,98 +460,45 @@ namespace $$MODULE_NAME$$
     }
 }
 "@;
-                                    let module_name = je::filesys::purename(path.path);
-                                    let system_name = name;
+                                        let module_name = je::filesys::purename(path.path);
+                                        let system_name = name;
 
-                                    if (!je::file::writeall(F"{path.path}systems/{system_name}.hpp", 
-                                        system_header
-                                            ->replace("$$MODULE_NAME$$", module_name)
-                                            ->replace("$$SYSTEM_NAME$$", system_name))
-                                        ||
-                                        !je::file::writeall(F"{path.path}systems/{system_name}.cpp", 
-                                        system_src
-                                            ->replace("$$MODULE_NAME$$", module_name)
-                                            ->replace("$$SYSTEM_NAME$$", system_name))
-                                        )
+                                        if (!je::file::writeall(F"{path.path}systems/{system_name}.hpp", 
+                                            system_header
+                                                ->replace("$$MODULE_NAME$$", module_name)
+                                                ->replace("$$SYSTEM_NAME$$", system_name))
+                                            ||
+                                            !je::file::writeall(F"{path.path}systems/{system_name}.cpp", 
+                                            system_src
+                                                ->replace("$$MODULE_NAME$$", module_name)
+                                                ->replace("$$SYSTEM_NAME$$", system_name))
+                                            )
+                                        {
+                                            je::filesys::delete(F"{path.path}systems/{system_name}.hpp");
+                                            je::filesys::delete(F"{path.path}systems/{system_name}.cpp");
+
+                                            generic::msgbox("创建系统失败", "无法创建和写入系统源文件");
+                                        }
+                                        else
+                                        {
+                                            generic::msgbox("创建系统成功", "系统已创建到\n" 
+                                                + F"{path.path}systems/{system_name}.hpp\n"
+                                                + F"{path.path}systems/{system_name}.cpp");
+                                            systems->add(system_name);
+                                        }
+                                    });
+                            //End of create new system
+                            if (MenuItem("新组件"))
+                                generic::inputbox("创建新组件", F"为模块{je::filesys::filename(path.path)}创建组件", "NewComponent",
+                                    func(name: string)
                                     {
-                                        je::filesys::delete(F"{path.path}systems/{system_name}.hpp");
-                                        je::filesys::delete(F"{path.path}systems/{system_name}.cpp");
+                                        if (components->find(name) != -1)
+                                        {
+                                            generic::msgbox("创建组件失败", F"模块{je::filesys::filename(path.path)}已经存在一个同名组件");
+                                            return;
+                                        }
 
-                                        generic::msgbox("创建系统失败", "无法创建和写入系统源文件");
-                                    }
-                                    else
-                                    {
-                                        generic::msgbox("创建系统成功", "系统已创建到\n" 
-                                            + F"{path.path}systems/{system_name}.hpp\n"
-                                            + F"{path.path}systems/{system_name}.cpp");
-                                        systems->add(system_name);
-                                    }
-                                });
-
-                        EndMenuBar();
-                    }
-                    if (BeginListBox("##", 350.0, 400.0))
-                    {
-                        systems->trans(\s: string = display_usable_system(s););
-                        EndListBox();
-                    }
- 
-                    End();
-
-                    if (open)
-                        return FormAction::Nothing;
-                    return FormAction::Close;
-                }, (true,));
-            }
-            if (MenuItem(F"组件..."))
-            {
-                let components = je::filesys::childs(F"{path.path}components")
-                    ->okay
-                    ->map(\s: array<string> = s
-                         ->forall(\f: string = je::filesys::externname(f) == "hpp";)
-                         ->trans(\f: string = fname->sub(0, fname->len - 4)
-                            where fname = je::filesys::filename(f);)
-                        ;)
-                    ->valor([])
-                    ->tovec;
-
-                let display_usable_component = func(s: string)
-                {
-                    Selectable(s);
-                    if (BeginPopupContextItem())
-                    {
-                        let file_path = F"{path.path}components/{s}.hpp";
-
-                        if (MenuItem("在VSCode中打开"))
-                            je::filesys::open(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
-                        if (MenuItem("移除此组件"))
-                            generic::askbox("确认移除组件？", F"是否从模块{je::filesys::filename(path.path)}中移除组件{s}?",
-                                func(){
-                                    components->remove(components->find(s));
-                                    je::filesys::delete(file_path);
-                                });
-                        EndPopup();
-                    }
-                };
-
-                launch(func(mut open: bool)
-                {
-                    Begin(F"模块{je::filesys::filename(path.path)}可用组件", 
-                        WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
-                    if (BeginMenuBar())
-                    {
-                        if (MenuItem("创建新组件"))
-                            generic::inputbox("创建新组件", F"为模块{je::filesys::filename(path.path)}创建组件", "NewComponent",
-                                func(name: string)
-                                {
-                                    if (components->find(name) != -1)
-                                    {
-                                        generic::msgbox("创建组件失败", F"模块{je::filesys::filename(path.path)}已经存在一个同名组件");
-                                        return;
-                                    }
-
-                                    let component_header = 
+                                        let component_header = 
 @"#include "jeecs.hpp"
 
 namespace $$MODULE_NAME$$
@@ -527,29 +515,37 @@ namespace $$MODULE_NAME$$
     };
 }
 "@;
-                                    let module_name = je::filesys::purename(path.path);
-                                    let component_name = name;
+                                        let module_name = je::filesys::purename(path.path);
+                                        let component_name = name;
 
-                                    if (!je::file::writeall(F"{path.path}components/{component_name}.hpp", 
-                                        component_header
-                                            ->replace("$$MODULE_NAME$$", module_name)
-                                            ->replace("$$COMPONENT_NAME$$", component_name))
-                                        )
-                                    {
-                                        je::filesys::delete(F"{path.path}components/{component_name}.hpp");
-                                        generic::msgbox("创建组件失败", "无法创建和写入组件源文件");
-                                    }
-                                    else
-                                    {
-                                        generic::msgbox("创建组件成功", "组件已创建到\n" 
-                                            + F"{path.path}components/{component_name}.hpp");
-                                        components->add(component_name);
-                                    }
-                                });
-
+                                        if (!je::file::writeall(F"{path.path}components/{component_name}.hpp", 
+                                            component_header
+                                                ->replace("$$MODULE_NAME$$", module_name)
+                                                ->replace("$$COMPONENT_NAME$$", component_name))
+                                            )
+                                        {
+                                            je::filesys::delete(F"{path.path}components/{component_name}.hpp");
+                                            generic::msgbox("创建组件失败", "无法创建和写入组件源文件");
+                                        }
+                                        else
+                                        {
+                                            generic::msgbox("创建组件成功", "组件已创建到\n" 
+                                                + F"{path.path}components/{component_name}.hpp");
+                                            components->add(component_name);
+                                        }
+                                    });
+                            // End of create new component
+                            EndMenu();
+                        }
                         EndMenuBar();
                     }
-                    if (BeginListBox("##", 350.0, 400.0))
+                    if (BeginListBox("##1", 350.0, 400.0))
+                    {
+                        systems->trans(\s: string = display_usable_system(s););
+                        EndListBox();
+                    }
+                    SameLine();
+                    if (BeginListBox("##2", 350.0, 400.0))
                     {
                         components->trans(\s: string = display_usable_component(s););
                         EndListBox();

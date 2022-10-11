@@ -119,7 +119,16 @@ namespace editor::Serialize
         else
             std::panic("invalid uniform type when restore.");
     }
-
+    func _typeinfo_or_warning(typename: string)
+    {
+        let tinfo = je::typeinfo(typename);
+        if (!tinfo->has)
+        {
+            je::logerr(F"无法找到{typename}，请检查是否有模块未加载成功");
+            generic::msgbox("找不到类型", F"无法找到{typename}，请检查是否有模块未加载成功");
+        }
+        return tinfo;
+    }
     public func restore_entity(world: je::world, entity_dat: map)
     {      
         let component_types_dat = entity_dat
@@ -127,7 +136,7 @@ namespace editor::Serialize
                 ->map(\cs: dynamic = cs as map
                     ->unmapping
                     ->trans(\kv:(dynamic, dynamic) = (kv[0] as string, kv[1] as map);)
-                    ->trans(\td:(string, map) = (je::typeinfo(td[0]), td[1]
+                    ->trans(\td:(string, map) = (_typeinfo_or_warning(td[0]), td[1]
                             ->unmapping
                             ->trans(\p:(dynamic, dynamic) = (p[0] as string, p[1] as string);)
                             ->mapping);)
@@ -261,13 +270,13 @@ namespace editor::Serialize
                 dat->get("runtime_systems": dynamic)
                     ->map(\d: dynamic = d as array<dynamic>;)
                     ->map(\rtsyss: array<dynamic> = rtsyss
-                        ->trans(\tname: dynamic = je::typeinfo(tname as string);)
+                        ->trans(\tname: dynamic = _typeinfo_or_warning(tname as string);)
                         ->forall(\t: option<je::typeinfo> = t->has;)  // TODO: 类型没找到弹个框
                         ->trans(\t: option<je::typeinfo> = t->val;);)
                     ->valor([]));
             dat->get("edit_systems": dynamic)
                 ->map(\d: dynamic = (d as array<dynamic>)
-                    ->trans(\tname: dynamic = je::typeinfo(tname as string);)
+                    ->trans(\tname: dynamic = _typeinfo_or_warning(tname as string);)
                     ->forall(\t: option<je::typeinfo> = t->has;)
                     ->trans(\t: option<je::typeinfo> = world.instance->add_system(t->val);););
 
