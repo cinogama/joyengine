@@ -575,8 +575,8 @@ struct jegl_interface_config
 };
 
 struct jegl_thread_notifier;
-
 struct jegl_graphic_api;
+struct jegl_resource;
 
 struct jegl_thread
 {
@@ -605,7 +605,7 @@ struct jegl_texture
         NEAREST,
     };
     // NOTE: Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
-    pixel_data_t* m_pixels;
+    pixel_data_t*   m_pixels;
     size_t          m_width;
     size_t          m_height;
 
@@ -754,6 +754,15 @@ struct jegl_shader
     cull_mode           m_cull_mode;
 };
 
+struct jegl_framebuf
+{
+    jegl_resource** m_output_passes;
+    size_t          m_pass_count;
+    size_t          m_width;
+    size_t          m_height;
+    uint8_t         m_msaa_level;
+};
+
 struct jegl_resource
 {
     struct jegl_destroy_resouce
@@ -768,7 +777,8 @@ struct jegl_resource
     {
         VERTEX,         // Mesh
         TEXTURE,        // Texture
-        SHADER,        // Shader
+        SHADER,         // Shader
+        FRAMEBUF,       // Framebuffer
     };
     type m_type;
     jegl_thread* m_graphic_thread;
@@ -791,6 +801,7 @@ struct jegl_resource
         jegl_texture* m_raw_texture_data;
         jegl_vertex* m_raw_vertex_data;
         jegl_shader* m_raw_shader_data;
+        jegl_framebuf* m_raw_framebuf_data;
     };
 };
 
