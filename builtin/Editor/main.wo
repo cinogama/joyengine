@@ -359,12 +359,26 @@ func Editor_Welcome(ref open: bool)
 
     Separator();
 
-    Text("关于项目");
-    
+    Text("关于项目"); 
+    SameLine(); 
+    if (Button("修改项目的关于信息"))
+    {
+        launch(func()
+        {
+            Begin("修改项目的关于信息", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+                InputTextMultiline("##", ref editor::Project::GetCurrentProject().about_info, 400., 200.);
+                let close = Button("完成");
+            End();
+            if (close)
+                return FormAction::Close;
+            return FormAction::Nothing;
+        }, ());
+    }
+
     let mut available_width = 0.;
     GetContentRegionAvail(ref available_width, 0. /*不关心高度*/);
 
-    InputTextMultiline("##", editor::Project::GetCurrentProject().about_info, available_width, 200.0);
+    InputTextMultiline("##", editor::Project::GetCurrentProject().about_info, available_width, 100.0);
 
     if (Button("确认"))
         open = false;

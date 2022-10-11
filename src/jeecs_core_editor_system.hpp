@@ -206,7 +206,7 @@ namespace jeecs
 
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
         {
-            if (_inputs.l_buttom_click)
+            if (_inputs.l_buttom_click && _editor_enabled)
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
 
@@ -366,6 +366,9 @@ namespace jeecs
             Renderer::Shape* shape,
             Renderer::Shaders& shaders)
         {
+            if (!_editor_enabled)
+                return;
+
             auto* editing_entity = jedbg_get_editing_entity();
             Transform::LocalPosition* editing_pos = editing_entity
                 ? editing_entity->get_component<Transform::LocalPosition>()
@@ -439,8 +442,7 @@ namespace jeecs
             _inputs.r_buttom_click = input::first_down(_inputs.r_buttom);
             _inputs.l_buttom_double_click = input::double_click(_inputs.l_buttom);
 
-            if (_editor_enabled)
-                select_from(get_world())
+            select_from(get_world())
                 // Move walker(root)
                 .exec(&DefaultEditorSystem::MoveWalker).contain<Editor::EditorWalker>().except<Camera::Projection>()
                 // Move walker(camera)
@@ -471,7 +473,7 @@ namespace jeecs
                     else
                         jedbg_set_editing_entity(&selected_list.begin()->entity);
                 }
-                else if (_inputs.l_buttom_double_click)
+                else if (_inputs.l_buttom_double_click && _editor_enabled)
                     jedbg_set_editing_entity(nullptr);
             }
 

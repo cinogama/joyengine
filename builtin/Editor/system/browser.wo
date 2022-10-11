@@ -400,8 +400,7 @@ public func frag(vf: v2f)
                 launch(func(mut open: bool)
                 {
                     Begin(F"模块{je::filesys::filename(path.path)}当前组件和系统", 
-                        WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+                        WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
                     if (BeginMenuBar())
                     {
                         if (BeginMenu("创建..."))
@@ -539,17 +538,32 @@ namespace $$MODULE_NAME$$
                         }
                         EndMenuBar();
                     }
-                    if (BeginListBox("##1", 350.0, 400.0))
+
+                    let mut available_width = 0., mut avaliable_height = 0.;
+                    GetContentRegionAvail(ref available_width, 0.);
+
+                    BeginGroup();
+                    Text("系统");
+                    GetContentRegionAvail(0., ref avaliable_height);
+                    if (BeginListBox("##1", available_width/2.-0.5, avaliable_height))
                     {
                         systems->trans(\s: string = display_usable_system(s););
                         EndListBox();
                     }
+                    EndGroup();
+
                     SameLine();
-                    if (BeginListBox("##2", 350.0, 400.0))
+
+                    BeginGroup();
+                    Text("组件");
+                    GetContentRegionAvail(0., ref avaliable_height);
+                    if (BeginListBox("##2", available_width/2.-0.5, avaliable_height))
                     {
                         components->trans(\s: string = display_usable_component(s););
                         EndListBox();
                     }
+                    EndGroup();
+
                     End();
 
                     if (open)
