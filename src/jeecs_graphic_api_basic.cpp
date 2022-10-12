@@ -306,6 +306,12 @@ void jegl_close_resource(jegl_resource* resource)
                 je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_formats);
                 delete resource->m_raw_vertex_data;
                 break;
+            case jegl_resource::FRAMEBUF:
+                for (size_t i = 0; i < resource->m_raw_framebuf_data->m_pass_count; ++i)
+                {
+                    TODO;
+                }
+                break;
             default:
                 jeecs::debug::log_error("Unknown resource type to close.");
                 return;
