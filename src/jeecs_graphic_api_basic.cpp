@@ -27,7 +27,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
     _current_graphic_thread = thread;
     do
     {
-        auto custom_interface = thread->m_apis->init_interface(thread, 
+        auto custom_interface = thread->m_apis->init_interface(thread,
             &thread->_m_thread_notifier->m_interface_config, !first_bootup);
         first_bootup = false;
         ++thread->m_version;
@@ -90,7 +90,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             } while (0);
         }
 
-        thread->m_apis->shutdown_interface(thread, custom_interface, 
+        thread->m_apis->shutdown_interface(thread, custom_interface,
             thread->_m_thread_notifier->m_reboot_flag);
 
         if (!thread->_m_thread_notifier->m_reboot_flag)
@@ -286,8 +286,14 @@ void jegl_close_resource(jegl_resource* resource)
             {
             case jegl_resource::TEXTURE:
                 // close resource's raw data, then send this resource to closing-queue
-                stbi_image_free(resource->m_raw_texture_data->m_pixels);
-                delete resource->m_raw_texture_data;
+                if (resource->m_raw_texture_data->m_pixels)
+                {
+                    assert(0 == (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::FORMAT_MASK));
+                    stbi_image_free(resource->m_raw_texture_data->m_pixels);
+                    delete resource->m_raw_texture_data;
+                }
+                else
+                    assert(0 != (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::FORMAT_MASK));
                 break;
             case jegl_resource::SHADER:
                 // close resource's raw data, then send this resource to closing-queue
@@ -417,13 +423,19 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::te
     texture->m_path = nullptr;
     texture->m_ptr = INVALID_RESOURCE;
 
-    texture->m_raw_texture_data->m_pixels = (jegl_texture::pixel_data_t*)stbi__malloc(width * height * format);
-    assert(texture->m_raw_texture_data->m_pixels);
+    if ((format & jegl_texture::texture_format::FORMAT_MASK) == 0)
+    {
+        texture->m_raw_texture_data->m_pixels = (jegl_texture::pixel_data_t*)stbi__malloc(width * height * format);
+        assert(texture->m_raw_texture_data->m_pixels);
+    }
+    else
+        // For special format texture such as depth, do not alloc for pixel.
+        texture->m_raw_texture_data->m_pixels = nullptr;
 
     texture->m_raw_texture_data->m_width = width;
     texture->m_raw_texture_data->m_height = height;
     texture->m_raw_texture_data->m_format = format;
-    texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::LINEAR;
+    texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
 
     return texture;
 }
@@ -464,7 +476,7 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_raw_texture_data->m_width = (size_t)w;
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
-        texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::LINEAR;
+        texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::NEAREST;
 
         return texture;
     }

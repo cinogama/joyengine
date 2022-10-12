@@ -593,19 +593,65 @@ struct jegl_thread
 struct jegl_texture
 {
     using pixel_data_t = uint8_t;
-    enum texture_format : uint8_t
+    enum texture_format : uint16_t
     {
-        MONO = 1,
-        RGB = 3,
-        RGBA = 4,
+        MONO = 0x0001,
+        RGB = 0x0003,
+        RGBA = 0x0004,
+        COLOR_DEPTH_MASK = 0x000F,
+
+        COLOR16 = 0x0010,
+        DEPTH = 0x0020,
+        FRAMEBUF = 0x0040,
+        CUBE = 0x0080,
+
+        MSAAx1 = 0x0100,    // WTF?
+        MSAAx2 = 0x0200,
+        MSAAx4 = 0x0400,
+        MSAAx8 = 0x0800,
+        MSAAx16 = 0x1000,
+        MSAA_MASK = 0xFF00,
+
+        FORMAT_MASK = 0xFFF0,
     };
-    enum texture_sampling : uint8_t
+    enum texture_sampling : uint16_t
     {
-        LINEAR,
-        NEAREST,
+        MIN_LINEAR = 0x0000,
+        MIN_NEAREST = 0x0001,
+        MIN_NEAREST_NEAREST_MIP = 0x0002,
+        MIN_LINEAR_NEAREST_MIP = 0x0003,
+        MIN_NEAREST_LINEAR_MIP = 0x0004,
+        MIN_LINEAR_LINEAR_MIP = 0x0005,
+
+        MAG_LINEAR = 0x0000,
+        MAG_NEAREST = 0x0010,
+
+        CLAMP_EDGE_X = 0x0000,
+        REPEAT_X = 0x0100,
+        CLAMP_EDGE_Y = 0x0000,
+        REPEAT_Y = 0x1000,
+
+
+        FILTER_METHOD_MASK = 0x00FF,
+        MIN_FILTER_MASK = 0x000F,
+        MAG_FILTER_MASK = 0x00F0,
+
+        WRAP_METHOD_MASK = 0xFF00,
+        WRAP_X_METHOD_MASK = 0x0F00,
+        WRAP_Y_METHOD_MASK = 0xF000,
+
+        LINEAR = MIN_LINEAR | MAG_LINEAR,
+        NEAREST = MIN_NEAREST | MAG_NEAREST,
+        CLAMP_EDGE = CLAMP_EDGE_X | CLAMP_EDGE_Y,
+        REPEAT = REPEAT_X | REPEAT_Y,
+
+        DEFAULT = LINEAR | CLAMP_EDGE,
     };
-    // NOTE: Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
-    pixel_data_t*   m_pixels;
+
+    // NOTE:
+    // * Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
+    // * If texture's m_pixels is nullptr, only create a texture in pipeline.
+    pixel_data_t* m_pixels;
     size_t          m_width;
     size_t          m_height;
 
@@ -979,7 +1025,7 @@ JE_API void jedbg_set_editing_entity(const jeecs::game_entity* _entity);
 JE_API const jeecs::game_entity* jedbg_get_editing_entity();
 
 // NOTE: Get graphic thread
-JE_API jegl_thread* jedbg_get_editing_graphic_thread(void * universe);
+JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
 #endif
 
 WO_FORCE_CAPI_END
@@ -3666,7 +3712,7 @@ namespace jeecs
             }
             inline bool enabled() const noexcept
             {
-                return nullptr != _m_resouce 
+                return nullptr != _m_resouce
                     && nullptr != _m_resouce->m_custom_resource;
             }
             inline operator jegl_resource* () const noexcept
