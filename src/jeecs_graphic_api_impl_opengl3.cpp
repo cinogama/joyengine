@@ -323,9 +323,9 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             switch (resource->m_raw_texture_data->m_sampling & jegl_texture::texture_sampling::WRAP_X_METHOD_MASK)
             {
             case jegl_texture::texture_sampling::CLAMP_EDGE_X:
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
+                glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
             case jegl_texture::texture_sampling::REPEAT_X:
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
+                glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
             default:
                 jeecs::debug::log_error("Unknown texture wrap method in x(%04x)",
                     resource->m_raw_texture_data->m_sampling);
@@ -333,9 +333,9 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             switch (resource->m_raw_texture_data->m_sampling & jegl_texture::texture_sampling::WRAP_Y_METHOD_MASK)
             {
             case jegl_texture::texture_sampling::CLAMP_EDGE_Y:
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
+                glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
             case jegl_texture::texture_sampling::REPEAT_Y:
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
+                glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
             default:
                 jeecs::debug::log_error("Unknown texture wrap method in y(%04x)",
                     resource->m_raw_texture_data->m_sampling);

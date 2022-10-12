@@ -476,7 +476,7 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_raw_texture_data->m_width = (size_t)w;
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
-        texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::NEAREST;
+        texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
 
         return texture;
     }
