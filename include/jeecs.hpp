@@ -690,7 +690,7 @@ struct jegl_shader
         FLOAT3,
         FLOAT4,
         FLOAT4X4,
-        TEXTURE2D,
+        TEXTURE,
     };
     struct builtin_uniform_location
     {

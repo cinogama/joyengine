@@ -28,6 +28,10 @@ public:
             return "mat4";
         case jegl_shader_value::type::TEXTURE2D:
             return "sampler2D";
+        case jegl_shader_value::type::TEXTURE2D_MS:
+            return "sampler2DMS";
+        case jegl_shader_value::type::TEXTURE_CUBE:
+            return "samplerCube";
         default:
             jeecs::debug::log_error("Unknown value type when generating glsl, please check!");
             return "unknown";
@@ -155,6 +159,9 @@ std::string _generate_code_for_glsl_impl(
 
             switch (value->get_type())
             {
+            case jegl_shader_value::type::INTEGER:
+                apply += std::to_string(value->m_integer);
+                break;
             case jegl_shader_value::type::FLOAT:
                 apply += std::to_string(value->m_float);
                 break;
@@ -230,8 +237,10 @@ uniform_information get_uniform_info(const std::string& name, jegl_shader_value*
     case jegl_shader_value::type::FLOAT4x4:
         uniform_type = jegl_shader::uniform_type::FLOAT4X4; break;
     case jegl_shader_value::type::TEXTURE2D:
+    case jegl_shader_value::type::TEXTURE2D_MS:
+    case jegl_shader_value::type::TEXTURE_CUBE:
         init_value = value; // Texture2d need init-value(itself) for channel id;
-        uniform_type = jegl_shader::uniform_type::TEXTURE2D; break;
+        uniform_type = jegl_shader::uniform_type::TEXTURE; break;
     default:
         jeecs::debug::log_error("Unsupport uniform variable type."); break;
     }
@@ -330,6 +339,32 @@ vec4 JEBUILTIN_AlphaTest(vec4 color)
     if (color.a <= 0.0)
         discard;
     return color;
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
+        else if (builtin_func_name == "JEBUILTIN_TextureMs")
+        {
+            const std::string unifrom_block = R"(
+vec4 JEBUILTIN_TextureMs(sampler2DMS tex, vec2 uv, int msaa_level)
+{
+    ivec2 texture_size = textureSize(tex);
+    vec4 result = vec4(0, 0, 0, 0);
+    for(int i = 0; i < msaa_level; ++i)
+    {
+	    result+=texelFetch(tex, ivec2(uv * vec2(texture_size)), i);
+    }
+    return result/float(msaa_level);
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
+        else if (builtin_func_name == "JEBUILTIN_TextureFastMs")
+        {
+            const std::string unifrom_block = R"(
+vec4 JEBUILTIN_TextureFastMs(sampler2DMS tex, vec2 uv)
+{
+    return texelFetch(mst,ivec2(uv * vec2(textureSize(tex))),0);
 }
 )";
             built_in_srcs += unifrom_block;

@@ -75,7 +75,7 @@ public let vert =
     where vertex_pos = float4(v.vertex, 1.);;
 
 public let frag = 
-\f: v2f = fout{ color = float4(t, 0, t, 1) }
+\f: v2f = fout{ color = float4(t, 0., t, 1.) }
     where t = je_time->y();;
 
 )");
@@ -175,10 +175,12 @@ public let frag =
             double current_time = je_clock_time();
 
             math::vec4 shader_time =
-            { (float)current_time ,
-            (float)abs(2.0 * (current_time * 2.0 - double(int(current_time * 2.0)) - 0.5)) ,
-            (float)abs(2.0 * (current_time - double(int(current_time)) - 0.5)),
-            (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5)) };
+            {
+                (float)current_time ,
+                (float)abs(2.0 * (current_time * 2.0 - double(int(current_time * 2.0)) - 0.5)) ,
+                (float)abs(2.0 * (current_time - double(int(current_time)) - 0.5)),
+                (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5))
+            };
 
             jegl_update_shared_uniform(0, sizeof(math::vec4), &shader_time);
 
@@ -277,7 +279,6 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
             // Redirect to screen space for imgui rend.
             jegl_rend_to_framebuffer(nullptr, 0, 0, WINDOWS_WIDTH, WINDOWS_HEIGHT);
-
         }
 
         bool IsActive(game_world world)const noexcept

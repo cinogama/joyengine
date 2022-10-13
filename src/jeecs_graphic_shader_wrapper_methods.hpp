@@ -312,6 +312,10 @@ reduce_method{return new jegl_shader_value(
 ); }} },
 { "JEBUILTIN_AlphaTest", {jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },
+{ "JEBUILTIN_TextureMs", {jegl_shader_value::TEXTURE2D_MS, jegl_shader_value::FLOAT2, jegl_shader_value::INTEGER,
+reduce_method{return nullptr; }} },
+{ "JEBUILTIN_TextureFastMs", {jegl_shader_value::TEXTURE2D_MS, jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
 
 { "sin", {jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },

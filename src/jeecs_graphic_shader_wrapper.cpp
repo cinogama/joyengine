@@ -29,7 +29,10 @@ struct jegl_shader_value
         FLOAT4x4 = 0x0400,
 
         TEXTURE2D = 0x0800,
-        INTEGER = 0X1000,
+        TEXTURE_CUBE = 0X1000,
+        TEXTURE2D_MS = 0X2000,
+
+        INTEGER = 0x3000,
 
     };
 
@@ -73,6 +76,13 @@ struct jegl_shader_value
             jegl_shader_value* m_uniform_init_val_may_nil;
         };
     };
+
+    jegl_shader_value(int init_val)
+        : m_type((type)(type::INTEGER | type::INIT_VALUE))
+        , m_integer(init_val)
+        , m_ref_count(0)
+    {
+    }
 
     jegl_shader_value(float init_val)
         : m_type((type)(type::FLOAT | type::INIT_VALUE))
@@ -467,6 +477,8 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
         jegl_shader_value* sval;
         if (value_type == WO_GCHANDLE_TYPE)
             sval = (jegl_shader_value*)wo_pointer(args + i);
+        else if (value_type == WO_INTEGER_TYPE)
+            sval = new jegl_shader_value((int)wo_int(args + i));
         else
         {
             sval = new jegl_shader_value((float)wo_cast_real(args + i));
@@ -708,7 +720,10 @@ public enum shader_value_type
     FLOAT4x4 = 0x0400,
 
     TEXTURE2D = 0x0800,
-    INTEGER = 0X1000,
+    TEXTURE_CUBE = 0X1000,
+    TEXTURE2D_MS = 0X2000,
+
+    INTEGER = 0x3000,
 }
 
 public using float = gchandle;
@@ -721,6 +736,8 @@ public using float3x3 = gchandle;
 public using float4x4 = gchandle;
 
 public using texture2d = gchandle;
+public using texture2dms = gchandle;
+public using texturecube = gchandle;
 public using integer = gchandle;
 
 private func _type_is_same<AT, BT>()=> bool
@@ -748,6 +765,10 @@ private func _get_type_enum<ShaderValueT>()=> shader_value_type
         return shader_value_type::FLOAT4x4;
     else if (_type_is_same:<ShaderValueT, texture2d>())
         return shader_value_type::TEXTURE2D;
+    else if (_type_is_same:<ShaderValueT, texture2dms>())
+        return shader_value_type::TEXTURE2D_MS;
+    else if (_type_is_same:<ShaderValueT, texturecube>())
+        return shader_value_type::TEXTURE_CUBE;
     else if (_type_is_same:<ShaderValueT, integer>())
         return shader_value_type::INTEGER;
 
@@ -1170,6 +1191,14 @@ public func texture(tex:texture2d, uv:float2)=> float4
 {
     return apply_operation:<float4>("texture", tex, uv);
 }
+public func texture_ms(tex:texture2dms, uv:float2, msaa_level: int)=> float4
+{
+    return apply_operation:<float4>("JEBUILTIN_TextureMs", tex, uv, msaa_level);
+}
+public func texture_fastms(tex:texture2dms, uv:float2)=> float4
+{
+    return apply_operation:<float4>("JEBUILTIN_TextureFastMs", tex, uv);
+}
 
 public func lerp<T>(a: T, b: T, uv:float)=> T
 {
@@ -1470,6 +1499,8 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             case jegl_shader_value::type::INTEGER:
                 variable->n = init_val->m_integer; break;
             case jegl_shader_value::type::TEXTURE2D:
+            case jegl_shader_value::type::TEXTURE2D_MS:
+            case jegl_shader_value::type::TEXTURE_CUBE:
                 variable->n = init_val->m_uniform_texture_channel; break;
             default:
                 jeecs::debug::log_error("Unsupport uniform variable type."); break;

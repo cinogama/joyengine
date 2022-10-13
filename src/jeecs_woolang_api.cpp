@@ -1083,7 +1083,7 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
                 type = jeecs::typing::type_info::of<jeecs::math::vec4>(nullptr); break;
             case jegl_shader::uniform_type::INT:
                 type = jeecs::typing::type_info::of<int>(nullptr); break;
-            case jegl_shader::uniform_type::TEXTURE2D:
+            case jegl_shader::uniform_type::TEXTURE:
                 type = jeecs::typing::type_info::of<jeecs::graphic::texture*>(nullptr); break;
             default:
                 // Unknown / Unsupport type, just give this things.
