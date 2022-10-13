@@ -31,7 +31,6 @@ void je_clock_suppress_sleep(double sup_stax)
 
 void je_clock_sleep_for(double time)
 {
-
     using namespace std;
     auto current_time_point = je_clock_time();
 

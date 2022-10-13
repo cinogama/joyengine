@@ -575,8 +575,8 @@ struct jegl_interface_config
 };
 
 struct jegl_thread_notifier;
-
 struct jegl_graphic_api;
+struct jegl_resource;
 
 struct jegl_thread
 {
@@ -593,18 +593,64 @@ struct jegl_thread
 struct jegl_texture
 {
     using pixel_data_t = uint8_t;
-    enum texture_format : uint8_t
+    enum texture_format : uint16_t
     {
-        MONO = 1,
-        RGB = 3,
-        RGBA = 4,
+        MONO = 0x0001,
+        RGB = 0x0003,
+        RGBA = 0x0004,
+        COLOR_DEPTH_MASK = 0x000F,
+
+        COLOR16 = 0x0010,
+        DEPTH = 0x0020,
+        FRAMEBUF = 0x0040,
+        CUBE = 0x0080,
+
+        MSAAx1 = 0x0100,    // WTF?
+        MSAAx2 = 0x0200,
+        MSAAx4 = 0x0400,
+        MSAAx8 = 0x0800,
+        MSAAx16 = 0x1000,
+        MSAA_MASK = 0xFF00,
+
+        FORMAT_MASK = 0xFFF0,
     };
-    enum texture_sampling : uint8_t
+    enum texture_sampling : uint16_t
     {
-        LINEAR,
-        NEAREST,
+        MIN_LINEAR = 0x0000,
+        MIN_NEAREST = 0x0001,
+        MIN_NEAREST_NEAREST_MIP = 0x0002,
+        MIN_LINEAR_NEAREST_MIP = 0x0003,
+        MIN_NEAREST_LINEAR_MIP = 0x0004,
+        MIN_LINEAR_LINEAR_MIP = 0x0005,
+
+        MAG_LINEAR = 0x0000,
+        MAG_NEAREST = 0x0010,
+
+        CLAMP_EDGE_X = 0x0000,
+        REPEAT_X = 0x0100,
+        CLAMP_EDGE_Y = 0x0000,
+        REPEAT_Y = 0x1000,
+
+
+        FILTER_METHOD_MASK = 0x00FF,
+        MIN_FILTER_MASK = 0x000F,
+        MAG_FILTER_MASK = 0x00F0,
+
+        WRAP_METHOD_MASK = 0xFF00,
+        WRAP_X_METHOD_MASK = 0x0F00,
+        WRAP_Y_METHOD_MASK = 0xF000,
+
+        LINEAR = MIN_LINEAR | MAG_LINEAR,
+        NEAREST = MIN_NEAREST | MAG_NEAREST,
+        CLAMP_EDGE = CLAMP_EDGE_X | CLAMP_EDGE_Y,
+        REPEAT = REPEAT_X | REPEAT_Y,
+
+        DEFAULT = LINEAR | CLAMP_EDGE,
     };
-    // NOTE: Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
+
+    // NOTE:
+    // * Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
+    // * If texture's m_pixels is nullptr, only create a texture in pipeline.
     pixel_data_t* m_pixels;
     size_t          m_width;
     size_t          m_height;
@@ -754,6 +800,16 @@ struct jegl_shader
     cull_mode           m_cull_mode;
 };
 
+struct jegl_framebuf
+{
+    // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
+    typedef struct attachment_t attachment_t;
+    attachment_t* m_output_attachments;
+    size_t          m_attachment_count;
+    size_t          m_width;
+    size_t          m_height;
+};
+
 struct jegl_resource
 {
     struct jegl_destroy_resouce
@@ -768,7 +824,8 @@ struct jegl_resource
     {
         VERTEX,         // Mesh
         TEXTURE,        // Texture
-        SHADER,        // Shader
+        SHADER,         // Shader
+        FRAMEBUF,       // Framebuffer
     };
     type m_type;
     jegl_thread* m_graphic_thread;
@@ -791,6 +848,7 @@ struct jegl_resource
         jegl_texture* m_raw_texture_data;
         jegl_vertex* m_raw_vertex_data;
         jegl_shader* m_raw_shader_data;
+        jegl_framebuf* m_raw_framebuf_data;
     };
 };
 
@@ -872,6 +930,12 @@ JE_API jegl_resource* jegl_create_vertex(
     const size_t* format,
     size_t                      data_length,
     size_t                      format_length);
+
+JE_API jegl_resource* jegl_create_framebuf(
+    size_t width,
+    size_t height,
+    const jegl_texture::texture_format* attachment_formats,
+    size_t attachment_count);
 
 JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
 
@@ -968,7 +1032,7 @@ JE_API void jedbg_set_editing_entity(const jeecs::game_entity* _entity);
 JE_API const jeecs::game_entity* jedbg_get_editing_entity();
 
 // NOTE: Get graphic thread
-JE_API jegl_thread* jedbg_get_editing_graphic_thread(void * universe);
+JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
 #endif
 
 WO_FORCE_CAPI_END
@@ -3637,13 +3701,13 @@ namespace jeecs
 
     namespace graphic
     {
-        class resouce_basic
+        class resource_basic
         {
-            JECS_DISABLE_MOVE_AND_COPY(resouce_basic);
+            JECS_DISABLE_MOVE_AND_COPY(resource_basic);
 
             jegl_resource* _m_resouce;
         protected:
-            resouce_basic(jegl_resource* res) noexcept
+            resource_basic(jegl_resource* res) noexcept
                 :_m_resouce(res)
             {
 
@@ -3655,7 +3719,7 @@ namespace jeecs
             }
             inline bool enabled() const noexcept
             {
-                return nullptr != _m_resouce 
+                return nullptr != _m_resouce
                     && nullptr != _m_resouce->m_custom_resource;
             }
             inline operator jegl_resource* () const noexcept
@@ -3666,26 +3730,26 @@ namespace jeecs
             {
                 return _m_resouce;
             }
-            ~resouce_basic()
+            ~resource_basic()
             {
                 if (_m_resouce)
                     jegl_close_resource(_m_resouce);
             }
         };
 
-        class texture : public resouce_basic
+        class texture : public resource_basic
         {
         public:
             explicit texture(const std::string& str)
-                : resouce_basic(jegl_load_texture(str.c_str()))
+                : resource_basic(jegl_load_texture(str.c_str()))
             {
             }
             explicit texture(const texture& res)
-                : resouce_basic(jegl_copy_resource(res.resouce()))
+                : resource_basic(jegl_copy_resource(res.resouce()))
             {
             }
             explicit texture(size_t width, size_t height, jegl_texture::texture_format format)
-                : resouce_basic(jegl_create_texture(width, height, format))
+                : resource_basic(jegl_create_texture(width, height, format))
             {
             }
 
@@ -3788,27 +3852,27 @@ namespace jeecs
             }
         };
 
-        class shader : public resouce_basic
+        class shader : public resource_basic
         {
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
             explicit shader(const std::string& name_path, const std::string& src)
-                : resouce_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
+                : resource_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
                 , m_builtin(nullptr)
             {
                 if (enabled())
                     m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
             }
             explicit shader(const shader& res)
-                : resouce_basic(jegl_copy_resource(res.resouce()))
+                : resource_basic(jegl_copy_resource(res.resouce()))
                 , m_builtin(nullptr)
             {
                 if (enabled())
                     m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
             }
             explicit shader(const std::string& src_path)
-                : resouce_basic(jegl_load_shader(src_path.c_str()))
+                : resource_basic(jegl_load_shader(src_path.c_str()))
                 , m_builtin(nullptr)
             {
                 if (enabled())
@@ -3958,22 +4022,45 @@ namespace jeecs
             }
         };
 
-        class vertex : public resouce_basic
+        class vertex : public resource_basic
         {
         public:
             using type = jegl_vertex::vertex_type;
 
             explicit vertex(const std::string& str)
-                : resouce_basic(jegl_load_vertex(str.c_str()))
+                : resource_basic(jegl_load_vertex(str.c_str()))
             {
             }
             explicit vertex(const vertex& res)
-                : resouce_basic(jegl_copy_resource(res.resouce()))
+                : resource_basic(jegl_copy_resource(res.resouce()))
             {
             }
             explicit vertex(type vertex_type, const std::vector<float>& pdatas, const std::vector<size_t>& formats)
-                : resouce_basic(jegl_create_vertex(vertex_type, pdatas.data(), formats.data(), pdatas.size(), formats.size()))
+                : resource_basic(jegl_create_vertex(vertex_type, pdatas.data(), formats.data(), pdatas.size(), formats.size()))
             {
+            }
+        };
+
+        class framebuffer : public resource_basic
+        {
+        public:
+            explicit framebuffer(size_t reso_w, size_t reso_h, const std::vector<jegl_texture::texture_format>& attachment)
+                :resource_basic(jegl_create_framebuf(reso_w, reso_h, attachment.data(), attachment.size()))
+            {
+            }
+
+            basic::resource<texture> get_attachment(size_t index) const
+            {
+                if (enabled())
+                {
+                    if (index < resouce()->m_raw_framebuf_data->m_attachment_count)
+                    {
+                        auto* attachments = (basic::resource<graphic::texture>*)resouce()->m_raw_framebuf_data->m_output_attachments;
+                        return attachments[index];
+                    }
+                    return nullptr;
+                }
+                return nullptr;
             }
         };
 

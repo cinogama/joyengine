@@ -44,10 +44,10 @@ namespace jeecs
         {
             default_shape_quad =
                 new graphic::vertex(jegl_vertex::QUADS,
-                    { -0.5f, -0.5f, 0.0f,     0.0f, 1.0f,
-                    0.5f, -0.5f, 0.0f,      1.0f, 1.0f,
-                    0.5f, 0.5f, 0.0f,       1.0f, 0.0f,
-                    -0.5f, 0.5f, 0.0f,      0.0f, 0.0f, },
+                    { -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,
+                    0.5f, -0.5f, 0.0f,      1.0f, 0.0f,
+                    0.5f, 0.5f, 0.0f,       1.0f, 1.0f,
+                    -0.5f, 0.5f, 0.0f,      0.0f, 1.0f, },
                     { 3, 2 });
 
             default_texture = new graphic::texture(2, 2, jegl_texture::texture_format::RGBA);
@@ -167,7 +167,6 @@ public let frag =
                 m_renderer_list.pop();
             }
             jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
-            const size_t RENDAIMBUFFER_WIDTH = WINDOWS_WIDTH, RENDAIMBUFFER_HEIGHT = WINDOWS_HEIGHT;
 
             // Clear frame buffer, (TODO: Only clear depth)
             jegl_clear_framebuffer(nullptr);
@@ -190,23 +189,27 @@ public let frag =
                     // TODO: If camera has component named 'RendToTexture' handle it.
                     jegl_resource* rend_aim_buffer = nullptr;
 
+                    size_t
+                        RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH,
+                        RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT;
+
                     if (current_camera.viewport)
-                        jegl_rend_to_framebuffer(nullptr,
+                        jegl_rend_to_framebuffer(rend_aim_buffer,
                             current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
                             current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT,
                             current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH,
                             current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT);
                     else
-                        jegl_rend_to_framebuffer(nullptr, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                        jegl_rend_to_framebuffer(rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (rend_aim_buffer)
-                        jegl_clear_framebuffer(nullptr);
+                        jegl_clear_framebuffer(rend_aim_buffer);
 
                     const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
                     const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
 
-                    float MAT4_MV[4][4], MAT4_VP[4][4];  
+                    float MAT4_MV[4][4], MAT4_VP[4][4];
                     math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
                     // TODO: Update camera shared uniform.
 
@@ -218,7 +221,7 @@ public let frag =
 
                         const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
 
-                        float MAT4_MVP[4][4];  
+                        float MAT4_MVP[4][4];
                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -271,6 +274,10 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                 }
                 m_camera_list.pop();
             }
+
+            // Redirect to screen space for imgui rend.
+            jegl_rend_to_framebuffer(nullptr, 0, 0, WINDOWS_WIDTH, WINDOWS_HEIGHT);
+
         }
 
         bool IsActive(game_world world)const noexcept

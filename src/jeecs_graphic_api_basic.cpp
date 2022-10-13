@@ -27,7 +27,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
     _current_graphic_thread = thread;
     do
     {
-        auto custom_interface = thread->m_apis->init_interface(thread, 
+        auto custom_interface = thread->m_apis->init_interface(thread,
             &thread->_m_thread_notifier->m_interface_config, !first_bootup);
         first_bootup = false;
         ++thread->m_version;
@@ -90,7 +90,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             } while (0);
         }
 
-        thread->m_apis->shutdown_interface(thread, custom_interface, 
+        thread->m_apis->shutdown_interface(thread, custom_interface,
             thread->_m_thread_notifier->m_reboot_flag);
 
         if (!thread->_m_thread_notifier->m_reboot_flag)
@@ -286,8 +286,14 @@ void jegl_close_resource(jegl_resource* resource)
             {
             case jegl_resource::TEXTURE:
                 // close resource's raw data, then send this resource to closing-queue
-                stbi_image_free(resource->m_raw_texture_data->m_pixels);
-                delete resource->m_raw_texture_data;
+                if (resource->m_raw_texture_data->m_pixels)
+                {
+                    assert(0 == (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::FORMAT_MASK));
+                    stbi_image_free(resource->m_raw_texture_data->m_pixels);
+                    delete resource->m_raw_texture_data;
+                }
+                else
+                    assert(0 != (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::FORMAT_MASK));
                 break;
             case jegl_resource::SHADER:
                 // close resource's raw data, then send this resource to closing-queue
@@ -299,6 +305,20 @@ void jegl_close_resource(jegl_resource* resource)
                 je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_datas);
                 je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_formats);
                 delete resource->m_raw_vertex_data;
+                break;
+            case jegl_resource::FRAMEBUF:
+                // Close all frame rend out texture
+                if (!resource->m_raw_framebuf_data)
+                    assert(resource->m_raw_framebuf_data->m_attachment_count == 0);
+                else
+                {
+                    assert(resource->m_raw_framebuf_data->m_attachment_count > 0);
+                    jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+                        (jeecs::basic::resource<jeecs::graphic::texture>*)resource->m_raw_framebuf_data->m_output_attachments;
+
+                    delete[]attachments;
+                }
+                delete resource->m_raw_framebuf_data;
                 break;
             default:
                 jeecs::debug::log_error("Unknown resource type to close.");
@@ -352,6 +372,9 @@ jegl_resource* _create_resource()
 {
     jegl_resource* res = new jegl_resource();
     res->m_raw_ref_count = new int(1);
+    res->m_graphic_thread = nullptr;
+    res->m_graphic_thread_version = 0;
+    res->m_ptr = INVALID_RESOURCE;
 
     return res;
 }
@@ -398,32 +421,34 @@ jegl_resource* _jegl_create_died_texture(const char* path)
     // NOTE: Used for generate a died texture.
     assert(path != nullptr);
 
-    jegl_resource* shader = _create_resource();
-    shader->m_type = jegl_resource::TEXTURE;
-    shader->m_graphic_thread = nullptr;
-    shader->m_raw_shader_data = nullptr;
-    shader->m_path = jeecs::basic::make_new_string(path);
-    shader->m_ptr = INVALID_RESOURCE;
+    jegl_resource* texture = _create_resource();
+    texture->m_type = jegl_resource::TEXTURE;
+    texture->m_raw_texture_data = nullptr;
+    texture->m_path = jeecs::basic::make_new_string(path);
 
-    return shader;
+    return texture;
 }
 
 jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::texture_format format)
 {
     jegl_resource* texture = _create_resource();
-    texture->m_graphic_thread = nullptr;
     texture->m_type = jegl_resource::TEXTURE;
     texture->m_raw_texture_data = new jegl_texture();
     texture->m_path = nullptr;
-    texture->m_ptr = INVALID_RESOURCE;
 
-    texture->m_raw_texture_data->m_pixels = (jegl_texture::pixel_data_t*)stbi__malloc(width * height * format);
-    assert(texture->m_raw_texture_data->m_pixels);
+    if ((format & jegl_texture::texture_format::FORMAT_MASK) == 0)
+    {
+        texture->m_raw_texture_data->m_pixels = (jegl_texture::pixel_data_t*)stbi__malloc(width * height * format);
+        assert(texture->m_raw_texture_data->m_pixels);
+    }
+    else
+        // For special format texture such as depth, do not alloc for pixel.
+        texture->m_raw_texture_data->m_pixels = nullptr;
 
     texture->m_raw_texture_data->m_width = width;
     texture->m_raw_texture_data->m_height = height;
     texture->m_raw_texture_data->m_format = format;
-    texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::LINEAR;
+    texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
 
     return texture;
 }
@@ -433,17 +458,15 @@ jegl_resource* jegl_load_texture(const char* path)
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
         jegl_resource* texture = _create_resource();
-        texture->m_graphic_thread = nullptr;
         texture->m_type = jegl_resource::TEXTURE;
         texture->m_raw_texture_data = new jegl_texture();
         texture->m_path = jeecs::basic::make_new_string(path);
-        texture->m_ptr = INVALID_RESOURCE;
 
         unsigned char* fbuf = new unsigned char[texfile->m_file_length];
         jeecs_file_read(fbuf, sizeof(unsigned char), texfile->m_file_length, texfile);
         int w, h, cdepth;
 
-        stbi_set_flip_vertically_on_load(false);
+        stbi_set_flip_vertically_on_load(true);
         texture->m_raw_texture_data->m_pixels = stbi_load_from_memory(
             fbuf,
             texfile->m_file_length,
@@ -464,7 +487,7 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_raw_texture_data->m_width = (size_t)w;
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
-        texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::LINEAR;
+        texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
 
         return texture;
     }
@@ -487,11 +510,9 @@ jegl_resource* jegl_create_vertex(
     size_t format_length)
 {
     jegl_resource* vertex = _create_resource();
-    vertex->m_graphic_thread = nullptr;
     vertex->m_type = jegl_resource::VERTEX;
     vertex->m_raw_vertex_data = new jegl_vertex();
     vertex->m_raw_vertex_data->m_path = nullptr;
-    vertex->m_ptr = INVALID_RESOURCE;
 
     size_t datacount_per_point = 0;
     for (size_t i = 0; i < format_length; ++i)
@@ -562,10 +583,8 @@ jegl_resource* _jegl_create_died_shader(const char* path)
 
     jegl_resource* shader = _create_resource();
     shader->m_type = jegl_resource::SHADER;
-    shader->m_graphic_thread = nullptr;
     shader->m_raw_shader_data = nullptr;
     shader->m_path = jeecs::basic::make_new_string(path);
-    shader->m_ptr = INVALID_RESOURCE;
 
     return shader;
 }
@@ -598,11 +617,9 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
         jegl_shader_generate_glsl(shader_graph, _shader);
 
         jegl_resource* shader = _create_resource();
-        shader->m_graphic_thread = nullptr;
         shader->m_type = jegl_resource::SHADER;
         shader->m_raw_shader_data = _shader;
         shader->m_path = jeecs::basic::make_new_string(path);
-        shader->m_ptr = INVALID_RESOURCE;
 
         wo_close_vm(vmm);
         return shader;
@@ -630,6 +647,32 @@ jegl_resource* jegl_load_shader(const char* path)
     }
     jeecs::debug::log_error("Fail to open file: '%s'", path);
     return _jegl_create_died_shader(path);
+}
+
+jegl_resource* jegl_create_framebuf(size_t width, size_t height, const jegl_texture::texture_format* attachment_formats, size_t attachment_count)
+{
+    jegl_resource* framebuf = _create_resource();
+    framebuf->m_type = jegl_resource::FRAMEBUF;
+    framebuf->m_raw_framebuf_data = new jegl_framebuf();
+    framebuf->m_path = nullptr;
+
+    framebuf->m_raw_framebuf_data->m_attachment_count = attachment_count;
+    framebuf->m_raw_framebuf_data->m_width = width;
+    framebuf->m_raw_framebuf_data->m_height = height;
+
+    jeecs::basic::resource<jeecs::graphic::texture>* attachments = nullptr;
+    if (attachment_count > 0)
+    {
+        attachments = new jeecs::basic::resource<jeecs::graphic::texture>[attachment_count];
+
+        for (size_t i = 0; i < attachment_count; ++i)
+            attachments[i] = new jeecs::graphic::texture(width, height,
+                jegl_texture::texture_format(attachment_formats[i] | jegl_texture::texture_format::FRAMEBUF));
+    }
+
+    framebuf->m_raw_framebuf_data->m_output_attachments = (jegl_framebuf::attachment_t*)attachments;
+
+    return framebuf;
 }
 
 jegl_thread* jegl_current_thread()
