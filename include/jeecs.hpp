@@ -802,8 +802,8 @@ struct jegl_shader
 
 struct jegl_framebuf
 {
-    jegl_resource** m_output_passes;
-    size_t          m_pass_count;
+    jegl_resource** m_output_attachments;
+    size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
 };
@@ -928,6 +928,12 @@ JE_API jegl_resource* jegl_create_vertex(
     const size_t* format,
     size_t                      data_length,
     size_t                      format_length);
+
+JE_API jegl_resource* jegl_create_framebuf(
+    size_t width,
+    size_t height,
+    const jegl_texture::texture_format* attachment_formats,
+    size_t attachment_count);
 
 JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
 
@@ -3693,13 +3699,13 @@ namespace jeecs
 
     namespace graphic
     {
-        class resouce_basic
+        class resource_basic
         {
-            JECS_DISABLE_MOVE_AND_COPY(resouce_basic);
+            JECS_DISABLE_MOVE_AND_COPY(resource_basic);
 
             jegl_resource* _m_resouce;
         protected:
-            resouce_basic(jegl_resource* res) noexcept
+            resource_basic(jegl_resource* res) noexcept
                 :_m_resouce(res)
             {
 
@@ -3722,26 +3728,26 @@ namespace jeecs
             {
                 return _m_resouce;
             }
-            ~resouce_basic()
+            ~resource_basic()
             {
                 if (_m_resouce)
                     jegl_close_resource(_m_resouce);
             }
         };
-
-        class texture : public resouce_basic
+        class framebuffer;
+        class texture : public resource_basic
         {
         public:
             explicit texture(const std::string& str)
-                : resouce_basic(jegl_load_texture(str.c_str()))
+                : resource_basic(jegl_load_texture(str.c_str()))
             {
             }
             explicit texture(const texture& res)
-                : resouce_basic(jegl_copy_resource(res.resouce()))
+                : resource_basic(jegl_copy_resource(res.resouce()))
             {
             }
             explicit texture(size_t width, size_t height, jegl_texture::texture_format format)
-                : resouce_basic(jegl_create_texture(width, height, format))
+                : resource_basic(jegl_create_texture(width, height, format))
             {
             }
 
@@ -3844,27 +3850,27 @@ namespace jeecs
             }
         };
 
-        class shader : public resouce_basic
+        class shader : public resource_basic
         {
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
             explicit shader(const std::string& name_path, const std::string& src)
-                : resouce_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
+                : resource_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
                 , m_builtin(nullptr)
             {
                 if (enabled())
                     m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
             }
             explicit shader(const shader& res)
-                : resouce_basic(jegl_copy_resource(res.resouce()))
+                : resource_basic(jegl_copy_resource(res.resouce()))
                 , m_builtin(nullptr)
             {
                 if (enabled())
                     m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
             }
             explicit shader(const std::string& src_path)
-                : resouce_basic(jegl_load_shader(src_path.c_str()))
+                : resource_basic(jegl_load_shader(src_path.c_str()))
                 , m_builtin(nullptr)
             {
                 if (enabled())
@@ -4014,23 +4020,43 @@ namespace jeecs
             }
         };
 
-        class vertex : public resouce_basic
+        class vertex : public resource_basic
         {
         public:
             using type = jegl_vertex::vertex_type;
 
             explicit vertex(const std::string& str)
-                : resouce_basic(jegl_load_vertex(str.c_str()))
+                : resource_basic(jegl_load_vertex(str.c_str()))
             {
             }
             explicit vertex(const vertex& res)
-                : resouce_basic(jegl_copy_resource(res.resouce()))
+                : resource_basic(jegl_copy_resource(res.resouce()))
             {
             }
             explicit vertex(type vertex_type, const std::vector<float>& pdatas, const std::vector<size_t>& formats)
-                : resouce_basic(jegl_create_vertex(vertex_type, pdatas.data(), formats.data(), pdatas.size(), formats.size()))
+                : resource_basic(jegl_create_vertex(vertex_type, pdatas.data(), formats.data(), pdatas.size(), formats.size()))
             {
             }
+        };
+
+        class framebuffer : public resource_basic
+        {
+        public:
+            explicit framebuffer(size_t reso_w, size_t reso_h, const std::vector<jegl_texture::texture_format>& attachment)
+                :resource_basic(jegl_create_framebuf(reso_w, reso_h, attachment.data(), attachment.size()))
+            {
+            }
+
+            /*basic::resource<texture> get_attachment(size_t index) const
+            {
+                if (enabled())
+                {
+                    if (index < resouce()->m_raw_framebuf_data->m_attachment_count)
+                        return new texture(resouce()->m_raw_framebuf_data->m_output_attachments[index]);
+                    return nullptr;
+                }
+                return nullptr;
+            }*/
         };
 
         inline void ortho_projection(

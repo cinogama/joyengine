@@ -397,7 +397,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         else
         {
             // Depth texture do not use color format
-            switch (resource->m_raw_texture_data->m_format)
+            switch (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::COLOR_DEPTH_MASK)
             {
             case jegl_texture::texture_format::MONO:
                 texture_src_format = GL_LUMINANCE;
@@ -470,9 +470,9 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         bool already_has_attached_depth = false;
 
         GLenum attachment = GL_COLOR_ATTACHMENT0;
-        for (size_t i = 0; i < resource->m_raw_framebuf_data->m_pass_count; ++i)
+        for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
         {
-            jegl_resource* frame_texture = resource->m_raw_framebuf_data->m_output_passes[i];
+            jegl_resource* frame_texture = resource->m_raw_framebuf_data->m_output_attachments[i];
             assert(nullptr != frame_texture && nullptr != frame_texture->m_raw_texture_data);
 
             jegl_using_resource(frame_texture);
@@ -737,7 +737,7 @@ void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource* framebuffer, size_t
     if (nullptr == framebuffer)
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     else
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_uint1);
+        jegl_using_resource(framebuffer);
 
     glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }

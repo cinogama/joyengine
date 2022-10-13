@@ -309,16 +309,16 @@ void jegl_close_resource(jegl_resource* resource)
             case jegl_resource::FRAMEBUF:
                 // Close all frame rend out texture
                 if (!resource->m_raw_framebuf_data)
-                    assert(resource->m_raw_framebuf_data->m_pass_count == 0);
+                    assert(resource->m_raw_framebuf_data->m_attachment_count == 0);
                 else
                 {
-                    assert(resource->m_raw_framebuf_data->m_pass_count > 0);
-                    for (size_t i = 0; i < resource->m_raw_framebuf_data->m_pass_count; ++i)
+                    assert(resource->m_raw_framebuf_data->m_attachment_count > 0);
+                    for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
                     {
-                        assert(nullptr != resource->m_raw_framebuf_data->m_output_passes[i]);
-                        jegl_close_resource(resource->m_raw_framebuf_data->m_output_passes[i]);
+                        assert(nullptr != resource->m_raw_framebuf_data->m_output_attachments[i]);
+                        jegl_close_resource(resource->m_raw_framebuf_data->m_output_attachments[i]);
                     }
-                    delete[]resource->m_raw_framebuf_data->m_output_passes;
+                    delete[]resource->m_raw_framebuf_data->m_output_attachments;
                 }
                 delete resource->m_raw_framebuf_data;
                 break;
@@ -468,7 +468,7 @@ jegl_resource* jegl_load_texture(const char* path)
         jeecs_file_read(fbuf, sizeof(unsigned char), texfile->m_file_length, texfile);
         int w, h, cdepth;
 
-        stbi_set_flip_vertically_on_load(false);
+        stbi_set_flip_vertically_on_load(true);
         texture->m_raw_texture_data->m_pixels = stbi_load_from_memory(
             fbuf,
             texfile->m_file_length,
@@ -651,28 +651,28 @@ jegl_resource* jegl_load_shader(const char* path)
     return _jegl_create_died_shader(path);
 }
 
-jegl_resource* jegl_create_framebuf(size_t width, size_t height, jegl_texture::texture_format* formats, size_t passcount)
+jegl_resource* jegl_create_framebuf(size_t width, size_t height, const jegl_texture::texture_format* attachment_formats, size_t attachment_count)
 {
     jegl_resource* framebuf = _create_resource();
     framebuf->m_type = jegl_resource::FRAMEBUF;
     framebuf->m_raw_framebuf_data = new jegl_framebuf();
     framebuf->m_path = nullptr;
 
-    framebuf->m_raw_framebuf_data->m_pass_count = passcount;
+    framebuf->m_raw_framebuf_data->m_attachment_count = attachment_count;
     framebuf->m_raw_framebuf_data->m_width = width;
     framebuf->m_raw_framebuf_data->m_height = height;
 
-    if (passcount)
+    if (attachment_count > 0)
     {
-        framebuf->m_raw_framebuf_data->m_output_passes
-            = new jegl_resource * [passcount];
+        framebuf->m_raw_framebuf_data->m_output_attachments
+            = new jegl_resource * [attachment_count];
 
-        for (size_t i = 0; i < passcount; ++i)
-            framebuf->m_raw_framebuf_data->m_output_passes[i] = jegl_create_texture(width, height,
-                jegl_texture::texture_format(formats[i] | jegl_texture::texture_format::FRAMEBUF));
+        for (size_t i = 0; i < attachment_count; ++i)
+            framebuf->m_raw_framebuf_data->m_output_attachments[i] = jegl_create_texture(width, height,
+                jegl_texture::texture_format(attachment_formats[i] | jegl_texture::texture_format::FRAMEBUF));
     }
     else
-        framebuf->m_raw_framebuf_data->m_output_passes = nullptr;
+        framebuf->m_raw_framebuf_data->m_output_attachments = nullptr;
 
     return framebuf;
 }
