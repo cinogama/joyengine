@@ -802,7 +802,9 @@ struct jegl_shader
 
 struct jegl_framebuf
 {
-    jegl_resource** m_output_attachments;
+    // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
+    typedef struct attachment_t attachment_t;
+    attachment_t* m_output_attachments;
     size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
@@ -3734,7 +3736,7 @@ namespace jeecs
                     jegl_close_resource(_m_resouce);
             }
         };
-        class framebuffer;
+
         class texture : public resource_basic
         {
         public:
@@ -4047,16 +4049,19 @@ namespace jeecs
             {
             }
 
-            /*basic::resource<texture> get_attachment(size_t index) const
+            basic::resource<texture> get_attachment(size_t index) const
             {
                 if (enabled())
                 {
                     if (index < resouce()->m_raw_framebuf_data->m_attachment_count)
-                        return new texture(resouce()->m_raw_framebuf_data->m_output_attachments[index]);
+                    {
+                        auto* attachments = (basic::resource<graphic::texture>*)resouce()->m_raw_framebuf_data->m_output_attachments;
+                        return attachments[index];
+                    }
                     return nullptr;
                 }
                 return nullptr;
-            }*/
+            }
         };
 
         inline void ortho_projection(

@@ -313,12 +313,10 @@ void jegl_close_resource(jegl_resource* resource)
                 else
                 {
                     assert(resource->m_raw_framebuf_data->m_attachment_count > 0);
-                    for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
-                    {
-                        assert(nullptr != resource->m_raw_framebuf_data->m_output_attachments[i]);
-                        jegl_close_resource(resource->m_raw_framebuf_data->m_output_attachments[i]);
-                    }
-                    delete[]resource->m_raw_framebuf_data->m_output_attachments;
+                    jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+                        (jeecs::basic::resource<jeecs::graphic::texture>*)resource->m_raw_framebuf_data->m_output_attachments;
+
+                    delete[]attachments;
                 }
                 delete resource->m_raw_framebuf_data;
                 break;
@@ -662,17 +660,17 @@ jegl_resource* jegl_create_framebuf(size_t width, size_t height, const jegl_text
     framebuf->m_raw_framebuf_data->m_width = width;
     framebuf->m_raw_framebuf_data->m_height = height;
 
+    jeecs::basic::resource<jeecs::graphic::texture>* attachments = nullptr;
     if (attachment_count > 0)
     {
-        framebuf->m_raw_framebuf_data->m_output_attachments
-            = new jegl_resource * [attachment_count];
+        attachments = new jeecs::basic::resource<jeecs::graphic::texture>[attachment_count];
 
         for (size_t i = 0; i < attachment_count; ++i)
-            framebuf->m_raw_framebuf_data->m_output_attachments[i] = jegl_create_texture(width, height,
+            attachments[i] = new jeecs::graphic::texture(width, height,
                 jegl_texture::texture_format(attachment_formats[i] | jegl_texture::texture_format::FRAMEBUF));
     }
-    else
-        framebuf->m_raw_framebuf_data->m_output_attachments = nullptr;
+
+    framebuf->m_raw_framebuf_data->m_output_attachments = (jegl_framebuf::attachment_t*)attachments;
 
     return framebuf;
 }

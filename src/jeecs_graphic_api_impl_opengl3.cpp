@@ -472,7 +472,10 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         GLenum attachment = GL_COLOR_ATTACHMENT0;
         for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
         {
-            jegl_resource* frame_texture = resource->m_raw_framebuf_data->m_output_attachments[i];
+            jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+                (jeecs::basic::resource<jeecs::graphic::texture>*)resource->m_raw_framebuf_data->m_output_attachments;
+
+            jegl_resource* frame_texture = attachments[i]->resouce();
             assert(nullptr != frame_texture && nullptr != frame_texture->m_raw_texture_data);
 
             jegl_using_resource(frame_texture);
