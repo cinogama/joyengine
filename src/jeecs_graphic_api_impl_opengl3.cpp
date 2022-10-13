@@ -281,7 +281,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         }
         else
         {
-            resource->m_uint1 = shader_program;
             auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
             builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(resource, "JOYENGINE_TRANS_M");
@@ -291,6 +290,8 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MVP");
             builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MV");
             builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_VP");
+
+            resource->m_uint1 = shader_program;
         }
 
         glDeleteShader(vertex_shader);
@@ -432,9 +433,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 
             glGenerateMipmap(gl_texture_type);
         }
-
-        glBindTexture(gl_texture_type, 0);
-
         resource->m_uint1 = texture;
     }
     else if (resource->m_type == jegl_resource::type::VERTEX)
@@ -464,8 +462,51 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         resource->m_uint1 = vao;
         resource->m_uint2 = vbo;
     }
+    else if (resource->m_type == jegl_resource::type::FRAMEBUF)
+    {
+        GLuint fbo;
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        bool already_has_attached_depth = false;
+
+        GLenum attachment = GL_COLOR_ATTACHMENT0;
+        for (size_t i = 0; i < resource->m_raw_framebuf_data->m_pass_count; ++i)
+        {
+            jegl_resource* frame_texture = resource->m_raw_framebuf_data->m_output_passes[i];
+            assert(nullptr != frame_texture && nullptr != frame_texture->m_raw_texture_data);
+
+            jegl_using_resource(frame_texture);
+
+            GLenum using_attachment = attachment;
+            GLenum buffer_texture_type = GL_TEXTURE_2D;
+
+            if (0 != (frame_texture->m_raw_texture_data->m_format & jegl_texture::texture_format::DEPTH))
+            {
+                if (already_has_attached_depth)
+                    jeecs::debug::log_error("Framebuffer(%p) attach depth buffer repeatedly.", resource);
+                already_has_attached_depth = true;
+                using_attachment = GL_DEPTH_ATTACHMENT;
+            }
+            else
+                ++attachment;
+
+            if (0 != (frame_texture->m_raw_texture_data->m_format & jegl_texture::texture_format::MSAA_MASK))
+                // Texture using msaa
+                buffer_texture_type = GL_TEXTURE_2D_MULTISAMPLE;
+
+            glFramebufferTexture2D(GL_FRAMEBUFFER, using_attachment, buffer_texture_type, frame_texture->m_uint1, 0);
+        }
+        std::vector<GLuint> attachments;
+        for (GLenum attachment_index = GL_COLOR_ATTACHMENT0; attachment_index < attachment; ++attachment_index)
+            attachments.push_back(attachment_index);
+
+        glDrawBuffers(attachments.size(), attachments.data());
+
+        resource->m_uint1 = fbo;
+    }
     else
-        jeecs::debug::log_error("Unknown resource type when initing resource %p, please check.", resource);
+        jeecs::debug::log_error("Unknown resource type when initing resource(%p), please check.", resource);
 }
 
 thread_local static jegl_shader::depth_test_method  ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
@@ -625,18 +666,22 @@ inline void _gl_update_shader_state(jegl_shader* shader)
 
 inline void _gl_using_shader_program(jegl_resource* resource)
 {
+    assert(resource->m_raw_shader_data);
     _gl_update_shader_state(resource->m_raw_shader_data);
     glUseProgram(resource->m_uint1);
 }
 
 inline void _gl_using_texture2d(jegl_resource* resource)
 {
-    glBindTexture(GL_TEXTURE_2D, resource->m_uint1);
-}
+    assert(resource->m_raw_texture_data);
+    auto bind_texture_type = GL_TEXTURE_2D;
 
-inline void _gl_using_vertex(jegl_resource* resource)
-{
-    glBindVertexArray(resource->m_uint1);
+    if (0 != (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::MSAA_MASK))
+        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, resource->m_uint1);
+    else if (0 != (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::CUBE))
+        glBindTexture(GL_TEXTURE_CUBE_MAP, resource->m_uint1);
+    else
+        glBindTexture(GL_TEXTURE_2D, resource->m_uint1);
 }
 
 void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
@@ -646,7 +691,9 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
     else if (resource->m_type == jegl_resource::type::TEXTURE)
         _gl_using_texture2d(resource);
     else if (resource->m_type == jegl_resource::type::VERTEX)
-        _gl_using_vertex(resource);
+        glBindVertexArray(resource->m_uint1);
+    else if (resource->m_type == jegl_resource::type::FRAMEBUF)
+        glBindFramebuffer(GL_FRAMEBUFFER, resource->m_uint1);
 }
 
 void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
@@ -660,6 +707,8 @@ void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
         glDeleteVertexArrays(1, &resource->m_uint1);
         glDeleteBuffers(1, &resource->m_uint2);
     }
+    else if (resource->m_type == jegl_resource::type::FRAMEBUF)
+        glDeleteFramebuffers(1, &resource->m_uint1);
     else
         jeecs::debug::log_error("Unknown resource type when closing resource %p, please check.", resource);
 }
@@ -684,8 +733,13 @@ void gl_draw_vertex_with_shader(jegl_resource* vert)
     glDrawArrays(DRAW_METHODS[vert->m_raw_vertex_data->m_type], 0, vert->m_raw_vertex_data->m_point_count);
 }
 
-void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h)
+void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
+    if (nullptr == framebuffer)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    else
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_uint1);
+
     glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }
 void gl_clear_framebuffer_color(jegl_thread*, jegl_resource*)

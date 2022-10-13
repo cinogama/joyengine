@@ -806,7 +806,6 @@ struct jegl_framebuf
     size_t          m_pass_count;
     size_t          m_width;
     size_t          m_height;
-    uint8_t         m_msaa_level;
 };
 
 struct jegl_resource
