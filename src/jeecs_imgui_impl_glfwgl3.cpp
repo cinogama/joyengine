@@ -760,13 +760,13 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width,
                 ((*texture)->resouce())->m_raw_texture_data->m_height
-            ));
+            ), ImVec2(0, 1), ImVec2(1, 0));
     else if (argc == 2)
         ImGui::Image((ImTextureID)((*texture)->resouce())->m_uint1,
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
-            ));
+            ), ImVec2(0, 1), ImVec2(1, 0));
 
     return wo_ret_void(vm);
 }
@@ -782,13 +782,13 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width,
                 ((*texture)->resouce())->m_raw_texture_data->m_height
-            ));
+            ), ImVec2(0, 1), ImVec2(1, 0));
     else if (argc == 2)
         result = ImGui::ImageButton((ImTextureID)((*texture)->resouce())->m_uint1,
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
-            ));
+            ), ImVec2(0, 1), ImVec2(1, 0));
 
     return wo_ret_bool(vm, result);
 }
