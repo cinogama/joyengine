@@ -33,7 +33,7 @@ public:
         case jegl_shader_value::type::TEXTURE_CUBE:
             return "samplerCube";
         default:
-            jeecs::debug::log_error("Unknown value type when generating glsl, please check!");
+            jeecs::debug::logerr("Unknown value type when generating glsl, please check!");
             return "unknown";
             break;
         }
@@ -205,7 +205,7 @@ std::string _generate_code_for_glsl_impl(
                 break;
             }
             default:
-                jeecs::debug::log_error("Unknown constant value when generating glsl, please check!");
+                jeecs::debug::logerr("Unknown constant value when generating glsl, please check!");
                 apply += "invalid";
                 break;
             }
@@ -242,7 +242,7 @@ uniform_information get_uniform_info(const std::string& name, jegl_shader_value*
         init_value = value; // Texture2d need init-value(itself) for channel id;
         uniform_type = jegl_shader::uniform_type::TEXTURE; break;
     default:
-        jeecs::debug::log_error("Unsupport uniform variable type."); break;
+        jeecs::debug::logerr("Unsupport uniform variable type."); break;
     }
     return std::make_tuple(name, uniform_type, init_value);
 }

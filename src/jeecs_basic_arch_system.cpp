@@ -11,8 +11,8 @@
 #   define DEBUG_ARCH_LOG(...) ((void)0)
 #   define DEBUG_ARCH_LOG_WARN(...) ((void)0)
 #else
-#   define DEBUG_ARCH_LOG(...) jeecs::debug::log_info( __VA_ARGS__ );
-#   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::log_warn( __VA_ARGS__ );
+#   define DEBUG_ARCH_LOG(...) jeecs::debug::loginfo( __VA_ARGS__ );
+#   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::logwarn( __VA_ARGS__ );
 #endif
 
 #ifdef __cpp_lib_execution
@@ -921,7 +921,7 @@ namespace jeecs_impl
             }
             else
             {
-                jeecs::debug::log_warn("Current system(%p) named '%s' ready to append later, but in same frame it has been request to remove, canceled.",
+                jeecs::debug::logwarn("Current system(%p) named '%s' ready to append later, but in same frame it has been request to remove, canceled.",
                     fnd->second.m_system_instance, type->m_typename);
                 _destroy_system_instance(type, fnd->second.m_system_instance);
                 m_delay_appending_systems.erase(fnd);
@@ -934,14 +934,14 @@ namespace jeecs_impl
             if (m_delay_removing_systems[type])
             {
                 --m_delay_removing_systems[type];
-                jeecs::debug::log_warn("Current system(%p) named '%s' ready to append, but in same frame it has been request to remove, canceled.",
+                jeecs::debug::logwarn("Current system(%p) named '%s' ready to append, but in same frame it has been request to remove, canceled.",
                     sys, type->m_typename);
 
                 _destroy_system_instance(type, sys);
             }
             else if (m_systems.find(type) != m_systems.end())
             {
-                jeecs::debug::log_warn("Current system(%p) named '%s' already contained in world(%p), try add it(%p) later.",
+                jeecs::debug::logwarn("Current system(%p) named '%s' already contained in world(%p), try add it(%p) later.",
                     m_systems[type], type->m_typename, this, sys);
 
                 append_system_instance_delay(type, sys);
@@ -1013,7 +1013,7 @@ namespace jeecs_impl
                             append_system_instance(delay_appending_system.first, delay_appending_system.second.m_system_instance);
                         else
                         {
-                            jeecs::debug::log_error("Trying to append system(%p) with type of '%s', but the system has same type already appended.",
+                            jeecs::debug::logerr("Trying to append system(%p) with type of '%s', but the system has same type already appended.",
                                 delay_appending_system.second.m_system_instance, delay_appending_system.first->m_typename);
                             _destroy_system_instance(delay_appending_system.first, delay_appending_system.second.m_system_instance);
                         }
@@ -1027,7 +1027,7 @@ namespace jeecs_impl
                     {
                         if (delay_removing_system.second)
                         {
-                            jeecs::debug::log_error("Trying to remove system with type of '%s', but the specified type of system does not exists.",
+                            jeecs::debug::logerr("Trying to remove system with type of '%s', but the specified type of system does not exists.",
                                 delay_removing_system.first->m_typename);
                         }
                     }
@@ -1188,7 +1188,7 @@ namespace jeecs_impl
                             {
                                 // Origin chunk has same component, the old one will be replaced by the new one.
                                 // Give warning here!
-                                jeecs::debug::log_warn("Try adding component '%s' to entity, but here is already have a same one.",
+                                jeecs::debug::logwarn("Try adding component '%s' to entity, but here is already have a same one.",
                                     current_typed_component->m_typeinfo->m_typename);
                             }
 
@@ -1196,7 +1196,7 @@ namespace jeecs_impl
                             if (addr_place)
                             {
                                 // This type of component already in list, destruct/free it and give warning
-                                jeecs::debug::log_warn("Try adding same component named '%s' to entity in same frame.",
+                                jeecs::debug::logwarn("Try adding same component named '%s' to entity in same frame.",
                                     current_typed_component->m_typeinfo->m_typename);
                                 current_typed_component->m_typeinfo->m_destructor(addr_place);
                                 je_mem_free(addr_place);
@@ -1447,7 +1447,7 @@ namespace jeecs_impl
                         });
 
                     if (fnd == _m_shared_pre_jobs.end())
-                        jeecs::debug::log_error("Cannot find pre-job(%p) in universe(%p), remove failed.",
+                        jeecs::debug::logerr("Cannot find pre-job(%p) in universe(%p), remove failed.",
                             cur_action->m_for_worlds_job, this);
                     else
                     {
@@ -1465,7 +1465,7 @@ namespace jeecs_impl
                         });
 
                     if (fnd == _m_shared_pre_jobs.end())
-                        jeecs::debug::log_error("Cannot find pre-callonce-job(%p) in universe(%p), remove failed.",
+                        jeecs::debug::logerr("Cannot find pre-callonce-job(%p) in universe(%p), remove failed.",
                             cur_action->m_call_once_job, this);
                     else
                     {
@@ -1484,7 +1484,7 @@ namespace jeecs_impl
                         });
 
                     if (fnd == _m_shared_jobs.end())
-                        jeecs::debug::log_error("Cannot find job(%p) in universe(%p), remove failed.",
+                        jeecs::debug::logerr("Cannot find job(%p) in universe(%p), remove failed.",
                             cur_action->m_for_worlds_job, this);
                     else
                     {
@@ -1502,7 +1502,7 @@ namespace jeecs_impl
                         });
 
                     if (fnd == _m_shared_jobs.end())
-                        jeecs::debug::log_error("Cannot find callonce-job(%p) in universe(%p), remove failed.",
+                        jeecs::debug::logerr("Cannot find callonce-job(%p) in universe(%p), remove failed.",
                             cur_action->m_call_once_job, this);
                     else
                     {
@@ -1520,7 +1520,7 @@ namespace jeecs_impl
                         });
 
                     if (fnd == _m_shared_after_jobs.end())
-                        jeecs::debug::log_error("Cannot find after-job(%p) in universe(%p), remove failed.",
+                        jeecs::debug::logerr("Cannot find after-job(%p) in universe(%p), remove failed.",
                             cur_action->m_for_worlds_job, this);
                     else
                     {
@@ -1538,7 +1538,7 @@ namespace jeecs_impl
                         });
 
                     if (fnd == _m_shared_after_jobs.end())
-                        jeecs::debug::log_error("Cannot find after-callonce-job(%p) in universe(%p), remove failed.",
+                        jeecs::debug::logerr("Cannot find after-callonce-job(%p) in universe(%p), remove failed.",
                             cur_action->m_call_once_job, this);
                     else
                     {

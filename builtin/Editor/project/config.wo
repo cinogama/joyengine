@@ -11,8 +11,8 @@ namespace editor
         path : option<string>,  // 项目文件的路径，默认项目没有这个值
         worlds : vec<Project::World>,
 
-        graphic_system : je::typeinfo,    // 默认使用的图形系统类型
-        editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
+        mut graphic_system : je::typeinfo,    // 默认使用的图形系统类型
+        mut editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
 
         native_modules : map<string /* path */, CxxProject>,
         mut about_info : string,        // 无聊小功能，可以给项目加个关于信息，版权信息也可以写里面
@@ -143,7 +143,9 @@ namespace editor::Project
             // Camera 族组件
             je::typeinfo("Camera::PerspectiveProjection")->val,
             je::typeinfo("Camera::Projection")->val,
+            je::typeinfo("Camera::RendToFramebuffer")->val,
         ]);
+        editor_camera->je::editor::apply_camera_framebuf_setting(320, 240);
         editor_camera->editor::set_parent(camera_walker, true);
         camera_walker->editor::name("调试摄像机组");
         editor_camera->editor::name("调试摄像机");
@@ -263,7 +265,7 @@ namespace editor::Project
             path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
             // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
             graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
-            editor_system = je::typeinfo("Editor::DefaultEditorSystem")->val,
+            editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,
             native_modules = {}mut,
             about_info = "此项目为默认项目，不可用于实际使用\n(C)Cinogama.",
@@ -350,16 +352,16 @@ namespace editor::Project
 
 
             // 加载自定义的图形和编辑时系统
-            let graphic_system = data
+            proj.graphic_system = data
                 ->get("graphic_system": dynamic)
-                ->map(\n: dynamic = typeinfo(n as string);)
-                ->or(\ = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME);)
+                ->bind(\n: dynamic = typeinfo(n as string);)
+                ->or(\ = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val;)
                 ->reduce
                 ->val;
-            let editor_system = data
+            proj.editor_system = data
                 ->get("editor_system": dynamic)
-                ->map(\n: dynamic = typeinfo(n as string);)
-                ->or(\ = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME);)
+                ->bind(\n: dynamic = typeinfo(n as string);)
+                ->or(\ = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val;)
                 ->reduce
                 ->val;
 

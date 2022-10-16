@@ -383,7 +383,7 @@ std::unordered_map<std::string, action_node*> _generate_accpetable_tree()
             else
             {
                 if ((*act_node)->m_reduce_const_function)
-                    jeecs::debug::log_fatal("Shader operation map conflict.");
+                    jeecs::debug::logfatal("Shader operation map conflict.");
                 (*act_node)->m_reduce_const_function = std::get<calc_func_t>(type_or_act);
             }
         }
@@ -1503,7 +1503,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             case jegl_shader_value::type::TEXTURE_CUBE:
                 variable->n = init_val->m_uniform_texture_channel; break;
             default:
-                jeecs::debug::log_error("Unsupport uniform variable type."); break;
+                jeecs::debug::logerr("Unsupport uniform variable type."); break;
             }
             variable->m_updated = true;
         }

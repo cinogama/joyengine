@@ -279,6 +279,8 @@ namespace je::gui
     public func Image(tex: je::graphic::texture)=> void;
     extern("libjoyecs", "je_gui_image")
     public func Image(tex: je::graphic::texture, scale: real)=> void;
+    extern("libjoyecs", "je_gui_image")
+    public func Image(tex: je::graphic::texture, width: int, height: int)=> void;
 
     extern("libjoyecs", "je_gui_imagebutton")
     public func ImageButton(tex: je::graphic::texture)=> bool;
@@ -766,6 +768,12 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
+            ), ImVec2(0, 1), ImVec2(1, 0));
+    else if (argc == 3)
+        ImGui::Image((ImTextureID)((*texture)->resouce())->m_uint1,
+            ImVec2(
+                wo_int(args + 1),
+                wo_int(args + 2)
             ), ImVec2(0, 1), ImVec2(1, 0));
 
     return wo_ret_void(vm);

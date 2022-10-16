@@ -96,7 +96,7 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     GRAPHIC_THREAD_ID = std::this_thread::get_id();
 
     if (!glfwInit())
-        jeecs::debug::log_fatal("Failed to init glfw.");
+        jeecs::debug::logfatal("Failed to init glfw.");
 
     WINDOWS_SIZE_WIDTH = config->m_windows_width ? config->m_windows_width : config->m_resolution_x;
     WINDOWS_SIZE_HEIGHT = config->m_windows_height ? config->m_windows_height : config->m_resolution_y;
@@ -117,7 +117,7 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glfwSwapInterval(0);
 
     if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
-        jeecs::debug::log_fatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
+        jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
 
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_TEXTURE_2D);
@@ -156,7 +156,7 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 
     if (glfwWindowShouldClose(WINDOWS_HANDLE))
     {
-        jeecs::debug::log_warn("Graphic interface has been closed, graphic thread will exit soon.");
+        jeecs::debug::logwarn("Graphic interface has been closed, graphic thread will exit soon.");
         return false;
     }
     return true;
@@ -227,7 +227,7 @@ void gl_set_uniform(jegl_resource*, int location, jegl_shader::uniform_type type
     case jegl_shader::FLOAT4X4:
         glUniformMatrix4fv((GLuint)location, 1, false, (float*)val); break;
     default:
-        jeecs::debug::log_error("Unknown uniform variable type to set."); break;
+        jeecs::debug::logerr("Unknown uniform variable type to set."); break;
     }
 }
 
@@ -276,7 +276,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
                 glGetProgramInfoLog(shader_program, errmsg_len, &errmsg_written_len, errmsg_buf.data());
                 error_informations = error_informations + "In shader program link: \n" + errmsg_buf.data();
             }
-            jeecs::debug::log_error("Some error happend when tring compile shader %p, please check.\n %s",
+            jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
                 resource, error_informations.c_str());
         }
         else
@@ -327,7 +327,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             case jegl_texture::texture_sampling::REPEAT_X:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
             default:
-                jeecs::debug::log_error("Unknown texture wrap method in x(%04x)",
+                jeecs::debug::logerr("Unknown texture wrap method in x(%04x)",
                     resource->m_raw_texture_data->m_sampling);
             }
             switch (resource->m_raw_texture_data->m_sampling & jegl_texture::texture_sampling::WRAP_Y_METHOD_MASK)
@@ -337,7 +337,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             case jegl_texture::texture_sampling::REPEAT_Y:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
             default:
-                jeecs::debug::log_error("Unknown texture wrap method in y(%04x)",
+                jeecs::debug::logerr("Unknown texture wrap method in y(%04x)",
                     resource->m_raw_texture_data->m_sampling);
             }
 
@@ -357,7 +357,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             case jegl_texture::texture_sampling::MIN_NEAREST_NEAREST_MIP:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST); break;
             default:
-                jeecs::debug::log_error("Unknown texture min filter method(%04x)",
+                jeecs::debug::logerr("Unknown texture min filter method(%04x)",
                     resource->m_raw_texture_data->m_sampling);
             }
             switch (resource->m_raw_texture_data->m_sampling & jegl_texture::texture_sampling::MAG_FILTER_MASK)
@@ -367,14 +367,14 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             case jegl_texture::texture_sampling::MAG_NEAREST:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MAG_FILTER, GL_NEAREST); break;
             default:
-                jeecs::debug::log_error("Unknown texture mag filter method(%04x)",
+                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
                     resource->m_raw_texture_data->m_sampling);
             }
         }
         if (is_depth)
         {
             if (is_16bit)
-                jeecs::debug::log_error("Depth texture cannot use 16bit.");
+                jeecs::debug::logerr("Depth texture cannot use 16bit.");
 
             if (is_cube)
                 assert(0); // todo;
@@ -409,7 +409,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
                 texture_src_format = GL_RGBA;
                 texture_aim_format = is_16bit ? GL_RGBA16 : GL_RGBA; break;
             default:
-                jeecs::debug::log_error("Unknown texture raw-data format.");
+                jeecs::debug::logerr("Unknown texture raw-data format.");
             }
 
             if (is_cube)
@@ -486,7 +486,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             if (0 != (frame_texture->m_raw_texture_data->m_format & jegl_texture::texture_format::DEPTH))
             {
                 if (already_has_attached_depth)
-                    jeecs::debug::log_error("Framebuffer(%p) attach depth buffer repeatedly.", resource);
+                    jeecs::debug::logerr("Framebuffer(%p) attach depth buffer repeatedly.", resource);
                 already_has_attached_depth = true;
                 using_attachment = GL_DEPTH_ATTACHMENT;
             }
@@ -508,7 +508,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         resource->m_uint1 = fbo;
     }
     else
-        jeecs::debug::log_error("Unknown resource type when initing resource(%p), please check.", resource);
+        jeecs::debug::logerr("Unknown resource type when initing resource(%p), please check.", resource);
 }
 
 thread_local static jegl_shader::depth_test_method  ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
@@ -541,7 +541,7 @@ inline void _gl_update_depth_test_method(jegl_shader::depth_test_method mode)
             case jegl_shader::depth_test_method::GREATER_EQUAL: glDepthFunc(GL_GEQUAL); break;
             case jegl_shader::depth_test_method::ALWAYS:   glDepthFunc(GL_ALWAYS); break;
             default:
-                jeecs::debug::log_error("Invalid depth test method.");
+                jeecs::debug::logerr("Invalid depth test method.");
                 break;
             }
         }// end else
@@ -603,7 +603,7 @@ inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jeg
             case jegl_shader::blend_method::CONST_ALPHA: src_factor = GL_CONSTANT_ALPHA; break;
             case jegl_shader::blend_method::ONE_MINUS_CONST_COLOR: src_factor = GL_ONE_MINUS_CONSTANT_COLOR; break;
             case jegl_shader::blend_method::ONE_MINUS_CONST_ALPHA: src_factor = GL_ONE_MINUS_CONSTANT_ALPHA; break;
-            default: jeecs::debug::log_error("Invalid blend src method."); break;
+            default: jeecs::debug::logerr("Invalid blend src method."); break;
             }
             switch (dst_mode)
             {
@@ -621,7 +621,7 @@ inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jeg
             case jegl_shader::blend_method::CONST_ALPHA: dst_factor = GL_CONSTANT_ALPHA; break;
             case jegl_shader::blend_method::ONE_MINUS_CONST_COLOR: dst_factor = GL_ONE_MINUS_CONSTANT_COLOR; break;
             case jegl_shader::blend_method::ONE_MINUS_CONST_ALPHA: dst_factor = GL_ONE_MINUS_CONSTANT_ALPHA; break;
-            default: jeecs::debug::log_error("Invalid blend src method."); break;
+            default: jeecs::debug::logerr("Invalid blend src method."); break;
             }
             glEnable(GL_BLEND);
             glBlendFunc(src_factor, dst_factor);
@@ -650,7 +650,7 @@ inline void _gl_update_cull_mode_method(jegl_shader::cull_mode mode)
             case jegl_shader::cull_mode::BACK:
                 glCullFace(GL_FRONT_AND_BACK); break;
             default:
-                jeecs::debug::log_error("Invalid culling mode.");
+                jeecs::debug::logerr("Invalid culling mode.");
                 break;
             }
         }
@@ -712,7 +712,7 @@ void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
     else if (resource->m_type == jegl_resource::type::FRAMEBUF)
         glDeleteFramebuffers(1, &resource->m_uint1);
     else
-        jeecs::debug::log_error("Unknown resource type when closing resource %p, please check.", resource);
+        jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
 }
 
 void gl_bind_texture(jegl_resource* texture, size_t pass)

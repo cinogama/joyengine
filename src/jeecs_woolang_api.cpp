@@ -116,6 +116,52 @@ WO_API wo_api wojeapi_unload_module(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
+    {
+        rbf->framebuffer = new jeecs::graphic::framebuffer(
+            wo_int(args + 1), wo_int(args + 2), {
+                jegl_texture::texture_format::RGBA,
+                jegl_texture::texture_format::DEPTH,
+            }
+        );
+    }
+    else
+        jeecs::debug::logerr("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
+    {
+        if (!rbf->framebuffer)
+        {
+            jeecs::debug::logerr("RendToFramebuffer(%p).framebuffer not specify in entity when 'wojeapi_get_framebuf_texture'.",
+                rbf);
+            return wo_ret_option_none(vm);
+        }
+        auto tex = rbf->framebuffer->get_attachment(wo_int(args + 1));
+        if (!tex)
+        {
+            jeecs::debug::logerr("RendToFramebuffer(%p).framebuffer not contain attach(%zu) in entity when 'wojeapi_get_framebuf_texture'.",
+                rbf, (size_t)wo_int(args + 1));
+            return wo_ret_option_none(vm);
+        }
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::texture>(tex), nullptr,
+            [](void* ptr) {
+                delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
+            });
+    }
+    else
+        jeecs::debug::logerr("No RendToFramebuffer in specify entity when 'wojeapi_get_framebuf_texture'.");
+    return wo_ret_option_none(vm);
+}
+
 // ECS UNIVERSE
 WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
 {
@@ -566,7 +612,7 @@ WO_API wo_api wojeapi_loginfo(wo_vm vm, wo_value args, size_t argc)
     for (size_t i = 0; i < argc; i++)
         disp += wo_cast_string(args + i);
 
-    jeecs::debug::log_info("%s", disp.c_str());
+    jeecs::debug::loginfo("%s", disp.c_str());
     return wo_ret_void(vm);
 }
 
@@ -577,7 +623,7 @@ WO_API wo_api wojeapi_logwarn(wo_vm vm, wo_value args, size_t argc)
     for (size_t i = 0; i < argc; i++)
         disp += wo_cast_string(args + i);
 
-    jeecs::debug::log_warn("%s", disp.c_str());
+    jeecs::debug::logwarn("%s", disp.c_str());
     return wo_ret_void(vm);
 }
 
@@ -588,7 +634,7 @@ WO_API wo_api wojeapi_logerr(wo_vm vm, wo_value args, size_t argc)
     for (size_t i = 0; i < argc; i++)
         disp += wo_cast_string(args + i);
 
-    jeecs::debug::log_error("%s", disp.c_str());
+    jeecs::debug::logerr("%s", disp.c_str());
     return wo_ret_void(vm);
 }
 
@@ -599,7 +645,7 @@ WO_API wo_api wojeapi_logfatal(wo_vm vm, wo_value args, size_t argc)
     for (size_t i = 0; i < argc; i++)
         disp += wo_cast_string(args + i);
 
-    jeecs::debug::log_fatal("%s", disp.c_str());
+    jeecs::debug::logfatal("%s", disp.c_str());
     return wo_ret_void(vm);
 }
 
@@ -1242,6 +1288,12 @@ namespace je
 
         extern("libjoyecs", "wojeapi_setable_editor_system")
         public func enable_editor_system(able: bool)=> void;
+
+        extern("libjoyecs", "wojeapi_apply_camera_framebuf_setting")
+        public func apply_camera_framebuf_setting(camera: entity, width: int, height: int)=> void;
+
+        extern("libjoyecs", "wojeapi_get_framebuf_texture")
+        public func get_framebuf_texture(camera: entity, index: int)=> option<graphic::texture>;
     }
 
     extern("libjoyecs", "wojeapi_log")

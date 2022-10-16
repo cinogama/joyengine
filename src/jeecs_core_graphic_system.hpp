@@ -14,24 +14,9 @@
 
 namespace jeecs
 {
-    struct DefaultGraphicPipelineSystem;
-    struct DefaultGraphicPipeline
+    struct GraphicThreadHost
     {
-        JECS_DISABLE_MOVE_AND_COPY(DefaultGraphicPipeline);
-
-        using Translation = Transform::Translation;
-
-        using Rendqueue = Renderer::Rendqueue;
-
-        using Clip = Camera::Clip;
-        using PerspectiveProjection = Camera::PerspectiveProjection;
-        using OrthoProjection = Camera::OrthoProjection;
-        using Projection = Camera::Projection;
-        using Viewport = Camera::Viewport;
-
-        using Shape = Renderer::Shape;
-        using Shaders = Renderer::Shaders;
-        using Textures = Renderer::Textures;
+        JECS_DISABLE_MOVE_AND_COPY(GraphicThreadHost);
 
         jegl_thread* glthread = nullptr;
 
@@ -40,7 +25,7 @@ namespace jeecs
         basic::resource<graphic::texture> default_texture;
         jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
 
-        DefaultGraphicPipeline()
+        GraphicThreadHost()
         {
             default_shape_quad =
                 new graphic::vertex(jegl_vertex::QUADS,
@@ -91,10 +76,12 @@ public let frag =
                 config,
                 jegl_using_opengl_apis,
                 [](void* ptr, jegl_thread* glthread)
-                {((DefaultGraphicPipeline*)ptr)->Frame(glthread); }, this);
+                {
+                    ((GraphicThreadHost*)ptr)->_m_rend_update_func(glthread);
+                }, this);
         }
 
-        ~DefaultGraphicPipeline()
+        ~GraphicThreadHost()
         {
             assert(this == _m_instance);
             _m_instance = nullptr;
@@ -102,18 +89,19 @@ public let frag =
                 jegl_terminate_graphic_thread(glthread);
         }
 
-        inline static std::atomic<DefaultGraphicPipeline*> _m_instance = nullptr;
+        inline static std::atomic<GraphicThreadHost*> _m_instance = nullptr;
         inline static std::atomic<void*> _m_rending_world = nullptr;
+        std::function<void(jegl_thread*)> _m_rend_update_func;
 
-        static DefaultGraphicPipeline* get_default_graphic_pipeline_instance(game_universe universe)
+        static GraphicThreadHost* get_default_graphic_pipeline_instance(game_universe universe)
         {
             if (nullptr == _m_instance)
             {
-                _m_instance = new DefaultGraphicPipeline();
+                _m_instance = new GraphicThreadHost();
                 je_ecs_universe_register_exit_callback(universe.handle(),
                     [](void* instance)
                     {
-                        delete (DefaultGraphicPipeline*)instance;
+                        delete (GraphicThreadHost*)instance;
                     },
                     _m_instance);
             }
@@ -122,11 +110,90 @@ public let frag =
             return _m_instance;
         }
 
+        bool IsActive(game_world world)const noexcept
+        {
+            return world.handle() == _m_rending_world;
+        }
+        void DeActive(game_world world)const noexcept
+        {
+            void* excpet_world = world.handle();
+            _m_rending_world.compare_exchange_weak(excpet_world, nullptr);
+        }
+
+        template<typename PipelineSystemT>
+        inline void UpdateFrame(game_world world, PipelineSystemT* sys)noexcept
+        {
+            void* _null = nullptr;
+            if (_m_rending_world.compare_exchange_weak(_null, world.handle()))
+            {
+                // Rend world update, repleace frame function;
+                _m_rend_update_func = [sys](jegl_thread* gt) {sys->Frame(gt); };
+            }
+
+            if (glthread && IsActive(world))
+                if (!jegl_update(glthread))
+                {
+                    // update is not work now, means graphic thread want to exit..
+                    // ready to shutdown current universe
+
+                    if (game_universe universe = world.get_universe())
+                        universe.stop();
+                }
+        }
+    };
+
+    struct EmptyGraphicPipelineSystem : public game_system
+    {
+        GraphicThreadHost* _m_pipeline;
+
+        EmptyGraphicPipelineSystem(game_world w)
+            : game_system(w)
+            , _m_pipeline(GraphicThreadHost::get_default_graphic_pipeline_instance(w.get_universe()))
+        {
+
+        }
+
+        inline GraphicThreadHost* host()const noexcept
+        {
+            return _m_pipeline;
+        }
+
+        template<typename SysT>
+        inline void UpdateFrame(SysT* _this) noexcept
+        {
+            _m_pipeline->UpdateFrame(get_world(), _this);
+        }
+
+        void Frame(jegl_thread* glthread)
+        {
+            jeecs::debug::logerr("No graphic frame pipeline found in current graphic system(%p), please check.",
+                this);
+        }
+    };
+
+    struct DefaultGraphicPipelineSystem : public EmptyGraphicPipelineSystem
+    {
+        using Translation = Transform::Translation;
+
+        using Rendqueue = Renderer::Rendqueue;
+
+        using Clip = Camera::Clip;
+        using PerspectiveProjection = Camera::PerspectiveProjection;
+        using OrthoProjection = Camera::OrthoProjection;
+        using Projection = Camera::Projection;
+        using Viewport = Camera::Viewport;
+        using RendToFramebuffer = Camera::RendToFramebuffer;
+
+        using Shape = Renderer::Shape;
+        using Shaders = Renderer::Shaders;
+        using Textures = Renderer::Textures;
+
         struct camera_arch
         {
             const Rendqueue* rendqueue;
             const Projection* projection;
             const Viewport* viewport;
+            const RendToFramebuffer* rendToFramebuffer;
 
             bool operator < (const camera_arch& another) const noexcept
             {
@@ -157,6 +224,86 @@ public let frag =
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
 
+        DefaultGraphicPipelineSystem(game_world w)
+            : EmptyGraphicPipelineSystem(w)
+        {
+
+        }
+
+        ~DefaultGraphicPipelineSystem()
+        {
+            _m_pipeline->DeActive(get_world());
+        }
+
+        void PrepareCameras(Projection& projection, Translation& translation, OrthoProjection* ortho, PerspectiveProjection* perspec, Clip* clip)
+        {
+            float mat_inv_rotation[4][4];
+            translation.world_rotation.create_inv_matrix(mat_inv_rotation);
+            float mat_inv_position[4][4] = {};
+            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
+            mat_inv_position[3][0] = -translation.world_position.x;
+            mat_inv_position[3][1] = -translation.world_position.y;
+            mat_inv_position[3][2] = -translation.world_position.z;
+
+            // TODO: Optmize
+            math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
+
+            assert(ortho || perspec);
+            float znear = clip ? clip->znear : 0.3f;
+            float zfar = clip ? clip->zfar : 1000.0f;
+            if (ortho)
+            {
+                graphic::ortho_projection(projection.projection,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    ortho->scale, znear, zfar);
+                graphic::ortho_inv_projection(projection.inv_projection,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    ortho->scale, znear, zfar);
+            }
+            else
+            {
+                graphic::perspective_projection(projection.projection,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    perspec->angle, znear, zfar);
+                graphic::perspective_inv_projection(projection.inv_projection,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    perspec->angle, znear, zfar);
+            }
+        }
+
+        void PreUpdate()
+        {
+            if (!_m_pipeline->IsActive(get_world()))
+                return;
+
+            select_from(get_world())
+                .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(
+                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
+                    {
+                        // Calc camera proj matrix
+                        m_camera_list.emplace(
+                            camera_arch{
+                                rendqueue, &projection, cameraviewport, rendbuf
+                            }
+                        );
+                    })
+                .exec(
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    {
+                        // TODO: Need Impl AnyOf
+                            // RendOb will be input to a chain and used for swap
+                        m_renderer_list.emplace(
+                            renderer_arch{
+                                rendqueue, &trans, shape, shads, texs
+                            });
+                    }).anyof<Shaders, Textures, Shape>();
+        }
+        void LateUpdate()
+        {
+            UpdateFrame(this);
+        }
+
         void Frame(jegl_thread* glthread)
         {
             std::list<renderer_arch> m_renderer_entities;
@@ -184,12 +331,22 @@ public let frag =
 
             jegl_update_shared_uniform(0, sizeof(math::vec4), &shader_time);
 
-            while (!m_camera_list.empty())
+            for (;!m_camera_list.empty(); m_camera_list.pop())
             {
                 auto& current_camera = m_camera_list.top();
                 {
-                    // TODO: If camera has component named 'RendToTexture' handle it.
                     jegl_resource* rend_aim_buffer = nullptr;
+                    if (current_camera.rendToFramebuffer )
+                    {
+                        if (!current_camera.rendToFramebuffer->framebuffer)
+                        {
+                            debug::logwarn("A camera with component RendToFramebuffer(%p), but not specify frame-buffer instance.",
+                                current_camera.rendToFramebuffer);
+                            continue;
+                        }
+                        else
+                            rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->resouce();
+                    }
 
                     size_t
                         RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH,
@@ -230,11 +387,11 @@ public let frag =
                         auto& drawing_shape =
                             (rendentity.shape && rendentity.shape->vertex)
                             ? rendentity.shape->vertex
-                            : default_shape_quad;
+                            : host()->default_shape_quad;
                         auto& drawing_shaders =
                             (rendentity.shaders && rendentity.shaders->shaders.size())
                             ? rendentity.shaders->shaders
-                            : default_shaders_list;
+                            : host()->default_shaders_list;
 
                         // Bind texture here
                         if (rendentity.textures)
@@ -244,14 +401,14 @@ public let frag =
                                     jegl_using_texture(*texture.m_texture, texture.m_pass_id);
                                 else
                                     // Current texture is missing, using default texture instead.
-                                    jegl_using_texture(*default_texture, texture.m_pass_id);
+                                    jegl_using_texture(*host()->default_texture, texture.m_pass_id);
                             }
 
                         for (auto& shader_pass : drawing_shaders)
                         {
                             auto* using_shader = &shader_pass;
                             if (!shader_pass->enabled() || !shader_pass->m_builtin)
-                                using_shader = &default_shader;
+                                using_shader = &host()->default_shader;
 
                             jegl_using_resource((*using_shader)->resouce());
 
@@ -274,136 +431,10 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                     }
                 }
-                m_camera_list.pop();
             }
 
             // Redirect to screen space for imgui rend.
             jegl_rend_to_framebuffer(nullptr, 0, 0, WINDOWS_WIDTH, WINDOWS_HEIGHT);
-        }
-
-        bool IsActive(game_world world)const noexcept
-        {
-            return world.handle() == _m_rending_world;
-        }
-        void DeActive(game_world world)const noexcept
-        {
-            void* excpet_world = world.handle();
-            _m_rending_world.compare_exchange_weak(excpet_world, nullptr);
-        }
-
-        inline void UpdateFrame(game_world world)noexcept
-        {
-            void* _null = nullptr;
-            _m_rending_world.compare_exchange_weak(_null, world.handle());
-
-            if (glthread && IsActive(world))
-                if (!jegl_update(glthread))
-                {
-                    // update is not work now, means graphic thread want to exit..
-                    // ready to shutdown current universe
-
-                    if (game_universe universe = world.get_universe())
-                        universe.stop();
-                }
-        }
-    };
-    struct DefaultGraphicPipelineSystem : public game_system
-    {
-        using Translation = Transform::Translation;
-
-        using Rendqueue = Renderer::Rendqueue;
-
-        using Clip = Camera::Clip;
-        using PerspectiveProjection = Camera::PerspectiveProjection;
-        using OrthoProjection = Camera::OrthoProjection;
-        using Projection = Camera::Projection;
-        using Viewport = Camera::Viewport;
-
-        using Shape = Renderer::Shape;
-        using Shaders = Renderer::Shaders;
-        using Textures = Renderer::Textures;
-
-        DefaultGraphicPipeline* _m_pipeline;
-
-        DefaultGraphicPipelineSystem(game_world w)
-            : game_system(w)
-            , _m_pipeline(DefaultGraphicPipeline::get_default_graphic_pipeline_instance(w.get_universe()))
-        {
-            // GraphicSystem is a public system and not belong to any world.
-        }
-
-        ~DefaultGraphicPipelineSystem()
-        {
-            _m_pipeline->DeActive(get_world());
-        }
-
-        void PrepareCameras(Projection& projection, Translation& translation, OrthoProjection* ortho, PerspectiveProjection* perspec, Clip* clip)
-        {
-            float mat_inv_rotation[4][4];
-            translation.world_rotation.create_inv_matrix(mat_inv_rotation);
-            float mat_inv_position[4][4] = {};
-            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
-            mat_inv_position[3][0] = -translation.world_position.x;
-            mat_inv_position[3][1] = -translation.world_position.y;
-            mat_inv_position[3][2] = -translation.world_position.z;
-
-            // TODO: Optmize
-            math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
-
-            assert(ortho || perspec);
-            float znear = clip ? clip->znear : 0.3f;
-            float zfar = clip ? clip->zfar : 1000.0f;
-            if (ortho)
-            {
-                graphic::ortho_projection(projection.projection,
-                    (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
-                    ortho->scale, znear, zfar);
-                graphic::ortho_inv_projection(projection.inv_projection,
-                    (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
-                    ortho->scale, znear, zfar);
-            }
-            else
-            {
-                graphic::perspective_projection(projection.projection,
-                    (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
-                    perspec->angle, znear, zfar);
-                graphic::perspective_inv_projection(projection.inv_projection,
-                    (float)_m_pipeline->WINDOWS_WIDTH, (float)_m_pipeline->WINDOWS_HEIGHT,
-                    perspec->angle, znear, zfar);
-            }
-        }
-
-        void PreUpdate()
-        {
-            if (!_m_pipeline->IsActive(get_world()))
-                return;
-
-            select_from(get_world())
-                .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
-                .exec(
-                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport)
-                    {
-                        // Calc camera proj matrix
-                        _m_pipeline->m_camera_list.emplace(
-                            DefaultGraphicPipeline::camera_arch{
-                                rendqueue, &projection, cameraviewport
-                            }
-                        );
-                    })
-                .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
-                    {
-                        // TODO: Need Impl AnyOf
-                            // RendOb will be input to a chain and used for swap
-                        _m_pipeline->m_renderer_list.emplace(
-                            DefaultGraphicPipeline::renderer_arch{
-                                rendqueue, &trans, shape, shads, texs
-                            });
-                    }).anyof<Shaders, Textures, Shape>();
-        }
-        void LateUpdate()
-        {
-            _m_pipeline->UpdateFrame(get_world());
         }
 
     };
@@ -411,5 +442,5 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
 jegl_thread* jedbg_get_editing_graphic_thread(void* universe)
 {
-    return jeecs::DefaultGraphicPipeline::get_default_graphic_pipeline_instance(universe)->glthread;
+    return jeecs::GraphicThreadHost::get_default_graphic_pipeline_instance(universe)->glthread;
 }

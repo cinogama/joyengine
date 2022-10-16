@@ -1361,22 +1361,22 @@ namespace jeecs
             je_log(JE_LOG_NORMAL, format, args...);
         }
         template<typename ... ArgTs>
-        inline void log_info(const char* format, ArgTs&& ... args)
+        inline void loginfo(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_INFO, format, args...);
         }
         template<typename ... ArgTs>
-        inline void log_warn(const char* format, ArgTs&& ... args)
+        inline void logwarn(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_WARNING, format, args...);
         }
         template<typename ... ArgTs>
-        inline void log_error(const char* format, ArgTs&& ... args)
+        inline void logerr(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_ERROR, format, args...);
         }
         template<typename ... ArgTs>
-        inline void log_fatal(const char* format, ArgTs&& ... args)
+        inline void logfatal(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_FATAL, format, args...);
         }
@@ -1547,7 +1547,7 @@ namespace jeecs
                 if constexpr (std::is_copy_constructible<T>::value)
                     new(_ptr)T(*(const T*)_be_copy_ptr);
                 else
-                    debug::log_fatal("This type: '%s' is not copy-constructible but you try to do it."
+                    debug::logfatal("This type: '%s' is not copy-constructible but you try to do it."
                         , typeid(T).name());
             }
             static void mover(void* _ptr, void* _be_moved_ptr)
@@ -1555,7 +1555,7 @@ namespace jeecs
                 if constexpr (std::is_move_constructible<T>::value)
                     new(_ptr)T(std::move(*(T*)_be_moved_ptr));
                 else
-                    debug::log_fatal("This type: '%s' is not move-constructible but you try to do it."
+                    debug::logfatal("This type: '%s' is not move-constructible but you try to do it."
                         , typeid(T).name());
             }
             static const char* to_string(const void* _ptr)
@@ -1574,7 +1574,7 @@ namespace jeecs
                 }
 
                 static auto call_once = []() {
-                    debug::log_fatal("This type: '%s' have no function named 'to_string'."
+                    debug::logfatal("This type: '%s' have no function named 'to_string'."
                         , typeid(T).name());
                     return 0;
                 }();
@@ -1595,7 +1595,7 @@ namespace jeecs
                 else
                 {
                     static auto call_once = []() {
-                        debug::log_fatal("This type: '%s' have no function named 'parse'."
+                        debug::logfatal("This type: '%s' have no function named 'parse'."
                             , typeid(T).name());
                         return 0;
                     }();
@@ -2297,7 +2297,7 @@ namespace jeecs
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id)
-                    debug::log_warn("Repeat or conflict when excepting component '%s'.",
+                    debug::logwarn("Repeat or conflict when excepting component '%s'.",
                         typing::type_info::of<CurRequireT>()->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::EXCEPT, 0, id));
@@ -2315,7 +2315,7 @@ namespace jeecs
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id)
-                    debug::log_warn("Repeat or conflict when containing component '%s'.",
+                    debug::logwarn("Repeat or conflict when containing component '%s'.",
                         typing::type_info::of<CurRequireT>()->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::CONTAIN, 0, id));
@@ -2332,7 +2332,7 @@ namespace jeecs
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id && req.m_require != requirement::type::MAYNOT)
-                    debug::log_warn("Repeat or conflict when require any of component '%s'.",
+                    debug::logwarn("Repeat or conflict when require any of component '%s'.",
                         typing::type_info::of<CurRequireT>()->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::ANYOF, any_group, id));
@@ -2516,7 +2516,7 @@ namespace jeecs
         {
             if (!m_current_world)
             {
-                jeecs::debug::log_warn("Failed to execute current jobs(%p). Game world not specify!");
+                jeecs::debug::logwarn("Failed to execute current jobs(%p). Game world not specify!");
                 return false;
             }
 
@@ -2558,7 +2558,7 @@ namespace jeecs
     public:
         selector()
         {
-            jeecs::debug::log_info("New selector(%p) created.", this);
+            jeecs::debug::loginfo("New selector(%p) created.", this);
         }
         ~selector()
         {
@@ -2566,7 +2566,7 @@ namespace jeecs
                 step.clear_archs();
             m_steps.clear();
 
-            jeecs::debug::log_info("Selector(%p) closed.", this);
+            jeecs::debug::loginfo("Selector(%p) closed.", this);
         }
 
         selector& at(game_world w)
@@ -2780,9 +2780,9 @@ namespace jeecs
                 return result;
             }
             else
-                debug::log_error("Current entity is invalid when dumping editor informations.");
+                debug::logerr("Current entity is invalid when dumping editor informations.");
 #else
-            debug::log_error("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
+            debug::logerr("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
 #endif
             return "";
         }
@@ -3890,7 +3890,7 @@ namespace jeecs
                         {
                             if (jegl_shad_uniforms->m_uniform_type !=
                                 jegl_shader::uniform_type::INT)
-                                debug::log_error("Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'."
+                                debug::logerr("Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'."
                                     , name.c_str(), val, this);
                             else
                             {
@@ -3903,7 +3903,7 @@ namespace jeecs
                     }
                 }
                 else
-                    debug::log_error("Trying set uniform('%s' = %d) to invalid shader(%p), please check."
+                    debug::logerr("Trying set uniform('%s' = %d) to invalid shader(%p), please check."
                         , name.c_str(), val, this);
             }
             void set_uniform(const std::string& name, float val)noexcept
@@ -3917,7 +3917,7 @@ namespace jeecs
                         {
                             if (jegl_shad_uniforms->m_uniform_type !=
                                 jegl_shader::uniform_type::FLOAT)
-                                debug::log_error("Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'."
+                                debug::logerr("Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'."
                                     , name.c_str(), val, this);
                             else
                             {
@@ -3930,7 +3930,7 @@ namespace jeecs
                     }
                 }
                 else
-                    debug::log_error("Trying set uniform('%s' = %f) to invalid shader(%p), please check."
+                    debug::logerr("Trying set uniform('%s' = %f) to invalid shader(%p), please check."
                         , name.c_str(), val, this);
             }
             void set_uniform(const std::string& name, const math::vec2& val)noexcept
@@ -3944,7 +3944,7 @@ namespace jeecs
                         {
                             if (jegl_shad_uniforms->m_uniform_type !=
                                 jegl_shader::uniform_type::FLOAT2)
-                                debug::log_error("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT2'."
+                                debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT2'."
                                     , name.c_str(), val.to_string().c_str(), this);
                             else
                             {
@@ -3958,7 +3958,7 @@ namespace jeecs
                     }
                 }
                 else
-                    debug::log_error("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
+                    debug::logerr("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
                         , name.c_str(), val.to_string().c_str(), this);
             }
             void set_uniform(const std::string& name, const math::vec3& val)noexcept
@@ -3972,7 +3972,7 @@ namespace jeecs
                         {
                             if (jegl_shad_uniforms->m_uniform_type !=
                                 jegl_shader::uniform_type::FLOAT3)
-                                debug::log_error("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT3'."
+                                debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT3'."
                                     , name.c_str(), val.to_string().c_str(), this);
                             else
                             {
@@ -3987,7 +3987,7 @@ namespace jeecs
                     }
                 }
                 else
-                    debug::log_error("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
+                    debug::logerr("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
                         , name.c_str(), val.to_string().c_str(), this);
             }
             void set_uniform(const std::string& name, const math::vec4& val)noexcept
@@ -4001,7 +4001,7 @@ namespace jeecs
                         {
                             if (jegl_shad_uniforms->m_uniform_type !=
                                 jegl_shader::uniform_type::FLOAT4)
-                                debug::log_error("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT4'."
+                                debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT4'."
                                     , name.c_str(), val.to_string().c_str(), this);
                             else
                             {
@@ -4017,7 +4017,7 @@ namespace jeecs
                     }
                 }
                 else
-                    debug::log_error("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
+                    debug::logerr("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
                         , name.c_str(), val.to_string().c_str(), this);
             }
         };
@@ -4752,6 +4752,7 @@ namespace jeecs
                 textures.push_back(texture_with_passid(passid, texture));
             }
         };
+
     }
     namespace Camera
     {
@@ -4799,6 +4800,11 @@ namespace jeecs
             {
                 typing::register_member(&Viewport::viewport, "viewport");
             }
+        };
+
+        struct RendToFramebuffer
+        {
+            basic::resource<graphic::framebuffer> framebuffer = nullptr;
         };
     }
 
@@ -5108,25 +5114,26 @@ namespace jeecs
         inline void module_entry()
         {
             // 0. register built-in components
+            using namespace typing;
+            type_info::of<Transform::LocalPosition>("Transform::LocalPosition");
+            type_info::of<Transform::LocalRotation>("Transform::LocalRotation");
+            type_info::of<Transform::LocalScale>("Transform::LocalScale");
+            type_info::of<Transform::ChildAnchor>("Transform::ChildAnchor");
+            type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
+            type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
+            type_info::of<Transform::Translation>("Transform::Translation");
 
-            jeecs::typing::type_info::of<Transform::LocalPosition>("Transform::LocalPosition");
-            jeecs::typing::type_info::of<Transform::LocalRotation>("Transform::LocalRotation");
-            jeecs::typing::type_info::of<Transform::LocalScale>("Transform::LocalScale");
-            jeecs::typing::type_info::of<Transform::ChildAnchor>("Transform::ChildAnchor");
-            jeecs::typing::type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
-            jeecs::typing::type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
-            jeecs::typing::type_info::of<Transform::Translation>("Transform::Translation");
+            type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
+            type_info::of<Renderer::Shape>("Renderer::Shape");
+            type_info::of<Renderer::Shaders>("Renderer::Shaders");
+            type_info::of<Renderer::Textures>("Renderer::Textures");
 
-            jeecs::typing::type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
-            jeecs::typing::type_info::of<Renderer::Shape>("Renderer::Shape");
-            jeecs::typing::type_info::of<Renderer::Shaders>("Renderer::Shaders");
-            jeecs::typing::type_info::of<Renderer::Textures>("Renderer::Textures");
-
-            jeecs::typing::type_info::of<Camera::Clip>("Camera::Clip");
-            jeecs::typing::type_info::of<Camera::Projection>("Camera::Projection");
-            jeecs::typing::type_info::of<Camera::OrthoProjection>("Camera::OrthoProjection");
-            jeecs::typing::type_info::of<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
-            jeecs::typing::type_info::of<Camera::Viewport>("Camera::Viewport");
+            type_info::of<Camera::Clip>("Camera::Clip");
+            type_info::of<Camera::Projection>("Camera::Projection");
+            type_info::of<Camera::OrthoProjection>("Camera::OrthoProjection");
+            type_info::of<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
+            type_info::of<Camera::Viewport>("Camera::Viewport");
+            type_info::of<Camera::RendToFramebuffer>("Camera::RendToFramebuffer");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();

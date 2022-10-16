@@ -62,7 +62,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                 else
                 {
                     // Free this
-                    jeecs::debug::log_warn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!"
+                    jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!"
                         , cur_del_res->m_destroy_resource);
                     delete cur_del_res->m_destroy_resource;
                     delete cur_del_res;
@@ -126,7 +126,7 @@ jegl_thread* jegl_start_graphic_thread(
         if (!*reador)
         {
             err_api_no++;
-            jeecs::debug::log_fatal("GraphicAPI function: %zu is invalid.", (size_t)(reador - (void**)thread_handle->m_apis));
+            jeecs::debug::logfatal("GraphicAPI function: %zu is invalid.", (size_t)(reador - (void**)thread_handle->m_apis));
         }
     }
     if (err_api_no)
@@ -135,7 +135,7 @@ jegl_thread* jegl_start_graphic_thread(
         jeecs::basic::destroy_free(thread_handle->m_apis);
         jeecs::basic::destroy_free(thread_handle);
 
-        jeecs::debug::log_fatal("Fail to start up graphic thread, abort and return nullptr.");
+        jeecs::debug::logfatal("Fail to start up graphic thread, abort and return nullptr.");
         return nullptr;
     }
 
@@ -209,7 +209,7 @@ void jegl_using_resource(jegl_resource* resource)
     bool need_init_resouce = false;
     // This function is not thread safe.
     if (!_current_graphic_thread)
-        return jeecs::debug::log_error("Graphic resource only usable in graphic thread.");
+        return jeecs::debug::logerr("Graphic resource only usable in graphic thread.");
 
     if (!resource->m_graphic_thread)
     {
@@ -218,7 +218,7 @@ void jegl_using_resource(jegl_resource* resource)
         resource->m_graphic_thread_version = _current_graphic_thread->m_version;
     }
     if (_current_graphic_thread != resource->m_graphic_thread)
-        return jeecs::debug::log_error("This resource has been used in graphic thread:%p.", resource->m_graphic_thread);
+        return jeecs::debug::logerr("This resource has been used in graphic thread:%p.", resource->m_graphic_thread);
     if (resource->m_graphic_thread_version != _current_graphic_thread->m_version)
     {
         need_init_resouce = true;
@@ -264,7 +264,7 @@ void jegl_using_resource(jegl_resource* resource)
                         jegl_uniform_int(resource, uniform_vars->m_index, uniform_vars->n);
                         break;
                     default:
-                        jeecs::debug::log_error("Unsupport uniform variable type."); break;
+                        jeecs::debug::logerr("Unsupport uniform variable type."); break;
                         break;
                     }
                 }
@@ -321,7 +321,7 @@ void jegl_close_resource(jegl_resource* resource)
                 delete resource->m_raw_framebuf_data;
                 break;
             default:
-                jeecs::debug::log_error("Unknown resource type to close.");
+                jeecs::debug::logerr("Unknown resource type to close.");
                 return;
             }
         }
@@ -478,7 +478,7 @@ jegl_resource* jegl_load_texture(const char* path)
 
         if (texture->m_raw_texture_data->m_pixels == nullptr)
         {
-            jeecs::debug::log_error("Fail to load texture form file: '%s'", path);
+            jeecs::debug::logerr("Fail to load texture form file: '%s'", path);
             delete texture->m_raw_texture_data;
             delete texture;
             return _jegl_create_died_texture(path);
@@ -492,7 +492,7 @@ jegl_resource* jegl_load_texture(const char* path)
         return texture;
     }
 
-    jeecs::debug::log_error("Fail to open file: '%s'", path);
+    jeecs::debug::logerr("Fail to open file: '%s'", path);
     return _jegl_create_died_texture(path);
 }
 
@@ -521,7 +521,7 @@ jegl_resource* jegl_create_vertex(
     auto point_count = data_length / datacount_per_point;
 
     if (data_length % datacount_per_point)
-        jeecs::debug::log_warn("Vertex data & format not matched, please check.");
+        jeecs::debug::logwarn("Vertex data & format not matched, please check.");
 
     vertex->m_raw_vertex_data->m_type = type;
     vertex->m_raw_vertex_data->m_format_count = format_length;
@@ -567,7 +567,7 @@ jegl_resource* jegl_create_vertex(
     }
     else
     {
-        jeecs::debug::log_warn("Position data of vertex(%p) mismatch, first data should be position and with length '3'", vertex);
+        jeecs::debug::logwarn("Position data of vertex(%p) mismatch, first data should be position and with length '3'", vertex);
         vertex->m_raw_vertex_data->m_size_x = 1.f;
         vertex->m_raw_vertex_data->m_size_y = 1.f;
         vertex->m_raw_vertex_data->m_size_z = 1.f;
@@ -595,7 +595,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
     if (!wo_load_source(vmm, path, src))
     {
         // Compile error
-        jeecs::debug::log_error("Fail to load shader: %s.\n%s", path, wo_get_compile_error(vmm, WO_NOTHING));
+        jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(vmm, WO_NOTHING));
         wo_close_vm(vmm);
         return _jegl_create_died_shader(path);
     }
@@ -605,7 +605,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
     auto generate_shader_func = wo_extern_symb(vmm, "shader::generate");
     if (!generate_shader_func)
     {
-        jeecs::debug::log_error("Fail to load shader: %s. you should import je.shader.", path);
+        jeecs::debug::logerr("Fail to load shader: %s. you should import je.shader.", path);
         wo_close_vm(vmm);
         return _jegl_create_died_shader(path);
     }
@@ -626,7 +626,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
     }
     else
     {
-        jeecs::debug::log_error("Fail to load shader: %s: %s.", path, wo_get_runtime_error(vmm));
+        jeecs::debug::logerr("Fail to load shader: %s: %s.", path, wo_get_runtime_error(vmm));
         wo_close_vm(vmm);
         return nullptr;
     }
@@ -645,7 +645,7 @@ jegl_resource* jegl_load_shader(const char* path)
 
         return jegl_load_shader_source(path, src);
     }
-    jeecs::debug::log_error("Fail to open file: '%s'", path);
+    jeecs::debug::logerr("Fail to open file: '%s'", path);
     return _jegl_create_died_shader(path);
 }
 

@@ -69,7 +69,7 @@ namespace jeecs_impl
 
                 // Register alias-hash
                 _m_type_hash_id_mapping[_hash] = *out_typeid;
-                jeecs::debug::log_warn("Type '%s' with different type-hash. alias-hash has been created.");
+                jeecs::debug::logwarn("Type '%s' with different type-hash. alias-hash has been created.");
                 return false;
             }
 

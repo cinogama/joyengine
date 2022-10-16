@@ -36,7 +36,7 @@ bool jedbg_editor(void)
         wo_run(vmm);
     else
     {
-        jeecs::debug::log_error(wo_get_compile_error(vmm, WO_NEED_COLOR));
+        jeecs::debug::logerr(wo_get_compile_error(vmm, WO_NEED_COLOR));
         failed_in_start_editor = true;
     }
     wo_close_vm(vmm);
@@ -58,10 +58,10 @@ void* je_module_load(const char* name, const char* path)
             wo_load_func(lib, "jeecs_module_entry"))
             entry();
 
-        jeecs::debug::log_info("Module: '%s'(%p) loaded", path, lib);
+        jeecs::debug::loginfo("Module: '%s'(%p) loaded", path, lib);
         return lib;
     }
-    jeecs::debug::log_error("Failed to load module: '%s'", path);
+    jeecs::debug::logerr("Failed to load module: '%s'", path);
     return nullptr;
 }
 
@@ -77,6 +77,6 @@ void je_module_unload(void* lib)
     if (auto leave = (jeecs::typing::module_leave_t)
         wo_load_func(lib, "jeecs_module_leave"))
         leave();
-    jeecs::debug::log_info("Module: '%p' unloaded", lib);
+    jeecs::debug::loginfo("Module: '%p' unloaded", lib);
     return wo_unload_lib(lib);
 }
