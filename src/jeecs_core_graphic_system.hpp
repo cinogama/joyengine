@@ -235,7 +235,13 @@ public let frag =
             _m_pipeline->DeActive(get_world());
         }
 
-        void PrepareCameras(Projection& projection, Translation& translation, OrthoProjection* ortho, PerspectiveProjection* perspec, Clip* clip)
+        void PrepareCameras(Projection& projection,
+            Translation& translation,
+            OrthoProjection* ortho,
+            PerspectiveProjection* perspec,
+            Clip* clip,
+            Viewport* viewport,
+            RendToFramebuffer* rendbuf)
         {
             float mat_inv_rotation[4][4];
             translation.world_rotation.create_inv_matrix(mat_inv_rotation);
@@ -251,22 +257,35 @@ public let frag =
             assert(ortho || perspec);
             float znear = clip ? clip->znear : 0.3f;
             float zfar = clip ? clip->zfar : 1000.0f;
+
+            jegl_resource* rend_aim_buffer = rendbuf ? rendbuf->framebuffer->resouce() : nullptr;
+
+            size_t
+                RENDAIMBUFFER_WIDTH =
+                (size_t)llround(
+                    (viewport ? viewport->viewport.z : 1.0f) *
+                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
+                RENDAIMBUFFER_HEIGHT =
+                (size_t)llround(
+                    (viewport ? viewport->viewport.w : 1.0f) *
+                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
+
             if (ortho)
             {
                 graphic::ortho_projection(projection.projection,
-                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
                     ortho->scale, znear, zfar);
                 graphic::ortho_inv_projection(projection.inv_projection,
-                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
                     ortho->scale, znear, zfar);
             }
             else
             {
                 graphic::perspective_projection(projection.projection,
-                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
                     perspec->angle, znear, zfar);
                 graphic::perspective_inv_projection(projection.inv_projection,
-                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT,
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
                     perspec->angle, znear, zfar);
             }
         }
@@ -331,12 +350,12 @@ public let frag =
 
             jegl_update_shared_uniform(0, sizeof(math::vec4), &shader_time);
 
-            for (;!m_camera_list.empty(); m_camera_list.pop())
+            for (; !m_camera_list.empty(); m_camera_list.pop())
             {
                 auto& current_camera = m_camera_list.top();
                 {
                     jegl_resource* rend_aim_buffer = nullptr;
-                    if (current_camera.rendToFramebuffer )
+                    if (current_camera.rendToFramebuffer)
                     {
                         if (!current_camera.rendToFramebuffer->framebuffer)
                         {
