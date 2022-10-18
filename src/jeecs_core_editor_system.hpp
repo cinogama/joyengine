@@ -69,9 +69,7 @@ namespace jeecs
             bool r_buttom = false;
 
             bool l_buttom_click = false;
-            bool r_buttom_click = false;
-
-            bool l_buttom_double_click = false;
+            bool r_buttom_pushed = false;
 
             jeecs::math::vec2 uniform_mouse_pos = {};
             jeecs::math::ivec2 advise_lock_mouse_pos = {};
@@ -105,7 +103,7 @@ namespace jeecs
             using namespace input;
             using namespace math;
 
-            if (_inputs.r_buttom_click)
+            if (_inputs.r_buttom_pushed)
             {
                 _begin_drag = _inputs.uniform_mouse_pos;
                 _drag_viewing = false;
@@ -225,6 +223,7 @@ namespace jeecs
             Transform::LocalPosition& position,
             Transform::LocalRotation& rotation,
             Transform::LocalScale& scale,
+            Transform::Translation& trans,
             Editor::EntityMoverRoot& mover)
 
         {
@@ -445,9 +444,8 @@ namespace jeecs
             _inputs.l_ctrl = input::keydown(input::keycode::L_CTRL);
             _inputs.l_buttom = input::keydown(input::keycode::MOUSE_L_BUTTION);
             _inputs.r_buttom = input::keydown(input::keycode::MOUSE_R_BUTTION);
-            _inputs.l_buttom_click = input::first_down(_inputs.l_buttom);
-            _inputs.r_buttom_click = input::first_down(_inputs.r_buttom);
-            _inputs.l_buttom_double_click = input::double_click(_inputs.l_buttom);
+            _inputs.l_buttom_click = input::is_up(_inputs.l_buttom);
+            _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
 
             select_from(get_world())
                 // Move walker(root)
@@ -480,7 +478,7 @@ namespace jeecs
                     else
                         jedbg_set_editing_entity(&selected_list.begin()->entity);
                 }
-                else if (_inputs.l_buttom_double_click)
+                else if (_inputs.l_buttom_click)
                     jedbg_set_editing_entity(nullptr);
             }
 

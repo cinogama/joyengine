@@ -209,6 +209,15 @@ func Editor_CameraViewport()
             ? WindowsAttribute::ImGuiWindowFlags_None
             | WindowsAttribute::ImGuiWindowFlags_NoMove), 
         ref display_debug_camera_viewport);
+
+    if (BeginMenuBar())
+    {
+        if (MenuItem("调试运行"))
+            GameDebug::start_debug();
+
+        EndMenuBar();
+    }
+
     let debug_camera_entity = je::world::rend()
         ->bind(\w: je::world = w->editor::get_all_entities
             ->forall(\e: je::entity = 
@@ -237,7 +246,7 @@ func Editor_CameraViewport()
 
         let (offsetx, offsety) = (mx - lupx - wx, my - lupy - wy);
 
-        if (offsetx >= 0. && offsety >= 0. && offsetx <= itemw && offsety <= itemh)
+        if (IsItemHovered())
         {
             // 在渲染区域内！
             windows_moveable = false;

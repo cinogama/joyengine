@@ -107,6 +107,38 @@ namespace editor::Project
         static let mut state = CreateOrLoadProjectState::OpenOrCreate;
         
         let mut close_form = false;
+
+        func open_proj_path(create_proj_in: string)=> bool
+        {
+            let projname = je::filesys::filename(create_proj_in);
+            let proj_data = 
+                je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
+                    ->bind(\json: string = json->todict;);
+
+            match (proj_data)
+            {
+            value(data)?
+            {
+                match(LoadProject(data))
+                {
+                ok(proj)?
+                {
+                    // 更新一下项目历史
+                    update_project_history(proj.path->val);
+                                    
+                    // 关闭窗口
+                    return true;
+                }
+                err(msg)?
+                    launch(MsgBox, ("创建项目失败", msg));
+                }
+            }
+            none?
+                launch(MsgBox, ("打开项目失败", F"无法读取项目文件：'{create_proj_in}/{projname}.jeproj4'"));
+            }
+            return false;
+        }
+
         Begin("加载或新建项目", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             let mut cur_width = 0.;
@@ -115,6 +147,21 @@ namespace editor::Project
             if (state == CreateOrLoadProjectState::OpenOrCreate)
             {
                 Text("欢迎使用JoyEngine4.0，让我们先从这里开始：");
+
+                Separator();
+
+                // TODO; 在这个地方列出历史项目，并支持一键导入
+                static let histories = get_project_histroy();
+                Text("历史项目：");
+                BeginChild("HistoryList", 0., 150.);
+                let mut cur_width_in_history_box = 0.;
+                GetContentRegionAvail(ref cur_width_in_history_box, 0./* 不关心高度 */);
+                for (let history_path : histories)
+                {
+                    if (Button(F"打开 {history_path}", cur_width_in_history_box, 0.))
+                        close_form = open_proj_path(history_path);;
+                }
+                EndChild();
 
                 if (Button("加载已有的项目", cur_width, 0.))
                     state = CreateOrLoadProjectState::OpenProject;
@@ -136,35 +183,7 @@ namespace editor::Project
                     none?
                         launch(MsgBox, ("打开项目失败", "请选择项目文件所在的目录"));
                     value(create_proj_in)?
-                        {
-                            let projname = je::filesys::filename(create_proj_in);
-                            let proj_data = 
-                                je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
-                                    ->bind(\json: string = json->todict;);
-
-                            match (proj_data)
-                            {
-                            value(data)?
-                            {
-                                match(LoadProject(data))
-                                {
-                                ok(proj)?
-                                {
-                                    // 更新一下项目历史
-                                    update_project_history(proj.path->val);
-                                    
-                                    // 关闭窗口
-                                    close_form = true;
-                                }
-                                err(msg)?
-                                    launch(MsgBox, ("创建项目失败", msg));
-                                }
-                            }
-                            none?
-                                launch(MsgBox, ("打开项目失败", F"无法读取项目文件：'{create_proj_in}/{projname}.jeproj4'"));
-                            }
-
-                        }
+                        close_form = open_proj_path(create_proj_in);
                     }// end of match select_path_to_create
                 }
                 if (Button("取消", cur_width, 0.))
