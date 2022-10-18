@@ -975,17 +975,17 @@ JE_API void jegl_uniform_float4x4(jegl_resource* shader, int location, const flo
 JE_API jegl_thread* jegl_current_thread();
 
 JE_API void je_io_set_keystate(jeecs::input::keycode keycode, bool keydown);
-JE_API void je_io_set_mousepos(int group, float x, float y);
+JE_API void je_io_set_mousepos(int group, int x, int y);
 JE_API void je_io_set_windowsize(int x, int y);
 JE_API void je_io_set_wheel(float count);
 
 JE_API bool je_io_is_keydown(jeecs::input::keycode keycode);
-JE_API void je_io_mouse_pos(int group, float* x, float* y);
+JE_API void je_io_mouse_pos(int group, int* x, int* y);
 JE_API void je_io_windowsize(int* x, int* y);
 JE_API float je_io_wheel();
 
-JE_API void je_io_lock_mouse(bool lock);
-JE_API bool je_io_should_lock_mouse();
+JE_API void je_io_lock_mouse(bool lock, int x, int y);
+JE_API bool je_io_should_lock_mouse(int* x, int* y);
 
 JE_API void je_io_update_windowsize(int x, int y);
 JE_API bool je_io_should_update_windowsize(int* x, int* y);
@@ -3088,6 +3088,113 @@ namespace jeecs
             return vec2(_v2.x * _f, _v2.y * _f);
         }
 
+        struct ivec2
+        {
+            int x;
+            int y;
+            constexpr ivec2(int _x = 0.f, int _y = 0.f) noexcept
+                : x(_x)
+                , y(_y)
+            {
+
+            }
+            constexpr ivec2(const vec2& _v2)noexcept
+                : x(_v2.x)
+                , y(_v2.y)
+            {
+
+            }
+
+            constexpr ivec2(vec2&& _v2)noexcept
+                : x(_v2.x)
+                , y(_v2.y)
+            {
+
+            }
+
+            // + - * / with another vec2
+            inline constexpr ivec2 operator + (const ivec2& _v2) const noexcept
+            {
+                return ivec2(x + _v2.x, y + _v2.y);
+            }
+            inline constexpr ivec2 operator - (const ivec2& _v2) const noexcept
+            {
+                return ivec2(x - _v2.x, y - _v2.y);
+            }
+            inline constexpr ivec2 operator - () const noexcept
+            {
+                return ivec2(-x, -y);
+            }
+            inline constexpr ivec2 operator + () const noexcept
+            {
+                return ivec2(x, y);
+            }
+            inline constexpr ivec2 operator * (const ivec2& _v2) const noexcept
+            {
+                return ivec2(x * _v2.x, y * _v2.y);
+            }
+            inline constexpr ivec2 operator / (const ivec2& _v2) const noexcept
+            {
+                return ivec2(x / _v2.x, y / _v2.y);
+            }
+            // * / with float
+            inline constexpr ivec2 operator * (int _f) const noexcept
+            {
+                return ivec2(x * _f, y * _f);
+            }
+            inline constexpr ivec2 operator / (int _f) const noexcept
+            {
+                return vec2(x / _f, y / _f);
+            }
+
+            inline constexpr ivec2& operator = (const ivec2& _v2) noexcept = default;
+            inline constexpr ivec2& operator += (const ivec2& _v2) noexcept
+            {
+                x += _v2.x;
+                y += _v2.y;
+                return *this;
+            }
+            inline constexpr ivec2& operator -= (const ivec2& _v2) noexcept
+            {
+                x -= _v2.x;
+                y -= _v2.y;
+                return *this;
+            }
+            inline constexpr ivec2& operator *= (const ivec2& _v2) noexcept
+            {
+                x *= _v2.x;
+                y *= _v2.y;
+                return *this;
+            }
+            inline constexpr ivec2& operator *= (float _f) noexcept
+            {
+                x *= _f;
+                y *= _f;
+                return *this;
+            }
+            inline constexpr ivec2& operator /= (const ivec2& _v2) noexcept
+            {
+                x /= _v2.x;
+                y /= _v2.y;
+                return *this;
+            }
+            inline constexpr ivec2& operator /= (int _f) noexcept
+            {
+                x /= _f;
+                y /= _f;
+                return *this;
+            }
+            // == !=
+            inline constexpr bool operator == (const ivec2& _v2) const noexcept
+            {
+                return x == _v2.x && y == _v2.y;
+            }
+            inline constexpr bool operator != (const ivec2& _v2) const noexcept
+            {
+                return x != _v2.x || y != _v2.y;
+            }
+        };
+
         struct vec3 :public _basevec3
         {
             constexpr vec3(float _x = 0.f, float _y = 0.f, float _z = 0.f)noexcept
@@ -5156,17 +5263,17 @@ namespace jeecs
         {
             return je_io_wheel();
         }
-        inline math::vec2 mousepos(int group)
+        inline math::ivec2 mousepos(int group)
         {
-            float x, y;
+            int x, y;
             je_io_mouse_pos(group, &x, &y);
-            return { x,y };
+            return { x, y };
         }
-        inline math::vec2 windowsize()
+        inline math::ivec2 windowsize()
         {
             int x, y;
             je_io_windowsize(&x, &y);
-            return { (float)x,(float)y };
+            return { x, y };
         }
 
         template<typing::typehash_t hash_v1, int v2>

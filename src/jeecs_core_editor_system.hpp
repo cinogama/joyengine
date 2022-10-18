@@ -74,6 +74,7 @@ namespace jeecs
             bool l_buttom_double_click = false;
 
             jeecs::math::vec2 uniform_mouse_pos = {};
+            jeecs::math::ivec2 advise_lock_mouse_pos = {};
         }_inputs;
 
         DefaultEditorSystem(game_world w)
@@ -97,6 +98,8 @@ namespace jeecs
         const Transform::Translation* _grab_axis_translation = nullptr;
         math::vec2 _grab_last_pos;
 
+        bool advise_lock_mouse = false;
+
         void MoveWalker(Transform::LocalPosition& position, Transform::LocalRotation& rotation, Transform::Translation& trans)
         {
             using namespace input;
@@ -113,7 +116,7 @@ namespace jeecs
                 if (_drag_viewing || (_inputs.uniform_mouse_pos - _begin_drag).length() >= 0.01f)
                 {
                     _drag_viewing = true;
-                    je_io_lock_mouse(true);
+                    advise_lock_mouse = true;
 
                     rotation.rot = rotation.rot * quat(0, 30.f * _inputs.uniform_mouse_pos.x, 0);
                 }
@@ -127,7 +130,7 @@ namespace jeecs
                     position.pos += _camera_rot * vec3(5.f / 60.f, 0, 0);
             }
             else
-                je_io_lock_mouse(false);
+                advise_lock_mouse = false;
         }
 
         void CameraWalker(
@@ -386,6 +389,8 @@ namespace jeecs
             {
                 if (_grab_axis_translation == &trans && _camera_porjection)
                 {
+                    advise_lock_mouse = true;
+
                     math::vec4 p0 = trans.world_position;
                     p0.w = 1.0f;
                     p0 = math::mat4trans(_camera_porjection->projection, math::mat4trans(_camera_porjection->view, p0));
@@ -405,7 +410,7 @@ namespace jeecs
                         editing_rot_may_null
                     );
 
-                    _grab_last_pos = cur_mouse_pos;
+                    _grab_last_pos = {};
                 }
             }
             else
@@ -478,6 +483,8 @@ namespace jeecs
                 else if (_inputs.l_buttom_double_click)
                     jedbg_set_editing_entity(nullptr);
             }
+
+            je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
 
             selected_list.clear();
         }
@@ -680,7 +687,11 @@ WO_API wo_api wojeapi_setable_editor_system(wo_vm vm, wo_value args, size_t argc
 }
 WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::DefaultEditorSystem::_inputs.uniform_mouse_pos = 
+    jeecs::DefaultEditorSystem::_inputs.uniform_mouse_pos =
         jeecs::math::vec2{ wo_float(args + 0), wo_float(args + 1) };
+
+    jeecs::DefaultEditorSystem::_inputs.advise_lock_mouse_pos =
+        jeecs::math::ivec2{ (int)wo_int(args + 2), (int)wo_int(args + 3) };
+
     return wo_ret_void(vm);
 }

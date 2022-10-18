@@ -201,7 +201,14 @@ func Editor_CameraViewport()
     if (!display_debug_camera_viewport)
         return;
 
-    Begin("调试器视口", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref display_debug_camera_viewport);
+    static let mut windows_moveable = true;
+
+    Begin("调试器视口", 
+        WindowsAttribute::ImGuiWindowFlags_MenuBar
+        + (windows_moveable 
+            ? WindowsAttribute::ImGuiWindowFlags_None
+            | WindowsAttribute::ImGuiWindowFlags_NoMove), 
+        ref display_debug_camera_viewport);
     let debug_camera_entity = je::world::rend()
         ->bind(\w: je::world = w->editor::get_all_entities
             ->forall(\e: je::entity = 
@@ -221,26 +228,35 @@ func Editor_CameraViewport()
         let mut available_width = 0., mut available_height = 0.;
         GetContentRegionAvail(ref available_width, ref available_height);
 
-        let (wwidth, wheight) = GetWindowPos();
+        let (wx, wy) = GetWindowPos();
         let (lupx, lupy) = GetCursorPos();
         Image(frametex, available_width: int, available_height: int);
         let (itemw, itemh) = GetItemRectSize();
 
         let (mx, my) = GetMousePos();
 
-        let (offsetx, offsety) = (mx - lupx - wwidth, my - lupy - wheight);
+        let (offsetx, offsety) = (mx - lupx - wx, my - lupy - wy);
 
         if (offsetx >= 0. && offsety >= 0. && offsetx <= itemw && offsety <= itemh)
         {
             // 在渲染区域内！
-            let uniform_mpos_x = 2. * (offsetx / itemw - 0.5), 
-                uniform_mpos_y = 2. * (offsety / itemh - 0.5);
+            windows_moveable = false;
+
+            let uniform_mpos_x = 2. * ((offsetx:int - itemw:int/2):real / itemw), 
+                uniform_mpos_y = -2. * ((offsety:int - itemh:int/2):real / itemh);
 
             je::editor::enable_editor_system(true);
-            je::editor::update_editor_mouse_pos(uniform_mpos_x, uniform_mpos_y);
+            je::editor::update_editor_mouse_pos(
+                uniform_mpos_x, 
+                uniform_mpos_y, 
+                wx:int + lupx:int + (itemw:int/2), 
+                wy:int + lupy:int + (itemh:int/2));
         }
         else
+        {
+            windows_moveable = true;
             je::editor::enable_editor_system(false);
+        }
 
         if (origin_width != available_width: int || origin_height != available_height: int)
         {

@@ -37,9 +37,7 @@ void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
 
 void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
 {
-    je_io_set_mousepos(0,
-        (float)x / WINDOWS_SIZE_WIDTH * 2.0f - 1.0f,
-        -((float)y / WINDOWS_SIZE_HEIGHT * 2.0f - 1.0f));
+    je_io_set_mousepos(0, (int)x, (int)y);
 }
 
 void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
@@ -146,9 +144,9 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
     assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
 
     glfwPollEvents();
-
-    if (je_io_should_lock_mouse())
-        glfwSetCursorPos(WINDOWS_HANDLE, round(WINDOWS_SIZE_WIDTH / 2.0f), round(WINDOWS_SIZE_HEIGHT / 2.0f));
+    int mouse_lock_x, mouse_lock_y;
+    if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
+        glfwSetCursorPos(WINDOWS_HANDLE, mouse_lock_x, mouse_lock_y);
 
     int window_width, window_height;
     if (je_io_should_update_windowsize(&window_width, &window_height))

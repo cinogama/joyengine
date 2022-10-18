@@ -1287,7 +1287,7 @@ namespace je
         public func unload_module(module: handle)=> void;
 
         extern("libjoyecs", "wojeapi_update_editor_mouse_pos")
-        public func update_editor_mouse_pos(x: real, y: real)=> void;
+        public func update_editor_mouse_pos(x: real, y: real, lockposx: int, lockposy: int)=> void;
 
         extern("libjoyecs", "wojeapi_setable_editor_system")
         public func enable_editor_system(able: bool)=> void;
