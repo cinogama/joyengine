@@ -160,6 +160,21 @@ namespace GameDebug
     let mut edit_context = option::none: 
         option<typeof(std::declval:<editor::Project>()->DumpAllWorlds)>;
 
+    let mut safe_mode = false;
+
+    func is_safe_mode()
+    {
+        return safe_mode;
+    }
+    public func stop_safe_mode()
+    {
+        safe_mode = false;
+    }
+    public func start_safe_mode()
+    {
+        safe_mode = true
+    }
+
     func is_debugging()
     {
         return edit_context->has;
@@ -287,6 +302,9 @@ func Editor_CameraViewport()
 func Editor_MainMenuBar()
 {
     let mut show_main_menu = true;
+
+    if (GameDebug::is_safe_mode())
+        return FormAction::Nothing;
 
     // 刷新检测热键
     shortcut::update();

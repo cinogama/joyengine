@@ -321,6 +321,8 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         using je::filesys;
         using je::file;
 
+        je::logfatal("TODO；如果加载过程中发生失败，建议引擎进入安全模式，并且尝试更新模块并重编译");
+
         // 加载指定路径的 CXX 项目信息
         if (!exist(path))
             return result::err(F"找不到模块{path}，请检查文件是否丢失");
@@ -361,14 +363,17 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                     ;)
             ;)
         ;
-        get_current_runtime_path(created_module->get_runtime_path(config))
-            ->map(\dllpath: string = 
-                filename(dllpath) == "0" 
-                ? result::ok("无需清理旧的模块")
-                | move(dllpath, F"{created_module->get_runtime_path(config)}0");)
-            ->or(\ = result::err("清理模块失败，找不到最新的模块");)
-            ->val
-            ->or(\errmsg: string = std::panic(errmsg););
+
+        let founding_newest_result = 
+            get_current_runtime_path(created_module->get_runtime_path(config))
+                ->map(\dllpath: string = 
+                    filename(dllpath) == "0" 
+                    ? result::ok("无需清理旧的模块")
+                    | move(dllpath, F"{created_module->get_runtime_path(config)}0");)
+                ->or(\ = result::err("清理模块失败，找不到最新的模块");)
+                ->val;
+        if (founding_newest_result->iserr)
+            return founding_newest_result->fail;
 
         if (!created_module->load_library_of_platform(config)->has)
             return result::err(F"无法为当前运行时{config}加载模块，请检查");
