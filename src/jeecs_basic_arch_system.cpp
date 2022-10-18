@@ -865,7 +865,7 @@ namespace jeecs_impl
         std::string _m_name;
 
         std::atomic_bool _m_destroying_flag = false;
-        std::atomic_bool _m_archmgr_updated = false;
+        std::atomic_size_t _m_archmgr_updated_version = 100;
 
         system_container_t m_systems;
         system_delay_container_t m_delay_appending_systems;
@@ -987,9 +987,9 @@ namespace jeecs_impl
         }
 
     public:
-        bool archtype_mgr_updated()const noexcept
+        size_t archtype_mgr_updated_version()const noexcept
         {
-            return _m_archmgr_updated;
+            return _m_archmgr_updated_version;
         }
 
         void update_dependence_archinfo(jeecs::dependence* require)const noexcept
@@ -1001,7 +1001,8 @@ namespace jeecs_impl
         {
             if (!is_destroying())
             {
-                _m_archmgr_updated = _m_arch_manager._arch_modified();
+                if (_m_arch_manager._arch_modified())
+                    ++_m_archmgr_updated_version;
 
                 if (!m_delay_appending_systems.empty())
                 {
@@ -2032,9 +2033,9 @@ void je_ecs_world_create_entity_with_components(
         out_entity->_set_arch_chunk_info(entity._m_in_chunk, entity._m_id, entity._m_version);
 }
 
-bool je_ecs_world_archmgr_updated(void* world)
+size_t je_ecs_world_archmgr_updated_version(void* world)
 {
-    return ((jeecs_impl::ecs_world*)world)->archtype_mgr_updated();
+    return ((jeecs_impl::ecs_world*)world)->archtype_mgr_updated_version();
 }
 
 void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence)

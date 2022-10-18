@@ -497,7 +497,7 @@ JE_API void je_ecs_world_destroy(void* world);
 
 JE_API bool je_ecs_world_is_valid(void* world);
 
-JE_API bool je_ecs_world_archmgr_updated(void* world);
+JE_API size_t je_ecs_world_archmgr_updated_version(void* world);
 JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
 JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
 
@@ -2189,8 +2189,9 @@ namespace jeecs
         jeecs::vector<requirement> m_requirements;
 
         // Store archtypes here?
-        game_world                 m_world = nullptr;
-        bool                       m_requirements_inited = false;
+        game_world  m_world = nullptr;
+        bool        m_requirements_inited = false;
+        size_t      m_current_arch_version = 0;
 
         // archs of dependences:
         struct arch_chunks_info
@@ -2230,12 +2231,16 @@ namespace jeecs
         {
             je_ecs_clear_dependence_archinfos(this);
         }
-        bool need_update(const game_world& aim_world) const noexcept
+        bool need_update(const game_world& aim_world)noexcept
         {
             assert(aim_world.handle() != nullptr);
 
-            if (m_world != aim_world || je_ecs_world_archmgr_updated(aim_world.handle()))
+            size_t arch_updated_ver = je_ecs_world_archmgr_updated_version(aim_world.handle());
+            if (m_world != aim_world || m_current_arch_version != arch_updated_ver)
+            {
+                m_current_arch_version = arch_updated_ver;
                 return true;
+            }
             return false;
         }
     };
