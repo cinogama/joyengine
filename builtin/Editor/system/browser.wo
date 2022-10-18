@@ -324,9 +324,10 @@ public func frag(vf: v2f)
                 none?
                     generic::askbox("是否加载此模块？", 
                         F"正在要求重新编译模块{path.path}，但此模块尚未被加载\n是否现在加载并重新编译？",
-                        func ()
+                        func (sure: bool)
                         {
-                            match (CxxProject::load(path.path))
+                            if (!sure) return;
+                            match (CxxProject::open_for_loading(path.path))
                             {
                             ok(mod)?
                                 mod->update_compile(je::editor::platform());
@@ -369,7 +370,8 @@ public func frag(vf: v2f)
                             je::filesys::open(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
                         if (MenuItem("移除此组件"))
                             generic::askbox("确认移除组件？", F"是否从模块{je::filesys::filename(path.path)}中移除组件{s}?",
-                                func(){
+                                func(sure: bool){
+                                    if (!sure) return;
                                     components->remove(components->find(s));
                                     je::filesys::delete(file_path);
                                 });
@@ -388,7 +390,8 @@ public func frag(vf: v2f)
                             je::filesys::open(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
                         if (MenuItem("移除此系统"))
                             generic::askbox("确认移除系统？", F"是否从模块{je::filesys::filename(path.path)}中移除系统{s}?",
-                                func(){
+                                func(sure: bool){
+                                    if (!sure) return
                                     systems->remove(systems->find(s));
                                     je::filesys::delete(F"{path.path}systems/{s}.hpp");
                                     je::filesys::delete(file_path);
@@ -583,9 +586,13 @@ namespace $$MODULE_NAME$$
         if (MenuItem("删除", is_modifiable_file))
         {
             generic::askbox(F"删除{path.path}", F"是否继续删除{path.path}",
-                \=je::filesys::delete(path.path)
-                    ->map(\_: anything = force_update();)
-                    ->or(\reason: string = generic::msgbox("删除失败", reason);););
+                func(sure: bool)
+                {
+                    if (!sure) return;
+                    je::filesys::delete(path.path)
+                        ->map(\_: anything = force_update();)
+                        ->or(\reason: string = generic::msgbox("删除失败", reason);)
+                });
         }
     }
 
@@ -750,8 +757,6 @@ namespace $$MODULE_NAME$$
 
     public func show(ref open: bool)
     {
-        if (!open) return FormAction::Close;
-
         Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
             path_tree();
             SameLine();
@@ -767,9 +772,5 @@ namespace $$MODULE_NAME$$
                 
             EndGroup();
         End();
-
-        if (!open)
-            return FormAction::Close;
-        return FormAction::Nothing;
     }
 }

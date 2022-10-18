@@ -29,29 +29,26 @@ using je::gui;
 using editor;
 using generic;
 
+namespace EditFormsConfig
+{
+    public 
+        let mut shown_world_list = false,
+            mut shown_entity_list = false,
+            mut shown_inspector_list = false,
+            mut shown_browser_list = false;
+}
+
 shortcut::register([je::keycode::L_CTRL, je::keycode::W,], func(){
-    static let mut shown = false;
-    shown = !shown;
-    if (shown)
-        launch(WorldList::show, (ref shown,));
+    EditFormsConfig::shown_world_list = !EditFormsConfig::shown_world_list;
 });
 shortcut::register([je::keycode::L_CTRL, je::keycode::E,], func(){
-    static let mut shown = false;
-    shown = !shown;
-    if (shown)
-        launch(EntityList::show, (ref shown,));
+    EditFormsConfig::shown_entity_list = !EditFormsConfig::shown_entity_list;
 });
 shortcut::register([je::keycode::L_CTRL, je::keycode::I,], func(){
-    static let mut shown = false;
-    shown = !shown;
-    if (shown)
-        launch(Inspector::show, (ref shown,));
+    EditFormsConfig::shown_inspector_list = !EditFormsConfig::shown_inspector_list;
 });
 shortcut::register([je::keycode::L_CTRL, je::keycode::B,], func(){
-    static let mut shown = false;
-    shown = !shown;
-    if (shown)
-        launch(Browser::show, (ref shown,));
+    EditFormsConfig::shown_browser_list = !EditFormsConfig::shown_browser_list;
 });
 
 static let mut display_debug_camera_viewport = true;
@@ -309,6 +306,15 @@ func Editor_MainMenuBar()
     // 刷新检测热键
     shortcut::update();
 
+    if (EditFormsConfig::shown_world_list)
+        WorldList::show(ref EditFormsConfig::shown_world_list);
+    if (EditFormsConfig::shown_entity_list)
+        EntityList::show(ref EditFormsConfig::shown_entity_list);
+    if (EditFormsConfig::shown_inspector_list)
+        Inspector::show(ref EditFormsConfig::shown_inspector_list);
+    if (EditFormsConfig::shown_browser_list)
+        Browser::show(ref EditFormsConfig::shown_browser_list);
+
     // 拉取一下log信息
     let last_log_info = logmgr::update_buffers();
 
@@ -328,17 +334,18 @@ func Editor_MainMenuBar()
             if (MenuItem("退出"))
                 checkbox("确认退出", "即将关闭JoyEngine，是否需要保存项目？", 
                 // 选择是，执行保存操作，完成后退出
-                func(){
-                    match(Project::GetCurrentProject()->SaveProject())
-                    {
-                    ok(_)?
+                func(check: generic::CheckResult){
+                    if (check == generic::CheckResult::YES)
+                        match(Project::GetCurrentProject()->SaveProject())
+                        {
+                        ok(_)?
+                            je::exit();
+                        err(msg)?
+                            launch(MsgBox, ("保存项目失败", msg));
+                        }
+                    else if (check == generic::CheckResult::NO)
                         je::exit();
-                    err(msg)?
-                        launch(MsgBox, ("保存项目失败", msg));
-                    }
-                }, 
-                // 选择否，直接退出
-                je::exit);
+                });
 
             EndMenu();
         }

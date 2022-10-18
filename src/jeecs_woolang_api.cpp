@@ -123,7 +123,7 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args, siz
     {
         rbf->framebuffer = new jeecs::graphic::framebuffer(
             wo_int(args + 1), wo_int(args + 2), {
-                jegl_texture::texture_format::RGBA,
+                jegl_texture::texture_format::RGB,
                 jegl_texture::texture_format::DEPTH,
             }
         );

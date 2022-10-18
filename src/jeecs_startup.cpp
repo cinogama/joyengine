@@ -52,7 +52,7 @@ void je_finish()
 
 void* je_module_load(const char* name, const char* path)
 {
-    if (void* lib = wo_load_lib(name, path))
+    if (void* lib = wo_load_lib(name, path, false))
     {
         if (auto entry = (jeecs::typing::module_entry_t)
             wo_load_func(lib, "jeecs_module_entry"))

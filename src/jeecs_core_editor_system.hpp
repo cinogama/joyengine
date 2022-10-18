@@ -69,6 +69,7 @@ namespace jeecs
             bool r_buttom = false;
 
             bool l_buttom_click = false;
+            bool l_buttom_pushed = false;
             bool r_buttom_pushed = false;
 
             jeecs::math::vec2 uniform_mouse_pos = {};
@@ -415,7 +416,7 @@ namespace jeecs
             else
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
-                bool select_click = _inputs.l_buttom_click;
+                bool select_click = _inputs.l_buttom_pushed;
 
                 if (result.intersected)
                 {
@@ -445,6 +446,7 @@ namespace jeecs
             _inputs.l_buttom = input::keydown(input::keycode::MOUSE_L_BUTTION);
             _inputs.r_buttom = input::keydown(input::keycode::MOUSE_R_BUTTION);
             _inputs.l_buttom_click = input::is_up(_inputs.l_buttom);
+            _inputs.l_buttom_pushed = input::first_down(_inputs.l_buttom);
             _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
 
             select_from(get_world())

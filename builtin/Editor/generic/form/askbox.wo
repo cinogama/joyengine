@@ -3,7 +3,7 @@ import je.gui;
 
 namespace generic
 {
-    func AskBox(title:string, shown:string, trigger:()=>void)
+    func AskBox(title:string, shown:string, trigger:(bool)=>void)
     {
         using je::gui;
 
@@ -14,12 +14,15 @@ namespace generic
             Text(shown);
             if (Button("确定"))
             {
-                trigger();
+                trigger(true);
                 open = false;
             }
             SameLine();
             if (Button("取消"))
+            {
+                trigger(false);
                 open = false;
+            }
         }
         End();
 
@@ -27,11 +30,19 @@ namespace generic
             return FormAction::Close;
         return FormAction::Nothing;
     }
-    public func askbox(title: string, shown: string, trigger: ()=>void)
+    public func askbox(title: string, shown: string, trigger: (bool)=>void)
     {
         je::gui::launch(AskBox, (title, shown, trigger));
     }
-    public func checkbox(title: string, shown: string, yesf:()=>anything, nof:()=>void)
+
+    public enum CheckResult
+    {
+        YES,
+        NO,
+        CANCEL
+    }
+
+    public func checkbox(title: string, shown: string, checker:(CheckResult)=>anything)
     {
         using je::gui;
         launch(func(){
@@ -41,18 +52,21 @@ namespace generic
                 Text(shown);
                 if (Button("是"))
                 {
-                    yesf();
+                    checker(CheckResult::YES);
                     open = false;
                 }
                 SameLine();
                 if (Button("否"))
                 {
-                    nof();
+                    checker(CheckResult::NO);
                     open = false;
                 }
                 SameLine();
                 if (Button("取消"))
+                {
+                    checker(CheckResult::CANCEL);
                     open = false;
+                }
             }
             End();
 

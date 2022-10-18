@@ -70,27 +70,26 @@ public using CxxProject = struct {
             ],
         }: dict<string, array<string>>;
 
-    public func start(name: string, locpath: string)=> result<CxxProject, string>
+    public func update_engine_file(cxx_proj_path: string)
     {
         using je::file;
         using je::filesys;
 
-        // 在指定目录下创建Cxx项目目录
-        let cxx_proj_path = F"{normalize(locpath)}{name}.jemodule4/";
-        if (exist(cxx_proj_path))
-            return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
+        // 从引擎根目录更新引擎相关头文件和库文件
+        if (!exist(cxx_proj_path))
+            return result::err(F"无法找到C++模块项目，{cxx_proj_path}目录不存在");
 
-        let r = 
-            // 0. 把项目所需的预设文件结构复制到指定目录
-            copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
-            // 1. 继续，把引擎的头文件复制过来
-            ->bind(\_: anything = copy(ENGINE_HEADER_PATH, F"{cxx_proj_path}engine/include"););
+        // 1. 删除engine目录
+        je::filesys::delete(F"{cxx_proj_path}/engine");
+        je::filesys::mkdir(F"{cxx_proj_path}/engine");
+        je::filesys::mkdir(F"{cxx_proj_path}/engine/library");
+
+        // 2. 把新的engine移过来，把引擎的头文件复制过来
+        let r = copy(ENGINE_HEADER_PATH, F"{cxx_proj_path}engine/include");
 
         if (r->iserr)
-        {
-            delete(cxx_proj_path);
             return r->fail;
-        }
+
         // 2. 开始复制库文件, 顺便确认支持的平台
         alias platform_t = string;
         let platform_support = {}mut : map<platform_t, bool>;
@@ -102,6 +101,28 @@ public using CxxProject = struct {
                 ->reduce(\l: bool, r: bool = l ? r | l;)
                 ->map(\r: bool = platform_support->set(platform, r););
         }
+
+        return result::ok(platform_support);
+    }
+
+    public func start(name: string, locpath: string)=> result<CxxProject, string>
+    {
+        using je::file;
+        using je::filesys;
+
+        // 在指定目录下创建Cxx项目目录
+        let cxx_proj_path = F"{normalize(locpath)}{name}.jemodule4/";
+        if (exist(cxx_proj_path))
+            return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
+
+        let r = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
+            ->bind(\_: anything = update_engine_file(cxx_proj_path););
+        if (r->iserr)
+        {
+            delete(cxx_proj_path);
+            return r->fail;
+        }
+        let platform_support = r->okay->val;
 
         let enabled_generating = platform_support
             ->forall(\_: anything, enable: bool = enable;)
@@ -316,12 +337,11 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         none? std::panic("Output PDB file not found;");
         }
     }
-    public func load(path: string)
+
+    public func open_for_loading(path: string)
     {
         using je::filesys;
         using je::file;
-
-        je::logfatal("TODO；如果加载过程中发生失败，建议引擎进入安全模式，并且尝试更新模块并重编译");
 
         // 加载指定路径的 CXX 项目信息
         if (!exist(path))
@@ -350,35 +370,52 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         current_je_proj.native_modules->get(created_module.path)
                     ->or(\ = current_je_proj.native_modules->set(created_module.path, created_module););
 
-        let config = je::editor::platform();
-
-        // 获取最新的模块版本，将其保留并重命名为0，删除其他全部版本
-        get_current_runtime_id(created_module->get_runtime_path(config))
-            ->map(\newest_id: int = 
-                childs(created_module->get_runtime_path(config))
-                    ->map(\child_paths: array<string> =
-                        child_paths
-                            ->forall(\path: string = !isdir(path) || newest_id != filename(path): int;)
-                            ->trans(\path: string = delete(path);)
-                    ;)
-            ;)
-        ;
-
-        let founding_newest_result = 
-            get_current_runtime_path(created_module->get_runtime_path(config))
-                ->map(\dllpath: string = 
-                    filename(dllpath) == "0" 
-                    ? result::ok("无需清理旧的模块")
-                    | move(dllpath, F"{created_module->get_runtime_path(config)}0");)
-                ->or(\ = result::err("清理模块失败，找不到最新的模块");)
-                ->val;
-        if (founding_newest_result->iserr)
-            return founding_newest_result->fail;
-
-        if (!created_module->load_library_of_platform(config)->has)
-            return result::err(F"无法为当前运行时{config}加载模块，请检查");
-
         return result::ok(created_module);
+    }
+
+    public func load(path: string)
+    {
+        using je::filesys;
+        using je::file;
+
+        match(open_for_loading(path))
+        {
+        err(errmsg)?
+            return result::err(errmsg);
+        ok(created_module)?
+        {
+            let config = je::editor::platform();
+
+            // 获取最新的模块版本，将其保留并重命名为0，删除其他全部版本
+            get_current_runtime_id(created_module->get_runtime_path(config))
+                ->map(\newest_id: int = 
+                    childs(created_module->get_runtime_path(config))
+                        ->map(\child_paths: array<string> =
+                            child_paths
+                                ->forall(\path: string = !isdir(path) || newest_id != filename(path): int;)
+                                ->trans(\path: string = delete(path);)
+                        ;)
+                ;)
+            ;
+
+            let founding_newest_result = 
+                get_current_runtime_path(created_module->get_runtime_path(config))
+                    ->map(\dllpath: string = 
+                        filename(dllpath) == "0" 
+                        ? result::ok("无需清理旧的模块")
+                        | move(dllpath, F"{created_module->get_runtime_path(config)}0");)
+                    ->or(\ = result::err("清理模块失败，找不到最新的模块");)
+                    ->val;
+            if (founding_newest_result->iserr)
+                return founding_newest_result->fail;
+
+            if (!created_module->load_library_of_platform(config)->has)
+                return result::err(F"无法为当前运行时{config}加载模块，请检查");
+
+            return result::ok(created_module);
+        }
+        
+        }// End of match
     }
 
     func generate_cmake_doc(conf: string)=> result<CxxProjectBuildConfig, string>

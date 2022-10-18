@@ -35,7 +35,6 @@ namespace editor::WorldList
     public func show(ref open: bool)
     {
         using je::gui;
-        if(!open) return FormAction::Close;
 
         Begin("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
                         + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
@@ -55,11 +54,11 @@ namespace editor::WorldList
                                 if (rend_world != world)
                                     generic::askbox("切换渲染世界",
                                                 F"即将切换到{world->editor::name}，是否继续？",
-                                                \=SwitchEditingWorld(world););
+                                                \sure: bool = sure?SwitchEditingWorld(world)|nil;);
                             none?
                                 generic::askbox("切换渲染世界",
                                             F"即将切换到{world->editor::name}，是否继续？",
-                                            \=SwitchEditingWorld(world););
+                                            \sure: bool = sure?SwitchEditingWorld(world)|nil;);
                         }
                     }
                     DragItem("JEEDITOR_WORLD", world: string, \=Text(F"World:{world->editor::name}"););
@@ -68,10 +67,6 @@ namespace editor::WorldList
                 EndListBox();
             }
         End();
-
-        if (!open)
-            return FormAction::Close;
-        return FormAction::Nothing;
     }
 
     private func context_menu(world: je::world)
@@ -92,7 +87,8 @@ namespace editor::WorldList
                     let delete_world_form = 
                         \ = generic::askbox("确认删除世界",
                                 F"确定要删除世界{world->editor::name}吗？未保存的世界将永久丢失！",
-                                func(){
+                                func(sure: bool){
+                                    if (!sure) return;
                                     EntityList::set_current_entity(option::none);
                                     Project::GetCurrentProject()->CloseWorld(world);
                                 });;
@@ -100,13 +96,16 @@ namespace editor::WorldList
                         \ proj_world: Project::World, saving_path: string = 
                             generic::checkbox("确认关闭世界",
                                 F"正在关闭世界{world->editor::name}，是否需要保存？世界将被保存到{saving_path}！",
-                                func(){
-                                    EntityList::set_current_entity(option::none);
-                                    proj_world->Save();
-                                    Project::GetCurrentProject()->CloseWorld(world);
-                                },
-                                \ = Project::GetCurrentProject()->CloseWorld(world);
-                                );;
+                                func(check: generic::CheckResult){
+                                    if (check == generic::CheckResult::YES)
+                                    {
+                                        EntityList::set_current_entity(option::none);
+                                        proj_world->Save();
+                                        Project::GetCurrentProject()->CloseWorld(world);
+                                    }
+                                    else if (check == generic::CheckResult::NO)
+                                        Project::GetCurrentProject()->CloseWorld(world);
+                                });;
                     match(Project::GetCurrentProject()->FindWorld(world))
                     {
                     value(proj_world)?
