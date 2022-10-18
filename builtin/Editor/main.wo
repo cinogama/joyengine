@@ -221,7 +221,26 @@ func Editor_CameraViewport()
         let mut available_width = 0., mut available_height = 0.;
         GetContentRegionAvail(ref available_width, ref available_height);
 
+        let (wwidth, wheight) = GetWindowPos();
+        let (lupx, lupy) = GetCursorPos();
         Image(frametex, available_width: int, available_height: int);
+        let (itemw, itemh) = GetItemRectSize();
+
+        let (mx, my) = GetMousePos();
+
+        let (offsetx, offsety) = (mx - lupx - wwidth, my - lupy - wheight);
+
+        if (offsetx >= 0. && offsety >= 0. && offsetx <= itemw && offsety <= itemh)
+        {
+            // 在渲染区域内！
+            let uniform_mpos_x = 2. * (offsetx / itemw - 0.5), 
+                uniform_mpos_y = 2. * (offsety / itemh - 0.5);
+
+            je::editor::enable_editor_system(true);
+            je::editor::update_editor_mouse_pos(uniform_mpos_x, uniform_mpos_y);
+        }
+        else
+            je::editor::enable_editor_system(false);
 
         if (origin_width != available_width: int || origin_height != available_height: int)
         {
@@ -246,8 +265,6 @@ func Editor_MainMenuBar()
 
     // 刷新检测热键
     shortcut::update();
-
-    je::editor::enable_editor_system(!AnyWindowsFocused());
 
     // 拉取一下log信息
     let last_log_info = logmgr::update_buffers();

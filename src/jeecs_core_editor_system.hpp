@@ -56,7 +56,7 @@ namespace jeecs
 
         const Camera::Projection* _camera_porjection;
 
-        struct input_msg
+        inline static struct input_msg
         {
             bool w = false;
             bool s = false;
@@ -72,6 +72,8 @@ namespace jeecs
             bool r_buttom_click = false;
 
             bool l_buttom_double_click = false;
+
+            jeecs::math::vec2 uniform_mouse_pos = {};
         }_inputs;
 
         DefaultEditorSystem(game_world w)
@@ -102,18 +104,18 @@ namespace jeecs
 
             if (_inputs.r_buttom_click)
             {
-                _begin_drag = mousepos(0);
+                _begin_drag = _inputs.uniform_mouse_pos;
                 _drag_viewing = false;
             }
 
             if (_inputs.r_buttom)
             {
-                if (_drag_viewing || (mousepos(0) - _begin_drag).length() >= 0.01f)
+                if (_drag_viewing || (_inputs.uniform_mouse_pos - _begin_drag).length() >= 0.01f)
                 {
                     _drag_viewing = true;
                     je_io_lock_mouse(true);
 
-                    rotation.rot = rotation.rot * quat(0, 30.f * mousepos(0).x, 0);
+                    rotation.rot = rotation.rot * quat(0, 30.f * _inputs.uniform_mouse_pos.x, 0);
                 }
                 if (_inputs.w)
                     position.pos += _camera_rot * vec3(0, 0, 5.f / 60.f);
@@ -136,7 +138,7 @@ namespace jeecs
             using namespace input;
             using namespace math;
 
-            auto mouse_position = mousepos(0);
+            auto mouse_position = _inputs.uniform_mouse_pos;
 
             _camera_ray = math::ray(trans, proj, mouse_position, false);
             _camera_porjection = &proj;
@@ -206,7 +208,7 @@ namespace jeecs
 
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
         {
-            if (_inputs.l_buttom_click && _editor_enabled)
+            if (_inputs.l_buttom_click)
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
 
@@ -366,9 +368,6 @@ namespace jeecs
             Renderer::Shape* shape,
             Renderer::Shaders& shaders)
         {
-            if (!_editor_enabled)
-                return;
-
             auto* editing_entity = jedbg_get_editing_entity();
             Transform::LocalPosition* editing_pos = editing_entity
                 ? editing_entity->get_component<Transform::LocalPosition>()
@@ -397,7 +396,7 @@ namespace jeecs
                     math::vec2 screen_axis = { p1.x - p0.x,p1.y - p0.y };
                     screen_axis = screen_axis.unit();
 
-                    math::vec2 cur_mouse_pos = input::mousepos(0);
+                    math::vec2 cur_mouse_pos = _inputs.uniform_mouse_pos;
                     math::vec2 diff = cur_mouse_pos - _grab_last_pos;
 
                     editing_pos->set_world_position(
@@ -419,7 +418,7 @@ namespace jeecs
                     if (select_click)
                     {
                         _grab_axis_translation = &trans;
-                        _grab_last_pos = input::mousepos(0);
+                        _grab_last_pos = _inputs.uniform_mouse_pos;
                     }
                     if (!_inputs.l_buttom)
                         shaders.set_uniform("high_light", 1.0f);
@@ -431,6 +430,9 @@ namespace jeecs
 
         void Update()
         {
+            if (!_editor_enabled)
+                return;
+
             _inputs.w = input::keydown(input::keycode::W);
             _inputs.s = input::keydown(input::keycode::S);
             _inputs.a = input::keydown(input::keycode::A);
@@ -473,7 +475,7 @@ namespace jeecs
                     else
                         jedbg_set_editing_entity(&selected_list.begin()->entity);
                 }
-                else if (_inputs.l_buttom_double_click && _editor_enabled)
+                else if (_inputs.l_buttom_double_click)
                     jedbg_set_editing_entity(nullptr);
             }
 
@@ -674,5 +676,11 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
 WO_API wo_api wojeapi_setable_editor_system(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::DefaultEditorSystem::_editor_enabled = wo_bool(args + 0);
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::DefaultEditorSystem::_inputs.uniform_mouse_pos = 
+        jeecs::math::vec2{ wo_float(args + 0), wo_float(args + 1) };
     return wo_ret_void(vm);
 }

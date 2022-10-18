@@ -82,6 +82,15 @@ namespace je::gui
     extern("libjoyecs", "je_gui_job_vm_handle")
     public func JobID()=> handle;
 
+    extern("libjoyecs", "je_gui_get_window_pos")
+    public func GetWindowPos()=> (real, real);
+    extern("libjoyecs", "je_gui_get_mouse_pos")
+    public func GetMousePos()=> (real, real);
+    extern("libjoyecs", "je_gui_get_cursor_pos")
+    public func GetCursorPos()=> (real, real);
+    extern("libjoyecs", "je_gui_get_item_rect_size")
+    public func GetItemRectSize()=> (real, real);
+
     extern("libjoyecs", "je_gui_begin")
     public func Begin(title:string)=> bool;
     extern("libjoyecs", "je_gui_begin")
@@ -444,6 +453,48 @@ WO_API wo_api je_gui_set_next_item_open(wo_vm vm, wo_value args, size_t argc)
 }
 
 //
+WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    auto&& wpos = ImGui::GetWindowPos();
+
+    wo_value ret = wo_push_struct(vm, 2);
+    wo_set_float(wo_struct_get(ret, 0), wpos.x);
+    wo_set_float(wo_struct_get(ret, 1), wpos.y);
+
+    return wo_ret_val(vm, ret);
+}
+
+WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    auto&& mpos = ImGui::GetMousePos();
+
+    wo_value ret = wo_push_struct(vm, 2);
+    wo_set_float(wo_struct_get(ret, 0), mpos.x);
+    wo_set_float(wo_struct_get(ret, 1), mpos.y);
+
+    return wo_ret_val(vm, ret);
+}
+
+WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    auto&& cpos = ImGui::GetCursorPos();
+
+    wo_value ret = wo_push_struct(vm, 2);
+    wo_set_float(wo_struct_get(ret, 0), cpos.x);
+    wo_set_float(wo_struct_get(ret, 1), cpos.y);
+
+    return wo_ret_val(vm, ret);
+}
+WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args, size_t argc)
+{
+    auto&& isize = ImGui::GetItemRectSize();
+
+    wo_value ret = wo_push_struct(vm, 2);
+    wo_set_float(wo_struct_get(ret, 0), isize.x);
+    wo_set_float(wo_struct_get(ret, 1), isize.y);
+
+    return wo_ret_val(vm, ret);
+}
 
 WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args, size_t argc)
 {

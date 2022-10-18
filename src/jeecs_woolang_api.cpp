@@ -1286,6 +1286,9 @@ namespace je
         extern("libjoyecs", "wojeapi_unload_module")
         public func unload_module(module: handle)=> void;
 
+        extern("libjoyecs", "wojeapi_update_editor_mouse_pos")
+        public func update_editor_mouse_pos(x: real, y: real)=> void;
+
         extern("libjoyecs", "wojeapi_setable_editor_system")
         public func enable_editor_system(able: bool)=> void;
 
@@ -1687,15 +1690,14 @@ namespace je
                     private public func _get_systems_from_world(self: world)=> array<typeinfo>;
                 return _get_systems_from_world(self);
             }
-
+)"
+R"(
             public func top_entity_iter(self: world)=> entity::editor::entity_iter
             {
                 return entity::editor::entity_iter(self->get_all_entities());
             }
         }
     }
-)"
-R"(
     public using entity = gchandle;
     namespace entity
     {
