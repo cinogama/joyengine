@@ -7,6 +7,8 @@ import builtin.Editor.generic.form.askbox;
 
 import entitycreator;
 
+using je::gui;
+
 namespace editor::EntityList
 {
     // TODO; Display entity with Editor::Invisable?
@@ -32,38 +34,40 @@ namespace editor::EntityList
             EndMenuBar();
         }
     }
-
+    public func context_for_entity(entity: option<je::entity>)
+    {
+        let has_editable_entity = entity->has;
+        if (MenuItem("删除", has_editable_entity))
+        {
+            generic::askbox("删除实体",
+                F"确认要删除实体{entity->val->editor::name()}吗？",
+                \sure: bool = sure?entity->val->close()|nil;);
+        }
+        if (MenuItem("重命名", has_editable_entity))
+        {
+            launch(generic::InputBox, ("重命名实体",
+                                    F"请输入新名称",
+                                    entity->val->editor::name(),
+                                    \text: string = entity->val->editor::name(text);));
+        }
+        if (MenuItem("编辑组件", has_editable_entity))
+        {
+            launch(EntityCreator::show, (EntityCreator::edit_context(entity->val),));
+        }
+    }
     private func context_menu(entity: je::entity)
     {
-        using je::gui;
         if (BeginPopupContextItem())
         {
             MenuItem(F"实体 {entity->editor::chunkinfo()}", false);
             Separator();
-            if (MenuItem(F"删除 {entity->editor::name()}"))
-            {
-                generic::askbox("删除实体",
-                    F"确认要删除实体{entity->editor::name()}吗？",
-                    \sure: bool = sure?entity->close()|nil;);
-            }
-            if (MenuItem("重命名"))
-            {
-                launch(generic::InputBox, ("重命名实体",
-                                        F"请输入新名称",
-                                        entity->editor::name(),
-                                        \text: string = entity->editor::name(text);));
-            }
-            if (MenuItem("编辑组件"))
-            {
-                launch(EntityCreator::show, (EntityCreator::edit_context(entity),));
-            }
+            context_for_entity(option::value(entity));
             EndPopup();
         }
     }
 
     public func show(ref open: bool)
     {
-        using je::gui;
         Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
                         + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                     , ref open);
@@ -135,8 +139,6 @@ namespace editor::EntityList
 
     private func set_parent(child: je::entity, parent: je::entity)
     {
-        using je::gui;
-
         static let ChildAnchor   = je::typeinfo("Transform::ChildAnchor")->val(),
                    LocalToParent = je::typeinfo("Transform::LocalToParent")->val(),
                    LocalToWorld  = je::typeinfo("Transform::LocalToWorld")->val();
@@ -166,8 +168,6 @@ namespace editor::EntityList
     }
     private func _display_entity_with_iter(entity_iter: je::entity::editor::entity_iter)=> int
     {
-        using je::gui;
-
         let mut current_uid_entity_map = {}mut: map<string, je::entity>;
         
         let mut display_count = 0;

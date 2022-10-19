@@ -70,6 +70,7 @@ namespace jeecs
 
             bool l_buttom_click = false;
             bool l_buttom_pushed = false;
+            bool r_buttom_click = false;
             bool r_buttom_pushed = false;
 
             jeecs::math::vec2 uniform_mouse_pos = {};
@@ -210,7 +211,7 @@ namespace jeecs
 
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
         {
-            if (_inputs.l_buttom_click)
+            if (_inputs.l_buttom_pushed || _inputs.r_buttom_pushed)
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
 
@@ -447,6 +448,7 @@ namespace jeecs
             _inputs.r_buttom = input::keydown(input::keycode::MOUSE_R_BUTTION);
             _inputs.l_buttom_click = input::is_up(_inputs.l_buttom);
             _inputs.l_buttom_pushed = input::first_down(_inputs.l_buttom);
+            _inputs.r_buttom_click = input::is_up(_inputs.r_buttom);
             _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
 
             select_from(get_world())
@@ -480,7 +482,7 @@ namespace jeecs
                     else
                         jedbg_set_editing_entity(&selected_list.begin()->entity);
                 }
-                else if (_inputs.l_buttom_click)
+                else if (_inputs.l_buttom_pushed)
                     jedbg_set_editing_entity(nullptr);
             }
 
