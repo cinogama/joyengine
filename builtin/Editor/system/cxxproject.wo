@@ -464,8 +464,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             ["win32_debug_x86"] = CxxProjectBuildConfig{ 
                 config = "win32_debug_x86",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32_debug")
-                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo32_debug")
+                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32_debug.lib")
+                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo32_debug.lib")
                     ->replace("$$JE_POSTFIX$$", "32_debug"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=DEBUG",
                 built_command = "-p:Configuration=Debug",
@@ -473,8 +473,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             ["win32_release_x86"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x86",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32")
-                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo32")
+                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32.lib")
+                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo32.lib")
                     ->replace("$$JE_POSTFIX$$", "32"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=RELEASE",
                 built_command = "-p:Configuration=Release",
@@ -482,8 +482,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             ["win32_debug_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_debug_x64",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs_debug")
-                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo_debug")
+                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs_debug.lib")
+                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo_debug.lib")
                     ->replace("$$JE_POSTFIX$$", "_debug"),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=DEBUG",
                 built_command = "-p:Configuration=Debug",
@@ -491,8 +491,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             ["win32_release_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x64",
                 cmake = win32_cmake
-                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs")
-                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo")
+                    ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs.lib")
+                    ->replace("$$JE_WOOLANG_LIB$$", "libwoo.lib")
                     ->replace("$$JE_POSTFIX$$", ""),
                 cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=RELEASE",
                 built_command = "-p:Configuration=Release",
@@ -709,7 +709,7 @@ $$REGISTER_SYSTEM_TYPES$$
             return result::err(context.display_msg);
         }
 
-        let cmake_command = F"{utils::WrapPath(CMAKE_PATH)} \"{utils::WrapPath(self.path)}\" -B \"{utils::WrapPath(self.path + "msvcbuild")}\" {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
+        let cmake_command = F"{utils::WrapPath(CMAKE_PATH)} \"{utils::WrapPath(self.path)}\" -B \"{utils::WrapPath(self.path + "msvcbuild_" + config)}\" {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
         
         context.display_msg = F"正在使用CMake生成编译配置\n{cmake_command}";
         context.progress = 15;
@@ -720,8 +720,8 @@ $$REGISTER_SYSTEM_TYPES$$
             return result::err(context.display_msg);
         }
 
-        let msvc_proj_path = utils::WrapPath(F"{self.path}msvcbuild/builder/{config}/{self.name}.vcxproj");
-        let msvc_compile_result_path = F"{self.path}msvcbuild/compile.log";
+        let msvc_proj_path = utils::WrapPath(F"{self.path}msvcbuild_{config}/builder/{config}/{self.name}.vcxproj");
+        let msvc_compile_result_path = F"{self.path}msvcbuild_{config}/compile.log";
 
         delete(msvc_compile_result_path);
 
