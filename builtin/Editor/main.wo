@@ -291,7 +291,7 @@ func Editor_CameraViewport()
         }
         if (BeginPopupContextWindow())
         {
-            lock_active = true;
+            //lock_active = true;
 
             if (MenuItem("新建实体"))
                 launch(EntityCreator::show, (EntityCreator::create_context(),));
@@ -300,8 +300,6 @@ func Editor_CameraViewport()
 
             EndPopup();
         }
-        else
-            lock_active = false;
         
     }
     none?
@@ -379,6 +377,8 @@ func Editor_MainMenuBar()
                 shortcut::active([je::keycode::L_CTRL, je::keycode::E]);
             if (MenuItem("检视面板", "Ctrl + I"))
                 shortcut::active([je::keycode::L_CTRL, je::keycode::I]);
+            if (MenuItem("调试视口", "Ctrl + P"))
+                shortcut::active([je::keycode::L_CTRL, je::keycode::P]);
             Separator();
             if (MenuItem("文件管理器", "Ctrl + B"))
                 shortcut::active([je::keycode::L_CTRL, je::keycode::B]);

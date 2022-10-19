@@ -364,7 +364,11 @@ namespace editor::Project
                                 {
                                 ok(mod)?
                                 {
-                                    let update_result = CxxProject::update_engine_file(path);
+                                    let update_result = 
+                                        CxxProject::update_engine_file(path)
+                                            ->bind(\r: map<string, bool> = 
+                                                CxxProject::generate_module_config(mod.name, path, r);
+                                            );
                                     if (update_result->isok)
                                         mod->update_compile(je::editor::platform());
                                     else

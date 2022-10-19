@@ -70,6 +70,8 @@ public using CxxProject = struct {
             ],
         }: dict<string, array<string>>;
 
+    alias platform_t = string;
+
     public func update_engine_file(cxx_proj_path: string)
     {
         using je::file;
@@ -91,7 +93,6 @@ public using CxxProject = struct {
             return r->fail;
 
         // 2. 开始复制库文件, 顺便确认支持的平台
-        alias platform_t = string;
         let platform_support = {}mut : map<platform_t, bool>;
         for (let platform, files : ENGINE_CORE_LIBRARYS_PATHS)
         {
@@ -105,25 +106,11 @@ public using CxxProject = struct {
         return result::ok(platform_support);
     }
 
-    public func start(name: string, locpath: string)=> result<CxxProject, string>
-    {
+    public func generate_module_config(name: string, cxx_proj_path: string, platform_support: map<platform_t, bool>)
+    {      
         using je::file;
         using je::filesys;
-
-        // 在指定目录下创建Cxx项目目录
-        let cxx_proj_path = F"{normalize(locpath)}{name}.jemodule4/";
-        if (exist(cxx_proj_path))
-            return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
-
-        let r = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
-            ->bind(\_: anything = update_engine_file(cxx_proj_path););
-        if (r->iserr)
-        {
-            delete(cxx_proj_path);
-            return r->fail;
-        }
-        let platform_support = r->okay->val;
-
+        
         let enabled_generating = platform_support
             ->forall(\_: anything, enable: bool = enable;)
             ->unmapping
@@ -141,7 +128,6 @@ public using CxxProject = struct {
                 = r[1]->error->val;))
                 je::logerr(r);
 
-            delete(cxx_proj_path);
             return result::err(F"创建模块的CMake文件时失败：\n{
                 failed_generating
                     ->trans(\r: (anything, result<anything, string>) = r[1]->error->val;)
@@ -150,25 +136,13 @@ public using CxxProject = struct {
             }");
         }
 
-        let created_module = CxxProject{ 
-            name = name, 
-            path = normalize(cxx_proj_path), 
-            configs = generating_results
-                ->mapping
-                ->trans(\k: string, v: result<CxxProjectBuildConfig, string> 
-                    = (k, v->okay->val);),
-            module_instance = option::none,
-            };
-
-        // 3. 给支持的平台生成CMake文件，并且把配置信息存档
+         // 3. 给支持的平台生成CMake文件，并且把配置信息存档
         writeall(F"{cxx_proj_path}config.inf", {
-            ["name"] = created_module.name: dynamic,
-            ["path"] = created_module.path: dynamic,
-            ["conf"] = created_module.configs
-                ->unmapping
-                ->trans(\conf: (string, anything) = conf[0];): dynamic
+            ["name"] = name: dynamic,
+            ["path"] = normalize(cxx_proj_path): dynamic,
+            ["conf"] = enabled_generating: dynamic
         }: string);
-
+        
         for (let config : generating_results->trans(
             \c: (anything, result<CxxProjectBuildConfig, anything>) = c[1]->okay->val;))
         {
@@ -179,19 +153,13 @@ public using CxxProject = struct {
                 // 对应目录不存在，在这里创建一下，失败就寄掉
                 let mkdir_result = mkdir(aim_cmake_dir);
                 if (mkdir_result->iserr)
-                {
-                    delete(cxx_proj_path);
                     return mkdir_result->fail;
-                }
             }
             if (!writeall(F"{aim_cmake_dir}/CMakeLists.txt", 
                 config.cmake
                     ->replace("$$JEMODULE_PROJECT_NAME$$", name)
                     ->replace("$$JEMODULE_BUILD_CONFIG$$", config.config)))
-            {
-                delete(cxx_proj_path);
                 return result::err(F"无法写入'{aim_cmake_dir}/CMakeLists.txt'");
-            }
         }
 
         // 4. 生成主CMakeLists
@@ -223,7 +191,6 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         if (!cmake_subdirs->has)
         {
-            delete(cxx_proj_path);
             std::panic("没有可用的配置，这绝不应该发生");
             return result::err("没有可用的配置，请检查引擎目录相关文件是否丢失");
         }
@@ -231,15 +198,55 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         if (!writeall(F"{cxx_proj_path}CMakeLists.txt", 
                 F"{cmake_head}\n{cmake_subdirs->val}\n"
                     ->replace("$$JEMODULE_PROJECT_NAME$$", name)))
+            return result::err(F"无法写入'{cxx_proj_path}CMakeLists.txt'");
+
+        return result::ok(generating_results);
+    }
+
+    public func start(name: string, locpath: string)=> result<CxxProject, string>
+    {
+        using je::file;
+        using je::filesys;
+
+        // 在指定目录下创建Cxx项目目录
+        let cxx_proj_path = F"{normalize(locpath)}{name}.jemodule4/";
+        if (exist(cxx_proj_path))
+            return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
+
+        let r = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
+            ->bind(\_: anything = update_engine_file(cxx_proj_path););
+        if (r->iserr)
         {
             delete(cxx_proj_path);
-            return result::err(F"无法写入'{cxx_proj_path}CMakeLists.txt'");
+            return r->fail;
         }
+        let platform_support = r->okay->val;
 
-        // 最后，编译一下当前平台
-        created_module->update_compile(je::editor::platform());
+        match (generate_module_config(name, cxx_proj_path, platform_support))
+        {
+        err(reason)?
+        {
+            delete(cxx_proj_path);
+            return result::err(reason);
+        }
+        ok(generating_results)?
+        {       
+            let created_module = CxxProject{ 
+                name = name, 
+                path = normalize(cxx_proj_path), 
+                configs = generating_results
+                    ->mapping
+                    ->trans(\k: string, v: result<CxxProjectBuildConfig, string> 
+                        = (k, v->okay->val);),
+                module_instance = option::none,
+                };
 
-        return result::ok(created_module);
+            // 最后，编译一下当前平台
+            created_module->update_compile(je::editor::platform());
+
+            return result::ok(created_module);
+        }
+        }
     }
 
     func search_file_in(dir: string, exname: string)=> option<string>
@@ -334,7 +341,8 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         {
         value(p)?
             assert(move(p, F"{newest_runtime_path}{filename(p)}")->isok);
-        none? std::panic("Output PDB file not found;");
+        none?
+            ; // 没有pdb就算了，可能是release
         }
     }
 
@@ -428,8 +436,8 @@ include_directories("../../engine/include")
 include_directories("../../systems")
 include_directories("../../components")
 
-find_library(joyengine_lib $$JE_ENGINE_LIB$$ ../../engine/library)
-find_library(woolang_lib $$JE_WOOLANG_LIB$$ ../../engine/library)
+find_library(joyengine_lib "$$JE_ENGINE_LIB$$" ../../engine/library)
+find_library(woolang_lib "$$JE_WOOLANG_LIB$$" ../../engine/library)
 
 file(GLOB_RECURSE module_systems_sources ../../systems/*.cpp)
 file(GLOB_RECURSE module_systems_headers ../../systems/*.hpp)
