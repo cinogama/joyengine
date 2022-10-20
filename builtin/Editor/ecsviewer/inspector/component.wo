@@ -28,7 +28,7 @@ namespace editor::Inspector::Component
                 if (MenuItem(F"移除组件: {comp_type->name()}"))
                     entity->editor::remove_component(comp_type);
             none?
-                MenuItem("移除组件", false);
+                MenuItemEnabled("移除组件", false);
             }
             Separator();
 
@@ -52,7 +52,7 @@ namespace editor::Inspector::Component
 
         _last_display_entity = cur_entity; // 
 
-        BeginChild("component_editor", 0., max_height);
+        BeginChildSize("component_editor", 0., max_height);
             match (cur_entity)
             {
                 value(current_entity)?
@@ -77,7 +77,7 @@ namespace editor::Inspector::Component
                         // 从根开始，找到最终组件所在的节点
                         for (let name: scope_names)
                         {
-                            current_types = current_types.m_map->get_or_set_default(name, 
+                            current_types = current_types.m_map->getorset(name, 
                                 component_chain{
                                     m_map = {}mut,
                                     m_component_type = option::none:<je::typeinfo>
@@ -111,7 +111,7 @@ namespace editor::Inspector::Component
                             {
                             value(component_addr)?
                             {
-                                for (let name, type, addr : component_addr->editor::iter_member())
+                                for (let name, (type, addr) : component_addr->editor::members())
                                 {
                                     member_count += 1;
                                     _show_edit_widget(name, type, addr);

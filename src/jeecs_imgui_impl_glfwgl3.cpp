@@ -94,9 +94,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin")
     public func Begin(title:string)=> bool;
     extern("libjoyecs", "je_gui_begin")
-    public func Begin(title:string, attribute:WindowsAttribute)=> bool;
+    public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin")
-    public func Begin(title:string, attribute:WindowsAttribute, ref closed:bool)=> bool;
+    public func BeginAttrOpen(title:string, attribute:WindowsAttribute, ref open:bool)=> bool;
 
     extern("libjoyecs", "je_gui_end")
     public func End()=> bool;
@@ -104,9 +104,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin_child")
     public func BeginChild(title:string)=> bool;
     extern("libjoyecs", "je_gui_begin_child")
-    public func BeginChild(title:string, attr: WindowsAttribute)=> bool;
+    public func BeginChildAttr(title:string, attr: WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_child")
-    public func BeginChild(title:string, sizex: real, sizey: real)=> bool;
+    public func BeginChildSize(title:string, sizex: real, sizey: real)=> bool;
 
     extern("libjoyecs", "je_gui_end_child")
     public func EndChild()=> void;
@@ -122,7 +122,7 @@ namespace je::gui
     extern("libjoyecs", "je_gui_button")
     public func Button(msg:string)=> bool;
     extern("libjoyecs", "je_gui_button")
-    public func Button(msg:string, sizex: real, sizey: real)=> bool;
+    public func ButtonSize(msg:string, sizex: real, sizey: real)=> bool;
 
     extern("libjoyecs", "je_gui_begin_main_menu_bar")
     public func BeginMainMenuBar()=> bool;
@@ -130,16 +130,16 @@ namespace je::gui
     extern("libjoyecs", "je_gui_menu_item")
     public func MenuItem(text:string)=> bool;
     extern("libjoyecs", "je_gui_menu_item")
-    public func MenuItem(text:string, shortcut:string)=> bool;
+    public func MenuItemShortcut(text:string, shortcut:string)=> bool;
     extern("libjoyecs", "je_gui_menu_item")
-    public func MenuItem(text:string, enable:bool)=> bool;
+    public func MenuItemEnabled(text:string, enable:bool)=> bool;
     extern("libjoyecs", "je_gui_menu_item")
-    public func MenuItem(text:string, shortcut:string, enable:bool)=> bool;
+    public func MenuItemShortcutEnabled(text:string, shortcut:string, enable:bool)=> bool;
     extern("libjoyecs", "je_gui_menu_item")
-    public func MenuItem(text:string, shortcut:string, ref selected:bool, enable:bool)=> bool;
-    public func MenuItem(text:string, ref selected:bool, enable:bool)=> bool
+    public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, ref selected:bool, enable:bool)=> bool;
+    public func MenuItemSelectedEnabled(text:string, ref selected:bool, enable:bool)=> bool
     {
-        return MenuItem(text, "", ref selected, enable);
+        return MenuItemShortcutSelectedEnabled(text, "", ref selected, enable);
     }
 
     extern("libjoyecs", "je_gui_end_main_menu_bar")
@@ -154,23 +154,23 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin_menu")
     public func BeginMenu(text:string)=> bool;
     extern("libjoyecs", "je_gui_begin_menu")
-    public func BeginMenu(text:string, enable:bool)=> bool;
+    public func BeginMenuEnabled(text:string, enable:bool)=> bool;
 
     extern("libjoyecs", "je_gui_listbox")
     public func ListBox(label:string, items:array<string>)=> int;
     extern("libjoyecs", "je_gui_listbox")
-    public func ListBox(label:string, items:array<string>, ref select_item:int)=> int;
+    public func ListBoxSelect(label:string, items:array<string>, ref select_item:int)=> int;
     extern("libjoyecs", "je_gui_listbox")
-    public func ListBox(label:string, items:array<string>, ref select_item:int, height_count:int)=> int;
+    public func ListBoxSelectHeight(label:string, items:array<string>, ref select_item:int, height_count:int)=> int;
     extern("libjoyecs", "je_gui_listbox_withsize")
-    public func ListBox(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
+    public func ListBoxSelectSize(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
 
     extern("libjoyecs", "je_gui_begin_listbox")
     public func BeginListBox(label:string, width:real, height:real)=>bool;
     extern("libjoyecs", "je_gui_begin_selectable")
     public func Selectable(label:string)=>bool;
     extern("libjoyecs", "je_gui_begin_selectable")
-    public func Selectable(label:string, selected:bool)=>bool;
+    public func SelectableSelected(label:string, selected:bool)=>bool;
     extern("libjoyecs", "je_gui_end_listbox")
     public func EndListBox()=> void;
 
@@ -192,7 +192,7 @@ namespace je::gui
     extern("libjoyecs", "je_gui_is_itemclicked")
     public func IsItemClicked(button: ImGuiMouseButton)=> bool;
 
-    public func IsItemClicked()
+    public func IsItemClickedLeft()
     {
         return IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Left);
     }
@@ -206,12 +206,12 @@ namespace je::gui
     public func SetTooltip(msg: string)=> bool;
 
     extern("libjoyecs", "je_gui_beginpopup_contextitem")
-    public func BeginPopupContextItem(label:string)=>bool;
+    public func BeginPopupContextItemLabel(label:string)=>bool;
     extern("libjoyecs", "je_gui_beginpopup_contextitem")
     public func BeginPopupContextItem()=>bool;
 
     extern("libjoyecs", "je_gui_beginpopup_contextwindow")
-    public func BeginPopupContextWindow(label:string)=>bool;
+    public func BeginPopupContextWindowLabel(label:string)=>bool;
     extern("libjoyecs", "je_gui_beginpopup_contextwindow")
     public func BeginPopupContextWindow()=>bool;
 
@@ -223,11 +223,11 @@ namespace je::gui
     extern("libjoyecs", "je_gui_openpopup_on_item_click")
     public func OpenPopupOnItemClick()=>void;
     extern("libjoyecs", "je_gui_openpopup_on_item_click")
-    public func OpenPopupOnItemClick(flag:PopupAttribute)=>void;
+    public func OpenPopupOnItemClickAttr(flag:PopupAttribute)=>void;
     extern("libjoyecs", "je_gui_openpopup_on_item_click")
-    public func OpenPopupOnItemClick(label:string)=>void;
+    public func OpenPopupOnItemClickLabel(label:string)=>void;
     extern("libjoyecs", "je_gui_openpopup_on_item_click")
-    public func OpenPopupOnItemClick(label:string, flag:PopupAttribute)=>void;
+    public func OpenPopupOnItemClickLabelAttr(label:string, flag:PopupAttribute)=>void;
 
     extern("libjoyecs", "je_gui_openpopup")
     public func OpenPopup(label:string)=>void;     
@@ -239,10 +239,10 @@ namespace je::gui
     public func EndPopup()=>void;
 
     extern("libjoyecs", "je_gui_push_id")
-    public func PushID(id:int)=>void;
+    public func PushIDInt(id:int)=>void;
 
     extern("libjoyecs", "je_gui_push_id_str")
-    public func PushID(id:string)=>void;
+    public func PushIDStr(id:string)=>void;
 
     extern("libjoyecs", "je_gui_pop_id")
     public func PopID()=>void;
@@ -253,7 +253,7 @@ namespace je::gui
     extern("libjoyecs", "je_gui_input_float_box")
     public func InputFloat(label: string, ref value: real)=> bool;
     extern("libjoyecs", "je_gui_input_float_box")
-    public func InputFloat(label: string, ref value: real, format: string)=> bool;
+    public func InputFloatFormat(label: string, ref value: real, format: string)=> bool;
 
     extern("libjoyecs", "je_gui_input_int_box")
     public func InputInt(label: string, ref value: int)=> bool;
@@ -261,22 +261,22 @@ namespace je::gui
     extern("libjoyecs", "je_gui_input_float2_box")
     public func InputFloat2(label: string, ref x: real, ref y: real)=> bool;
     extern("libjoyecs", "je_gui_input_float2_box")
-    public func InputFloat2(label: string, ref x: real, ref y: real, format: string)=> bool;
+    public func InputFloat2Format(label: string, ref x: real, ref y: real, format: string)=> bool;
 
     extern("libjoyecs", "je_gui_input_float3_box")
     public func InputFloat3(label: string, ref x: real, ref y: real, ref z: real)=> bool;
     extern("libjoyecs", "je_gui_input_float3_box")
-    public func InputFloat3(label: string, ref x: real, ref y: real, ref z: real, format: string)=> bool;
+    public func InputFloat3Format(label: string, ref x: real, ref y: real, ref z: real, format: string)=> bool;
 
     extern("libjoyecs", "je_gui_input_float4_box")
     public func InputFloat4(label: string, ref x: real, ref y: real, ref z: real, ref w: real)=> bool;
     extern("libjoyecs", "je_gui_input_float4_box")
-    public func InputFloat4(label: string, ref x: real, ref y: real, ref z: real, ref w: real, format: string)=> bool;
+    public func InputFloat4Format(label: string, ref x: real, ref y: real, ref z: real, ref w: real, format: string)=> bool;
 
     extern("libjoyecs", "je_gui_input_text_multiline")
     public func InputTextMultiline(label:string, ref buffer: string)=> bool;
     extern("libjoyecs", "je_gui_input_text_multiline")
-    public func InputTextMultiline(label:string, ref buffer: string, width:real, height:real)=> bool;
+    public func InputTextMultilineSize(label:string, ref buffer: string, width:real, height:real)=> bool;
 
     extern("libjoyecs", "je_gui_end_menu")
     public func EndMenu()=> void;
@@ -287,14 +287,16 @@ namespace je::gui
     extern("libjoyecs", "je_gui_image")
     public func Image(tex: je::graphic::texture)=> void;
     extern("libjoyecs", "je_gui_image")
-    public func Image(tex: je::graphic::texture, scale: real)=> void;
+    public func ImageScale(tex: je::graphic::texture, scale: real)=> void;
     extern("libjoyecs", "je_gui_image")
-    public func Image(tex: je::graphic::texture, width: int, height: int)=> void;
+    public func ImageSize(tex: je::graphic::texture, width: int, height: int)=> void;
 
     extern("libjoyecs", "je_gui_imagebutton")
     public func ImageButton(tex: je::graphic::texture)=> bool;
     extern("libjoyecs", "je_gui_imagebutton")
-    public func ImageButton(tex: je::graphic::texture, scale: real)=> bool;
+    public func ImageButtonScale(tex: je::graphic::texture, scale: real)=> bool;
+    extern("libjoyecs", "je_gui_imagebutton")
+    public func ImageButtonSize(tex: je::graphic::texture, width: real, height: real)=> bool;
 
     extern("libjoyecs", "je_gui_content_region_avail")
     public func GetContentRegionAvail(ref x: real, ref y: real)=> void;
@@ -320,7 +322,7 @@ R"(
     extern("libjoyecs", "je_gui_begin_drag_drop_source")
     public func BeginDragDropSource()=> bool;
     extern("libjoyecs", "je_gui_begin_drag_drop_source")
-    public func BeginDragDropSource(attrib: DragAttribute)=> bool;
+    public func BeginDragDropSourceAttr(attrib: DragAttribute)=> bool;
     extern("libjoyecs", "je_gui_set_drag_drop_payload")
     public func SetDragDropPayload(type: string, data: string)=> bool;
     extern("libjoyecs", "je_gui_end_drag_drop_source")
@@ -847,6 +849,12 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
+            ), ImVec2(0, 1), ImVec2(1, 0));
+    else if (argc == 3)
+        result = ImGui::ImageButton((ImTextureID)((*texture)->resouce())->m_uint1,
+            ImVec2(
+                wo_float(args + 1),
+                wo_float(args + 2)
             ), ImVec2(0, 1), ImVec2(1, 0));
 
     return wo_ret_bool(vm, result);

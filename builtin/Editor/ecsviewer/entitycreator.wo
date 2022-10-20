@@ -8,7 +8,7 @@ import builtin.Editor.generic.form.msgbox;
 
 namespace editor::EntityCreator
 {
-    private let icon_image = je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/Component.png");
+    private let icon_image = je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/Component.png");
     using EntityContext = struct {
         mut name  : string,
         edit_entity      : option<je::entity>,
@@ -67,8 +67,8 @@ namespace editor::EntityCreator
         using je::gui;
 
         BeginGroup();
-            PushID(typename);
-                ImageButton(icon_image, 0.075);
+            PushIDStr(typename);
+                ImageButtonScale(icon_image, 0.075);
             PopID();
             if (BeginDragDropSource())
             {
@@ -85,7 +85,7 @@ namespace editor::EntityCreator
     func show_append_components(context: EntityContext, width: real)
     {
         using je::gui;
-        BeginChild("append_components", width, 0.);
+        BeginChildSize("append_components", width, 0.);
             Text("新实体组件");
             for(let component_type : context.has_append_types)
                 show_component(component_type->name());
@@ -106,7 +106,7 @@ namespace editor::EntityCreator
     func show_usable_components(context: EntityContext, width: real)
     {
         using je::gui;
-        BeginChild("usable_components", width, 0.);
+        BeginChildSize("usable_components", width, 0.);
             Text("可用组件");
             for(let component_type : context.not_append_types)
                 show_component(component_type->name());
@@ -132,7 +132,7 @@ namespace editor::EntityCreator
     }
     func remove_components(context: EntityContext, type_name: string)
     {
-        match(je::typeinfo(type_name))
+        match(je::typeinfo::load_from_name(type_name))
         {
             value(type)?
                 if (context.not_append_types->find(type) == -1)
@@ -147,7 +147,7 @@ namespace editor::EntityCreator
     }
     func add_components(context: EntityContext, type_name: string)
     {
-        match(je::typeinfo(type_name))
+        match(je::typeinfo::load_from_name(type_name))
         {
             value(type)?
                 if (context.has_append_types->find(type) == -1)
@@ -169,7 +169,7 @@ namespace editor::EntityCreator
         {
             let menu_button_text = context.edit_entity->has ? "应用" | "创建";
 
-            if (MenuItem(menu_button_text, context.name != "" 
+            if (MenuItemEnabled(menu_button_text, context.name != "" 
                             && !context.has_append_types->empty))
             {
                 // TODO: 实例化实体，至少要有一个组件
@@ -247,7 +247,7 @@ namespace editor::EntityCreator
         using je::gui;
 
         let mut open = true;
-        Begin(context.edit_entity->has ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
+        BeginAttrOpen(context.edit_entity->has ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
             | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
    
             if (menu_bar(context))
@@ -268,7 +268,7 @@ namespace editor::EntityCreator
                     add_components->trans(\t: je::typeinfo = e->editor::add_component(t););
                     removing_components->trans(\t: je::typeinfo = e->editor::remove_component(t););
 
-                    e->editor::name(context.name);
+                    e->editor::set_name(context.name);
                 }
                 none?
                     match(je::world::rend())
@@ -276,7 +276,7 @@ namespace editor::EntityCreator
                         value(rworld)?
                         {
                             rworld->add_entity(context.has_append_types->toarray)
-                                  ->editor::name(context.name);
+                                  ->editor::set_name(context.name);
                         }
                         none?
                             launch(generic::MsgBox, ("创建实体失败", "没有找到渲染中的世界",));

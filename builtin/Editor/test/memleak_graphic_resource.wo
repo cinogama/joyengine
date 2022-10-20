@@ -11,8 +11,8 @@ namespace test::memory_leak::GraphicResource
 	{
 		if (run)
 		{
-			let tex    = je::graphic::texture(100, 100),
-				shader = je::graphic::shader("vshader.shader", @"
+			let tex    = je::graphic::texture::create(100, 100),
+				shader = je::graphic::shader::create("vshader.shader", @"
 					// test shader, only for test.
 					import je.shader;
 
@@ -65,7 +65,7 @@ namespace test::memory_leak::GraphicResource
 		static let mut testing = false;
 
 		let mut open = true;
-		Begin("内存泄漏检查（图形系统资源）", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+		BeginAttrOpen("内存泄漏检查（图形系统资源）", WindowsAttribute::ImGuiWindowFlags_None, ref open);
 			Text("这个窗口被用于检查图形系统资源是否造成内存泄漏");
 			Text("关闭窗口即停止测试，不要重复开启窗口");
 		End();

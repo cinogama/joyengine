@@ -16,7 +16,7 @@ namespace editor::WorldList
     {
         je::world::rend()->map(\old: je::world = old->editor::remove_system(Project::GetCurrentProject().editor_system););
 
-        aim_world->rend();
+        aim_world->set_rend;
         aim_world->add_system(Project::GetCurrentProject().editor_system);
     }
 
@@ -36,7 +36,7 @@ namespace editor::WorldList
     {
         using je::gui;
 
-        Begin("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
+        BeginAttrOpen("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
                         + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
             menu();
             if (BeginListBox("##", 200.0, 400.0))
@@ -44,7 +44,7 @@ namespace editor::WorldList
                 let worlds = je::universe::current()->editor::worlds_list;
                 for (let world : worlds)
                 {
-                    if (Selectable(world->editor::name + "##" + world: string, 
+                    if (SelectableSelected(world->editor::name + "##" + world: string, 
                             je::world::rend()->map(\rw:je::world = rw == world;)
                                              ->valor(false)))
                     {
@@ -74,7 +74,7 @@ namespace editor::WorldList
         using je::gui;
         if (BeginPopupContextItem())
         {
-            MenuItem(F"世界 {world->editor::name}", false);
+            MenuItemEnabled(F"世界 {world->editor::name}", false);
             Separator();
             if (MenuItem(F"删除 {world->editor::name}"))
             {
@@ -124,7 +124,7 @@ namespace editor::WorldList
                                         func(new_name: string){
                                             if (new_name == "")
                                                 return; // 输入为空，直接跳过
-                                            world->editor::name(new_name);
+                                            world->editor::set_name(new_name);
                                         }));
             if (MenuItem("变更系统"))
             {

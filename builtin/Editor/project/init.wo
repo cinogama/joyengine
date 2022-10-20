@@ -71,12 +71,13 @@ namespace editor::Project
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
                 + selected_path
-                    ->map(\p: string = p == path.path;, \ = false;)
+                    ->map(\p: string = p == path.path;)
+                    ->valor(false)
                     ->\b: bool = 
                         b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
                             | TreeNodeAttribute::ImGuiTreeNodeFlags_None;);
 
-        if (IsItemClicked() && !IsItemToggledOpen())
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
             selected_path = option::value(path.path);
 
         if (show_child)
@@ -139,7 +140,7 @@ namespace editor::Project
             return false;
         }
 
-        Begin("加载或新建项目", 
+        BeginAttr("加载或新建项目", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             let mut cur_width = 0.;
             GetContentRegionAvail(ref cur_width, 0./* 不关心高度 */);
@@ -153,30 +154,30 @@ namespace editor::Project
                 // TODO; 在这个地方列出历史项目，并支持一键导入
                 static let histories = get_project_histroy();
                 Text("历史项目：");
-                BeginChild("HistoryList", 0., 150.);
+                BeginChildSize("HistoryList", 0., 150.);
                 let mut cur_width_in_history_box = 0.;
                 GetContentRegionAvail(ref cur_width_in_history_box, 0./* 不关心高度 */);
                 for (let history_path : histories)
                 {
-                    if (Button(F"打开 {history_path}", cur_width_in_history_box, 0.))
+                    if (ButtonSize(F"打开 {history_path}", cur_width_in_history_box, 0.))
                         close_form = open_proj_path(history_path);;
                 }
                 EndChild();
 
-                if (Button("加载已有的项目", cur_width, 0.))
+                if (ButtonSize("加载已有的项目", cur_width, 0.))
                     state = CreateOrLoadProjectState::OpenProject;
-                if (Button("新建一个项目", cur_width, 0.))
+                if (ButtonSize("新建一个项目", cur_width, 0.))
                     state = CreateOrLoadProjectState::CreateProject;
             }
             else if (state == CreateOrLoadProjectState::OpenProject)
             {
                 Text("请选择项目文件所在的目录：");
 
-                BeginChild("SelectPathToCreateProject", 0., 300.);
+                BeginChildSize("SelectPathToCreateProject", 0., 300.);
                     let select_path_to_create = _ListAndSelectPathToCreateProject();
                 EndChild();
 
-                if (Button("确认", cur_width, 0.))
+                if (ButtonSize("确认", cur_width, 0.))
                 {
                     match (select_path_to_create)
                     {
@@ -186,7 +187,7 @@ namespace editor::Project
                         close_form = open_proj_path(create_proj_in);
                     }// end of match select_path_to_create
                 }
-                if (Button("取消", cur_width, 0.))
+                if (ButtonSize("取消", cur_width, 0.))
                     state = CreateOrLoadProjectState::OpenOrCreate;
             }
             else if (state == CreateOrLoadProjectState::CreateProject)
@@ -196,11 +197,11 @@ namespace editor::Project
                 static let mut project_name = "";
                 InputText("项目名称", ref project_name);
                 
-                BeginChild("SelectPathToCreateProject", 0., 300.);
+                BeginChildSize("SelectPathToCreateProject", 0., 300.);
                     let select_path_to_create = _ListAndSelectPathToCreateProject();
                 EndChild();
 
-                if (Button("开始项目！", cur_width, 0.))
+                if (ButtonSize("开始项目！", cur_width, 0.))
                 {
                     if (project_name->trim == "")
                         // 不允许项目名为空
@@ -220,10 +221,10 @@ namespace editor::Project
                                 {
                                     // 在这个项目里创建一个默认的世界，并且渲染这个世界
                                     let default_world = proj->CreateWorld().instance;
-                                    default_world->editor::name("Root");
+                                    default_world->editor::set_name("Root");
                                     default_world->add_system(proj.graphic_system);
                                     default_world->add_system(proj.editor_system);
-                                    default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val);
+                                    default_world->add_system(je::typeinfo::load_from_name("Translation::TranslationUpdatingSystem")->val);
 
                                     // 更新一下项目历史
                                     update_project_history(proj.path->val);
@@ -238,7 +239,7 @@ namespace editor::Project
                         }// end of match select_path_to_create
                     }
                 }
-                if (Button("取消", cur_width, 0.))
+                if (ButtonSize("取消", cur_width, 0.))
                     state = CreateOrLoadProjectState::OpenOrCreate;
             }
         End();
@@ -264,7 +265,7 @@ namespace editor::Project
 
         // 2. 创建默认的世界，用于支持启动编辑器的一些gui活动
         let default_world = proj->CreateWorld().instance;
-        default_world->editor::name("Default");
+        default_world->editor::set_name("Default");
         default_world->add_system(proj.graphic_system);
     }
 

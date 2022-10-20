@@ -56,11 +56,11 @@ namespace editor::Inspector::Material
         {
             Drag(shader_path)?
             {
-                shader_operation = shader_option::AddShader(je::graphic::shader(shader_path));
+                shader_operation = shader_option::AddShader(je::graphic::shader::load(shader_path));
             }
             None? /* 没有文件拖入，不干任何事情 */;
         }
-        if (IsItemClicked() && !IsItemToggledOpen())
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
         {
             // TODO: 总得放点什么在这儿
         }
@@ -100,7 +100,7 @@ namespace editor::Inspector::Material
                             Drag(path)?
                             {
                                 // 拖动文件到这里，加载这个纹理，然后绑定
-                                entity->editor::graphic::bind_texture(id, je::graphic::texture(path));
+                                entity->editor::graphic::bind_texture(id, je::graphic::texture::load(path));
                             }
                             None?
                                 ; // 没任何变化，啥也不干
@@ -127,14 +127,14 @@ namespace editor::Inspector::Material
 
         _last_display_entity = cur_entity; // 
 
-        BeginChild("material_editor", 0., max_height);
+        BeginChildSize("material_editor", 0., max_height);
             Text("材质编辑器");
             Separator();
             match (cur_entity)
             {
                 value(current_entity)?
                 {
-                    static let ShadersTypeID = je::typeinfo("Renderer::Shaders")->val();
+                    static let ShadersTypeID = je::typeinfo::load_from_name("Renderer::Shaders")->val();
                     match (current_entity->editor::get_component(ShadersTypeID))
                     {
                         value(shaders)?
@@ -166,7 +166,7 @@ namespace editor::Inspector::Material
                             {
                                 Drag(shader_path)?
                                 {
-                                    shaders = shaders->append(je::graphic::shader(shader_path));
+                                    shaders = shaders->append(je::graphic::shader::load(shader_path));
                                     shaders_has_updated = true;
                                 }
                                 None? /* 没有文件拖入，不干任何事情 */;

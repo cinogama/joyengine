@@ -12,59 +12,59 @@ namespace test::memory_leak::ComponentModify
 	{
 		if (run)
 		{
-			context.e->editor::remove_component(je::typeinfo("Transform::LocalPosition")->val());
-			context.e->editor::remove_component(je::typeinfo("Transform::LocalRotation")->val());
-			context.e->editor::remove_component(je::typeinfo("Transform::LocalScale")->val());
-			context.e->editor::remove_component(je::typeinfo("Transform::ChildAnchor")->val());
-			context.e->editor::remove_component(je::typeinfo("Transform::LocalToWorld")->val());
-			context.e->editor::remove_component(je::typeinfo("Transform::LocalToParent")->val());
-			context.e->editor::remove_component(je::typeinfo("Transform::Translation")->val());
-			context.e->editor::remove_component(je::typeinfo("Renderer::Rendqueue")->val());
-			context.e->editor::remove_component(je::typeinfo("Renderer::Shape")->val());
-			context.e->editor::remove_component(je::typeinfo("Renderer::Shaders")->val());
-			context.e->editor::remove_component(je::typeinfo("Renderer::Textures")->val());
-			context.e->editor::remove_component(je::typeinfo("Camera::Clip")->val());
-			context.e->editor::remove_component(je::typeinfo("Camera::Projection")->val());
-			context.e->editor::remove_component(je::typeinfo("Camera::OrthoProjection")->val());
-			context.e->editor::remove_component(je::typeinfo("Camera::PerspectiveProjection")->val());
-			context.e->editor::remove_component(je::typeinfo("Camera::Viewport")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::LocalPosition")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::LocalRotation")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::LocalScale")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::ChildAnchor")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::LocalToWorld")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::LocalToParent")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::Translation")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Renderer::Rendqueue")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Renderer::Shape")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Renderer::Shaders")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Renderer::Textures")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Camera::Clip")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Camera::Projection")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Camera::OrthoProjection")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Camera::PerspectiveProjection")->val());
+			context.e->editor::remove_component(je::typeinfo::load_from_name("Camera::Viewport")->val());
 
-			context.e->editor::add_component(je::typeinfo("Transform::LocalPosition")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::LocalRotation")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::LocalScale")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::ChildAnchor")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::LocalToWorld")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::LocalToParent")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::Translation")->val());
-			context.e->editor::add_component(je::typeinfo("Renderer::Rendqueue")->val());
-			context.e->editor::add_component(je::typeinfo("Renderer::Shape")->val());
-			context.e->editor::add_component(je::typeinfo("Renderer::Shaders")->val());
-			context.e->editor::add_component(je::typeinfo("Renderer::Textures")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::Clip")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::Projection")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::OrthoProjection")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::PerspectiveProjection")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::Viewport")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalPosition")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalRotation")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalScale")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::ChildAnchor")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalToWorld")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalToParent")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::Translation")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Renderer::Rendqueue")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Renderer::Shape")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Renderer::Shaders")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Renderer::Textures")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::Clip")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::Projection")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::OrthoProjection")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::PerspectiveProjection")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::Viewport")->val());
 
-			context.e->editor::add_component(je::typeinfo("Transform::LocalPosition")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::LocalRotation")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::LocalScale")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::ChildAnchor")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::LocalToWorld")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::LocalToParent")->val());
-			context.e->editor::add_component(je::typeinfo("Transform::Translation")->val());
-			context.e->editor::add_component(je::typeinfo("Renderer::Rendqueue")->val());
-			context.e->editor::add_component(je::typeinfo("Renderer::Shape")->val());
-			context.e->editor::add_component(je::typeinfo("Renderer::Shaders")->val());
-			context.e->editor::add_component(je::typeinfo("Renderer::Textures")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::Clip")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::Projection")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::OrthoProjection")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::PerspectiveProjection")->val());
-			context.e->editor::add_component(je::typeinfo("Camera::Viewport")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalPosition")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalRotation")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalScale")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::ChildAnchor")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalToWorld")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::LocalToParent")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Transform::Translation")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Renderer::Rendqueue")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Renderer::Shape")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Renderer::Shaders")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Renderer::Textures")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::Clip")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::Projection")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::OrthoProjection")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::PerspectiveProjection")->val());
+			context.e->editor::add_component(je::typeinfo::load_from_name("Camera::Viewport")->val());
 
 			context.count += 1;
-			context.e->editor::name(F"test_memleak_{context.count}");
+			context.e->editor::set_name(F"test_memleak_{context.count}");
 
 			return je::gui::FormAction::Nothing;
 		}
@@ -80,7 +80,7 @@ namespace test::memory_leak::ComponentModify
 		static let mut testing = false;
 
 		let mut open = true;
-		Begin("内存泄漏检查（组件变更）", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+		BeginAttrOpen("内存泄漏检查（组件变更）", WindowsAttribute::ImGuiWindowFlags_None, ref open);
 			Text("这个窗口被用于测试组件的变更是否造成内存泄漏");
 			Text("关闭窗口即停止测试，不要重复开启窗口");
 		End();
@@ -91,23 +91,23 @@ namespace test::memory_leak::ComponentModify
 			launch(_test_co, (test_context{
 								e = je::world::rend()
 										->val()
-										->add_entity([je::typeinfo("Editor::Name")->val(),
-										je::typeinfo("Transform::LocalPosition")->val(),
-										je::typeinfo("Transform::LocalRotation")->val(),
-										je::typeinfo("Transform::LocalScale")->val(),
-										je::typeinfo("Transform::ChildAnchor")->val(),
-										je::typeinfo("Transform::LocalToWorld")->val(),
-										je::typeinfo("Transform::LocalToParent")->val(),
-										je::typeinfo("Transform::Translation")->val(),
-										je::typeinfo("Renderer::Rendqueue")->val(),
-										je::typeinfo("Renderer::Shape")->val(),
-										je::typeinfo("Renderer::Shaders")->val(),
-										je::typeinfo("Renderer::Textures")->val(),
-										je::typeinfo("Camera::Clip")->val(),
-										je::typeinfo("Camera::Projection")->val(),
-										je::typeinfo("Camera::OrthoProjection")->val(),
-										je::typeinfo("Camera::PerspectiveProjection")->val(),
-										je::typeinfo("Camera::Viewport")->val(),]),
+										->add_entity([je::typeinfo::load_from_name("Editor::Name")->val(),
+										je::typeinfo::load_from_name("Transform::LocalPosition")->val(),
+										je::typeinfo::load_from_name("Transform::LocalRotation")->val(),
+										je::typeinfo::load_from_name("Transform::LocalScale")->val(),
+										je::typeinfo::load_from_name("Transform::ChildAnchor")->val(),
+										je::typeinfo::load_from_name("Transform::LocalToWorld")->val(),
+										je::typeinfo::load_from_name("Transform::LocalToParent")->val(),
+										je::typeinfo::load_from_name("Transform::Translation")->val(),
+										je::typeinfo::load_from_name("Renderer::Rendqueue")->val(),
+										je::typeinfo::load_from_name("Renderer::Shape")->val(),
+										je::typeinfo::load_from_name("Renderer::Shaders")->val(),
+										je::typeinfo::load_from_name("Renderer::Textures")->val(),
+										je::typeinfo::load_from_name("Camera::Clip")->val(),
+										je::typeinfo::load_from_name("Camera::Projection")->val(),
+										je::typeinfo::load_from_name("Camera::OrthoProjection")->val(),
+										je::typeinfo::load_from_name("Camera::PerspectiveProjection")->val(),
+										je::typeinfo::load_from_name("Camera::Viewport")->val(),]),
 								count = 0,
 							  }, ref testing));
 		}

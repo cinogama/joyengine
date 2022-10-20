@@ -12,7 +12,7 @@ namespace generic
         let mut text_buffer = default_value;
         while (open)
         {
-            Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+            BeginAttrOpen(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
                 Text(shown);
                 InputText("##", ref text_buffer);
                 if (Button("确定"))

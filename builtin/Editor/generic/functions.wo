@@ -15,7 +15,7 @@ namespace utils
     public func ShortStringCutEnd(str: string, maxlen: int)
     {
         if (str->len > maxlen)
-            return str->sub(0, maxlen - 3) + "...";
+            return str->subto(0, maxlen - 3) + "...";
         return str;
     }
 

@@ -130,13 +130,13 @@ namespace logmgr
         Separator();
         for (let k, v : log_buffers)
         {
-            if (BeginMenu(F"{log_level_name[k]}({v->len})", !v->empty))
+            if (BeginMenuEnabled(F"{log_level_name[k]}({v->len})", !v->empty))
             {
                 func get_title_of_error(msg: string)
                 {
                     let switch_line_place = msg->find("\n");
                     if (switch_line_place !=- 1)
-                        return msg->sub(0, switch_line_place);
+                        return msg->subto(0, switch_line_place);
                     return msg;
                 }
                 for (let msg : v)
@@ -215,7 +215,7 @@ func Editor_CameraViewport()
 
     static let mut windows_moveable = true;
 
-    Begin("调试器视口", 
+    BeginAttrOpen("调试器视口", 
         WindowsAttribute::ImGuiWindowFlags_MenuBar
         + (windows_moveable 
             ? WindowsAttribute::ImGuiWindowFlags_None
@@ -233,8 +233,8 @@ func Editor_CameraViewport()
     let debug_camera_entity = je::world::rend()
         ->bind(\w: je::world = w->editor::get_all_entities
             ->forall(\e: je::entity = 
-                e->editor::get_component(je::typeinfo("Editor::EditorWalker")->val)->has
-                && e->editor::get_component(je::typeinfo("Camera::RendToFramebuffer")->val)->has
+                e->editor::get_component(je::typeinfo::load_from_name("Editor::EditorWalker")->val)->has
+                && e->editor::get_component(je::typeinfo::load_from_name("Camera::RendToFramebuffer")->val)->has
             ;)
             ->reduce(\l: je::entity, r: je::entity = l;)
         ;)
@@ -253,7 +253,7 @@ func Editor_CameraViewport()
         let (wx, wy) = GetWindowPos();
         let (lupx, lupy) = GetCursorPos();
 
-        Image(frametex, available_width: int, available_height: int);
+        ImageSize(frametex, available_width: int, available_height: int);
 
         let (itemw, itemh) = GetItemRectSize();
         let (mx, my) = GetMousePos();
@@ -341,7 +341,7 @@ func Editor_MainMenuBar()
         {
             MenuItem("新建");
             MenuItem("打开");
-            if (MenuItem("保存", "Ctrl + S"))
+            if (MenuItemShortcut("保存", "Ctrl + S"))
                 shortcut::active([je::keycode::L_CTRL, je::keycode::S]);
 
             Separator();
@@ -365,22 +365,22 @@ func Editor_MainMenuBar()
         }
         if (BeginMenu("编辑"))
         {
-            if (MenuItem("调试运行", "使用Ctrl+Esc终止调试"))
+            if (MenuItemShortcut("调试运行", "使用Ctrl+Esc终止调试"))
                 GameDebug::start_debug();
             EndMenu();
         }
         if (BeginMenu("视图"))
         {
-            if (MenuItem("世界列表", "Ctrl + W"))
+            if (MenuItemShortcut("世界列表", "Ctrl + W"))
                 shortcut::active([je::keycode::L_CTRL, je::keycode::W]);
-            if (MenuItem("层级面板", "Ctrl + E"))
+            if (MenuItemShortcut("层级面板", "Ctrl + E"))
                 shortcut::active([je::keycode::L_CTRL, je::keycode::E]);
-            if (MenuItem("检视面板", "Ctrl + I"))
+            if (MenuItemShortcut("检视面板", "Ctrl + I"))
                 shortcut::active([je::keycode::L_CTRL, je::keycode::I]);
-            if (MenuItem("调试视口", "Ctrl + P"))
+            if (MenuItemShortcut("调试视口", "Ctrl + P"))
                 shortcut::active([je::keycode::L_CTRL, je::keycode::P]);
             Separator();
-            if (MenuItem("文件管理器", "Ctrl + B"))
+            if (MenuItemShortcut("文件管理器", "Ctrl + B"))
                 shortcut::active([je::keycode::L_CTRL, je::keycode::B]);
 
 
@@ -390,7 +390,7 @@ func Editor_MainMenuBar()
         {
             static let mut editor_opened = false;
 
-            if (MenuItem("打开快捷编辑器", ref editor_opened, true) && editor_opened)
+            if (MenuItemSelectedEnabled("打开快捷编辑器", ref editor_opened, true) && editor_opened)
                 launch(Editor_ScriptEditor, (ref editor_opened,));
 
             EndMenu();
@@ -399,7 +399,7 @@ func Editor_MainMenuBar()
         {
             static let mut about_shown = false;
 
-            if (MenuItem("关于", ref about_shown, true) && about_shown)
+            if (MenuItemSelectedEnabled("关于", ref about_shown, true) && about_shown)
                 launch(Editor_Welcome, (ref about_shown,));
                     
             EndMenu();
@@ -430,7 +430,7 @@ func Editor_MainMenuBar()
                     1920, 1080, 60, true);
             if (MenuItem("还原窗口"))
             {
-                let (win_width, win_height) = je::input::windowsize();
+                let (win_width, win_height) = je::input::window_size();
                 je::editor::restart_graphic_interface("DEBUG",
                     win_width, win_height, 60, false);
             }
@@ -442,7 +442,7 @@ func Editor_MainMenuBar()
                 proj->RestoreAllWorlds(dat);
             }
             let mut show_hiding_editor_entity = EntityList::get_enable_show_invisable_entity();
-            if (MenuItem("显示编辑器隐藏实体", ref show_hiding_editor_entity, true))
+            if (MenuItemSelectedEnabled("显示编辑器隐藏实体", ref show_hiding_editor_entity, true))
             {
                 EntityList::set_enable_show_invisable_entity(show_hiding_editor_entity);
             }
@@ -481,7 +481,7 @@ func Editor_Welcome(ref open: bool)
     if (!open)
         return FormAction::Close;
 
-    Begin("欢迎", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+    BeginAttr("欢迎", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
     Text("欢迎使用JoyEngineECS.");
     Separator();
     Text("Copyright (C)Cinogama project. 2022.");
@@ -496,8 +496,8 @@ func Editor_Welcome(ref open: bool)
     {
         launch(func()
         {
-            Begin("修改项目的关于信息", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-                InputTextMultiline("##", ref editor::Project::GetCurrentProject().about_info, 400., 200.);
+            BeginAttr("修改项目的关于信息", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+                InputTextMultilineSize("##", ref editor::Project::GetCurrentProject().about_info, 400., 200.);
                 let close = Button("完成");
             End();
             if (close)
@@ -507,9 +507,9 @@ func Editor_Welcome(ref open: bool)
     }
 
     let mut available_width = 0.;
-    GetContentRegionAvail(ref available_width, 0. /*不关心高度*/);
+    GetContentRegionAvail(ref available_width, 0.);
 
-    InputTextMultiline("##", editor::Project::GetCurrentProject().about_info, available_width, 100.0);
+    InputTextMultilineSize("##", editor::Project::GetCurrentProject().about_info, available_width, 100.0);
 
     if (Button("确认"))
         open = false;
@@ -550,7 +550,7 @@ func display_icon_in_console()
         f: gchandle->close();
     }
 
-    font(@"builtin/cino_ipix_12px.ttf"@, 14)
+    font::load(@"builtin/cino_ipix_12px.ttf"@, 14)
         ->map(\f: font = display_text(f, text)
                 where text = "Joy{scale:0.75}{offset:(0.2, -0.1)}4.x{scale:1}\nEngine";);
     je::log("");

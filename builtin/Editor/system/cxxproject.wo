@@ -513,7 +513,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
         mut compile_thread  : option<std::thread>,
         mut compile_result  : option<result<result<string, string>, string>>,
     };
-    func update_compile(self: CxxProject, config: string)
+    public func update_compile(self: CxxProject, config: string)
     {
         // 起个线程跑编译，然后弄个窗口显示一下进度
 
@@ -526,7 +526,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             massive_msg = option::none,
             };
         je::gui::launch(func(){
-            Begin(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None, ref context.show);
+            BeginAttrOpen(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None, ref context.show);
                 Text(F"正在编译C++模块：{self.name}");
                 Text(context.display_msg);
                 
@@ -536,7 +536,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                 {
                     let mut w = 0., mut h = 0.;
                     GetContentRegionAvail(ref w, ref h);
-                    InputTextMultiline("##", msg, w, h);
+                    InputTextMultilineSize("##", msg, w, h);
                 }
                 none? ;
                 }
@@ -549,7 +549,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
         }, ());
 
         context.compile_thread = 
-            option::value(std::thread(func ()
+            option::value(std::thread::create(func ()
             {
                 match (self->_compile(config, context))
                 {
@@ -569,7 +569,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                             // 这里yield一下，保证一切按部就班
 
                             let fakeworld = je::universe::current()->create_world();
-                            fakeworld->rend();
+                            fakeworld->set_rend();
 
                             std::yield();
                             std::yield();
@@ -596,7 +596,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                 }
                 err(_)?;
                 }
-            }));
+            },()) );
     }
     func _compile(self: CxxProject, config: string, context: compile_context)
     {
@@ -637,7 +637,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             ->map(\childs: array<string> = childs
                  ->forall(\f: string = externname(f) == "hpp";)
                  ->trans(\f: string = filename(f);)
-                 ->trans(\f: string = f->sub(0, f->len - 4);)
+                 ->trans(\f: string = f->subto(0, f->len - 4);)
                 ;)
             ->valor([]);
            
@@ -646,7 +646,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             ->map(\childs: array<string> = childs
                  ->forall(\f: string = externname(f) == "hpp";)
                  ->trans(\f: string = filename(f);)
-                 ->trans(\f: string = f->sub(0, f->len - 4);)
+                 ->trans(\f: string = f->subto(0, f->len - 4);)
                 ;)
             ->valor([]);
 
@@ -744,7 +744,7 @@ $$REGISTER_SYSTEM_TYPES$$
         context.display_msg = F"编译完成";
         context.progress = 100;
 
-        current_je_proj.native_modules->get_or_set_default(self.path, self);
+        current_je_proj.native_modules->getorset(self.path, self);
 
         return result::ok(context.display_msg);
     }

@@ -102,7 +102,7 @@ namespace editor::Project
             // 干掉所有Editor系统和所有Editor实体
             for (let e : world.instance->editor::get_all_entities())
             {
-                let static editor_invisable = je::typeinfo("Editor::Invisable")->val;
+                let static editor_invisable = je::typeinfo::load_from_name("Editor::Invisable")->val;
                 if (e->editor::get_component(editor_invisable)->has)
                     e->close();
             }
@@ -124,46 +124,46 @@ namespace editor::Project
         // 父对象，负责带着摄像机运动，同时负责y轴旋转
         let camera_walker = world_instance->add_entity([
             // Transform 族组件
-            je::typeinfo("Transform::LocalPosition")->val,
-            je::typeinfo("Transform::LocalRotation")->val,
-            je::typeinfo("Transform::LocalToWorld")->val,
-            je::typeinfo("Transform::Translation")->val,
-            je::typeinfo("Transform::ChildAnchor")->val,
+            je::typeinfo::load_from_name("Transform::LocalPosition")->val,
+            je::typeinfo::load_from_name("Transform::LocalRotation")->val,
+            je::typeinfo::load_from_name("Transform::LocalToWorld")->val,
+            je::typeinfo::load_from_name("Transform::Translation")->val,
+            je::typeinfo::load_from_name("Transform::ChildAnchor")->val,
             // Editor 族组件
-            je::typeinfo("Editor::Invisable")->val,
-            je::typeinfo("Editor::EditorWalker")->val,
+            je::typeinfo::load_from_name("Editor::Invisable")->val,
+            je::typeinfo::load_from_name("Editor::EditorWalker")->val,
         ]);
         // 摄像机，同时负责x轴旋转
         let editor_camera = world_instance->add_entity([
             // Transform 族组件
-            je::typeinfo("Transform::LocalRotation")->val,
-            je::typeinfo("Transform::LocalToParent")->val,
-            je::typeinfo("Transform::Translation")->val,
+            je::typeinfo::load_from_name("Transform::LocalRotation")->val,
+            je::typeinfo::load_from_name("Transform::LocalToParent")->val,
+            je::typeinfo::load_from_name("Transform::Translation")->val,
             // Editor 族组件
-            je::typeinfo("Editor::Invisable")->val,
-            je::typeinfo("Editor::EditorWalker")->val,
+            je::typeinfo::load_from_name("Editor::Invisable")->val,
+            je::typeinfo::load_from_name("Editor::EditorWalker")->val,
             // Camera 族组件
-            je::typeinfo("Camera::PerspectiveProjection")->val,
-            je::typeinfo("Camera::Projection")->val,
-            je::typeinfo("Camera::RendToFramebuffer")->val,
+            je::typeinfo::load_from_name("Camera::PerspectiveProjection")->val,
+            je::typeinfo::load_from_name("Camera::Projection")->val,
+            je::typeinfo::load_from_name("Camera::RendToFramebuffer")->val,
         ]);
         editor_camera->je::editor::apply_camera_framebuf_setting(320, 240);
         editor_camera->editor::set_parent(camera_walker, true);
-        camera_walker->editor::name("调试摄像机组");
-        editor_camera->editor::name("调试摄像机");
+        camera_walker->editor::set_name("调试摄像机组");
+        editor_camera->editor::set_name("调试摄像机");
 
         // 移动器，这里只创建根实体，具体的轴由编辑器系统生成
         let entity_mover = world_instance->add_entity([
             // Transform 族组件
-            je::typeinfo("Transform::LocalPosition")->val,
-            je::typeinfo("Transform::LocalRotation")->val,
-            je::typeinfo("Transform::LocalScale")->val,
-            je::typeinfo("Transform::ChildAnchor")->val,
-            je::typeinfo("Transform::Translation")->val,
-            je::typeinfo("Transform::LocalToWorld")->val,
+            je::typeinfo::load_from_name("Transform::LocalPosition")->val,
+            je::typeinfo::load_from_name("Transform::LocalRotation")->val,
+            je::typeinfo::load_from_name("Transform::LocalScale")->val,
+            je::typeinfo::load_from_name("Transform::ChildAnchor")->val,
+            je::typeinfo::load_from_name("Transform::Translation")->val,
+            je::typeinfo::load_from_name("Transform::LocalToWorld")->val,
             // Editor 族组件
-            je::typeinfo("Editor::Invisable")->val,
-            je::typeinfo("Editor::EntityMoverRoot")->val,
+            je::typeinfo::load_from_name("Editor::Invisable")->val,
+            je::typeinfo::load_from_name("Editor::EntityMoverRoot")->val,
         ]);
 
         let world = World{
@@ -266,8 +266,8 @@ namespace editor::Project
             name = "Default project",
             path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
             // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
-            graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
-            editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
+            graphic_system = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
+            editor_system = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,
             native_modules = {}mut,
             about_info = "此项目为默认项目，不可用于实际使用\n(C)Cinogama.",
@@ -279,8 +279,8 @@ namespace editor::Project
         let created_project = Project{
             name = name,
             path = option::value(je::filesys::normalize(path)),
-            graphic_system = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
-            editor_system = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val,
+            graphic_system = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
+            editor_system = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,
             native_modules = {}mut,
             about_info = "你可以在这里放一些对项目的描述信息\n(C)Copyright.",
@@ -334,7 +334,7 @@ namespace editor::Project
         ok(proj)?
         {
             let failed_loading_module = 
-                data->get("native_module": dynamic, []: dynamic) as array
+                data->getdefault("native_module": dynamic, []: dynamic) as array
                     ->trans(\d: dynamic = d as string;)
                     ->trans(\p: string = (p, CxxProject::load(p)->error);)
                     ->forall(\r: (string, option<string>) = r[1]->has;)
@@ -387,29 +387,29 @@ namespace editor::Project
             
             let runtime_worlds = data["worlds": dynamic] as array<dynamic>;
 
-            let window_info = data->get("window": dynamic, {}: dynamic) as map<dynamic, dynamic>;
-            let window_size = window_info->get("size": dynamic, [640, 480]: dynamic) as array<dynamic>;
+            let window_info = data->getdefault("window": dynamic, {}: dynamic) as map<dynamic, dynamic>;
+            let window_size = window_info->getdefault("size": dynamic, [640, 480]: dynamic) as array<dynamic>;
 
-            proj.about_info = data->get("about_info": dynamic, "": dynamic) as string;
+            proj.about_info = data->getdefault("about_info": dynamic, "": dynamic) as string;
 
 
             // 加载自定义的图形和编辑时系统
             proj.graphic_system = data
                 ->get("graphic_system": dynamic)
-                ->bind(\n: dynamic = typeinfo(n as string);)
-                ->or(\ = je::typeinfo(DEFAULT_GRAPHIC_SYSTEM_NAME)->val;)
+                ->bind(\n: dynamic = typeinfo::load_from_name(n as string);)
+                ->or(\ = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val;)
                 ->reduce
                 ->val;
             proj.editor_system = data
                 ->get("editor_system": dynamic)
-                ->bind(\n: dynamic = typeinfo(n as string);)
-                ->or(\ = je::typeinfo(DEFAULT_EDITOR_SYSTEM_NAME)->val;)
+                ->bind(\n: dynamic = typeinfo::load_from_name(n as string);)
+                ->or(\ = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val;)
                 ->reduce
                 ->val;
 
             je::editor::restart_graphic_interface(F"JoyEngine 4.0 - {proj_name}",
                 window_size[0]: int, window_size[1]: int, 60, false);
-            // je::input::windowsize(window_size[0]: int, window_size[1]: int);
+            // je::input::set_window_size(window_size[0]: int, window_size[1]: int);
 
             runtime_worlds
                 ->trans(\p: dynamic = p as string;)
@@ -419,8 +419,8 @@ namespace editor::Project
             {
                 // 无论何种原因导致没有正在编辑的世界，给他创建一个
                 let default_world = proj->CreateWorld().instance;
-                default_world->editor::name("Root");
-                default_world->add_system(je::typeinfo("Translation::TranslationUpdatingSystem")->val);
+                default_world->editor::set_name("Root");
+                default_world->add_system(je::typeinfo::load_from_name("Translation::TranslationUpdatingSystem")->val);
             }
 
             // 选一个世界去渲染， TODO: 在项目里记录一下？
@@ -428,10 +428,10 @@ namespace editor::Project
             rendworld->add_system(proj.graphic_system);
             rendworld->add_system(proj.editor_system);
 
-            EditFormsConfig::shown_world_list = window_info->get("shown_world_list": dynamic, false: dynamic) as int: bool;
-            EditFormsConfig::shown_entity_list = window_info->get("shown_entity_list": dynamic, false: dynamic) as int: bool;
-            EditFormsConfig::shown_inspector_list = window_info->get("shown_inspector_list": dynamic, false: dynamic) as int: bool;
-            EditFormsConfig::shown_browser_list = window_info->get("shown_browser_list": dynamic, false: dynamic) as int: bool;
+            EditFormsConfig::shown_world_list = window_info->getdefault("shown_world_list": dynamic, false: dynamic) as int: bool;
+            EditFormsConfig::shown_entity_list = window_info->getdefault("shown_entity_list": dynamic, false: dynamic) as int: bool;
+            EditFormsConfig::shown_inspector_list = window_info->getdefault("shown_inspector_list": dynamic, false: dynamic) as int: bool;
+            EditFormsConfig::shown_browser_list = window_info->getdefault("shown_browser_list": dynamic, false: dynamic) as int: bool;
 
             return ok(proj);
         }
@@ -479,7 +479,7 @@ namespace editor::Project
             self.worlds
                 ->trans(\w: World = w->Save(););
 
-            let (win_width, win_height) = je::input::windowsize();
+            let (win_width, win_height) = je::input::window_size();
 
             let window_info = {
                 ["size"] = [win_width, win_height]: dynamic,

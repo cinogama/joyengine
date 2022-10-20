@@ -32,21 +32,21 @@ namespace editor::Browser
     
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
-        ["png"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
-        ["jpg"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
-        ["bmp"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
-        ["psd"] = FileType::image(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
-        ["shader"] = FileType::shader(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")),
-        ["jemodule4"] = FileType::shader(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/CppProgram.png")),
+        ["png"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
+        ["jpg"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
+        ["bmp"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
+        ["psd"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
+        ["shader"] = FileType::shader(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")),
+        ["jemodule4"] = FileType::shader(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/CppProgram.png")),
     };
 
     // 根据文件拓展名返回文件的类型
     private func get_file_icon_by_extern_name(_path: PathInfo)=> FileType
     {
         static let default_path_icon 
-            = FileType::path(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/FilePath.png"));
+            = FileType::path(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/FilePath.png"));
         static let default_file_icon 
-            = FileType::others(je::graphic::texture(F"{std::exepath()}builtin/Editor/icon/File.png"));
+            = FileType::others(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/File.png"));
 
         let icon = FILE_TYPE_ICONS->get(_path.externname);
 
@@ -122,7 +122,7 @@ namespace editor::Browser
                         path = current_subpath, 
                         name = je::filesys::filename(current_subpath),
                         externname = je::filesys::externname(current_subpath),
-                        type = mutable(je::filesys::isdir(current_subpath)?
+                        type = mutable::create(je::filesys::isdir(current_subpath)?
                                 PathType::dir(option::none) | PathType::file),
                     };);
 
@@ -344,7 +344,7 @@ public func frag(vf: v2f)
                         ->okay
                         ->map(\s: array<string> = s
                              ->forall(\f: string = je::filesys::externname(f) == "hpp";)
-                             ->trans(\f: string = fname->sub(0, fname->len - 4)
+                             ->trans(\f: string = fname->subto(0, fname->len - 4)
                                 where fname = je::filesys::filename(f);)
                             ;)
                         ->valor([])
@@ -353,7 +353,7 @@ public func frag(vf: v2f)
                     ->okay
                     ->map(\s: array<string> = s
                          ->forall(\f: string = je::filesys::externname(f) == "hpp";)
-                         ->trans(\f: string = fname->sub(0, fname->len - 4)
+                         ->trans(\f: string = fname->subto(0, fname->len - 4)
                             where fname = je::filesys::filename(f);)
                         ;)
                     ->valor([])
@@ -402,7 +402,7 @@ public func frag(vf: v2f)
 
                 launch(func(mut open: bool)
                 {
-                    Begin(F"模块{je::filesys::filename(path.path)}当前组件和系统", 
+                    BeginAttrOpen(F"模块{je::filesys::filename(path.path)}当前组件和系统", 
                         WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
                     if (BeginMenuBar())
                     {
@@ -576,14 +576,14 @@ namespace $$MODULE_NAME$$
             }
             Separator();
         }
-        if (MenuItem("重命名", is_modifiable_file))
+        if (MenuItemEnabled("重命名", is_modifiable_file))
         {
             generic::inputbox("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
                 \newname: string = je::filesys::move(path.path, je::filesys::parent(path.path) + newname)
                     ->map(\_: anything = force_update();)
                     ->or(\reason: string = generic::msgbox("重命名失败", reason);););
         }
-        if (MenuItem("删除", is_modifiable_file))
+        if (MenuItemEnabled("删除", is_modifiable_file))
         {
             generic::askbox(F"删除{path.path}", F"是否继续删除{path.path}",
                 func(sure: bool)
@@ -600,8 +600,8 @@ namespace $$MODULE_NAME$$
     func FileIcon(path: PathInfo)=> Action
     {
         BeginGroup();
-            PushID(path.path);
-                let clicked = ImageButton(get_file_icon_by_extern_name(path)->get_texture, 0.125);
+            PushIDStr(path.path);
+                let clicked = ImageButtonScale(get_file_icon_by_extern_name(path)->get_texture, 0.125);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             context_menu(option::value(path));
@@ -659,7 +659,7 @@ namespace $$MODULE_NAME$$
                         path = subpath,
                         name = je::filesys::filename(subpath),
                         externname = je::filesys::externname(subpath),
-                        type = mutable(je::filesys::isdir(subpath)
+                        type = mutable::create(je::filesys::isdir(subpath)
                             ? PathType::dir(option::none) 
                             | PathType::file),
                     };);
@@ -706,7 +706,7 @@ namespace $$MODULE_NAME$$
                 path = root_path,
                 name = je::filesys::filename(root_path),
                 externname = je::filesys::externname(root_path),
-                type = mutable(PathType::dir(option::none)),
+                type = mutable::create(PathType::dir(option::none)),
             };
 
         if (force_update_dir_tree_flag)
@@ -731,7 +731,7 @@ namespace $$MODULE_NAME$$
                     attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                         
                 let show_child = TreeNodeEx(path.name, attribute);
-                if (IsItemClicked() && !IsItemToggledOpen())
+                if (IsItemClickedLeft() && !IsItemToggledOpen())
                     current_work_path = path.path;
 
                 if (show_child)
@@ -750,18 +750,18 @@ namespace $$MODULE_NAME$$
             }
         }
 
-        BeginChild("path_tree", 200., 0.);
+        BeginChildSize("path_tree", 200., 0.);
             _show_paths(_root);
         EndChild();
     }
 
     public func show(ref open: bool)
     {
-        Begin("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+        BeginAttrOpen("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
             path_tree();
             SameLine();
             BeginGroup();
-                BeginChild("tools_bar", 0., 40.);
+                BeginChildSize("tools_bar", 0., 40.);
                     // TODO 此处放一些返回上一层之类的按钮
                     if (Button("U"))
                         current_work_path = je::filesys::parent(current_work_path);

@@ -206,7 +206,7 @@ namespace je::filesys
         if (isdir(_path))
         {
             let result = []mut: vec<string>;
-            for (let child : path(_path))
+            for (let child : path::create(_path))
                 result->add(child);
 
             return ok(result->toarray);
@@ -218,7 +218,7 @@ namespace je::filesys
     {
         _path = _path->replace("\\", "/");
         while (_path!= "" && _path->endwith("/"))
-            _path = _path->sub(0, _path->len() - 1);
+            _path = _path->subto(0, _path->len() - 1);
 
         let find_place = _path->rfind("/");
         return _path->sub(find_place + 1);
@@ -245,7 +245,7 @@ namespace je::filesys
     {
         let fexname = fullexternname(_path);
         let fname = filename(_path);
-        return fname->sub(0, fname->len - fexname->len);
+        return fname->subto(0, fname->len - fexname->len);
     }
 
     extern("libjoyecs", "wojeapi_filesys_normalize_path")

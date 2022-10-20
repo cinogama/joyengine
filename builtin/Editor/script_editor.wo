@@ -10,7 +10,7 @@ public func Editor_ScriptEditor(ref open:bool)
     using je::gui;
     if(!open) return FormAction::Close;
 
-    Begin("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
+    BeginAttrOpen("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
 
     static let mut textbuf = 
 @"import woo.std;
@@ -22,16 +22,16 @@ je::log("Helloworld, JoyEngine.");
     if (Button("执行"))
     {
         let src = textbuf;
-        let vm = std::vm();
-        if (!vm->load_source("je/editor_runtime/editor_script.wo", src))
+        let vm = std::vm::create();
+        if (!vm->loadsrc("je/editor_runtime/editor_script.wo", src))
             // Msgout!
-            launch(generic::MsgBox, ("编译脚本失败", vm->error_msg(std::vm::info_style::WO_NOTHING),));      
+            launch(generic::MsgBox, ("编译脚本失败", vm->errmsg(),));      
         else
             vm->run();
         vm->close();
     }
 
-    InputTextMultiline("##", ref textbuf, 500.0, 300.0);
+    InputTextMultilineSize("##", ref textbuf, 500.0, 300.0);
 
     End();
 

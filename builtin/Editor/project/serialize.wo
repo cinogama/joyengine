@@ -68,7 +68,7 @@ namespace editor::Serialize
                     where 
                         collect_members = func(){
                             let result = {}mut: map<string, mut string>; 
-                            for (let name, type, addr : c->editor::iter_member())
+                            for (let name, (type, addr) : c->editor::members())
                                 result[name] = addr->to_string(type);
                             return result->todict;
                         },
@@ -121,7 +121,7 @@ namespace editor::Serialize
     }
     func _typeinfo_or_warning(typename: string)
     {
-        let tinfo = je::typeinfo(typename);
+        let tinfo = je::typeinfo::load_from_name(typename);
         if (!tinfo->has)
         {
             je::logerr(F"无法找到{typename}，请检查是否有模块未加载成功");
@@ -155,7 +155,7 @@ namespace editor::Serialize
                     let shads = []mut: vec<(graphic::shader, dict)>;
                     for (let shader_path_dat_pair : shaders: array)
                     {
-                        let s = graphic::shader(shader_path_dat_pair: array[0] as string);
+                        let s = graphic::shader::load(shader_path_dat_pair: array[0] as string);
                         shads->add((s, shader_path_dat_pair: array[1] as dict));
                     }
                     return shads->toarray;
@@ -171,12 +171,12 @@ namespace editor::Serialize
         let entity = world->add_entity(
             component_types_dat
                 ->trans(\tp: (je::typeinfo,anything) = tp[0];)
-                ->connect(entity_has_bad_shader ? [je::typeinfo("Editor::BadShadersUniform")->val] | []));
+                ->connect(entity_has_bad_shader ? [je::typeinfo::load_from_name("Editor::BadShadersUniform")->val] | []));
         
         // 如果数据里面有name字段，那就设置一下实体名字
         entity_dat
             ->get("name": dynamic)
-            ->map(\n:dynamic = entity->editor::name(n as string););
+            ->map(\n:dynamic = entity->editor::set_name(n as string););
 
         // 开始应用数据
         component_types_dat
@@ -213,7 +213,7 @@ namespace editor::Serialize
                 {
                     for (let passid, path : textures: dict)
                         entity->editor::graphic::bind_texture(passid as int,
-                            graphic::texture(path as string));
+                            graphic::texture::load(path as string));
                 });
 
         return option::value(entity);
@@ -221,7 +221,7 @@ namespace editor::Serialize
 
     public func save_project_world(world: Project::World)
     {
-        static let INVISABLE = je::typeinfo("Editor::Invisable")->val;
+        static let INVISABLE = je::typeinfo::load_from_name("Editor::Invisable")->val;
 
         alias entity_info_t = dict<string, dynamic>;
 
@@ -260,7 +260,7 @@ namespace editor::Serialize
         value(name)?
         {
             let world = project->CreateWorld();
-            world.instance->editor::name(name as string);
+            world.instance->editor::set_name(name as string);
             world.path = dat
                 ->get("path": dynamic)
                 ->bind(\s:dynamic = s is string 

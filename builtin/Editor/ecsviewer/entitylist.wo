@@ -37,20 +37,20 @@ namespace editor::EntityList
     public func context_for_entity(entity: option<je::entity>)
     {
         let has_editable_entity = entity->has;
-        if (MenuItem("删除", has_editable_entity))
+        if (MenuItemEnabled("删除", has_editable_entity))
         {
             generic::askbox("删除实体",
                 F"确认要删除实体{entity->val->editor::name()}吗？",
                 \sure: bool = sure?entity->val->close()|nil;);
         }
-        if (MenuItem("重命名", has_editable_entity))
+        if (MenuItemEnabled("重命名", has_editable_entity))
         {
             launch(generic::InputBox, ("重命名实体",
                                     F"请输入新名称",
                                     entity->val->editor::name(),
-                                    \text: string = entity->val->editor::name(text);));
+                                    \text: string = entity->val->editor::set_name(text);));
         }
-        if (MenuItem("编辑组件", has_editable_entity))
+        if (MenuItemEnabled("编辑组件", has_editable_entity))
         {
             launch(EntityCreator::show, (EntityCreator::edit_context(entity->val),));
         }
@@ -59,7 +59,7 @@ namespace editor::EntityList
     {
         if (BeginPopupContextItem())
         {
-            MenuItem(F"实体 {entity->editor::chunkinfo()}", false);
+            MenuItemEnabled(F"实体 {entity->editor::chunkinfo()}", false);
             Separator();
             context_for_entity(option::value(entity));
             EndPopup();
@@ -68,7 +68,7 @@ namespace editor::EntityList
 
     public func show(ref open: bool)
     {
-        Begin("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
+        BeginAttrOpen("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
                         + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                     , ref open);
             menu();
@@ -139,9 +139,9 @@ namespace editor::EntityList
 
     private func set_parent(child: je::entity, parent: je::entity)
     {
-        static let ChildAnchor   = je::typeinfo("Transform::ChildAnchor")->val(),
-                   LocalToParent = je::typeinfo("Transform::LocalToParent")->val(),
-                   LocalToWorld  = je::typeinfo("Transform::LocalToWorld")->val();
+        static let ChildAnchor   = je::typeinfo::load_from_name("Transform::ChildAnchor")->val(),
+                   LocalToParent = je::typeinfo::load_from_name("Transform::LocalToParent")->val(),
+                   LocalToWorld  = je::typeinfo::load_from_name("Transform::LocalToWorld")->val();
 
         if (is_ancestor(parent, child))
         {
@@ -181,7 +181,7 @@ namespace editor::EntityList
             display_count += 1;
             
             // 如果实体有 Editor::Invisable 这个组件，就跳过显示
-            static let INVISABLE = je::typeinfo("Editor::Invisable")->val();
+            static let INVISABLE = je::typeinfo::load_from_name("Editor::Invisable")->val();
             if (entity->editor::get_component(INVISABLE)->has() && !enable_display_invisable_entity)
                 continue;
 
@@ -227,7 +227,7 @@ namespace editor::EntityList
             }
 
             context_menu(entity);
-            if (IsItemClicked() && !IsItemToggledOpen())
+            if (IsItemClickedLeft() && !IsItemToggledOpen())
                 set_current_entity(option::value(entity));
 
             if(shown_child)

@@ -1334,7 +1334,7 @@ namespace je
         extern("libjoyecs", "wojeapi_input_keydown")
         public func keydown(kcode: keycode)=> bool;
 
-        public func windowsize(x: int, y: int)
+        public func set_window_size(x: int, y: int)
         {
             extern("libjoyecs", "wojeapi_input_update_window_size")
             func _windowsize(width: int, height: int)=> void;
@@ -1342,7 +1342,7 @@ namespace je
             _windowsize(x, y);
         }  
 
-        public func windowsize()
+        public func window_size()
         {
             extern("libjoyecs", "wojeapi_input_window_size")
             func _windowsize(ref width: int, ref height: int)=> void;
@@ -1389,10 +1389,10 @@ namespace je
             }
         }
         extern("libjoyecs", "wojeapi_type_of")
-        public func create(name: string)=> option<typeinfo>;
+        public func load_from_name(name: string)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_of")
-        public func create(id: int)=> option<typeinfo>;
+        public func load_from_id(id: int)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_id")
         public func id(self: typeinfo)=> int;
@@ -1407,15 +1407,15 @@ namespace je
         extern("libjoyecs", "wojeapi_type_basic_type")
         private public func create(tid: basic_type)=> typeinfo;
 
-        public let const int = typeinfo(basic_type::INT);
-        public let const float = typeinfo(basic_type::FLOAT);
-        public let const float2 = typeinfo(basic_type::FLOAT2);
-        public let const float3 = typeinfo(basic_type::FLOAT3);
-        public let const float4 = typeinfo(basic_type::FLOAT4);
-        public let const quat = typeinfo(basic_type::QUAT);
-        public let const string = typeinfo(basic_type::STRING);
+        public let const int = typeinfo::create(basic_type::INT);
+        public let const float = typeinfo::create(basic_type::FLOAT);
+        public let const float2 = typeinfo::create(basic_type::FLOAT2);
+        public let const float3 = typeinfo::create(basic_type::FLOAT3);
+        public let const float4 = typeinfo::create(basic_type::FLOAT4);
+        public let const quat = typeinfo::create(basic_type::QUAT);
+        public let const string = typeinfo::create(basic_type::STRING);
 
-        public let const texture = typeinfo(basic_type::TEXTURE);
+        public let const texture = typeinfo::create(basic_type::TEXTURE);
     }
 
     namespace graphic
@@ -1423,7 +1423,7 @@ namespace je
         public using texture = gchandle
         {
             extern("libjoyecs", "wojeapi_texture_open")
-            public func create(path: string)=> texture;
+            public func load(path: string)=> texture;
 
             extern("libjoyecs", "wojeapi_texture_create")
             public func create(width: int, height: int)=> texture;
@@ -1452,7 +1452,7 @@ namespace je
             namespace pixel
             {
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
-                public func color(self: pixel, ref r: real, ref g: real, ref b: real, ref a: real)=> void;
+                public func set_color(self: pixel, ref r: real, ref g: real, ref b: real, ref a: real)=> void;
 
                 public func color(self: pixel)
                 {
@@ -1473,7 +1473,7 @@ namespace je
         public using font = gchandle
         {
             extern("libjoyecs", "wojeapi_font_open")
-            public func create(path: string, font_width: int)=> option<font>;
+            public func load(path: string, font_width: int)=> option<font>;
 
             extern("libjoyecs", "wojeapi_font_load_char")
             public func load_char(self: font, ch: string)=> character;
@@ -1485,7 +1485,7 @@ namespace je
         public using shader = gchandle
         {
             extern("libjoyecs", "wojeapi_shader_open")
-            public func create(path: string)=> shader;
+            public func load(path: string)=> shader;
             
             extern("libjoyecs", "wojeapi_shader_create")
             public func create(vpath: string, src: string)=> option<shader>;
@@ -1633,9 +1633,9 @@ namespace je
         extern("libjoyecs", "wojeapi_add_system_to_world")
         public func add_system(self: world, systype: typeinfo)=> bool;
 
-        public func rend(self: world)
+        public func set_rend(self: world)
         {
-            static let const graphic_typeinfo = typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
+            static let const graphic_typeinfo = typeinfo::load_from_name("Graphic::DefaultGraphicPipelineSystem")->val();
 
             // Remove GraphicPipelineSystem immediately.
             universe::current()->editor::worlds_list()
@@ -1646,10 +1646,11 @@ namespace je
 
             return self;
         }
-
+)"
+R"(
         public func rend()=> option<world>
         {
-            static let const graphic_typeinfo = typeinfo("Graphic::DefaultGraphicPipelineSystem")->val();
+            static let const graphic_typeinfo = typeinfo::load_from_name("Graphic::DefaultGraphicPipelineSystem")->val();
 
             let rending_world = universe::current()->editor::worlds_list()
                                     ->forall(\w:world = w->editor::get_system(graphic_typeinfo)->has(););
@@ -1674,7 +1675,7 @@ namespace je
             public func name(self: world)=> string;
 
             extern("libjoyecs", "wojeapi_set_world_name")
-            public func name(self: world, _name: string)=> void;
+            public func set_name(self: world, _name: string)=> void;
 
             public func get_all_entities(self: world)=> array<entity>
             {
@@ -1690,11 +1691,10 @@ namespace je
                     private public func _get_systems_from_world(self: world)=> array<typeinfo>;
                 return _get_systems_from_world(self);
             }
-)"
-R"(
+
             public func top_entity_iter(self: world)=> entity::editor::entity_iter
             {
-                return entity::editor::entity_iter(self->get_all_entities());
+                return entity::editor::entity_iter::create(self->get_all_entities());
             }
         }
     }
@@ -1774,12 +1774,12 @@ R"(
                 extern("libjoyecs", "wojeapi_set_editing_entity")
                 public func _set_editing_entity(e: entity)=> void;
                 extern("libjoyecs", "wojeapi_set_editing_entity")
-                public func _set_editing_entity()=> void;
+                public func _reset_editing_entity()=> void;
 
                 match(self)
                 {
                 value(e)? _set_editing_entity(e);
-                none? _set_editing_entity();
+                none? _reset_editing_entity();
                 }
             }
 
@@ -1799,7 +1799,7 @@ R"(
             public func name(self: entity)=> string;
 
             extern("libjoyecs", "wojeapi_set_entity_name")
-            public func name(self: entity, name: string)=> string;
+            public func set_name(self: entity, name: string)=> string;
 
             extern("libjoyecs", "wojeapi_get_entity_chunk_info")
             public func chunkinfo(self: entity)=> string;
@@ -1935,7 +1935,8 @@ R"(
                     return false;
                 }
             } // end of namespace entity_iter
-
+)"
+R"(
             namespace graphic
             {
                 // Used for reload specify shader; called when shader updated or moved;

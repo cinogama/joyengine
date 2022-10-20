@@ -37,6 +37,6 @@ namespace editor::OpenFile
 	public func open(file: Browser::PathInfo)
 	{
 		// 单独起一个线程来处理文件打开事务
-		std::thread(_open_impl, (file,));
+		std::thread::create(_open_impl, (file,));
 	}
 }

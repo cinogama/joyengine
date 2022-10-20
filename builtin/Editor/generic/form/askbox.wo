@@ -9,7 +9,7 @@ namespace generic
 
         let mut open = true;
 
-        Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+        BeginAttr(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
         {
             Text(shown);
             if (Button("确定"))
@@ -47,7 +47,7 @@ namespace generic
         using je::gui;
         launch(func(){
             let mut open = true;
-            Begin(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+            BeginAttr(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             {
                 Text(shown);
                 if (Button("是"))
