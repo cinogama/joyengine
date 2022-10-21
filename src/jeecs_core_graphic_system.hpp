@@ -57,10 +57,10 @@ using fout = struct {
 
 public let vert = 
 \v: vin = v2f{ pos = je_mvp * vertex_pos }
-    where vertex_pos = float4(v.vertex, 1.);;
+    where vertex_pos = float4::create(v.vertex, 1.);;
 
 public let frag = 
-\f: v2f = fout{ color = float4(t, 0., t, 1.) }
+\f: v2f = fout{ color = float4::create(t, 0., t, 1.) }
     where t = je_time->y();;
 
 )");

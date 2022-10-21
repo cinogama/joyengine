@@ -330,7 +330,8 @@ void jegl_close_resource(jegl_resource* resource)
     }
     else
     {
-        if (resource->m_type == jegl_resource::type::SHADER)
+        if (resource->m_type == jegl_resource::type::SHADER
+            && resource->m_raw_shader_data != nullptr)
         {
             // SHADER copy have raw data to free..
             auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;

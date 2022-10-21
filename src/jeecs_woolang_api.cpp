@@ -1454,10 +1454,13 @@ namespace je
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
                 public func set_color(self: pixel, ref r: real, ref g: real, ref b: real, ref a: real)=> void;
 
+                extern("libjoyecs", "wojeapi_texture_pixel_color")
+                public func get_color(self: pixel, ref r: real, ref g: real, ref b: real, ref a: real)=> void;
+
                 public func color(self: pixel)
                 {
                     let mut r = 0., mut g = 0., mut b = 0., mut a = 0.;
-                    self->color(ref r, ref g, ref b, ref a);
+                    self->get_color(ref r, ref g, ref b, ref a);
 
                     return (r, g, b, a);
                 }

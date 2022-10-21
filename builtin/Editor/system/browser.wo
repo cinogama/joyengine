@@ -211,14 +211,14 @@ using fout = struct {
 public func vert(v: vin)
 {
     return v2f {
-        pos = je_mvp * float4(v.vertex, 1.)
+        pos = je_mvp * float4::create(v.vertex, 1.)
     };
 }
 
 public func frag(vf: v2f)
 {
     return fout {
-        color = float4(1., 1., 1., 1.)
+        color = float4::new(1., 1., 1., 1.)
     };
 }
 "@                          ;);
@@ -250,14 +250,14 @@ using fout = struct {
 public func vert(v: vin)
 {
     return v2f {
-        pos = je_mvp * float4(v.vertex, 1.),
+        pos = je_mvp * float4::create(v.vertex, 1.),
         uv  = v.uv,
     };
 }
 
 public func frag(vf: v2f)
 {
-    let tex = uniform:<texture2d>("MainTexture")->channel(0);
+    let tex = uniform_texture:<texture2d>("MainTexture", 0);
 
     return fout {
         color = texture(tex, vf.uv),

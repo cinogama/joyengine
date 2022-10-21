@@ -261,32 +261,32 @@ namespace jeecs
                 static basic::resource<graphic::shader>
                     axis_shader = new graphic::shader("je/debug/mover_axis.shader",
                         R"(
-        import je.shader;
+import je.shader;
         
-        ZTEST (ALWAYS);
+ZTEST (ALWAYS);
         
-        VAO_STRUCT vin {
-            vertex : float3,
-            color  : float3
-        };
-        using v2f = struct {
-            pos : float4,
-            color : float3
-        };
-        using fout = struct {
-            color : float4
-        };
+VAO_STRUCT vin {
+    vertex : float3,
+    color  : float3
+};
+using v2f = struct {
+    pos : float4,
+    color : float3
+};
+using fout = struct {
+    color : float4
+};
         
-        public let vert = 
-        \v: vin = v2f { pos = je_mvp * vertex_pos, 
-                        color = v.color } 
-            where vertex_pos = float4(v.vertex, 1.);;
+public let vert = 
+\v: vin = v2f { pos = je_mvp * vertex_pos, 
+                color = v.color } 
+    where vertex_pos = float4::create(v.vertex, 1.);;
         
-        public let frag = 
-        \f: v2f = fout{ color = float4(show_color, 1.) }
-            where show_color = lerp(f.color, float3(1., 1., 1.), ratio),
-                        ratio = step(float(0.5), high_light),
-                    high_light = uniform("high_light", float(0.0));;
+public let frag = 
+\f: v2f = fout{ color = float4::create(show_color, 1.) }
+    where show_color = lerp(f.color, float3::new(1., 1., 1.), ratio),
+                ratio = step(float::new(0.5), high_light),
+            high_light = uniform("high_light", float::new(0.));;
         
         )");
                 game_world current_world = mover_entity.game_world();

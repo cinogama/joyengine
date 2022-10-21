@@ -315,7 +315,9 @@ WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args, size_t argc)
 {
     jegl_shader_value* texture2d_val = (jegl_shader_value*)wo_pointer(args + 0);
-    assert(texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D);
+    assert(texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D
+    || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D_MS
+    || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE_CUBE);
 
     texture2d_val->m_uniform_texture_channel = (int)wo_int(args + 1);
     return wo_ret_val(vm, args + 0);
@@ -798,20 +800,26 @@ private func _uniform<ShaderResultT>(
 )=> ShaderResultT;
 
 extern("libjoyecs", "jeecs_shader_create_uniform_variable_with_init_value")
-private func _uniform<ShaderResultT>(
+private func _uniform_with_init<ShaderResultT>(
     result_type : shader_value_type,
     uniform_name : string,
     init_value : ShaderResultT
 )=> ShaderResultT;
 
-public func uniform<ShaderResultT>(uniform_name:string)=> ShaderResultT
+public func uniform_texture<ShaderResultT>(uniform_name:string, pass: int)=> ShaderResultT
+    where std::declval:<ShaderResultT>() is texture2d
+        || std::declval:<ShaderResultT>() is texture2dms
+        || std::declval:<ShaderResultT>() is texturecube;
 {
-    return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, false);
+    extern("libjoyecs", "jeecs_shader_texture2d_set_channel")
+        public func channel<T>(self: T, pass: int)=> T;
+    
+    return channel(_uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, false), pass);
 }
 
 public func uniform<ShaderResultT>(uniform_name:string, init_value: ShaderResultT)=> ShaderResultT
 {
-    return _uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, init_value);
+    return _uniform_with_init:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, init_value);
 }
 
 public func shared_uniform<ShaderResultT>(uniform_name:string)=> ShaderResultT
@@ -876,7 +884,7 @@ namespace fragment_out
 namespace float
 {
     extern("libjoyecs", "jeecs_shader_float_create")
-    public func create(init_val:real)=> float;
+    public func new(init_val:real)=> float;
 
     public func create(...)=> float{return apply_operation:<float>("float", ......);}
 
@@ -888,32 +896,27 @@ namespace float
     {
         return apply_operation:<float>("-", a, b);
     }
-    public func operator * (a:float, b:float)=> float
+    public func operator * <T>(a:float, b:T)=> T
+        where b is float 
+            || b is float2 
+            || b is float3 
+            || b is float4;
     {
-        return apply_operation:<float>("*", a, b);
+        if (b is float)
+            return apply_operation:<float>("*", a, b);
+        else
+            return b * a;
     }
+
     public func operator / (a:float, b:float)=> float
     {
         return apply_operation:<float>("/", a, b);
     }
-
-    public func operator * (a:float, b:float2)=> float2
-    {
-        return apply_operation:<float2>("*", b, a);
-    }
-    public func operator * (a:float, b:float3)=> float3
-    {
-        return apply_operation:<float3>("*", b, a);
-    }
-    public func operator * (a:float, b:float4)=> float4
-    {
-        return apply_operation:<float4>("*", b, a);
-    }   
 }
 namespace float2
 {
     extern("libjoyecs", "jeecs_shader_float2_create")
-    public func create(x:real, y:real)=> float2;
+    public func new(x:real, y:real)=> float2;
 
     public func create(...)=> float2{return apply_operation:<float2>("float2", ......);}
 
@@ -930,16 +933,12 @@ namespace float2
     {
         return apply_operation:<float2>("-", a, b);
     }
-    public func operator * (a:float2, b:float2)=> float2
+    public func operator * <T>(a:float2, b:T)=> float2
+        where b is float || b is float2;
     {
         return apply_operation:<float2>("*", a, b);
     }
 
-    public func operator * (a:float2, b:float)=> float2
-    {
-        return apply_operation:<float2>("*", a, b);
-    }
-    
     public func operator / (a:float2, b:float)=> float2
     {
         return apply_operation:<float2>("/", a, b);
@@ -948,7 +947,7 @@ namespace float2
 namespace float3
 {
     extern("libjoyecs", "jeecs_shader_float3_create")
-    public func create(x:real, y:real, z:real)=> float3;
+    public func new(x:real, y:real, z:real)=> float3;
 
     public func create(...)=> float3{return apply_operation:<float3>("float3", ......);}
 
@@ -976,16 +975,12 @@ namespace float3
     {
         return apply_operation:<float3>("-", a, b);
     }
-    public func operator * (a:float3, b:float3)=> float3
+    public func operator * <T>(a:float3, b:T)=> float3
+        where b is float || b is float3;
     {
         return apply_operation:<float3>("*", a, b);
     }
 
-    public func operator * (a:float3, b:float)=> float3
-    {
-        return apply_operation:<float3>("*", a, b);
-    }
-    
     public func operator / (a:float3, b:float)=> float3
     {
         return apply_operation:<float3>("/", a, b);
@@ -994,7 +989,7 @@ namespace float3
 namespace float4
 {
     extern("libjoyecs", "jeecs_shader_float4_create")
-    public func create(x:real, y:real, z:real, w:real)=> float4;
+    public func new(x:real, y:real, z:real, w:real)=> float4;
 
     public func create(...)=> float4{return apply_operation:<float4>("float4", ......);}
 
@@ -1074,12 +1069,8 @@ namespace float4
     {
         return apply_operation:<float4>("-", a, b);
     }
-    public func operator * (a:float4, b:float4)=> float4
-    {
-        return apply_operation:<float4>("*", a, b);
-    }
-
-    public func operator * (a:float4, b:float)=> float4
+    public func operator * <T>(a:float4, b:T)=> float4
+        where b is float || b is float4;
     {
         return apply_operation:<float4>("*", a, b);
     }
@@ -1095,21 +1086,20 @@ namespace float4
 namespace float4x4
 {
     extern("libjoyecs", "jeecs_shader_float4x4_create")
-    public func create(p00:real, p01:real, p02:real, p03:real,
+    public func new(p00:real, p01:real, p02:real, p03:real,
                 p10:real, p11:real, p12:real, p13:real,
                 p20:real, p21:real, p22:real, p23:real,
                 p30:real, p31:real, p32:real, p33:real)=> float4x4;
 
     public func create(...)=> float4x4{return apply_operation:<float4x4>("float4x4", ......);}
 
-    public func operator * (a:float4x4, b:float4x4)=> float4x4
+    public func operator * <T>(a:float4x4, b:T)=> T
+        where b is float4 || b is float4x4;
     {
-        return apply_operation:<float4x4>("*", a, b);
-    }
-
-    public func operator * (a:float4x4, b:float4)=> float4
-    {
-        return apply_operation:<float4>("*", a, b);
+        if (b is float4x4)
+            return apply_operation:<float4x4>("*", a, b);
+        else
+            return apply_operation:<float4>("*", a, b);
     }
 }
 
@@ -1144,15 +1134,15 @@ namespace shader
     private extern func generate()
     {
         // 'v_out' is a struct with member of shader variable as vertex outputs.
-        let v_out = vert(_JE_BUILT_VAO_STRUCT(vertex_in()));
+        let v_out = vert(_JE_BUILT_VAO_STRUCT(vertex_in::create()));
         
         // 'vertex_out' will analyze struct, then 'fragment_in' will build a new struct
-        let vertext_out_result = vertex_out(v_out);
-        let f_in = fragment_in:<typeof(v_out)>(vertext_out_result);
+        let vertext_out_result = vertex_out::create(v_out);
+        let f_in = fragment_in::create:<typeof(v_out)>(vertext_out_result);
     
         // 'f_out' is a struct with output shader variable.
         let f_out = frag(f_in);
-        let fragment_out_result = fragment_out(f_out);
+        let fragment_out_result = fragment_out::create(f_out);
 
         return _wraped_shader(vertext_out_result, fragment_out_result, configs);
     }
@@ -1166,26 +1156,29 @@ namespace shader
         public func generate_glsl_fragment(wrapper:shader_wrapper)=> string;
     }
 }
+public let float_zero = float::new(0.);
+public let float2_zero = float2::new(0., 0.);
+public let float3_zero = float3::new(0., 0., 0.);
+public let float4_zero = float4::new(0., 0., 0., 0.);
+public let float4x4_unit = float4x4::new(
+    1., 0., 0., 0.,
+    0., 1., 0., 0.,
+    0., 0., 1., 0.,
+    0., 0., 0., 1.);
 
-namespace texture2d
-{
-    extern("libjoyecs", "jeecs_shader_texture2d_set_channel")
-    public func channel(self: texture2d, pass: int)=> texture2d;
-}
-
-// Default unifrom
+// Default uniform
 public let je_time = shared_uniform:<float4>("JOYENGINE_TIMES");
 
-public let je_m = uniform:<float4x4>("JOYENGINE_TRANS_M");
-public let je_v = uniform:<float4x4>("JOYENGINE_TRANS_V");
-public let je_p = uniform:<float4x4>("JOYENGINE_TRANS_P");
+public let je_m = uniform("JOYENGINE_TRANS_M", float4x4_unit);
+public let je_v = uniform("JOYENGINE_TRANS_V", float4x4_unit);
+public let je_p = uniform("JOYENGINE_TRANS_P", float4x4_unit);
 
 // je_mvp = je_p * je_v * je_m;
 // je_mv  = je_v * je_m;
 // je_vp  = je_p * je_v;
-public let je_mvp = uniform:<float4x4>("JOYENGINE_TRANS_MVP");
-public let je_mv = uniform:<float4x4>("JOYENGINE_TRANS_MV");
-public let je_vp = uniform:<float4x4>("JOYENGINE_TRANS_VP");
+public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4_unit);
+public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4_unit);
+public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4_unit);
 
 public func texture(tex:texture2d, uv:float2)=> float4
 {
