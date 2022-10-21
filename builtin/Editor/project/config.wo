@@ -387,7 +387,7 @@ namespace editor::Project
             
             let runtime_worlds = data["worlds": dynamic] as array<dynamic>;
 
-            let window_info = data->getdefault("window": dynamic, {}: dynamic) as map<dynamic, dynamic>;
+            let window_info = data->getdefault("window": dynamic, {}: dynamic) as dict<dynamic, dynamic>;
             let window_size = window_info->getdefault("size": dynamic, [640, 480]: dynamic) as array<dynamic>;
 
             proj.about_info = data->getdefault("about_info": dynamic, "": dynamic) as string;

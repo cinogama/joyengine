@@ -129,14 +129,14 @@ namespace editor::Serialize
         }
         return tinfo;
     }
-    public func restore_entity(world: je::world, entity_dat: map)
+    public func restore_entity(world: je::world, entity_dat: dict)
     {      
         let component_types_dat = entity_dat
                 ->get("components": dynamic)
-                ->map(\cs: dynamic = cs as map
+                ->map(\cs: dynamic = cs as dict
                     ->unmapping
-                    ->trans(\kv:(dynamic, dynamic) = (kv[0] as string, kv[1] as map);)
-                    ->trans(\td:(string, map) = (_typeinfo_or_warning(td[0]), td[1]
+                    ->trans(\kv:(dynamic, dynamic) = (kv[0] as string, kv[1] as dict);)
+                    ->trans(\td:(string, dict) = (_typeinfo_or_warning(td[0]), td[1]
                             ->unmapping
                             ->trans(\p:(dynamic, dynamic) = (p[0] as string, p[1] as string);)
                             ->mapping);)
@@ -282,8 +282,8 @@ namespace editor::Serialize
 
             dat->get("entities": dynamic)
                 ->map(\es: dynamic = es as array<dynamic>
-                    ->trans(\edat: dynamic = edat as map;)
-                    ->trans(\edat: map = Serialize::restore_entity(world.instance, edat);););
+                    ->trans(\edat: dynamic = edat as dict;)
+                    ->trans(\edat: dict = Serialize::restore_entity(world.instance, edat);););
 
             return value(world);
         }
