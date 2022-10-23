@@ -97,8 +97,8 @@ public using CxxProject = struct {
         for (let platform, files : ENGINE_CORE_LIBRARYS_PATHS)
         {
             files
-                ->trans(\name: string = copy(F"{ENGINE_CORE_LIBRARYS_LOCATE_PATH}{name}", F"{cxx_proj_path}engine/library/{name}");)
-                ->trans(\r: result<anything, anything> = r->isok;)
+                ->map(\name: string = copy(F"{ENGINE_CORE_LIBRARYS_LOCATE_PATH}{name}", F"{cxx_proj_path}engine/library/{name}");)
+                ->map(\r: result<anything, anything> = r->isok;)
                 ->reduce(\l: bool, r: bool = l ? r | l;)
                 ->map(\r: bool = platform_support->set(platform, r););
         }
@@ -114,23 +114,23 @@ public using CxxProject = struct {
         let enabled_generating = platform_support
             ->forall(\_: anything, enable: bool = enable;)
             ->unmapping
-            ->trans(\conf_enab: (string, anything) = conf_enab[0];);
+            ->map(\conf_enab: (string, anything) = conf_enab[0];);
             
         let generating_results = enabled_generating
-            ->trans(\conf: string = (conf, generate_cmake_doc(conf)););
+            ->map(\conf: string = (conf, generate_cmake_doc(conf)););
 
         let failed_generating = generating_results
             ->forall(\r: (anything, result<anything, anything>) = r[1]->iserr;);
 
         if (!failed_generating->empty)
         {
-            for (let r : failed_generating->trans(\r: (anything, result<anything, string>)
+            for (let r : failed_generating->map(\r: (anything, result<anything, string>)
                 = r[1]->error->val;))
                 je::logerr(r);
 
             return result::err(F"创建模块的CMake文件时失败：\n{
                 failed_generating
-                    ->trans(\r: (anything, result<anything, string>) = r[1]->error->val;)
+                    ->map(\r: (anything, result<anything, string>) = r[1]->error->val;)
                     ->reduce(\l: string, r: string = l + "\n" + r;)
                     ->val
             }");
@@ -143,7 +143,7 @@ public using CxxProject = struct {
             ["conf"] = enabled_generating: dynamic
         }: string);
         
-        for (let config : generating_results->trans(
+        for (let config : generating_results->map(
             \c: (anything, result<CxxProjectBuildConfig, anything>) = c[1]->okay->val;))
         {
             // 3.1 把生成出来的CMake保存起来
@@ -181,7 +181,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${JEMODULE
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 "@;
         let cmake_subdirs = enabled_generating
-            ->trans(func(conf: string){
+            ->map(func(conf: string){
                 let check_if_need_build = F"if ($\{JEMODULE_BUILT_AIM\} STREQUAL \"{conf}\")";
                 let include_subdir = F"    add_subdirectory(\"builder/{conf}\")";
                 return F"{check_if_need_build}\n{include_subdir}";
@@ -236,7 +236,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                 path = normalize(cxx_proj_path), 
                 configs = generating_results
                     ->mapping
-                    ->trans(\k: string, v: result<CxxProjectBuildConfig, string> 
+                    ->map(\k: string, v: result<CxxProjectBuildConfig, string> 
                         = (k, v->okay->val);),
                 module_instance = option::none,
                 };
@@ -286,7 +286,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                 ->okay
                 ->bind(\child_path: array<string> = child_path
                     ->forall(\path: string = isdir(path);)
-                    ->trans(\path: string = filename(path): int;)
+                    ->map(\path: string = filename(path): int;)
                     ->reduce(\l: int, r: int = l > r ? l | r;)
                 ;)
     }
@@ -367,9 +367,9 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             path = normalize(readdat->val["path": dynamic] as string), 
             configs = readdat
                 ->val["conf": dynamic] as array
-                ->trans(\d: dynamic = d as string;)
+                ->map(\d: dynamic = d as string;)
                 // 如果文件打不开，直接在这里爆炸
-                ->trans(\conf: string = (conf, generate_cmake_doc(conf)->okay->val);)
+                ->map(\conf: string = (conf, generate_cmake_doc(conf)->okay->val);)
                 ->mapping,
             module_instance = option::none,
             };
@@ -401,7 +401,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                         ->map(\child_paths: array<string> =
                             child_paths
                                 ->forall(\path: string = !isdir(path) || newest_id != filename(path): int;)
-                                ->trans(\path: string = delete(path);)
+                                ->map(\path: string = delete(path);)
                         ;)
                 ;)
             ;
@@ -636,8 +636,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             ->okay
             ->map(\childs: array<string> = childs
                  ->forall(\f: string = externname(f) == "hpp";)
-                 ->trans(\f: string = filename(f);)
-                 ->trans(\f: string = f->subto(0, f->len - 4);)
+                 ->map(\f: string = filename(f);)
+                 ->map(\f: string = f->subto(0, f->len - 4);)
                 ;)
             ->valor([]);
            
@@ -645,8 +645,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             ->okay
             ->map(\childs: array<string> = childs
                  ->forall(\f: string = externname(f) == "hpp";)
-                 ->trans(\f: string = filename(f);)
-                 ->trans(\f: string = f->subto(0, f->len - 4);)
+                 ->map(\f: string = filename(f);)
+                 ->map(\f: string = f->subto(0, f->len - 4);)
                 ;)
             ->valor([]);
 
@@ -674,25 +674,25 @@ $$REGISTER_SYSTEM_TYPES$$
         "@;
         let import_component_headers = 
             components
-                ->trans(\f: string = F"#include \"{f}.hpp\"";)
+                ->map(\f: string = F"#include \"{f}.hpp\"";)
                 ->reduce(\l: string, r: string = l + "\n" + r;)
                 ->valor("");
         let import_system_headers = 
             systems
-                ->trans(\f: string = F"#include \"{f}.hpp\"";)
+                ->map(\f: string = F"#include \"{f}.hpp\"";)
                 ->reduce(\l: string, r: string = l + "\n" + r;)
                 ->valor("");
 
         let register_component_types =
             components
-                ->trans(\f: string = F"jeecs::typing::type_info::of<{self.name}::{f}>(\"{self.name}::{f}\");";)
-                ->trans(\f: string = "        " + f;)
+                ->map(\f: string = F"jeecs::typing::type_info::of<{self.name}::{f}>(\"{self.name}::{f}\");";)
+                ->map(\f: string = "        " + f;)
                 ->reduce(\l: string, r: string = l + "\n" + r;)
                 ->valor("");
         let register_system_types = 
             systems
-                ->trans(\f: string = F"jeecs::typing::type_info::of<{self.name}::{f}>(\"{self.name}::{f}\");";)
-                ->trans(\f: string = "        " + f;)
+                ->map(\f: string = F"jeecs::typing::type_info::of<{self.name}::{f}>(\"{self.name}::{f}\");";)
+                ->map(\f: string = "        " + f;)
                 ->reduce(\l: string, r: string = l + "\n" + r;)
                 ->valor("");
 

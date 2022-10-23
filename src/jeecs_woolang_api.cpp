@@ -1525,7 +1525,7 @@ namespace je
 
                 return
                     _get_uniforms_from_shader(self)
-                        ->trans(\name: string, tv: (typeinfo, uniform_value_data) = (name, 
+                        ->map(\name: string, tv: (typeinfo, uniform_value_data) = (name, 
                             type == typeinfo::int
                             ? uniform_variable::integer(val.n)
                             | type == typeinfo::float
@@ -1643,7 +1643,7 @@ namespace je
             // Remove GraphicPipelineSystem immediately.
             universe::current()->editor::worlds_list()
                 ->forall(\w:world = w->editor::get_system(graphic_typeinfo)->has();)
-                ->trans(\w:world = w->editor::remove_system(graphic_typeinfo););
+                ->map(\w:world = w->editor::remove_system(graphic_typeinfo););
 
             self->add_system(graphic_typeinfo);
 

@@ -111,7 +111,7 @@ namespace logmgr
         // 如果level超出0-5的范围，直接panic
         log_buffers
             ->unmapping
-            ->trans(\logs: (je::editor::loglevel, vec<string>) = 
+            ->map(\logs: (je::editor::loglevel, vec<string>) = 
                 result[logs[0]:int] = logs[1]->len;);
 
         return (result[0], result[1], result[2], result[3], result[4]);
@@ -125,7 +125,7 @@ namespace logmgr
             last_log = option::none;
             log_buffers
                 ->vals
-                ->trans(\v: vec<anything> = v->clear;);
+                ->map(\v: vec<anything> = v->clear;);
         }
         Separator();
         for (let k, v : log_buffers)
@@ -231,21 +231,20 @@ func Editor_CameraViewport()
     }
 
     let debug_camera_entity = je::world::rend()
-        ->bind(\w: je::world = w->editor::get_all_entities
-            ->forall(\e: je::entity = 
+        ->bind(\w = w->editor::get_all_entities
+            ->forall(\e = 
                 e->editor::get_component(je::typeinfo::load_from_name("Editor::EditorWalker")->val)->has
                 && e->editor::get_component(je::typeinfo::load_from_name("Camera::RendToFramebuffer")->val)->has
             ;)
-            ->reduce(\l: je::entity, r: je::entity = l;)
+            ->reduce(\l, r = l;)
         ;)
     ;
 
-    match(debug_camera_entity->bind(\camera: je::entity = je::editor::get_framebuf_texture(camera, 0);))
+    match(debug_camera_entity =>> \camera = je::editor::get_framebuf_texture(camera, 0);)
     {
     value(frametex)?
     {
-        static let mut origin_width = 0, mut origin_height = 0;
-        static let mut lock_active = false;
+        let (frame_tex_width, frame_tex_height) = frametex->size;
 
         let mut available_width = 0., mut available_height = 0.;
         GetContentRegionAvail(ref available_width, ref available_height);
@@ -259,7 +258,7 @@ func Editor_CameraViewport()
         let (mx, my) = GetMousePos();
         let (offsetx, offsety) = (mx - lupx - wx, my - lupy - wy);
 
-        if (IsItemHovered() || lock_active)
+        if (IsItemHovered())
         {
             // 在渲染区域内！
 
@@ -281,18 +280,14 @@ func Editor_CameraViewport()
             je::editor::enable_editor_system(false);
         }
 
-        if (origin_width != available_width: int || origin_height != available_height: int)
+        if (frame_tex_width != available_width: int || frame_tex_height != available_height: int)
         {
-            origin_width = available_width: int;
-            origin_height = available_height: int;
-
-            debug_camera_entity->val
-                ->je::editor::apply_camera_framebuf_setting(origin_width, origin_height);
+            debug_camera_entity
+                ->val
+                ->je::editor::apply_camera_framebuf_setting(available_width: int, available_height: int);
         }
         if (BeginPopupContextWindow())
         {
-            //lock_active = true;
-
             if (MenuItem("新建实体"))
                 launch(EntityCreator::show, (EntityCreator::create_context(),));
             Separator();
@@ -453,7 +448,7 @@ func Editor_MainMenuBar()
         // todo 这个返回一个元组的设计太蠢了
         let msg = [("普通", normal), ("信息", info), ("警告", warning), ("错误", error), ("致命", fatal)]
             ->forall(\msg: (string, int) = msg[1] > 0;)
-            ->trans(\msg: (string, int) = F"{msg[0]}:{msg[1]} ";)
+            ->map(\msg: (string, int) = F"{msg[0]}:{msg[1]} ";)
             ->reduce(\lmsg: string, rmsg: string = lmsg + rmsg;);
 
         if (BeginMenu(msg->valor("暂无日志")->trim 

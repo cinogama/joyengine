@@ -265,8 +265,8 @@ namespace editor::EntityCreator
                     let removing_components = context.not_append_types->forall(
                             \type: je::typeinfo = e->editor::get_component(type)->has;);
 
-                    add_components->trans(\t: je::typeinfo = e->editor::add_component(t););
-                    removing_components->trans(\t: je::typeinfo = e->editor::remove_component(t););
+                    add_components->map(\t: je::typeinfo = e->editor::add_component(t););
+                    removing_components->map(\t: je::typeinfo = e->editor::remove_component(t););
 
                     e->editor::set_name(context.name);
                 }

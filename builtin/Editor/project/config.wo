@@ -206,7 +206,7 @@ namespace editor::Project
     {
         return
             self.worlds
-                ->trans(\w: World = Serialize::save_project_world(w);): string;
+                ->map(\w: World = Serialize::save_project_world(w);): string;
     }
 
     public func CloseAllWorlds(self: Project)
@@ -214,12 +214,12 @@ namespace editor::Project
         EntityList::set_current_entity(option::none);
         self.worlds
             ->dup
-            ->trans(\w: World = self->CloseWorld(w.instance););
+            ->map(\w: World = self->CloseWorld(w.instance););
     }
 
     public func RestoreAllWorlds(self: Project, worlds: string)
     {
-        worlds->toarray->val->trans(\d: dynamic = Serialize::restore_world(self, d as dict););
+        worlds->toarray->val->map(\d: dynamic = Serialize::restore_world(self, d as dict););
         if (!self.worlds->empty)
             self.worlds[0].instance->WorldList::SwitchEditingWorld;
     }
@@ -335,16 +335,16 @@ namespace editor::Project
         {
             let failed_loading_module = 
                 data->getdefault("native_module": dynamic, []: dynamic) as array
-                    ->trans(\d: dynamic = d as string;)
-                    ->trans(\p: string = (p, CxxProject::load(p)->error);)
+                    ->map(\d: dynamic = d as string;)
+                    ->map(\p: string = (p, CxxProject::load(p)->error);)
                     ->forall(\r: (string, option<string>) = r[1]->has;)
-                    ->trans(\r: (string, option<string>) = (r[0], r[1]->val););
+                    ->map(\r: (string, option<string>) = (r[0], r[1]->val););
 
             if (!failed_loading_module->empty)
             {
                 let failed_informations = 
                     failed_loading_module
-                        ->trans(\r: (string, string) = r[0] + " " + r[1];)
+                        ->map(\r: (string, string) = r[0] + " " + r[1];)
                         ->reduce(\l: string, r:string = l+"\n"+r;)
                         ->val;
                 let option_msg = @"
@@ -412,8 +412,8 @@ namespace editor::Project
             // je::input::set_window_size(window_size[0]: int, window_size[1]: int);
 
             runtime_worlds
-                ->trans(\p: dynamic = p as string;)
-                ->trans(\path: string = proj->LoadWorld(path););
+                ->map(\p: dynamic = p as string;)
+                ->map(\path: string = proj->LoadWorld(path););
 
             if (proj.worlds->empty)
             {
@@ -463,7 +463,7 @@ namespace editor::Project
             using Serialize;
             let worlds_dumped_data = 
                 self.worlds
-                    ->trans(\w: World = save_project_world(w););
+                    ->map(\w: World = save_project_world(w););
 
             // 1. 检查所有世界是否已经有路径信息，如果没有则说明有新建的世界没有保存过，要求保存
             let worlds = []mut: vec<string>;
@@ -477,7 +477,7 @@ namespace editor::Project
 
             // OK，看上去该保存的都保存上了，调World的Save方法写入世界数据
             self.worlds
-                ->trans(\w: World = w->Save(););
+                ->map(\w: World = w->Save(););
 
             let (win_width, win_height) = je::input::window_size();
 
@@ -501,7 +501,7 @@ namespace editor::Project
                 ["editor_system"] = self.editor_system->name: dynamic,
 
                 ["native_module"] = self.native_modules->unmapping
-                    ->trans(\m: (string, anything) = m[0];): dynamic,
+                    ->map(\m: (string, anything) = m[0];): dynamic,
 
                 ["about_info"] = self.about_info: dynamic,
             };

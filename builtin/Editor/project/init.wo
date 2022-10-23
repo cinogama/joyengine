@@ -28,7 +28,7 @@ namespace editor::Project
             arr->add(ch);
 
         return arr
-            ->trans(\ch: char = [ch]->str + ":/";)
+            ->map(\ch: char = [ch]->str + ":/";)
             ->forall(\path: string = je::filesys::isdir(path););
     }
 
@@ -40,7 +40,7 @@ namespace editor::Project
     private func _GetRootPaths()
     {
         return _GetAvailableRootPaths()
-            ->trans(\rootpath: string = Path{
+            ->map(\rootpath: string = Path{
                 name = rootpath,
                 path = rootpath,
                 childs = option::none};);
@@ -53,7 +53,7 @@ namespace editor::Project
                 je::filesys::childs(path.path)
                     ->unwarp
                     ->forall(\child_path: string = je::filesys::isdir(child_path);)
-                    ->trans(\child_path: string = Path{
+                    ->map(\child_path: string = Path{
                         name = je::filesys::filename(child_path),
                         path = child_path,
                         childs = option::none

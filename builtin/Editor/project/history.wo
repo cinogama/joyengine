@@ -19,7 +19,7 @@ namespace editor::Project
 				->readall
 				->bind(\str: string = str->toarray;)
 				->map(\arr: array = arr
-					->trans(\d: dynamic = d as string;);)			
+					->map(\d: dynamic = d as string;);)			
 				->valor([]);
 	}
 

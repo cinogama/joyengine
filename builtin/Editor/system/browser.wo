@@ -118,7 +118,7 @@ namespace editor::Browser
             let sublist = 
                 je::filesys::childs(self.path)
                     ->unwarp
-                    ->trans(\current_subpath: string = PathInfo{
+                    ->map(\current_subpath: string = PathInfo{
                         path = current_subpath, 
                         name = je::filesys::filename(current_subpath),
                         externname = je::filesys::externname(current_subpath),
@@ -303,9 +303,9 @@ public func frag(vf: v2f)
                 // 从universe中获取所有world，更新world中所有实体的shader
                 je::universe::current()
                     ->editor::worlds_list
-                    ->trans(\w: je::world = w
+                    ->map(\w: je::world = w
                         ->editor::get_all_entities
-                        ->trans(\e: je::entity = 
+                        ->map(\e: je::entity = 
                             e->editor::graphic::try_reload_shaders(path.path, path.path)
                         ;)
                     ;);
@@ -344,7 +344,7 @@ public func frag(vf: v2f)
                         ->okay
                         ->map(\s: array<string> = s
                              ->forall(\f: string = je::filesys::externname(f) == "hpp";)
-                             ->trans(\f: string = fname->subto(0, fname->len - 4)
+                             ->map(\f: string = fname->subto(0, fname->len - 4)
                                 where fname = je::filesys::filename(f);)
                             ;)
                         ->valor([])
@@ -353,7 +353,7 @@ public func frag(vf: v2f)
                     ->okay
                     ->map(\s: array<string> = s
                          ->forall(\f: string = je::filesys::externname(f) == "hpp";)
-                         ->trans(\f: string = fname->subto(0, fname->len - 4)
+                         ->map(\f: string = fname->subto(0, fname->len - 4)
                             where fname = je::filesys::filename(f);)
                         ;)
                     ->valor([])
@@ -550,7 +550,7 @@ namespace $$MODULE_NAME$$
                     GetContentRegionAvail(0., ref avaliable_height);
                     if (BeginListBox("##1", available_width/2.-0.5, avaliable_height))
                     {
-                        systems->trans(\s: string = display_usable_system(s););
+                        systems->map(\s: string = display_usable_system(s););
                         EndListBox();
                     }
                     EndGroup();
@@ -562,7 +562,7 @@ namespace $$MODULE_NAME$$
                     GetContentRegionAvail(0., ref avaliable_height);
                     if (BeginListBox("##2", available_width/2.-0.5, avaliable_height))
                     {
-                        components->trans(\s: string = display_usable_component(s););
+                        components->map(\s: string = display_usable_component(s););
                         EndListBox();
                     }
                     EndGroup();
@@ -601,7 +601,7 @@ namespace $$MODULE_NAME$$
     {
         BeginGroup();
             PushIDStr(path.path);
-                let clicked = ImageButtonScale(get_file_icon_by_extern_name(path)->get_texture, 0.125);
+                let clicked = ImageButtonSize(get_file_icon_by_extern_name(path)->get_texture, 32., 32.);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             context_menu(option::value(path));
@@ -655,7 +655,7 @@ namespace $$MODULE_NAME$$
             now_item_in_path =
                 je::filesys::childs(current_work_path)
                     ->unwarp
-                    ->trans(\subpath: string = PathInfo{ 
+                    ->map(\subpath: string = PathInfo{ 
                         path = subpath,
                         name = je::filesys::filename(subpath),
                         externname = je::filesys::externname(subpath),
@@ -668,7 +668,7 @@ namespace $$MODULE_NAME$$
         BeginChild("files_list");
             context_menu(option::none);
             now_item_in_path
-                ->trans(\subpath: PathInfo = 
+                ->map(\subpath: PathInfo = 
                     action == Action::Click ? 0
                     | action == Action::DoubleClick ? 
                         subpath
