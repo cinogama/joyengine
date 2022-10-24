@@ -1349,17 +1349,17 @@ public func CULL(cull: CullConfig)
 {
     let eat_token = func(ref expect_name: string, expect_type: std::token_type)
                     {
-                        let mut out_result = "";
-                        if (lexer->next(ref out_result) != expect_type)
+                        let (token, out_result) = lexer->next();
+                        if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
     let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
-                        let mut out_result = "";
-                        if (lexer->peek("") != expect_type)
+                        let (token, out_result) = lexer->peek();
+                        if (token != expect_type)
                             return option::none;
-                        assert(lexer->next(ref out_result) == expect_type);
+                        lexer->next;
                         return option::value(out_result);
                     };
 
