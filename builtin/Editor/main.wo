@@ -231,13 +231,13 @@ func Editor_CameraViewport()
     }
 
     let debug_camera_entity = je::world::rend()
-        ->bind(\w = w->editor::get_all_entities
+        =>> \w = w->editor::get_all_entities
             ->forall(\e = 
                 e->editor::get_component(je::typeinfo::load_from_name("Editor::EditorWalker")->val)->has
                 && e->editor::get_component(je::typeinfo::load_from_name("Camera::RendToFramebuffer")->val)->has
             ;)
             ->reduce(\l, r = l;)
-        ;)
+            ;
     ;
 
     match(debug_camera_entity =>> \camera = je::editor::get_framebuf_texture(camera, 0);)
