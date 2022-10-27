@@ -41,7 +41,7 @@ namespace editor::EntityList
         {
             generic::askbox("删除实体",
                 F"确认要删除实体{entity->val->editor::name()}吗？",
-                \sure: bool = sure?entity->val->close()|nil;);
+                \sure = sure?entity->val->close()|nil;);
         }
         if (MenuItemEnabled("重命名", has_editable_entity))
         {
@@ -109,7 +109,7 @@ namespace editor::EntityList
         value(uid)?
         {
             if (cur->editor::get_uid()
-                   ->bind(\cuidv: string = puid->map(\puidv: string = puidv == cuidv;)
+                   ->bind(\cuidv = puid->map(\puidv = puidv == cuidv;)
                         where puid = checking->editor::get_uid();)
                    ->valor(false))
                 // 当前实体和目标实体相同，直接返回
@@ -155,7 +155,7 @@ namespace editor::EntityList
             */
             // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把父节点设置为L2W
             child->editor::get_parent_uid()
-                 ->map(\uid: string = parent->editor::set_parent_with_uid(uid, true);)
+                 ->> \uid = parent->editor::set_parent_with_uid(uid, true);
                  ->or(func(){
                     if (parent->editor::get_component(LocalToParent)->has())
                         parent->editor::remove_component(LocalToParent);

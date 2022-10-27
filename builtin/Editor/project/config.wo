@@ -190,14 +190,14 @@ namespace editor::Project
         }
 
         return je::file::readall(path)
-            ->bind(\d: string = d->todict;)
-            ->bind(\d: dict<dynamic, dynamic> = Serialize::restore_world(self, d););
+            =>> \d = d->todict;
+            =>> \d = Serialize::restore_world(self, d);;
     }
 
     public func CloseWorld(self: Project, world: je::world)
     {
         self->FindWorld(world)
-            ->map(\w: World = self.worlds->remove(self.worlds->find(w)););
+            ->> \w: World = self.worlds->remove(self.worlds->find(w));;
 
         world->close;
     }
@@ -206,7 +206,8 @@ namespace editor::Project
     {
         return
             self.worlds
-                ->map(\w: World = Serialize::save_project_world(w);): string;
+                ->> \w: World = Serialize::save_project_world(w);
+                : string;
     }
 
     public func CloseAllWorlds(self: Project)
@@ -219,7 +220,8 @@ namespace editor::Project
 
     public func RestoreAllWorlds(self: Project, worlds: string)
     {
-        worlds->toarray->val->map(\d: dynamic = Serialize::restore_world(self, d as dict););
+        worlds->toarray->val
+            ->> \d = Serialize::restore_world(self, d as dict);;
         if (!self.worlds->empty)
             self.worlds[0].instance->WorldList::SwitchEditingWorld;
     }
@@ -366,9 +368,7 @@ namespace editor::Project
                                 {
                                     let update_result = 
                                         CxxProject::update_engine_file(path)
-                                            ->bind(\r: map<string, bool> = 
-                                                CxxProject::generate_module_config(mod.name, path, r);
-                                            );
+                                            =>> \r = CxxProject::generate_module_config(mod.name, path, r);;
                                     if (update_result->isok)
                                         mod->update_compile(je::editor::platform());
                                     else
@@ -396,13 +396,13 @@ namespace editor::Project
             // 加载自定义的图形和编辑时系统
             proj.graphic_system = data
                 ->get("graphic_system": dynamic)
-                ->bind(\n: dynamic = typeinfo::load_from_name(n as string);)
+                ->bind(\n = typeinfo::load_from_name(n as string);)
                 ->or(\ = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val;)
                 ->reduce
                 ->val;
             proj.editor_system = data
                 ->get("editor_system": dynamic)
-                ->bind(\n: dynamic = typeinfo::load_from_name(n as string);)
+                ->bind(\n = typeinfo::load_from_name(n as string);)
                 ->or(\ = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val;)
                 ->reduce
                 ->val;
@@ -412,8 +412,7 @@ namespace editor::Project
             // je::input::set_window_size(window_size[0]: int, window_size[1]: int);
 
             runtime_worlds
-                ->map(\p: dynamic = p as string;)
-                ->map(\path: string = proj->LoadWorld(path););
+                ->map(\path = proj->LoadWorld(path as string););
 
             if (proj.worlds->empty)
             {
@@ -477,7 +476,7 @@ namespace editor::Project
 
             // OK，看上去该保存的都保存上了，调World的Save方法写入世界数据
             self.worlds
-                ->map(\w: World = w->Save(););
+                ->> \w = w->Save();;
 
             let (win_width, win_height) = je::input::window_size();
 

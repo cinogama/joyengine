@@ -47,10 +47,10 @@ namespace editor::Inspector::Component
 
         let _display_entity_changed = 
             _last_display_entity
-                ->bind(\e: je::entity = cur_entity->map(\ce: je::entity = e != ce;);)
+                =>> \e = cur_entity ->> \ce = e != ce;;
                 ->valor(true);
 
-        _last_display_entity = cur_entity; // 
+        _last_display_entity = cur_entity;
 
         BeginChildSize("component_editor", 0., max_height);
             match (cur_entity)

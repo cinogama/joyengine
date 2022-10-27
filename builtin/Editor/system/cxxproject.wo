@@ -38,7 +38,7 @@ public using CxxProject = struct {
     let CXX_PROJECT_EXAMPLE_PATH = F"{std::exepath()}builtin/cxxproject/";
 
     // 引擎的头文件路径
-    let ENGINE_HEADER_PATH = F"{std::exepath()}builtin/include/";
+    public let ENGINE_HEADER_PATH = F"{std::exepath()}builtin/include/";
 
     // 引擎的库目录
     let ENGINE_CORE_LIBRARYS_LOCATE_PATH = std::exepath();
@@ -214,7 +214,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
 
         let r = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
-            ->bind(\_: anything = update_engine_file(cxx_proj_path););
+            =>> \_ = update_engine_file(cxx_proj_path);;
         if (r->iserr)
         {
             delete(cxx_proj_path);

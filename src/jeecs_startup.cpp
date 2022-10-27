@@ -50,6 +50,11 @@ void je_finish()
     wo_finish();
 }
 
+const char* je_build_version()
+{
+    return "JoyEngine 4.0.dev " __TIMESTAMP__;
+}
+
 void* je_module_load(const char* name, const char* path)
 {
     if (void* lib = wo_load_lib(name, path, false))

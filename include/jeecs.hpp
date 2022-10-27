@@ -390,6 +390,8 @@ JE_API void je_mem_free(void* ptr);
 JE_API void je_init(int argc, char** argv);
 JE_API void je_finish(void);
 
+JE_API const char* je_build_version();
+
 JE_API void je_log_strat(void);
 JE_API void je_log_shutdown(void);
 

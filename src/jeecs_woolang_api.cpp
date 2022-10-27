@@ -7,6 +7,25 @@
 std::atomic_flag log_buffer_mx = {};
 std::list<std::pair<int, std::string>> log_buffer;
 
+WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm, je_build_version());
+}
+
+WO_API wo_api wojeapi_crc64_file(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_integer_t result = wo_crc64_file(wo_string(args + 0));
+    if (result)
+        return wo_ret_option_int(vm, result);
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_crc64_string(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_integer_t result = wo_crc64_str(wo_string(args + 0));
+    return wo_ret_int(vm, result);
+}
+
 WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc)
 {
     std::function<void(int, const char*)>* callbacks =
@@ -1251,6 +1270,15 @@ namespace je
 {
     namespace editor
     {
+        extern("libjoyecs", "wojeapi_build_version")
+        public func build_version()=> string;
+
+        extern("libjoyecs", "wojeapi_crc64_file")
+        public func crc64file(file_path: string)=> option<int>;
+
+        extern("libjoyecs", "wojeapi_crc64_string")
+        public func crc64str(file_path: string)=> int;
+
         public enum loglevel
         {
             NORMAL = 0,

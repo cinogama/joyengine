@@ -42,6 +42,25 @@ WO_API wo_api wojeapi_filesys_path_next(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, true);
 }
 
+WO_API wo_api wojeapi_filesys_recur_path(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* result = new fs::recursive_directory_iterator(wo_string(args + 0));
+    return wo_ret_gchandle(vm, result, nullptr, [](void* ptr)
+        {
+            delete(fs::recursive_directory_iterator*)ptr;
+        });
+}
+
+WO_API wo_api wojeapi_filesys_recur_path_next(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* result = (fs::recursive_directory_iterator*)wo_pointer(args + 0);
+    if (*result == fs::recursive_directory_iterator())
+        return wo_ret_bool(vm, false);
+
+    wo_set_string(args + 1, normalize_path_str((*((*result)++)).path()).c_str());
+    return wo_ret_bool(vm, true);
+}
+
 WO_API wo_api wojeapi_filesys_is_dir(wo_vm vm, wo_value args, size_t argc)
 {
     std::error_code ec;
@@ -178,7 +197,7 @@ namespace je::filesys
     using path = gchandle
     {
         extern("libjoyecs", "wojeapi_filesys_path")
-        public func create(_path: string)=> path;
+        func create(_path: string)=> path;
 
         func iter(self: path)
         {
@@ -198,6 +217,30 @@ namespace je::filesys
             return result;
         }
     }
+
+    using recur_path = gchandle
+    {
+        extern("libjoyecs", "wojeapi_filesys_recur_path")
+        func create(_path: string)=> recur_path;
+
+        func iter(self: recur_path)
+        {
+            return self;
+        }
+        
+        func next(self: recur_path, ref out_path: string)
+        {
+            extern("libjoyecs", "wojeapi_filesys_recur_path_next")
+            func _next(self: recur_path, ref out_path: string)=> bool;
+
+            let result = _next(self, ref out_path);
+
+            if (result)
+                out_path = out_path->replace("\\", "/");
+
+            return result;
+        }
+    }
     
     public func childs(_path: string)
     {
@@ -207,6 +250,21 @@ namespace je::filesys
         {
             let result = []mut: vec<string>;
             for (let child : path::create(_path))
+                result->add(child);
+
+            return ok(result->toarray);
+        }
+        return err(F"{_path} not a valid directory.");
+    }
+
+    public func allchilds(_path: string)
+    {
+        using result;
+
+        if (isdir(_path))
+        {
+            let result = []mut: vec<string>;
+            for (let child : recur_path::create(_path))
                 result->add(child);
 
             return ok(result->toarray);

@@ -291,6 +291,70 @@ public func frag(vf: v2f)
             EndPopup();
         }
     }
+
+    func crc_path(path)
+    {
+        // 给定一个路径，计算整个路径的全部crc
+        using je::filesys;
+        using je::editor;
+        let normalized_path =  path->normalize;
+        let pure_path = \p: string = p->beginwith(normalized_path) ? p->sub(normalized_path->len)| p;;
+
+        func debug(msg)
+        {
+            std::println(msg);
+            return msg;
+        }
+
+        return normalized_path
+            -> allchilds()
+            -> okay
+            =>> \childs = childs
+                ->>\child = normalize(child);
+                ->> \child = isfile(child)? pchild + crc64file(child)->val: string | pchild
+                    where pchild = pure_path(child);
+                ->  reduce(\l, r = l + r;)
+                ->> \str = crc64str(str);
+                ;
+            ->  val;
+    }
+
+    func try_update_recompile(mod)
+    {
+        // 检查一下引擎的提供的文件，确认是否需要重新编译
+        let engine_path_crc64 = crc_path(CxxProject::ENGINE_HEADER_PATH);
+        let specify_module_path_crc64 = crc_path(F"{mod.path}engine/include");
+
+        if (engine_path_crc64 == specify_module_path_crc64)
+        {
+            mod->update_compile(je::editor::platform());
+            return true;
+        }
+        else
+        {
+            generic::checkbox("模块头文件版本不一致", F"模块{mod.path}\n的引擎头文件在尝试重新编译时检测到了不一致。\n是否需要更新？",
+                func(choice)
+                {
+                    if (choice == generic::CheckResult::CANCEL)
+                        return;
+                    else if (choice == generic::CheckResult::YES)
+                    {
+                        let update_result = 
+                            CxxProject::update_engine_file(mod.path)
+                                =>> \r = CxxProject::generate_module_config(mod.name, mod.path, r);;
+                        if (!update_result->isok)
+                        {
+                            generic::msgbox("重新编译失败", F"{mod.path}更新引擎文件失败：\n{update_result->error->val}");
+                            return 0;
+                        }
+                    }
+                    else; // 点NO 啥也不干~
+                    mod->update_compile(je::editor::platform());
+                });
+            return false;
+        }
+    }
+
     func file_item_menu(path: PathInfo)
     {
         let NOT_MODIFIABLE_FILES = ["jeproj4", "jemodule4"];
@@ -320,7 +384,7 @@ public func frag(vf: v2f)
                     ->get(je::filesys::normalize(path.path)))
                 {
                 value(mod)?
-                    mod->update_compile(je::editor::platform());
+                    try_update_recompile(mod);
                 none?
                     generic::askbox("是否加载此模块？", 
                         F"正在要求重新编译模块{path.path}，但此模块尚未被加载\n是否现在加载并重新编译？",
@@ -330,7 +394,7 @@ public func frag(vf: v2f)
                             match (CxxProject::open_for_loading(path.path))
                             {
                             ok(mod)?
-                                mod->update_compile(je::editor::platform());
+                                try_update_recompile(mod);
                             err(reason)?
                                 generic::msgbox("加载模块失败", reason);
                             }
@@ -343,8 +407,8 @@ public func frag(vf: v2f)
                 let components = je::filesys::childs(F"{path.path}components")
                         ->okay
                         ->map(\s: array<string> = s
-                             ->forall(\f: string = je::filesys::externname(f) == "hpp";)
-                             ->map(\f: string = fname->subto(0, fname->len - 4)
+                             ->forall(\f = je::filesys::externname(f) == "hpp";)
+                             ->map(\f = fname->subto(0, fname->len - 4)
                                 where fname = je::filesys::filename(f);)
                             ;)
                         ->valor([])
@@ -352,8 +416,8 @@ public func frag(vf: v2f)
                 let systems = je::filesys::childs(F"{path.path}systems")
                     ->okay
                     ->map(\s: array<string> = s
-                         ->forall(\f: string = je::filesys::externname(f) == "hpp";)
-                         ->map(\f: string = fname->subto(0, fname->len - 4)
+                         ->forall(\f = je::filesys::externname(f) == "hpp";)
+                         ->map(\f = fname->subto(0, fname->len - 4)
                             where fname = je::filesys::filename(f);)
                         ;)
                     ->valor([])
