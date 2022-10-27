@@ -11,6 +11,8 @@ namespace editor
         path : option<string>,  // 项目文件的路径，默认项目没有这个值
         worlds : vec<Project::World>,
 
+        engine_version : string, // 引擎版本
+
         mut graphic_system : je::typeinfo,    // 默认使用的图形系统类型
         mut editor_system  : je::typeinfo,    // 默认使用的编辑器系统类型
 
@@ -267,6 +269,7 @@ namespace editor::Project
         return SetCurrentProject(Project{
             name = "Default project",
             path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
+            engine_version = je::editor::build_version(),
             // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
             graphic_system = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val,
@@ -281,6 +284,7 @@ namespace editor::Project
         let created_project = Project{
             name = name,
             path = option::value(je::filesys::normalize(path)),
+            engine_version = je::editor::build_version(),
             graphic_system = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
             editor_system = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,
@@ -335,62 +339,90 @@ namespace editor::Project
         {
         ok(proj)?
         {
+            let force_recompile_all = GameDebug::is_safe_mode();
+
             let failed_loading_module = 
-                data->getdefault("native_module": dynamic, []: dynamic) as array
-                    ->map(\d: dynamic = d as string;)
-                    ->map(\p: string = (p, CxxProject::load(p)->error);)
-                    ->forall(\r: (string, option<string>) = r[1]->has;)
-                    ->map(\r: (string, option<string>) = (r[0], r[1]->val););
+                data->  getor("native_module": dynamic, []: dynamic) as array
+                    =>> \p = force_recompile_all // 如果已经处于安全模式，就全部重新编译
+                        // 目的是防止加载失败又给个机会把安全模式解除，同时防止加载模块导致崩溃
+                        ? [(p as string, option::value("引擎版本更新，安全模式要求重新编译"))]                           
+                        | [(p as string, CxxProject::load(p as string)->error)];
+                    ->  forall(\r = r[1]->has;)
+                    ->> \r = (r[0], r[1]->val);
+                ;
 
             if (!failed_loading_module->empty)
             {
                 let failed_informations = 
                     failed_loading_module
-                        ->map(\r: (string, string) = r[0] + " " + r[1];)
+                        ->> \r = r[0] + ":\n  " + r[1];
                         ->reduce(\l: string, r:string = l+"\n"+r;)
                         ->val;
-                let option_msg = @"
+                let option_msg = 
+                    force_recompile_all
+                    ? @"
+选择'确定'开始重新编译
+选择'取消'立即退出引擎"@
+                    | @"
 选择'是'进入安全模式，尝试更新模块文件后重新编译
 选择'否'不做任何操作，立即退出编辑器
 选择'取消'放弃所有无法加载的数据，继续编辑操作"@;
 
-                GameDebug::start_safe_mode();
-
-                generic::checkbox(F"{failed_loading_module->len}个模块加载失败",
-                    F"{failed_informations}{option_msg}", 
-                    func (check: generic::CheckResult){
-                        if (check == generic::CheckResult::YES)
+                let failed_title = F"{failed_loading_module->len}个模块加载失败";
+                let failed_infor = F"{failed_informations}\n{option_msg}";
+               
+                let recompile_action = func()
+                {
+                    for (let (path, _) : failed_loading_module)
+                        match (CxxProject::open_for_loading(path))
                         {
-                            for (let (path, _) : failed_loading_module)
-                                match (CxxProject::open_for_loading(path))
-                                {
-                                ok(mod)?
-                                {
-                                    let update_result = 
-                                        CxxProject::update_engine_file(path)
-                                            =>> \r = CxxProject::generate_module_config(mod.name, path, r);;
-                                    if (update_result->isok)
-                                        mod->update_compile(je::editor::platform());
-                                    else
-                                        generic::msgbox("重新编译失败", F"{path}更新引擎文件失败：\n{update_result->error->val}");
-                                }
-                                err(reason)?
-                                    generic::msgbox("重新编译失败", F"{path}无法加载：\n{reason}");
-                                }
+                        ok(mod)?
+                        {
+                            let update_result = 
+                                CxxProject::update_engine_file(path)
+                                    =>> \r = CxxProject::generate_module_config(mod.name, path, r);;
+                            if (update_result->isok)
+                                mod->update_compile(je::editor::platform());
+                            else
+                                generic::msgbox("重新编译失败", F"{path}更新引擎文件失败：\n{update_result->error->val}");
                         }
+                        err(reason)?
+                            generic::msgbox("重新编译失败", F"{path}无法加载：\n{reason}");
+                        }
+                };
+
+                if (force_recompile_all)
+                {
+                    generic::askbox(failed_title, failed_infor,
+                        func (choice)
+                        {
+                            if (choice)
+                                recompile_action();
+                            else
+                                je::exit();
+                        });
+                }
+                else
+                {
+                    GameDebug::start_safe_mode();
+                    generic::checkbox(failed_title, failed_infor,
+                    func (check){
+                        if (check == generic::CheckResult::YES)
+                            recompile_action();
                         else if (check == generic::CheckResult::NO)
                             je::exit();
                         else
                             GameDebug::stop_safe_mode();
                     });
+                }
             }
             
             let runtime_worlds = data["worlds": dynamic] as array<dynamic>;
 
-            let window_info = data->getdefault("window": dynamic, {}: dynamic) as dict<dynamic, dynamic>;
-            let window_size = window_info->getdefault("size": dynamic, [640, 480]: dynamic) as array<dynamic>;
+            let window_info = data->getor("window": dynamic, {}: dynamic) as dict<dynamic, dynamic>;
+            let window_size = window_info->getor("size": dynamic, [640, 480]: dynamic) as array<dynamic>;
 
-            proj.about_info = data->getdefault("about_info": dynamic, "": dynamic) as string;
+            proj.about_info = data->getor("about_info": dynamic, "": dynamic) as string;
 
 
             // 加载自定义的图形和编辑时系统
@@ -427,10 +459,10 @@ namespace editor::Project
             rendworld->add_system(proj.graphic_system);
             rendworld->add_system(proj.editor_system);
 
-            EditFormsConfig::shown_world_list = window_info->getdefault("shown_world_list": dynamic, false: dynamic) as int: bool;
-            EditFormsConfig::shown_entity_list = window_info->getdefault("shown_entity_list": dynamic, false: dynamic) as int: bool;
-            EditFormsConfig::shown_inspector_list = window_info->getdefault("shown_inspector_list": dynamic, false: dynamic) as int: bool;
-            EditFormsConfig::shown_browser_list = window_info->getdefault("shown_browser_list": dynamic, false: dynamic) as int: bool;
+            EditFormsConfig::shown_world_list = window_info->getor("shown_world_list": dynamic, false: dynamic) as int: bool;
+            EditFormsConfig::shown_entity_list = window_info->getor("shown_entity_list": dynamic, false: dynamic) as int: bool;
+            EditFormsConfig::shown_inspector_list = window_info->getor("shown_inspector_list": dynamic, false: dynamic) as int: bool;
+            EditFormsConfig::shown_browser_list = window_info->getor("shown_browser_list": dynamic, false: dynamic) as int: bool;
 
             return ok(proj);
         }
@@ -495,6 +527,7 @@ namespace editor::Project
                 ["worlds"] = worlds: dynamic,
 
                 // 可选的项目信息
+                ["engine_version"] = self.engine_version: dynamic,
                 ["window"] = window_info: dynamic,
                 ["graphic_system"] = self.graphic_system->name: dynamic,
                 ["editor_system"] = self.editor_system->name: dynamic,

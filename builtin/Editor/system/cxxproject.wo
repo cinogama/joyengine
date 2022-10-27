@@ -140,7 +140,7 @@ public using CxxProject = struct {
         writeall(F"{cxx_proj_path}config.inf", {
             ["name"] = name: dynamic,
             ["path"] = normalize(cxx_proj_path): dynamic,
-            ["conf"] = enabled_generating: dynamic
+            ["conf"] = enabled_generating: dynamic,
         }: string);
         
         for (let config : generating_results->map(
@@ -358,7 +358,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             return result::err(F"找不到配置文件{normalize(path)}config.inf，请检查文件是否丢失");
 
         let readdat = readall(F"{normalize(path)}config.inf")
-            ->bind(\d: string = d->todict;);
+            =>> \d = d->todict;;
         if (!readdat->has)
             return result::err(F"模块{path}的配置文件无法读取或格式不正确");
 

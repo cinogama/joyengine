@@ -105,11 +105,11 @@ namespace editor::Project
     func _AskCreateOrLoadProject<FT, ArgTs>(form: FT, args: ArgTs)
     {
         // 反正这个窗口就创建一次，所以就搞个静态变量保存状态，也不用还原了
-        static let mut state = CreateOrLoadProjectState::OpenOrCreate;
-        
-        let mut close_form = false;
+        static let 
+            mut state = CreateOrLoadProjectState::OpenOrCreate,
+            mut close_form = false;
 
-        func open_proj_path(create_proj_in: string)=> bool
+        func open_proj_path(create_proj_in: string)
         {
             let projname = je::filesys::filename(create_proj_in);
             let proj_data = 
@@ -120,24 +120,44 @@ namespace editor::Project
             {
             value(data)?
             {
-                match(LoadProject(data))
+                let load_proj = func()
                 {
-                ok(proj)?
-                {
-                    // 更新一下项目历史
-                    update_project_history(proj.path->val);
+                    match(LoadProject(data))
+                    {
+                    ok(proj)?
+                    {
+                        // 更新一下项目历史
+                        update_project_history(proj.path->val);
                                     
-                    // 关闭窗口
-                    return true;
-                }
-                err(msg)?
-                    launch(MsgBox, ("创建项目失败", msg));
-                }
+                        // 关闭窗口
+                        close_form = true;
+                    }
+                    err(msg)?
+                        launch(MsgBox, ("打开项目失败", msg));
+                    }
+                };
+
+                if (data->get("engine_version": dynamic)
+                    ->> \ver = ver as string == je::editor::build_version();
+                    ->  valor(false) == false)
+                    generic::checkbox("提示", "正在加载的项目上次被不同版本的JoyEngine编辑过\n是否进入安全模式？",
+                        func(choice)
+                        {
+                            if (choice == generic::CheckResult::CANCEL)
+                                return;
+                            else if (choice == generic::CheckResult::YES)
+                                // 启动安全模式
+                                GameDebug::start_safe_mode();
+
+                            load_proj();
+                        });
+                else
+                    load_proj();
+                    
             }
             none?
                 launch(MsgBox, ("打开项目失败", F"无法读取项目文件：'{create_proj_in}/{projname}.jeproj4'"));
             }
-            return false;
         }
 
         BeginAttr("加载或新建项目", 
@@ -160,7 +180,7 @@ namespace editor::Project
                 for (let history_path : histories)
                 {
                     if (ButtonSize(F"打开 {history_path}", cur_width_in_history_box, 0.))
-                        close_form = open_proj_path(history_path);;
+                        open_proj_path(history_path);;
                 }
                 EndChild();
 
@@ -184,7 +204,7 @@ namespace editor::Project
                     none?
                         launch(MsgBox, ("打开项目失败", "请选择项目文件所在的目录"));
                     value(create_proj_in)?
-                        close_form = open_proj_path(create_proj_in);
+                        open_proj_path(create_proj_in);
                     }// end of match select_path_to_create
                 }
                 if (ButtonSize("取消", cur_width, 0.))

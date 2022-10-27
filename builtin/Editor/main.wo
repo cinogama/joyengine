@@ -159,7 +159,7 @@ namespace GameDebug
 
     let mut safe_mode = false;
 
-    func is_safe_mode()
+    public func is_safe_mode()
     {
         return safe_mode;
     }
