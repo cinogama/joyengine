@@ -77,7 +77,7 @@ namespace jeecs
             jeecs::math::ivec2 advise_lock_mouse_pos = {};
         };
 
-        inline static input_msg _inputs;
+        inline static input_msg _inputs = {};
 
         DefaultEditorSystem(game_world w)
             : game_system(w)
