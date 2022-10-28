@@ -22,6 +22,7 @@ namespace editor::WorldList
 
         je::world::rend()
             ->> \old = GRAPHIC_PIPELINE_SYSTEMS
+                ->  forall(\gst = old->editor::get_system(gst)->has;)
                 ->> \gst = old->editor::remove_system(gst);
                 ;
             ;

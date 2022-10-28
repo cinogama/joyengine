@@ -9,12 +9,16 @@ using je::gui;
 
 namespace editor::Browser
 {
+    public let mut editor_need_hiding_file = true;
+
     union FileType
     {
         path(je::graphic::texture),
         image(je::graphic::texture),
         shader(je::graphic::texture),
         others(je::graphic::texture),
+        cache(je::graphic::texture),
+        world(je::graphic::texture),
     }
     namespace FileType
     {
@@ -26,6 +30,8 @@ namespace editor::Browser
                 image(t)? return t;
                 shader(t)? return t;
                 others(t)? return t;
+                cache(t)? return t;
+                world(t)? return t;
             }
         }
     }
@@ -37,7 +43,9 @@ namespace editor::Browser
         ["bmp"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
         ["psd"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
         ["shader"] = FileType::shader(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")),
-        ["jemodule4"] = FileType::shader(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/CppProgram.png")),
+        ["jemodule4"] = FileType::path(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/CppProgram.png")),
+        ["jecache4"] = FileType::cache(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/JoyEngineCSP-Dev.png")),
+        ["jeworld"] = FileType::world(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/World.png")),
     };
 
     // 根据文件拓展名返回文件的类型
@@ -79,6 +87,14 @@ namespace editor::Browser
         type        : mutable<PathType>, // 类型，如果是目录，则还包含目录内的子项    
     }
     {
+        func should_hide(self: PathInfo)
+        {
+            static let HIDING_FILE_TYPE = ["jecache4"];
+            
+            if (editor_need_hiding_file)
+                return HIDING_FILE_TYPE->find(self.externname) != -1;
+            return false;
+        }
         func indir(self : PathInfo, functor: (option<array<PathInfo>>)=>void)
         {
             match (self.type->get)
@@ -732,16 +748,18 @@ namespace $$MODULE_NAME$$
         BeginChild("files_list");
             context_menu(option::none);
             now_item_in_path
-                ->map(\subpath: PathInfo = 
-                    action == Action::Click ? 0
+                -> forall(\item = !item->should_hide;)
+                ->> \item = 
+                    action == Action::Click 
+                    ? 0
                     | action == Action::DoubleClick ? 
-                        subpath
-                            ->indir(\_:void = set_current_work_path(subpath.path);)
-                            ->infile(\= OpenFile::open(subpath);)   
+                        item
+                            ->indir(\_:void = set_current_work_path(item.path);)
+                            ->infile(\= OpenFile::open(item);)   
                     /* | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单") */
                     | func(){}() // get void
-                    where action = FileIcon(subpath);
-                ); 
+                    where action = FileIcon(item);
+                ; 
         EndChild();
 
         // 允许各种乱七八糟的东西拖到这里

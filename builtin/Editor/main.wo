@@ -443,6 +443,11 @@ func Editor_MainMenuBar()
             {
                 EntityList::set_enable_show_invisable_entity(show_hiding_editor_entity);
             }
+            if (MenuItemSelectedEnabled("资源管理器隐藏内置资源",
+                ref editor::Browser::editor_need_hiding_file, true))
+            {
+
+            }
             EndMenu();
         }
         let (normal, info, warning, error, fatal) = logmgr::get_log_count();

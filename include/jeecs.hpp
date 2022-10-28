@@ -561,6 +561,11 @@ JE_API size_t      jeecs_file_read(
     size_t count,
     jeecs_file* file);
 
+JE_API jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version);
+JE_API void* jeecs_create_cache_file(const char* filepath, uint32_t format_version);
+JE_API size_t jeecs_write_cache_file(const void* write_buffer, size_t elem_size, size_t count, void* file);
+JE_API void jeecs_close_cache_file(void* file);
+
 /////////////////////////// GRAPHIC //////////////////////////////
 // Here to store low-level-graphic-api.
 
@@ -4273,7 +4278,6 @@ namespace jeecs
             const float ZRANGE = znear - zfar;
             const float TAN_HALF_FOV = tanf(angle / math::quat::RAD2DEG / 2.0f);
 
-
             auto m = out_proj_mat;
             m[0][0] = 1.0f / (TAN_HALF_FOV * WIDTH_HEIGHT_RATIO);
             m[0][1] = 0;
@@ -4793,6 +4797,17 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
 
+        struct Layer
+        {
+            // NOTE:
+            // In graphic system, the layer larger, the entity will rend more priority.
+            uint32_t layer = 0;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Layer::layer, "layer");
+            }
+        };
     }
     namespace Renderer
     {
@@ -5243,6 +5258,7 @@ namespace jeecs
             type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
             type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
             type_info::of<Transform::Translation>("Transform::Translation");
+            type_info::of<Transform::Layer>("Transform::Layer");
 
             type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
             type_info::of<Renderer::Shape>("Renderer::Shape");

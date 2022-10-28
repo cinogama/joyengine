@@ -563,7 +563,6 @@ namespace editor::Project
                 static let USABLE_GRAPHIC_SYSTEMS = 
                     je::typeinfo::editor::get_all_systems_types()
                         -> forall(\st = st->name->beginwith("Graphic::"););
-
                 static let USABLE_GRAPHIC_SYSTEM_NAMES =
                     USABLE_GRAPHIC_SYSTEMS
                         ->> \t = t->name;
@@ -571,9 +570,31 @@ namespace editor::Project
 
                 let mut index = USABLE_GRAPHIC_SYSTEMS->find(self.graphic_system);
                 if (Combo("图形管线", USABLE_GRAPHIC_SYSTEM_NAMES, ref index))
+                {
                     self.graphic_system = USABLE_GRAPHIC_SYSTEMS[index];
-                TextDisabled("* 更新渲染世界后，图形管线变更才能生效");
 
+                    // 更新一下
+                    je::world::rend()
+                        ->> \w = WorldList::SwitchEditingWorld(w);;
+                }
+
+                static let USABLE_EDITOR_SYSTEMS = 
+                    je::typeinfo::editor::get_all_systems_types()
+                        -> forall(\st = st->name->beginwith("Editor::"););
+                static let USABLE_EDITOR_SYSTEM_NAMES =
+                    USABLE_EDITOR_SYSTEMS
+                        ->> \t = t->name;
+                        ;
+
+                index = USABLE_EDITOR_SYSTEMS->find(self.editor_system);
+                if (Combo("编辑系统", USABLE_EDITOR_SYSTEM_NAMES, ref index))
+                {
+                    self.editor_system = USABLE_EDITOR_SYSTEMS[index];
+
+                    // 更新一下
+                    je::world::rend()
+                        ->> \w = WorldList::SwitchEditingWorld(w);;
+                }
 
             End();
 

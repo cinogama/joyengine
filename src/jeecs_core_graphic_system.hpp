@@ -178,6 +178,7 @@ public let frag =
     struct DefaultGraphicPipelineSystem : public EmptyGraphicPipelineSystem
     {
         using Translation = Transform::Translation;
+        using Layer = Transform::Layer;
 
         using Rendqueue = Renderer::Rendqueue;
 
@@ -210,15 +211,23 @@ public let frag =
         {
             const Rendqueue* rendqueue;
             const Translation* translation;
+            const Layer* layer;
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
 
             bool operator < (const renderer_arch& another) const noexcept
             {
-                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue > b_queue;
+                int a_layer = layer ? layer->layer : 0;
+                int b_layer = another.layer ? another.layer->layer : 0;
+
+                if (a_layer == b_layer)
+                {
+                    int a_queue = rendqueue ? rendqueue->rend_queue : 0;
+                    int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
+                    return a_queue > b_queue;
+                }
+                return a_layer < b_layer;
             }
         };
 
@@ -312,13 +321,13 @@ public let frag =
                         );
                     })
                 .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    [this](Translation& trans, Layer* layer, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
                     {
                         // TODO: Need Impl AnyOf
                             // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs
+                                rendqueue, &trans, layer, shape, shads, texs
                             });
                     }).anyof<Shaders, Textures, Shape>();
         }
@@ -460,23 +469,6 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             jegl_rend_to_framebuffer(nullptr, 0, 0, WINDOWS_WIDTH, WINDOWS_HEIGHT);
         }
 
-    };
-
-    struct Light2DGraphicPipelineSystem : DefaultGraphicPipelineSystem
-    {
-        Light2DGraphicPipelineSystem(game_world w)
-            : DefaultGraphicPipelineSystem(w)
-        {
-
-        }
-        void LateUpdate()
-        {
-            UpdateFrame(this);
-        }
-        void Frame(jegl_thread* glthread)
-        {
-            jeecs::debug::logfatal("Test");
-        }
     };
 }
 
