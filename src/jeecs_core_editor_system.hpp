@@ -75,6 +75,10 @@ namespace jeecs
 
             jeecs::math::vec2 uniform_mouse_pos = {};
             jeecs::math::ivec2 advise_lock_mouse_pos = {};
+
+            // Why write an empty constructor function here?
+            // It's a bug of clang/gcc, fuck!
+            input_msg()noexcept {}
         };
 
         inline static input_msg _inputs = {};
