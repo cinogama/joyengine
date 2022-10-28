@@ -548,4 +548,37 @@ namespace editor::Project
             return result::err("当前项目是编辑器创建的默认项目，无法保存");
         }
     }
+
+    public func config_form(self: Project)
+    {
+        using je;
+        using je::gui;
+
+        launch(func(){
+            
+            let mut open = false;
+            BeginAttrOpen("项目设置", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+                Text("项目名称" + self.name);
+
+                static let USABLE_GRAPHIC_SYSTEMS = 
+                    je::typeinfo::editor::get_all_systems_types()
+                        -> forall(\st = st->name->beginwith("Graphic::"););
+
+                static let USABLE_GRAPHIC_SYSTEM_NAMES =
+                    USABLE_GRAPHIC_SYSTEMS
+                        ->> \t = t->name;
+                        ;
+
+                let mut index = USABLE_GRAPHIC_SYSTEMS->find(self.graphic_system);
+                if (Combo("图形管线", USABLE_GRAPHIC_SYSTEM_NAMES, ref index))
+                    self.graphic_system = USABLE_GRAPHIC_SYSTEMS[index];
+                TextDisabled("* 更新渲染世界后，图形管线变更才能生效");
+
+
+            End();
+
+            return open ? FormAction::Nothing | FormAction::Close;
+        
+        }, ());
+    }
 }

@@ -278,6 +278,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_input_text_multiline")
     public func InputTextMultilineSize(label:string, ref buffer: string, width:real, height:real)=> bool;
 
+    extern("libjoyecs", "je_gui_combo")
+    public func Combo(label:string, items: array<string>, ref select_item: int)=> bool;
+
     extern("libjoyecs", "je_gui_end_menu")
     public func EndMenu()=> void;
 
@@ -977,6 +980,20 @@ WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)
 
     if (updated)
         wo_set_string(args + 1, buf.c_str());
+
+    return wo_ret_bool(vm, updated);
+}
+
+WO_API wo_api je_gui_combo(wo_vm vm, wo_value args, size_t argc)
+{
+    std::vector<const char*> combo_items;
+    for (wo_integer_t i = 0; i < wo_lengthof(args + 1); ++i)
+    {
+        combo_items.push_back(wo_string(wo_arr_get(args + 1, i)));
+    }
+    int current_item = (int)wo_int(args + 2);
+    auto updated = ImGui::Combo(wo_string(args + 0), &current_item, combo_items.data(), (int)combo_items.size());
+    wo_set_int(args + 2, current_item);
 
     return wo_ret_bool(vm, updated);
 }

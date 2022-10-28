@@ -12,6 +12,11 @@ WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, je_build_version());
 }
 
+WO_API wo_api wojeapi_get_rendering_world(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_option_ptr(vm, jedbg_get_rendering_world(wo_pointer(args + 0)));
+}
+
 WO_API wo_api wojeapi_crc64_file(wo_vm vm, wo_value args, size_t argc)
 {
     wo_integer_t result = wo_crc64_file(wo_string(args + 0));
@@ -36,7 +41,7 @@ WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc
             });
 
     return wo_ret_handle(vm,
-        je_log_register_callback(+[](int level, const char* msg, void* func)
+        je_log_register_callback([](int level, const char* msg, void* func)
             {
                 (*(std::function<void(int, const char*)>*)func)(level, msg);
             }, callbacks));
@@ -1663,32 +1668,14 @@ namespace je
 
         extern("libjoyecs", "wojeapi_add_system_to_world")
         public func add_system(self: world, systype: typeinfo)=> bool;
-
-        public func set_rend(self: world)
-        {
-            static let const graphic_typeinfo = typeinfo::load_from_name("Graphic::DefaultGraphicPipelineSystem")->val();
-
-            // Remove GraphicPipelineSystem immediately.
-            universe::current()->editor::worlds_list()
-                ->forall(\w:world = w->editor::get_system(graphic_typeinfo)->has();)
-                ->map(\w:world = w->editor::remove_system(graphic_typeinfo););
-
-            self->add_system(graphic_typeinfo);
-
-            return self;
-        }
 )"
 R"(
         public func rend()=> option<world>
         {
-            static let const graphic_typeinfo = typeinfo::load_from_name("Graphic::DefaultGraphicPipelineSystem")->val();
+            extern("libjoyecs", "wojeapi_get_rendering_world")
+            func _get_rendering_world(u: universe)=> option<world>;
 
-            let rending_world = universe::current()->editor::worlds_list()
-                                    ->forall(\w:world = w->editor::get_system(graphic_typeinfo)->has(););
-            if (!rending_world->empty())
-                return option::value(rending_world[0]);
-
-            return option::none;
+            return _get_rendering_world(universe::current());
         }
 
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")

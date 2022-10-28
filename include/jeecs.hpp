@@ -1035,6 +1035,7 @@ JE_API const jeecs::game_entity* jedbg_get_editing_entity();
 
 // NOTE: Get graphic thread
 JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
+JE_API void*        jedbg_get_rendering_world(void* universe); 
 #endif
 
 WO_FORCE_CAPI_END

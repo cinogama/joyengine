@@ -152,6 +152,10 @@ public let frag =
         {
 
         }
+        ~EmptyGraphicPipelineSystem()
+        {
+            _m_pipeline->DeActive(get_world());
+        }
 
         inline GraphicThreadHost* host()const noexcept
         {
@@ -232,7 +236,7 @@ public let frag =
 
         ~DefaultGraphicPipelineSystem()
         {
-            _m_pipeline->DeActive(get_world());
+
         }
 
         void PrepareCameras(Projection& projection,
@@ -457,9 +461,32 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         }
 
     };
+
+    struct Light2DGraphicPipelineSystem : DefaultGraphicPipelineSystem
+    {
+        Light2DGraphicPipelineSystem(game_world w)
+            : DefaultGraphicPipelineSystem(w)
+        {
+
+        }
+        void LateUpdate()
+        {
+            UpdateFrame(this);
+        }
+        void Frame(jegl_thread* glthread)
+        {
+            jeecs::debug::logfatal("Test");
+        }
+    };
 }
 
 jegl_thread* jedbg_get_editing_graphic_thread(void* universe)
 {
     return jeecs::GraphicThreadHost::get_default_graphic_pipeline_instance(universe)->glthread;
+}
+
+void* jedbg_get_rendering_world(void* universe)
+{
+    auto* host = jeecs::GraphicThreadHost::get_default_graphic_pipeline_instance(universe);
+    return host->_m_rending_world;
 }

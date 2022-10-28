@@ -14,9 +14,19 @@ namespace editor::WorldList
 {
     public func SwitchEditingWorld(aim_world: je::world)
     {
-        je::world::rend()->map(\old: je::world = old->editor::remove_system(Project::GetCurrentProject().editor_system););
+        static let GRAPHIC_PIPELINE_SYSTEMS = je::typeinfo::editor::get_all_systems_types()
+            -> forall(\t = t->name->beginwith("Graphic::"););
 
-        aim_world->set_rend;
+        je::world::rend()
+            ->> \old = old->editor::remove_system(Project::GetCurrentProject().editor_system);;
+
+        je::world::rend()
+            ->> \old = GRAPHIC_PIPELINE_SYSTEMS
+                ->> \gst = old->editor::remove_system(gst);
+                ;
+            ;
+
+        aim_world->add_system(Project::GetCurrentProject().graphic_system);
         aim_world->add_system(Project::GetCurrentProject().editor_system);
     }
 
