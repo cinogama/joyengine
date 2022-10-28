@@ -29,6 +29,7 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
 
     jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
+    jeecs::typing::type_info::of<jeecs::Light2DGraphicPipelineSystem>("Graphic::Light2DGraphicPipelineSystem");
 
     jeecs::typing::type_info::of<jeecs::Editor::Name>("Editor::Name");
     jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");

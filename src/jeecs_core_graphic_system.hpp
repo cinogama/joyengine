@@ -470,6 +470,25 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         }
 
     };
+
+    struct Light2DGraphicPipelineSystem : DefaultGraphicPipelineSystem
+    {
+        Light2DGraphicPipelineSystem(game_world w)
+            :DefaultGraphicPipelineSystem(w)
+        {
+
+        }
+
+        void LateUpdate()
+        {
+            UpdateFrame(this);
+        }
+
+        void Frame(jegl_thread* glthread)
+        {
+            debug::log("TODO;");
+        }
+    };
 }
 
 jegl_thread* jedbg_get_editing_graphic_thread(void* universe)
