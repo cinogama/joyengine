@@ -56,7 +56,7 @@ namespace jeecs
 
         const Camera::Projection* _camera_porjection;
 
-        inline static struct input_msg
+        struct input_msg
         {
             bool w = false;
             bool s = false;
@@ -75,7 +75,9 @@ namespace jeecs
 
             jeecs::math::vec2 uniform_mouse_pos = {};
             jeecs::math::ivec2 advise_lock_mouse_pos = {};
-        }_inputs;
+        };
+
+        inline static input_msg _inputs;
 
         DefaultEditorSystem(game_world w)
             : game_system(w)
