@@ -320,6 +320,10 @@ void jegl_close_resource(jegl_resource* resource)
                 }
                 delete resource->m_raw_framebuf_data;
                 break;
+            case jegl_resource::UNIFORMBUF:
+                je_mem_free(resource->m_raw_uniformbuf_data->m_buffer);
+                delete resource->m_raw_uniformbuf_data;
+                break;
             default:
                 jeecs::debug::logerr("Unknown resource type to close.");
                 return;
@@ -809,7 +813,7 @@ jegl_resource* jegl_create_framebuf(size_t width, size_t height, const jegl_text
 {
     jegl_resource* framebuf = _create_resource();
     framebuf->m_type = jegl_resource::FRAMEBUF;
-    framebuf->m_raw_framebuf_data = new jegl_framebuf();
+    framebuf->m_raw_framebuf_data = new jegl_frame_buffer();
     framebuf->m_path = nullptr;
 
     framebuf->m_raw_framebuf_data->m_attachment_count = attachment_count;
@@ -826,9 +830,54 @@ jegl_resource* jegl_create_framebuf(size_t width, size_t height, const jegl_text
                 jegl_texture::texture_format(attachment_formats[i] | jegl_texture::texture_format::FRAMEBUF));
     }
 
-    framebuf->m_raw_framebuf_data->m_output_attachments = (jegl_framebuf::attachment_t*)attachments;
+    framebuf->m_raw_framebuf_data->m_output_attachments = (jegl_frame_buffer::attachment_t*)attachments;
 
     return framebuf;
+}
+
+jegl_resource* jegl_create_uniformbuf(
+    size_t binding_place,
+    size_t length)
+{
+    jegl_resource* uniformbuf = _create_resource();
+    uniformbuf->m_type = jegl_resource::UNIFORMBUF;
+    uniformbuf->m_raw_uniformbuf_data = new jegl_uniform_buffer();
+    uniformbuf->m_path = nullptr;
+
+    uniformbuf->m_raw_uniformbuf_data->m_buffer = (uint8_t*)je_mem_alloc(length);
+    uniformbuf->m_raw_uniformbuf_data->m_buffer_size = length;
+    uniformbuf->m_raw_uniformbuf_data->m_buffer_binding_place = binding_place;
+
+    uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = 0;
+    uniformbuf->m_raw_uniformbuf_data->m_update_length = 0;
+
+    return uniformbuf;
+}
+
+void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t update_offset, size_t update_length)
+{
+    assert(uniformbuf->m_type == jegl_resource::UNIFORMBUF && update_length != 0);
+
+    if (update_length != 0)
+    {
+        memcpy(uniformbuf->m_raw_uniformbuf_data->m_buffer + update_offset, buf, update_length);
+        if (uniformbuf->m_raw_uniformbuf_data->m_update_length != 0)
+        {
+            size_t new_begin = std::min(uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset, update_offset);
+            size_t new_end = std::max(
+                uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset
+                + uniformbuf->m_raw_uniformbuf_data->m_update_length,
+                update_offset + update_length);
+
+            uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = new_begin;
+            uniformbuf->m_raw_uniformbuf_data->m_update_length = new_end - new_begin;
+        }
+        else
+        {
+            uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = update_offset;
+            uniformbuf->m_raw_uniformbuf_data->m_update_length = update_length;
+        }
+    }
 }
 
 jegl_thread* jegl_current_thread()
@@ -862,11 +911,6 @@ void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, si
 void jegl_using_texture(jegl_resource* texture, size_t pass)
 {
     _current_graphic_thread->m_apis->bind_texture(texture, pass);
-}
-
-void jegl_update_shared_uniform(size_t offset, size_t datalen, const void* data)
-{
-    _current_graphic_thread->m_apis->update_shared_uniform(_current_graphic_thread, offset, datalen, data);
 }
 
 int jegl_uniform_location(jegl_resource* shader, const char* name)

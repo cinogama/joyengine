@@ -237,10 +237,16 @@ public let frag =
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
 
+        jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_default_uniform_buffer;
+        struct default_uniform_buffer_data_t
+        {
+            jeecs::math::vec4 time;
+        };
+
         DefaultGraphicPipelineSystem(game_world w)
             : EmptyGraphicPipelineSystem(w)
         {
-
+            m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
 
         ~DefaultGraphicPipelineSystem()
@@ -329,7 +335,18 @@ public let frag =
                             renderer_arch{
                                 rendqueue, &trans, layer, shape, shads, texs
                             });
-                    }).anyof<Shaders, Textures, Shape>();
+                    }).anyof<Shaders, Textures, Shape>()
+                .exec(
+                    [](Translation& trans, 
+                        Light2D::Color& color, 
+                        Light2D::LayerEffect* effect_layer,
+                        Light2D::Point* point,
+                        Light2D::Parallel* parallel, 
+                        Light2D::Shadow* shadow)
+                    {
+
+                    }).anyof<Light2D::Point, Light2D::Parallel>()
+                                ;
         }
         void LateUpdate()
         {
@@ -361,7 +378,12 @@ public let frag =
                 (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5))
             };
 
-            jegl_update_shared_uniform(0, sizeof(math::vec4), &shader_time);
+            m_default_uniform_buffer->update_buffer(
+                offsetof(default_uniform_buffer_data_t, time), 
+                sizeof(math::vec4),
+                &shader_time);
+
+            jegl_using_resource(m_default_uniform_buffer->resouce());
 
             for (; !m_camera_list.empty(); m_camera_list.pop())
             {
@@ -469,25 +491,6 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             jegl_rend_to_framebuffer(nullptr, 0, 0, WINDOWS_WIDTH, WINDOWS_HEIGHT);
         }
 
-    };
-
-    struct Light2DGraphicPipelineSystem : DefaultGraphicPipelineSystem
-    {
-        Light2DGraphicPipelineSystem(game_world w)
-            :DefaultGraphicPipelineSystem(w)
-        {
-
-        }
-
-        void LateUpdate()
-        {
-            UpdateFrame(this);
-        }
-
-        void Frame(jegl_thread* glthread)
-        {
-            debug::log("TODO;");
-        }
     };
 }
 

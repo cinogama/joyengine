@@ -123,17 +123,6 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glDisable(GL_ALPHA_TEST);
     glAlphaFunc(GL_GREATER, 0.0f);
 
-    GLuint ubo;
-    glGenBuffers(1, &ubo);
-    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-    glBufferData(GL_UNIFORM_BUFFER,
-        sizeof(jeecs::math::vec4),
-        NULL, GL_DYNAMIC_COPY); // 预分配空间
-
-    glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0,
-        sizeof(jeecs::math::vec4)
-    );
-
     jegui_init(WINDOWS_HANDLE, reboot);
 
     return nullptr;
@@ -186,12 +175,6 @@ void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t, bool r
     jegui_shutdown(reboot);
     glfwDestroyWindow(WINDOWS_HANDLE);
 
-}
-
-
-void gl_update_shared_uniform(jegl_thread*, size_t offset, size_t datalen, const void* data)
-{
-    glBufferSubData(GL_UNIFORM_BUFFER, offset, datalen, data);
 }
 
 int gl_get_uniform_location(jegl_resource* shader, const char* name)
@@ -505,6 +488,20 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 
         resource->m_uint1 = fbo;
     }
+    else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
+    {
+        GLuint uniform_buffer_object;
+        glGenBuffers(1, &uniform_buffer_object);
+        glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer_object);
+        glBufferData(GL_UNIFORM_BUFFER,
+            resource->m_raw_uniformbuf_data->m_buffer_size,
+            NULL, GL_DYNAMIC_COPY); // 预分配空间
+
+        glBindBufferRange(GL_UNIFORM_BUFFER, resource->m_raw_uniformbuf_data->m_buffer_binding_place,
+            uniform_buffer_object, 0, resource->m_raw_uniformbuf_data->m_buffer_size);
+
+        resource->m_uint1 = uniform_buffer_object;
+    }
     else
         jeecs::debug::logerr("Unknown resource type when initing resource(%p), please check.", resource);
 }
@@ -666,6 +663,7 @@ inline void _gl_update_shader_state(jegl_shader* shader)
 
 inline void _gl_using_shader_program(jegl_resource* resource)
 {
+    // TODO; Move update shader uniforms here.
     assert(resource->m_raw_shader_data);
     _gl_update_shader_state(resource->m_raw_shader_data);
     glUseProgram(resource->m_uint1);
@@ -694,6 +692,24 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
         glBindVertexArray(resource->m_uint1);
     else if (resource->m_type == jegl_resource::type::FRAMEBUF)
         glBindFramebuffer(GL_FRAMEBUFFER, resource->m_uint1);
+    else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
+    {
+        glBindBuffer(GL_UNIFORM_BUFFER, resource->m_uint1);
+
+        auto* uniform_buffer = resource->m_raw_uniformbuf_data;
+        if (uniform_buffer->m_update_length != 0)
+        {
+            glBufferSubData(GL_UNIFORM_BUFFER,
+                resource->m_raw_uniformbuf_data->m_update_begin_offset,
+                resource->m_raw_uniformbuf_data->m_update_length,
+                resource->m_raw_uniformbuf_data->m_buffer + resource->m_raw_uniformbuf_data->m_update_begin_offset);
+
+            resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
+            resource->m_raw_uniformbuf_data->m_update_length = 0;
+        }
+    }
+    else
+        jeecs::debug::logerr("Unknown resource type(%d) when using when resource %p.", (int)resource->m_type, resource);
 }
 
 void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
@@ -709,6 +725,8 @@ void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
     }
     else if (resource->m_type == jegl_resource::type::FRAMEBUF)
         glDeleteFramebuffers(1, &resource->m_uint1);
+    else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
+        glDeleteBuffers(1, &resource->m_uint1);
     else
         jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
 }
@@ -742,17 +760,32 @@ void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource* framebuffer, size_t
 
     glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }
-void gl_clear_framebuffer_color(jegl_thread*, jegl_resource*)
+void gl_clear_framebuffer_color(jegl_thread*, jegl_resource* framebuffer)
 {
+    if (nullptr == framebuffer)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    else
+        jegl_using_resource(framebuffer);
+
     glClear(GL_COLOR_BUFFER_BIT);
 }
-void gl_clear_framebuffer(jegl_thread*, jegl_resource*)
+void gl_clear_framebuffer(jegl_thread*, jegl_resource* framebuffer)
 {
+    if (nullptr == framebuffer)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    else
+        jegl_using_resource(framebuffer);
+
     _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
-void gl_clear_framebuffer_depth(jegl_thread*, jegl_resource*)
+void gl_clear_framebuffer_depth(jegl_thread*, jegl_resource* framebuffer)
 {
+    if (nullptr == framebuffer)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    else
+        jegl_using_resource(framebuffer);
+
     _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
     glClear(GL_DEPTH_BUFFER_BIT);
 }
@@ -784,8 +817,6 @@ JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->clear_rend_buffer = gl_clear_framebuffer;
     write_to_apis->clear_rend_buffer_color = gl_clear_framebuffer_color;
     write_to_apis->clear_rend_buffer_depth = gl_clear_framebuffer_depth;
-
-    write_to_apis->update_shared_uniform = gl_update_shared_uniform;
 
     write_to_apis->get_uniform_location = gl_get_uniform_location;
     write_to_apis->set_uniform = gl_set_uniform;

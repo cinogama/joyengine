@@ -14,6 +14,8 @@ namespace editor::WorldList
 {
     public func SwitchEditingWorld(aim_world: je::world)
     {
+        EntityList::set_current_entity(option::none);
+
         static let GRAPHIC_PIPELINE_SYSTEMS = je::typeinfo::editor::get_all_systems_types()
             -> forall(\t = t->name->beginwith("Graphic::"););
 
@@ -26,7 +28,6 @@ namespace editor::WorldList
                 ->> \gst = old->editor::remove_system(gst);
                 ;
             ;
-
         aim_world->add_system(Project::GetCurrentProject().graphic_system);
         aim_world->add_system(Project::GetCurrentProject().editor_system);
     }
@@ -115,7 +116,10 @@ namespace editor::WorldList
                                         Project::GetCurrentProject()->CloseWorld(world);
                                     }
                                     else if (check == generic::CheckResult::NO)
+                                    {
+                                        EntityList::set_current_entity(option::none);
                                         Project::GetCurrentProject()->CloseWorld(world);
+                                    }
                                 });;
                     match(Project::GetCurrentProject()->FindWorld(world))
                     {

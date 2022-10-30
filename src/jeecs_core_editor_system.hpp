@@ -396,7 +396,7 @@ public let frag =
             {
                 if (_grab_axis_translation == &trans && _camera_porjection)
                 {
-                    advise_lock_mouse = true;
+                    // advise_lock_mouse = true;
 
                     math::vec4 p0 = trans.world_position;
                     p0.w = 1.0f;
@@ -417,7 +417,7 @@ public let frag =
                         editing_rot_may_null
                     );
 
-                    _grab_last_pos = {};
+                    _grab_last_pos = cur_mouse_pos;
                 }
             }
             else
