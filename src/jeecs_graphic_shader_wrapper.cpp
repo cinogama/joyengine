@@ -316,8 +316,8 @@ WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args, size_t
 {
     jegl_shader_value* texture2d_val = (jegl_shader_value*)wo_pointer(args + 0);
     assert(texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D
-    || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D_MS
-    || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE_CUBE);
+        || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D_MS
+        || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE_CUBE);
 
     texture2d_val->m_uniform_texture_channel = (int)wo_int(args + 1);
     return wo_ret_val(vm, args + 0);
@@ -588,6 +588,13 @@ struct shader_value_outs
     }
 };
 
+struct shader_uniform_block
+{
+    size_t location;
+    std::string name;
+    std::vector<std::pair<std::string, jegl_shader_value::type>> variables;
+};
+
 struct shader_configs
 {
     jegl_shader::depth_test_method m_depth_test;
@@ -602,13 +609,45 @@ struct shader_wrapper
     shader_value_outs* vertex_out;
     shader_value_outs* fragment_out;
     shader_configs shader_config;
+    shader_uniform_block** shader_uniform_blocks;
 
     ~shader_wrapper()
     {
+        assert(nullptr != shader_uniform_blocks);
+
+        auto** block = shader_uniform_blocks;
+        while (nullptr != *block)
+        {
+            delete (*block);
+            ++block;
+        }
+        delete[] shader_uniform_blocks;
+
         delete vertex_out;
         delete fragment_out;
     }
 };
+
+WO_API wo_api jeecs_shader_create_uniform_block(wo_vm vm, wo_value args, size_t argc)
+{
+    shader_uniform_block* block = new shader_uniform_block;
+    block->location = wo_int(args + 0);
+    block->name = wo_string(args + 1);
+    return wo_ret_pointer(vm, block);
+}
+
+WO_API wo_api jeecs_shader_append_uniform_block(wo_vm vm, wo_value args, size_t argc)
+{
+    shader_uniform_block* block = (shader_uniform_block*)wo_pointer(args + 0);
+
+    auto type = (jegl_shader_value::type)wo_int(args + 1);
+    auto name = wo_string(args + 2);
+
+    block->variables.push_back(std::make_pair(name, type));
+
+    return wo_ret_void(vm);
+}
+
 
 WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size_t argc)
 {
@@ -660,12 +699,21 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
     config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 4));
     config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 5));
 
+    shader_uniform_block** ubos = nullptr;
+    size_t ubo_count = wo_lengthof(args + 3);
+
+    ubos = new shader_uniform_block * [ubo_count + 1];
+    for (size_t i = 0; i < ubo_count; ++i)
+        ubos[i] = (shader_uniform_block*)wo_pointer(wo_arr_get(args + 3, i));
+    ubos[ubo_count] = nullptr;
+
     return wo_ret_gchandle(vm,
         new shader_wrapper
         {
             (shader_value_outs*)wo_pointer(args + 0),
             (shader_value_outs*)wo_pointer(args + 1),
-            config
+            config,
+            ubos
         }, nullptr,
         [](void* ptr) {
             delete (shader_wrapper*)ptr;
@@ -1125,11 +1173,14 @@ namespace shader
         cull = NONE,
     };
 
+    let uniform_blocks = []mut: vec<uniform_block>;
+
     extern("libjoyecs", "jeecs_shader_wrap_result_pack")
     private func _wraped_shader(
         vertout: vertex_out, 
         fragout: fragment_out, 
-        shader_config: ShaderConfig)=> shader_wrapper;
+        shader_config: ShaderConfig,
+        uniform_blocks: array<uniform_block>)=> shader_wrapper;
 
     private extern func generate()
     {
@@ -1144,7 +1195,7 @@ namespace shader
         let f_out = frag(f_in);
         let fragment_out_result = fragment_out::create(f_out);
 
-        return _wraped_shader(vertext_out_result, fragment_out_result, configs);
+        return _wraped_shader(vertext_out_result, fragment_out_result, configs, uniform_blocks->toarray);
     }
 
     namespace debug
@@ -1167,8 +1218,6 @@ public let float4x4_unit = float4x4::new(
     0., 0., 0., 1.);
 
 // Default uniform
-public let je_time = shared_uniform:<float4>("JOYENGINE_TIMES");
-
 public let je_m = uniform("JOYENGINE_TRANS_M", float4x4_unit);
 public let je_v = uniform("JOYENGINE_TRANS_V", float4x4_unit);
 public let je_p = uniform("JOYENGINE_TRANS_P", float4x4_unit);
@@ -1421,6 +1470,31 @@ public func CULL(cull: CullConfig)
 
     lexer->lex(out_struct_decl);
 }
+
+using uniform_block = handle
+{
+    func create(binding_place: int, name: string)
+    {
+        extern("libjoyecs", "jeecs_shader_create_uniform_block")
+        func _create(binding_place: int, name: string)=> uniform_block;
+    
+        let block = _create(binding_place, name);
+        shader::uniform_blocks->add(block);
+        return block;
+    }
+    func append_uniform<T>(self: uniform_block, name: string)
+    {
+        extern("libjoyecs", "jeecs_shader_append_uniform_block")
+        func _append_uniform(self: uniform_block, type: shader_value_type, name: string)=> void;
+
+        _append_uniform(self, _get_type_enum:<T>(), name);
+        return shared_uniform:<T>(name);
+    }
+}
+
+let _default_uniform_block = uniform_block::create(0, "JOYENGINE_DEFAULT");
+
+public let je_time = _default_uniform_block->append_uniform:<float4>("JOYENGINE_TIMES");
 
 )";
 

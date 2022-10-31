@@ -277,7 +277,7 @@ public let frag =
             float znear = clip ? clip->znear : 0.3f;
             float zfar = clip ? clip->zfar : 1000.0f;
 
-            jegl_resource* rend_aim_buffer = rendbuf ? rendbuf->framebuffer->resouce() : nullptr;
+            jegl_resource* rend_aim_buffer = rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer->resouce() : nullptr;
 
             size_t
                 RENDAIMBUFFER_WIDTH =
@@ -336,16 +336,16 @@ public let frag =
                                 rendqueue, &trans, layer, shape, shads, texs
                             });
                     }).anyof<Shaders, Textures, Shape>()
-                .exec(
-                    [](Translation& trans, 
-                        Light2D::Color& color, 
-                        Light2D::LayerEffect* effect_layer,
-                        Light2D::Point* point,
-                        Light2D::Parallel* parallel, 
-                        Light2D::Shadow* shadow)
-                    {
+                        .exec(
+                            [](Translation& trans,
+                                Light2D::Color& color,
+                                Light2D::LayerEffect* effect_layer,
+                                Light2D::Point* point,
+                                Light2D::Parallel* parallel,
+                                Light2D::Shadow* shadow)
+                            {
 
-                    }).anyof<Light2D::Point, Light2D::Parallel>()
+                            }).anyof<Light2D::Point, Light2D::Parallel>()
                                 ;
         }
         void LateUpdate()
@@ -379,7 +379,7 @@ public let frag =
             };
 
             m_default_uniform_buffer->update_buffer(
-                offsetof(default_uniform_buffer_data_t, time), 
+                offsetof(default_uniform_buffer_data_t, time),
                 sizeof(math::vec4),
                 &shader_time);
 
@@ -392,12 +392,9 @@ public let frag =
                     jegl_resource* rend_aim_buffer = nullptr;
                     if (current_camera.rendToFramebuffer)
                     {
-                        if (!current_camera.rendToFramebuffer->framebuffer)
-                        {
-                            debug::logwarn("A camera with component RendToFramebuffer(%p), but not specify frame-buffer instance.",
-                                current_camera.rendToFramebuffer);
+                        if (current_camera.rendToFramebuffer->framebuffer == nullptr 
+                            || !current_camera.rendToFramebuffer->framebuffer->enabled())
                             continue;
-                        }
                         else
                             rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->resouce();
                     }
