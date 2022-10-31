@@ -29,10 +29,12 @@ struct jegl_shader_value
         FLOAT4x4 = 0x0400,
 
         TEXTURE2D = 0x0800,
-        TEXTURE_CUBE = 0X1000,
-        TEXTURE2D_MS = 0X2000,
+        TEXTURE_CUBE = 0x1000,
+        TEXTURE2D_MS = 0x2000,
 
-        INTEGER = 0x3000,
+        INTEGER = 0x4000,
+
+        STRUCT = 0x8000,
 
     };
 
@@ -494,26 +496,32 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
     }
     jegl_shader_value::type result_type = (jegl_shader_value::type)wo_int(args + 0);
     wo_string_t operation = wo_string(args + 1);
-    auto* reduce_func = get_const_reduce_func(operation, _types.data(), _types.size());
-    if (!reduce_func)
-        return wo_ret_halt(vm, "Cannot do this operations: no matched operation with these types.");
 
-    if (result_is_const)
+    if (operation[0] == '.')
+        ;
+    else
     {
-        auto* result = (*reduce_func)(_args.size(), _args.data());
-        if (result) // if result == nullptr, there is no method for constant, calc it in shader~
+        auto* reduce_func = get_const_reduce_func(operation, _types.data(), _types.size());
+        if (!reduce_func)
+            return wo_ret_halt(vm, "Cannot do this operations: no matched operation with these types.");
+
+        if (result_is_const)
         {
-            if (result->get_type() != result_type)
+            auto* result = (*reduce_func)(_args.size(), _args.data());
+            if (result) // if result == nullptr, there is no method for constant, calc it in shader~
             {
-                _free_shader_value(result);
-                return wo_ret_halt(vm, "Cannot do this operations: return type dis-matched.");
+                if (result->get_type() != result_type)
+                {
+                    _free_shader_value(result);
+                    return wo_ret_halt(vm, "Cannot do this operations: return type dis-matched.");
+                }
+                return wo_ret_gchandle(vm, result, nullptr, _free_shader_value);
             }
-            return wo_ret_gchandle(vm, result, nullptr, _free_shader_value);
         }
     }
 
     jegl_shader_value* val =
-        new jegl_shader_value(result_type, wo_string(args + 1), argc - 2);
+        new jegl_shader_value(result_type, operation, argc - 2);
     for (size_t i = 2; i < argc; ++i)
         val->set_used_val(i - 2, _args[i - 2]);
 
@@ -588,11 +596,22 @@ struct shader_value_outs
     }
 };
 
-struct shader_uniform_block
+struct shader_struct_define
 {
-    size_t location;
+    // If binding_place == jeecs::typing::INVALID_UINT32, it is a struct define.
+    // or else, it will be a uniform block declear;
+    uint32_t binding_place;
     std::string name;
-    std::vector<std::pair<std::string, jegl_shader_value::type>> variables;
+
+    struct struct_variable
+    {
+        std::string name;
+        jegl_shader_value::type type;
+
+        shader_struct_define* struct_type_may_nil;
+    };
+
+    std::vector<struct_variable> variables;
 };
 
 struct shader_configs
@@ -609,45 +628,57 @@ struct shader_wrapper
     shader_value_outs* vertex_out;
     shader_value_outs* fragment_out;
     shader_configs shader_config;
-    shader_uniform_block** shader_uniform_blocks;
+    shader_struct_define** shader_struct_define_may_uniform_block;
 
     ~shader_wrapper()
     {
-        assert(nullptr != shader_uniform_blocks);
+        assert(nullptr != shader_struct_define_may_uniform_block);
 
-        auto** block = shader_uniform_blocks;
+        auto** block = shader_struct_define_may_uniform_block;
         while (nullptr != *block)
         {
             delete (*block);
             ++block;
         }
-        delete[] shader_uniform_blocks;
+        delete[] shader_struct_define_may_uniform_block;
 
         delete vertex_out;
         delete fragment_out;
     }
 };
 
-WO_API wo_api jeecs_shader_create_uniform_block(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_struct_define(wo_vm vm, wo_value args, size_t argc)
 {
-    shader_uniform_block* block = new shader_uniform_block;
-    block->location = wo_int(args + 0);
-    block->name = wo_string(args + 1);
+    shader_struct_define* block = new shader_struct_define;
+    block->binding_place = jeecs::typing::INVALID_UINT32;
+    block->name = wo_string(args + 0);
     return wo_ret_pointer(vm, block);
 }
 
-WO_API wo_api jeecs_shader_append_uniform_block(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args, size_t argc)
 {
-    shader_uniform_block* block = (shader_uniform_block*)wo_pointer(args + 0);
-
-    auto type = (jegl_shader_value::type)wo_int(args + 1);
-    auto name = wo_string(args + 2);
-
-    block->variables.push_back(std::make_pair(name, type));
-
+    shader_struct_define* block = (shader_struct_define*)wo_pointer(args + 0);
+    block->binding_place = wo_int(args + 1);
     return wo_ret_void(vm);
 }
 
+WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args, size_t argc)
+{
+    shader_struct_define* block = (shader_struct_define*)wo_pointer(args + 0);
+
+    shader_struct_define::struct_variable variable_member_define;
+    variable_member_define.type = (jegl_shader_value::type)wo_int(args + 1);
+    variable_member_define.name = wo_string(args + 2);
+
+    if (variable_member_define.type == jegl_shader_value::type::STRUCT)
+        variable_member_define.struct_type_may_nil = (shader_struct_define*)wo_pointer(wo_struct_get(args + 3, 1));
+    else
+        variable_member_define.struct_type_may_nil = nullptr;
+
+    block->variables.push_back(variable_member_define);
+
+    return wo_ret_void(vm);
+}
 
 WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size_t argc)
 {
@@ -699,12 +730,12 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
     config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 4));
     config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 5));
 
-    shader_uniform_block** ubos = nullptr;
+    shader_struct_define** ubos = nullptr;
     size_t ubo_count = wo_lengthof(args + 3);
 
-    ubos = new shader_uniform_block * [ubo_count + 1];
+    ubos = new shader_struct_define * [ubo_count + 1];
     for (size_t i = 0; i < ubo_count; ++i)
-        ubos[i] = (shader_uniform_block*)wo_pointer(wo_arr_get(args + 3, i));
+        ubos[i] = (shader_struct_define*)wo_pointer(wo_arr_get(args + 3, i));
     ubos[ubo_count] = nullptr;
 
     return wo_ret_gchandle(vm,
@@ -770,10 +801,12 @@ public enum shader_value_type
     FLOAT4x4 = 0x0400,
 
     TEXTURE2D = 0x0800,
-    TEXTURE_CUBE = 0X1000,
-    TEXTURE2D_MS = 0X2000,
+    TEXTURE_CUBE = 0x1000,
+    TEXTURE2D_MS = 0x2000,
 
-    INTEGER = 0x3000,
+    INTEGER = 0x4000,
+
+    STRUCT = 0x8000,
 }
 
 public using float = gchandle;
@@ -789,6 +822,8 @@ public using texture2d = gchandle;
 public using texture2dms = gchandle;
 public using texturecube = gchandle;
 public using integer = gchandle;
+
+public using structure = gchandle;
 
 private func _type_is_same<AT, BT>()=> bool
 {
@@ -821,6 +856,8 @@ private func _get_type_enum<ShaderValueT>()=> shader_value_type
         return shader_value_type::TEXTURE_CUBE;
     else if (_type_is_same:<ShaderValueT, integer>())
         return shader_value_type::INTEGER;
+    else if (_type_is_same:<ShaderValueT, structure>())
+        return shader_value_type::STRUCT;
 
     std::halt("Unknown type, not shader type?");
 }
@@ -1034,6 +1071,7 @@ namespace float3
         return apply_operation:<float3>("/", a, b);
     }
 }
+)" R"(
 namespace float4
 {
     extern("libjoyecs", "jeecs_shader_float4_create")
@@ -1127,8 +1165,6 @@ namespace float4
     {
         return apply_operation:<float4>("/", a, b);
     }
-
-    )" R"(
 }
 
 namespace float4x4
@@ -1173,14 +1209,14 @@ namespace shader
         cull = NONE,
     };
 
-    let uniform_blocks = []mut: vec<uniform_block>;
+    let struct_uniform_blocks_decls = []mut: vec<struct_define>;
 
     extern("libjoyecs", "jeecs_shader_wrap_result_pack")
     private func _wraped_shader(
         vertout: vertex_out, 
         fragout: fragment_out, 
         shader_config: ShaderConfig,
-        uniform_blocks: array<uniform_block>)=> shader_wrapper;
+        struct_or_uniform_block_decl_list: array<struct_define>)=> shader_wrapper;
 
     private extern func generate()
     {
@@ -1195,7 +1231,7 @@ namespace shader
         let f_out = frag(f_in);
         let fragment_out_result = fragment_out::create(f_out);
 
-        return _wraped_shader(vertext_out_result, fragment_out_result, configs, uniform_blocks->toarray);
+        return _wraped_shader(vertext_out_result, fragment_out_result, configs, struct_uniform_blocks_decls->toarray);
     }
 
     namespace debug
@@ -1393,7 +1429,7 @@ public func CULL(cull: CullConfig)
 {
     shader::configs.cull = cull;
 }
-
+)" R"(
 #macro VAO_STRUCT
 {
     let eat_token = func(ref expect_name: string, expect_type: std::token_type)
@@ -1412,7 +1448,7 @@ public func CULL(cull: CullConfig)
                         return option::value(out_result);
                     };
 
-    // using VAO_STRUCT vin = struct { ...
+    // using VAO_STRUCT vin { ...
     // 0. Get struct name, then eat '{'
     let vao_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
@@ -1471,30 +1507,240 @@ public func CULL(cull: CullConfig)
     lexer->lex(out_struct_decl);
 }
 
-using uniform_block = handle
+namespace structure
 {
-    func create(binding_place: int, name: string)
+    public func get<ElemT>(self: structure, name: string)
     {
-        extern("libjoyecs", "jeecs_shader_create_uniform_block")
-        func _create(binding_place: int, name: string)=> uniform_block;
-    
-        let block = _create(binding_place, name);
-        shader::uniform_blocks->add(block);
-        return block;
-    }
-    func append_uniform<T>(self: uniform_block, name: string)
-    {
-        extern("libjoyecs", "jeecs_shader_append_uniform_block")
-        func _append_uniform(self: uniform_block, type: shader_value_type, name: string)=> void;
-
-        _append_uniform(self, _get_type_enum:<T>(), name);
-        return shared_uniform:<T>(name);
+        return apply_operation:<ElemT>("." + name, self);
     }
 }
 
-let _default_uniform_block = uniform_block::create(0, "JOYENGINE_DEFAULT");
+using struct_define = handle
+{
+    extern("libjoyecs", "jeecs_shader_append_struct_member")
+    func _append_member(self: struct_define, type: shader_value_type, name: string, st: option<struct_define>)=> void;
 
-public let je_time = _default_uniform_block->append_uniform:<float4>("JOYENGINE_TIMES");
+    public func create(name: string)
+    {
+        extern("libjoyecs", "jeecs_shader_create_struct_define")
+        func _create(name: string)=> struct_define;
+    
+        let block = _create(name);
+        shader::struct_uniform_blocks_decls->add(block);
+        return block;
+    }
+    public func append_member<T>(self: struct_define, name: string)
+    {
+        _append_member(self, _get_type_enum:<T>(), name, option::none);
+    }
+    public func append_struct_member(self: struct_define, name: string, struct_type: struct_define)
+    {
+        _append_member(self, shader_value_type::STRUCT, name, option::value(struct_type));
+    }
+    
+    extern("libjoyecs", "jeecs_shader_bind_struct_as_uniform_buffer")
+    func bind_as_uniform_buffer(self: struct_define, binding_place: int)=> void;
+    
+}
+
+#macro GRAPHIC_STRUCT
+{
+    let eat_token = func(ref expect_name: string, expect_type: std::token_type)
+                    {
+                        let (token, out_result) = lexer->next();
+                        if (token != expect_type)
+                            lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
+                        return out_result;
+                    };
+    let try_eat_token = func(expect_type: std::token_type)=> option<string>
+                    {
+                        let (token, out_result) = lexer->peek();
+                        if (token != expect_type)
+                            return option::none;
+                        lexer->next;
+                        return option::value(out_result);
+                    };
+
+    // using GRAPHIC_STRUCT example { ...
+    // 0. Get struct name, then eat '{'
+    let graphic_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+    eat_token("{", std::token_type::l_left_curly_braces);
+    
+    // 1. Get struct item name.
+    let struct_infos = []mut: vec<(string, (string, bool))>;
+    while (true)
+    {
+        if (try_eat_token(std::token_type::l_right_curly_braces)->has())
+            // Meet '}', end work!
+            break;
+
+        let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        eat_token(":", std::token_type::l_typecast);
+
+        // Shader type only have a identifier and without template.
+        let is_struct = try_eat_token(std::token_type::l_struct);
+        let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->has)));
+
+        if (!try_eat_token(std::token_type::l_comma)->has())
+        {
+            eat_token("}", std::token_type::l_right_curly_braces);
+            break;
+        }
+    }
+    // End, need a ';' here.
+    eat_token(";", std::token_type::l_semicolon);
+
+    //  OK We have current struct info, built struct out
+    let mut out_struct_decl = F"public let {graphic_struct_name} = struct_define::create(\"{graphic_struct_name}\");";
+    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+        if (is_struct_type)
+            out_struct_decl += F"{graphic_struct_name}->append_struct_member(\"{vao_member_name}\", {vao_shader_type});\n";
+        else
+            out_struct_decl += F"{graphic_struct_name}->append_member:<{vao_shader_type}>(\"{vao_member_name}\");\n";
+
+    out_struct_decl += F"public using {graphic_struct_name}_t = structure\n\{\n";
+    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    {
+        out_struct_decl += F"    func {vao_member_name}(self: {graphic_struct_name}_t)\n\{\n        ";
+        
+        if (is_struct_type)
+            out_struct_decl += F"return self: gchandle: structure->get:<structure>(\"{vao_member_name}\"): gchandle: {vao_shader_type}_t;\n";
+        else
+            out_struct_decl += F"return self: gchandle: structure->get:<{vao_shader_type}>(\"{vao_member_name}\");\n";
+
+        out_struct_decl += "    }\n";
+    }
+    out_struct_decl += "}\n";
+
+    lexer->lex(out_struct_decl);
+}
+
+using uniform_block = struct_define
+{
+    public func create(name: string, binding_place: int)
+    {
+        let ubo = struct_define::create(name);
+        ubo->bind_as_uniform_buffer(binding_place);
+
+        return ubo: handle: uniform_block;
+    }
+
+    public func append_uniform<T>(self: uniform_block, name: string)
+    {
+        self: handle: struct_define->append_member:<T>(name);
+        return shared_uniform:<T>(name);
+    }
+
+    public func append_struct_uniform(self: uniform_block, name: string, struct_type: struct_define)
+    {
+        self: handle: struct_define->append_struct_member(name, struct_type);
+        return shared_uniform:<structure>(name);
+    }
+}
+
+#macro UNIFORM_BUFFER
+{
+    let eat_token = func(ref expect_name: string, expect_type: std::token_type)
+                    {
+                        let (token, out_result) = lexer->next();
+                        if (token != expect_type)
+                            lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
+                        return out_result;
+                    };
+    let try_eat_token = func(expect_type: std::token_type)=> option<string>
+                    {
+                        let (token, out_result) = lexer->peek();
+                        if (token != expect_type)
+                            return option::none;
+                        lexer->next;
+                        return option::value(out_result);
+                    };
+
+    // using UNIFORM_BUFFER example = BIND_PLACE { ...
+    // 0. Get struct name, then eat '{'
+    let graphic_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+    eat_token("=", std::token_type::l_assign);
+
+    let bind_place = eat_token("INTEGER", std::token_type::l_literal_integer): int;
+
+    eat_token("{", std::token_type::l_left_curly_braces);
+    
+    // 1. Get struct item name.
+    let struct_infos = []mut: vec<(string, (string, bool))>;
+    while (true)
+    {
+        if (try_eat_token(std::token_type::l_right_curly_braces)->has())
+            // Meet '}', end work!
+            break;
+
+        let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        eat_token(":", std::token_type::l_typecast);
+
+        // Shader type only have a identifier and without template.
+        let is_struct = try_eat_token(std::token_type::l_struct);
+        let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->has)));
+
+        if (!try_eat_token(std::token_type::l_comma)->has())
+        {
+            eat_token("}", std::token_type::l_right_curly_braces);
+            break;
+        }
+    }
+    // End, need a ';' here.
+    eat_token(";", std::token_type::l_semicolon);
+
+    //  OK We have current struct info, built struct out
+    let mut out_struct_decl = F"public let {graphic_struct_name} = uniform_block::create(\"{graphic_struct_name}\", {bind_place});";
+    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+        if (is_struct_type)
+            out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_struct_uniform(\"{vao_member_name->upper}\", {vao_shader_type}): gchandle: {vao_shader_type}_t;\n";
+        else
+            out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_uniform:<{vao_shader_type}>(\"{vao_member_name->upper}\");\n";
+
+    lexer->lex(out_struct_decl);
+}
+
+UNIFORM_BUFFER JOYENGINE_DEFAULT = 0
+{
+    je_time: float4,
+};
+)";
+
+const char* shader_light2d_path = "je/shader/light2d.wo";
+const char* shader_light2d_src = R"(
+// JoyEngineECS RScene shader for light2d-system
+
+import je.shader;
+
+let MAX_SHADOW_LIGHT_COUNT = 16;
+
+// define struct for Light
+GRAPHIC_STRUCT Light2D
+{
+    color:      float4,  // color->xyz is color, color->w is intensity.
+    position:   float4,  
+    direction:  float4,  // direction->xyz is dir, direction->w is angle in radians.
+};
+
+UNIFORM_BUFFER JOYENGINE_LIGHT2D = 1
+{
+    
+};
+
+public let je_lights = func(){
+    let lights = []mut: vec<Light2D_t>;
+
+    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
+        lights->add(JOYENGINE_LIGHT2D->append_struct_uniform(F"JE_LIGHT2D_{i}", Light2D): gchandle: Light2D_t);
+
+    return lights->toarray;
+}();
 
 )";
 

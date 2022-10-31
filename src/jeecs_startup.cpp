@@ -5,6 +5,9 @@
 extern const char* shader_wrapper_path;
 extern const char* shader_wrapper_src;
 
+extern const char* shader_light2d_path;
+extern const char* shader_light2d_src;
+
 extern const char* gui_api_path;
 extern const char* gui_api_src;
 
@@ -23,6 +26,7 @@ void je_init(int argc, char** argv)
 
     wo_virtual_source(jeecs_woolang_api_path, jeecs_woolang_api_src, false);
     wo_virtual_source(shader_wrapper_path, shader_wrapper_src, false);
+    wo_virtual_source(shader_light2d_path, shader_light2d_src, false);
     wo_virtual_source(gui_api_path, gui_api_src, false);
     wo_virtual_source(jeecs_filesys_woolang_api_path, jeecs_filesys_woolang_api_src, false);
 }

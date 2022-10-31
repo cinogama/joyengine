@@ -253,7 +253,7 @@ uniform_information get_uniform_info(const std::string& name, jegl_shader_value*
 
 std::string _generate_uniform_block_for_glsl(shader_wrapper* wrap)
 {
-    auto** block_iter = wrap->shader_uniform_blocks;
+    auto** block_iter = wrap->shader_struct_define_may_uniform_block;
     std::string result;
 
     while (nullptr != *block_iter)
@@ -263,10 +263,15 @@ std::string _generate_uniform_block_for_glsl(shader_wrapper* wrap)
         if (!block->variables.empty())
         {
             std::string uniform_block_decl =
-                "layout (std140, binding = " + std::to_string(block->location) + ") uniform " + block->name + "\n{\n";
+                block->binding_place == jeecs::typing::INVALID_UINT32
+                ? "struct " + block->name + "\n{\n"
+                : "layout (std140, binding = " + std::to_string(block->binding_place) + ") uniform " + block->name + "\n{\n";
 
-            for (auto& [vname, vtype] : block->variables)
-                uniform_block_decl += "    " + _glsl_wrapper_contex::get_type_name_from_type(vtype) + " " + vname + ";\n";
+            for (auto& variable_inform : block->variables)
+                if (variable_inform.type == jegl_shader_value::type::STRUCT)
+                    uniform_block_decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
+                else
+                    uniform_block_decl += "    " + _glsl_wrapper_contex::get_type_name_from_type(variable_inform.type) + " " + variable_inform.name + ";\n";
 
             result += uniform_block_decl + "};\n";
         }
