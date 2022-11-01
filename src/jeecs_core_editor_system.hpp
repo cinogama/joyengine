@@ -639,6 +639,8 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
                     if (nullptr == bad_uniforms)
                         bad_uniforms = entity->add_component<jeecs::Editor::BadShadersUniform>();
 
+                    assert(bad_uniforms != nullptr);
+
                     auto& new_bad_shad_uniform_buf = bad_uniforms->uniforms[new_shader.get()];
 
                     // 1.1 If bad uniforms already has old_shader's data, update them..
@@ -674,7 +676,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
                             uni_var = uni_var->m_next;
                         }
                     }
-                    else
+                    else if (bad_uniforms)
                     {
                         auto& old_bad_shad_uniform_buf = bad_uniforms->uniforms[shad.get()];
                         for (auto& [name, dat] : old_bad_shad_uniform_buf)

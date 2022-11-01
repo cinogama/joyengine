@@ -707,6 +707,7 @@ struct jegl_shader
         uint32_t m_builtin_uniform_mvp = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_mv = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_vp = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_color_factor = jeecs::typing::INVALID_UINT32;
     };
 
     struct unifrom_variables
@@ -950,6 +951,7 @@ JE_API jegl_resource* jegl_create_vertex(
     size_t                      data_length,
     size_t                      format_length);
 
+// TODO: Support create frame buffer with different output attachment resolutions.
 JE_API jegl_resource* jegl_create_framebuf(
     size_t width,
     size_t height,

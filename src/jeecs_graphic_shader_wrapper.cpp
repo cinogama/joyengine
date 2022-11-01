@@ -1244,6 +1244,7 @@ namespace shader
     }
 }
 public let float_zero = float::new(0.);
+public let float_one = float::new(1.);
 public let float2_zero = float2::new(0., 0.);
 public let float3_zero = float3::new(0., 0., 0.);
 public let float4_zero = float4::new(0., 0., 0., 0.);
@@ -1264,6 +1265,8 @@ public let je_p = uniform("JOYENGINE_TRANS_P", float4x4_unit);
 public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4_unit);
 public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4_unit);
 public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4_unit);
+
+public let je_color_factor = uniform("JOYENGINE_COLOR_FACTOR", float_one);
 
 public func texture(tex:texture2d, uv:float2)=> float4
 {
@@ -1709,39 +1712,10 @@ using uniform_block = struct_define
 UNIFORM_BUFFER JOYENGINE_DEFAULT = 0
 {
     je_time: float4,
-};
-)";
-
-const char* shader_light2d_path = "je/shader/light2d.wo";
-const char* shader_light2d_src = R"(
-// JoyEngineECS RScene shader for light2d-system
-
-import je.shader;
-
-let MAX_SHADOW_LIGHT_COUNT = 16;
-
-// define struct for Light
-GRAPHIC_STRUCT Light2D
-{
-    color:      float4,  // color->xyz is color, color->w is intensity.
-    position:   float4,  
-    direction:  float4,  // direction->xyz is dir, direction->w is angle in radians.
+    je_layer_and_padding: float4, // Only use je_layer_and_padding.x
 };
 
-UNIFORM_BUFFER JOYENGINE_LIGHT2D = 1
-{
-    
-};
-
-public let je_lights = func(){
-    let lights = []mut: vec<Light2D_t>;
-
-    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
-        lights->add(JOYENGINE_LIGHT2D->append_struct_uniform(F"JE_LIGHT2D_{i}", Light2D): gchandle: Light2D_t);
-
-    return lights->toarray;
-}();
-
+public let je_layer = je_layer_and_padding->x;
 )";
 
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)

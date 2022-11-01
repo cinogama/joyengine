@@ -12,6 +12,50 @@
 #include <queue>
 #include <list>
 
+const char* shader_light2d_path = "je/shader/light2d_forward.wo";
+const char* shader_light2d_src = R"(
+// JoyEngineECS RScene shader for light2d-system
+// This script only used for forward light2d pipeline.
+
+import je.shader;
+
+let MAX_SHADOW_LIGHT_COUNT = 16;
+
+// define struct for Light
+GRAPHIC_STRUCT Light2D
+{
+    color:      float4,  // color->xyz is color, color->w is intensity.
+    position:   float4,  
+    direction:  float4,  // direction->xyz is dir, direction->w is angle in radians.
+    _padding:   float4,
+};
+
+UNIFORM_BUFFER JOYENGINE_LIGHT2D = 1
+{
+    // Append nothing here, add them later.
+};
+
+// Create lights for JOYENGINE_LIGHT2D
+public let je_light2ds = func(){
+    let lights = []mut: vec<Light2D_t>;
+
+    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
+        lights->add(JOYENGINE_LIGHT2D->append_struct_uniform(F"JE_LIGHT2D_{i}", Light2D): gchandle: Light2D_t);
+
+    return lights->toarray;
+}();
+
+public let je_shadow2ds = func(){
+    let shadows = []mut: vec<texture2d>;
+
+    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
+        lights->add(uniform_texture:<texture2d>("JE_SHADOW2D_{i}", 16 + i));
+
+    return shadows->toarray;
+}();
+
+)";
+
 namespace jeecs
 {
     struct GraphicThreadHost
@@ -241,6 +285,7 @@ public let frag =
         struct default_uniform_buffer_data_t
         {
             jeecs::math::vec4 time;
+            jeecs::math::vec4 layer_and_padding;
         };
 
         DefaultGraphicPipelineSystem(game_world w)
@@ -392,7 +437,7 @@ public let frag =
                     jegl_resource* rend_aim_buffer = nullptr;
                     if (current_camera.rendToFramebuffer)
                     {
-                        if (current_camera.rendToFramebuffer->framebuffer == nullptr 
+                        if (current_camera.rendToFramebuffer->framebuffer == nullptr
                             || !current_camera.rendToFramebuffer->framebuffer->enabled())
                             continue;
                         else
@@ -423,8 +468,27 @@ public let frag =
                     math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
                     // TODO: Update camera shared uniform.
 
+                    uint32_t current_rendering_entity_layer_group = typing::INVALID_UINT32;
+
                     for (auto& rendentity : m_renderer_entities)
                     {
+                        uint32_t current_rendering_entity_layer = rendentity.layer == nullptr ? 0 : rendentity.layer->layer;
+                        if (current_rendering_entity_layer != current_rendering_entity_layer_group)
+                        {
+                            // Update uniform block & update light2d shadow buf?
+                            current_rendering_entity_layer_group = current_rendering_entity_layer;
+                            math::vec4 shader_layer_and_padding =
+                            {
+                                (float)current_rendering_entity_layer_group, 0.f, 0.f, 0.f
+                            };
+
+                            m_default_uniform_buffer->update_buffer(
+                                offsetof(default_uniform_buffer_data_t, layer_and_padding),
+                                sizeof(math::vec4),
+                                &shader_layer_and_padding);
+                            jegl_using_resource(m_default_uniform_buffer->resouce());
+                        }
+
                         /*jegl_using_texture();
                         jegl_draw_vertex_with_shader();*/
                         assert(rendentity.translation);

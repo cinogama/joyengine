@@ -234,7 +234,7 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     return fout {
-        color = float4::new(1., 1., 1., 1.)
+        color = je_color_factor * float4::new(1., 1., 1., 1.)
     };
 }
 "@                          ;);
@@ -276,7 +276,7 @@ public func frag(vf: v2f)
     let tex = uniform_texture:<texture2d>("MainTexture", 0);
 
     return fout {
-        color = texture(tex, vf.uv),
+        color = je_color_factor * texture(tex, vf.uv),
     };
 }
 "@                          ;);
