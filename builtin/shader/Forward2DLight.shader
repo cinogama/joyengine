@@ -60,20 +60,26 @@ public func frag(vf: v2f)
 {
     let Albedo = uniform_texture:<texture2d>("Albedo", 0);
     let Normalize = uniform_texture:<texture2d>("Normalize", 1);
-    // let Metallic = uniform_texture:<texture2d>("Metallic", 2);
-    // let AO = uniform_texture:<texture2d>("AO", 3);
+    let Metallic = uniform_texture:<texture2d>("Metallic", 2);
+    let AO = uniform_texture:<texture2d>("AO", 3);
 
     let pixel_normal = transed_normal_tangent_map(Normalize, vf);
 
+    let mut out_color = float3::new(0., 0., 0.);
     for (let mut i = 0; i < MAX_SHADOW_LIGHT_COUNT; i += 1)
     {
         let active_light = je_light2ds[i];
         // TODO: Parallel & angle light.
+        // TODO: PBR Pipeline?
+        let fragment_to_light_direction = normalize(active_light->position->xyz - vf.fragpos);
+        let light_effect_factor = fragment_to_light_direction->dot(pixel_normal)->clamp(0., 1.);
+        let light_effect_color = active_light->color->w * light_effect_factor * active_light->color->xyz;
 
-
+        // TODO; Effect distance decrease.
+        out_color = out_color + light_effect_color * texture(Albedo, vf.uv)->xyz;
     }
 
     return fout{
-        color = float4::create(pixel_normal, 0.), // TODO;
+        color = float4::create(out_color, 1.), // TODO;
     };
 }

@@ -982,12 +982,13 @@ namespace float
         return apply_operation:<float>("-", a, b);
     }
     public func operator * <T>(a:float, b:T)=> T
-        where b is float 
+        where b is real 
+            || b is float 
             || b is float2 
             || b is float3 
             || b is float4;
     {
-        if (b is float)
+        if (b is float || b is real)
             return apply_operation:<float>("*", a, b);
         else
             return b * a;
@@ -1019,7 +1020,7 @@ namespace float2
         return apply_operation:<float2>("-", a, b);
     }
     public func operator * <T>(a:float2, b:T)=> float2
-        where b is float || b is float2;
+        where b is real || b is float || b is float2;
     {
         return apply_operation:<float2>("*", a, b);
     }
@@ -1061,7 +1062,7 @@ namespace float3
         return apply_operation:<float3>("-", a, b);
     }
     public func operator * <T>(a:float3, b:T)=> float3
-        where b is float || b is float3;
+        where b is real || b is float || b is float3;
     {
         return apply_operation:<float3>("*", a, b);
     }
@@ -1156,7 +1157,7 @@ namespace float4
         return apply_operation:<float4>("-", a, b);
     }
     public func operator * <T>(a:float4, b:T)=> float4
-        where b is float || b is float4;
+        where b is real || b is float || b is float4;
     {
         return apply_operation:<float4>("*", a, b);
     }
@@ -1292,10 +1293,17 @@ public func step(a: float, b: float)=> float
 // Math functions
 
 let const is_glvalue<T> = 
-    std::declval:<T>() is float
+    std::declval:<T>() is real
+    || std::declval:<T>() is int
+    || std::declval:<T>() is float
     || std::declval:<T>() is float2
     || std::declval:<T>() is float3
     || std::declval:<T>() is float4
+;
+
+let const is_float<T> = 
+    std::declval:<T>() is real
+    || std::declval:<T>() is float
 ;
 
 public func sin<T>(a: T)=> T
@@ -1321,7 +1329,7 @@ public func abs<T>(a: T)=> T
 }
 
 public func normalize<T>(a: T)=> T
-    where is_glvalue:<T> && !(a is float);
+    where is_glvalue:<T> && !is_float:<T>;
 {
     return apply_operation:<T>("normalize", a);
 }
@@ -1329,6 +1337,23 @@ public func normalize<T>(a: T)=> T
 public func movement(trans4x4: float4x4)=> float3
 {
     return apply_operation:<float3>("JEBUILTIN_Movement", trans4x4);
+}
+
+public func clamp<T, FT>(a: T, b: FT, c: FT)=> T
+    where is_glvalue:<T> && (is_float:<FT> || b is T);
+{
+    return apply_operation:<T>("clamp", a, b, c);
+}
+
+public func dot<T>(a: T, b: T)=> float
+    where is_glvalue:<T> && !(is_float:<T>);
+{
+    return apply_operation:<float>("dot", a, b);
+}
+
+public func cross(a: float3, b: float3)=> float3
+{
+    return apply_operation:<float3>("cross", a, b);
 }
 
 // Engine builtin function
@@ -1622,7 +1647,7 @@ using struct_define = handle
     out_struct_decl += F"public using {graphic_struct_name}_t = structure\n\{\n";
     for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
     {
-        out_struct_decl += F"    func {vao_member_name}(self: {graphic_struct_name}_t)\n\{\n        ";
+        out_struct_decl += F"    public func {vao_member_name}(self: {graphic_struct_name}_t)\n\{\n        ";
         
         if (is_struct_type)
             out_struct_decl += F"return self: gchandle: structure->get:<structure>(\"{vao_member_name}\"): gchandle: {vao_shader_type}_t;\n";
