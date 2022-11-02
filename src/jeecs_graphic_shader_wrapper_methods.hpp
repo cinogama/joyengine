@@ -185,6 +185,9 @@ reduce_method{return nullptr; }} },
 { "JEBUILTIN_TextureFastMs", {jegl_shader_value::TEXTURE2D_MS, jegl_shader_value::FLOAT2,
 reduce_method{return nullptr; }} },
 
+{ "JEBUILTIN_Movement", {jegl_shader_value::FLOAT4x4,
+reduce_method{return new jegl_shader_value(args[0]->m_float4x4[0][3], args[0]->m_float4x4[1][3], args[0]->m_float4x4[2][3]); }} },
+
 { "sin", {jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },
 { "cos", {jegl_shader_value::FLOAT4,
@@ -215,10 +218,17 @@ reduce_method{return nullptr; }} },
 
 { "normalize", {jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },
-
 { "normalize", {jegl_shader_value::FLOAT3,
 reduce_method{return nullptr; }} },
-
 { "normalize", {jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
+
+{ "abs", {jegl_shader_value::FLOAT4,
+reduce_method{return nullptr; }} },
+{ "abs", {jegl_shader_value::FLOAT3,
+reduce_method{return nullptr; }} },
+{ "abs", {jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
+{ "abs", {jegl_shader_value::FLOAT,
 reduce_method{return nullptr; }} },
 };

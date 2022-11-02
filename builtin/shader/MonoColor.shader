@@ -30,6 +30,6 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     return fout{
-        color = je_color_factor * float4::new(1., 1., 1., 1.)
+        color = float4::new(1., 1., 1., 1.)
     };
 }

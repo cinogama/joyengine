@@ -272,8 +272,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MVP");
             builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MV");
             builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_VP");
-
-            builtin_uniforms.m_builtin_color_factor = gl_get_uniform_location(resource, "JOYENGINE_COLOR_FACTOR");
         }
 
         glDeleteShader(vertex_shader);

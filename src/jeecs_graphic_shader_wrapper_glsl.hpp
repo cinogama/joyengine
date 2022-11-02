@@ -305,6 +305,16 @@ std::string _generate_code_for_glsl_vertex(shader_wrapper* wrap)
     std::string built_in_srcs;
     for (auto& builtin_func_name : contex._used_builtin_func)
     {
+        if (builtin_func_name == "JEBUILTIN_Movement")
+        {
+            const std::string unifrom_block = R"(
+vec3 JEBUILTIN_Movement(mat4 trans)
+{
+    return vec3(trans[3][0], trans[3][1], trans[3][2]);
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
     }
 
 
@@ -396,6 +406,16 @@ vec4 JEBUILTIN_TextureMs(sampler2DMS tex, vec2 uv, int msaa_level)
 vec4 JEBUILTIN_TextureFastMs(sampler2DMS tex, vec2 uv)
 {
     return texelFetch(mst,ivec2(uv * vec2(textureSize(tex))),0);
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
+        else if (builtin_func_name == "JEBUILTIN_Movement")
+        {
+            const std::string unifrom_block = R"(
+vec3 JEBUILTIN_Movement(mat4 trans)
+{
+    return vec3(trans[3][0], trans[3][1], trans[3][2]);
 }
 )";
             built_in_srcs += unifrom_block;

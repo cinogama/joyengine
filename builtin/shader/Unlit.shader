@@ -35,6 +35,6 @@ public func frag(vf: v2f)
     let tex = uniform_texture:<texture2d>("MainTexture", 0);
 
     return fout{
-        color = je_color_factor * texture(tex, vf.uv),
+        color = texture(tex, vf.uv),
     };
 }

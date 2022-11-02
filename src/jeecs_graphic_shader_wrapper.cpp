@@ -1266,8 +1266,6 @@ public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4_unit);
 public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4_unit);
 public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4_unit);
 
-public let je_color_factor = uniform("JOYENGINE_COLOR_FACTOR", float_one);
-
 public func texture(tex:texture2d, uv:float2)=> float4
 {
     return apply_operation:<float4>("texture", tex, uv);
@@ -1316,10 +1314,21 @@ public func tan<T>(a: T)=> T
     return apply_operation:<T>("tan", a);
 }
 
+public func abs<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("abs", a);
+}
+
 public func normalize<T>(a: T)=> T
     where is_glvalue:<T> && !(a is float);
 {
     return apply_operation:<T>("normalize", a);
+}
+
+public func movement(trans4x4: float4x4)=> float3
+{
+    return apply_operation:<float3>("JEBUILTIN_Movement", trans4x4);
 }
 
 // Engine builtin function
