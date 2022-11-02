@@ -653,9 +653,9 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
 
                         new_bad_shad_uniform_buf = res;
                     }
-                    else
+                    else if (shad->enabled())
                     {
-                        assert(shad->enabled() == true);
+                        // Store old-enabled-shader data.
                         auto uni_var = shad_res->m_raw_shader_data->m_custom_uniforms;
                         while (uni_var)
                         {

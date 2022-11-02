@@ -1316,6 +1316,12 @@ public func tan<T>(a: T)=> T
     return apply_operation:<T>("tan", a);
 }
 
+public func normalize<T>(a: T)=> T
+    where is_glvalue:<T> && !(a is float);
+{
+    return apply_operation:<T>("normalize", a);
+}
+
 // Engine builtin function
 
 public func alphatest(colf4: float4)=> float4

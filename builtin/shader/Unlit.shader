@@ -1,9 +1,12 @@
+// Unlit.shader
+// (C)Cinogama project. 2022.
+
 import je.shader;
 
-ZTEST(LESS);
-ZWRITE(ENABLE);
-BLEND(ONE, ZERO);
-CULL(NONE);
+ZTEST   (LESS);
+ZWRITE  (ENABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
 
 VAO_STRUCT vin{
     vertex: float3,
@@ -11,12 +14,12 @@ VAO_STRUCT vin{
 };
 
 using v2f = struct {
-pos: float4,
-uv : float2,
+    pos: float4,
+    uv : float2,
 };
 
 using fout = struct {
-color: float4
+    color: float4
 };
 
 public func vert(v: vin)

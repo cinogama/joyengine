@@ -12,14 +12,14 @@
 #include <queue>
 #include <list>
 
-const char* shader_light2d_path = "je/shader/light2d_forward.wo";
+const char* shader_light2d_path = "je/shader/light2d.wo";
 const char* shader_light2d_src = R"(
 // JoyEngineECS RScene shader for light2d-system
 // This script only used for forward light2d pipeline.
 
 import je.shader;
 
-let MAX_SHADOW_LIGHT_COUNT = 16;
+public let MAX_SHADOW_LIGHT_COUNT = 16;
 
 // define struct for Light
 GRAPHIC_STRUCT Light2D
@@ -49,7 +49,7 @@ public let je_shadow2ds = func(){
     let shadows = []mut: vec<texture2d>;
 
     for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
-        lights->add(uniform_texture:<texture2d>("JE_SHADOW2D_{i}", 16 + i));
+        shadows->add(uniform_texture:<texture2d>("JE_SHADOW2D_{i}", 16 + i));
 
     return shadows->toarray;
 }();
@@ -73,11 +73,13 @@ namespace jeecs
         {
             default_shape_quad =
                 new graphic::vertex(jegl_vertex::QUADS,
-                    { -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,
-                    0.5f, -0.5f, 0.0f,      1.0f, 0.0f,
-                    0.5f, 0.5f, 0.0f,       1.0f, 1.0f,
-                    -0.5f, 0.5f, 0.0f,      0.0f, 1.0f, },
-                    { 3, 2 });
+                    {
+                        -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
+                        0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f, 0.0f, -1.0f,
+                        0.5f, 0.5f, 0.0f,       1.0f, 1.0f,  0.0f, 0.0f, -1.0f,
+                        -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f, 
+                    },
+                    { 3, 2, 3 });
 
             default_texture = new graphic::texture(2, 2, jegl_texture::texture_format::RGBA);
             default_texture->pix(0, 0).set({ 1.f, 0.f, 1.f, 1.f });

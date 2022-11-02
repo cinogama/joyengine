@@ -212,4 +212,13 @@ reduce_method{return nullptr; }} },
 reduce_method{return nullptr; }} },
 { "tan", {jegl_shader_value::FLOAT,
 reduce_method{return nullptr; }} },
+
+{ "normalize", {jegl_shader_value::FLOAT4,
+reduce_method{return nullptr; }} },
+
+{ "normalize", {jegl_shader_value::FLOAT3,
+reduce_method{return nullptr; }} },
+
+{ "normalize", {jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
 };
