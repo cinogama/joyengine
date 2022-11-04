@@ -1733,6 +1733,7 @@ namespace jeecs
                 release_func = v.release_func;
                 ref_count = v.ref_count;
                 v.ptr = nullptr;
+                v.ref_count = nullptr;
             }
 
             shared_pointer& operator =(const shared_pointer& v) noexcept
@@ -1755,6 +1756,7 @@ namespace jeecs
                 release_func = v.release_func;
                 ref_count = v.ref_count;
                 v.ptr = nullptr;
+                v.ref_count = nullptr;
 
                 return *this;
             }
