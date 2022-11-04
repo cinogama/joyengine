@@ -1689,15 +1689,20 @@ namespace jeecs
         public:
             void clear()
             {
-                if (!-- * ref_count)
+                if (ptr)
                 {
-                    // Recycle
-                    if (ptr)
-                        release_func(ptr);
+                    if (!-- * ref_count)
+                    {
+                        // Recycle
+                        
+                            release_func(ptr);
 
-                    ref_count->~CounterT();
-                    je_mem_free(ref_count);
+                        ref_count->~CounterT();
+                        je_mem_free(ref_count);
+                    }
                 }
+                else
+                    assert(ref_count == nullptr);
             }
             ~shared_pointer()
             {
@@ -1708,9 +1713,10 @@ namespace jeecs
             shared_pointer(T* v, void(*f)(T*) = nullptr) noexcept :
                 ptr(v),
                 release_func(f ? f : DEFAULT_DESTROY_FUNCTION),
-                ref_count(new (je_mem_alloc(sizeof(CounterT))) CounterT(1))
+                ref_count(nullptr)
             {
-
+                if (ptr != nullptr)
+                    ref_count = new (je_mem_alloc(sizeof(CounterT))) CounterT(1);
             }
 
             shared_pointer(const shared_pointer& v) noexcept
