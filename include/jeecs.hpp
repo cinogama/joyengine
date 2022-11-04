@@ -1689,16 +1689,14 @@ namespace jeecs
         public:
             void clear()
             {
-                if (ptr)
+                if (!-- * ref_count)
                 {
-                    if (!-- * ref_count)
-                    {
-                        // Recycle
+                    // Recycle
+                    if (ptr)
                         release_func(ptr);
 
-                        ref_count->~CounterT();
-                        je_mem_free(ref_count);
-                    }
+                    ref_count->~CounterT();
+                    je_mem_free(ref_count);
                 }
             }
             ~shared_pointer()
