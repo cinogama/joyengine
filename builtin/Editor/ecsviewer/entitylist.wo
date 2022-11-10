@@ -66,11 +66,10 @@ namespace editor::EntityList
         }
     }
 
-    public func show(ref open: bool)
+    public func show(open: mutable<bool>)
     {
-        BeginAttrOpen("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                    , ref open);
+        open->set(BeginAttrOpen("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize));
             menu();
                 
             match(je::world::rend())
@@ -214,14 +213,17 @@ namespace editor::EntityList
             if(BeginDragDropTarget())
             {
                 let mut drag_entity_chunkinfo = "";
-                if (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE", ref drag_entity_chunkinfo))
+                match (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE"))
                 {
+                value(drag_entity_chunkinfo)?
                     if (drag_entity_chunkinfo != entity->editor::chunkinfo())
                     {
                         // 自己拖到自己身上肯定就寄了，只处理不同的实体。
                         je::entity::editor::find_entity_by_chunkinfo(drag_entity_chunkinfo)
                             ->map(\e: je::entity = set_parent(e, entity););
                     }
+                none?
+                    ;
                 }
                 EndDragDropTarget();
             }

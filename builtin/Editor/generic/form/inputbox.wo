@@ -9,20 +9,20 @@ namespace generic
     {
         let mut open = true;
 
-        let mut text_buffer = default_value;
+        let text_buffer = mutable::create(default_value);
         while (open)
         {
-            BeginAttrOpen(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+            open = BeginAttrOpen(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
                 Text(shown);
-                InputText("##", ref text_buffer);
+                InputText("##", text_buffer);
                 if (Button("确定"))
                 {
-                    trigger(text_buffer);
+                    trigger(text_buffer->get);
                     open = false;
                 }
                 SameLine();
                 if (Button("清除"))
-                    text_buffer = "";
+                    text_buffer->set("");
                 SameLine();
                 if (Button("取消"))
                     open = false;

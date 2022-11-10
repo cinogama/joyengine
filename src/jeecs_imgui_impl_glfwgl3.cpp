@@ -95,8 +95,8 @@ namespace je::gui
     public func Begin(title:string)=> bool;
     extern("libjoyecs", "je_gui_begin")
     public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
-    extern("libjoyecs", "je_gui_begin")
-    public func BeginAttrOpen(title:string, attribute:WindowsAttribute, ref open:bool)=> bool;
+    extern("libjoyecs", "je_gui_begin_open")
+    public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> bool;
 
     extern("libjoyecs", "je_gui_end")
     public func End()=> bool;
@@ -135,11 +135,11 @@ namespace je::gui
     public func MenuItemEnabled(text:string, enable:bool)=> bool;
     extern("libjoyecs", "je_gui_menu_item")
     public func MenuItemShortcutEnabled(text:string, shortcut:string, enable:bool)=> bool;
-    extern("libjoyecs", "je_gui_menu_item")
-    public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, ref selected:bool, enable:bool)=> bool;
-    public func MenuItemSelectedEnabled(text:string, ref selected:bool, enable:bool)=> bool
+    extern("libjoyecs", "je_gui_menu_item_selected")
+    public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, selected:bool, enable:bool)=> option<bool /*selected*/>;
+    public func MenuItemSelectedEnabled(text:string, selected:bool, enable:bool)=> option<bool /*selected*/>
     {
-        return MenuItemShortcutSelectedEnabled(text, "", ref selected, enable);
+        return MenuItemShortcutSelectedEnabled(text, "", selected, enable);
     }
 
     extern("libjoyecs", "je_gui_end_main_menu_bar")
@@ -157,13 +157,13 @@ namespace je::gui
     public func BeginMenuEnabled(text:string, enable:bool)=> bool;
 
     extern("libjoyecs", "je_gui_listbox")
-    public func ListBox(label:string, items:array<string>)=> int;
+    public func ListBox(label:string, items:array<string>)=> option<int>;
     extern("libjoyecs", "je_gui_listbox")
-    public func ListBoxSelect(label:string, items:array<string>, ref select_item:int)=> int;
+    public func ListBoxSelect(label:string, items:array<string>, select_item:int)=> option<int>;
     extern("libjoyecs", "je_gui_listbox")
-    public func ListBoxSelectHeight(label:string, items:array<string>, ref select_item:int, height_count:int)=> int;
+    public func ListBoxSelectHeight(label:string, items:array<string>, select_item:int, height_count:int)=> option<int>;
     extern("libjoyecs", "je_gui_listbox_withsize")
-    public func ListBoxSelectSize(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
+    public func ListBoxSelectSize(label:string, items:array<string>, select_item:int, width:real, height:real)=> option<int>;
 
     extern("libjoyecs", "je_gui_begin_listbox")
     public func BeginListBox(label:string, width:real, height:real)=>bool;
@@ -248,38 +248,39 @@ namespace je::gui
     public func PopID()=>void;
 
     extern("libjoyecs", "je_gui_input_text_box")
-    public func InputText(label:string, ref buffer:string)=> bool;
+    public func InputText(label:string, buffer: string)=> option<string>;
 
     extern("libjoyecs", "je_gui_input_float_box")
-    public func InputFloat(label: string, ref value: real)=> bool;
+    public func InputFloat(label: string, value: real)=> option<real>;
+
     extern("libjoyecs", "je_gui_input_float_box")
-    public func InputFloatFormat(label: string, ref value: real, format: string)=> bool;
+    public func InputFloatFormat(label: string, value: real, format: string)=> option<real>;
 
     extern("libjoyecs", "je_gui_input_int_box")
-    public func InputInt(label: string, ref value: int)=> bool;
+    public func InputInt(label: string, value: int)=> option<int>;
 
     extern("libjoyecs", "je_gui_input_float2_box")
-    public func InputFloat2(label: string, ref x: real, ref y: real)=> bool;
+    public func InputFloat2(label: string, x: real, y: real)=> option<(real, real)>;
     extern("libjoyecs", "je_gui_input_float2_box")
-    public func InputFloat2Format(label: string, ref x: real, ref y: real, format: string)=> bool;
+    public func InputFloat2Format(label: string, x: real, y: real, format: string)=> option<(real, real)>;
 
     extern("libjoyecs", "je_gui_input_float3_box")
-    public func InputFloat3(label: string, ref x: real, ref y: real, ref z: real)=> bool;
+    public func InputFloat3(label: string, x: real, y: real, z: real)=> option<(real, real, real)>;
     extern("libjoyecs", "je_gui_input_float3_box")
-    public func InputFloat3Format(label: string, ref x: real, ref y: real, ref z: real, format: string)=> bool;
+    public func InputFloat3Format(label: string, x: real, y: real, z: real, format: string)=> option<(real, real, real)>;
 
     extern("libjoyecs", "je_gui_input_float4_box")
-    public func InputFloat4(label: string, ref x: real, ref y: real, ref z: real, ref w: real)=> bool;
+    public func InputFloat4(label: string, x: real, y: real, z: real, w: real)=> option<(real, real, real, real)>;
     extern("libjoyecs", "je_gui_input_float4_box")
-    public func InputFloat4Format(label: string, ref x: real, ref y: real, ref z: real, ref w: real, format: string)=> bool;
+    public func InputFloat4Format(label: string, x: real, y: real, z: real, w: real, format: string)=> option<(real, real, real, real)>;
 
     extern("libjoyecs", "je_gui_input_text_multiline")
-    public func InputTextMultiline(label:string, ref buffer: string)=> bool;
+    public func InputTextMultiline(label:string, buffer: string)=> option<string>;
     extern("libjoyecs", "je_gui_input_text_multiline")
-    public func InputTextMultilineSize(label:string, ref buffer: string, width:real, height:real)=> bool;
+    public func InputTextMultilineSize(label:string, buffer: string, width:real, height:real)=> option<string>;
 
     extern("libjoyecs", "je_gui_combo")
-    public func Combo(label:string, items: array<string>, ref select_item: int)=> bool;
+    public func Combo(label:string, items: array<string>, select_item: int)=> option<select_item>;
 
     extern("libjoyecs", "je_gui_end_menu")
     public func EndMenu()=> void;
@@ -302,7 +303,7 @@ namespace je::gui
     public func ImageButtonSize(tex: je::graphic::texture, width: real, height: real)=> bool;
 
     extern("libjoyecs", "je_gui_content_region_avail")
-    public func GetContentRegionAvail(ref x: real, ref y: real)=> void;
+    public func GetContentRegionAvail()=> (real, real);
 )"
 R"(
     public enum DragAttribute
@@ -344,7 +345,7 @@ R"(
     extern("libjoyecs", "je_gui_begin_drag_drop_target")
     public func BeginDragDropTarget()=> bool;
     extern("libjoyecs", "je_gui_accept_drag_drop_payload")
-    public func AcceptDragDropPayload(type: string, ref data: string)=> bool;
+    public func AcceptDragDropPayload(type: string)=> option<string>;
     extern("libjoyecs", "je_gui_end_accept_drop_source")
     public func EndDragDropTarget()=> bool;
 
@@ -352,11 +353,17 @@ R"(
     {
         if (BeginDragDropTarget())
         {
-            let mut data = "";
-            for (let accept_type : types)
-                if (AcceptDragDropPayload(accept_type, ref data))
-                    return option::value((accept_type, data));
+            let drag_result = types
+                ->> \type = (type, AcceptDragDropPayload(type));
+                ->  forall(\accept_type_result = accept_result->has
+                    where (_, accept_result) = accept_type_result;)
+                ->  reduce(\l, r = l;)
+                ->  reduce
+                ;
+
             EndDragDropTarget();
+
+            return drag_result;
         }
         return option::none;
     }
@@ -441,10 +448,9 @@ WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args, size_t ar
 {
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(wo_string(args + 0)))
     {
-        wo_set_string(args + 1, (const char*)payload->Data);
-        return wo_ret_bool(vm, true);
+        return wo_ret_option_string(vm, (const char*)payload->Data);
     }
-    return wo_ret_bool(vm, false);
+    return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_end_accept_drop_source(wo_vm vm, wo_value args, size_t argc)
 {
@@ -642,10 +648,9 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
 
     bool val_changed = ImGui::ListBox(wo_string(args + 0), &selected_item, items.data(), items.size(), max_height_item);
 
-    if (argc >= 3)
-        wo_set_int(args + 2, selected_item);
-
-    return wo_ret_bool(vm, val_changed);
+    if (val_changed)
+        return wo_ret_option_int(vm, selected_item);
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args, size_t argc)
@@ -670,10 +675,11 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args, size_t argc)
         if (!value_updated)
             selected_index = origin_selected_index;
 
-        wo_set_int(args + 2, selected_index);
         ImGui::EndListBox();
     }
-    return wo_ret_bool(vm, value_updated);
+    if (value_updated)
+        return wo_ret_option_int(vm, selected_index);
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api je_gui_job_vm_handle(wo_vm vm, wo_value args, size_t argc)
@@ -687,13 +693,26 @@ WO_API wo_api je_gui_begin(wo_vm vm, wo_value args, size_t argc)
     if (argc == 3)
     {
         bool showing = true;
-        windows_flag = ImGui::Begin(wo_string(args), &showing, wo_int(args + 1));
-        wo_set_bool(args + 2, showing);
+        ImGui::Begin(wo_string(args), &showing, wo_int(args + 1));
+        windows_flag = showing;
     }
     else if (argc == 2)
         windows_flag = ImGui::Begin(wo_string(args), 0, wo_int(args + 1));
     else
         windows_flag = ImGui::Begin(wo_string(args));
+
+    if (ImGui::IsWindowFocused())
+        next_frame_any_window_focused_on = true;
+
+    return wo_ret_bool(vm, windows_flag);
+}
+WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args, size_t argc)
+{
+    bool windows_flag = false;
+
+    bool showing = true;
+    ImGui::Begin(wo_string(args), &showing, wo_int(args + 1));
+    windows_flag = showing;
 
     if (ImGui::IsWindowFocused())
         next_frame_any_window_focused_on = true;
@@ -776,6 +795,18 @@ WO_API wo_api je_gui_menu_item(wo_vm vm, wo_value args, size_t argc)
     }
     return wo_ret_bool(vm, ImGui::MenuItem(wo_string(args + 0)));
 }
+
+WO_API wo_api je_gui_menu_item_selected(wo_vm vm, wo_value args, size_t argc)
+{
+    bool selected = wo_bool(args + 2);
+    bool clicked = ImGui::MenuItem(wo_string(args + 0), wo_string(args + 1), &selected, wo_bool(args + 3));
+    wo_set_bool(args + 2, selected);
+
+    if (clicked)
+        return wo_ret_option_bool(vm, selected);
+    return wo_ret_option_none(vm);
+}
+
 WO_API wo_api je_gui_end_main_menu_bar(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::EndMainMenuBar();
@@ -867,8 +898,10 @@ WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args, size_t argc)
 {
     auto&& sz = ImGui::GetContentRegionAvail();
 
-    wo_set_float(args + 0, sz.x);
-    wo_set_float(args + 1, sz.y);
+    wo_value result = wo_push_struct(vm, 2);
+
+    wo_set_float(wo_struct_get(result, 0), sz.x);
+    wo_set_float(wo_struct_get(result, 1), sz.y);
 
     return wo_ret_void(vm);
 }
@@ -878,10 +911,9 @@ WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
     std::string buf = wo_string(args + 1);
     if (ImGui::InputText(wo_string(args + 0), &buf))
     {
-        wo_set_string(args + 1, buf.c_str());
-        return wo_ret_bool(vm, true);
+        return wo_ret_option_string(vm, buf.c_str());
     }
-    return wo_ret_bool(vm, false);
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args, size_t argc)
@@ -892,8 +924,9 @@ WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args, size_t argc)
 
     update = ImGui::InputInt(label, &value);
 
-    wo_set_int(args + 1, value);
-    return wo_ret_bool(vm, update);
+    if (update)
+        return wo_ret_option_int(vm, value);
+    return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args, size_t argc)
 {
@@ -908,8 +941,10 @@ WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args, size_t argc)
         wo_string_t format = wo_string(args + 2);
         update = ImGui::InputFloat(label, &value, 0.f, 0.f, format);
     }
-    wo_set_float(args + 1, value);
-    return wo_ret_bool(vm, update);
+
+    if (update)
+        return wo_ret_option_float(vm, value);
+    return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args, size_t argc)
 {
@@ -924,9 +959,16 @@ WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args, size_t argc)
         wo_string_t format = wo_string(args + 3);
         update = ImGui::InputFloat2(label, values, format);
     }
-    wo_set_float(args + 1, values[0]);
-    wo_set_float(args + 2, values[1]);
-    return wo_ret_bool(vm, update);
+
+    if (update)
+    {
+        wo_value result = wo_push_struct(vm, 2);
+        wo_set_float(wo_struct_get(result, 0), values[0]);
+        wo_set_float(wo_struct_get(result, 1), values[1]);
+
+        return wo_ret_option_val(vm, result);
+    }
+    return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args, size_t argc)
 {
@@ -941,10 +983,16 @@ WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args, size_t argc)
         wo_string_t format = wo_string(args + 4);
         update = ImGui::InputFloat3(label, values, format);
     }
-    wo_set_float(args + 1, values[0]);
-    wo_set_float(args + 2, values[1]);
-    wo_set_float(args + 3, values[2]);
-    return wo_ret_bool(vm, update);
+
+    if (update)
+    {
+        wo_value result = wo_push_struct(vm, 3);
+        wo_set_float(wo_struct_get(result, 0), values[0]);
+        wo_set_float(wo_struct_get(result, 1), values[1]);
+        wo_set_float(wo_struct_get(result, 2), values[2]);
+        return wo_ret_option_val(vm, result);
+    }
+    return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args, size_t argc)
 {
@@ -959,11 +1007,16 @@ WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args, size_t argc)
         wo_string_t format = wo_string(args + 5);
         update = ImGui::InputFloat4(label, values, format);
     }
-    wo_set_float(args + 1, values[0]);
-    wo_set_float(args + 2, values[1]);
-    wo_set_float(args + 3, values[2]);
-    wo_set_float(args + 4, values[3]);
-    return wo_ret_bool(vm, update);
+    if (update)
+    {
+        wo_value result = wo_push_struct(vm, 4);
+        wo_set_float(wo_struct_get(result, 0), values[0]);
+        wo_set_float(wo_struct_get(result, 1), values[1]);
+        wo_set_float(wo_struct_get(result, 2), values[2]);
+        wo_set_float(wo_struct_get(result, 3), values[3]);
+        return wo_ret_option_val(vm, result);
+    }
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)
@@ -979,9 +1032,8 @@ WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)
         updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf);
 
     if (updated)
-        wo_set_string(args + 1, buf.c_str());
-
-    return wo_ret_bool(vm, updated);
+        return wo_ret_option_string(vm, buf.c_str());
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api je_gui_combo(wo_vm vm, wo_value args, size_t argc)
@@ -993,9 +1045,10 @@ WO_API wo_api je_gui_combo(wo_vm vm, wo_value args, size_t argc)
     }
     int current_item = (int)wo_int(args + 2);
     auto updated = ImGui::Combo(wo_string(args + 0), &current_item, combo_items.data(), (int)combo_items.size());
-    wo_set_int(args + 2, current_item);
 
-    return wo_ret_bool(vm, updated);
+    if (updated)
+        return wo_ret_option_int(vm, current_item);
+    return wo_ret_option_none(vm);
 }
 
 struct gui_wo_job_coroutine

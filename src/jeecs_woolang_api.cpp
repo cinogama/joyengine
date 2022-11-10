@@ -573,19 +573,18 @@ WO_API wo_api wojeapi_member_iterator_next(wo_vm vm, wo_value args, size_t argc)
 {
     //func next(self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value)=> bool;
     component_member_iter* iter = (component_member_iter*)wo_pointer(args + 0);
-    wo_value out_name = args + 1;
-    wo_value out_type = args + 2;
-    wo_value out_addr = args + 3;
 
     if (nullptr == iter->iter)
-        return wo_ret_bool(vm, false);
+        return wo_ret_option_none(vm);
 
-    wo_set_string(out_name, iter->iter->m_member_name);
-    wo_set_pointer(out_type, (void*)iter->iter->m_member_type);
-    wo_set_handle(out_addr, (wo_handle_t)(iter->iter->m_member_offset + (intptr_t)iter->component_addr));
+    wo_value result = wo_push_struct(vm, 3);
+
+    wo_set_string(wo_struct_get(result, 0), iter->iter->m_member_name);
+    wo_set_pointer(wo_struct_get(result, 1), (void*)iter->iter->m_member_type);
+    wo_set_handle(wo_struct_get(result, 2), (wo_handle_t)(iter->iter->m_member_offset + (intptr_t)iter->component_addr));
     iter->iter = iter->iter->m_next_member;
 
-    return wo_ret_bool(vm, true);
+    return wo_ret_option_val(vm, result);
 }
 
 // INPUTS
@@ -597,9 +596,12 @@ WO_API wo_api wojeapi_input_keydown(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
 {
     auto winsz = jeecs::input::windowsize();
-    wo_set_int(args + 0, (wo_int_t)winsz.x);
-    wo_set_int(args + 1, (wo_int_t)winsz.y);
-    return wo_ret_void(vm);
+
+    wo_value result = wo_push_struct(vm, 2);
+    wo_set_int(wo_struct_get(result, 0), (wo_int_t)winsz.x);
+    wo_set_int(wo_struct_get(result, 1), (wo_int_t)winsz.y);
+
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t argc)
@@ -756,94 +758,55 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_native_value_int(wo_vm vm, wo_value args, size_t argc)
 {
     int* value = (int*)wo_pointer(args + 0);
-    if (wo_is_ref(args + 1))
-        wo_set_int(args + 1, *value);
-    else
-        *value = wo_int(args + 1);
-    return wo_ret_void(vm);
+    return wo_ret_int(vm, *value);
 }
 
 WO_API wo_api wojeapi_native_value_float(wo_vm vm, wo_value args, size_t argc)
 {
     float* value = (float*)wo_pointer(args + 0);
-    if (wo_is_ref(args + 1))
-        wo_set_float(args + 1, *value);
-    else
-        *value = wo_float(args + 1);
-    return wo_ret_void(vm);
+    return wo_ret_float(vm, *value);
 }
 
 WO_API wo_api wojeapi_native_value_float2(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::math::vec2* value = (jeecs::math::vec2*)wo_pointer(args + 0);
-    if (wo_is_ref(args + 1))
-        wo_set_float(args + 1, value->x);
-    else
-        value->x = wo_float(args + 1);
 
-    if (wo_is_ref(args + 2))
-        wo_set_float(args + 2, value->y);
-    else
-        value->y = wo_float(args + 2);
+    wo_value result = wo_push_struct(vm, 2);
+    wo_set_float(wo_struct_get(result, 0), value->x);
+    wo_set_float(wo_struct_get(result, 1), value->y);
 
-    return wo_ret_void(vm);
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_native_value_float3(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::math::vec3* value = (jeecs::math::vec3*)wo_pointer(args + 0);
-    if (wo_is_ref(args + 1))
-        wo_set_float(args + 1, value->x);
-    else
-        value->x = wo_float(args + 1);
 
-    if (wo_is_ref(args + 2))
-        wo_set_float(args + 2, value->y);
-    else
-        value->y = wo_float(args + 2);
+    wo_value result = wo_push_struct(vm, 3);
+    wo_set_float(wo_struct_get(result, 0), value->x);
+    wo_set_float(wo_struct_get(result, 1), value->y);
+    wo_set_float(wo_struct_get(result, 2), value->z);
 
-    if (wo_is_ref(args + 3))
-        wo_set_float(args + 3, value->z);
-    else
-        value->z = wo_float(args + 3);
-
-    return wo_ret_void(vm);
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::math::vec4* value = (jeecs::math::vec4*)wo_pointer(args + 0);
-    if (wo_is_ref(args + 1))
-        wo_set_float(args + 1, value->x);
-    else
-        value->x = wo_float(args + 1);
 
-    if (wo_is_ref(args + 2))
-        wo_set_float(args + 2, value->y);
-    else
-        value->y = wo_float(args + 2);
+    wo_value result = wo_push_struct(vm, 4);
+    wo_set_float(wo_struct_get(result, 0), value->x);
+    wo_set_float(wo_struct_get(result, 1), value->y);
+    wo_set_float(wo_struct_get(result, 2), value->z);
+    wo_set_float(wo_struct_get(result, 3), value->w);
 
-    if (wo_is_ref(args + 3))
-        wo_set_float(args + 3, value->z);
-    else
-        value->z = wo_float(args + 3);
-
-    if (wo_is_ref(args + 4))
-        wo_set_float(args + 4, value->w);
-    else
-        value->w = wo_float(args + 4);
-
-    return wo_ret_void(vm);
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_native_value_je_string(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::string* value = (jeecs::string*)wo_pointer(args + 0);
-    if (wo_is_ref(args + 1))
-        wo_set_string(args + 1, value->c_str());
-    else
-        *value = wo_string(args + 1);
-    return wo_ret_void(vm);
+    return wo_ret_string(vm, value->c_str());
 }
 
 WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t argc)
@@ -851,25 +814,82 @@ WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t ar
     jeecs::math::quat* value = (jeecs::math::quat*)wo_pointer(args + 0);
     auto&& euler_v3 = value->euler_angle();
 
-    bool need_update = false;
+    wo_value result = wo_push_struct(vm, 3);
+    wo_set_float(wo_struct_get(result, 0), euler_v3.x);
+    wo_set_float(wo_struct_get(result, 1), euler_v3.y);
+    wo_set_float(wo_struct_get(result, 2), euler_v3.z);
 
-    if (wo_is_ref(args + 1))
-        wo_set_float(args + 1, euler_v3.x);
-    else
-        euler_v3.x = wo_float(args + 1), need_update = true;
+    return wo_ret_val(vm, result);
+}
 
-    if (wo_is_ref(args + 2))
-        wo_set_float(args + 2, euler_v3.y);
-    else
-        euler_v3.y = wo_float(args + 2), need_update = true;
+// set
+WO_API wo_api wojeapi_native_value_set_int(wo_vm vm, wo_value args, size_t argc)
+{
+    int* value = (int*)wo_pointer(args + 0);
 
-    if (wo_is_ref(args + 3))
-        wo_set_float(args + 3, euler_v3.z);
-    else
-        euler_v3.z = wo_float(args + 3), need_update = true;
+    *value = wo_int(args + 1);
+    return wo_ret_void(vm);
+}
 
-    if (need_update)
-        value->set_euler_angle(euler_v3);
+WO_API wo_api wojeapi_native_value_set_float(wo_vm vm, wo_value args, size_t argc)
+{
+    float* value = (float*)wo_pointer(args + 0);
+
+    *value = wo_float(args + 1);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_native_value_set_float2(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::vec2* value = (jeecs::math::vec2*)wo_pointer(args + 0);
+
+    value->x = wo_float(args + 1);
+    value->y = wo_float(args + 2);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_native_value_set_float3(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::vec3* value = (jeecs::math::vec3*)wo_pointer(args + 0);
+
+    value->x = wo_float(args + 1);
+    value->y = wo_float(args + 2);
+    value->z = wo_float(args + 3);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_native_value_set_float4(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::vec4* value = (jeecs::math::vec4*)wo_pointer(args + 0);
+
+    value->x = wo_float(args + 1);
+    value->y = wo_float(args + 2);
+    value->z = wo_float(args + 3);
+    value->w = wo_float(args + 4);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_native_value_set_je_string(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::string* value = (jeecs::string*)wo_pointer(args + 0);
+
+    *value = wo_string(args + 1);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_native_value_set_rot_euler3(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::quat* value = (jeecs::math::quat*)wo_pointer(args + 0);
+    auto&& euler_v3 = value->euler_angle();
+
+    euler_v3.x = wo_float(args + 1);
+    euler_v3.y = wo_float(args + 2);
+    euler_v3.z = wo_float(args + 3);
+
+    value->set_euler_angle(euler_v3);
 
     return wo_ret_void(vm);
 }
@@ -925,31 +945,28 @@ WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
             delete (jeecs::graphic::texture::pixel*)ptr;
         });
 }
-
 WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args, size_t argc)
 {
     auto* pix = (jeecs::graphic::texture::pixel*)wo_pointer(args + 0);
     auto color = pix->get();
 
-    if (wo_is_ref(args + 1))
-        wo_set_float(args + 1, color.x);
-    else
-        color.x = wo_float(args + 1);
+    wo_value result = wo_push_struct(vm, 4);
+    wo_set_float(wo_struct_get(result, 0), color.x);
+    wo_set_float(wo_struct_get(result, 1), color.y);
+    wo_set_float(wo_struct_get(result, 2), color.z);
+    wo_set_float(wo_struct_get(result, 3), color.w);
 
-    if (wo_is_ref(args + 2))
-        wo_set_float(args + 2, color.y);
-    else
-        color.y = wo_float(args + 2);
+    return wo_ret_val(vm, result);
+}
+WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* pix = (jeecs::graphic::texture::pixel*)wo_pointer(args + 0);
+    auto color = jeecs::math::vec4();
 
-    if (wo_is_ref(args + 3))
-        wo_set_float(args + 3, color.z);
-    else
-        color.z = wo_float(args + 3);
-
-    if (wo_is_ref(args + 4))
-        wo_set_float(args + 4, color.w);
-    else
-        color.w = wo_float(args + 4);
+    color.x = wo_float(args + 1);
+    color.y = wo_float(args + 2);
+    color.z = wo_float(args + 3);
+    color.w = wo_float(args + 4);
 
     pix->set(color);
 
@@ -1253,10 +1270,11 @@ WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args, size_t argc)
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
     auto sz = texture->get()->size();
 
-    wo_set_int(args + 1, (wo_int_t)sz.x);
-    wo_set_int(args + 2, (wo_int_t)sz.y);
+    wo_value result = wo_push_struct(vm, 2);
+    wo_set_int(wo_struct_get(result, 0), (wo_int_t)sz.x);
+    wo_set_int(wo_struct_get(result, 1), (wo_int_t)sz.y);
 
-    return wo_ret_void(vm);
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args, size_t argc)
@@ -1375,16 +1393,8 @@ namespace je
             _windowsize(x, y);
         }  
 
-        public func window_size()
-        {
-            extern("libjoyecs", "wojeapi_input_window_size")
-            func _windowsize(ref width: int, ref height: int)=> void;
-
-            let mut x = 0, mut y = 0;
-            _windowsize(ref x, ref y);
-    
-            return (x, y);
-        }
+        extern("libjoyecs", "wojeapi_input_window_size")
+        public func window_size()=> (int, int);
     }
 
     extern("libjoyecs", "wojeapi_exit")
@@ -1467,16 +1477,8 @@ namespace je
             extern("libjoyecs", "wojeapi_texture_is_valid")
             public func isvalid(self: texture)=> bool;
 
-            public func size(self: texture)=> (int, int)
-            {
-                extern("libjoyecs", "wojeapi_texture_get_size")
-                func _size(self: texture, ref x: int, ref y: int)=> void;
-
-                let mut x = 0, mut y = 0;
-                _size(self, ref x, ref y);
-
-                return (x, y);
-            }
+            extern("libjoyecs", "wojeapi_texture_get_size")
+            public func size(self: texture)=> (int, int);
 
             extern("libjoyecs", "wojeapi_texture_get_pixel")
             public func pix(self: texture, x: int, y: int)=> pixel;
@@ -1484,19 +1486,11 @@ namespace je
             public using pixel = gchandle;
             namespace pixel
             {
-                extern("libjoyecs", "wojeapi_texture_pixel_color")
-                public func set_color(self: pixel, ref r: real, ref g: real, ref b: real, ref a: real)=> void;
+                extern("libjoyecs", "wojeapi_texture_set_pixel_color")
+                public func set_color(self: pixel, r: real, g: real, b: real, a: real)=> void;
 
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
-                public func get_color(self: pixel, ref r: real, ref g: real, ref b: real, ref a: real)=> void;
-
-                public func color(self: pixel)
-                {
-                    let mut r = 0., mut g = 0., mut b = 0., mut a = 0.;
-                    self->get_color(ref r, ref g, ref b, ref a);
-
-                    return (r, g, b, a);
-                }
+                public func get_color(self: pixel)=> (real, real, real, real);
             }
         }
 
@@ -1913,19 +1907,21 @@ R"(
                 {
                     return self;
                 }
-                public func next(self: entity_iter, ref out_iter: entity_iter,ref out_entity: entity)=> bool
+                public func next(self: entity_iter)=> option<(entity_iter, entity)>
                 {
                     let current_iter = self.m_cur_iter;
-                    while (current_iter->next(0, ref out_entity))
+
+                    for (let _, out_entity : current_iter)
                     {
                         if (self.m_judge_func(out_entity))
                         {
                             self.m_current_entity = option::value(out_entity);
-                            out_iter = self;
                             self.m_outed_entities->add(out_entity);
-                            return true;
+
+                            return option::value((self, out_entity));
                         }
                     }
+
                 continue_find_not_displayed_entity@
                     while (!self.m_not_top_entities->empty())
                     {
@@ -1944,13 +1940,12 @@ R"(
                             // Current entity have jeecs::Transform::LocalToParent,
                             // but it's LocalToParent donot point to any other entity;
                             self.m_current_entity = option::value(top);
-                            out_iter = self;
-                            out_entity = top;
                             self.m_outed_entities->add(top);
-                            return true;
+
+                            return option::value((self, out_entity));
                         }
                     }
-                    return false;
+                    return option::none;
                 }
             } // end of namespace entity_iter
 )"
@@ -1991,31 +1986,53 @@ R"(
     namespace native_value
     {
         extern("libjoyecs", "wojeapi_native_value_int")
-        public func int(self: native_value, ref value: int)=> void;
+        public func int(self: native_value)=> int;
 
         extern("libjoyecs", "wojeapi_native_value_float")
-        public func float(self: native_value, ref value: real)=> void;
+        public func float(self: native_value)=> float;
 
         extern("libjoyecs", "wojeapi_native_value_float2")
-        public func float2(self: native_value, ref x: real, ref y: real)=> void;
+        public func float2(self: native_value)=> (real, real);
 
         extern("libjoyecs", "wojeapi_native_value_float3")
-        public func float3(self: native_value, ref x: real, ref y: real, ref z: real)=> void;
+        public func float3(self: native_value)=> (real, real, real);
 
         extern("libjoyecs", "wojeapi_native_value_float4")
-        public func float4(self: native_value, ref x: real, ref y: real, ref z: real, ref w: real)=> void;
+        public func float4(self: native_value)=> (real, real, real, real);
 
         extern("libjoyecs", "wojeapi_native_value_rot_euler3")
-        public func euler3(self: native_value, ref x: real, ref y: real, ref z: real)=> void;
+        public func euler3(self: native_value)=> (real, real, real);
 
         extern("libjoyecs", "wojeapi_native_value_je_string")
-        public func string(self: native_value, ref val: string)=> void;
+        public func string(self: native_value)=> string;
 
         extern("libjoyecs", "wojeapi_native_value_je_to_string")
         public func to_string(self: native_value, types: typeinfo)=> string; 
 
         extern("libjoyecs", "wojeapi_native_value_je_parse")
         public func parse(self: native_value, types: typeinfo, str: string)=> void; 
+
+        
+        extern("libjoyecs", "wojeapi_native_value_set_int")
+        public func set_int(self: native_value, value: int)=> void;
+
+        extern("libjoyecs", "wojeapi_native_value_set_float")
+        public func set_float(self: native_value, value: real)=> void;
+
+        extern("libjoyecs", "wojeapi_native_value_set_float2")
+        public func set_float2(self: native_value, x: real, y: real)=> void;
+
+        extern("libjoyecs", "wojeapi_native_value_set_float3")
+        public func set_float3(self: native_value, x: real, y: real, z: real)=> void;
+
+        extern("libjoyecs", "wojeapi_native_value_set_float4")
+        public func set_float4(self: native_value, x: real, y: real, z: real, w: real)=> void;
+
+        extern("libjoyecs", "wojeapi_native_value_set_rot_euler3")
+        public func set_euler3(self: native_value, x: real, y: real, z: real)=> void;
+
+        extern("libjoyecs", "wojeapi_native_value_set_je_string")
+        public func set_string(self: native_value, val: string)=> void;
     }
 
     public using component = struct{addr: handle, type: typeinfo}
@@ -2031,7 +2048,7 @@ R"(
                 }
 
                 extern("libjoyecs", "wojeapi_member_iterator_next")
-                public func next(self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value)=> bool;
+                public func next(self: member_iterator)=> option<(string, typeinfo, native_value)>;
             }
 
             func iter_member(self: component)

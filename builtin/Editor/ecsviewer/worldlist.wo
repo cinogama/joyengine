@@ -44,12 +44,12 @@ namespace editor::WorldList
         }
     }
 
-    public func show(ref open: bool)
+    public func show(open: mutable<bool>)
     {
         using je::gui;
 
-        BeginAttrOpen("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+        open->set(BeginAttrOpen("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize));
             menu();
             if (BeginListBox("##", 200.0, 400.0))
             {

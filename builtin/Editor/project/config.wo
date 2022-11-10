@@ -556,8 +556,7 @@ namespace editor::Project
 
         launch(func(){
             
-            let mut open = false;
-            BeginAttrOpen("项目设置", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+            let mut open = BeginAttrOpen("项目设置", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
                 Text("项目名称" + self.name);
 
                 static let USABLE_GRAPHIC_SYSTEMS = 
@@ -567,15 +566,19 @@ namespace editor::Project
                     USABLE_GRAPHIC_SYSTEMS
                         ->> \t = t->name;
                         ;
-
-                let mut index = USABLE_GRAPHIC_SYSTEMS->find(self.graphic_system);
-                if (Combo("图形管线", USABLE_GRAPHIC_SYSTEM_NAMES, ref index))
+                match (Combo("图形管线", USABLE_GRAPHIC_SYSTEM_NAMES, USABLE_GRAPHIC_SYSTEMS->find(self.graphic_system)))
+                {
+                value(index)?
                 {
                     self.graphic_system = USABLE_GRAPHIC_SYSTEMS[index];
 
                     // 更新一下
                     je::world::rend()
-                        ->> \w = WorldList::SwitchEditingWorld(w);;
+                        ->> \w = WorldList::SwitchEditingWorld(w);
+                        ;
+                }
+                none?
+                    ;
                 }
 
                 static let USABLE_EDITOR_SYSTEMS = 
@@ -585,15 +588,19 @@ namespace editor::Project
                     USABLE_EDITOR_SYSTEMS
                         ->> \t = t->name;
                         ;
-
-                index = USABLE_EDITOR_SYSTEMS->find(self.editor_system);
-                if (Combo("编辑系统", USABLE_EDITOR_SYSTEM_NAMES, ref index))
+                match (Combo("编辑系统", USABLE_EDITOR_SYSTEM_NAMES, USABLE_EDITOR_SYSTEMS->find(self.editor_system)))
+                {
+                value(index)?
                 {
                     self.editor_system = USABLE_EDITOR_SYSTEMS[index];
 
                     // 更新一下
                     je::world::rend()
-                        ->> \w = WorldList::SwitchEditingWorld(w);;
+                        ->> \w = WorldList::SwitchEditingWorld(w);
+                        ;
+                }
+                none?
+                    ;
                 }
 
             End();

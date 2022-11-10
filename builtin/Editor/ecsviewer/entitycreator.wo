@@ -10,7 +10,7 @@ namespace editor::EntityCreator
 {
     private let icon_image = je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/Component.png");
     using EntityContext = struct {
-        mut name  : string,
+        name  : mutable<string>,
         edit_entity      : option<je::entity>,
         has_append_types : vec<je::typeinfo>,
         not_append_types : vec<je::typeinfo>,
@@ -19,7 +19,7 @@ namespace editor::EntityCreator
     public func edit_context(entity: je::entity)=> EntityContext
     {
         let context = EntityContext{
-            name = entity->editor::name,
+            name = mutable::create(entity->editor::name),
             edit_entity = option::value(entity),
             has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
@@ -45,7 +45,7 @@ namespace editor::EntityCreator
     public func create_context()=> EntityContext
     {
         let context = EntityContext{
-            name = "New entity",
+            name = mutable::create("New entity"),
             edit_entity = option::none,
             has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
@@ -93,11 +93,13 @@ namespace editor::EntityCreator
 
         if(BeginDragDropTarget())
         {
-            let mut data = "";
-            if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
+            match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
             {
+            value(data)?
                 // 有组件被拖动至此
                 add_components(context, data);
+            none?
+                ;
             }
             EndDragDropTarget();
         }
@@ -115,10 +117,13 @@ namespace editor::EntityCreator
         if(BeginDragDropTarget())
         {
             let mut data = "";
-            if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
+            match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
             {
+            value(data)?
                 // 有组件被拖动至此
                 remove_components(context, data);
+            none?
+                ;
             }
             EndDragDropTarget();
         }
@@ -169,7 +174,7 @@ namespace editor::EntityCreator
         {
             let menu_button_text = context.edit_entity->has ? "应用" | "创建";
 
-            if (MenuItemEnabled(menu_button_text, context.name != "" 
+            if (MenuItemEnabled(menu_button_text, context.name->get != "" 
                             && !context.has_append_types->empty))
             {
                 // TODO: 实例化实体，至少要有一个组件
@@ -246,9 +251,8 @@ namespace editor::EntityCreator
     {
         using je::gui;
 
-        let mut open = true;
-        BeginAttrOpen(context.edit_entity->has ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
-            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+        let mut open = BeginAttrOpen(context.edit_entity->has ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
+            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
    
             if (menu_bar(context))
             {
@@ -268,7 +272,7 @@ namespace editor::EntityCreator
                     add_components->map(\t: je::typeinfo = e->editor::add_component(t););
                     removing_components->map(\t: je::typeinfo = e->editor::remove_component(t););
 
-                    e->editor::set_name(context.name);
+                    e->editor::set_name(context.name->get);
                 }
                 none?
                     match(je::world::rend())
@@ -276,7 +280,7 @@ namespace editor::EntityCreator
                         value(rworld)?
                         {
                             rworld->add_entity(context.has_append_types->toarray)
-                                  ->editor::set_name(context.name);
+                                  ->editor::set_name(context.name->get);
                         }
                         none?
                             launch(generic::MsgBox, ("创建实体失败", "没有找到渲染中的世界",));
@@ -287,10 +291,9 @@ namespace editor::EntityCreator
                 open = false;
             }
 
-            InputText("名称", ref context.name);
+            InputText("名称", context.name);
 
-            let mut available_width = 0.;
-            GetContentRegionAvail(ref available_width, 0./* 不关心高度 */);
+            let (available_width, _) = GetContentRegionAvail();
 
             show_append_components(context, available_width / 2.);
             SameLine();

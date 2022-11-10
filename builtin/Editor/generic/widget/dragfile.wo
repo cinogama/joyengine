@@ -14,16 +14,20 @@ namespace generic
     {
         using je::gui;
 
-        let mut data = "", mut some_data_drag = false;
         if(BeginDragDropTarget())
         {
-            some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH", ref data);
+            let some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH");
             EndDragDropTarget();
+
+            match (some_data_drag)
+            {
+            value(data)?
+                return DragFileAction::Drag(data);
+            none?
+                ;
+            }
         }
-        if (some_data_drag)
-            return DragFileAction::Drag(data);
-        else
-            return DragFileAction::None;
+        return DragFileAction::None;
     }
     public func DragFile(name: string, mut path: string)
     {

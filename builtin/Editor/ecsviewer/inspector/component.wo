@@ -144,63 +144,37 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::float] = 
             func(name: string, addr: je::native_value)
             {
-                let mut value = 0.; addr->float(ref value);
-
-                if (InputFloat(name, ref value))
-                    addr->float(value);
+                InputFloat(name, addr->float) ->> \value = addr->set_float(value);;
             };
         _type_widget_methods[je::typeinfo::int] = 
             func(name: string, addr: je::native_value)
             {
-                let mut value = 0; addr->int(ref value);
-
-                if (InputInt(name, ref value))
-                    addr->int(value);
+                 InputInt(name, addr->int) ->> \value = addr->set_int(value);;
             };
         _type_widget_methods[je::typeinfo::float2] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = 0., mut y = 0.;
-                addr->float2(ref x, ref y);
-
-                if (InputFloat2(name, ref x, ref y))
-                    addr->float2(x, y);
+                InputFloat2(name, addr->float2...) ->> \value = addr->set_float2(value...);;
             };
         _type_widget_methods[je::typeinfo::float3] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = 0., mut y = 0., mut z = 0.;
-                addr->float3(ref x, ref y, ref z);
-
-                if (InputFloat3(name, ref x, ref y, ref z))
-                    addr->float3(x, y, z);
+                InputFloat3(name, addr->float3...) ->> \value = addr->set_float3(value...);;
             };
         _type_widget_methods[je::typeinfo::float4] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = 0., mut y = 0., mut z = 0., mut w = 0.;
-                addr->float4(ref x, ref y, ref z, ref w);
-
-                if (InputFloat4(name, ref x, ref y, ref z, ref w))
-                    addr->float4(x, y, z, w);
+                InputFloat4(name, addr->float4...) ->> \value = addr->set_float4(value...);;
             };
         _type_widget_methods[je::typeinfo::quat] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = 0., mut y = 0., mut z = 0.;
-                addr->euler3(ref x, ref y, ref z);
-
-                if (InputFloat3(name, ref x, ref y, ref z))
-                    addr->euler3(x, y, z);
+                InputFloat3(name, addr->euler3...) ->> \value = addr->set_euler3(value...);;
             };
         _type_widget_methods[je::typeinfo::string] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = "";
-                addr->string(ref x);
-
-                if (InputText(name, ref x))
-                    addr->string(x);
+                InputText(name, addr->string) ->> \value = addr->set_string(value);;
             };
     }
     _register_default_method(); // 此处注册常用默认操作

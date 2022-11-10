@@ -34,12 +34,13 @@ WO_API wo_api wojeapi_filesys_path(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_filesys_path_next(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* result = (fs::directory_iterator*)wo_pointer(args + 0);
-    if (*result == fs::directory_iterator())
-        return wo_ret_bool(vm, false);
+    auto* iter = (fs::directory_iterator*)wo_pointer(args + 0);
+    if (*iter == fs::directory_iterator())
+        return wo_ret_option_none(vm);
 
-    wo_set_string(args + 1, normalize_path_str((*((*result)++)).path()).c_str());
-    return wo_ret_bool(vm, true);
+    wo_value result = wo_push_struct(vm, 1);
+    wo_set_string(wo_struct_get(result, 0), normalize_path_str((*((*iter)++)).path()).c_str());
+    return wo_ret_option_val(vm, result);
 }
 
 WO_API wo_api wojeapi_filesys_recur_path(wo_vm vm, wo_value args, size_t argc)
@@ -53,12 +54,13 @@ WO_API wo_api wojeapi_filesys_recur_path(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_filesys_recur_path_next(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* result = (fs::recursive_directory_iterator*)wo_pointer(args + 0);
-    if (*result == fs::recursive_directory_iterator())
-        return wo_ret_bool(vm, false);
+    auto* iter = (fs::recursive_directory_iterator*)wo_pointer(args + 0);
+    if (*iter == fs::recursive_directory_iterator())
+        return wo_ret_option_none(vm);
 
-    wo_set_string(args + 1, normalize_path_str((*((*result)++)).path()).c_str());
-    return wo_ret_bool(vm, true);
+    wo_value result = wo_push_struct(vm, 1);
+    wo_set_string(wo_struct_get(result, 0), normalize_path_str((*((*iter)++)).path()).c_str());
+    return wo_ret_option_val(vm, result);
 }
 
 WO_API wo_api wojeapi_filesys_is_dir(wo_vm vm, wo_value args, size_t argc)
@@ -204,17 +206,14 @@ namespace je::filesys
             return self;
         }
         
-        func next(self: path, ref out_path: string)
+        func next(self: path)
         {
             extern("libjoyecs", "wojeapi_filesys_path_next")
-            func _next(self: path, ref out_path: string)=> bool;
+            func _next(self: path)=> option<(string)>;
 
-            let result = _next(self, ref out_path);
-
-            if (result)
-                out_path = out_path->replace("\\", "/");
-
-            return result;
+            return _next(self)
+                ->> \p = p->replace("\\", "/");
+                ;
         }
     }
 
@@ -228,17 +227,14 @@ namespace je::filesys
             return self;
         }
         
-        func next(self: recur_path, ref out_path: string)
+        func next(self: recur_path)
         {
             extern("libjoyecs", "wojeapi_filesys_recur_path_next")
-            func _next(self: recur_path, ref out_path: string)=> bool;
+            func _next(self: recur_path)=> option<(string)>;
 
-            let result = _next(self, ref out_path);
-
-            if (result)
-                out_path = out_path->replace("\\", "/");
-
-            return result;
+            return _next(self)
+                ->> \p = p->replace("\\", "/");
+                ;
         }
     }
     

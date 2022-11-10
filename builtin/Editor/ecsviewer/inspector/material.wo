@@ -73,21 +73,16 @@ namespace editor::Inspector::Material
 
                 match (uniform_val)
                 {
-                    integer(mut n)?
-                        if (InputInt(name, ref n))
-                            shader->set_uniform(name, n);
-                    float(mut x)?
-                        if (InputFloat(name, ref x))
-                            shader->set_uniform(name, x);
-                    float2((mut x, mut y))?
-                        if (InputFloat2(name, ref x, ref y))
-                            shader->set_uniform(name, (x, y));
-                    float3((mut x, mut y, mut z))?
-                        if (InputFloat3(name, ref x, ref y, ref z))
-                            shader->set_uniform(name, (x, y, z));
-                    float4((mut x, mut y, mut z, mut w))?
-                        if (InputFloat4(name, ref x, ref y, ref z, ref w))
-                            shader->set_uniform(name, (x, y, z, w));
+                    integer(n)?
+                        InputInt(name, n) ->> \n = shader->set_uniform(name, n);;
+                    float(x)?
+                        InputFloat(name, x) ->> \x = shader->set_uniform(name, x);;
+                    float2((x, y))?
+                        InputFloat2(name, x, y) ->> \xy = shader->set_uniform(name, xy);;
+                    float3((x, y, z))?
+                        InputFloat3(name, x, y, z) ->> \xyz = shader->set_uniform(name, xyz);;
+                    float4((x, y, z, w))?
+                        InputFloat4(name, x, y, z, w) ->> \xyzw = shader->set_uniform(name, xyzw);;
                     texture(id)?
                     {
                         let texture_path = 
