@@ -357,8 +357,9 @@ R"(
                 ->> \type = (type, AcceptDragDropPayload(type));
                 ->  forall(\accept_type_result = accept_result->has
                     where (_, accept_result) = accept_type_result;)
-                ->  reduce(\l, r = l;)
+                ->  reduce(\l, r = (l[0], l[1]);)
                 ->  reduce
+                ->> \e = (e[0], e[1]->val);
                 ;
 
             EndDragDropTarget();

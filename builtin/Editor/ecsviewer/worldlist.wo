@@ -44,12 +44,12 @@ namespace editor::WorldList
         }
     }
 
-    public func show(open: mutable<bool>)
+    public func show(reqopen: bool)
     {
         using je::gui;
 
-        open->set(BeginAttrOpen("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize));
+        let open = BeginAttrOpen("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             menu();
             if (BeginListBox("##", 200.0, 400.0))
             {
@@ -79,6 +79,8 @@ namespace editor::WorldList
                 EndListBox();
             }
         End();
+
+        return open && reqopen;
     }
 
     private func context_menu(world: je::world)

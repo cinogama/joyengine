@@ -1930,7 +1930,7 @@ R"(
 
                         if (self.m_outed_entities->find(top) == -1)
                         {
-                            for (let entity: self.m_all_entity_list)
+                            for (let _, entity: self.m_all_entity_list)
                             {
                                 if (top != entity && top->is_child_of(entity))
                                     // Parent finded, it's not a orphan entity.
@@ -1942,7 +1942,7 @@ R"(
                             self.m_current_entity = option::value(top);
                             self.m_outed_entities->add(top);
 
-                            return option::value((self, out_entity));
+                            return option::value((self, top));
                         }
                     }
                     return option::none;

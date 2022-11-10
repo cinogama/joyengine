@@ -66,10 +66,10 @@ namespace editor::EntityList
         }
     }
 
-    public func show(open: mutable<bool>)
+    public func show(reqopen: bool)
     {
-        open->set(BeginAttrOpen("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize));
+        let open = BeginAttrOpen("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             menu();
                 
             match(je::world::rend())
@@ -85,6 +85,7 @@ namespace editor::EntityList
             }  
                 
         End();
+        return reqopen && open
     }
 
     public func set_current_entity(current_entity: option<je::entity>)

@@ -11,13 +11,13 @@ import inspector.component;
 
 namespace editor::Inspector
 {
-    public func show(ref open: bool)
+    public func show(reqopen: bool)
     {
         using je::gui;
 
-        BeginAttrOpen("检视面板", WindowsAttribute::ImGuiWindowFlags_None, ref open);
-            let mut _1_3_height = 0.;
-            GetContentRegionAvail(0./* 不关心宽度 */, ref _1_3_height);
+        let open = BeginAttrOpen("检视面板", WindowsAttribute::ImGuiWindowFlags_None);
+            let (_, _1_3_height) = GetContentRegionAvail();
+
             _1_3_height /= 3.;
             _1_3_height -= 5.;
 
@@ -28,6 +28,8 @@ namespace editor::Inspector
             // 接下来是材质编辑器部分
             Material::show(cur_entity, _1_3_height);
         End();
+
+        return open && reqopen;
     }
 }
 

@@ -5,24 +5,29 @@ using je::gui;
 
 namespace generic
 {
-    public func InputBox(title:string, shown:string, default_value: string, trigger: (string)=>void)
+    public func InputBox(title:string, shown:string, mut intput_text: string, trigger: (string)=>void)
     {
         let mut open = true;
 
-        let text_buffer = mutable::create(default_value);
         while (open)
         {
             open = BeginAttrOpen(F"{title}##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
                 Text(shown);
-                InputText("##", text_buffer);
+                match (InputText("##", intput_text))
+                {
+                value(new_text)?
+                    intput_text = new_text;
+                none?
+                    ;
+                }
                 if (Button("确定"))
                 {
-                    trigger(text_buffer->get);
+                    trigger(intput_text);
                     open = false;
                 }
                 SameLine();
                 if (Button("清除"))
-                    text_buffer->set("");
+                    intput_text = "";
                 SameLine();
                 if (Button("取消"))
                     open = false;

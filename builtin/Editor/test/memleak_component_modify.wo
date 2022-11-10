@@ -8,9 +8,9 @@ namespace test::memory_leak::ComponentModify
 		e     : je::entity,
 		mut count : int
 	};
-	func _test_co(context: test_context, ref run: bool)
+	func _test_co(context: test_context, run: mutable<bool>)
 	{
-		if (run)
+		if (run->get)
 		{
 			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::LocalPosition")->val());
 			context.e->editor::remove_component(je::typeinfo::load_from_name("Transform::LocalRotation")->val());
@@ -77,17 +77,16 @@ namespace test::memory_leak::ComponentModify
 	{
 		using je::gui;
 
-		static let mut testing = false;
+		static let testing = mutable::create(false);
 
-		let mut open = true;
-		BeginAttrOpen("内存泄漏检查（组件变更）", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+		let open = BeginAttrOpen("内存泄漏检查（组件变更）", WindowsAttribute::ImGuiWindowFlags_None);
 			Text("这个窗口被用于测试组件的变更是否造成内存泄漏");
 			Text("关闭窗口即停止测试，不要重复开启窗口");
 		End();
 
 		if (!testing)
 		{
-			testing = true;
+			testing->set(true);
 			launch(_test_co, (test_context{
 								e = je::world::rend()
 										->val()
@@ -109,12 +108,12 @@ namespace test::memory_leak::ComponentModify
 										je::typeinfo::load_from_name("Camera::PerspectiveProjection")->val(),
 										je::typeinfo::load_from_name("Camera::Viewport")->val(),]),
 								count = 0,
-							  }, ref testing));
+							  }, testing));
 		}
 
 		if (!open)
 		{
-			testing = false;
+			testing->set(false);
 			return FormAction::Close;
 		}
 		return FormAction::Nothing;

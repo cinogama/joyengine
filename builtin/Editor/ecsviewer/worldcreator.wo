@@ -11,7 +11,7 @@ namespace editor::WorldCreator
     private let icon_image = je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/System.png");
 
     using WorldContext  = struct {
-        name  : mutable<string>,
+        mut name  : string,
         edit_world : option<je::world>,
         has_append_types : vec<je::typeinfo>,
         has_active_types : vec<je::typeinfo>,
@@ -31,7 +31,7 @@ namespace editor::WorldCreator
         let all_systems = []mut: typeof(context.not_append_types);
         context.not_append_types->swap(all_systems);
     
-        for (let sys : all_systems)
+        for (let _, sys : all_systems)
             // 不显示所有编辑器/图形系统
             if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
                 if (sys->name()->beginwith("Translation::"))
@@ -46,7 +46,7 @@ namespace editor::WorldCreator
     public func edit_context(world: je::world)=> WorldContext
     {
         let context = WorldContext{
-            name = mutable::create(world->editor::name()),
+            name = world->editor::name(),
             edit_world = option::value(world),
             has_append_types = []mut,
             has_active_types = []mut,
@@ -56,20 +56,20 @@ namespace editor::WorldCreator
         let all_systems = []mut: typeof(context.not_append_types);
         context.not_append_types->swap(all_systems);
     
-        for (let sys : all_systems)
+        for (let _, sys : all_systems)
             // 不显示所有编辑器/图形系统
             if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
                 context.not_append_types->add(sys);
 
         // 处理一下已经创建/添加的系统
-        for (let actived_sys : world->editor::get_systems_types())
+        for (let _, actived_sys : world->editor::get_systems_types())
             if (!actived_sys->name()->beginwith("Editor::") && !actived_sys->name()->beginwith("Graphic::"))
                 active_systems(context, actived_sys->name());
 
         match(Project::GetCurrentProject()->FindWorld(world))
         {
         value(proj_world)?
-            for (let actived_sys : proj_world.runtime_systems)
+            for (let _, actived_sys : proj_world.runtime_systems)
                 append_systems(context, actived_sys->name());
         none?
             ;
@@ -149,7 +149,7 @@ namespace editor::WorldCreator
         using je::gui;
         BeginChildSize("active_system", width, height);
             Text("环境系统（编辑/运行时生效）");
-            for(let component_type : context.has_active_types)
+            for(let _, component_type : context.has_active_types)
                 show_system(component_type->name());
         EndChild();
 
@@ -172,7 +172,7 @@ namespace editor::WorldCreator
         using je::gui;
         BeginChildSize("append_system", width, height);
             Text("运行时系统（运行时生效）");
-            for(let component_type : context.has_append_types)
+            for(let _, component_type : context.has_append_types)
                 show_system(component_type->name());
         EndChild();
 
@@ -195,7 +195,7 @@ namespace editor::WorldCreator
         using je::gui;
         BeginChildSize("usable_system", width, 0.);
             Text("可用系统");
-            for(let component_type : context.not_append_types)
+            for(let _, component_type : context.not_append_types)
                 show_system(component_type->name());
         EndChild();
 
@@ -224,10 +224,10 @@ namespace editor::WorldCreator
         {
             if (context.edit_world->has())
             {
-                if (MenuItemEnabled("更新", context.name->get != ""))
+                if (MenuItemEnabled("更新", context.name != ""))
                     create_world = true;
             }
-            else if (MenuItemEnabled("创建", context.name->get != ""))
+            else if (MenuItemEnabled("创建", context.name != ""))
                create_world = true;
             
             EndMenuBar();
@@ -252,12 +252,12 @@ namespace editor::WorldCreator
                         let project_world = Project::GetCurrentProject()->CreateWorld();
                         let created_world = project_world.instance;
 
-                        created_world->editor::set_name(context.name->get);
+                        created_world->editor::set_name(context.name);
 
-                        for (let active_sys : context.has_active_types)
+                        for (let _, active_sys : context.has_active_types)
                             created_world->add_system(active_sys);
 
-                        for (let active_sys : context.has_append_types)
+                        for (let _, active_sys : context.has_append_types)
                             project_world.runtime_systems->add(active_sys);
                     }
                     value(world)?
@@ -282,13 +282,15 @@ namespace editor::WorldCreator
                             ->forall(\t: je::typeinfo = context.not_append_types->find(t) != -1 
                                                      || context.has_append_types->find(t) != -1;)
                             ->map(\t: je::typeinfo=world->editor::remove_system(t););
-                        world->editor::set_name(context.name->get);
+                        world->editor::set_name(context.name);
                     }
                 }
                 open = false;
             }
 
-            InputText("名称", context.name);
+            InputText("名称", context.name)
+                ->> \new_text = context.name = new_text;
+                ;
 
             let (available_width, available_height) = GetContentRegionAvail();
 

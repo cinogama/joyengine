@@ -64,7 +64,7 @@ namespace editor::Project
 
         return path.childs->val;
     }
-    private func _ListPath(path: Path, ref selected_path: option<string>)
+    private func _ListPath(path: Path)
     {
         let show_child = TreeNodeEx(path.name, 
                 TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
@@ -78,28 +78,33 @@ namespace editor::Project
                             | TreeNodeAttribute::ImGuiTreeNodeFlags_None;);
 
         if (IsItemClickedLeft() && !IsItemToggledOpen())
-            selected_path = option::value(path.path);
+            return option::value(path.path);
 
         if (show_child)
         {
             for (let child_path : path->_GetChildPaths(false))
-                child_path->_ListPath(ref selected_path);
+                match(_ListPath(child_path))
+                {
+                value(result)?
+                    return value(result);
+                none?
+                    ;
+                }
 
             TreePop();
         }
+        return option::none;
     }
     private func _ListAndSelectPathToCreateProject()=> option<string>
     {
-        static let mut selected_path = option::none: option<string>;
-
         static let roots = _GetRootPaths();
-        for(let root_path : roots)
-            root_path->_ListPath(ref selected_path);
 
-        selected_path = selected_path
-            ->bind(\p: string = je::filesys::isdir(p) ? option::value(p) | option::none;);
-
-        return selected_path;
+        return roots
+            ->> \path = _ListPath(path);
+            ->  forall(\r = r->has;)
+            ->  reduce(\l,r = l;)
+            =>> \p = je::filesys::isdir(p) ? option::value(p) | option::none;
+            ;
     }
 
     func _AskCreateOrLoadProject<FT, ArgTs>(form: FT, args: ArgTs)
@@ -162,8 +167,7 @@ namespace editor::Project
 
         BeginAttr("加载或新建项目", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-            let mut cur_width = 0.;
-            GetContentRegionAvail(ref cur_width, 0./* 不关心高度 */);
+            let (cur_width, _) = GetContentRegionAvail();
 
             if (state == CreateOrLoadProjectState::OpenOrCreate)
             {
@@ -175,8 +179,7 @@ namespace editor::Project
                 static let histories = get_project_histroy();
                 Text("历史项目：");
                 BeginChildSize("HistoryList", 0., 150.);
-                let mut cur_width_in_history_box = 0.;
-                GetContentRegionAvail(ref cur_width_in_history_box, 0./* 不关心高度 */);
+                let (cur_width_in_history_box, _) = GetContentRegionAvail();
                 for (let history_path : histories)
                 {
                     if (ButtonSize(F"打开 {history_path}", cur_width_in_history_box, 0.))
@@ -215,7 +218,9 @@ namespace editor::Project
                 Text("请输入新建项目名称：");
 
                 static let mut project_name = "";
-                InputText("项目名称", ref project_name);
+                InputText("项目名称", project_name)
+                    ->> \newname = project_name = newname;
+                    ;
                 
                 BeginChildSize("SelectPathToCreateProject", 0., 300.);
                     let select_path_to_create = _ListAndSelectPathToCreateProject();

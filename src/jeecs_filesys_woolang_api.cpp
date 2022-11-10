@@ -212,7 +212,7 @@ namespace je::filesys
             func _next(self: path)=> option<(string)>;
 
             return _next(self)
-                ->> \p = p->replace("\\", "/");
+                ->> \p = (p[0]->replace("\\", "/"),);
                 ;
         }
     }
@@ -233,7 +233,7 @@ namespace je::filesys
             func _next(self: recur_path)=> option<(string)>;
 
             return _next(self)
-                ->> \p = p->replace("\\", "/");
+                ->> \p = (p[0]->replace("\\", "/"),);
                 ;
         }
     }

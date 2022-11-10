@@ -96,20 +96,20 @@ namespace editor::Project
 
     public func StartDebug(self: Project)
     {
-        for (let world : self.worlds)
+        for (let _, world : self.worlds)
         {
-            for (let rt_sys : world.runtime_systems)
+            for (let _, rt_sys : world.runtime_systems)
                 world.instance->add_system(rt_sys);
 
             // 干掉所有Editor系统和所有Editor实体
-            for (let e : world.instance->editor::get_all_entities())
+            for (let _, e : world.instance->editor::get_all_entities())
             {
                 let static editor_invisable = je::typeinfo::load_from_name("Editor::Invisable")->val;
                 if (e->editor::get_component(editor_invisable)->has)
                     e->close();
             }
 
-            for (let s : world.instance->editor::get_systems_types())
+            for (let _, s : world.instance->editor::get_systems_types())
             {
                 if (s->name->beginwith("Editor::"))
                     world.instance->editor::remove_system(s);
@@ -230,7 +230,7 @@ namespace editor::Project
 
     public func FindWorld(self: Project, world: je::world)=> option<World>
     {
-        for (let project_world : self.worlds)
+        for (let _, project_world : self.worlds)
             if (project_world.instance == world)
                 return option::value(project_world);
 
@@ -255,7 +255,7 @@ namespace editor::Project
 
         let proj = _current_project->val;
         je::loginfo(F"关闭当前项目: {proj.name}");
-        for (let w : proj.worlds)
+        for (let _, w : proj.worlds)
         {
             je::loginfo(F"关闭项目中所属的世界：{w.instance->editor::name}");
             w.instance->close;
@@ -373,7 +373,7 @@ namespace editor::Project
                
                 let recompile_action = func()
                 {
-                    for (let (path, _) : failed_loading_module)
+                    for (let _, (path, _) : failed_loading_module)
                         match (CxxProject::open_for_loading(path))
                         {
                         ok(mod)?
@@ -498,7 +498,7 @@ namespace editor::Project
 
             // 1. 检查所有世界是否已经有路径信息，如果没有则说明有新建的世界没有保存过，要求保存
             let worlds = []mut: vec<string>;
-            for (let world_data : worlds_dumped_data)
+            for (let _, world_data : worlds_dumped_data)
             {
                 if (world_data["path"] is typeof(nil))
                     return result::err(F"存在尚未保存的世界: {world_data["name"]}");

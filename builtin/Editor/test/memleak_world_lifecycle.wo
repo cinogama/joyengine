@@ -8,9 +8,9 @@ namespace test::memory_leak::WorldLifecycle
 		mut count : int,
 		worlds : vec<je::world>,
 	};
-	func _test_co(context: test_context, ref run: bool)
+	func _test_co(context: test_context, run: mutable<bool>)
 	{
-		if (run)
+		if (run->get)
 		{
 			// 0. 创建世界
 			let world = je::universe::current()->create_world();
@@ -97,18 +97,17 @@ namespace test::memory_leak::WorldLifecycle
 	{
 		using je::gui;
 
-		static let mut testing = false;
+		static let testing = mutable::create(false);
 
-		let mut open = true;
-		BeginAttrOpen("内存泄漏检查（世界生命周期）", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+		let open = BeginAttrOpen("内存泄漏检查（世界生命周期）", WindowsAttribute::ImGuiWindowFlags_None);
 			Text("这个窗口被用于世界的生命周期循循环是否造成内存泄漏");
 			Text("关闭窗口即停止测试，不要重复开启窗口");
 		End();
 
 		if (!testing)
 		{
-			testing = true;
-			launch(_test_co, (test_context{count = 0, worlds = []mut}, ref testing));
+			testing->set(true);
+			launch(_test_co, (test_context{count = 0, worlds = []mut}, testing));
 		}
 
 		if (!open)

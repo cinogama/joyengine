@@ -188,10 +188,8 @@ namespace editor::Inspector::Component
         else
         {
             // 没有注册的特殊控件，使用底层自带的to_string方法处理
-            let mut data_str = addr->to_string(type);
-
-            if (InputText(name, ref data_str))
-                addr->parse(type, data_str);
+            InputText(name, addr->to_string(type)) 
+                ->> \data_str = addr->parse(type, data_str);;
         }
     }
 

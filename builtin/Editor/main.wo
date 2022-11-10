@@ -215,12 +215,11 @@ func Editor_CameraViewport()
 
     static let mut windows_moveable = true;
 
-    BeginAttrOpen("调试器视口", 
+    display_debug_camera_viewport = BeginAttrOpen("调试器视口", 
         WindowsAttribute::ImGuiWindowFlags_MenuBar
         + (windows_moveable 
             ? WindowsAttribute::ImGuiWindowFlags_None
-            | WindowsAttribute::ImGuiWindowFlags_NoMove), 
-        ref display_debug_camera_viewport);
+            | WindowsAttribute::ImGuiWindowFlags_NoMove));
 
     if (BeginMenuBar())
     {
@@ -246,8 +245,7 @@ func Editor_CameraViewport()
     {
         let (frame_tex_width, frame_tex_height) = frametex->size;
 
-        let mut available_width = 0., mut available_height = 0.;
-        GetContentRegionAvail(ref available_width, ref available_height);
+        let (available_width, available_height) = GetContentRegionAvail();
 
         let (wx, wy) = GetWindowPos();
         let (lupx, lupy) = GetCursorPos();
@@ -316,13 +314,13 @@ func Editor_MainMenuBar()
     shortcut::update();
 
     if (EditFormsConfig::shown_world_list)
-        WorldList::show(ref EditFormsConfig::shown_world_list);
+        EditFormsConfig::shown_world_list = WorldList::show();
     if (EditFormsConfig::shown_entity_list)
-        EntityList::show(ref EditFormsConfig::shown_entity_list);
+        EditFormsConfig::shown_entity_list = EntityList::show();
     if (EditFormsConfig::shown_inspector_list)
-        Inspector::show(ref EditFormsConfig::shown_inspector_list);
+        EditFormsConfig::shown_inspector_list = Inspector::show();
     if (EditFormsConfig::shown_browser_list)
-        Browser::show(ref EditFormsConfig::shown_browser_list);
+        EditFormsConfig::shown_browser_list = Browser::show();
 
     // 拉取一下log信息
     let last_log_info = logmgr::update_buffers();
@@ -385,19 +383,36 @@ func Editor_MainMenuBar()
         }
          if (BeginMenu("脚本"))
         {
-            static let mut editor_opened = false;
+            static let editor_opened = mutable::create(false);
 
-            if (MenuItemSelectedEnabled("打开快捷编辑器", ref editor_opened, true) && editor_opened)
-                launch(Editor_ScriptEditor, (ref editor_opened,));
-
+            match (MenuItemSelectedEnabled("打开快捷编辑器", editor_opened->get, true))
+            {
+            value(opened)?
+            {
+                editor_opened->set(opened);
+                if (opened)
+                     launch(Editor_ScriptEditor, (editor_opened,));
+            }
+            none?
+                ;
+            }
             EndMenu();
         }
         if (BeginMenu("帮助"))
         {
-            static let mut about_shown = false;
+            static let about_shown = mutable::create(false);
 
-            if (MenuItemSelectedEnabled("关于", ref about_shown, true) && about_shown)
-                launch(Editor_Welcome, (ref about_shown,));
+            match (MenuItemSelectedEnabled("关于", about_shown->get, true))
+            {
+            value(selected)?
+            {
+                about_shown->set(selected);
+                if (selected)
+                     launch(Editor_Welcome, (about_shown,));
+            }
+            none?
+                ;
+            }
                     
             EndMenu();
         }
@@ -439,14 +454,20 @@ func Editor_MainMenuBar()
                 proj->RestoreAllWorlds(dat);
             }
             let mut show_hiding_editor_entity = EntityList::get_enable_show_invisable_entity();
-            if (MenuItemSelectedEnabled("显示编辑器隐藏实体", ref show_hiding_editor_entity, true))
+            match (MenuItemSelectedEnabled("显示编辑器隐藏实体", show_hiding_editor_entity, true))
             {
-                EntityList::set_enable_show_invisable_entity(show_hiding_editor_entity);
+            value(selected)?
+                EntityList::set_enable_show_invisable_entity(selected);
+            none?
+                ;
             }
-            if (MenuItemSelectedEnabled("资源管理器隐藏内置资源",
-                ref editor::Browser::editor_need_hiding_file, true))
+            match (MenuItemSelectedEnabled("资源管理器隐藏内置资源",
+                editor::Browser::editor_need_hiding_file, true))
             {
-
+            value(selected)?
+                editor::Browser::editor_need_hiding_file = selected;
+            none?
+                ;
             }
             EndMenu();
         }
@@ -478,9 +499,9 @@ func Editor_MainMenuBar()
 }
 
 // 关于信息窗口
-func Editor_Welcome(ref open: bool)
+func Editor_Welcome(open: mutable<bool>)
 {
-    if (!open)
+    if (!open->get)
         return FormAction::Close;
 
     BeginAttr("欢迎", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
@@ -499,7 +520,9 @@ func Editor_Welcome(ref open: bool)
         launch(func()
         {
             BeginAttr("修改项目的关于信息", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-                InputTextMultilineSize("##", ref editor::Project::GetCurrentProject().about_info, 400., 200.);
+                InputTextMultilineSize("##", editor::Project::GetCurrentProject().about_info, 400., 200.)
+                    ->> \newtext = editor::Project::GetCurrentProject().about_info = newtext;
+                    ;
                 let close = Button("完成");
             End();
             if (close)
@@ -508,16 +531,15 @@ func Editor_Welcome(ref open: bool)
         }, ());
     }
 
-    let mut available_width = 0.;
-    GetContentRegionAvail(ref available_width, 0.);
+    let (available_width, _) = GetContentRegionAvail();
 
     InputTextMultilineSize("##", editor::Project::GetCurrentProject().about_info, available_width, 100.0);
 
     if (Button("确认"))
-        open = false;
+        open->set(false);
     End();
 
-    if (!open)
+    if (!open->get)
         return FormAction::Close;
     return FormAction::Nothing;
 }
