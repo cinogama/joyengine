@@ -210,6 +210,8 @@ namespace GameDebug
 
 func Editor_CameraViewport()
 {
+    // 编辑视口区域，编辑时的主要操作都在这里完成
+
     if (!display_debug_camera_viewport)
         return;
 

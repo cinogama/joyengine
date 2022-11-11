@@ -4995,11 +4995,33 @@ namespace jeecs
 
                 std::string to_string()const noexcept
                 {
-                    return "#light2d_layer_effects#";
+                    std::string dat = "#light2d_layer_effects#";
+                    dat += "size:" + std::to_string(layer_factors.size());
+                    for (auto& p : layer_factors)
+                    {
+                        dat += ";" + std::to_string(p.layer) + ":" + std::to_string(p.factor);
+                    }
+                    return dat;
                 }
                 void parse(const char* jsonstr) noexcept
                 {
+                    size_t size = 0;
+                    size_t readed_byte = 0;
+                    layer_factors.clear();
+                    if (sscanf(jsonstr, "#light2d_layer_effects#size:%zu%zn", &size, &readed_byte) == 1)
+                    {
+                        jsonstr += readed_byte;
+                        for (size_t i = 0; i < size; ++i)
+                        {
+                            uint32_t layer = 0;
+                            float factor = 0.f;
 
+                            if (sscanf(jsonstr, ";%u:%f%zn", &layer, &factor, &readed_byte) == 2)
+                                jsonstr += readed_byte;
+
+                            layer_factors.push_back(effect_pair{ layer ,factor });
+                        }
+                    }
                 }
             };
 

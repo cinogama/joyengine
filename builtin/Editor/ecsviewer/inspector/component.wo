@@ -179,6 +179,72 @@ namespace editor::Inspector::Component
     }
     _register_default_method(); // 此处注册常用默认操作
             
+
+    let _custom_component_member_editor = {}mut: map<string, (string)=>option<string>>;
+
+    public func register_custom_editor(typeflag: string, method: (string)=>option<string>)
+    {
+        if (_custom_component_member_editor->contain(typeflag))
+            je::logwarn(F"重复注册的标签：{typeflag}");
+
+        _custom_component_member_editor->set(typeflag, method);
+    }
+
+    // 直接在这里注册一下得了
+
+    // 1. 注册2D光照系统，光照层级系数的列表
+    register_custom_editor("light2d_layer_effects", func(dat: string)
+    {
+        using je::gui;
+
+        let mut need_update = false;
+        let datas = dat->split(";")
+            =>> \dat = arr->len == 2 ? [(arr[0], arr[1]: real)] | []
+                where arr = dat->split(":");
+            ;
+
+        let has_repeated_layer = datas->mapping->len != datas->len;
+        if (has_repeated_layer)
+            TextDisabled("检测到有重复的层，请删除重复的层级");
+
+        let length = datas
+            ->  forall(\data = data[0] == "size";)
+            ->  reduce(\l,r=l;)
+            ->> \data = data[1] as real : int;
+            ->  valor(datas->len)
+            ;
+
+        let mut update_str = "size:";
+
+        match (InputInt("size", length))
+        {
+        value(mut newsize)?
+        {
+            if (newsize < 0) newsize = 0;
+            need_update = true;
+            update_str += newsize: string;
+        }
+        none?
+            update_str += length: string;
+        }
+
+        for (let index, (layer, factor) : datas->forall(\d = d[0]!="size";))
+        {
+            let new_layer = InputInt(F"##layer{index}", layer: int)->valor(layer: int);      
+            SameLine();
+            let new_factor = InputFloat(F"##factor{index}", factor: real)->valor(factor);
+
+            if (new_layer != layer: int || new_factor != factor)
+                need_update = true;
+
+            update_str += F";{new_layer}:{new_factor}"
+        }
+            
+        if (need_update)
+            return option::value(update_str);
+        return option::none;
+    });
+
     private func _show_edit_widget(name: string, type: je::typeinfo, addr: je::native_value)
     {
         using je::gui;
@@ -188,8 +254,26 @@ namespace editor::Inspector::Component
         else
         {
             // 没有注册的特殊控件，使用底层自带的to_string方法处理
-            InputText(name, addr->to_string(type)) 
-                ->> \data_str = addr->parse(type, data_str);;
+            let member_data = addr->to_string(type);
+            if (member_data->beginwith("#"))
+            {
+                // 这个member需要特殊处理
+                Text(name);
+
+                let spec_method = member_data->subto(1, member_data->findfrom("#", 1) - 1);
+                match (_custom_component_member_editor->get(spec_method))
+                {
+                none?
+                    TextDisabled(F"未找到编辑{spec_method}的自定义编辑器");
+                value(method)?
+                    method(member_data->sub(spec_method->len + 2))
+                        ->> \update_str = addr->parse(type, F"#{spec_method}#" + update_str);
+                        ;
+                }
+            }
+            else
+                InputText(name, member_data) 
+                    ->> \data_str = addr->parse(type, data_str);;
         }
     }
 

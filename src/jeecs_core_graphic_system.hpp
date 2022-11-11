@@ -383,17 +383,16 @@ public let frag =
                                 rendqueue, &trans, layer, shape, shads, texs
                             });
                     }).anyof<Shaders, Textures, Shape>()
-                        .exec(
-                            [](Translation& trans,
-                                Light2D::Color& color,
-                                Light2D::LayerEffect* effect_layer,
-                                Light2D::Point* point,
-                                Light2D::Parallel* parallel,
-                                Light2D::Shadow* shadow)
-                            {
+                .exec(
+                    [this](Translation& trans,
+                        Light2D::Color& color,
+                        Light2D::LayerEffect* effect_layer,
+                        Light2D::Point* point,
+                        Light2D::Parallel* parallel,
+                        Light2D::Shadow* shadow)
+                    {
 
-                            }).anyof<Light2D::Point, Light2D::Parallel>()
-                                ;
+                    }).anyof<Light2D::Point, Light2D::Parallel>();
         }
         void LateUpdate()
         {
