@@ -54,7 +54,7 @@ namespace editor::WorldList
             if (BeginListBox("##", 200.0, 400.0))
             {
                 let worlds = je::universe::current()->editor::worlds_list;
-                for (let world : worlds)
+                for (let _, world : worlds)
                 {
                     if (SelectableSelected(world->editor::name + "##" + world: string, 
                             je::world::rend()->map(\rw:je::world = rw == world;)

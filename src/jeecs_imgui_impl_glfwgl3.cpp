@@ -280,7 +280,7 @@ namespace je::gui
     public func InputTextMultilineSize(label:string, buffer: string, width:real, height:real)=> option<string>;
 
     extern("libjoyecs", "je_gui_combo")
-    public func Combo(label:string, items: array<string>, select_item: int)=> option<select_item>;
+    public func Combo(label:string, items: array<string>, select_item: int)=> option<int>;
 
     extern("libjoyecs", "je_gui_end_menu")
     public func EndMenu()=> void;
@@ -904,7 +904,7 @@ WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args, size_t argc)
     wo_set_float(wo_struct_get(result, 0), sz.x);
     wo_set_float(wo_struct_get(result, 1), sz.y);
 
-    return wo_ret_void(vm);
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)

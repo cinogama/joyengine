@@ -36,7 +36,7 @@ namespace shortcut
 			return true;
 		}
 
-		for (let hotkey : registered_keys)
+		for (let _, hotkey : registered_keys)
 		{
 			if (hotkey.keys == hotkeys)
 				hotkey.state = true;
@@ -51,10 +51,10 @@ namespace shortcut
 		// 每一帧检查一次，看看有没有对应的热键处于按下状态
 
 		// 遍历热键注册表
-		for (let hotkey : registered_keys)
+		for (let _, hotkey : registered_keys)
 		{
 			let mut state = true;
-			for (let key : hotkey.keys)
+			for (let _, key : hotkey.keys)
 				if (!keydown(key))
 				{
 					state = false;

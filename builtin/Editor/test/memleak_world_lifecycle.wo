@@ -79,7 +79,7 @@ namespace test::memory_leak::WorldLifecycle
 			context.count += 1;
 			if (context.count % 100 == 0)
 			{
-				for (let w : context.worlds)
+				for (let _, w : context.worlds)
 					w->close();
 				context.worlds->clear();
 			}
@@ -87,9 +87,9 @@ namespace test::memory_leak::WorldLifecycle
 			return je::gui::FormAction::Nothing;
 		}
 
-		for (let w : context.worlds)
-					w->close();
-				context.worlds->clear();
+		for (let _, w : context.worlds)
+			w->close();
+		context.worlds->clear();
 		return je::gui::FormAction::Close;
 	}
 
@@ -104,7 +104,7 @@ namespace test::memory_leak::WorldLifecycle
 			Text("关闭窗口即停止测试，不要重复开启窗口");
 		End();
 
-		if (!testing)
+		if (!testing->get)
 		{
 			testing->set(true);
 			launch(_test_co, (test_context{count = 0, worlds = []mut}, testing));
@@ -112,7 +112,7 @@ namespace test::memory_leak::WorldLifecycle
 
 		if (!open)
 		{
-			testing = false;
+			testing->set(false);
 			return FormAction::Close;
 		}
 		return FormAction::Nothing;

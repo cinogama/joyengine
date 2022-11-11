@@ -62,14 +62,14 @@ namespace test::memory_leak::GraphicResource
 	{
 		using je::gui;
 
-		static let mut testing = false;
+		static let testing = mutable::create(false);
 
 		let open = BeginAttrOpen("内存泄漏检查（图形系统资源）", WindowsAttribute::ImGuiWindowFlags_None);
 			Text("这个窗口被用于检查图形系统资源是否造成内存泄漏");
 			Text("关闭窗口即停止测试，不要重复开启窗口");
 		End();
 
-		if (!testing)
+		if (!testing->get)
 		{
 			testing->set(true);
 			launch(_test_co, (test_context{count = 0}, testing));

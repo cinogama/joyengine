@@ -705,10 +705,10 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size
 WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t argc)
 {
     shader_value_outs* values = (shader_value_outs*)wo_pointer(args + 0);
-    wo_value out_struct = args + 1;
 
     uint16_t fragmentin_size = (uint16_t)values->out_values.size();
-    wo_set_struct(out_struct, fragmentin_size);
+    wo_value out_struct = wo_push_struct(vm, fragmentin_size);
+
     for (uint16_t i = 0; i < fragmentin_size; i++)
     {
         auto* val = new jegl_shader_value(values->out_values[i]->get_type());
@@ -948,9 +948,9 @@ namespace fragment_in
     public func create<VertexOutT>(data_from_vert: vertex_out)=> VertexOutT
     {
         extern("libjoyecs", "jeecs_shader_create_fragment_in")
-        func _parse_vertex_out_to_struct<VertexOutT>(vout: vertex_out, ref _out_struct: dynamic)=> VertexOutT;
+        func _parse_vertex_out_to_struct<VertexOutT>(vout: vertex_out)=> VertexOutT;
 
-        return _parse_vertex_out_to_struct:<VertexOutT>(data_from_vert, nil: dynamic);
+        return _parse_vertex_out_to_struct:<VertexOutT>(data_from_vert);
     }
 }
 
@@ -1475,7 +1475,7 @@ public func CULL(cull: CullConfig)
 )" R"(
 #macro VAO_STRUCT
 {
-    let eat_token = func(ref expect_name: string, expect_type: std::token_type)
+    let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
                         let (token, out_result) = lexer->next();
                         if (token != expect_type)
@@ -1525,7 +1525,7 @@ public func CULL(cull: CullConfig)
     //  OK We have current vao struct info, built struct out
     let mut out_struct_decl = F"public using {vao_struct_name} = struct {"{"}\n";
 
-    for(let (vao_member_name, vao_shader_type) : struct_infos)
+    for(let _, (vao_member_name, vao_shader_type) : struct_infos)
         out_struct_decl += F"{vao_member_name} : {vao_shader_type}, \n";
 
     out_struct_decl += "};\n";
@@ -1540,7 +1540,7 @@ public func CULL(cull: CullConfig)
 
     let mut vinid = 0;
 
-    for(let (vao_member_name, vao_shader_type) : struct_infos)
+    for(let _, (vao_member_name, vao_shader_type) : struct_infos)
     {
         out_struct_decl += F"{vao_member_name} = vertex_data_in->in:<{vao_shader_type}>({vinid}), \n";
         vinid += 1;
@@ -1588,7 +1588,7 @@ using struct_define = handle
 
 #macro GRAPHIC_STRUCT
 {
-    let eat_token = func(ref expect_name: string, expect_type: std::token_type)
+    let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
                         let (token, out_result) = lexer->next();
                         if (token != expect_type)
@@ -1638,14 +1638,14 @@ using struct_define = handle
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = struct_define::create(\"{graphic_struct_name}\");";
-    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
         if (is_struct_type)
             out_struct_decl += F"{graphic_struct_name}->append_struct_member(\"{vao_member_name}\", {vao_shader_type});\n";
         else
             out_struct_decl += F"{graphic_struct_name}->append_member:<{vao_shader_type}>(\"{vao_member_name}\");\n";
 
     out_struct_decl += F"public using {graphic_struct_name}_t = structure\n\{\n";
-    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
     {
         out_struct_decl += F"    public func {vao_member_name}(self: {graphic_struct_name}_t)\n\{\n        ";
         
@@ -1686,7 +1686,7 @@ using uniform_block = struct_define
 
 #macro UNIFORM_BUFFER
 {
-    let eat_token = func(ref expect_name: string, expect_type: std::token_type)
+    let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
                         let (token, out_result) = lexer->next();
                         if (token != expect_type)
@@ -1740,7 +1740,7 @@ using uniform_block = struct_define
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = uniform_block::create(\"{graphic_struct_name}\", {bind_place});";
-    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
         if (is_struct_type)
             out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_struct_uniform(\"{vao_member_name->upper}\", {vao_shader_type}): gchandle: {vao_shader_type}_t;\n";
         else

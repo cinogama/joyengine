@@ -84,7 +84,7 @@ namespace test::memory_leak::ComponentModify
 			Text("关闭窗口即停止测试，不要重复开启窗口");
 		End();
 
-		if (!testing)
+		if (!testing->get)
 		{
 			testing->set(true);
 			launch(_test_co, (test_context{

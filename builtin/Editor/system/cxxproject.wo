@@ -114,24 +114,25 @@ public using CxxProject = struct {
         let enabled_generating = platform_support
             ->forall(\_: anything, enable: bool = enable;)
             ->unmapping
-            ->map(\conf_enab: (string, anything) = conf_enab[0];);
+            ->> \conf_enab: (string, anything) = conf_enab[0];
+            ;
             
         let generating_results = enabled_generating
-            ->map(\conf: string = (conf, generate_cmake_doc(conf)););
+            ->> \conf: string = (conf, generate_cmake_doc(conf));
+            ;
 
         let failed_generating = generating_results
             ->forall(\r: (anything, result<anything, anything>) = r[1]->iserr;);
 
         if (!failed_generating->empty)
         {
-            for (let r : failed_generating->map(\r: (anything, result<anything, string>)
-                = r[1]->error->val;))
+            for (let _, r : failed_generating ->> \r = r[1]->error->val;)
                 je::logerr(r);
 
             return result::err(F"创建模块的CMake文件时失败：\n{
                 failed_generating
-                    ->map(\r: (anything, result<anything, string>) = r[1]->error->val;)
-                    ->reduce(\l: string, r: string = l + "\n" + r;)
+                    ->> \r = r[1]->error->val;
+                    ->reduce(\l, r = l + "\n" + r;)
                     ->val
             }");
         }
@@ -143,8 +144,7 @@ public using CxxProject = struct {
             ["conf"] = enabled_generating: dynamic,
         }: string);
         
-        for (let config : generating_results->map(
-            \c: (anything, result<CxxProjectBuildConfig, anything>) = c[1]->okay->val;))
+        for (let _, config : generating_results ->> \c = c[1]->okay->val;)
         {
             // 3.1 把生成出来的CMake保存起来
             let aim_cmake_dir = F"{cxx_proj_path}builder/{config.config}";
@@ -253,7 +253,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     {
         using je::filesys;
 
-        for (let p : childs(dir)->okay->val)
+        for (let _, p : childs(dir)->okay->val)
         {
             if (isdir(p))
             {
@@ -375,8 +375,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             };
         
         let current_je_proj = editor::Project::GetCurrentProject();
-        current_je_proj.native_modules->get(created_module.path)
-                    ->or(\ = current_je_proj.native_modules->set(created_module.path, created_module););
+        current_je_proj.native_modules->getorset(created_module.path, created_module);
 
         return result::ok(created_module);
     }

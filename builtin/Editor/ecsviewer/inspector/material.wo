@@ -137,7 +137,7 @@ namespace editor::Inspector::Material
                             let mut shaders = current_entity->editor::graphic::get_shaders();
 
                             let mut index = 0, mut shaders_has_updated = false;
-                            for (let shader : shaders->dup())
+                            for (let _, shader : shaders->dup())
                             {
                                 match (show_shader(current_entity, shader, index, _display_entity_changed))
                                 {

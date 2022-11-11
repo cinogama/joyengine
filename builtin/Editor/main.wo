@@ -95,7 +95,7 @@ namespace logmgr
     func update_buffers()
     {
         let this_time_log = je::editor::getlogs();
-        for (let (t, s) : this_time_log)
+        for (let _, (t, s) : this_time_log)
             log_buffers[t]->insert(0, s);
 
         if (!this_time_log->empty)
@@ -139,7 +139,7 @@ namespace logmgr
                         return msg->subto(0, switch_line_place);
                     return msg;
                 }
-                for (let msg : v)
+                for (let _, msg : v)
                 {
                     MenuItem(msg->get_title_of_error->utils::ShortStringCutEnd(60));
                     if (IsItemHovered())
@@ -314,13 +314,13 @@ func Editor_MainMenuBar()
     shortcut::update();
 
     if (EditFormsConfig::shown_world_list)
-        EditFormsConfig::shown_world_list = WorldList::show();
+        EditFormsConfig::shown_world_list = WorldList::show(EditFormsConfig::shown_world_list);
     if (EditFormsConfig::shown_entity_list)
-        EditFormsConfig::shown_entity_list = EntityList::show();
+        EditFormsConfig::shown_entity_list = EntityList::show(EditFormsConfig::shown_entity_list);
     if (EditFormsConfig::shown_inspector_list)
-        EditFormsConfig::shown_inspector_list = Inspector::show();
+        EditFormsConfig::shown_inspector_list = Inspector::show(EditFormsConfig::shown_inspector_list);
     if (EditFormsConfig::shown_browser_list)
-        EditFormsConfig::shown_browser_list = Browser::show();
+        EditFormsConfig::shown_browser_list = Browser::show(EditFormsConfig::shown_browser_list);
 
     // 拉取一下log信息
     let last_log_info = logmgr::update_buffers();
@@ -564,7 +564,7 @@ func display_icon_in_console()
         {
             let mut out_line = "";
             for (let mut x = 0; x < width; x += 1)
-                out_line += chtex->pix(x, y)->color[3] <= 0.175 ? "  " | "■";
+                out_line += chtex->pix(x, y)->get_color[3] <= 0.175 ? "  " | "■";
 
             je::log(F"{out_line}|");
         }

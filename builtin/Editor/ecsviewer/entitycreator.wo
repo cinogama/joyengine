@@ -10,7 +10,7 @@ namespace editor::EntityCreator
 {
     private let icon_image = je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/Component.png");
     using EntityContext = struct {
-        name  : mutable<string>,
+        mut name  : string,
         edit_entity      : option<je::entity>,
         has_append_types : vec<je::typeinfo>,
         not_append_types : vec<je::typeinfo>,
@@ -19,7 +19,7 @@ namespace editor::EntityCreator
     public func edit_context(entity: je::entity)=> EntityContext
     {
         let context = EntityContext{
-            name = mutable::create(entity->editor::name),
+            name = entity->editor::name,
             edit_entity = option::value(entity),
             has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
@@ -29,13 +29,13 @@ namespace editor::EntityCreator
         context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
-        for (let comp : comps)
+        for (let _, comp : comps)
             if (!comp->name()->beginwith("Editor::"))
                 context.not_append_types->add(comp);
 
         // 把当前已有的组件处理一下
         let all_comps = context.not_append_types->dup();
-        for (let comp : all_comps)
+        for (let _, comp : all_comps)
             if (entity->editor::get_component(comp)->has)
                 add_components(context, comp->name);
 
@@ -45,7 +45,7 @@ namespace editor::EntityCreator
     public func create_context()=> EntityContext
     {
         let context = EntityContext{
-            name = mutable::create("New entity"),
+            name = "New entity",
             edit_entity = option::none,
             has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
@@ -55,7 +55,7 @@ namespace editor::EntityCreator
         context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
-        for (let comp : comps)
+        for (let _, comp : comps)
             if (!comp->name->beginwith("Editor::"))
                 context.not_append_types->add(comp);
 
@@ -87,7 +87,7 @@ namespace editor::EntityCreator
         using je::gui;
         BeginChildSize("append_components", width, 0.);
             Text("新实体组件");
-            for(let component_type : context.has_append_types)
+            for(let _, component_type : context.has_append_types)
                 show_component(component_type->name());
         EndChild();
 
@@ -110,7 +110,7 @@ namespace editor::EntityCreator
         using je::gui;
         BeginChildSize("usable_components", width, 0.);
             Text("可用组件");
-            for(let component_type : context.not_append_types)
+            for(let _, component_type : context.not_append_types)
                 show_component(component_type->name());
         EndChild();
 
@@ -131,7 +131,7 @@ namespace editor::EntityCreator
 
     func reset_context_cur_components(context: EntityContext)
     {
-        for (let append_component : context.has_append_types)
+        for (let _, append_component : context.has_append_types)
             context.not_append_types->add(append_component);
         context.has_append_types->clear();
     }
@@ -174,7 +174,7 @@ namespace editor::EntityCreator
         {
             let menu_button_text = context.edit_entity->has ? "应用" | "创建";
 
-            if (MenuItemEnabled(menu_button_text, context.name->get != "" 
+            if (MenuItemEnabled(menu_button_text, context.name != "" 
                             && !context.has_append_types->empty))
             {
                 // TODO: 实例化实体，至少要有一个组件
@@ -272,7 +272,7 @@ namespace editor::EntityCreator
                     add_components->map(\t: je::typeinfo = e->editor::add_component(t););
                     removing_components->map(\t: je::typeinfo = e->editor::remove_component(t););
 
-                    e->editor::set_name(context.name->get);
+                    e->editor::set_name(context.name);
                 }
                 none?
                     match(je::world::rend())
@@ -280,7 +280,7 @@ namespace editor::EntityCreator
                         value(rworld)?
                         {
                             rworld->add_entity(context.has_append_types->toarray)
-                                  ->editor::set_name(context.name->get);
+                                  ->editor::set_name(context.name);
                         }
                         none?
                             launch(generic::MsgBox, ("创建实体失败", "没有找到渲染中的世界",));
@@ -291,7 +291,9 @@ namespace editor::EntityCreator
                 open = false;
             }
 
-            InputText("名称", context.name);
+            InputText("名称", context.name)
+                ->> \newtext = context.name = newtext;
+                ;
 
             let (available_width, _) = GetContentRegionAvail();
 

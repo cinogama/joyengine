@@ -1989,7 +1989,7 @@ R"(
         public func int(self: native_value)=> int;
 
         extern("libjoyecs", "wojeapi_native_value_float")
-        public func float(self: native_value)=> float;
+        public func float(self: native_value)=> real;
 
         extern("libjoyecs", "wojeapi_native_value_float2")
         public func float2(self: native_value)=> (real, real);

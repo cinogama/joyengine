@@ -16,7 +16,7 @@ namespace editor::Inspector
         using je::gui;
 
         let open = BeginAttrOpen("检视面板", WindowsAttribute::ImGuiWindowFlags_None);
-            let (_, _1_3_height) = GetContentRegionAvail();
+            let (_, mut _1_3_height) = GetContentRegionAvail();
 
             _1_3_height /= 3.;
             _1_3_height -= 5.;

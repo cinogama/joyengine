@@ -63,7 +63,7 @@ namespace editor::Inspector::Component
                             m_map = {}mut, 
                             m_component_type = option::none:<je::typeinfo> 
                         };
-                    for (let component_type : current_entity->editor::get_components_types())
+                    for (let _, component_type : current_entity->editor::get_components_types())
                     {
                         let component_type_name = component_type->name();
 
@@ -75,7 +75,7 @@ namespace editor::Inspector::Component
                         let scope_names = component_type_name->split("::");
 
                         // 从根开始，找到最终组件所在的节点
-                        for (let name: scope_names)
+                        for (let _, name: scope_names)
                         {
                             current_types = current_types.m_map->getorset(name, 
                                 component_chain{

@@ -756,7 +756,7 @@ namespace $$MODULE_NAME$$
 
                 if (show_child)
                 {
-                    for (let subpath : path->childs(false))
+                    for (let _, subpath : path->childs(false))
                         _show_paths(subpath);
 
                     TreePop();

@@ -1,5 +1,5 @@
 // MonoColor.shader
-// (C)Cinogama project. 2022.
+// (C)Cinogama project. 2022. 版权所有
 
 import je.shader;
 

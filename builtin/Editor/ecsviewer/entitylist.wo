@@ -171,7 +171,7 @@ namespace editor::EntityList
         let mut current_uid_entity_map = {}mut: map<string, je::entity>;
         
         let mut display_count = 0;
-        for (let entity : entity_iter)
+        for (let _, entity : entity_iter)
         {
             // 如果当前实体有uid组件，那么添加一下
             entity
