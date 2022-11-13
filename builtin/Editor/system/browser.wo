@@ -5,6 +5,8 @@ import je.filesys;
 import openfile;
 import cxxproject;
 
+import builtin.woolib.tools;
+
 using je::gui;
 
 namespace editor::Browser
@@ -669,18 +671,33 @@ namespace $$MODULE_NAME$$
         {
             new_showing_path = current_work_path;
             force_update_file_group_flag = false;
+   
+            func compare_method (a: PathInfo, b: PathInfo)
+            {
+                func is_dir(p){match(p.type->get){dir(_)?return true;file?return false;}}
+                if (is_dir(a))
+                    return !is_dir(b);
+                else if (is_dir(b))
+                    return false;
+
+                if (a.externname != b.externname)
+                    return a.externname < b.externname;
+                return a.name < b.name;
+            }
 
             now_item_in_path =
                 je::filesys::childs(current_work_path)
                     ->unwarp
-                    ->map(\subpath: string = PathInfo{ 
-                        path = subpath,
-                        name = je::filesys::filename(subpath),
-                        externname = je::filesys::externname(subpath),
-                        type = mutable::create(je::filesys::isdir(subpath)
-                            ? PathType::dir(option::none) 
-                            | PathType::file),
-                    };);
+                    ->> \subpath = PathInfo{ 
+                            path = subpath,
+                            name = je::filesys::filename(subpath),
+                            externname = je::filesys::externname(subpath),
+                            type = mutable::create(je::filesys::isdir(subpath)
+                                ? PathType::dir(option::none) 
+                                | PathType::file),
+                        };
+                    ->sort(compare_method)
+                    ;
         }
 
         BeginChild("files_list");

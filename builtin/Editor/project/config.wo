@@ -532,8 +532,7 @@ namespace editor::Project
                 ["graphic_system"] = self.graphic_system->name: dynamic,
                 ["editor_system"] = self.editor_system->name: dynamic,
 
-                ["native_module"] = self.native_modules->unmapping
-                    ->map(\m: (string, anything) = m[0];): dynamic,
+                ["native_module"] = self.native_modules->unmapping ->> \m = m[0];: dynamic,
 
                 ["about_info"] = self.about_info: dynamic,
             };
