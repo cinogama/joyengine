@@ -1,0 +1,69 @@
+// better_enum
+// 对于闲的蛋疼的伙计，这里有一个更好的枚举~
+
+// [public...] better_enum <enum_name> { [...] }
+
+; // 挂个空节点放在这里，woolang不允许空源码，宏定义不属于代码~
+
+#macro better_enum
+{
+	using std;
+	using std::token_type;
+
+	let enum_name = lexer->expect(l_identifier)->valor("MISSING_ENUM"); // 这里应该有枚举的名称
+	lexer->expect(l_left_curly_braces); // 这里应该有一个左花括号
+
+	let enum_items = []mut : vec<(string, option<int>)>; 
+
+	while (true)
+	{
+		let itemname = lexer->expect(l_identifier);
+		match(itemname)
+		{
+		value(enum_item_name)?
+		{
+			let item_value = lexer->try(l_assign)
+				->> \_ = lexer->try(l_sub)->has;
+				->> \isneg = isneg ? -intval | intval 
+					where intval = lexer->expect(l_literal_integer)
+						->> \val = val: int;
+						->  valor(0)
+					;
+				;
+			enum_items->add((enum_item_name, item_value));
+
+			// 如果屁股后面有逗号，这里吃掉
+			lexer->try(l_comma);
+
+			// 如果屁股后面有'}'，这里吃掉 然后收工
+			if (lexer->try(l_right_curly_braces)->has)
+				break;
+		}
+		none?
+			return lexer->error("Unexpected token.");
+		}
+	}
+	if (enum_items->empty)
+	{
+		lexer->error("Item count in 'better_enum' must > 0.");
+		return;
+	}
+
+	// 展开生成枚举声明
+	let mut gened_enum_decl = F"enum {enum_name} \{\n";
+	for (let _, (item_name, item_value) : enum_items)
+	{
+		gened_enum_decl += F"{item_name}" + (item_value->has ? "=" + item_value->val: string | "") + ",\n";
+	}
+	gened_enum_decl += "}\n";
+
+
+	// 生成此枚举的方法
+	gened_enum_decl += F"namespace {enum_name} \{\n"
+
+	// tostring 方法
+
+
+	std::println(gened_enum_decl);
+
+}
