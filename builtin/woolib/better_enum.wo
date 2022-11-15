@@ -59,11 +59,26 @@
 
 
 	// 生成此枚举的方法
-	gened_enum_decl += F"namespace {enum_name} \{\n"
+	gened_enum_decl += F"namespace {enum_name}" + "{\n";
 
 	// tostring 方法
+	gened_enum_decl += F"func tostring(__self: {enum_name})" + "{\n" +
+		enum_items
+			->> \iteminfo = F"if ({iteminfo[0]} == __self) return option::value({iteminfo[0]->enstring});\n";
+			->  reduce(\l, r = l + "else " + r;)
+			->  valor("")
+		+ "return option::none;\n}\n";
 
+	// parse 方法
+	gened_enum_decl += F"func parse(__name: string)" + "{\n" +
+		enum_items
+			->> \iteminfo = F"if ({iteminfo[0]->enstring} == __name) return option::value({iteminfo[0]});\n";
+			->  reduce(\l, r = l + "else " + r;)
+			->  valor("")
+		+ "return option::none;\n}\n";
 
-	std::println(gened_enum_decl);
+	gened_enum_decl += "}";
+
+	lexer->lex(gened_enum_decl);
 
 }

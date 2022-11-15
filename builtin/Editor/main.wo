@@ -585,13 +585,6 @@ func display_icon_in_console()
 }
 
 /////////////////////
-import builtin.woolib.better_enum;
-
-better_enum example
-{
-    a = 1,
-    b = 2,
-}
 
 /////////////////////
 
