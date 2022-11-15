@@ -169,7 +169,7 @@ namespace GameDebug
     }
     public func start_safe_mode()
     {
-        safe_mode = true
+        safe_mode = true;
     }
 
     func is_debugging()

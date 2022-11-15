@@ -87,7 +87,7 @@ namespace editor::Inspector::Material
                     {
                         let texture_path = 
                             textures->get(id)
-                                    ->map(func(tex: je::graphic::texture){return tex->path()})
+                                    ->map(\tex = tex->path;)
                                     ->valor(F"<没有绑定到通道{id}的纹理>");
                                 
                         match (generic::DragFile(name, texture_path))

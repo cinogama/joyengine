@@ -85,7 +85,7 @@ namespace editor::EntityList
             }  
                 
         End();
-        return reqopen && open
+        return reqopen && open;
     }
 
     public func set_current_entity(current_entity: option<je::entity>)

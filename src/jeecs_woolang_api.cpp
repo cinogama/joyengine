@@ -1450,15 +1450,15 @@ namespace je
         extern("libjoyecs", "wojeapi_type_basic_type")
         private public func create(tid: basic_type)=> typeinfo;
 
-        public let const int = typeinfo::create(basic_type::INT);
-        public let const float = typeinfo::create(basic_type::FLOAT);
-        public let const float2 = typeinfo::create(basic_type::FLOAT2);
-        public let const float3 = typeinfo::create(basic_type::FLOAT3);
-        public let const float4 = typeinfo::create(basic_type::FLOAT4);
-        public let const quat = typeinfo::create(basic_type::QUAT);
-        public let const string = typeinfo::create(basic_type::STRING);
+        public let int = typeinfo::create(basic_type::INT);
+        public let float = typeinfo::create(basic_type::FLOAT);
+        public let float2 = typeinfo::create(basic_type::FLOAT2);
+        public let float3 = typeinfo::create(basic_type::FLOAT3);
+        public let float4 = typeinfo::create(basic_type::FLOAT4);
+        public let quat = typeinfo::create(basic_type::QUAT);
+        public let string = typeinfo::create(basic_type::STRING);
 
-        public let const texture = typeinfo::create(basic_type::TEXTURE);
+        public let texture = typeinfo::create(basic_type::TEXTURE);
     }
 
     namespace graphic
@@ -1878,7 +1878,7 @@ R"(
                                             let result = e->editor::is_top();
                                             if (!result)
                                                 not_top_entities->add(e);
-                                            return result
+                                            return result;
                                        },
                         m_current_entity = option::none:<entity>,
                         m_all_entity_list = entitys,

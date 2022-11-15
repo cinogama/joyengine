@@ -51,7 +51,7 @@ namespace editor::Serialize
                         }
                     }
                     return result->todict;
-                };)
+                };);
     }
 
 	public func save_entity(saving_entity: entity)

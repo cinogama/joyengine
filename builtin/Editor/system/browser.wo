@@ -227,8 +227,10 @@ namespace editor::Browser
                     // 创建C++模块，就跟JoyEngineCSP差不多
                     generic::inputbox("创建C++模块", F"将在{current_work_path}创建，请为项目命名：", "CppModule", 
                         \module_name: string = CxxProject::start(module_name, current_work_path)
-                            ->map(\_: anything = force_update();)
-                            ->or(\reason: string = generic::msgbox("创建C++模块失败", reason););)
+                            ->> \ _ = force_update();
+                            ->or(\reason = generic::msgbox("创建C++模块失败", reason);)
+                            ;
+                        );
                 }
                 EndMenu();
             }
@@ -610,8 +612,9 @@ namespace $$MODULE_NAME$$
                 {
                     if (!sure) return;
                     je::filesys::delete(path.path)
-                        ->map(\_: anything = force_update();)
-                        ->or(\reason: string = generic::msgbox("删除失败", reason);)
+                        ->> \_ = force_update();
+                        ->  or(\reason = generic::msgbox("删除失败", reason);)
+                        ;
                 });
         }
     }

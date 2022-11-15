@@ -237,7 +237,7 @@ namespace editor::Inspector::Component
             if (new_layer != layer: int || new_factor != factor)
                 need_update = true;
 
-            update_str += F";{new_layer}:{new_factor}"
+            update_str += F";{new_layer}:{new_factor}";
         }
             
         if (need_update)

@@ -21,7 +21,7 @@ namespace editor
     };
 }
 
-const let  
+let  
     DEFAULT_GRAPHIC_SYSTEM_NAME = "Graphic::DefaultGraphicPipelineSystem",
     DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
 

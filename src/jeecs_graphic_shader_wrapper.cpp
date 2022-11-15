@@ -1292,7 +1292,7 @@ public func step(a: float, b: float)=> float
 
 // Math functions
 
-let const is_glvalue<T> = 
+let is_glvalue<T> = 
     std::declval:<T>() is real
     || std::declval:<T>() is int
     || std::declval:<T>() is float
@@ -1301,7 +1301,7 @@ let const is_glvalue<T> =
     || std::declval:<T>() is float4
 ;
 
-let const is_float<T> = 
+let is_float<T> = 
     std::declval:<T>() is real
     || std::declval:<T>() is float
 ;
@@ -1375,23 +1375,23 @@ enum ZConfig
     GREATER_EQUAL,
     ALWAYS,
 }
-public let const OFF = ZConfig::OFF;
-public let const NEVER = ZConfig::NEVER;
-public let const LESS = ZConfig::LESS;
-public let const EQUAL = ZConfig::EQUAL;
-public let const GREATER = ZConfig::GREATER;
-public let const LESS_EQUAL = ZConfig::LESS_EQUAL;
-public let const NOT_EQUAL = ZConfig::NOT_EQUAL;
-public let const GREATER_EQUAL = ZConfig::GREATER_EQUAL;
-public let const ALWAYS = ZConfig::ALWAYS;
+public let OFF = ZConfig::OFF;
+public let NEVER = ZConfig::NEVER;
+public let LESS = ZConfig::LESS;
+public let EQUAL = ZConfig::EQUAL;
+public let GREATER = ZConfig::GREATER;
+public let LESS_EQUAL = ZConfig::LESS_EQUAL;
+public let NOT_EQUAL = ZConfig::NOT_EQUAL;
+public let GREATER_EQUAL = ZConfig::GREATER_EQUAL;
+public let ALWAYS = ZConfig::ALWAYS;
 
 enum GConfig
 {
     DISABLE = 0,
     ENABLE
 }
-public let const DISABLE = GConfig::DISABLE;
-public let const ENABLE = GConfig::ENABLE;
+public let DISABLE = GConfig::DISABLE;
+public let ENABLE = GConfig::ENABLE;
 
 enum BlendConfig
 {
@@ -1417,20 +1417,20 @@ enum BlendConfig
     ONE_MINUS_CONST_ALPHA,
 }
 
-public let const ZERO = BlendConfig::ZERO;
-public let const ONE = BlendConfig::ONE;
-public let const SRC_COLOR = BlendConfig::SRC_COLOR;
-public let const SRC_ALPHA = BlendConfig::SRC_ALPHA;
-public let const ONE_MINUS_SRC_ALPHA = BlendConfig::ONE_MINUS_SRC_ALPHA;
-public let const ONE_MINUS_SRC_COLOR = BlendConfig::ONE_MINUS_SRC_COLOR;
-public let const DST_COLOR = BlendConfig::DST_COLOR;
-public let const DST_ALPHA = BlendConfig::DST_ALPHA;
-public let const ONE_MINUS_DST_ALPHA = BlendConfig::ONE_MINUS_DST_ALPHA;
-public let const ONE_MINUS_DST_COLOR = BlendConfig::ONE_MINUS_DST_COLOR;
-public let const CONST_COLOR = BlendConfig::CONST_COLOR;
-public let const ONE_MINUS_CONST_COLOR = BlendConfig::ONE_MINUS_CONST_COLOR;
-public let const CONST_ALPHA = BlendConfig::CONST_ALPHA;
-public let const ONE_MINUS_CONST_ALPHA = BlendConfig::ONE_MINUS_CONST_ALPHA;
+public let ZERO = BlendConfig::ZERO;
+public let ONE = BlendConfig::ONE;
+public let SRC_COLOR = BlendConfig::SRC_COLOR;
+public let SRC_ALPHA = BlendConfig::SRC_ALPHA;
+public let ONE_MINUS_SRC_ALPHA = BlendConfig::ONE_MINUS_SRC_ALPHA;
+public let ONE_MINUS_SRC_COLOR = BlendConfig::ONE_MINUS_SRC_COLOR;
+public let DST_COLOR = BlendConfig::DST_COLOR;
+public let DST_ALPHA = BlendConfig::DST_ALPHA;
+public let ONE_MINUS_DST_ALPHA = BlendConfig::ONE_MINUS_DST_ALPHA;
+public let ONE_MINUS_DST_COLOR = BlendConfig::ONE_MINUS_DST_COLOR;
+public let CONST_COLOR = BlendConfig::CONST_COLOR;
+public let ONE_MINUS_CONST_COLOR = BlendConfig::ONE_MINUS_CONST_COLOR;
+public let CONST_ALPHA = BlendConfig::CONST_ALPHA;
+public let ONE_MINUS_CONST_ALPHA = BlendConfig::ONE_MINUS_CONST_ALPHA;
 
 enum CullConfig
 {
@@ -1440,10 +1440,10 @@ enum CullConfig
     ALL,
 }
 
-public let const NONE = CullConfig::NONE;
-public let const FRONT = CullConfig::FRONT;
-public let const BACK = CullConfig::BACK;
-public let const ALL = CullConfig::ALL;
+public let NONE = CullConfig::NONE;
+public let FRONT = CullConfig::FRONT;
+public let BACK = CullConfig::BACK;
+public let ALL = CullConfig::ALL;
 
 public func ZTEST(zconfig: ZConfig)
 {

@@ -284,11 +284,11 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         return 
             childs(runtime_dll_path)
                 ->okay
-                ->bind(\child_path: array<string> = child_path
-                    ->forall(\path: string = isdir(path);)
-                    ->map(\path: string = filename(path): int;)
-                    ->reduce(\l: int, r: int = l > r ? l | r;)
-                ;)
+                =>> \child_path = child_path
+                    ->  forall(\path = isdir(path);)
+                    ->> \path = filename(path): int;
+                    ->  reduce(\l, r = l > r ? l | r;);
+                ;
     }
     func get_current_runtime_path(runtime_dll_path: string)
     {
