@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_cache_version.hpp"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include <condition_variable>
@@ -458,6 +460,28 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::te
     return texture;
 }
 
+bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::texture_sampling* samp)
+{
+    if (jeecs_file* image_cache = jeecs_load_cache_file(path, IMAGE_CACHE_VERSION, true))
+    {
+        jeecs_file_read(samp, sizeof(jegl_texture::texture_sampling), 1, image_cache);
+        jeecs_file_close(image_cache);
+        return true;
+    }
+    return false;
+}
+
+bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::texture_sampling samp)
+{
+    if (void* image_cache = jeecs_create_cache_file(path, IMAGE_CACHE_VERSION))
+    {
+        jeecs_write_cache_file(&samp, sizeof(jegl_texture::texture_sampling), 1, image_cache);
+        jeecs_close_cache_file(image_cache);
+        return true;
+    }
+    return false;
+}
+
 jegl_resource* jegl_load_texture(const char* path)
 {
     if (jeecs_file* texfile = jeecs_file_open(path))
@@ -493,6 +517,10 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
         texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
+
+        // Read samping config from cache file...
+        if (!_jegl_read_texture_sampling_cache(path, &texture->m_raw_texture_data->m_sampling))
+            texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
 
         return texture;
     }
@@ -581,8 +609,6 @@ jegl_resource* jegl_create_vertex(
 
     return vertex;
 }
-
-constexpr uint32_t SHADER_CACHE_VERSION = 0x00000102;
 
 jegl_resource* _jegl_create_died_shader(const char* path)
 {
@@ -787,7 +813,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
 
 jegl_resource* jegl_load_shader(const char* path)
 {
-    if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION))
+    if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, false))
     {
         auto* shader_resource = _jegl_load_shader_cache(shader_cache);
         shader_resource->m_path = jeecs::basic::make_new_string(path);

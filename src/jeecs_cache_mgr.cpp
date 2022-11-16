@@ -1,9 +1,10 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+#include "jeecs_cache_version.hpp"
 
 #include <string>
 
-constexpr uint32_t cache_mgr_version = 0x00000001;
+
 
 // WARNING!!!!
 // DO NOT USE SIZE_T!!!!
@@ -34,7 +35,7 @@ wo_integer_t _crc64_of_file(const char* filepath)
     return crc64_result;
 }
 
-jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version)
+jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, bool ignore_crc64)
 {
     using namespace std;
 
@@ -64,7 +65,7 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version)
         }
 
         // 2. Check crc64 of current file;
-        wo_integer_t crc64_result = _crc64_of_file(filepath);
+        wo_integer_t crc64_result = ignore_crc64 ? 0 : _crc64_of_file(filepath);
 
         wo_integer_t cache_crc64 = 0;
         jeecs_file_read(&cache_crc64, sizeof(wo_integer_t), 1, cache_file);

@@ -186,6 +186,29 @@ WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
+bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::texture_sampling* samp);
+bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::texture_sampling samp);
+
+WO_API wo_api wojeapi_get_texture_sampling_method_by_path(wo_vm vm, wo_value args, size_t argc)
+{
+    //extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
+    //public func get_texture_sampling_method_by_path(path: string)=> option<texture_sampling>;
+    jegl_texture::texture_sampling samp;
+    if (_jegl_read_texture_sampling_cache(wo_string(args + 0), &samp))
+        return wo_ret_option_int(vm, (wo_integer_t)samp);
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_update_texture_sampling_method_by_path(wo_vm vm, wo_value args, size_t argc)
+{
+    //extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
+    //public func update_texture_sampling_method_by_path(path: string, method: texture_sampling)=> result<void, string>;
+    if (_jegl_write_texture_sampling_cache(wo_string(args + 0), (jegl_texture::texture_sampling)wo_int(args+1)))
+        return wo_ret_ok_void(vm);
+    return wo_ret_err_string(vm, "Failed to write image sampling method, maybe image file not exist.");
+}
+
+
 // ECS UNIVERSE
 WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1348,6 +1371,45 @@ namespace je
 
         extern("libjoyecs", "wojeapi_get_framebuf_texture")
         public func get_framebuf_texture(camera: entity, index: int)=> option<graphic::texture>;
+
+        public enum texture_sampling
+        {
+            MIN_LINEAR = 0x0000,
+            MIN_NEAREST = 0x0001,
+            MIN_NEAREST_NEAREST_MIP = 0x0002,
+            MIN_LINEAR_NEAREST_MIP = 0x0003,
+            MIN_NEAREST_LINEAR_MIP = 0x0004,
+            MIN_LINEAR_LINEAR_MIP = 0x0005,
+
+            MAG_LINEAR = 0x0000,
+            MAG_NEAREST = 0x0010,
+
+            CLAMP_EDGE_X = 0x0000,
+            REPEAT_X = 0x0100,
+            CLAMP_EDGE_Y = 0x0000,
+            REPEAT_Y = 0x1000,
+
+            FILTER_METHOD_MASK = 0x00FF,
+            MIN_FILTER_MASK = 0x000F,
+            MAG_FILTER_MASK = 0x00F0,
+
+            WRAP_METHOD_MASK = 0xFF00,
+            WRAP_X_METHOD_MASK = 0x0F00,
+            WRAP_Y_METHOD_MASK = 0xF000,
+
+            // LINEAR = MIN_LINEAR | MAG_LINEAR,
+            // NEAREST = MIN_NEAREST | MAG_NEAREST,
+            // CLAMP_EDGE = CLAMP_EDGE_X | CLAMP_EDGE_Y,
+            // REPEAT = REPEAT_X | REPEAT_Y,
+
+            // DEFAULT = LINEAR | CLAMP_EDGE,
+        };
+
+        extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
+        public func get_texture_sampling_method_by_path(path: string)=> option<texture_sampling>;
+
+        extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
+        public func update_texture_sampling_method_by_path(path: string, method: texture_sampling)=> result<void, string>;
     }
 
     extern("libjoyecs", "wojeapi_log")

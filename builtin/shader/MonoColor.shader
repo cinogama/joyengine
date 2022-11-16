@@ -30,6 +30,6 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     return fout{
-        color = float4::new(1., 1., 1., 1.)
+        color = uniform("Color", float4_one)
     };
 }
