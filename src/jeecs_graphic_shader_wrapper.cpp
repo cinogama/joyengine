@@ -1247,6 +1247,7 @@ namespace shader
 public let float_zero = float::new(0.);
 public let float_one = float::new(1.);
 public let float2_zero = float2::new(0., 0.);
+public let float2_one = float2::new(1., 1.);
 public let float3_zero = float3::new(0., 0., 0.);
 public let float4_zero = float4::new(0., 0., 0., 0.);
 public let float4x4_unit = float4x4::new(
@@ -1266,6 +1267,9 @@ public let je_p = uniform("JOYENGINE_TRANS_P", float4x4_unit);
 public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4_unit);
 public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4_unit);
 public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4_unit);
+
+public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2_one);
+public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2_zero);
 
 public func texture(tex:texture2d, uv:float2)=> float4
 {
@@ -1288,6 +1292,11 @@ public func lerp<T>(a: T, b: T, uv:float)=> T
 public func step(a: float, b: float)=> float
 {
     return apply_operation:<float>("step", a, b);
+}
+
+public func uvtrans(uv: float2, tiling: float2, offset: float2)
+{
+    return uv * tiling + offset;
 }
 
 // Math functions
@@ -1752,10 +1761,7 @@ using uniform_block = struct_define
 UNIFORM_BUFFER JOYENGINE_DEFAULT = 0
 {
     je_time: float4,
-    je_layer_and_padding: float4, // Only use je_layer_and_padding.x
 };
-
-public let je_layer = je_layer_and_padding->x;
 )";
 
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)

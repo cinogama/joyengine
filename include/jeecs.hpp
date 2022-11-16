@@ -707,6 +707,9 @@ struct jegl_shader
         uint32_t m_builtin_uniform_mvp = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_mv = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_vp = jeecs::typing::INVALID_UINT32;
+
+        uint32_t m_builtin_uniform_tiling = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_offset = jeecs::typing::INVALID_UINT32;
     };
 
     struct unifrom_variables
@@ -4832,18 +4835,6 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, pos) == offsetof(LocalToWorld, pos));
         static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
-
-        struct Layer
-        {
-            // NOTE:
-            // In graphic system, the layer larger, the entity will rend more priority.
-            uint32_t layer = 0;
-
-            static void JERefRegsiter()
-            {
-                typing::register_member(&Layer::layer, "layer");
-            }
-        };
     }
     namespace Renderer
     {
@@ -4908,6 +4899,8 @@ namespace jeecs
 
                 }
             };
+            math::vec2 tiling = math::vec2(1.f, 1.f);
+            math::vec2 offset = math::vec2(0.f, 0.f);
             jeecs::vector<texture_with_passid> textures;
 
             void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
@@ -4922,6 +4915,12 @@ namespace jeecs
                     }
                 }
                 textures.push_back(texture_with_passid(passid, texture));
+            }
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Textures::tiling, "tiling");
+                typing::register_member(&Textures::offset, "offset");
             }
         };
 
@@ -4982,57 +4981,6 @@ namespace jeecs
 
     namespace Light2D
     {
-        struct LayerEffect
-        {
-            struct layer_effects
-            {
-                struct effect_pair
-                {
-                    uint32_t layer;
-                    float    factor;
-                };
-                jeecs::vector<effect_pair> layer_factors;
-
-                std::string to_string()const noexcept
-                {
-                    std::string dat = "#light2d_layer_effects#";
-                    dat += "size:" + std::to_string(layer_factors.size());
-                    for (auto& p : layer_factors)
-                    {
-                        dat += ";" + std::to_string(p.layer) + ":" + std::to_string(p.factor);
-                    }
-                    return dat;
-                }
-                void parse(const char* jsonstr) noexcept
-                {
-                    size_t size = 0;
-                    size_t readed_byte = 0;
-                    layer_factors.clear();
-                    if (sscanf(jsonstr, "#light2d_layer_effects#size:%zu%zn", &size, &readed_byte) == 1)
-                    {
-                        jsonstr += readed_byte;
-                        for (size_t i = 0; i < size; ++i)
-                        {
-                            uint32_t layer = 0;
-                            float factor = 0.f;
-
-                            if (sscanf(jsonstr, ";%u:%f%zn", &layer, &factor, &readed_byte) == 2)
-                                jsonstr += readed_byte;
-
-                            layer_factors.push_back(effect_pair{ layer ,factor });
-                        }
-                    }
-                }
-            };
-
-            layer_effects effects;
-
-            static void JERefRegsiter()
-            {
-                typing::register_member(&LayerEffect::effects, "effects");
-            }
-        };
-
         struct Color
         {
             math::vec4 color = math::vec4(1, 1, 1, 1);
@@ -5373,7 +5321,6 @@ namespace jeecs
             type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
             type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
             type_info::of<Transform::Translation>("Transform::Translation");
-            type_info::of<Transform::Layer>("Transform::Layer");
 
             type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
             type_info::of<Renderer::Shape>("Renderer::Shape");
@@ -5387,7 +5334,6 @@ namespace jeecs
             type_info::of<Camera::Viewport>("Camera::Viewport");
             type_info::of<Camera::RendToFramebuffer>("Camera::RendToFramebuffer");
 
-            type_info::of<Light2D::LayerEffect>("Light2D::LayerEffect");
             type_info::of<Light2D::Color>("Light2D::Color");
             type_info::of<Light2D::Shadow>("Light2D::Shadow");
             type_info::of<Light2D::Parallel>("Light2D::Parallel");

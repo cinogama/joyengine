@@ -582,7 +582,7 @@ jegl_resource* jegl_create_vertex(
     return vertex;
 }
 
-constexpr uint32_t SHADER_CACHE_VERSION = 0x00000100;
+constexpr uint32_t SHADER_CACHE_VERSION = 0x00000102;
 
 jegl_resource* _jegl_create_died_shader(const char* path)
 {

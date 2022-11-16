@@ -77,7 +77,7 @@ namespace jeecs
                         -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
                         0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f, 0.0f, -1.0f,
                         0.5f, 0.5f, 0.0f,       1.0f, 1.0f,  0.0f, 0.0f, -1.0f,
-                        -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f, 
+                        -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f,
                     },
                     { 3, 2, 3 });
 
@@ -224,7 +224,6 @@ public let frag =
     struct DefaultGraphicPipelineSystem : public EmptyGraphicPipelineSystem
     {
         using Translation = Transform::Translation;
-        using Layer = Transform::Layer;
 
         using Rendqueue = Renderer::Rendqueue;
 
@@ -257,23 +256,15 @@ public let frag =
         {
             const Rendqueue* rendqueue;
             const Translation* translation;
-            const Layer* layer;
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
 
             bool operator < (const renderer_arch& another) const noexcept
             {
-                int a_layer = layer ? layer->layer : 0;
-                int b_layer = another.layer ? another.layer->layer : 0;
-
-                if (a_layer == b_layer)
-                {
-                    int a_queue = rendqueue ? rendqueue->rend_queue : 0;
-                    int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                    return a_queue > b_queue;
-                }
-                return a_layer < b_layer;
+                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
+                return a_queue > b_queue;
             }
         };
 
@@ -287,7 +278,6 @@ public let frag =
         struct default_uniform_buffer_data_t
         {
             jeecs::math::vec4 time;
-            jeecs::math::vec4 layer_and_padding;
         };
 
         DefaultGraphicPipelineSystem(game_world w)
@@ -374,25 +364,24 @@ public let frag =
                         );
                     })
                 .exec(
-                    [this](Translation& trans, Layer* layer, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
                     {
                         // TODO: Need Impl AnyOf
                             // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace(
                             renderer_arch{
-                                rendqueue, &trans, layer, shape, shads, texs
+                                rendqueue, &trans, shape, shads, texs
                             });
                     }).anyof<Shaders, Textures, Shape>()
-                .exec(
-                    [this](Translation& trans,
-                        Light2D::Color& color,
-                        Light2D::LayerEffect* effect_layer,
-                        Light2D::Point* point,
-                        Light2D::Parallel* parallel,
-                        Light2D::Shadow* shadow)
-                    {
+                        .exec(
+                            [this](Translation& trans,
+                                Light2D::Color& color,
+                                Light2D::Point* point,
+                                Light2D::Parallel* parallel,
+                                Light2D::Shadow* shadow)
+                            {
 
-                    }).anyof<Light2D::Point, Light2D::Parallel>();
+                            }).anyof<Light2D::Point, Light2D::Parallel>();
         }
         void LateUpdate()
         {
@@ -467,31 +456,11 @@ public let frag =
 
                     float MAT4_MV[4][4], MAT4_VP[4][4];
                     math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
-                    // TODO: Update camera shared uniform.
 
                     uint32_t current_rendering_entity_layer_group = typing::INVALID_UINT32;
 
                     for (auto& rendentity : m_renderer_entities)
                     {
-                        uint32_t current_rendering_entity_layer = rendentity.layer == nullptr ? 0 : rendentity.layer->layer;
-                        if (current_rendering_entity_layer != current_rendering_entity_layer_group)
-                        {
-                            // Update uniform block & update light2d shadow buf?
-                            current_rendering_entity_layer_group = current_rendering_entity_layer;
-                            math::vec4 shader_layer_and_padding =
-                            {
-                                (float)current_rendering_entity_layer_group, 0.f, 0.f, 0.f
-                            };
-
-                            m_default_uniform_buffer->update_buffer(
-                                offsetof(default_uniform_buffer_data_t, layer_and_padding),
-                                sizeof(math::vec4),
-                                &shader_layer_and_padding);
-                            jegl_using_resource(m_default_uniform_buffer->resouce());
-                        }
-
-                        /*jegl_using_texture();
-                        jegl_draw_vertex_with_shader();*/
                         assert(rendentity.translation);
 
                         const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
@@ -510,7 +479,16 @@ public let frag =
                             : host()->default_shaders_list;
 
                         // Bind texture here
+                        constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
+                        const jeecs::math::vec2
+                            * _using_tiling = &default_tiling,
+                            * _using_offset = &default_offset;
+
                         if (rendentity.textures)
+                        {
+                            _using_tiling = &rendentity.textures->tiling;
+                            _using_offset = &rendentity.textures->offset;
+
                             for (auto& texture : rendentity.textures->textures)
                             {
                                 if (texture.m_texture->enabled())
@@ -519,7 +497,7 @@ public let frag =
                                     // Current texture is missing, using default texture instead.
                                     jegl_using_texture(*host()->default_texture, texture.m_pass_id);
                             }
-
+                        }
                         for (auto& shader_pass : drawing_shaders)
                         {
                             auto* using_shader = &shader_pass;
@@ -529,9 +507,9 @@ public let frag =
                             jegl_using_resource((*using_shader)->resouce());
 
                             auto* builtin_uniform = (*using_shader)->m_builtin;
-#define NEED_AND_SET_UNIFORM(ITEM, TYPE, VALUE) \
+#define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
 if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, VALUE)
+ jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
 
                             NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
                             NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
@@ -540,6 +518,9 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                            NEED_AND_SET_UNIFORM(tiling, float2, _using_tiling->x, _using_tiling->y);
+                            NEED_AND_SET_UNIFORM(offset, float2, _using_offset->x, _using_offset->y);
 
 #undef NEED_AND_SET_UNIFORM
                             jegl_draw_vertex(*drawing_shape);

@@ -34,7 +34,7 @@ public func vert(v: vin)
     return v2f{
         fragpos = frag_position->xyz,
         pos  = je_vp * frag_position,
-        uv   = v.uv,
+        uv   = uvtrans(v.uv, je_tiling, je_offset),
         rtangent_x = (je_m * float4::new(1., 0., 0., 1.))->xyz - move_position,
         rtangent_y = (je_m * float4::new(0., 1., 0., 1.))->xyz - move_position,
         rtangent_z = (je_m * float4::new(0., 0., -1., 1.))->xyz - move_position,

@@ -26,7 +26,7 @@ public func vert(v: vin)
 {
     return v2f{
         pos = je_mvp * float4::create(v.vertex, 1.),
-        uv = v.uv,
+        uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
 
