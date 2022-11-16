@@ -192,11 +192,11 @@ bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::texture_
 WO_API wo_api wojeapi_get_texture_sampling_method_by_path(wo_vm vm, wo_value args, size_t argc)
 {
     //extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
-    //public func get_texture_sampling_method_by_path(path: string)=> option<texture_sampling>;
+    //public func get_texture_sampling_method_by_path(path: string)=> texture_sampling;
     jegl_texture::texture_sampling samp;
     if (_jegl_read_texture_sampling_cache(wo_string(args + 0), &samp))
-        return wo_ret_option_int(vm, (wo_integer_t)samp);
-    return wo_ret_option_none(vm);
+        return wo_ret_int(vm, (wo_integer_t)samp);
+    return wo_ret_int(vm, (wo_integer_t)jegl_texture::texture_sampling::DEFAULT);
 }
 
 WO_API wo_api wojeapi_update_texture_sampling_method_by_path(wo_vm vm, wo_value args, size_t argc)
@@ -1406,7 +1406,7 @@ namespace je
         };
 
         extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
-        public func get_texture_sampling_method_by_path(path: string)=> option<texture_sampling>;
+        public func get_texture_sampling_method_by_path(path: string)=> texture_sampling;
 
         extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
         public func update_texture_sampling_method_by_path(path: string, method: texture_sampling)=> result<void, string>;

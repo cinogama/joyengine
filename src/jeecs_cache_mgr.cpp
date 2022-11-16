@@ -80,7 +80,7 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
                 return nullptr;
             }
         }
-        else
+        else if (!ignore_crc64)
             jeecs::debug::logwarn("Found cache file when loading '%s', but origin file missing.", filepath);
         return cache_file;
     }

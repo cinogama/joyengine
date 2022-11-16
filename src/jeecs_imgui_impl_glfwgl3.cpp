@@ -97,6 +97,10 @@ namespace je::gui
     public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_open")
     public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> bool;
+    public func BeginOpen(title:string)
+    {
+        return BeginAttrOpen(title, WindowsAttribute::ImGuiWindowFlags_None);
+    }
 
     extern("libjoyecs", "je_gui_end")
     public func End()=> bool;
@@ -295,6 +299,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_image")
     public func ImageSize(tex: je::graphic::texture, width: int, height: int)=> void;
 
+)"
+R"(
+
     extern("libjoyecs", "je_gui_imagebutton")
     public func ImageButton(tex: je::graphic::texture)=> bool;
     extern("libjoyecs", "je_gui_imagebutton")
@@ -304,8 +311,7 @@ namespace je::gui
 
     extern("libjoyecs", "je_gui_content_region_avail")
     public func GetContentRegionAvail()=> (real, real);
-)"
-R"(
+
     public enum DragAttribute
     {
         ImGuiDragDropFlags_None                         = 0,
