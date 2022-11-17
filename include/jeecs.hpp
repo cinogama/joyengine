@@ -4994,7 +4994,7 @@ namespace jeecs
 
         struct Shadow
         {
-
+            basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
         };
 
         struct Parallel
@@ -5003,6 +5003,11 @@ namespace jeecs
         };
 
         struct Point
+        {
+
+        };
+
+        struct CameraPass
         {
 
         };
@@ -5339,6 +5344,7 @@ namespace jeecs
             type_info::of<Light2D::Shadow>("Light2D::Shadow");
             type_info::of<Light2D::Parallel>("Light2D::Parallel");
             type_info::of<Light2D::Point>("Light2D::Point");
+            type_info::of<Light2D::CameraPass>("Light2D::CameraPass");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();

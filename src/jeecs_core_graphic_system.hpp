@@ -244,6 +244,7 @@ public let frag =
             const Projection* projection;
             const Viewport* viewport;
             const RendToFramebuffer* rendToFramebuffer;
+            const Light2D::CameraPass* light2DPass;
 
             bool operator < (const camera_arch& another) const noexcept
             {
@@ -354,12 +355,12 @@ public let frag =
             select_from(get_world())
                 .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
-                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
+                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPass* light2dpass)
                     {
                         // Calc camera proj matrix
                         m_camera_list.emplace(
                             camera_arch{
-                                rendqueue, &projection, cameraviewport, rendbuf
+                                rendqueue, &projection, cameraviewport, rendbuf, light2dpass
                             }
                         );
                     })
@@ -457,7 +458,11 @@ public let frag =
                     float MAT4_MV[4][4], MAT4_VP[4][4];
                     math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
 
-                    uint32_t current_rendering_entity_layer_group = typing::INVALID_UINT32;
+                    // If current camera contain light2d-pass, prepare light shadow here.
+                    if (current_camera.light2DPass != nullptr && rend_aim_buffer != nullptr)
+                    {
+                        // TODO; Generate & bind shadow buffer.
+                    }
 
                     for (auto& rendentity : m_renderer_entities)
                     {
