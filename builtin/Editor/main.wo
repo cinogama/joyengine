@@ -99,7 +99,10 @@ namespace logmgr
             log_buffers[t]->insert(0, s);
 
         if (!this_time_log->empty)
-            return last_log = option::value(this_time_log[this_time_log->len - 1]);
+        {
+            let (level, msg) = this_time_log[this_time_log->len - 1];
+            return last_log = option::value((level, msg->utils::ShortStringCutEnd(60)));
+        }
 
         return last_log;
     }
@@ -485,8 +488,7 @@ func Editor_MainMenuBar()
             + last_log_info
                 ->map(\loginfo:(je::editor::loglevel, string)=
                     F" [{logmgr::log_level_name[loginfo[0]]}: {loginfo[1]}]";)
-                ->valor("")
-                ->utils::ShortStringCutEnd(60)))
+                ->valor("")))
         {
             logmgr::show_log();
             EndMenu();
