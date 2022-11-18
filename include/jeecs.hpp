@@ -5009,7 +5009,7 @@ namespace jeecs
 
         struct CameraPass
         {
-
+            basic::resource<graphic::framebuffer> defer_rend_aim = nullptr;
         };
     }
 

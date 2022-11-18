@@ -1025,7 +1025,8 @@ namespace float2
         return apply_operation:<float2>("*", a, b);
     }
 
-    public func operator / (a:float2, b:float)=> float2
+    public func operator / <T>(a:float2, b: T)=> float2
+        where b is real || b is float || b is float2;
     {
         return apply_operation:<float2>("/", a, b);
     }
@@ -1067,7 +1068,8 @@ namespace float3
         return apply_operation:<float3>("*", a, b);
     }
 
-    public func operator / (a:float3, b:float)=> float3
+    public func operator / <T>(a:float3, b: T)=> float3
+        where b is real || b is float || b is float3;
     {
         return apply_operation:<float3>("/", a, b);
     }
@@ -1162,7 +1164,8 @@ namespace float4
         return apply_operation:<float4>("*", a, b);
     }
 
-    public func operator / (a:float4, b:float)=> float4
+    public func operator /<T>(a:float4, b: T)=> float4
+        where b is real || b is float || b is float4;
     {
         return apply_operation:<float4>("/", a, b);
     }
@@ -1335,6 +1338,12 @@ public func abs<T>(a: T)=> T
     where is_glvalue:<T>;
 {
     return apply_operation:<T>("abs", a);
+}
+
+public func pow<T>(a: T, b: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("pow", a, b);
 }
 
 public func normalize<T>(a: T)=> T
