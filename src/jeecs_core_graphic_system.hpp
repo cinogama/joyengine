@@ -541,12 +541,12 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         struct DeferLight2DHost
         {
             jegl_thread* _m_belong_context;
-            
+
             // Used for move rend result to camera's render aim buffer.
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_non_light_effect_pass;
 
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_point_light;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_point_light_pass;
 
             DeferLight2DHost(jegl_thread* _ctx)
                 : _m_belong_context(_ctx)
@@ -562,7 +562,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     },
                     { 3, 2 });
 
-                _defer_light2d_non_light_effect_pass 
+                _defer_light2d_non_light_effect_pass
                     = new shader("je/defer_light2d_non_light.shader",
                         R"(
 import je.shader;
@@ -607,10 +607,10 @@ public func frag(vf: v2f)
     };
 }
 )");
-                _defer_light2d_point_light 
-                    = new shader("je/defer_light2d_point_light.shader", R"(
+                _defer_light2d_point_light_pass
+                    = new shader("je/defer_light2d_point_light.shader", 
+                        R"(
 import je.shader;
-
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -620,7 +620,7 @@ CULL    (BACK);
 VAO_STRUCT vin
 {
     vertex: float3,
-    uv: float2,
+    // uv: float2, // We don't care uv, we will use port position as uv.
 };
 
 using v2f = struct{
@@ -634,20 +634,22 @@ using fout = struct{
 
 public func vert(v: vin)
 {
+    let pos = je_mvp * float4::create(v.vertex, 1.);
     return v2f{
         pos = je_mvp * float4::create(v.vertex, 1.),
-        uv = v.uv,
+        uv = (pos->xy / pos->w + float2::new(1., 1.)) /2.,
     };
 }
 public func frag(vf: v2f)
 {
+    let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
+
     return fout{
-        color = float4::new(1., 1., 1., 1.)
+        color = texture(albedo_buffer, vf.uv)
     };
 }
 
 )");
-
             }
 
             static DeferLight2DHost* instance(jegl_thread* glcontext)
@@ -1012,7 +1014,6 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                             NEED_AND_SET_UNIFORM(tiling, float2, _using_tiling->x, _using_tiling->y);
                             NEED_AND_SET_UNIFORM(offset, float2, _using_offset->x, _using_offset->y);
-
 #undef NEED_AND_SET_UNIFORM
                             jegl_draw_vertex(*drawing_shape);
                         }
@@ -1043,6 +1044,27 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         // Rend ambient color to screen.
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(0)->resouce(), 0);
                         jegl_using_resource(light2d_host->_defer_light2d_non_light_effect_pass->resouce());
+                        jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
+
+                        // TODO! Rend light effect to aim buffer.
+                        // ATTENTION Here is test code.
+                        jegl_using_resource(light2d_host->_defer_light2d_point_light_pass->resouce());
+
+                        auto* builtin_uniform = light2d_host->_defer_light2d_point_light_pass->m_builtin;
+#define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
+if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+    jegl_uniform_##TYPE(light2d_host->_defer_light2d_point_light_pass->resouce(),\
+    builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+
+                        float MAT4_MVP[4][4] = { 
+                            0.5f,0.f,0.f,0.f,  
+                            0.f,0.5f,0.f,0.f ,  
+                            0.f,0.f,0.5f,0.f ,
+                            0.5f,0.f,0.f,1.f };
+
+                        NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+#undef NEED_AND_SET_UNIFORM
                         jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
                     }
                 }
