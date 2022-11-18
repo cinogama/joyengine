@@ -638,15 +638,15 @@ inline void _gl_update_cull_mode_method(jegl_shader::cull_mode mode)
             glDisable(GL_CULL_FACE);
         else
         {
-            glEnable(GL_ALPHA_TEST);
+            glEnable(GL_CULL_FACE);
             switch (mode)
             {
             case jegl_shader::cull_mode::ALL:
                 glCullFace(GL_FRONT_AND_BACK); break;
             case jegl_shader::cull_mode::FRONT:
-                glCullFace(GL_FRONT_AND_BACK); break;
+                glCullFace(GL_FRONT); break;
             case jegl_shader::cull_mode::BACK:
-                glCullFace(GL_FRONT_AND_BACK); break;
+                glCullFace(GL_BACK); break;
             default:
                 jeecs::debug::logerr("Invalid culling mode.");
                 break;
