@@ -546,6 +546,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_non_light_effect_pass;
 
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_point_light;
+
             DeferLight2DHost(jegl_thread* _ctx)
                 : _m_belong_context(_ctx)
             {
@@ -559,6 +561,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         -1.f, 1.f, 0.f,     0.f, 1.f,
                     },
                     { 3, 2 });
+
                 _defer_light2d_non_light_effect_pass 
                     = new shader("je/defer_light2d_non_light.shader",
                         R"(
@@ -604,6 +607,47 @@ public func frag(vf: v2f)
     };
 }
 )");
+                _defer_light2d_point_light 
+                    = new shader("je/defer_light2d_point_light.shader", R"(
+import je.shader;
+
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (BACK);
+
+VAO_STRUCT vin
+{
+    vertex: float3,
+    uv: float2,
+};
+
+using v2f = struct{
+    pos: float4,
+    uv: float2,
+};
+
+using fout = struct{
+    color: float4
+};
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = je_mvp * float4::create(v.vertex, 1.),
+        uv = v.uv,
+    };
+}
+public func frag(vf: v2f)
+{
+    return fout{
+        color = float4::new(1., 1., 1., 1.)
+    };
+}
+
+)");
+
             }
 
             static DeferLight2DHost* instance(jegl_thread* glcontext)
