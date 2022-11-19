@@ -275,6 +275,8 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 
             builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(resource, "JOYENGINE_TEXTURE_TILING");
             builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(resource, "JOYENGINE_TEXTURE_OFFSET");
+
+            builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(resource, "JOYENGINE_MAIN_COLOR");
         }
 
         glDeleteShader(vertex_shader);

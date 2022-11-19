@@ -1252,7 +1252,9 @@ public let float_one = float::new(1.);
 public let float2_zero = float2::new(0., 0.);
 public let float2_one = float2::new(1., 1.);
 public let float3_zero = float3::new(0., 0., 0.);
+public let float3_one = float3::new(1., 1., 1.);
 public let float4_zero = float4::new(0., 0., 0., 0.);
+public let float4_one = float4::new(1., 1., 1., 1.);
 public let float4x4_unit = float4x4::new(
     1., 0., 0., 0.,
     0., 1., 0., 0.,
@@ -1274,6 +1276,8 @@ public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4_unit);
 public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2_one);
 public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2_zero);
 
+public let je_color = uniform("JOYENGINE_MAIN_COLOR", float4_one);
+
 public func texture(tex:texture2d, uv:float2)=> float4
 {
     return apply_operation:<float4>("texture", tex, uv);
@@ -1292,7 +1296,9 @@ public func lerp<T>(a: T, b: T, uv:float)=> T
     return apply_operation:<T>("lerp", a, b, uv);
 }
 
-public func step(a: float, b: float)=> float
+public func step<T, U>(a: T, b: U)=> float
+    where a is float || a is real
+        , b is float || b is real;
 {
     return apply_operation:<float>("step", a, b);
 }

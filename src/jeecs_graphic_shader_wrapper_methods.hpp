@@ -170,6 +170,12 @@ return new jegl_shader_value((float*)&result, jegl_shader_value::FLOAT4x4);
 reduce_method{return nullptr; }} },
 { "step", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(args[0]->m_float < args[1]->m_float ? 1.0f : 0.0f); }} },
+{ "step", {jegl_shader_value::FLOAT2, jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
+{ "step", {jegl_shader_value::FLOAT2, jegl_shader_value::FLOAT3,
+reduce_method{return nullptr; }} },
+{ "step", {jegl_shader_value::FLOAT2, jegl_shader_value::FLOAT4,
+reduce_method{return nullptr; }} },
 
 { "lerp", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(jeecs::math::lerp(args[0]->m_float, args[1]->m_float, args[2]->m_float)); }} },

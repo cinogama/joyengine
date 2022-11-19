@@ -231,6 +231,11 @@ public let frag =
         ~DefaultGraphicPipelineSystem()
         {
         }
+
+        void LateUpdate()
+        {
+            UpdateFrame(this);
+        }
     };
 
     // TODO: When develop defer light2d pipeline disable it tmp...
@@ -639,6 +644,7 @@ VAO_STRUCT vin
 using v2f = struct{
     pos: float4,
     uv: float2,
+    lpos: float3,
 };
 
 using fout = struct{
@@ -647,20 +653,45 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    let pos = je_mvp * float4::create(v.vertex, 1.);
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let pos = je_p * vpos;
+    let lpos = je_mv * float4::new(0., 0., 0., 1.);
+
     return v2f{
-        pos = je_mvp * float4::create(v.vertex, 1.),
+        pos = pos,
         uv = (pos->xy / pos->w + float2::new(1., 1.)) /2.,
+        lpos = lpos->xyz / lpos->w,
     };
 }
+
+func hdr_unmap(a: float)
+{
+    return step(0., a) * a / (float_one - a) + step(a, 0.) * a / (float_one + a);
+}
+func hdr_unmap_float3(a: float3)
+{
+    return float3::create(hdr_unmap(a->x), hdr_unmap(a->y), hdr_unmap(a->z));
+}
+
 public func frag(vf: v2f)
 {
     let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
     let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
     let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
 
+    let albedo = texture(albedo_buffer, vf.uv);
+    let vpos_m = texture(vpos_m_buffer, vf.uv);
+    let vnorm_r = texture(vnorm_r_buffer, vf.uv);
+
+    let hdr_unmap_vpos = hdr_unmap_float3(vpos_m->xyz * 2. - float3_one) ;
+
+    let fragpos_to_light_dir = normalize(vf.lpos - hdr_unmap_vpos);
+    let vnormal = (vnorm_r->xyz - float3::new(0.5, 0.5, 0.5)) * 2.;    
+
+    let factor = clamp(dot(fragpos_to_light_dir, vnormal), 0., 1.);
+
     return fout{
-        color = texture(albedo_buffer, vf.uv)
+        color = float4::create(factor, factor, factor, 1.) //albedo * factor
     };
 }
 
@@ -710,6 +741,16 @@ public func frag(vf: v2f)
                 return a_queue > b_queue;
             }
         };
+
+        struct light2d_arch
+        {
+            const Translation* translation;
+            const Light2D::Color* color;
+            const Light2D::Point* point;
+            const Light2D::Parallel* parallel;
+            const Light2D::Shadow* shadow;
+        };
+
         struct renderer_arch
         {
             const Rendqueue* rendqueue;
@@ -728,6 +769,7 @@ public func frag(vf: v2f)
 
         std::priority_queue<camera_arch> m_camera_list;
         std::priority_queue<renderer_arch> m_renderer_list;
+        std::list<light2d_arch> m_2dlight_list;
 
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
@@ -864,15 +906,20 @@ public func frag(vf: v2f)
                                 rendqueue, &trans, shape, shads, texs
                             });
                     }).anyof<Shaders, Textures, Shape>()
-                        .exec(
-                            [this](Translation& trans,
-                                Light2D::Color& color,
-                                Light2D::Point* point,
-                                Light2D::Parallel* parallel,
-                                Light2D::Shadow* shadow)
-                            {
+                .exec(
+                    [this](Translation& trans,
+                        Light2D::Color& color,
+                        Light2D::Point* point,
+                        Light2D::Parallel* parallel,
+                        Light2D::Shadow* shadow)
+                    {
+                        m_2dlight_list.emplace_back(
+                            light2d_arch{
+                                &trans, &color, point, parallel, shadow
+                            }
+                        );
 
-                            }).anyof<Light2D::Point, Light2D::Parallel>();
+                    }).anyof<Light2D::Point, Light2D::Parallel>();
         }
         void LateUpdate()
         {
@@ -932,7 +979,7 @@ public func frag(vf: v2f)
                     const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
                     const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
 
-                    float MAT4_MV[4][4], MAT4_VP[4][4];
+                    float MAT4_VP[4][4];
                     math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
 
                     // If current camera contain light2d-pass, prepare light shadow here.
@@ -973,7 +1020,7 @@ public func frag(vf: v2f)
 
                         const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
 
-                        float MAT4_MVP[4][4];
+                        float MAT4_MV[4][4], MAT4_MVP[4][4];
                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -1056,31 +1103,43 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         if (rend_aim_buffer)
                             jegl_clear_framebuffer(rend_aim_buffer);
 
-                        // Rend ambient color to screen.
+                        // Bind attachment
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(0)->resouce(), 0);
+                        jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(2)->resouce(), 1);
+                        jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(3)->resouce(), 2);
+
+                        // Rend ambient color to screen.
                         jegl_using_resource(light2d_host->_defer_light2d_non_light_effect_pass->resouce());
                         jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
 
-                        // TODO! Rend light effect to aim buffer.
-                        // ATTENTION Here is test code.
-                        jegl_using_resource(light2d_host->_defer_light2d_point_light_pass->resouce());
+                        for (auto& light2d : m_2dlight_list)
+                        {
+                            jegl_using_resource(light2d_host->_defer_light2d_point_light_pass->resouce());
 
-                        auto* builtin_uniform = light2d_host->_defer_light2d_point_light_pass->m_builtin;
+                            auto* builtin_uniform = light2d_host->_defer_light2d_point_light_pass->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
 if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
     jegl_uniform_##TYPE(light2d_host->_defer_light2d_point_light_pass->resouce(),\
     builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
 
-                        float MAT4_MVP[4][4] = {
-                            0.5f,0.f,0.f,0.f,
-                            0.f,0.5f,0.f,0.f ,
-                            0.f,0.f,0.5f,0.f ,
-                            0.5f,0.f,0.f,1.f };
+                            const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
+                            float MAT4_MV[4][4], MAT4_MVP[4][4];
+                            math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                            math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
-                        NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+                            NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                            NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                            NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+
+                            NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
+                            NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                            NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
 #undef NEED_AND_SET_UNIFORM
-                        jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
+                            jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
+                        }
+                        m_2dlight_list.clear();
+                        // Finish for Light2d effect.                        
                     }
                 }
             }

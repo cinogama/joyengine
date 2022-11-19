@@ -47,11 +47,11 @@ public func vert(v: vin)
         vpos = vspace_position->xyz,
         uv   = uvtrans(v.uv, je_tiling, je_offset),
         vtangent_x = (je_v * float4::create((je_m * float4::new(1., 0., 0., 1.))->xyz - m_movement, 1.))
-            ->xyz + v_movement,
+            ->xyz - v_movement,
         vtangent_y = (je_v * float4::create((je_m * float4::new(0., 1., 0., 1.))->xyz - m_movement, 1.))
-            ->xyz + v_movement,
+            ->xyz - v_movement,
         vtangent_z = (je_v * float4::create((je_m * float4::new(0., 0., -1., 1.))->xyz - m_movement, 1.))
-            ->xyz + v_movement,
+            ->xyz - v_movement,
     };
 }
 
@@ -64,10 +64,19 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
 {
     let normal_from_map = get_normal_from_map(normal_map, vertex_info.uv);
     return normalize(
-        vertex_info.vtangent_x * normal_from_map +
-        vertex_info.vtangent_y * normal_from_map +
-        vertex_info.vtangent_z * normal_from_map
+        vertex_info.vtangent_x * normal_from_map->x +
+        vertex_info.vtangent_y * normal_from_map->y +
+        vertex_info.vtangent_z * normal_from_map->z
     );
+}
+
+func hdr_map(a: float)
+{
+    return step(0., a)* a / (a + float_one) + step(a, float_zero) * a / (float_one - a);
+}
+func hdr_map_float3(a: float3)
+{
+    return float3::create(hdr_map(a->x), hdr_map(a->y), hdr_map(a->z));
 }
 
 public func frag(vf: v2f)
@@ -78,10 +87,11 @@ public func frag(vf: v2f)
     let Roughness = uniform_texture:<texture2d>("Roughness", 3);
 
     let vnormal = transed_normal_tangent_map(Normalize, vf);
+    let hdr_maped_vpos = (hdr_map_float3(vf.vpos) + float3_one) / 2.;
 
     return fout{
         albedo = texture(Albedo, vf.uv),
-        vposition_m = float4::create(vf.vpos, texture(Metallic, vf.uv)->x),
-        vnormalize_r = float4::create(vnormal, texture(Roughness, vf.uv)->x),
+        vposition_m = float4::create(hdr_maped_vpos, texture(Metallic, vf.uv)->x),
+        vnormalize_r = float4::create((vnormal + float3_one) / 2., texture(Roughness, vf.uv)->x),
     };
 }
