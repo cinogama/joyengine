@@ -632,7 +632,7 @@ import je.shader;
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (ONE, ZERO);
+BLEND   (ONE, ONE);
 CULL    (BACK);
 
 VAO_STRUCT vin
@@ -691,7 +691,7 @@ public func frag(vf: v2f)
     let factor = clamp(dot(fragpos_to_light_dir, vnormal), 0., 1.);
 
     return fout{
-        color = float4::create(factor, factor, factor, 1.) //albedo * factor
+        color = float4::new(0., 0., 0., 1.)
     };
 }
 
