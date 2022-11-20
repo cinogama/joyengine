@@ -387,13 +387,13 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             {
             case jegl_texture::texture_format::MONO:
                 texture_src_format = GL_LUMINANCE;
-                texture_aim_format = is_16bit ? GL_LUMINANCE16 : GL_LUMINANCE; break;
+                texture_aim_format = is_16bit ? GL_LUMINANCE16F_ARB : GL_LUMINANCE; break;
             case jegl_texture::texture_format::RGB:
                 texture_src_format = GL_RGB;
-                texture_aim_format = is_16bit ? GL_RGB16 : GL_RGB; break;
+                texture_aim_format = is_16bit ? GL_RGB16F : GL_RGB; break;
             case jegl_texture::texture_format::RGBA:
                 texture_src_format = GL_RGBA;
-                texture_aim_format = is_16bit ? GL_RGBA16 : GL_RGBA; break;
+                texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA; break;
             default:
                 jeecs::debug::logerr("Unknown texture raw-data format.");
             }
@@ -413,7 +413,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
                     resource->m_raw_texture_data->m_width,
                     resource->m_raw_texture_data->m_height,
                     0, texture_src_format,
-                    is_16bit ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE,
+                    is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
                     resource->m_raw_texture_data->m_pixels);
 
             glGenerateMipmap(gl_texture_type);

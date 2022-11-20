@@ -1291,11 +1291,6 @@ public func texture_fastms(tex:texture2dms, uv:float2)=> float4
     return apply_operation:<float4>("JEBUILTIN_TextureFastMs", tex, uv);
 }
 
-public func lerp<T>(a: T, b: T, uv:float)=> T
-{
-    return apply_operation:<T>("lerp", a, b, uv);
-}
-
 public func step<T, U>(a: T, b: U)=> float
     where a is float || a is real
         , b is float || b is real;
@@ -1323,6 +1318,12 @@ let is_float<T> =
     std::declval:<T>() is real
     || std::declval:<T>() is float
 ;
+
+public func lerp<T>(a: T, b: T, uv:float)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("lerp", a, b, uv);
+}
 
 public func sin<T>(a: T)=> T
     where is_glvalue:<T>;
@@ -1352,6 +1353,18 @@ public func pow<T>(a: T, b: T)=> T
     return apply_operation:<T>("pow", a, b);
 }
 
+public func max<T>(a: T, b: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("max", a, b);
+}
+
+public func min<T>(a: T, b: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("min", a, b);
+}
+
 public func normalize<T>(a: T)=> T
     where is_glvalue:<T> && !is_float:<T>;
 {
@@ -1378,6 +1391,12 @@ public func dot<T>(a: T, b: T)=> float
 public func cross(a: float3, b: float3)=> float3
 {
     return apply_operation:<float3>("cross", a, b);
+}
+
+public func length<T>(a: T)=> float
+    where is_glvalue:<T> && !(is_float:<T>);
+{
+    return apply_operation:<float>("length", a);
 }
 
 // Engine builtin function

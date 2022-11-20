@@ -644,6 +644,7 @@ VAO_STRUCT vin
 using v2f = struct{
     pos: float4,
     uv: float2,
+    vpos: float3,
     lpos: float3,
 };
 
@@ -660,17 +661,52 @@ public func vert(v: vin)
     return v2f{
         pos = pos,
         uv = (pos->xy / pos->w + float2::new(1., 1.)) /2.,
+        vpos = float3_zero - movement(je_v),
         lpos = lpos->xyz / lpos->w,
     };
 }
 
-func hdr_unmap(a: float)
+let PI = float::new(3.1415926535897932384626);
+
+func DistributionGGX(N: float3, H: float3, roughness: float)
 {
-    return step(0., a) * a / (float_one - a) + step(a, 0.) * a / (float_one + a);
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let NdotH = max(dot(N, H), float_zero);
+    let NdotH2 = NdotH * NdotH;
+    
+    let nom = a2;
+    let denom = NdotH2 * (a2 - float_one) + float_one;
+    let pidenom2 = PI * denom * denom;
+
+    return nom / pidenom2;
 }
-func hdr_unmap_float3(a: float3)
+
+func GeometrySchlickGGX(NdotV: float, roughness: float)
 {
-    return float3::create(hdr_unmap(a->x), hdr_unmap(a->y), hdr_unmap(a->z));
+    let r = roughness + float_one;
+    let k = r * r / float::new(8.);
+    
+    let nom = NdotV;
+    let denom = NdotV * (float_one - k) + k;
+
+    return nom / denom;
+}
+
+func GeometrySmith(N: float3, V: float3, L: float3, roughness: float)
+{
+    let NdotV = max(dot(N, V), float_zero);
+    let NdotL = max(dot(N, L), float_zero);
+
+    let ggx1 = GeometrySchlickGGX(NdotL, roughness);
+    let ggx2 = GeometrySchlickGGX(NdotV, roughness);
+
+    return ggx1 * ggx2;
+}
+
+func FresnelSchlick(cosTheta: float, F0: float3)
+{
+    return F0 + (float3_one - F0) * pow(float_one - cosTheta, float::new(5.));
 }
 
 public func frag(vf: v2f)
@@ -679,19 +715,51 @@ public func frag(vf: v2f)
     let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
     let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
 
-    let albedo = texture(albedo_buffer, vf.uv);
+    let albedo = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let vpos_m = texture(vpos_m_buffer, vf.uv);
     let vnorm_r = texture(vnorm_r_buffer, vf.uv);
 
-    let hdr_unmap_vpos = hdr_unmap_float3(vpos_m->xyz * 2. - float3_one) ;
+    // Calculate light results.
+    let intensity = je_color->w;
+    let N = vnorm_r->xyz;
+    let roughness = vnorm_r->w;
+    let metallic = vpos_m->w;
 
-    let fragpos_to_light_dir = normalize(vf.lpos - hdr_unmap_vpos);
-    let vnormal = (vnorm_r->xyz - float3::new(0.5, 0.5, 0.5)) * 2.;    
+    let VVPOS = vf.vpos;
+    let FVPos = vpos_m->xyz;
+    let LVPos = vf.lpos;
+    let VL2FDiff = LVPos - FVPos;
 
-    let factor = clamp(dot(fragpos_to_light_dir, vnormal), 0., 1.);
+    let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
+
+    let V = normalize(VVPOS - FVPos);
+    let L = normalize(VL2FDiff);
+    let H = normalize(V + L);
+
+    let distance = length(VL2FDiff);
+    let attenuation = float_one / (distance * distance);
+    let radiance = intensity * je_color->xyz * attenuation;
+
+    let NDF = DistributionGGX(N, H, roughness);
+    let G = GeometrySmith(N, V, L, roughness);
+    let F = FresnelSchlick(max(dot(H, V), float_one), F0);
+
+    let nominator = NDF * G * F;
+    let denominator = max(dot(N, V), float_zero)
+        * max(dot(N, L), float_zero) 
+        + float::new(0.001);
+    let specular = nominator / denominator;
+    
+    let kS = F;
+    let kD = (float3_one - kS) * (float_one - metallic);
+    let NdotL = max(dot(N, L), float_zero);
+
+    let result = (kD * albedo / PI + specular) * radiance * NdotL;
 
     return fout{
-        color = float4::new(0., 0., 0., 1.)
+        color = float4::create(
+            pow(result / (float3_one + result), float3::new(1./2.2, 1./2.2, 1./2.2)),
+            0.)
     };
 }
 
@@ -1115,6 +1183,14 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         for (auto& light2d : m_2dlight_list)
                         {
                             jegl_using_resource(light2d_host->_defer_light2d_point_light_pass->resouce());
+
+                            jegl_uniform_float4(light2d_host->_defer_light2d_point_light_pass->resouce(),
+                                light2d_host->_defer_light2d_point_light_pass->m_builtin->m_builtin_uniform_color,
+                                light2d.color->color.x,
+                                light2d.color->color.y,
+                                light2d.color->color.z,
+                                light2d.color->color.w
+                                );
 
                             auto* builtin_uniform = light2d_host->_defer_light2d_point_light_pass->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \

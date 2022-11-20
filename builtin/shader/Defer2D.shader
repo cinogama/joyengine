@@ -87,11 +87,10 @@ public func frag(vf: v2f)
     let Roughness = uniform_texture:<texture2d>("Roughness", 3);
 
     let vnormal = transed_normal_tangent_map(Normalize, vf);
-    let hdr_maped_vpos = (hdr_map_float3(vf.vpos) + float3_one) / 2.;
 
     return fout{
         albedo = texture(Albedo, vf.uv),
-        vposition_m = float4::create(hdr_maped_vpos, texture(Metallic, vf.uv)->x),
-        vnormalize_r = float4::create((vnormal + float3_one) / 2., texture(Roughness, vf.uv)->x),
+        vposition_m = float4::create(vf.vpos, texture(Metallic, vf.uv)->x),
+        vnormalize_r = float4::create(vnormal, texture(Roughness, vf.uv)->x),
     };
 }
