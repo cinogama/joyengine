@@ -656,14 +656,13 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    let vpos = je_mv * float4::create(v.vertex, 1.);
-    let pos = je_p * vpos;
+    let pos = je_mvp * float4::create(v.vertex, 1.);
     let lpos = je_mv * float4::new(0., 0., 0., 1.);
 
     return v2f{
         pos = pos,
         uv = (pos->xy / pos->w + float2::new(1., 1.)) /2.,
-        lpos = lpos->xyz / lpos->w,
+        lpos = lpos->xyz,
     };
 }
 
