@@ -808,7 +808,6 @@ struct jegl_shader
 
     depth_test_method   m_depth_test;
     depth_mask_method   m_depth_mask;
-    alpha_test_method   m_alpha_test;
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
 };

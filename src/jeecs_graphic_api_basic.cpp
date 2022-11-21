@@ -648,7 +648,6 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
     // 2. read shader config
     jeecs_file_read(&_shader->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
     jeecs_file_read(&_shader->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cache_file);
-    jeecs_file_read(&_shader->m_alpha_test, sizeof(jegl_shader::alpha_test_method), 1, cache_file);
     jeecs_file_read(&_shader->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
     jeecs_file_read(&_shader->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
     jeecs_file_read(&_shader->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
@@ -726,7 +725,6 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource)
         */
         jeecs_write_cache_file(&raw_shader_data->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cachefile);
-        jeecs_write_cache_file(&raw_shader_data->m_alpha_test, sizeof(jegl_shader::alpha_test_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cachefile);

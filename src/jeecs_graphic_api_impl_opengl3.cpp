@@ -120,8 +120,6 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
-    glDisable(GL_ALPHA_TEST);
-    glAlphaFunc(GL_GREATER, 0.0f);
 
     jegui_init(WINDOWS_HANDLE, reboot);
 
@@ -560,19 +558,6 @@ inline void _gl_update_depth_mask_method(jegl_shader::depth_mask_method mode)
             glDepthMask(GL_FALSE);
     }
 }
-inline void _gl_update_alpha_test_method(jegl_shader::alpha_test_method mode)
-{
-    assert(mode != jegl_shader::alpha_test_method::INVALID);
-    if (ACTIVE_ALPHA_MODE != mode)
-    {
-        ACTIVE_ALPHA_MODE = mode;
-
-        if (mode == jegl_shader::alpha_test_method::ENABLE)
-            glEnable(GL_ALPHA_TEST);
-        else
-            glDisable(GL_ALPHA_TEST);
-    }
-}
 
 inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
 {
@@ -661,7 +646,6 @@ inline void _gl_update_shader_state(jegl_shader* shader)
 {
     _gl_update_depth_test_method(shader->m_depth_test);
     _gl_update_depth_mask_method(shader->m_depth_mask);
-    _gl_update_alpha_test_method(shader->m_alpha_test);
     _gl_update_blend_mode_method(shader->m_blend_src_mode, shader->m_blend_dst_mode);
     _gl_update_cull_mode_method(shader->m_cull_mode);
 }

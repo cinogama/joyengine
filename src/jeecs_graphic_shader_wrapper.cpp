@@ -618,7 +618,6 @@ struct shader_configs
 {
     jegl_shader::depth_test_method m_depth_test;
     jegl_shader::depth_mask_method m_depth_mask;
-    jegl_shader::alpha_test_method m_alpha_test;
     jegl_shader::blend_method m_blend_src, m_blend_dst;
     jegl_shader::cull_mode m_cull_mode;
 };
@@ -725,10 +724,9 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
 
     config.m_depth_test = (jegl_shader::depth_test_method)wo_int(wo_struct_get(args + 2, 0));
     config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(wo_struct_get(args + 2, 1));
-    config.m_alpha_test = (jegl_shader::alpha_test_method)wo_int(wo_struct_get(args + 2, 2));
-    config.m_blend_src = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 3));
-    config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 4));
-    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 5));
+    config.m_blend_src = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 2));
+    config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 3));
+    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 4));
 
     shader_struct_define** ubos = nullptr;
     size_t ubo_count = wo_lengthof(args + 3);
@@ -1198,7 +1196,6 @@ namespace shader
     using ShaderConfig = struct {
         mut ztest     : ZConfig,
         mut zwrite    : GConfig,
-        mut alpha     : GConfig,
         mut blend_src : BlendConfig,
         mut blend_dst : BlendConfig,
         mut cull      : CullConfig
@@ -1207,7 +1204,6 @@ namespace shader
     {
         ztest = LESS,
         zwrite = ENABLE,
-        alpha = DISABLE,
         blend_src = ONE,
         blend_dst = ZERO,
         cull = NONE,
@@ -1498,18 +1494,11 @@ public func ZWRITE(zwrite: GConfig)
     shader::configs.zwrite = zwrite;
 }
 
-public func ALPHA(aenable: GConfig)
-{
-    shader::configs.alpha = aenable;
-    std::println("'ALPHA' option for alpha-test is obsoleted, please use 'alphatest' function instead.");
-}
-
 public func BLEND(src: BlendConfig, dst: BlendConfig)
 {
     shader::configs.blend_src = src;
     shader::configs.blend_dst = dst;
 }
-
 
 public func CULL(cull: CullConfig)
 {
@@ -1804,7 +1793,6 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
 
     write_to_shader->m_depth_test = shader_wrapper_ptr->shader_config.m_depth_test;
     write_to_shader->m_depth_mask = shader_wrapper_ptr->shader_config.m_depth_mask;
-    write_to_shader->m_alpha_test = shader_wrapper_ptr->shader_config.m_alpha_test;
     write_to_shader->m_blend_src_mode = shader_wrapper_ptr->shader_config.m_blend_src;
     write_to_shader->m_blend_dst_mode = shader_wrapper_ptr->shader_config.m_blend_dst;
     write_to_shader->m_cull_mode = shader_wrapper_ptr->shader_config.m_cull_mode;
