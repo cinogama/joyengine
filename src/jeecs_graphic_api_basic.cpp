@@ -719,7 +719,6 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource)
         /*
             depth_test_method   m_depth_test;
             depth_mask_method   m_depth_mask;
-            alpha_test_method   m_alpha_test;
             blend_method        m_blend_src_mode, m_blend_dst_mode;
             cull_mode           m_cull_mode;
         */

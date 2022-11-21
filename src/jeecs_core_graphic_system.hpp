@@ -646,7 +646,6 @@ VAO_STRUCT vin
 
 using v2f = struct{
     pos: float4,
-    uv: float2,
     lpos: float3,
 };
 
@@ -661,7 +660,6 @@ public func vert(v: vin)
 
     return v2f{
         pos = pos,
-        uv = (pos->xy / pos->w + float2::new(1., 1.)) /2.,
         lpos = lpos->xyz,
     };
 }
@@ -715,9 +713,11 @@ public func frag(vf: v2f)
     let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
     let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
 
-    let albedo = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
-    let vpos_m = texture(vpos_m_buffer, vf.uv);
-    let vnorm_r = texture(vnorm_r_buffer, vf.uv);
+    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
+
+    let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
+    let vpos_m = texture(vpos_m_buffer, uv);
+    let vnorm_r = texture(vnorm_r_buffer, uv);
 
     // Calculate light results.
     let intensity = je_color->w;

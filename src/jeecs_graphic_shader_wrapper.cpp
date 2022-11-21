@@ -971,15 +971,17 @@ namespace float
 
     public func create(...)=> float{return apply_operation:<float>("float", ......);}
 
-    public func operator + (a:float, b:float)=> float
+    public func operator + <T>(a:float, b:T)=> float
+        where b is float || b is real;
     {
         return apply_operation:<float>("+", a, b);
     }
-    public func operator - (a:float, b:float)=> float
+    public func operator - <T>(a:float, b:T)=> float
+        where b is float || b is real;
     {
         return apply_operation:<float>("-", a, b);
     }
-    public func operator * <T>(a:float, b:T)=> T
+    public func operator * <T>(a:float, b:T)
         where b is real 
             || b is float 
             || b is float2 
@@ -992,7 +994,8 @@ namespace float
             return b * a;
     }
 
-    public func operator / (a:float, b:float)=> float
+    public func operator / <T>(a:float, b:T)=> float
+        where b is float || b is real;
     {
         return apply_operation:<float>("/", a, b);
     }
