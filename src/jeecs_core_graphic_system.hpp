@@ -712,6 +712,7 @@ public func frag(vf: v2f)
     let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
     let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
     let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
+    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
 
     let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
 
