@@ -562,8 +562,7 @@ public let frag =
 
             // Used for move rend result to camera's render aim buffer.
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_non_light_effect_pass;
-
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_mix_light_effect_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_point_light_pass;
 
             DeferLight2DHost(jegl_thread* _ctx)
@@ -580,7 +579,7 @@ public let frag =
                     },
                     { 3, 2 });
 
-                _defer_light2d_non_light_effect_pass
+                _defer_light2d_mix_light_effect_pass
                     = new shader("je/defer_light2d_non_light.shader",
                         R"(
 import je.shader;
@@ -614,11 +613,15 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let albedo_buffer           = uniform_texture:<texture2d>("Albedo", 0);
-    let albedo_color_with_gamma = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
-    let ambient_color           = albedo_color_with_gamma * 0.03;
-    let hdr_ambient             = ambient_color / (ambient_color + float3::new(1., 1., 1.));
-    let hdr_ambient_with_gamma  = pow(hdr_ambient, float3::new(1./2.2, 1./2.2, 1./2.2,));
+    let albedo_buffer   = uniform_texture:<texture2d>("Albedo", 0);
+    let light_buffer    = uniform_texture:<texture2d>("Light", 1);
+
+    let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2)) ;
+    let light_color_rgb = texture(light_buffer, vf.uv)->xyz;
+    let mixed_color_rgb = albedo_color_rgb * 0.03 + light_color_rgb;
+
+    let hdr_color_rgb           = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
+    let hdr_ambient_with_gamma  = pow(hdr_color_rgb, float3::new(1./2.2, 1./2.2, 1./2.2,));
 
     return fout{
         color = float4::create(hdr_ambient_with_gamma, 1.)
@@ -644,7 +647,6 @@ VAO_STRUCT vin
 using v2f = struct{
     pos: float4,
     uv: float2,
-    vpos: float3,
     lpos: float3,
 };
 
@@ -661,7 +663,6 @@ public func vert(v: vin)
     return v2f{
         pos = pos,
         uv = (pos->xy / pos->w + float2::new(1., 1.)) /2.,
-        vpos = float3_zero - movement(je_v),
         lpos = lpos->xyz / lpos->w,
     };
 }
@@ -725,14 +726,13 @@ public func frag(vf: v2f)
     let roughness = vnorm_r->w;
     let metallic = vpos_m->w;
 
-    let VVPOS = vf.vpos;
     let FVPos = vpos_m->xyz;
     let LVPos = vf.lpos;
     let VL2FDiff = LVPos - FVPos;
 
     let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
 
-    let V = normalize(VVPOS - FVPos);
+    let V = normalize(float3_zero - FVPos);
     let L = normalize(VL2FDiff);
     let H = normalize(V + L);
 
@@ -757,9 +757,7 @@ public func frag(vf: v2f)
     let result = (kD * albedo / PI + specular) * radiance * NdotL;
 
     return fout{
-        color = float4::create(
-            pow(result / (float3_one + result), float3::new(1./2.2, 1./2.2, 1./2.2)),
-            0.)
+        color = float4::create(result, 0.),
     };
 }
 
@@ -919,6 +917,8 @@ public func frag(vf: v2f)
             if (!_m_pipeline->IsActive(get_world()))
                 return;
 
+            m_2dlight_list.clear();
+
             select_from(get_world())
                 .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
@@ -957,9 +957,14 @@ public func frag(vf: v2f)
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
                                             jegl_texture::texture_format::RGBA, // Albedo
+                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // VPos_Metallic
+                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // VNorm_Roughness
                                             jegl_texture::texture_format::DEPTH, //Depth
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), //VPos_Metallic
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16) //VNorm_Roughness
+                                        });
+                                light2dpass->defer_light_effect
+                                    = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
+                                        {
+                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // LightResult
                                         });
                             }
                         }
@@ -1153,32 +1158,19 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     if (current_camera.light2DPass != nullptr)
                     {
                         // Rend light buffer to target buffer.
-                        assert(current_camera.light2DPass->defer_rend_aim != nullptr);
+                        assert(current_camera.light2DPass->defer_rend_aim != nullptr 
+                            && current_camera.light2DPass->defer_light_effect!=nullptr);
 
                         auto* light2d_host = DeferLight2DHost::instance(glthread);
 
-                        // Set target buffer.
-                        if (current_camera.viewport)
-                            jegl_rend_to_framebuffer(rend_aim_buffer,
-                                current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
-                                current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT,
-                                current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH,
-                                current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT);
-                        else
-                            jegl_rend_to_framebuffer(rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
-
-                        // If camera rend to texture, clear the frame buffer (if need)
-                        if (rend_aim_buffer)
-                            jegl_clear_framebuffer(rend_aim_buffer);
+                        // Rend Light result to target buffer.
+                        jegl_rend_to_framebuffer(current_camera.light2DPass->defer_light_effect->resouce(), 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                        jegl_clear_framebuffer_color(current_camera.light2DPass->defer_light_effect->resouce());
 
                         // Bind attachment
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(0)->resouce(), 0);
-                        jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(2)->resouce(), 1);
-                        jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(3)->resouce(), 2);
-
-                        // Rend ambient color to screen.
-                        jegl_using_resource(light2d_host->_defer_light2d_non_light_effect_pass->resouce());
-                        jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
+                        jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(1)->resouce(), 1);
+                        jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(2)->resouce(), 2);
 
                         for (auto& light2d : m_2dlight_list)
                         {
@@ -1214,9 +1206,29 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 #undef NEED_AND_SET_UNIFORM
                             jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
                         }
-                        m_2dlight_list.clear();
-                        // Finish for Light2d effect.                        
-                    }
+                        // Rend final result color to screen.
+                        // Set target buffer.
+                        if (current_camera.viewport)
+                            jegl_rend_to_framebuffer(rend_aim_buffer,
+                                current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
+                                current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT,
+                                current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH,
+                                current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT);
+                        else
+                            jegl_rend_to_framebuffer(rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+
+                        // If camera rend to texture, clear the frame buffer (if need)
+                        if (rend_aim_buffer)
+                            jegl_clear_framebuffer(rend_aim_buffer);
+
+                        jegl_using_resource(light2d_host->_defer_light2d_mix_light_effect_pass->resouce());
+
+                        // Bind light effect to textre-pass-1, because pass-0 is used for storing
+                        jegl_using_texture(current_camera.light2DPass->defer_light_effect->get_attachment(0)->resouce(), 1);
+
+                        jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
+
+                    } // Finish for Light2d effect.                    
                 }
             }
 
