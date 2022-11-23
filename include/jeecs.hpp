@@ -4995,7 +4995,15 @@ namespace jeecs
 
         struct Shadow
         {
+            size_t resolution_width = 1024;
+            size_t resolution_height = 768;
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Shadow::resolution_width, "resolution_width");
+                typing::register_member(&Shadow::resolution_height, "resolution_height");
+            }
         };
 
         struct Parallel
@@ -5012,6 +5020,21 @@ namespace jeecs
         {
             basic::resource<graphic::framebuffer> defer_rend_aim = nullptr;
             basic::resource<jeecs::graphic::framebuffer> defer_light_effect = nullptr;
+        };
+
+        struct Block
+        {
+            struct block_mesh
+            {
+                jeecs::vector<math::vec2> m_block_point = {
+                    math::vec2(-1.f, -1.f),
+                    math::vec2(-1.f, 1.f),
+                    math::vec2(1.f, 1.f),
+                    math::vec2(1.f, -1.f),
+                };
+                basic::resource<graphic::vertex> m_block_mesh = nullptr;
+            };
+
         };
     }
 

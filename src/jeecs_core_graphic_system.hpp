@@ -991,7 +991,29 @@ public func frag(vf: v2f)
                                 &trans, &color, point, parallel, shadow
                             }
                         );
+                        if (shadow != nullptr)
+                        {
+                            bool generate_new_framebuffer =
+                                shadow->shadow_buffer == nullptr
+                                || !shadow->shadow_buffer->enabled()
+                                || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
+                                || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
 
+                            if (generate_new_framebuffer)
+                            {
+                                shadow->shadow_buffer = new graphic::framebuffer(
+                                    shadow->resolution_width, shadow->resolution_height,
+                                    {
+                                        jegl_texture::texture_format::MONO, // Only store shadow value.
+                                    }
+                                );
+                                assert(shadow->shadow_buffer->enabled());
+                                shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
+                                    = (jegl_texture::texture_sampling)(
+                                        jegl_texture::texture_sampling::LINEAR 
+                                        | jegl_texture::texture_sampling::CLAMP_EDGE);
+                            }
+                        }
                     }).anyof<Light2D::Point, Light2D::Parallel>();
         }
         void LateUpdate()
