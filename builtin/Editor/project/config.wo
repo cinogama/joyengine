@@ -151,8 +151,6 @@ namespace editor::Project
         ]);
         editor_camera->je::editor::apply_camera_framebuf_setting(320, 240);
         editor_camera->editor::set_parent(camera_walker, true);
-        camera_walker->editor::set_name("调试摄像机组");
-        editor_camera->editor::set_name("调试摄像机");
 
         // 移动器，这里只创建根实体，具体的轴由编辑器系统生成
         let entity_mover = world_instance->add_entity([

@@ -567,9 +567,6 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                             // 这里yield一下，保证一切按部就班
 
                             let fakeworld = je::universe::current()->create_world();
-
-                            // TODO; fakeworld->add_system(Project::GetCurrentProject().graphic_system);
-                            // Crash here! woolang need fix.
                             fakeworld->add_system(proj.graphic_system);
 
                             std::yield();

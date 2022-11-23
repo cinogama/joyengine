@@ -226,14 +226,6 @@ func Editor_CameraViewport()
             ? WindowsAttribute::ImGuiWindowFlags_None
             | WindowsAttribute::ImGuiWindowFlags_NoMove));
 
-    if (BeginMenuBar())
-    {
-        if (MenuItem("调试运行"))
-            GameDebug::start_debug();
-
-        EndMenuBar();
-    }
-
     let debug_camera_entity = je::world::rend()
         =>> \w = w->editor::get_all_entities
             ->forall(\e = 
@@ -243,6 +235,21 @@ func Editor_CameraViewport()
             ->reduce(\l, r = l;)
             ;
     ;
+
+    if (BeginMenuBar())
+    {
+        if (MenuItem("调试运行"))
+            GameDebug::start_debug();
+        if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
+        {
+            let l2d_camera_pass_component_type = je::typeinfo::load_from_name("Light2D::CameraPass")->val;
+            if (debug_camera_entity->val->editor::get_component(l2d_camera_pass_component_type)->has)
+                debug_camera_entity->val->editor::remove_component(l2d_camera_pass_component_type);
+            else
+                debug_camera_entity->val->editor::add_component(l2d_camera_pass_component_type);
+        }
+        EndMenuBar();
+    }
 
     match(debug_camera_entity =>> \camera = je::editor::get_framebuf_texture(camera, 0);)
     {
