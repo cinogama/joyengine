@@ -32,6 +32,7 @@
 #include <type_traits>
 #include <sstream>
 #include <climits>
+#include <initializer_list>
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -1156,6 +1157,12 @@ namespace jeecs
         {
             _reserve(another_list.size());
             _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
+        }
+
+        vector(const std::initializer_list<ElemT>& another_list)
+        {
+            for (auto& elem : another_list)
+                push_back(elem);
         }
 
         vector(ElemT* ptr, size_t length)
@@ -5026,15 +5033,51 @@ namespace jeecs
         {
             struct block_mesh
             {
-                jeecs::vector<math::vec2> m_block_point = {
+                jeecs::vector<math::vec2> m_block_points = {
                     math::vec2(-1.f, -1.f),
                     math::vec2(-1.f, 1.f),
                     math::vec2(1.f, 1.f),
                     math::vec2(1.f, -1.f),
                 };
                 basic::resource<graphic::vertex> m_block_mesh = nullptr;
+
+                inline std::string to_string()const
+                {
+                    std::string result = "#je_light2d_block_shape#";
+                    result += "size:" + std::to_string(m_block_points.size()) + ";";
+                    for (size_t id = 0; id < m_block_points.size(); ++id)
+                    {
+                        result += std::to_string(id) + ":" + m_block_points[id].to_string() + ";";
+                    }
+                    return result;
+                }
+                inline void parse(const char*& databuf)
+                {
+                    size_t readed_length = 0;
+
+                    size_t size = 0;
+                    if (sscanf(databuf, "#je_light2d_block_shape#size:%zu;%zn", &size, &readed_length) == 1)
+                    {
+                        databuf += readed_length;
+                        m_block_points.clear();
+                        for (size_t i = 0; i < readed_length; ++i)
+                        {
+                            size_t idx = 0;
+                            math::vec2 pos;
+                            if (sscanf(databuf, "%zu:(%f,%f);%zn", &idx, &pos.x, &pos.y, &readed_length) != 3)
+                                return;
+                            m_block_points.push_back(pos);
+                        }
+                    }
+                }
             };
 
+            block_mesh mesh;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Block::mesh, "mesh");
+            }
         };
     }
 
@@ -5370,6 +5413,7 @@ namespace jeecs
             type_info::of<Light2D::Parallel>("Light2D::Parallel");
             type_info::of<Light2D::Point>("Light2D::Point");
             type_info::of<Light2D::CameraPass>("Light2D::CameraPass");
+            type_info::of<Light2D::Block>("Light2D::Block");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();
