@@ -833,9 +833,18 @@ public func frag(vf: v2f)
             }
         };
 
+        struct block2d_arch
+        {
+            const Translation* translation;
+            const Light2D::Block* block;
+            const Textures* textures;
+            const Shape* shape;
+        };
+
         std::priority_queue<camera_arch> m_camera_list;
         std::priority_queue<renderer_arch> m_renderer_list;
         std::list<light2d_arch> m_2dlight_list;
+        std::list<block2d_arch> m_2dblock_list;
 
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
@@ -918,7 +927,7 @@ public func frag(vf: v2f)
                 return;
 
             m_2dlight_list.clear();
-
+            m_2dblock_list.clear();
             select_from(get_world())
                 .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
@@ -1014,7 +1023,22 @@ public func frag(vf: v2f)
                                         | jegl_texture::texture_sampling::CLAMP_EDGE);
                             }
                         }
-                    }).anyof<Light2D::Point, Light2D::Parallel>();
+                    }
+                ).anyof<Light2D::Point, Light2D::Parallel>()
+                .exec(
+                    [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                    {
+                        m_2dblock_list.push_back(
+                            block2d_arch{
+                                 &trans, &block, texture, shape
+                            }
+                        );
+                        if (block.mesh.m_block_mesh == nullptr)
+                        {
+                            TODO; Generate_new_shape_for_shadow;
+                        }
+                    }
+                );
         }
         void LateUpdate()
         {

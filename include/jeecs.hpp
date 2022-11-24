@@ -5060,6 +5060,7 @@ namespace jeecs
                     {
                         databuf += readed_length;
                         m_block_points.clear();
+                        m_block_mesh = nullptr;
                         for (size_t i = 0; i < readed_length; ++i)
                         {
                             size_t idx = 0;
