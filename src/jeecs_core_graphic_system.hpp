@@ -1035,7 +1035,18 @@ public func frag(vf: v2f)
                         );
                         if (block.mesh.m_block_mesh == nullptr)
                         {
-                            TODO; Generate_new_shape_for_shadow;
+                            std::vector<float> _vertex_buffer;
+                            for (auto& point : block.mesh.m_block_points)
+                            {
+                                _vertex_buffer.insert(_vertex_buffer.end(),
+                                    {   
+                                        point.x, point.y, 0.f, 0.f,
+                                        point.x, point.y, 0.f, 1.f,
+                                    });
+                            }
+                            block.mesh.m_block_mesh = new jeecs::graphic::vertex(
+                                jeecs::graphic::vertex::type::TRIANGLESTRIP,
+                                _vertex_buffer, {3,1});
                         }
                     }
                 );
