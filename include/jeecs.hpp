@@ -4925,6 +4925,14 @@ namespace jeecs
                 }
                 textures.push_back(texture_with_passid(passid, texture));
             }
+            basic::resource<graphic::texture> get_texture(size_t passid) const
+            {
+                for (auto& [pass, tex] : textures)
+                    if (pass == passid)
+                        return tex;
+
+                return nullptr;
+            }
 
             static void JERefRegsiter()
             {
@@ -5034,10 +5042,10 @@ namespace jeecs
             struct block_mesh
             {
                 jeecs::vector<math::vec2> m_block_points = {
-                    math::vec2(-1.f, -1.f),
-                    math::vec2(-1.f, 1.f),
-                    math::vec2(1.f, 1.f),
-                    math::vec2(1.f, -1.f),
+                    math::vec2(-0.5f, -0.5f),
+                    math::vec2(-0.5f, 0.5f),
+                    math::vec2(0.5f, 0.5f),
+                    math::vec2(0.5f, -0.5f),
                 };
                 basic::resource<graphic::vertex> m_block_mesh = nullptr;
 
@@ -5061,12 +5069,13 @@ namespace jeecs
                         databuf += readed_length;
                         m_block_points.clear();
                         m_block_mesh = nullptr;
-                        for (size_t i = 0; i < readed_length; ++i)
+                        for (size_t i = 0; i < size; ++i)
                         {
                             size_t idx = 0;
                             math::vec2 pos;
                             if (sscanf(databuf, "%zu:(%f,%f);%zn", &idx, &pos.x, &pos.y, &readed_length) != 3)
                                 return;
+                            databuf += readed_length;
                             m_block_points.push_back(pos);
                         }
                     }

@@ -251,7 +251,8 @@ namespace editor::EntityCreator
     {
         using je::gui;
 
-        let mut open = BeginAttrOpen(context.edit_entity->has ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
+        let mut open = BeginAttrOpen(context.edit_entity->has 
+            ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
             | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
    
             if (menu_bar(context))

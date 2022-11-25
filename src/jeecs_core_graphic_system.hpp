@@ -561,14 +561,18 @@ public let frag =
             jegl_thread* _m_belong_context;
 
             // Used for move rend result to camera's render aim buffer.
+            jeecs::basic::resource<jeecs::graphic::texture> _no_shadow;
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_mix_light_effect_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_point_light_pass;
-
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
             DeferLight2DHost(jegl_thread* _ctx)
                 : _m_belong_context(_ctx)
             {
                 using namespace jeecs::graphic;
+                _no_shadow = new texture(1, 1, jegl_texture::texture_format::MONO);
+                _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
 
                 _screen_vertex = new vertex(jegl_vertex::vertex_type::QUADS,
                     {
@@ -578,6 +582,87 @@ public let frag =
                         -1.f, 1.f, 0.f,     0.f, 1.f,
                     },
                     { 3, 2 });
+
+                _defer_light2d_shadow_sub_pass 
+                    = new shader("je/defer_light2d_shadow_sub.shader", R"(
+import je.shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (BACK);
+
+VAO_STRUCT vin 
+{
+    vertex: float3,
+    uv: float2,
+};
+
+using v2f = struct{
+    pos: float4,
+    uv: float2,
+};
+
+using fout = struct{
+    shadow_factor: float,
+};
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = je_mvp * float4::create(v.vertex, 1.),
+        uv = uvtrans(v.uv, je_tiling, je_offset),
+    };
+}
+public func frag(vf: v2f)
+{
+    let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
+
+    alphatest(texture(main_texture, vf.uv));
+
+    return fout{
+        shadow_factor = je_color->x
+    };
+}
+)");
+
+                _defer_light2d_shadow_pass
+                    = new shader("je/defer_light2d_shadow_main.shader", R"(
+import je.shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
+
+VAO_STRUCT vin
+{
+    vertex: float3,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    shadow_factor: float,
+};
+
+public func vert(v: vin)
+{
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vpos = je_v * je_color;
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+
+    let shadow_vdir = normalize(vpos->xyz - light_vpos->xyz) * 200. * v.factor;
+    
+    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+}
+
+public func frag(vf: v2f)
+{
+    return fout{shadow_factor = float::new(1.)};
+}
+)");
 
                 _defer_light2d_mix_light_effect_pass
                     = new shader("je/defer_light2d_non_light.shader",
@@ -719,6 +804,7 @@ public func frag(vf: v2f)
     let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let vpos_m = texture(vpos_m_buffer, uv);
     let vnorm_r = texture(vnorm_r_buffer, uv);
+    let shadow_factor = texture(shadow_buffer, uv)->x;
 
     // Calculate light results.
     let intensity = je_color->w;
@@ -754,7 +840,7 @@ public func frag(vf: v2f)
     let kD = (float3_one - kS) * (float_one - metallic);
     let NdotL = max(dot(N, L), float_zero);
 
-    let result = (kD * albedo / PI + specular) * radiance * NdotL;
+    let result = (kD * albedo / PI + specular) * radiance * NdotL * (float_one - shadow_factor);
 
     return fout{
         color = float4::create(result, 0.),
@@ -1110,6 +1196,8 @@ public func frag(vf: v2f)
                     const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
 
                     float MAT4_VP[4][4];
+                    float MAT4_MV[4][4], MAT4_MVP[4][4];
+
                     math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
 
                     // If current camera contain light2d-pass, prepare light shadow here.
@@ -1117,15 +1205,114 @@ public func frag(vf: v2f)
                     {
                         assert(current_camera.light2DPass->defer_rend_aim != nullptr);
 
-                        auto light2d_rend_aim_buffer = current_camera.light2DPass->defer_rend_aim->resouce();
+                        auto* light2d_host = DeferLight2DHost::instance(glthread);
 
+                        // Walk throw all light, rend shadows to light's ShadowBuffer.
+                        for (auto& lightarch : m_2dlight_list)
+                        {
+                            if (lightarch.shadow != nullptr)
+                            {
+                                auto light2d_shadow_aim_buffer = lightarch.shadow->shadow_buffer->resouce();
+                                jegl_rend_to_framebuffer(light2d_shadow_aim_buffer, 0, 0, 
+                                    light2d_shadow_aim_buffer->m_raw_framebuf_data->m_width,
+                                    light2d_shadow_aim_buffer->m_raw_framebuf_data->m_height);
+
+                                jegl_clear_framebuffer(light2d_shadow_aim_buffer);
+
+                                const auto& main_shadow_pass = light2d_host->_defer_light2d_shadow_pass;
+                                const auto& sub_shadow_pass = light2d_host->_defer_light2d_shadow_sub_pass;
+
+                                // Let shader know where is the light (through je_color: float4)
+                                jegl_using_resource(main_shadow_pass->resouce());
+                                jegl_uniform_float4(main_shadow_pass->resouce(),
+                                    main_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                    lightarch.translation->world_position.x,
+                                    lightarch.translation->world_position.y,
+                                    lightarch.translation->world_position.z,
+                                    1.f);
+
+                                for (auto& blockarch : m_2dblock_list)
+                                {
+                                    // TODO. Ignore the block not in distance.
+
+                                    // TODO. Sort block by distance of camera;
+
+                                    // 1. Prepare m_light_pos/je_mvp
+                                    {
+                                        jegl_using_resource(main_shadow_pass->resouce());
+                                        auto* builtin_uniform = main_shadow_pass->m_builtin;
+
+#define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
+if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(main_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
+
+                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+
+                                        NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                                        NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                                        NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+
+                                        NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
+                                        NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                                        NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                        jegl_draw_vertex(blockarch.block->mesh.m_block_mesh->resouce());
+#undef NEED_AND_SET_UNIFORM
+                                    }
+                                    // 
+// 2. Cancel/Cover shadow.
+                                    {
+                                        if (blockarch.textures != nullptr)
+                                        {
+                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0);
+                                            if (main_texture != nullptr)
+                                                jegl_using_texture(main_texture->resouce(), 0);
+                                        }
+
+                                        jegl_using_resource(sub_shadow_pass->resouce());
+                                        auto* builtin_uniform = sub_shadow_pass->m_builtin;
+
+#define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
+if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
+
+                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+
+                                        NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                                        NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                                        NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+
+                                        NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
+                                        NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                                        NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                        if (blockarch.textures != nullptr)
+                                        {
+                                            NEED_AND_SET_UNIFORM(tiling, float2, blockarch.textures->tiling.x, blockarch.textures->tiling.y);
+                                            NEED_AND_SET_UNIFORM(offset, float2, blockarch.textures->offset.x, blockarch.textures->offset.y);
+                                        }
+                                        jeecs::graphic::vertex* using_shape = (blockarch.shape == nullptr
+                                            || blockarch.shape->vertex == nullptr
+                                            || !blockarch.shape->vertex->enabled())
+                                            ? host()->default_shape_quad
+                                            : blockarch.shape->vertex;
+
+                                        jegl_draw_vertex(using_shape->resouce());
+#undef NEED_AND_SET_UNIFORM
+                                    }
+                                }
+                            }
+                        }
+
+                        auto light2d_rend_aim_buffer = current_camera.light2DPass->defer_rend_aim->resouce();
                         jegl_rend_to_framebuffer(light2d_rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                         // TODO: Remove this clear for better performance.
                         jegl_clear_framebuffer(light2d_rend_aim_buffer);
-
-                        // TODO: Walk throw all light, rend shadows to light's ShadowBuffer.
-
                     }
                     else
                     {
@@ -1150,7 +1337,6 @@ public func frag(vf: v2f)
 
                         const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
 
-                        float MAT4_MV[4][4], MAT4_MVP[4][4];
                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -1231,6 +1417,11 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                         for (auto& light2d : m_2dlight_list)
                         {
+                            if (light2d.shadow != nullptr)
+                                jegl_using_texture(light2d.shadow->shadow_buffer->get_attachment(0)->resouce(), 3);
+                            else
+                                jegl_using_texture(light2d_host->_no_shadow->resouce(), 3);
+
                             jegl_using_resource(light2d_host->_defer_light2d_point_light_pass->resouce());
 
                             jegl_uniform_float4(light2d_host->_defer_light2d_point_light_pass->resouce(),
@@ -1248,7 +1439,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
     builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
 
                             const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
-                            float MAT4_MV[4][4], MAT4_MVP[4][4];
+
                             math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                             math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
