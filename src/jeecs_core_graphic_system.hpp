@@ -583,7 +583,7 @@ public let frag =
                     },
                     { 3, 2 });
 
-                _defer_light2d_shadow_sub_pass 
+                _defer_light2d_shadow_sub_pass
                     = new shader("je/defer_light2d_shadow_sub.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
@@ -653,7 +653,7 @@ public func vert(v: vin)
     let light_vpos = je_v * je_color;
     let vpos = je_mv * float4::create(v.vertex, 1.);
 
-    let shadow_vdir = normalize(vpos->xyz - light_vpos->xyz) * 200. * v.factor;
+    let shadow_vdir = normalize(vpos->xyz - light_vpos->xyz) * 2000. * v.factor;
     
     return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
 }
@@ -792,6 +792,26 @@ func FresnelSchlick(cosTheta: float, F0: float3)
     return F0 + (float3_one - F0) * pow(float_one - cosTheta, float::new(5.));
 }
 
+func multi_sampling_for_bias_shadow(shadow: texture2d, uv: float2)
+{
+    let bias = 0.001;
+    let mut shadow_factor = float_zero;
+
+    let bias_weight = [
+        (-1., 1., 0.0625), (0., 1., 1.), (1., 1., 0.0625),
+        (-1., 0., 1.), (0., 0., 1.), (1., 0., 1.),
+        (-1., -1., 0.0625), (0., -1., 1.), (1., -1., 0.0625),
+    ];
+
+    for (let _, (x, y, weight) : bias_weight)
+    {
+        shadow_factor = shadow_factor + texture(
+            shadow, uv + float2::new(bias * x, bias * y))->x * weight;
+        
+    }
+    return clamp(shadow_factor, 0., 1.);
+}
+
 public func frag(vf: v2f)
 {
     let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
@@ -804,7 +824,7 @@ public func frag(vf: v2f)
     let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let vpos_m = texture(vpos_m_buffer, uv);
     let vnorm_r = texture(vnorm_r_buffer, uv);
-    let shadow_factor = texture(shadow_buffer, uv)->x;
+    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, uv);
 
     // Calculate light results.
     let intensity = je_color->w;
@@ -881,6 +901,7 @@ public func frag(vf: v2f)
         struct camera_arch
         {
             const Rendqueue* rendqueue;
+            const Translation* translation;
             const Projection* projection;
             const Viewport* viewport;
             const RendToFramebuffer* rendToFramebuffer;
@@ -1017,12 +1038,12 @@ public func frag(vf: v2f)
             select_from(get_world())
                 .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
-                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPass* light2dpass)
+                    [this](Translation& tarns, Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPass* light2dpass)
                     {
                         // Calc camera proj matrix
                         m_camera_list.emplace(
                             camera_arch{
-                                rendqueue, &projection, cameraviewport, rendbuf, light2dpass
+                                rendqueue,&tarns,&projection, cameraviewport, rendbuf, light2dpass
                             }
                         );
 
@@ -1074,68 +1095,76 @@ public func frag(vf: v2f)
                                 rendqueue, &trans, shape, shads, texs
                             });
                     }).anyof<Shaders, Textures, Shape>()
-                .exec(
-                    [this](Translation& trans,
-                        Light2D::Color& color,
-                        Light2D::Point* point,
-                        Light2D::Parallel* parallel,
-                        Light2D::Shadow* shadow)
-                    {
-                        m_2dlight_list.emplace_back(
-                            light2d_arch{
-                                &trans, &color, point, parallel, shadow
-                            }
-                        );
-                        if (shadow != nullptr)
-                        {
-                            bool generate_new_framebuffer =
-                                shadow->shadow_buffer == nullptr
-                                || !shadow->shadow_buffer->enabled()
-                                || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
-                                || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
-
-                            if (generate_new_framebuffer)
+                        .exec(
+                            [this](Translation& trans,
+                                Light2D::Color& color,
+                                Light2D::Point* point,
+                                Light2D::Parallel* parallel,
+                                Light2D::Shadow* shadow)
                             {
-                                shadow->shadow_buffer = new graphic::framebuffer(
-                                    shadow->resolution_width, shadow->resolution_height,
-                                    {
-                                        jegl_texture::texture_format::MONO, // Only store shadow value.
+                                m_2dlight_list.emplace_back(
+                                    light2d_arch{
+                                        &trans, &color, point, parallel, shadow
                                     }
                                 );
-                                assert(shadow->shadow_buffer->enabled());
-                                shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
-                                    = (jegl_texture::texture_sampling)(
-                                        jegl_texture::texture_sampling::LINEAR 
-                                        | jegl_texture::texture_sampling::CLAMP_EDGE);
+                                if (shadow != nullptr)
+                                {
+                                    bool generate_new_framebuffer =
+                                        shadow->shadow_buffer == nullptr
+                                        || !shadow->shadow_buffer->enabled()
+                                        || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
+                                        || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
+
+                                    if (generate_new_framebuffer)
+                                    {
+                                        shadow->shadow_buffer = new graphic::framebuffer(
+                                            shadow->resolution_width, shadow->resolution_height,
+                                            {
+                                                jegl_texture::texture_format::MONO, // Only store shadow value.
+                                            }
+                                        );
+                                        assert(shadow->shadow_buffer->enabled());
+                                        shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
+                                            = (jegl_texture::texture_sampling)(
+                                                jegl_texture::texture_sampling::LINEAR
+                                                | jegl_texture::texture_sampling::CLAMP_EDGE);
+                                    }
+                                }
                             }
-                        }
-                    }
-                ).anyof<Light2D::Point, Light2D::Parallel>()
-                .exec(
-                    [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
-                    {
-                        m_2dblock_list.push_back(
-                            block2d_arch{
-                                 &trans, &block, texture, shape
-                            }
-                        );
-                        if (block.mesh.m_block_mesh == nullptr)
-                        {
-                            std::vector<float> _vertex_buffer;
-                            for (auto& point : block.mesh.m_block_points)
-                            {
-                                _vertex_buffer.insert(_vertex_buffer.end(),
-                                    {   
-                                        point.x, point.y, 0.f, 0.f,
-                                        point.x, point.y, 0.f, 1.f,
-                                    });
-                            }
-                            block.mesh.m_block_mesh = new jeecs::graphic::vertex(
-                                jeecs::graphic::vertex::type::TRIANGLESTRIP,
-                                _vertex_buffer, {3,1});
-                        }
-                    }
-                );
+                        ).anyof<Light2D::Point, Light2D::Parallel>()
+                                .exec(
+                                    [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                                    {
+                                        m_2dblock_list.push_back(
+                                            block2d_arch{
+                                                 &trans, &block, texture, shape
+                                            }
+                                        );
+                                        if (block.mesh.m_block_mesh == nullptr)
+                                        {
+                                            std::vector<float> _vertex_buffer;
+                                            if (!block.mesh.m_block_points.empty())
+                                            {
+                                                for (auto& point : block.mesh.m_block_points)
+                                                {
+                                                    _vertex_buffer.insert(_vertex_buffer.end(),
+                                                        {
+                                                            point.x, point.y, 0.f, 0.f,
+                                                            point.x, point.y, 0.f, 1.f,
+                                                        });
+                                                }
+                                                _vertex_buffer.insert(_vertex_buffer.end(),
+                                                    {
+                                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 0.f,
+                                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 1.f,
+                                                    });
+                                            }
+                                            block.mesh.m_block_mesh = new jeecs::graphic::vertex(
+                                                jeecs::graphic::vertex::type::TRIANGLESTRIP,
+                                                _vertex_buffer, { 3,1 });
+                                        }
+                                    }
+                            );
         }
         void LateUpdate()
         {
@@ -1213,7 +1242,7 @@ public func frag(vf: v2f)
                             if (lightarch.shadow != nullptr)
                             {
                                 auto light2d_shadow_aim_buffer = lightarch.shadow->shadow_buffer->resouce();
-                                jegl_rend_to_framebuffer(light2d_shadow_aim_buffer, 0, 0, 
+                                jegl_rend_to_framebuffer(light2d_shadow_aim_buffer, 0, 0,
                                     light2d_shadow_aim_buffer->m_raw_framebuf_data->m_width,
                                     light2d_shadow_aim_buffer->m_raw_framebuf_data->m_height);
 
@@ -1264,6 +1293,17 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                     // 
 // 2. Cancel/Cover shadow.
                                     {
+                                        // Check if the direction A from light to current block and
+                                        // the direction B from light to camera. if dot(A,B) > 0, it
+                                        // means light at back of block. 
+                                        float shadow_factor = 0.f;
+                                        //math::vec3 l2bdir =
+                                        //    blockarch.translation->world_position - lightarch.translation->world_position;
+                                        //math::vec3 l2cdir =
+                                        //    current_camera.translation->world_position - lightarch.translation->world_position;
+
+                                        //shadow_factor = l2bdir.dot(l2cdir) > 0.f ? 1.f : 0.f;
+
                                         if (blockarch.textures != nullptr)
                                         {
                                             jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0);
@@ -1289,6 +1329,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                         NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                                         NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                         NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                        NEED_AND_SET_UNIFORM(color, float4, shadow_factor, shadow_factor, shadow_factor, shadow_factor);
 
                                         if (blockarch.textures != nullptr)
                                         {
@@ -1401,8 +1443,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     if (current_camera.light2DPass != nullptr)
                     {
                         // Rend light buffer to target buffer.
-                        assert(current_camera.light2DPass->defer_rend_aim != nullptr 
-                            && current_camera.light2DPass->defer_light_effect!=nullptr);
+                        assert(current_camera.light2DPass->defer_rend_aim != nullptr
+                            && current_camera.light2DPass->defer_light_effect != nullptr);
 
                         auto* light2d_host = DeferLight2DHost::instance(glthread);
 
@@ -1430,7 +1472,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 light2d.color->color.y,
                                 light2d.color->color.z,
                                 light2d.color->color.w
-                                );
+                            );
 
                             auto* builtin_uniform = light2d_host->_defer_light2d_point_light_pass->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
