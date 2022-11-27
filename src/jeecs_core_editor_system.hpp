@@ -217,7 +217,7 @@ namespace jeecs
 
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
         {
-            if (_inputs.l_buttom_pushed || _inputs.r_buttom_pushed)
+            if (_inputs.l_buttom_pushed)
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
 

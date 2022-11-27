@@ -5073,10 +5073,13 @@ namespace jeecs
                         {
                             size_t idx = 0;
                             math::vec2 pos;
-                            if (sscanf(databuf, "%zu:(%f,%f);%zn", &idx, &pos.x, &pos.y, &readed_length) != 3)
-                                return;
-                            databuf += readed_length;
-                            m_block_points.push_back(pos);
+                            if (sscanf(databuf, "%zu:(%f,%f);%zn", &idx, &pos.x, &pos.y, &readed_length) == 3)
+                            {
+                                databuf += readed_length;
+                                m_block_points.push_back(pos);
+                            }
+                            else
+                                m_block_points.push_back(math::vec2(0.f, 0.f));
                         }
                     }
                 }
