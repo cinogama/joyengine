@@ -157,7 +157,7 @@ public using CxxProject = struct {
             }
             if (!writeall(F"{aim_cmake_dir}/CMakeLists.txt", 
                 config.cmake
-                    ->replace("$$JEMODULE_PROJECT_NAME$$", name)
+                    ->replace("$$JEMODULE_PROJECT_NAME$$", name->replace(" ", "_"))
                     ->replace("$$JEMODULE_BUILD_CONFIG$$", config.config)))
                 return result::err(F"无法写入'{aim_cmake_dir}/CMakeLists.txt'");
         }
@@ -197,7 +197,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         if (!writeall(F"{cxx_proj_path}CMakeLists.txt", 
                 F"{cmake_head}\n{cmake_subdirs->val}\n"
-                    ->replace("$$JEMODULE_PROJECT_NAME$$", name)))
+                    ->replace("$$JEMODULE_PROJECT_NAME$$", name->replace(" ", "_"))))
             return result::err(F"无法写入'{cxx_proj_path}CMakeLists.txt'");
 
         return result::ok(generating_results);
@@ -707,7 +707,7 @@ $$REGISTER_SYSTEM_TYPES$$
             return result::err(context.display_msg);
         }
 
-        let cmake_command = F"{utils::WrapPath(CMAKE_PATH)} \"{utils::WrapPath(self.path)}\" -B \"{utils::WrapPath(self.path + "msvcbuild_" + config)}\" {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
+        let cmake_command = F"{utils::WrapPath(CMAKE_PATH)} {utils::WrapPath(self.path)} -B {utils::WrapPath(self.path + "msvcbuild_" + config)} {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
         
         context.display_msg = F"正在使用CMake生成编译配置\n{cmake_command}";
         context.progress = 15;
