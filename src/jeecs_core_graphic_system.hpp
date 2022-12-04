@@ -793,21 +793,22 @@ func FresnelSchlick(cosTheta: float, F0: float3)
 
 func multi_sampling_for_bias_shadow(shadow: texture2d, uv: float2)
 {
-    let bias = 0.001;
     let mut shadow_factor = float_zero;
+    let bias = 2.;
 
     let bias_weight = [
-        (-2., 2., 0.01),    (-1., 2., 0.01),    (0., 2., 0.01),     (1., 2., 0.01),     (2., 2., 0.01),
-        (-2., 1., 0.01),    (-1., 1., 0.02),    (0., 1., 0.02),     (1., 1., 0.02),     (2., 1., 0.01),
-        (-2., 0., 0.01),    (-1., 0., 0.02),    (0., 0., 0.72),     (1., 0., 0.02),     (2., 0., 0.01),
-        (-2., -1., 0.01),   (-1., -1., 0.02),   (0., -1., 0.02),    (1., -1., 0.02),    (2., -1., 0.01),
-        (-2., -2., 0.01),   (-1., -2., 0.01),   (0., -2., 0.01),    (1., -2., 0.01),    (2., -2., 0.01),
+        (-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
+        (-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
+        (-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
+        (-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
+        (-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
     ];
 
     for (let _, (x, y, weight) : bias_weight)
     {
         shadow_factor = shadow_factor + texture(
-            shadow, uv + float2::create(bias * x, je_tiling->x / je_tiling->y * bias * y))->x * weight;
+            shadow, uv + (float2_one / je_tiling) * float2::create(x, y) * bias
+        )->x * weight;
         
     }
     return clamp(shadow_factor, 0., 1.);
@@ -1492,6 +1493,13 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                             jegl_using_resource(light2d_host->_defer_light2d_point_light_pass->resouce());
 
+                            jegl_uniform_float2(
+                                light2d_host->_defer_light2d_point_light_pass->resouce(),
+                                light2d_host->_defer_light2d_point_light_pass->m_builtin->m_builtin_uniform_tiling,
+                                current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_width,
+                                current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_height
+                            );
+
                             jegl_uniform_float4(light2d_host->_defer_light2d_point_light_pass->resouce(),
                                 light2d_host->_defer_light2d_point_light_pass->m_builtin->m_builtin_uniform_color,
                                 light2d.color->color.x,
@@ -1541,12 +1549,6 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                         // Bind light effect to textre-pass-1, because pass-0 is used for storing
                         jegl_using_texture(current_camera.light2DPass->defer_light_effect->get_attachment(0)->resouce(), 1);
-                        jegl_uniform_float2(
-                            light2d_host->_defer_light2d_mix_light_effect_pass->resouce(),
-                            light2d_host->_defer_light2d_mix_light_effect_pass->m_builtin->m_builtin_uniform_tiling,
-                            current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_width,
-                            current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_height
-                        );
 
                         jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
 
