@@ -750,7 +750,7 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
 {
     enum basic_type
     {
-        INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
+        INT, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
     };
     basic_type type = (basic_type)wo_int(args + 0);
 
@@ -758,6 +758,8 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
     {
     case INT:
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<int>(nullptr));
+    case BOOL:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<bool>(nullptr));
     case FLOAT:
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<float>(nullptr));
     case FLOAT2:
@@ -778,6 +780,12 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
 }
 
 // Native value
+WO_API wo_api wojeapi_native_value_bool(wo_vm vm, wo_value args, size_t argc)
+{
+    bool* value = (bool*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, *value);
+}
+
 WO_API wo_api wojeapi_native_value_int(wo_vm vm, wo_value args, size_t argc)
 {
     int* value = (int*)wo_pointer(args + 0);
@@ -846,6 +854,14 @@ WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t ar
 }
 
 // set
+WO_API wo_api wojeapi_native_value_set_bool(wo_vm vm, wo_value args, size_t argc)
+{
+    bool* value = (bool*)wo_pointer(args + 0);
+
+    *value = wo_bool(args + 1);
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_native_value_set_int(wo_vm vm, wo_value args, size_t argc)
 {
     int* value = (int*)wo_pointer(args + 0);
@@ -1507,12 +1523,13 @@ namespace je
 
         enum basic_type
         {
-            INT, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
+            INT, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
         }
         extern("libjoyecs", "wojeapi_type_basic_type")
         private public func create(tid: basic_type)=> typeinfo;
 
         public let int = typeinfo::create(basic_type::INT);
+        public let bool = typeinfo::create(basic_type::BOOL);
         public let float = typeinfo::create(basic_type::FLOAT);
         public let float2 = typeinfo::create(basic_type::FLOAT2);
         public let float3 = typeinfo::create(basic_type::FLOAT3);
@@ -2047,6 +2064,9 @@ R"(
     public using native_value = handle;
     namespace native_value
     {
+        extern("libjoyecs", "wojeapi_native_value_bool")
+        public func bool(self: native_value)=> bool;
+
         extern("libjoyecs", "wojeapi_native_value_int")
         public func int(self: native_value)=> int;
 
@@ -2075,6 +2095,9 @@ R"(
         public func parse(self: native_value, types: typeinfo, str: string)=> void; 
 
         
+        extern("libjoyecs", "wojeapi_native_value_set_bool")
+        public func set_bool(self: native_value, value: bool)=> void;
+
         extern("libjoyecs", "wojeapi_native_value_set_int")
         public func set_int(self: native_value, value: int)=> void;
 

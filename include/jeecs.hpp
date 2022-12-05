@@ -5012,11 +5012,13 @@ namespace jeecs
             size_t resolution_width = 1024;
             size_t resolution_height = 768;
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
+            bool shape_shadow = false;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&Shadow::resolution_width, "resolution_width");
                 typing::register_member(&Shadow::resolution_height, "resolution_height");
+                typing::register_member(&Shadow::shape_shadow, "shape_shadow");
             }
         };
 

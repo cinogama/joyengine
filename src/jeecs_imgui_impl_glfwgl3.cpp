@@ -251,6 +251,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_pop_id")
     public func PopID()=>void;
 
+    extern("libjoyecs", "je_gui_checkbox")
+    public func CheckBox(label: string, checked: bool)=> option<bool>;
+
     extern("libjoyecs", "je_gui_input_text_box")
     public func InputText(label:string, buffer: string)=> option<string>;
 
@@ -920,6 +923,14 @@ WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
     {
         return wo_ret_option_string(vm, buf.c_str());
     }
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_checkbox(wo_vm vm, wo_value args, size_t argc)
+{
+    bool checked = wo_bool(args+1);
+    if (ImGui::Checkbox(wo_string(args + 0), &checked))
+        return wo_ret_option_bool(vm, checked);
     return wo_ret_option_none(vm);
 }
 

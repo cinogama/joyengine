@@ -146,6 +146,11 @@ namespace editor::Inspector::Component
             {
                 InputFloat(name, addr->float) ->> \value = addr->set_float(value);;
             };
+        _type_widget_methods[je::typeinfo::bool] = 
+            func(name: string, addr: je::native_value)
+            {
+                CheckBox(name, addr->bool) ->> \value = addr->set_bool(value);;
+            };
         _type_widget_methods[je::typeinfo::int] = 
             func(name: string, addr: je::native_value)
             {
