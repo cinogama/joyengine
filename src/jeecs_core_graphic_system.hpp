@@ -652,7 +652,7 @@ public func vert(v: vin)
     let light_vpos = je_v * je_color;
     let vpos = je_mv * float4::create(v.vertex, 1.);
 
-    let shadow_vdir = normalize(vpos->xyz - light_vpos->xyz) * 2000. * v.factor;
+    let shadow_vdir = float3::create(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
     
     return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
 }
@@ -1137,11 +1137,6 @@ public func frag(vf: v2f)
                                 .exec(
                                     [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
                                     {
-                                        m_2dblock_list.push_back(
-                                            block2d_arch{
-                                                 &trans, &block, texture, shape
-                                            }
-                                        );
                                         if (block.mesh.m_block_mesh == nullptr)
                                         {
                                             std::vector<float> _vertex_buffer;
@@ -1166,6 +1161,15 @@ public func frag(vf: v2f)
                                             }
                                         }
                                         // Cannot create vertex with 0 point.
+
+                                        if (block.mesh.m_block_mesh != nullptr)
+                                        {
+                                            m_2dblock_list.push_back(
+                                                block2d_arch{
+                                                     &trans, &block, texture, shape
+                                                }
+                                            );
+                                        }
                                     }
                             );
         }

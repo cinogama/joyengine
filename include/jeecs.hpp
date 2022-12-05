@@ -1762,7 +1762,7 @@ namespace jeecs
             {
                 ptr = v.ptr;
                 release_func = v.release_func;
-                if (ref_count = v.ref_count)
+                if ((ref_count = v.ref_count))
                     ++* ref_count;
             }
 
@@ -1781,7 +1781,7 @@ namespace jeecs
 
                 ptr = v.ptr;
                 release_func = v.release_func;
-                if (ref_count = v.ref_count)
+                if ((ref_count = v.ref_count))
                     ++* ref_count;
 
                 return *this;
@@ -1796,7 +1796,6 @@ namespace jeecs
                 ref_count = v.ref_count;
                 v.ptr = nullptr;
                 v.ref_count = nullptr;
-
                 return *this;
             }
 
