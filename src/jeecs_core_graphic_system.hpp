@@ -856,7 +856,7 @@ VAO_STRUCT vin
 
 using v2f = struct{
     pos: float4,
-    lpos: float3,
+    lvdir: float3,
 };
 
 using fout = struct{
@@ -866,11 +866,12 @@ using fout = struct{
 public func vert(v: vin)
 {
     let pos = je_mvp * float4::create(v.vertex, 1.);
-    let lpos = je_mv * float4::new(0., 0., 0., 1.);
+    let lmdir = (je_m * float4::new(0., -1./100., 1./100., 1.))->xyz - movement(je_m);
+    let lvdir = (je_v * float4::create(lmdir, 1.))->xyz - movement(je_v);
 
     return v2f{
         pos = pos,
-        lpos = lpos->xyz,
+        lvdir = normalize(lvdir),
     };
 }
 
@@ -895,16 +896,14 @@ public func frag(vf: v2f)
     let metallic = vpos_m->w;
 
     let FVPos = vpos_m->xyz;
-    let LVPos = vf.lpos;
-    let VL2FDiff = LVPos - FVPos;
 
     let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
 
     let V = normalize(float3_zero - FVPos);
-    let L = normalize(VL2FDiff);
+    let L = normalize(vf.lvdir);
     let H = normalize(V + L);
 
-    let distance = length(VL2FDiff);
+    let distance = float_one;
     let attenuation = float_one / (distance * distance);
     let radiance = intensity * je_color->xyz * attenuation;
 
@@ -1275,7 +1274,7 @@ public func frag(vf: v2f)
                                         shadow->shadow_buffer = new graphic::framebuffer(
                                             shadow->resolution_width, shadow->resolution_height,
                                             {
-                                                jegl_texture::texture_format::MONO, // Only store shadow value.
+                                                jegl_texture::texture_format::RGBA, // Only store shadow value.
                                             }
                                         );
                                         assert(shadow->shadow_buffer->enabled());
@@ -1468,6 +1467,12 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                         NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                                         NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                         NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                        if (blockarch.textures != nullptr)
+                                        {
+                                            NEED_AND_SET_UNIFORM(tiling, float2, blockarch.textures->tiling.x, blockarch.textures->tiling.y);
+                                            NEED_AND_SET_UNIFORM(offset, float2, blockarch.textures->offset.x, blockarch.textures->offset.y);
+                                        }
 
                                         NEED_AND_SET_UNIFORM(color, float4,
                                             lightarch.translation->world_position.x,
@@ -1755,27 +1760,33 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             else
                                 jegl_using_texture(light2d_host->_no_shadow->resouce(), 3);
 
-                            jegl_using_resource(light2d_host->_defer_light2d_point_light_pass->resouce());
+                            jeecs::graphic::shader* using_light_shader_pass = nullptr;
+                            if (light2d.point != nullptr)
+                                using_light_shader_pass = light2d_host->_defer_light2d_point_light_pass;
+                            else if (light2d.parallel != nullptr)
+                                using_light_shader_pass = light2d_host->_defer_light2d_parallel_light_pass;
+
+                            jegl_using_resource(using_light_shader_pass->resouce());
 
                             jegl_uniform_float2(
-                                light2d_host->_defer_light2d_point_light_pass->resouce(),
-                                light2d_host->_defer_light2d_point_light_pass->m_builtin->m_builtin_uniform_tiling,
+                                using_light_shader_pass->resouce(),
+                                using_light_shader_pass->m_builtin->m_builtin_uniform_tiling,
                                 current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_width,
                                 current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_height
                             );
 
-                            jegl_uniform_float4(light2d_host->_defer_light2d_point_light_pass->resouce(),
-                                light2d_host->_defer_light2d_point_light_pass->m_builtin->m_builtin_uniform_color,
+                            jegl_uniform_float4(using_light_shader_pass->resouce(),
+                                using_light_shader_pass->m_builtin->m_builtin_uniform_color,
                                 light2d.color->color.x,
                                 light2d.color->color.y,
                                 light2d.color->color.z,
                                 light2d.color->color.w
                             );
 
-                            auto* builtin_uniform = light2d_host->_defer_light2d_point_light_pass->m_builtin;
+                            auto* builtin_uniform = using_light_shader_pass->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
 if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
-    jegl_uniform_##TYPE(light2d_host->_defer_light2d_point_light_pass->resouce(),\
+    jegl_uniform_##TYPE(using_light_shader_pass->resouce(),\
     builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
 
                             const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
