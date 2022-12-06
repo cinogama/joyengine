@@ -567,6 +567,7 @@ public let frag =
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_point_light_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_pass;
             DeferLight2DHost(jegl_thread* _ctx)
                 : _m_belong_context(_ctx)
             {
@@ -616,7 +617,55 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
-    let final_shadow = alphatest(float4::create(je_color->xyz, texture(main_texture, vf.uv)->w));
+    let final_shadow = alphatest(float4::create(float3_zero, texture(main_texture, vf.uv)->w));
+
+    return fout{
+        shadow_factor = final_shadow->x
+    };
+}
+)");
+
+                _defer_light2d_shadow_shape_pass
+                    = new shader("je/defer_light2d_shadow_shape.shader", R"(
+import je.shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (BACK);
+
+VAO_STRUCT vin 
+{
+    vertex: float3,
+    uv: float2,
+};
+
+using v2f = struct{
+    pos: float4,
+    uv: float2,
+};
+
+using fout = struct{
+    shadow_factor: float,
+};
+
+public func vert(v: vin)
+{
+    let light2d_vpos = je_v * float4::create(je_color->xyz, 1.);
+    let shadow_scale_factor = je_color->w;
+
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+
+    let shadow_vpos = normalize((vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w)) * shadow_scale_factor;
+    
+    return v2f{
+        pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos, 1.),
+        uv = uvtrans(v.uv, je_tiling, je_offset),
+    };
+}
+public func frag(vf: v2f)
+{
+    let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
+    let final_shadow = alphatest(float4::create(float3_one, texture(main_texture, vf.uv)->w));
 
     return fout{
         shadow_factor = final_shadow->x
@@ -1264,6 +1313,7 @@ public func frag(vf: v2f)
 
                                 const auto& main_shadow_pass = light2d_host->_defer_light2d_shadow_pass;
                                 const auto& sub_shadow_pass = light2d_host->_defer_light2d_shadow_sub_pass;
+                                const auto& shape_shadow_pass = light2d_host->_defer_light2d_shadow_shape_pass;
 
                                 // Let shader know where is the light (through je_color: float4)
                                 jegl_using_resource(main_shadow_pass->resouce());
@@ -1274,51 +1324,71 @@ public func frag(vf: v2f)
                                     lightarch.translation->world_position.z,
                                     1.f);
 
-                                size_t this_depth_layer = SIZE_MAX;
+                                int64_t this_depth_layer = INT64_MAX;
                                 const size_t block_entity_count = m_2dblock_list.size();
                                 size_t current_entity_id = 0;
 
                                 std::list<block2d_arch*> block_in_current_layer;
-                                if (lightarch.shadow->shape_shadow)
-                                {
 
-                                }
-                                else
+                                auto block2d_iter = m_2dblock_list.begin();
+                                auto block2d_end = m_2dblock_list.end();
+
+                                if (lightarch.shadow->shape_shadow_scale > 0.f)
                                 {
-                                    for (auto& blockarch : m_2dblock_list)
+                                    for (; block2d_iter != block2d_end; ++block2d_iter)
                                     {
+                                        auto& blockarch = *block2d_iter;
+
+                                        int64_t current_layer = (int64_t)(blockarch.translation->world_position.z * 100.f);
+                                        if (current_layer <= lightarch.translation->world_position.z * 100.f)
+                                            break;
+
                                         ++current_entity_id;
-
-                                        // TODO. Ignore the block not in range.
-
-                                        // 1. Prepare m_light_pos/je_mvp
                                         block_in_current_layer.push_back(&blockarch);
-                                        {
-                                            jegl_using_resource(main_shadow_pass->resouce());
-                                            auto* builtin_uniform = main_shadow_pass->m_builtin;
+
+                                        jegl_using_resource(shape_shadow_pass->resouce());
+                                        auto* builtin_uniform = shape_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
 if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(main_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
-                                            const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
+ jegl_uniform_##TYPE(shape_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
-                                            math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                                            math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
-                                            NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
-                                            NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
-                                            NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+                                        NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                                        NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                                        NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
 
-                                            NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
-                                            NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
-                                            NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+                                        NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
+                                        NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                                        NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
-                                            jegl_draw_vertex(blockarch.block->mesh.m_block_mesh->resouce());
-#undef NEED_AND_SET_UNIFORM
+                                        NEED_AND_SET_UNIFORM(color, float4,
+                                            lightarch.translation->world_position.x,
+                                            lightarch.translation->world_position.y,
+                                            lightarch.translation->world_position.z,
+                                            lightarch.shadow->shape_shadow_scale);
+
+                                        if (blockarch.textures != nullptr)
+                                        {
+                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0);
+                                            if (main_texture != nullptr)
+                                                jegl_using_texture(main_texture->resouce(), 0);
+                                            else
+                                                jegl_using_texture(host()->default_texture->resouce(), 0);
                                         }
-                                        // 
-                                        // 2. Cancel/Cover shadow.
-                                        size_t current_layer = (size_t)(blockarch.translation->world_position.z * 100.f);
+
+                                        jeecs::graphic::vertex* using_shape = (blockarch.shape == nullptr
+                                            || blockarch.shape->vertex == nullptr
+                                            || !blockarch.shape->vertex->enabled())
+                                            ? host()->default_shape_quad
+                                            : blockarch.shape->vertex;
+
+                                        jegl_draw_vertex(using_shape->resouce());
+#undef NEED_AND_SET_UNIFORM
+
                                         if (current_entity_id >= block_entity_count
                                             || current_layer != this_depth_layer)
                                         {
@@ -1326,22 +1396,13 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                                             for (auto* block_in_layer : block_in_current_layer)
                                             {
-                                                // Check if the direction A from light to current block and
-    // the direction B from light to camera. if dot(A,B) > 0, it
-    // means light at back of block. 
-                                                float shadow_factor = 0.f;
-                                                //math::vec3 l2bdir =
-                                                //    block_in_layer->translation->world_position - lightarch.translation->world_position;
-                                                //math::vec3 l2cdir =
-                                                //    current_camera.translation->world_position - lightarch.translation->world_position;
-
-                                                //shadow_factor = l2bdir.dot(l2cdir) > 0.f ? 1.f : 0.f;
-
                                                 if (block_in_layer->textures != nullptr)
                                                 {
                                                     jeecs::graphic::texture* main_texture = block_in_layer->textures->get_texture(0);
                                                     if (main_texture != nullptr)
                                                         jegl_using_texture(main_texture->resouce(), 0);
+                                                    else
+                                                        jegl_using_texture(host()->default_texture->resouce(), 0);
                                                 }
 
                                                 jegl_using_resource(sub_shadow_pass->resouce());
@@ -1363,8 +1424,6 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                                 NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                                 NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
-                                                NEED_AND_SET_UNIFORM(color, float4, shadow_factor, shadow_factor, shadow_factor, shadow_factor);
-
                                                 if (block_in_layer->textures != nullptr)
                                                 {
                                                     NEED_AND_SET_UNIFORM(tiling, float2, block_in_layer->textures->tiling.x, block_in_layer->textures->tiling.y);
@@ -1382,8 +1441,99 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             block_in_current_layer.clear();
                                             // End
                                         }
+
                                     }
                                 }
+
+                                for (; block2d_iter != block2d_end; ++block2d_iter)
+                                {
+                                    auto& blockarch = *block2d_iter;
+                                    ++current_entity_id;
+
+                                    // TODO. Ignore the block not in range.
+
+                                    // 1. Prepare m_light_pos/je_mvp
+                                    block_in_current_layer.push_back(&blockarch);
+                                    {
+                                        jegl_using_resource(main_shadow_pass->resouce());
+                                        auto* builtin_uniform = main_shadow_pass->m_builtin;
+
+#define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
+if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(main_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
+
+                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+
+                                        NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                                        NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                                        NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+
+                                        NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
+                                        NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                                        NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                        jegl_draw_vertex(blockarch.block->mesh.m_block_mesh->resouce());
+#undef NEED_AND_SET_UNIFORM
+                                    }
+                                    // 
+                                    // 2. Cancel/Cover shadow.
+                                    int64_t current_layer = (int64_t)(blockarch.translation->world_position.z * 100.f);
+                                    if (current_entity_id >= block_entity_count
+                                        || current_layer != this_depth_layer)
+                                    {
+                                        this_depth_layer = current_layer;
+
+                                        for (auto* block_in_layer : block_in_current_layer)
+                                        {
+                                            if (block_in_layer->textures != nullptr)
+                                            {
+                                                jeecs::graphic::texture* main_texture = block_in_layer->textures->get_texture(0);
+                                                if (main_texture != nullptr)
+                                                    jegl_using_texture(main_texture->resouce(), 0);
+                                                else
+                                                    jegl_using_texture(host()->default_texture->resouce(), 0);
+                                            }
+
+                                            jegl_using_resource(sub_shadow_pass->resouce());
+                                            auto* builtin_uniform = sub_shadow_pass->m_builtin;
+
+#define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
+if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+                                            const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
+
+                                            math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                            math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+
+                                            NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                                            NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                                            NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+
+                                            NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
+                                            NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                                            NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                            if (block_in_layer->textures != nullptr)
+                                            {
+                                                NEED_AND_SET_UNIFORM(tiling, float2, block_in_layer->textures->tiling.x, block_in_layer->textures->tiling.y);
+                                                NEED_AND_SET_UNIFORM(offset, float2, block_in_layer->textures->offset.x, block_in_layer->textures->offset.y);
+                                            }
+                                            jeecs::graphic::vertex* using_shape = (block_in_layer->shape == nullptr
+                                                || block_in_layer->shape->vertex == nullptr
+                                                || !block_in_layer->shape->vertex->enabled())
+                                                ? host()->default_shape_quad
+                                                : block_in_layer->shape->vertex;
+
+                                            jegl_draw_vertex(using_shape->resouce());
+#undef NEED_AND_SET_UNIFORM
+                                        }
+                                        block_in_current_layer.clear();
+                                        // End
+                                    }
+                                }
+
                             }
                         }
 

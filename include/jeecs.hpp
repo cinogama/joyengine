@@ -1601,9 +1601,7 @@ namespace jeecs
             }
             static const char* to_string(const void* _ptr)
             {
-                if constexpr (std::is_convertible<T, std::string>::value)
-                    return basic::make_new_string(*(const T*)_ptr);
-                else if constexpr (typing::sfinae_has_to_string<T>::value)
+                if constexpr (typing::sfinae_has_to_string<T>::value)
                     return basic::make_new_string(((const T*)_ptr)->to_string());
                 else if constexpr (std::is_fundamental<T>::value)
                 {
@@ -1613,7 +1611,9 @@ namespace jeecs
                     b >> str;
                     return basic::make_new_string(str.c_str());
                 }
-
+                else if constexpr (std::is_convertible<T, std::string>::value)
+                    return basic::make_new_string(*(const T*)_ptr);
+                
                 static auto call_once = []() {
                     debug::logfatal("This type: '%s' have no function named 'to_string'."
                         , typeid(T).name());
@@ -1623,9 +1623,7 @@ namespace jeecs
             }
             static void parse(void* _ptr, const char* _memb)
             {
-                if constexpr (std::is_convertible<const char*, T>::value)
-                    *(T*)_ptr = _memb;
-                else if constexpr (typing::sfinae_has_parse<T>::value)
+                if constexpr (typing::sfinae_has_parse<T>::value)
                     ((T*)_ptr)->parse(_memb);
                 else if constexpr (std::is_fundamental<T>::value)
                 {
@@ -1633,6 +1631,8 @@ namespace jeecs
                     b << _memb;
                     b >> *(T*)_ptr;
                 }
+                else if constexpr (std::is_convertible<const char*, T>::value)
+                    *(T*)_ptr = _memb;
                 else
                 {
                     static auto call_once = []() {
@@ -5012,13 +5012,13 @@ namespace jeecs
             size_t resolution_width = 1024;
             size_t resolution_height = 768;
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
-            bool shape_shadow = false;
+            float shape_shadow_scale = 2.f;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&Shadow::resolution_width, "resolution_width");
                 typing::register_member(&Shadow::resolution_height, "resolution_height");
-                typing::register_member(&Shadow::shape_shadow, "shape_shadow");
+                typing::register_member(&Shadow::shape_shadow_scale, "shape_shadow_scale");
             }
         };
 
