@@ -7,8 +7,9 @@ namespace fs = std::filesystem;
 
 std::string normalize_path_str(const fs::path& p)
 {
+    std::error_code ec;
     std::string path = p.lexically_normal().string();
-    if (fs::is_directory(p) && !path.empty()
+    if (fs::is_directory(p, ec) && !path.empty()
         && path.back() != '/' && path.back() != '\\')
     {
         path +=

@@ -56,6 +56,81 @@ public let je_shadow2ds = func(){
 
 )";
 
+const char* shader_pbr_path = "je/shader/pbr.wo";
+const char* shader_pbr_src = R"(
+// JoyEngineECS RScene shader tools.
+// This script only used for defer light-pbr.
+
+import je.shader;
+
+public let PI = float::new(3.1415926535897932384626);
+
+public func DistributionGGX(N: float3, H: float3, roughness: float)
+{
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let NdotH = max(dot(N, H), float_zero);
+    let NdotH2 = NdotH * NdotH;
+    
+    let nom = a2;
+    let denom = NdotH2 * (a2 - float_one) + float_one;
+    let pidenom2 = PI * denom * denom;
+
+    return nom / pidenom2;
+}
+
+public func GeometrySchlickGGX(NdotV: float, roughness: float)
+{
+    let r = roughness + float_one;
+    let k = r * r / float::new(8.);
+    
+    let nom = NdotV;
+    let denom = NdotV * (float_one - k) + k;
+
+    return nom / denom;
+}
+
+public func GeometrySmith(N: float3, V: float3, L: float3, roughness: float)
+{
+    let NdotV = max(dot(N, V), float_zero);
+    let NdotL = max(dot(N, L), float_zero);
+
+    let ggx1 = GeometrySchlickGGX(NdotL, roughness);
+    let ggx2 = GeometrySchlickGGX(NdotV, roughness);
+
+    return ggx1 * ggx2;
+}
+
+public func FresnelSchlick(cosTheta: float, F0: float3)
+{
+    return F0 + (float3_one - F0) * pow(float_one - cosTheta, float::new(5.));
+}
+
+public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
+{
+    let mut shadow_factor = float_zero;
+    let bias = 2.;
+
+    let bias_weight = [
+        (-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
+        (-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
+        (-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
+        (-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
+        (-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
+    ];
+
+    for (let _, (x, y, weight) : bias_weight)
+    {
+        shadow_factor = shadow_factor + texture(
+            shadow, uv + (float2_one / reso) * float2::create(x, y) * bias
+        )->x * weight;
+        
+    }
+    return clamp(shadow_factor, 0., 1.);
+}
+
+)";
+
 namespace jeecs
 {
     struct GraphicThreadHost
@@ -565,6 +640,7 @@ public let frag =
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_mix_light_effect_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_point_light_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_parallel_light_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_pass;
@@ -713,7 +789,7 @@ public func frag(vf: v2f)
 )");
 
                 _defer_light2d_mix_light_effect_pass
-                    = new shader("je/defer_light2d_non_light.shader",
+                    = new shader("je/defer_light2d_mix_light.shader",
                         R"(
 import je.shader;
 
@@ -761,10 +837,11 @@ public func frag(vf: v2f)
     };
 }
 )");
-                _defer_light2d_point_light_pass
-                    = new shader("je/defer_light2d_point_light.shader",
-                        R"(
+                _defer_light2d_parallel_light_pass = 
+                    new shader("je/defer_light2d_parallel_light.shader",
+                    R"(
 import je.shader;
+import je.shader.pbr;
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -797,70 +874,97 @@ public func vert(v: vin)
     };
 }
 
-let PI = float::new(3.1415926535897932384626);
-
-func DistributionGGX(N: float3, H: float3, roughness: float)
+public func frag(vf: v2f)
 {
-    let a = roughness * roughness;
-    let a2 = a * a;
-    let NdotH = max(dot(N, H), float_zero);
-    let NdotH2 = NdotH * NdotH;
+    let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
+    let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
+    let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
+    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
+
+    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
+
+    let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
+    let vpos_m = texture(vpos_m_buffer, uv);
+    let vnorm_r = texture(vnorm_r_buffer, uv);
+    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
+
+    // Calculate light results.
+    let intensity = je_color->w;
+    let N = vnorm_r->xyz;
+    let roughness = vnorm_r->w;
+    let metallic = vpos_m->w;
+
+    let FVPos = vpos_m->xyz;
+    let LVPos = vf.lpos;
+    let VL2FDiff = LVPos - FVPos;
+
+    let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
+
+    let V = normalize(float3_zero - FVPos);
+    let L = normalize(VL2FDiff);
+    let H = normalize(V + L);
+
+    let distance = length(VL2FDiff);
+    let attenuation = float_one / (distance * distance);
+    let radiance = intensity * je_color->xyz * attenuation;
+
+    let NDF = DistributionGGX(N, H, roughness);
+    let G = GeometrySmith(N, V, L, roughness);
+    let F = FresnelSchlick(max(dot(H, V), float_one), F0);
+
+    let nominator = NDF * G * F;
+    let denominator = max(dot(N, V), float_zero)
+        * max(dot(N, L), float_zero) 
+        + float::new(0.001);
+    let specular = nominator / denominator;
     
-    let nom = a2;
-    let denom = NdotH2 * (a2 - float_one) + float_one;
-    let pidenom2 = PI * denom * denom;
-
-    return nom / pidenom2;
-}
-
-func GeometrySchlickGGX(NdotV: float, roughness: float)
-{
-    let r = roughness + float_one;
-    let k = r * r / float::new(8.);
-    
-    let nom = NdotV;
-    let denom = NdotV * (float_one - k) + k;
-
-    return nom / denom;
-}
-
-func GeometrySmith(N: float3, V: float3, L: float3, roughness: float)
-{
-    let NdotV = max(dot(N, V), float_zero);
+    let kS = F;
+    let kD = (float3_one - kS) * (float_one - metallic);
     let NdotL = max(dot(N, L), float_zero);
 
-    let ggx1 = GeometrySchlickGGX(NdotL, roughness);
-    let ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    let result = (kD * albedo / PI + specular) * radiance * NdotL * (float_one - shadow_factor);
 
-    return ggx1 * ggx2;
+    return fout{
+        color = float4::create(result, 0.),
+    };
 }
 
-func FresnelSchlick(cosTheta: float, F0: float3)
+)");
+                _defer_light2d_point_light_pass
+                    = new shader("je/defer_light2d_point_light.shader",
+                        R"(
+import je.shader;
+import je.shader.pbr;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ONE);
+CULL    (BACK);
+
+VAO_STRUCT vin
 {
-    return F0 + (float3_one - F0) * pow(float_one - cosTheta, float::new(5.));
-}
+    vertex: float3,
+    // uv: float2, // We don't care uv, we will use port position as uv.
+};
 
-func multi_sampling_for_bias_shadow(shadow: texture2d, uv: float2)
+using v2f = struct{
+    pos: float4,
+    lpos: float3,
+};
+
+using fout = struct{
+    color: float4
+};
+
+public func vert(v: vin)
 {
-    let mut shadow_factor = float_zero;
-    let bias = 2.;
+    let pos = je_mvp * float4::create(v.vertex, 1.);
+    let lpos = je_mv * float4::new(0., 0., 0., 1.);
 
-    let bias_weight = [
-        (-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
-        (-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
-        (-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
-        (-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
-        (-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
-    ];
-
-    for (let _, (x, y, weight) : bias_weight)
-    {
-        shadow_factor = shadow_factor + texture(
-            shadow, uv + (float2_one / je_tiling) * float2::create(x, y) * bias
-        )->x * weight;
-        
-    }
-    return clamp(shadow_factor, 0., 1.);
+    return v2f{
+        pos = pos,
+        lpos = lpos->xyz,
+    };
 }
 
 public func frag(vf: v2f)
@@ -875,7 +979,7 @@ public func frag(vf: v2f)
     let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let vpos_m = texture(vpos_m_buffer, uv);
     let vnorm_r = texture(vnorm_r_buffer, uv);
-    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, uv);
+    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
 
     // Calculate light results.
     let intensity = je_color->w;
