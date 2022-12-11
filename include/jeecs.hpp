@@ -32,6 +32,7 @@
 #include <type_traits>
 #include <sstream>
 #include <climits>
+#include <initializer_list>
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -561,6 +562,12 @@ JE_API size_t      jeecs_file_read(
     size_t count,
     jeecs_file* file);
 
+// If ignore_crc64 == true, cache will always work even if origin file changed.
+JE_API jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, bool ignore_crc64);
+JE_API void* jeecs_create_cache_file(const char* filepath, uint32_t format_version);
+JE_API size_t jeecs_write_cache_file(const void* write_buffer, size_t elem_size, size_t count, void* file);
+JE_API void jeecs_close_cache_file(void* file);
+
 /////////////////////////// GRAPHIC //////////////////////////////
 // Here to store low-level-graphic-api.
 
@@ -702,6 +709,12 @@ struct jegl_shader
         uint32_t m_builtin_uniform_mvp = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_mv = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_vp = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_local_scale = jeecs::typing::INVALID_UINT32;
+
+        uint32_t m_builtin_uniform_tiling = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_offset = jeecs::typing::INVALID_UINT32;
+
+        uint32_t m_builtin_uniform_color = jeecs::typing::INVALID_UINT32;
     };
 
     struct unifrom_variables
@@ -797,12 +810,11 @@ struct jegl_shader
 
     depth_test_method   m_depth_test;
     depth_mask_method   m_depth_mask;
-    alpha_test_method   m_alpha_test;
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
 };
 
-struct jegl_framebuf
+struct jegl_frame_buffer
 {
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
@@ -810,6 +822,17 @@ struct jegl_framebuf
     size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
+};
+
+struct jegl_uniform_buffer
+{
+    size_t      m_buffer_binding_place;
+    size_t      m_buffer_size;
+    uint8_t* m_buffer;
+
+    // Used for marking update range;
+    size_t      m_update_begin_offset;
+    size_t      m_update_length;
 };
 
 struct jegl_resource
@@ -828,6 +851,7 @@ struct jegl_resource
         TEXTURE,        // Texture
         SHADER,         // Shader
         FRAMEBUF,       // Framebuffer
+        UNIFORMBUF,     // UniformBlock
     };
     type m_type;
     jegl_thread* m_graphic_thread;
@@ -850,7 +874,8 @@ struct jegl_resource
         jegl_texture* m_raw_texture_data;
         jegl_vertex* m_raw_vertex_data;
         jegl_shader* m_raw_shader_data;
-        jegl_framebuf* m_raw_framebuf_data;
+        jegl_frame_buffer* m_raw_framebuf_data;
+        jegl_uniform_buffer* m_raw_uniformbuf_data;
     };
 };
 
@@ -896,7 +921,6 @@ struct jegl_graphic_api
     clear_framebuf_func_t       clear_rend_buffer;
     clear_framebuf_func_t       clear_rend_buffer_color;
     clear_framebuf_func_t       clear_rend_buffer_depth;
-    update_shared_uniform_func_t update_shared_uniform;
 
     get_uniform_location_func_t get_uniform_location;   // this function only used after the shader has been 'using' now.
     set_uniform_func_t          set_uniform;            // too,
@@ -933,6 +957,7 @@ JE_API jegl_resource* jegl_create_vertex(
     size_t                      data_length,
     size_t                      format_length);
 
+// TODO: Support create frame buffer with different output attachment resolutions.
 JE_API jegl_resource* jegl_create_framebuf(
     size_t width,
     size_t height,
@@ -952,6 +977,15 @@ JE_API void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src);
 JE_API jegl_resource* jegl_load_shader(const char* path);
 
+JE_API jegl_resource* jegl_create_uniformbuf(
+    size_t length,
+    size_t binding_place);
+JE_API void jegl_update_uniformbuf(
+    jegl_resource* uniformbuf,
+    const void* buf,
+    size_t update_offset,
+    size_t update_length);
+
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis);
 
 JE_API void jegl_using_resource(jegl_resource* resource);
@@ -964,7 +998,6 @@ JE_API void jegl_clear_framebuffer(jegl_resource* framebuffer);
 JE_API void jegl_clear_framebuffer_color(jegl_resource* framebuffer);
 JE_API void jegl_clear_framebuffer_depth(jegl_resource* framebuffer);
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
-JE_API void jegl_update_shared_uniform(size_t offset, size_t datalen, const void* data);
 
 JE_API int jegl_uniform_location(jegl_resource* shader, const char* name);
 JE_API void jegl_uniform_int(jegl_resource* shader, int location, int value);
@@ -1035,6 +1068,7 @@ JE_API const jeecs::game_entity* jedbg_get_editing_entity();
 
 // NOTE: Get graphic thread
 JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
+JE_API void* jedbg_get_rendering_world(void* universe);
 #endif
 
 WO_FORCE_CAPI_END
@@ -1124,6 +1158,12 @@ namespace jeecs
         {
             _reserve(another_list.size());
             _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
+        }
+
+        vector(const std::initializer_list<ElemT>& another_list)
+        {
+            for (auto& elem : another_list)
+                push_back(elem);
         }
 
         vector(ElemT* ptr, size_t length)
@@ -1562,9 +1602,7 @@ namespace jeecs
             }
             static const char* to_string(const void* _ptr)
             {
-                if constexpr (std::is_convertible<T, std::string>::value)
-                    return basic::make_new_string(*(const T*)_ptr);
-                else if constexpr (typing::sfinae_has_to_string<T>::value)
+                if constexpr (typing::sfinae_has_to_string<T>::value)
                     return basic::make_new_string(((const T*)_ptr)->to_string());
                 else if constexpr (std::is_fundamental<T>::value)
                 {
@@ -1574,7 +1612,9 @@ namespace jeecs
                     b >> str;
                     return basic::make_new_string(str.c_str());
                 }
-
+                else if constexpr (std::is_convertible<T, std::string>::value)
+                    return basic::make_new_string(*(const T*)_ptr);
+                
                 static auto call_once = []() {
                     debug::logfatal("This type: '%s' have no function named 'to_string'."
                         , typeid(T).name());
@@ -1584,9 +1624,7 @@ namespace jeecs
             }
             static void parse(void* _ptr, const char* _memb)
             {
-                if constexpr (std::is_convertible<const char*, T>::value)
-                    *(T*)_ptr = _memb;
-                else if constexpr (typing::sfinae_has_parse<T>::value)
+                if constexpr (typing::sfinae_has_parse<T>::value)
                     ((T*)_ptr)->parse(_memb);
                 else if constexpr (std::is_fundamental<T>::value)
                 {
@@ -1594,6 +1632,8 @@ namespace jeecs
                     b << _memb;
                     b >> *(T*)_ptr;
                 }
+                else if constexpr (std::is_convertible<const char*, T>::value)
+                    *(T*)_ptr = _memb;
                 else
                 {
                     static auto call_once = []() {
@@ -1723,7 +1763,7 @@ namespace jeecs
             {
                 ptr = v.ptr;
                 release_func = v.release_func;
-                if (ref_count = v.ref_count)
+                if ((ref_count = v.ref_count))
                     ++* ref_count;
             }
 
@@ -1742,7 +1782,7 @@ namespace jeecs
 
                 ptr = v.ptr;
                 release_func = v.release_func;
-                if (ref_count = v.ref_count)
+                if ((ref_count = v.ref_count))
                     ++* ref_count;
 
                 return *this;
@@ -1757,7 +1797,6 @@ namespace jeecs
                 ref_count = v.ref_count;
                 v.ptr = nullptr;
                 v.ref_count = nullptr;
-
                 return *this;
             }
 
@@ -1950,7 +1989,7 @@ namespace jeecs
                 _type_guard.~_type_unregister_guard();
             }
             template<typename T>
-            inline static typeid_t id(const char* _typename = typeid(T).name())
+            inline static typeid_t id(const char* _typename)
             {
                 assert(!_m_shutdown_flag);
                 bool first_init = false;
@@ -1970,7 +2009,7 @@ namespace jeecs
             }
 
             template<typename T>
-            inline static const type_info* of(const char* _typename = typeid(T).name())
+            inline static const type_info* of(const char* _typename)
             {
                 assert(!_m_shutdown_flag);
                 static typeid_t registed_typeid = id<T>(_typename);
@@ -2052,7 +2091,7 @@ namespace jeecs
 
             ptrdiff_t member_offset = reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
             je_register_member(
-                type_info::id<ClassT>(),
+                type_info::id<ClassT>(typeid(ClassT).name()),
                 membt,
                 membname,
                 member_offset);
@@ -2083,7 +2122,7 @@ namespace jeecs
         inline game_entity add_entity()
         {
             typing::typeid_t component_ids[] = {
-                typing::type_info::id<CompTs>()...,
+                typing::type_info::id<CompTs>(typeid(CompTs).name())...,
                 typing::INVALID_TYPE_ID
             };
             game_entity gentity;
@@ -2284,12 +2323,12 @@ namespace jeecs
                     // Reference, means CONTAIN
                     dep.m_requirements.push_back(
                         requirement(requirement::type::CONTAIN, 0,
-                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>(typeid(CurRequireT).name())));
                 else if constexpr (std::is_pointer<CurRequireT>::value)
                     // Pointer, means MAYNOT
                     dep.m_requirements.push_back(
                         requirement(requirement::type::MAYNOT, 0,
-                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>(typeid(CurRequireT).name())));
                 else
                 {
                     static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value,
@@ -2305,13 +2344,13 @@ namespace jeecs
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
 
-            auto id = typing::type_info::id<CurRequireT>();
+            auto id = typing::type_info::id<CurRequireT>(typeid(CurRequireT).name());
 
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id)
                     debug::logwarn("Repeat or conflict when excepting component '%s'.",
-                        typing::type_info::of<CurRequireT>()->m_typename);
+                        typing::type_info::of<CurRequireT>(typeid(CurRequireT).name())->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::EXCEPT, 0, id));
             if constexpr (sizeof...(Ts) > 0)
@@ -2323,13 +2362,13 @@ namespace jeecs
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
 
-            auto id = typing::type_info::id<CurRequireT>();
+            auto id = typing::type_info::id<CurRequireT>(typeid(CurRequireT).name());
 
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id)
                     debug::logwarn("Repeat or conflict when containing component '%s'.",
-                        typing::type_info::of<CurRequireT>()->m_typename);
+                        typing::type_info::of<CurRequireT>(typeid(CurRequireT).name())->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::CONTAIN, 0, id));
             if constexpr (sizeof...(Ts) > 0)
@@ -2341,12 +2380,12 @@ namespace jeecs
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
 
-            auto id = typing::type_info::id<CurRequireT>();
+            auto id = typing::type_info::id<CurRequireT>(typeid(CurRequireT).name());
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id && req.m_require != requirement::type::MAYNOT)
                     debug::logwarn("Repeat or conflict when require any of component '%s'.",
-                        typing::type_info::of<CurRequireT>()->m_typename);
+                        typing::type_info::of<CurRequireT>(typeid(CurRequireT).name())->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::ANYOF, any_group, id));
             if constexpr (sizeof...(Ts) > 0)
@@ -2804,7 +2843,7 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::get_component()const noexcept
     {
-        auto* type = typing::type_info::of<T>();
+        auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return (T*)je_ecs_world_entity_get_component(this, type);
     }
@@ -2812,7 +2851,7 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
-        auto* type = typing::type_info::of<T>();
+        auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, type);
     }
@@ -2820,7 +2859,7 @@ namespace jeecs
     template<typename T>
     inline void game_entity::remove_component() const noexcept
     {
-        auto* type = typing::type_info::of<T>();
+        auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return je_ecs_world_entity_remove_component(je_ecs_world_of_entity(this), this, type);
     }
@@ -4184,6 +4223,21 @@ namespace jeecs
             }
         };
 
+        class uniformbuffer : public resource_basic
+        {
+        public:
+            explicit uniformbuffer(size_t binding_place, size_t buffersize)
+                :resource_basic(jegl_create_uniformbuf(binding_place, buffersize))
+            {
+            }
+
+            void update_buffer(size_t offset, size_t size, const void* datafrom) const noexcept
+            {
+                if (enabled())
+                    jegl_update_uniformbuf(resouce(), datafrom, offset, size);
+            }
+        };
+
         inline void ortho_projection(
             float(*out_proj_mat)[4],
             float windows_width,
@@ -4271,7 +4325,6 @@ namespace jeecs
             const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
             const float ZRANGE = znear - zfar;
             const float TAN_HALF_FOV = tanf(angle / math::quat::RAD2DEG / 2.0f);
-
 
             auto m = out_proj_mat;
             m[0][0] = 1.0f / (TAN_HALF_FOV * WIDTH_HEIGHT_RATIO);
@@ -4791,7 +4844,6 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, pos) == offsetof(LocalToWorld, pos));
         static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
-
     }
     namespace Renderer
     {
@@ -4856,6 +4908,8 @@ namespace jeecs
 
                 }
             };
+            math::vec2 tiling = math::vec2(1.f, 1.f);
+            math::vec2 offset = math::vec2(0.f, 0.f);
             jeecs::vector<texture_with_passid> textures;
 
             void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
@@ -4870,6 +4924,20 @@ namespace jeecs
                     }
                 }
                 textures.push_back(texture_with_passid(passid, texture));
+            }
+            basic::resource<graphic::texture> get_texture(size_t passid) const
+            {
+                for (auto& [pass, tex] : textures)
+                    if (pass == passid)
+                        return tex;
+
+                return nullptr;
+            }
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Textures::tiling, "tiling");
+                typing::register_member(&Textures::offset, "offset");
             }
         };
 
@@ -4925,6 +4993,106 @@ namespace jeecs
         struct RendToFramebuffer
         {
             basic::resource<graphic::framebuffer> framebuffer = nullptr;
+        };
+    }
+
+    namespace Light2D
+    {
+        struct Color
+        {
+            math::vec4 color = math::vec4(1, 1, 1, 1);
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Color::color, "color");
+            }
+        };
+
+        struct Shadow
+        {
+            size_t resolution_width = 1024;
+            size_t resolution_height = 768;
+            basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
+            float shape_shadow_scale = 2.f;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Shadow::resolution_width, "resolution_width");
+                typing::register_member(&Shadow::resolution_height, "resolution_height");
+                typing::register_member(&Shadow::shape_shadow_scale, "shape_shadow_scale");
+            }
+        };
+
+        struct Parallel
+        {
+
+        };
+
+        struct Point
+        {
+
+        };
+
+        struct CameraPass
+        {
+            basic::resource<graphic::framebuffer> defer_rend_aim = nullptr;
+            basic::resource<jeecs::graphic::framebuffer> defer_light_effect = nullptr;
+        };
+
+        struct Block
+        {
+            struct block_mesh
+            {
+                jeecs::vector<math::vec2> m_block_points = {
+                    math::vec2(-0.5f, -0.5f),
+                    math::vec2(-0.5f, 0.5f),
+                    math::vec2(0.5f, 0.5f),
+                    math::vec2(0.5f, -0.5f),
+                };
+                basic::resource<graphic::vertex> m_block_mesh = nullptr;
+
+                inline std::string to_string()const
+                {
+                    std::string result = "#je_light2d_block_shape#";
+                    result += "size:" + std::to_string(m_block_points.size()) + ";";
+                    for (size_t id = 0; id < m_block_points.size(); ++id)
+                    {
+                        result += std::to_string(id) + ":" + m_block_points[id].to_string() + ";";
+                    }
+                    return result;
+                }
+                inline void parse(const char*& databuf)
+                {
+                    size_t readed_length = 0;
+
+                    size_t size = 0;
+                    if (sscanf(databuf, "#je_light2d_block_shape#size:%zu;%zn", &size, &readed_length) == 1)
+                    {
+                        databuf += readed_length;
+                        m_block_points.clear();
+                        m_block_mesh = nullptr;
+                        for (size_t i = 0; i < size; ++i)
+                        {
+                            size_t idx = 0;
+                            math::vec2 pos;
+                            if (sscanf(databuf, "%zu:(%f,%f);%zn", &idx, &pos.x, &pos.y, &readed_length) == 3)
+                            {
+                                databuf += readed_length;
+                                m_block_points.push_back(pos);
+                            }
+                            else
+                                m_block_points.push_back(math::vec2(0.f, 0.f));
+                        }
+                    }
+                }
+            };
+
+            block_mesh mesh;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Block::mesh, "mesh");
+            }
         };
     }
 
@@ -5254,6 +5422,13 @@ namespace jeecs
             type_info::of<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
             type_info::of<Camera::Viewport>("Camera::Viewport");
             type_info::of<Camera::RendToFramebuffer>("Camera::RendToFramebuffer");
+
+            type_info::of<Light2D::Color>("Light2D::Color");
+            type_info::of<Light2D::Shadow>("Light2D::Shadow");
+            type_info::of<Light2D::Parallel>("Light2D::Parallel");
+            type_info::of<Light2D::Point>("Light2D::Point");
+            type_info::of<Light2D::CameraPass>("Light2D::CameraPass");
+            type_info::of<Light2D::Block>("Light2D::Block");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();

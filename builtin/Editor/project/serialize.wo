@@ -51,7 +51,7 @@ namespace editor::Serialize
                         }
                     }
                     return result->todict;
-                };)
+                };);
     }
 
 	public func save_entity(saving_entity: entity)
@@ -153,7 +153,7 @@ namespace editor::Serialize
             ->map(func(shaders: dynamic)
                 {
                     let shads = []mut: vec<(graphic::shader, dict)>;
-                    for (let shader_path_dat_pair : shaders: array)
+                    for (let _, shader_path_dat_pair : shaders: array)
                     {
                         let s = graphic::shader::load(shader_path_dat_pair: array[0] as string);
                         shads->add((s, shader_path_dat_pair: array[1] as dict));
@@ -173,11 +173,6 @@ namespace editor::Serialize
                 ->map(\tp: (je::typeinfo,anything) = tp[0];)
                 ->connect(entity_has_bad_shader ? [je::typeinfo::load_from_name("Editor::BadShadersUniform")->val] | []));
         
-        // 如果数据里面有name字段，那就设置一下实体名字
-        entity_dat
-            ->get("name": dynamic)
-            ->map(\n:dynamic = entity->editor::set_name(n as string););
-
         // 开始应用数据
         component_types_dat
             ->map(\cdata: (je::typeinfo, dict<string, string>) = 
@@ -215,6 +210,13 @@ namespace editor::Serialize
                         entity->editor::graphic::bind_texture(passid as int,
                             graphic::texture::load(path as string));
                 });
+
+        // 如果数据里面有name字段，那就设置一下实体名字
+        // 这种蛋疼操作只能最后做，因为在加载世界时，实体变更组件的同步可能会立即生效
+        // （因为当前世界还在update，其他世界可能在fflush），所以只能放这里
+        entity_dat
+            ->get("name": dynamic)
+            ->map(\n:dynamic = entity->editor::set_name(n as string););
 
         return option::value(entity);
     }

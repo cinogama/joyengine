@@ -95,11 +95,14 @@ namespace logmgr
     func update_buffers()
     {
         let this_time_log = je::editor::getlogs();
-        for (let (t, s) : this_time_log)
+        for (let _, (t, s) : this_time_log)
             log_buffers[t]->insert(0, s);
 
         if (!this_time_log->empty)
-            return last_log = option::value(this_time_log[this_time_log->len - 1]);
+        {
+            let (level, msg) = this_time_log[this_time_log->len - 1];
+            return last_log = option::value((level, msg->utils::ShortStringCutEnd(60)));
+        }
 
         return last_log;
     }
@@ -139,7 +142,7 @@ namespace logmgr
                         return msg->subto(0, switch_line_place);
                     return msg;
                 }
-                for (let msg : v)
+                for (let _, msg : v)
                 {
                     MenuItem(msg->get_title_of_error->utils::ShortStringCutEnd(60));
                     if (IsItemHovered())
@@ -169,7 +172,7 @@ namespace GameDebug
     }
     public func start_safe_mode()
     {
-        safe_mode = true
+        safe_mode = true;
     }
 
     func is_debugging()
@@ -210,25 +213,18 @@ namespace GameDebug
 
 func Editor_CameraViewport()
 {
+    // 编辑视口区域，编辑时的主要操作都在这里完成
+
     if (!display_debug_camera_viewport)
         return;
 
     static let mut windows_moveable = true;
 
-    BeginAttrOpen("调试器视口", 
+    display_debug_camera_viewport = BeginAttrOpen("调试器视口", 
         WindowsAttribute::ImGuiWindowFlags_MenuBar
         + (windows_moveable 
             ? WindowsAttribute::ImGuiWindowFlags_None
-            | WindowsAttribute::ImGuiWindowFlags_NoMove), 
-        ref display_debug_camera_viewport);
-
-    if (BeginMenuBar())
-    {
-        if (MenuItem("调试运行"))
-            GameDebug::start_debug();
-
-        EndMenuBar();
-    }
+            | WindowsAttribute::ImGuiWindowFlags_NoMove));
 
     let debug_camera_entity = je::world::rend()
         =>> \w = w->editor::get_all_entities
@@ -240,14 +236,28 @@ func Editor_CameraViewport()
             ;
     ;
 
+    if (BeginMenuBar())
+    {
+        if (MenuItem("调试运行"))
+            GameDebug::start_debug();
+        if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
+        {
+            let l2d_camera_pass_component_type = je::typeinfo::load_from_name("Light2D::CameraPass")->val;
+            if (debug_camera_entity->val->editor::get_component(l2d_camera_pass_component_type)->has)
+                debug_camera_entity->val->editor::remove_component(l2d_camera_pass_component_type);
+            else
+                debug_camera_entity->val->editor::add_component(l2d_camera_pass_component_type);
+        }
+        EndMenuBar();
+    }
+
     match(debug_camera_entity =>> \camera = je::editor::get_framebuf_texture(camera, 0);)
     {
     value(frametex)?
     {
         let (frame_tex_width, frame_tex_height) = frametex->size;
 
-        let mut available_width = 0., mut available_height = 0.;
-        GetContentRegionAvail(ref available_width, ref available_height);
+        let (available_width, available_height) = GetContentRegionAvail();
 
         let (wx, wy) = GetWindowPos();
         let (lupx, lupy) = GetCursorPos();
@@ -316,13 +326,13 @@ func Editor_MainMenuBar()
     shortcut::update();
 
     if (EditFormsConfig::shown_world_list)
-        WorldList::show(ref EditFormsConfig::shown_world_list);
+        EditFormsConfig::shown_world_list = WorldList::show(EditFormsConfig::shown_world_list);
     if (EditFormsConfig::shown_entity_list)
-        EntityList::show(ref EditFormsConfig::shown_entity_list);
+        EditFormsConfig::shown_entity_list = EntityList::show(EditFormsConfig::shown_entity_list);
     if (EditFormsConfig::shown_inspector_list)
-        Inspector::show(ref EditFormsConfig::shown_inspector_list);
+        EditFormsConfig::shown_inspector_list = Inspector::show(EditFormsConfig::shown_inspector_list);
     if (EditFormsConfig::shown_browser_list)
-        Browser::show(ref EditFormsConfig::shown_browser_list);
+        EditFormsConfig::shown_browser_list = Browser::show(EditFormsConfig::shown_browser_list);
 
     // 拉取一下log信息
     let last_log_info = logmgr::update_buffers();
@@ -362,6 +372,8 @@ func Editor_MainMenuBar()
         {
             if (MenuItemShortcut("调试运行", "使用Ctrl+Esc终止调试"))
                 GameDebug::start_debug();
+            if (MenuItem("项目设置"))
+                editor::Project::GetCurrentProject()->config_form();
             EndMenu();
         }
         if (BeginMenu("视图"))
@@ -383,19 +395,36 @@ func Editor_MainMenuBar()
         }
          if (BeginMenu("脚本"))
         {
-            static let mut editor_opened = false;
+            static let editor_opened = mutable::create(false);
 
-            if (MenuItemSelectedEnabled("打开快捷编辑器", ref editor_opened, true) && editor_opened)
-                launch(Editor_ScriptEditor, (ref editor_opened,));
-
+            match (MenuItemSelectedEnabled("打开快捷编辑器", editor_opened->get, true))
+            {
+            value(opened)?
+            {
+                editor_opened->set(opened);
+                if (opened)
+                     launch(Editor_ScriptEditor, (editor_opened,));
+            }
+            none?
+                ;
+            }
             EndMenu();
         }
         if (BeginMenu("帮助"))
         {
-            static let mut about_shown = false;
+            static let about_shown = mutable::create(false);
 
-            if (MenuItemSelectedEnabled("关于", ref about_shown, true) && about_shown)
-                launch(Editor_Welcome, (ref about_shown,));
+            match (MenuItemSelectedEnabled("关于", about_shown->get, true))
+            {
+            value(selected)?
+            {
+                about_shown->set(selected);
+                if (selected)
+                     launch(Editor_Welcome, (about_shown,));
+            }
+            none?
+                ;
+            }
                     
             EndMenu();
         }
@@ -437,9 +466,20 @@ func Editor_MainMenuBar()
                 proj->RestoreAllWorlds(dat);
             }
             let mut show_hiding_editor_entity = EntityList::get_enable_show_invisable_entity();
-            if (MenuItemSelectedEnabled("显示编辑器隐藏实体", ref show_hiding_editor_entity, true))
+            match (MenuItemSelectedEnabled("显示编辑器隐藏实体", show_hiding_editor_entity, true))
             {
-                EntityList::set_enable_show_invisable_entity(show_hiding_editor_entity);
+            value(selected)?
+                EntityList::set_enable_show_invisable_entity(selected);
+            none?
+                ;
+            }
+            match (MenuItemSelectedEnabled("资源管理器隐藏内置资源",
+                editor::Browser::editor_need_hiding_file, true))
+            {
+            value(selected)?
+                editor::Browser::editor_need_hiding_file = selected;
+            none?
+                ;
             }
             EndMenu();
         }
@@ -455,8 +495,7 @@ func Editor_MainMenuBar()
             + last_log_info
                 ->map(\loginfo:(je::editor::loglevel, string)=
                     F" [{logmgr::log_level_name[loginfo[0]]}: {loginfo[1]}]";)
-                ->valor("")
-                ->utils::ShortStringCutEnd(60)))
+                ->valor("")))
         {
             logmgr::show_log();
             EndMenu();
@@ -471,9 +510,9 @@ func Editor_MainMenuBar()
 }
 
 // 关于信息窗口
-func Editor_Welcome(ref open: bool)
+func Editor_Welcome(open: mutable<bool>)
 {
-    if (!open)
+    if (!open->get)
         return FormAction::Close;
 
     BeginAttr("欢迎", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
@@ -492,7 +531,9 @@ func Editor_Welcome(ref open: bool)
         launch(func()
         {
             BeginAttr("修改项目的关于信息", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-                InputTextMultilineSize("##", ref editor::Project::GetCurrentProject().about_info, 400., 200.);
+                InputTextMultilineSize("##", editor::Project::GetCurrentProject().about_info, 400., 200.)
+                    ->> \newtext = editor::Project::GetCurrentProject().about_info = newtext;
+                    ;
                 let close = Button("完成");
             End();
             if (close)
@@ -501,16 +542,15 @@ func Editor_Welcome(ref open: bool)
         }, ());
     }
 
-    let mut available_width = 0.;
-    GetContentRegionAvail(ref available_width, 0.);
+    let (available_width, _) = GetContentRegionAvail();
 
     InputTextMultilineSize("##", editor::Project::GetCurrentProject().about_info, available_width, 100.0);
 
     if (Button("确认"))
-        open = false;
+        open->set(false);
     End();
 
-    if (!open)
+    if (!open->get)
         return FormAction::Close;
     return FormAction::Nothing;
 }
@@ -535,7 +575,7 @@ func display_icon_in_console()
         {
             let mut out_line = "";
             for (let mut x = 0; x < width; x += 1)
-                out_line += chtex->pix(x, y)->color[3] <= 0.175 ? "  " | "■";
+                out_line += chtex->pix(x, y)->get_color[3] <= 0.175 ? "  " | "■";
 
             je::log(F"{out_line}|");
         }

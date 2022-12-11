@@ -27,7 +27,9 @@ const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const ch
 void jeecs_entry_register_core_systems()
 {
     jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
+
     jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
+    jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
 
     jeecs::typing::type_info::of<jeecs::Editor::Name>("Editor::Name");
     jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");

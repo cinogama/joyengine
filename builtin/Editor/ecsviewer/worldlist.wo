@@ -14,9 +14,21 @@ namespace editor::WorldList
 {
     public func SwitchEditingWorld(aim_world: je::world)
     {
-        je::world::rend()->map(\old: je::world = old->editor::remove_system(Project::GetCurrentProject().editor_system););
+        EntityList::set_current_entity(option::none);
 
-        aim_world->set_rend;
+        static let GRAPHIC_PIPELINE_SYSTEMS = je::typeinfo::editor::get_all_systems_types()
+            -> forall(\t = t->name->beginwith("Graphic::"););
+
+        je::world::rend()
+            ->> \old = old->editor::remove_system(Project::GetCurrentProject().editor_system);;
+
+        je::world::rend()
+            ->> \old = GRAPHIC_PIPELINE_SYSTEMS
+                ->  forall(\gst = old->editor::get_system(gst)->has;)
+                ->> \gst = old->editor::remove_system(gst);
+                ;
+            ;
+        aim_world->add_system(Project::GetCurrentProject().graphic_system);
         aim_world->add_system(Project::GetCurrentProject().editor_system);
     }
 
@@ -32,17 +44,17 @@ namespace editor::WorldList
         }
     }
 
-    public func show(ref open: bool)
+    public func show(reqopen: bool)
     {
         using je::gui;
 
-        BeginAttrOpen("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, ref open);
+        let open = BeginAttrOpen("世界列表", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             menu();
             if (BeginListBox("##", 200.0, 400.0))
             {
                 let worlds = je::universe::current()->editor::worlds_list;
-                for (let world : worlds)
+                for (let _, world : worlds)
                 {
                     if (SelectableSelected(world->editor::name + "##" + world: string, 
                             je::world::rend()->map(\rw:je::world = rw == world;)
@@ -67,6 +79,8 @@ namespace editor::WorldList
                 EndListBox();
             }
         End();
+
+        return open && reqopen;
     }
 
     private func context_menu(world: je::world)
@@ -104,7 +118,10 @@ namespace editor::WorldList
                                         Project::GetCurrentProject()->CloseWorld(world);
                                     }
                                     else if (check == generic::CheckResult::NO)
+                                    {
+                                        EntityList::set_current_entity(option::none);
                                         Project::GetCurrentProject()->CloseWorld(world);
+                                    }
                                 });;
                     match(Project::GetCurrentProject()->FindWorld(world))
                     {

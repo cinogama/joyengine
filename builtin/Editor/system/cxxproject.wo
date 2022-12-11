@@ -114,24 +114,25 @@ public using CxxProject = struct {
         let enabled_generating = platform_support
             ->forall(\_: anything, enable: bool = enable;)
             ->unmapping
-            ->map(\conf_enab: (string, anything) = conf_enab[0];);
+            ->> \conf_enab: (string, anything) = conf_enab[0];
+            ;
             
         let generating_results = enabled_generating
-            ->map(\conf: string = (conf, generate_cmake_doc(conf)););
+            ->> \conf: string = (conf, generate_cmake_doc(conf));
+            ;
 
         let failed_generating = generating_results
             ->forall(\r: (anything, result<anything, anything>) = r[1]->iserr;);
 
         if (!failed_generating->empty)
         {
-            for (let r : failed_generating->map(\r: (anything, result<anything, string>)
-                = r[1]->error->val;))
+            for (let _, r : failed_generating ->> \r = r[1]->error->val;)
                 je::logerr(r);
 
             return result::err(F"创建模块的CMake文件时失败：\n{
                 failed_generating
-                    ->map(\r: (anything, result<anything, string>) = r[1]->error->val;)
-                    ->reduce(\l: string, r: string = l + "\n" + r;)
+                    ->> \r = r[1]->error->val;
+                    ->reduce(\l, r = l + "\n" + r;)
                     ->val
             }");
         }
@@ -143,8 +144,7 @@ public using CxxProject = struct {
             ["conf"] = enabled_generating: dynamic,
         }: string);
         
-        for (let config : generating_results->map(
-            \c: (anything, result<CxxProjectBuildConfig, anything>) = c[1]->okay->val;))
+        for (let _, config : generating_results ->> \c = c[1]->okay->val;)
         {
             // 3.1 把生成出来的CMake保存起来
             let aim_cmake_dir = F"{cxx_proj_path}builder/{config.config}";
@@ -157,7 +157,7 @@ public using CxxProject = struct {
             }
             if (!writeall(F"{aim_cmake_dir}/CMakeLists.txt", 
                 config.cmake
-                    ->replace("$$JEMODULE_PROJECT_NAME$$", name)
+                    ->replace("$$JEMODULE_PROJECT_NAME$$", name->replace(" ", "_"))
                     ->replace("$$JEMODULE_BUILD_CONFIG$$", config.config)))
                 return result::err(F"无法写入'{aim_cmake_dir}/CMakeLists.txt'");
         }
@@ -197,7 +197,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         if (!writeall(F"{cxx_proj_path}CMakeLists.txt", 
                 F"{cmake_head}\n{cmake_subdirs->val}\n"
-                    ->replace("$$JEMODULE_PROJECT_NAME$$", name)))
+                    ->replace("$$JEMODULE_PROJECT_NAME$$", name->replace(" ", "_"))))
             return result::err(F"无法写入'{cxx_proj_path}CMakeLists.txt'");
 
         return result::ok(generating_results);
@@ -253,7 +253,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     {
         using je::filesys;
 
-        for (let p : childs(dir)->okay->val)
+        for (let _, p : childs(dir)->okay->val)
         {
             if (isdir(p))
             {
@@ -284,11 +284,11 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         return 
             childs(runtime_dll_path)
                 ->okay
-                ->bind(\child_path: array<string> = child_path
-                    ->forall(\path: string = isdir(path);)
-                    ->map(\path: string = filename(path): int;)
-                    ->reduce(\l: int, r: int = l > r ? l | r;)
-                ;)
+                =>> \child_path = child_path
+                    ->  forall(\path = isdir(path);)
+                    ->> \path = filename(path): int;
+                    ->  reduce(\l, r = l > r ? l | r;);
+                ;
     }
     func get_current_runtime_path(runtime_dll_path: string)
     {
@@ -375,8 +375,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             };
         
         let current_je_proj = editor::Project::GetCurrentProject();
-        current_je_proj.native_modules->get(created_module.path)
-                    ->or(\ = current_je_proj.native_modules->set(created_module.path, created_module););
+        current_je_proj.native_modules->getorset(created_module.path, created_module);
 
         return result::ok(created_module);
     }
@@ -526,7 +525,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             massive_msg = option::none,
             };
         je::gui::launch(func(){
-            BeginAttrOpen(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None, ref context.show);
+            context.show = BeginAttrOpen(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None);
                 Text(F"正在编译C++模块：{self.name}");
                 Text(context.display_msg);
                 
@@ -534,8 +533,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                 {
                 value(msg)?
                 {
-                    let mut w = 0., mut h = 0.;
-                    GetContentRegionAvail(ref w, ref h);
+                    let (w, h) = GetContentRegionAvail();
                     InputTextMultilineSize("##", msg, w, h);
                 }
                 none? ;
@@ -569,7 +567,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                             // 这里yield一下，保证一切按部就班
 
                             let fakeworld = je::universe::current()->create_world();
-                            fakeworld->set_rend();
+                            fakeworld->add_system(proj.graphic_system);
 
                             std::yield();
                             std::yield();
@@ -709,7 +707,7 @@ $$REGISTER_SYSTEM_TYPES$$
             return result::err(context.display_msg);
         }
 
-        let cmake_command = F"{utils::WrapPath(CMAKE_PATH)} \"{utils::WrapPath(self.path)}\" -B \"{utils::WrapPath(self.path + "msvcbuild_" + config)}\" {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
+        let cmake_command = F"{utils::WrapPath(CMAKE_PATH)} {utils::WrapPath(self.path)} -B {utils::WrapPath(self.path + "msvcbuild_" + config)} {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
         
         context.display_msg = F"正在使用CMake生成编译配置\n{cmake_command}";
         context.progress = 15;

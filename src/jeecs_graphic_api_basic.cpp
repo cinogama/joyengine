@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_cache_version.hpp"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include <condition_variable>
@@ -320,6 +322,10 @@ void jegl_close_resource(jegl_resource* resource)
                 }
                 delete resource->m_raw_framebuf_data;
                 break;
+            case jegl_resource::UNIFORMBUF:
+                je_mem_free(resource->m_raw_uniformbuf_data->m_buffer);
+                delete resource->m_raw_uniformbuf_data;
+                break;
             default:
                 jeecs::debug::logerr("Unknown resource type to close.");
                 return;
@@ -454,6 +460,28 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::te
     return texture;
 }
 
+bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::texture_sampling* samp)
+{
+    if (jeecs_file* image_cache = jeecs_load_cache_file(path, IMAGE_CACHE_VERSION, true))
+    {
+        jeecs_file_read(samp, sizeof(jegl_texture::texture_sampling), 1, image_cache);
+        jeecs_file_close(image_cache);
+        return true;
+    }
+    return false;
+}
+
+bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::texture_sampling samp)
+{
+    if (void* image_cache = jeecs_create_cache_file(path, IMAGE_CACHE_VERSION))
+    {
+        jeecs_write_cache_file(&samp, sizeof(jegl_texture::texture_sampling), 1, image_cache);
+        jeecs_close_cache_file(image_cache);
+        return true;
+    }
+    return false;
+}
+
 jegl_resource* jegl_load_texture(const char* path)
 {
     if (jeecs_file* texfile = jeecs_file_open(path))
@@ -489,6 +517,10 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
         texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
+
+        // Read samping config from cache file...
+        if (!_jegl_read_texture_sampling_cache(path, &texture->m_raw_texture_data->m_sampling))
+            texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
 
         return texture;
     }
@@ -590,6 +622,146 @@ jegl_resource* _jegl_create_died_shader(const char* path)
     return shader;
 }
 
+jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
+{
+    assert(cache_file != nullptr);
+
+    jegl_shader* _shader = new jegl_shader();
+
+    jegl_resource* shader = _create_resource();
+    shader->m_type = jegl_resource::SHADER;
+    shader->m_raw_shader_data = _shader;
+
+    uint64_t vertex_glsl_src_len, fragment_glsl_src_len;
+
+    // 1. Read generated source
+    jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
+    _shader->m_vertex_glsl_src = (const char*)je_mem_alloc(vertex_glsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_vertex_glsl_src), sizeof(char), vertex_glsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_vertex_glsl_src)[vertex_glsl_src_len] = 0;
+
+    jeecs_file_read(&fragment_glsl_src_len, sizeof(uint64_t), 1, cache_file);
+    _shader->m_fragment_glsl_src = (const char*)je_mem_alloc(fragment_glsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsl_src), sizeof(char), fragment_glsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_fragment_glsl_src)[fragment_glsl_src_len] = 0;
+
+    // 2. read shader config
+    jeecs_file_read(&_shader->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
+
+    // 3. read and generate custom variable informs
+
+    uint64_t custom_uniform_count;
+    jeecs_file_read(&custom_uniform_count, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_custom_uniforms = nullptr;
+
+    jegl_shader::unifrom_variables* last_create_variable = nullptr;
+    for (uint64_t i = 0; i < custom_uniform_count; ++i)
+    {
+        jegl_shader::unifrom_variables* current_variable = jeecs::basic::create_new<jegl_shader::unifrom_variables>();
+        if (_shader->m_custom_uniforms == nullptr)
+            _shader->m_custom_uniforms = current_variable;
+
+        if (last_create_variable != nullptr)
+            last_create_variable->m_next = current_variable;
+
+        // 3.1 read name
+        uint64_t uniform_name_len;
+        jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
+        current_variable->m_name = (const char*)je_mem_alloc(uniform_name_len + 1);
+        jeecs_file_read(const_cast<char*>(current_variable->m_name), sizeof(char), uniform_name_len, cache_file);
+        const_cast<char*>(current_variable->m_name)[uniform_name_len] = 0;
+
+        // 3.2 read type
+        jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
+
+        // 3.3 read data
+        static_assert(sizeof(current_variable->mat4x4) == sizeof(float[4][4]));
+        jeecs_file_read(&current_variable->mat4x4, sizeof(float[4][4]), 1, cache_file);
+
+        current_variable->m_index = jeecs::typing::INVALID_UINT32;
+        current_variable->m_updated = false;
+
+        last_create_variable = current_variable;
+        current_variable->m_next = nullptr;
+    }
+
+    jeecs_file_close(cache_file);
+
+    return shader;
+}
+
+void _jegl_create_shader_cache(jegl_resource* shader_resource)
+{
+    assert(shader_resource->m_path != nullptr
+        && shader_resource->m_raw_shader_data
+        && shader_resource->m_type == jegl_resource::type::SHADER);
+
+    if (auto* cachefile = jeecs_create_cache_file(shader_resource->m_path, SHADER_CACHE_VERSION))
+    {
+        auto* raw_shader_data = shader_resource->m_raw_shader_data;
+
+        uint64_t vertex_glsl_src_len = (uint64_t)strlen(raw_shader_data->m_vertex_glsl_src);
+        uint64_t fragment_glsl_src_len = (uint64_t)strlen(raw_shader_data->m_fragment_glsl_src);
+
+        // 1. write shader generated source to cache
+        jeecs_write_cache_file(&vertex_glsl_src_len, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_vertex_glsl_src, sizeof(char), vertex_glsl_src_len, cachefile);
+
+        jeecs_write_cache_file(&fragment_glsl_src_len, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_fragment_glsl_src, sizeof(char), fragment_glsl_src_len, cachefile);
+
+        // 2. write shader config to cache
+        /*
+            depth_test_method   m_depth_test;
+            depth_mask_method   m_depth_mask;
+            blend_method        m_blend_src_mode, m_blend_dst_mode;
+            cull_mode           m_cull_mode;
+        */
+        jeecs_write_cache_file(&raw_shader_data->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cachefile);
+        jeecs_write_cache_file(&raw_shader_data->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cachefile);
+        jeecs_write_cache_file(&raw_shader_data->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
+        jeecs_write_cache_file(&raw_shader_data->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
+        jeecs_write_cache_file(&raw_shader_data->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cachefile);
+
+        // 3. write shader custom variable informs
+        uint64_t custom_uniform = 0;
+        auto* count_for_uniform = raw_shader_data->m_custom_uniforms;
+        while (count_for_uniform)
+        {
+            ++custom_uniform;
+            count_for_uniform = count_for_uniform->m_next;
+        }
+
+        jeecs_write_cache_file(&custom_uniform, sizeof(uint64_t), 1, cachefile);
+
+        count_for_uniform = raw_shader_data->m_custom_uniforms;
+        while (count_for_uniform)
+        {
+            // 3.1 write name
+            uint64_t uniform_name_len = (uint64_t)strlen(count_for_uniform->m_name);
+            jeecs_write_cache_file(&uniform_name_len, sizeof(uint64_t), 1, cachefile);
+            jeecs_write_cache_file(count_for_uniform->m_name, sizeof(char), uniform_name_len, cachefile);
+
+            // 3.2 write type
+            jeecs_write_cache_file(&count_for_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
+
+            // 3.3 write data
+            static_assert(sizeof(count_for_uniform->mat4x4) == sizeof(float[4][4]));
+            jeecs_write_cache_file(&count_for_uniform->mat4x4, sizeof(float[4][4]), 1, cachefile);
+
+            count_for_uniform = count_for_uniform->m_next;
+        }
+
+        jeecs_close_cache_file(cachefile);
+    }
+}
+
+
 jegl_resource* jegl_load_shader_source(const char* path, const char* src)
 {
     wo_vm vmm = wo_create_vm();
@@ -622,6 +794,8 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
         shader->m_raw_shader_data = _shader;
         shader->m_path = jeecs::basic::make_new_string(path);
 
+        _jegl_create_shader_cache(shader);
+
         wo_close_vm(vmm);
         return shader;
     }
@@ -633,8 +807,16 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
     }
 
 }
+
 jegl_resource* jegl_load_shader(const char* path)
 {
+    if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, false))
+    {
+        auto* shader_resource = _jegl_load_shader_cache(shader_cache);
+        shader_resource->m_path = jeecs::basic::make_new_string(path);
+
+        return shader_resource;
+    }
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
         char* src = (char*)je_mem_alloc(texfile->m_file_length + 1);
@@ -654,7 +836,7 @@ jegl_resource* jegl_create_framebuf(size_t width, size_t height, const jegl_text
 {
     jegl_resource* framebuf = _create_resource();
     framebuf->m_type = jegl_resource::FRAMEBUF;
-    framebuf->m_raw_framebuf_data = new jegl_framebuf();
+    framebuf->m_raw_framebuf_data = new jegl_frame_buffer();
     framebuf->m_path = nullptr;
 
     framebuf->m_raw_framebuf_data->m_attachment_count = attachment_count;
@@ -671,9 +853,54 @@ jegl_resource* jegl_create_framebuf(size_t width, size_t height, const jegl_text
                 jegl_texture::texture_format(attachment_formats[i] | jegl_texture::texture_format::FRAMEBUF));
     }
 
-    framebuf->m_raw_framebuf_data->m_output_attachments = (jegl_framebuf::attachment_t*)attachments;
+    framebuf->m_raw_framebuf_data->m_output_attachments = (jegl_frame_buffer::attachment_t*)attachments;
 
     return framebuf;
+}
+
+jegl_resource* jegl_create_uniformbuf(
+    size_t binding_place,
+    size_t length)
+{
+    jegl_resource* uniformbuf = _create_resource();
+    uniformbuf->m_type = jegl_resource::UNIFORMBUF;
+    uniformbuf->m_raw_uniformbuf_data = new jegl_uniform_buffer();
+    uniformbuf->m_path = nullptr;
+
+    uniformbuf->m_raw_uniformbuf_data->m_buffer = (uint8_t*)je_mem_alloc(length);
+    uniformbuf->m_raw_uniformbuf_data->m_buffer_size = length;
+    uniformbuf->m_raw_uniformbuf_data->m_buffer_binding_place = binding_place;
+
+    uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = 0;
+    uniformbuf->m_raw_uniformbuf_data->m_update_length = 0;
+
+    return uniformbuf;
+}
+
+void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t update_offset, size_t update_length)
+{
+    assert(uniformbuf->m_type == jegl_resource::UNIFORMBUF && update_length != 0);
+
+    if (update_length != 0)
+    {
+        memcpy(uniformbuf->m_raw_uniformbuf_data->m_buffer + update_offset, buf, update_length);
+        if (uniformbuf->m_raw_uniformbuf_data->m_update_length != 0)
+        {
+            size_t new_begin = std::min(uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset, update_offset);
+            size_t new_end = std::max(
+                uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset
+                + uniformbuf->m_raw_uniformbuf_data->m_update_length,
+                update_offset + update_length);
+
+            uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = new_begin;
+            uniformbuf->m_raw_uniformbuf_data->m_update_length = new_end - new_begin;
+        }
+        else
+        {
+            uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = update_offset;
+            uniformbuf->m_raw_uniformbuf_data->m_update_length = update_length;
+        }
+    }
 }
 
 jegl_thread* jegl_current_thread()
@@ -707,11 +934,6 @@ void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, si
 void jegl_using_texture(jegl_resource* texture, size_t pass)
 {
     _current_graphic_thread->m_apis->bind_texture(texture, pass);
-}
-
-void jegl_update_shared_uniform(size_t offset, size_t datalen, const void* data)
-{
-    _current_graphic_thread->m_apis->update_shared_uniform(_current_graphic_thread, offset, datalen, data);
 }
 
 int jegl_uniform_location(jegl_resource* shader, const char* name)

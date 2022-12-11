@@ -63,7 +63,7 @@ namespace editor::Inspector::Component
                             m_map = {}mut, 
                             m_component_type = option::none:<je::typeinfo> 
                         };
-                    for (let component_type : current_entity->editor::get_components_types())
+                    for (let _, component_type : current_entity->editor::get_components_types())
                     {
                         let component_type_name = component_type->name();
 
@@ -75,7 +75,7 @@ namespace editor::Inspector::Component
                         let scope_names = component_type_name->split("::");
 
                         // 从根开始，找到最终组件所在的节点
-                        for (let name: scope_names)
+                        for (let _, name: scope_names)
                         {
                             current_types = current_types.m_map->getorset(name, 
                                 component_chain{
@@ -144,67 +144,123 @@ namespace editor::Inspector::Component
         _type_widget_methods[je::typeinfo::float] = 
             func(name: string, addr: je::native_value)
             {
-                let mut value = 0.; addr->float(ref value);
-
-                if (InputFloat(name, ref value))
-                    addr->float(value);
+                InputFloat(name, addr->float) ->> \value = addr->set_float(value);;
+            };
+        _type_widget_methods[je::typeinfo::bool] = 
+            func(name: string, addr: je::native_value)
+            {
+                CheckBox(name, addr->bool) ->> \value = addr->set_bool(value);;
             };
         _type_widget_methods[je::typeinfo::int] = 
             func(name: string, addr: je::native_value)
             {
-                let mut value = 0; addr->int(ref value);
-
-                if (InputInt(name, ref value))
-                    addr->int(value);
+                 InputInt(name, addr->int) ->> \value = addr->set_int(value);;
             };
         _type_widget_methods[je::typeinfo::float2] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = 0., mut y = 0.;
-                addr->float2(ref x, ref y);
-
-                if (InputFloat2(name, ref x, ref y))
-                    addr->float2(x, y);
+                InputFloat2(name, addr->float2...) ->> \value = addr->set_float2(value...);;
             };
         _type_widget_methods[je::typeinfo::float3] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = 0., mut y = 0., mut z = 0.;
-                addr->float3(ref x, ref y, ref z);
-
-                if (InputFloat3(name, ref x, ref y, ref z))
-                    addr->float3(x, y, z);
+                InputFloat3(name, addr->float3...) ->> \value = addr->set_float3(value...);;
             };
         _type_widget_methods[je::typeinfo::float4] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = 0., mut y = 0., mut z = 0., mut w = 0.;
-                addr->float4(ref x, ref y, ref z, ref w);
-
-                if (InputFloat4(name, ref x, ref y, ref z, ref w))
-                    addr->float4(x, y, z, w);
+                InputFloat4(name, addr->float4...) ->> \value = addr->set_float4(value...);;
             };
         _type_widget_methods[je::typeinfo::quat] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = 0., mut y = 0., mut z = 0.;
-                addr->euler3(ref x, ref y, ref z);
-
-                if (InputFloat3(name, ref x, ref y, ref z))
-                    addr->euler3(x, y, z);
+                InputFloat3(name, addr->euler3...) ->> \value = addr->set_euler3(value...);;
             };
         _type_widget_methods[je::typeinfo::string] = 
             func(name: string, addr: je::native_value)
             {
-                let mut x = "";
-                addr->string(ref x);
-
-                if (InputText(name, ref x))
-                    addr->string(x);
+                InputText(name, addr->string) ->> \value = addr->set_string(value);;
             };
     }
     _register_default_method(); // 此处注册常用默认操作
             
+
+    let _custom_component_member_editor = {}mut: map<string, (string)=>option<string>>;
+
+    public func register_custom_editor(typeflag: string, method: (string)=>option<string>)
+    {
+        if (_custom_component_member_editor->contain(typeflag))
+            je::logwarn(F"重复注册的标签：{typeflag}");
+
+        _custom_component_member_editor->set(typeflag, method);
+    }
+
+    func _str2vec2(str: string)
+    {
+        let x = mutable::create(0.), y = mutable::create(0.);
+        str->take_token("(")
+            =>> \s = s->take_real();
+            =>> \snr = s->take_token(",")
+                where s = snr[0], r = x->set(snr[1]);
+            =>> \s = s->take_real();
+            =>> \snr = s->take_token(")")
+                where s = snr[0], r = y->set(snr[1]);
+            ;
+        return (x->get, y->get);
+    }
+
+    // 直接在这里注册一下得了
+
+    // 1. 注册2D阴影形状
+    register_custom_editor("je_light2d_block_shape", func(dat: string)
+    {
+        using je::gui;
+
+        let mut need_update = false;
+        let datas = dat->split(";")
+            =>> \dat = arr->len == 2 ? [(arr[0], arr[1])] | []
+                where arr = dat->split(":");
+            ;
+
+        let length = datas
+            ->  forall(\data = data[0] == "size";)
+            ->  reduce(\l, r = l;)
+            ->> \data = data[1]: int;
+            ->  valor(datas->len)
+            ;
+
+        let mut update_str = "size:";
+
+        match (InputInt("size", length))
+        {
+        value(mut newsize)?
+        {
+            if (newsize < 0) newsize = 0;
+            need_update = true;
+            update_str += newsize: string;
+        }
+        none?
+            update_str += length: string;
+        }
+
+        for (let index, (layer, factor) : datas->forall(\d = d[0]!="size";))
+        {
+            Text(F"{layer}:");      
+            SameLine();
+            let (posx, posy) = _str2vec2(factor);
+            let (new_posx, new_posy) = InputFloat2(F"##factor{index}", posx, posy)->valor((posx, posy));
+
+            if (new_posx != posx || new_posy != posy)
+                need_update = true;
+
+            update_str += F";{layer}:({new_posx},{new_posy})";
+        }
+            
+        if (need_update)
+            return option::value(update_str);
+        return option::none;
+    });
+
     private func _show_edit_widget(name: string, type: je::typeinfo, addr: je::native_value)
     {
         using je::gui;
@@ -214,10 +270,26 @@ namespace editor::Inspector::Component
         else
         {
             // 没有注册的特殊控件，使用底层自带的to_string方法处理
-            let mut data_str = addr->to_string(type);
+            let member_data = addr->to_string(type);
+            if (member_data->beginwith("#"))
+            {
+                // 这个member需要特殊处理
+                Text(name);
 
-            if (InputText(name, ref data_str))
-                addr->parse(type, data_str);
+                let spec_method = member_data->subto(1, member_data->findfrom("#", 1) - 1);
+                match (_custom_component_member_editor->get(spec_method))
+                {
+                none?
+                    TextDisabled(F"未找到编辑{spec_method}的自定义编辑器");
+                value(method)?
+                    method(member_data->sub(spec_method->len + 2))
+                        ->> \update_str = addr->parse(type, F"#{spec_method}#" + update_str);
+                        ;
+                }
+            }
+            else
+                InputText(name, member_data) 
+                    ->> \data_str = addr->parse(type, data_str);;
         }
     }
 

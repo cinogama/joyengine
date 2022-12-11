@@ -5,16 +5,22 @@ import je.filesys;
 import openfile;
 import cxxproject;
 
+import builtin.woolib.tools;
+
 using je::gui;
 
 namespace editor::Browser
 {
+    public let mut editor_need_hiding_file = true;
+
     union FileType
     {
         path(je::graphic::texture),
         image(je::graphic::texture),
         shader(je::graphic::texture),
         others(je::graphic::texture),
+        cache(je::graphic::texture),
+        world(je::graphic::texture),
     }
     namespace FileType
     {
@@ -26,10 +32,15 @@ namespace editor::Browser
                 image(t)? return t;
                 shader(t)? return t;
                 others(t)? return t;
+                cache(t)? return t;
+                world(t)? return t;
             }
         }
     }
     
+    // 支持作为图片格式的拓展名
+    let IMAGE_FILE_EXTERN_NAMES = ["png", "jpg", "bmp", "psd",];
+
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
         ["png"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
@@ -37,7 +48,9 @@ namespace editor::Browser
         ["bmp"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
         ["psd"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")),
         ["shader"] = FileType::shader(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")),
-        ["jemodule4"] = FileType::shader(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/CppProgram.png")),
+        ["jemodule4"] = FileType::path(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/CppProgram.png")),
+        ["jecache4"] = FileType::cache(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/JoyEngineCSP-Dev.png")),
+        ["jeworld"] = FileType::world(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/World.png")),
     };
 
     // 根据文件拓展名返回文件的类型
@@ -79,6 +92,14 @@ namespace editor::Browser
         type        : mutable<PathType>, // 类型，如果是目录，则还包含目录内的子项    
     }
     {
+        func should_hide(self: PathInfo)
+        {
+            static let HIDING_FILE_TYPE = ["jecache4"];
+            
+            if (editor_need_hiding_file)
+                return HIDING_FILE_TYPE->find(self.externname) != -1;
+            return false;
+        }
         func indir(self : PathInfo, functor: (option<array<PathInfo>>)=>void)
         {
             match (self.type->get)
@@ -176,6 +197,12 @@ namespace editor::Browser
                 Separator();
                 if (BeginMenu("着色器脚本"))
                 {
+                    static let editor_origin_shader = {
+                        ["空白着色器"] = "MonoColor",
+                        ["无光着色器"] = "Unlit",
+                        ["后向2D光照着色器"] = "Defer2D",
+                    };
+
                     let create_shader_at = func(shader_name: string, shader_src: string)
                     {
                         let shader_path = je::filesys::normalize(F"{current_work_path}/{shader_name}.shader");
@@ -185,85 +212,17 @@ namespace editor::Browser
                             force_update();
                     };
 
-                    if (MenuItem(F"空白着色器"))
-                        generic::inputbox("创建着色器", F"将在{current_work_path}创建空白着色器：", "MonoColor",
-                            \shader_name: string = create_shader_at(shader_name, shader_src) 
-                                where shader_src = 
-@"import je.shader;
-
-ZTEST   (LESS);
-ZWRITE  (ENABLE);
-BLEND   (ONE, ZERO);
-CULL    (NONE);
-
-VAO_STRUCT vin {
-    vertex  : float3,
-};
-
-using v2f = struct {
-    pos     : float4,
-};
-
-using fout = struct {
-    color: float4
-};
-
-public func vert(v: vin)
-{
-    return v2f {
-        pos = je_mvp * float4::create(v.vertex, 1.)
-    };
-}
-
-public func frag(vf: v2f)
-{
-    return fout {
-        color = float4::new(1., 1., 1., 1.)
-    };
-}
-"@                          ;);
-                    if (MenuItem(F"无光着色器"))
-                        generic::inputbox("创建着色器", F"将在{current_work_path}创建无光着色器：", "Unlit",
-                            \shader_name: string = create_shader_at(shader_name, shader_src) 
-                                where shader_src = 
-@"import je.shader;
-
-ZTEST   (LESS);
-ZWRITE  (ENABLE);
-BLEND   (ONE, ZERO);
-CULL    (NONE);
-
-VAO_STRUCT vin {
-    vertex  : float3,
-    uv      : float2,
-};
-
-using v2f = struct {
-    pos     : float4,
-    uv      : float2,
-};
-
-using fout = struct {
-    color: float4
-};
-
-public func vert(v: vin)
-{
-    return v2f {
-        pos = je_mvp * float4::create(v.vertex, 1.),
-        uv  = v.uv,
-    };
-}
-
-public func frag(vf: v2f)
-{
-    let tex = uniform_texture:<texture2d>("MainTexture", 0);
-
-    return fout {
-        color = texture(tex, vf.uv),
-    };
-}
-"@                          ;);
+                    for (let shader_display_name, shader_path_name : editor_origin_shader)
+                        if (MenuItem(shader_display_name))
+                            generic::inputbox("创建着色器", F"将在{current_work_path}创建{shader_display_name}：",
+                                shader_path_name,
+                                \shader_name: string = 
+                                    je::file::readall(F"{std::exepath()}builtin/shader/{shader_path_name}.shader")
+                                        ->> \src = create_shader_at(shader_name, src);
+                                        ->  or(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
+                                    ;
+                                ); // end of inputbox
+                  
                     EndMenu();
                 }
                 if (MenuItem(F"C++模块"))
@@ -271,8 +230,10 @@ public func frag(vf: v2f)
                     // 创建C++模块，就跟JoyEngineCSP差不多
                     generic::inputbox("创建C++模块", F"将在{current_work_path}创建，请为项目命名：", "CppModule", 
                         \module_name: string = CxxProject::start(module_name, current_work_path)
-                            ->map(\_: anything = force_update();)
-                            ->or(\reason: string = generic::msgbox("创建C++模块失败", reason););)
+                            ->> \ _ = force_update();
+                            ->or(\reason = generic::msgbox("创建C++模块失败", reason);)
+                            ;
+                        );
                 }
                 EndMenu();
             }
@@ -376,7 +337,7 @@ public func frag(vf: v2f)
             }
             Separator();
         }
-        if (path.externname == "jemodule4")
+        else if (path.externname == "jemodule4")
         {
             if (MenuItem(F"重新编译此模块"))
             {
@@ -466,8 +427,8 @@ public func frag(vf: v2f)
 
                 launch(func(mut open: bool)
                 {
-                    BeginAttrOpen(F"模块{je::filesys::filename(path.path)}当前组件和系统", 
-                        WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+                    open = BeginAttrOpen(F"模块{je::filesys::filename(path.path)}当前组件和系统", 
+                        WindowsAttribute::ImGuiWindowFlags_MenuBar);
                     if (BeginMenuBar())
                     {
                         if (BeginMenu("创建..."))
@@ -606,12 +567,12 @@ namespace $$MODULE_NAME$$
                         EndMenuBar();
                     }
 
-                    let mut available_width = 0., mut avaliable_height = 0.;
-                    GetContentRegionAvail(ref available_width, 0.);
+                    let (available_width, _) = GetContentRegionAvail();
 
                     BeginGroup();
                     Text("系统");
-                    GetContentRegionAvail(0., ref avaliable_height);
+                    let (_, avaliable_height) = GetContentRegionAvail();
+
                     if (BeginListBox("##1", available_width/2.-0.5, avaliable_height))
                     {
                         systems->map(\s: string = display_usable_system(s););
@@ -623,8 +584,8 @@ namespace $$MODULE_NAME$$
 
                     BeginGroup();
                     Text("组件");
-                    GetContentRegionAvail(0., ref avaliable_height);
-                    if (BeginListBox("##2", available_width/2.-0.5, avaliable_height))
+                    let (_, avaliable_height2) = GetContentRegionAvail();
+                    if (BeginListBox("##2", available_width/2.-0.5, avaliable_height2))
                     {
                         components->map(\s: string = display_usable_component(s););
                         EndListBox();
@@ -640,6 +601,126 @@ namespace $$MODULE_NAME$$
             }
             Separator();
         }
+        else if (IMAGE_FILE_EXTERN_NAMES->find(path.externname) != -1)
+        {
+            // 是图片，在这里编辑图片的采用方法等数据
+            if (MenuItem("编辑图片"))
+            {
+                using je::editor;
+                let image_samping_method = je::editor::get_texture_sampling_method_by_path(path.path);
+
+                launch(func(method: mutable<texture_sampling>){
+                    let mut open = BeginOpen(F"编辑图片{path.path}");
+                        static let MIN_SAMPLING_METHODS = {
+                            ["线性采样"] = texture_sampling::MIN_LINEAR,
+                            ["临近采样"] = texture_sampling::MIN_NEAREST,
+                            ["MIN_NEAREST_NEAREST_MIP"] = texture_sampling::MIN_NEAREST_NEAREST_MIP,
+                            ["MIN_LINEAR_NEAREST_MIP"] = texture_sampling::MIN_LINEAR_NEAREST_MIP,
+                            ["MIN_NEAREST_LINEAR_MIP"] = texture_sampling::MIN_NEAREST_LINEAR_MIP,
+                            ["MIN_LINEAR_LINEAR_MIP"] = texture_sampling::MIN_LINEAR_LINEAR_MIP,
+                        };
+                        static let MAG_SAMPLING_METHODS = {
+                            ["线性采样"] = texture_sampling::MAG_LINEAR,
+                            ["临近采样"] = texture_sampling::MAG_NEAREST,
+                        };
+                        static let X_SAMPLING_METHODS = {
+                            ["截断"] = texture_sampling::CLAMP_EDGE_X,
+                            ["重复"] = texture_sampling::REPEAT_X,
+                        };
+                        static let Y_SAMPLING_METHODS = {
+                            ["截断"] = texture_sampling::CLAMP_EDGE_Y,
+                            ["重复"] = texture_sampling::REPEAT_Y,
+                        };
+
+                        static let MIN_SAMPLING_METHODS_NAMES = MIN_SAMPLING_METHODS->keys;
+                        static let MIN_SAMPLING_METHODS_VALUES = MIN_SAMPLING_METHODS->vals;
+                        static let MAG_SAMPLING_METHODS_NAMES = MAG_SAMPLING_METHODS->keys;
+                        static let MAG_SAMPLING_METHODS_VALUES = MAG_SAMPLING_METHODS->vals;
+
+                        static let X_SAMPLING_METHODS_NAMES = X_SAMPLING_METHODS->keys;
+                        static let X_SAMPLING_METHODS_VALUES = X_SAMPLING_METHODS->vals;
+                        static let Y_SAMPLING_METHODS_NAMES = Y_SAMPLING_METHODS->keys;
+                        static let Y_SAMPLING_METHODS_VALUES = Y_SAMPLING_METHODS->vals;
+
+                        Text("采样设置");
+                        Separator();
+                        match (Combo("缩小时", 
+                            MIN_SAMPLING_METHODS_NAMES, 
+                            MIN_SAMPLING_METHODS_VALUES
+                                ->find(std::bitand(method->get: int, texture_sampling::MIN_FILTER_MASK: int): texture_sampling)))
+                        {
+                        value(newselect)?
+                            method->set(std::bitnot(texture_sampling::MIN_FILTER_MASK: int)
+                                ->std::bitand(method->get: int)
+                                ->std::bitor(MIN_SAMPLING_METHODS_VALUES[newselect]: int): texture_sampling);
+                        none?
+                            ;
+                        }
+
+                        match (Combo("放大时", 
+                            MAG_SAMPLING_METHODS_NAMES, 
+                            MAG_SAMPLING_METHODS_VALUES
+                                ->find(std::bitand(method->get: int, texture_sampling::MAG_FILTER_MASK: int): texture_sampling)))
+                        {
+                        value(newselect)?
+                            method->set(std::bitnot(texture_sampling::MAG_FILTER_MASK: int)
+                                ->std::bitand(method->get: int)
+                                ->std::bitor(MAG_SAMPLING_METHODS_VALUES[newselect]: int): texture_sampling);
+                        none?
+                            ;
+                        }
+                        
+                        Separator();
+
+                        match (Combo("X方向", 
+                            X_SAMPLING_METHODS_NAMES, 
+                            X_SAMPLING_METHODS_VALUES
+                                ->find(std::bitand(method->get: int, texture_sampling::WRAP_X_METHOD_MASK: int): texture_sampling)))
+                        {
+                        value(newselect)?
+                            method->set(std::bitnot(texture_sampling::WRAP_X_METHOD_MASK: int)
+                                ->std::bitand(method->get: int)
+                                ->std::bitor(X_SAMPLING_METHODS_VALUES[newselect]: int): texture_sampling);
+                        none?
+                            ;
+                        }
+
+                        match (Combo("Y方向", 
+                            Y_SAMPLING_METHODS_NAMES, 
+                            Y_SAMPLING_METHODS_VALUES
+                                ->find(std::bitand(method->get: int, texture_sampling::WRAP_Y_METHOD_MASK: int): texture_sampling)))
+                        {
+                        value(newselect)?
+                            method->set(std::bitnot(texture_sampling::WRAP_Y_METHOD_MASK: int)
+                                ->std::bitand(method->get: int)
+                                ->std::bitor(Y_SAMPLING_METHODS_VALUES[newselect]: int): texture_sampling);
+                        none?
+                            ;
+                        }
+
+                        if (Button("确认"))
+                        {
+                            open = false;
+                            je::editor::update_texture_sampling_method_by_path(path.path, method->get);
+                        }
+
+                    End();
+
+                    if (open)
+                        return FormAction::Nothing;
+                    return FormAction::Close;
+                
+                }, (mutable::create(image_samping_method), /**/));
+            }
+            if (MenuItem("更新此图片"))
+            {
+                std::panic("TODO");
+            }
+            Separator();
+        }
+
+        // 下面是通用的选项
+
         if (MenuItemEnabled("重命名", is_modifiable_file))
         {
             generic::inputbox("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
@@ -654,8 +735,9 @@ namespace $$MODULE_NAME$$
                 {
                     if (!sure) return;
                     je::filesys::delete(path.path)
-                        ->map(\_: anything = force_update();)
-                        ->or(\reason: string = generic::msgbox("删除失败", reason);)
+                        ->> \_ = force_update();
+                        ->  or(\reason = generic::msgbox("删除失败", reason);)
+                        ;
                 });
         }
     }
@@ -715,33 +797,50 @@ namespace $$MODULE_NAME$$
         {
             new_showing_path = current_work_path;
             force_update_file_group_flag = false;
+   
+            func compare_method (a: PathInfo, b: PathInfo)
+            {
+                func is_dir(p){match(p.type->get){dir(_)?return true;file?return false;}}
+                if (is_dir(a))
+                    return !is_dir(b);
+                else if (is_dir(b))
+                    return false;
+
+                if (a.externname != b.externname)
+                    return a.externname < b.externname;
+                return a.name < b.name;
+            }
 
             now_item_in_path =
                 je::filesys::childs(current_work_path)
                     ->unwarp
-                    ->map(\subpath: string = PathInfo{ 
-                        path = subpath,
-                        name = je::filesys::filename(subpath),
-                        externname = je::filesys::externname(subpath),
-                        type = mutable::create(je::filesys::isdir(subpath)
-                            ? PathType::dir(option::none) 
-                            | PathType::file),
-                    };);
+                    ->> \subpath = PathInfo{ 
+                            path = subpath,
+                            name = je::filesys::filename(subpath),
+                            externname = je::filesys::externname(subpath),
+                            type = mutable::create(je::filesys::isdir(subpath)
+                                ? PathType::dir(option::none) 
+                                | PathType::file),
+                        };
+                    ->sort(compare_method)
+                    ;
         }
 
         BeginChild("files_list");
             context_menu(option::none);
             now_item_in_path
-                ->map(\subpath: PathInfo = 
-                    action == Action::Click ? 0
+                -> forall(\item = !item->should_hide;)
+                ->> \item = 
+                    action == Action::Click 
+                    ? 0
                     | action == Action::DoubleClick ? 
-                        subpath
-                            ->indir(\_:void = set_current_work_path(subpath.path);)
-                            ->infile(\= OpenFile::open(subpath);)   
+                        item
+                            ->indir(\_:void = set_current_work_path(item.path);)
+                            ->infile(\= OpenFile::open(item);)   
                     /* | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单") */
                     | func(){}() // get void
-                    where action = FileIcon(subpath);
-                ); 
+                    where action = FileIcon(item);
+                ; 
         EndChild();
 
         // 允许各种乱七八糟的东西拖到这里
@@ -800,7 +899,7 @@ namespace $$MODULE_NAME$$
 
                 if (show_child)
                 {
-                    for (let subpath : path->childs(false))
+                    for (let _, subpath : path->childs(false))
                         _show_paths(subpath);
 
                     TreePop();
@@ -819,9 +918,9 @@ namespace $$MODULE_NAME$$
         EndChild();
     }
 
-    public func show(ref open: bool)
+    public func show(reqopen: bool)
     {
-        BeginAttrOpen("资源管理器", WindowsAttribute::ImGuiWindowFlags_None, ref open);
+        let open = BeginAttrOpen("资源管理器", WindowsAttribute::ImGuiWindowFlags_None);
             path_tree();
             SameLine();
             BeginGroup();
@@ -836,5 +935,7 @@ namespace $$MODULE_NAME$$
                 
             EndGroup();
         End();
+
+        return open && reqopen;
     }
 }

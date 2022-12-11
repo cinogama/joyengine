@@ -66,11 +66,10 @@ namespace editor::EntityList
         }
     }
 
-    public func show(ref open: bool)
+    public func show(reqopen: bool)
     {
-        BeginAttrOpen("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                    , ref open);
+        let open = BeginAttrOpen("层级面板", WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             menu();
                 
             match(je::world::rend())
@@ -86,6 +85,7 @@ namespace editor::EntityList
             }  
                 
         End();
+        return reqopen && open;
     }
 
     public func set_current_entity(current_entity: option<je::entity>)
@@ -171,7 +171,7 @@ namespace editor::EntityList
         let mut current_uid_entity_map = {}mut: map<string, je::entity>;
         
         let mut display_count = 0;
-        for (let entity : entity_iter)
+        for (let _, entity : entity_iter)
         {
             // 如果当前实体有uid组件，那么添加一下
             entity
@@ -214,14 +214,17 @@ namespace editor::EntityList
             if(BeginDragDropTarget())
             {
                 let mut drag_entity_chunkinfo = "";
-                if (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE", ref drag_entity_chunkinfo))
+                match (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE"))
                 {
+                value(drag_entity_chunkinfo)?
                     if (drag_entity_chunkinfo != entity->editor::chunkinfo())
                     {
                         // 自己拖到自己身上肯定就寄了，只处理不同的实体。
                         je::entity::editor::find_entity_by_chunkinfo(drag_entity_chunkinfo)
                             ->map(\e: je::entity = set_parent(e, entity););
                     }
+                none?
+                    ;
                 }
                 EndDragDropTarget();
             }

@@ -9,7 +9,7 @@ using je::file;
 
 namespace editor::Project
 {
-	let const HISTORY_FILE = F"{exepath()}history.txt";
+	let HISTORY_FILE = F"{exepath()}history.txt";
 
 	// 获取历史记录
 	public func get_project_histroy()=> array<string>

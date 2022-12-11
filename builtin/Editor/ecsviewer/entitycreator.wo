@@ -29,13 +29,13 @@ namespace editor::EntityCreator
         context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
-        for (let comp : comps)
+        for (let _, comp : comps)
             if (!comp->name()->beginwith("Editor::"))
                 context.not_append_types->add(comp);
 
         // 把当前已有的组件处理一下
         let all_comps = context.not_append_types->dup();
-        for (let comp : all_comps)
+        for (let _, comp : all_comps)
             if (entity->editor::get_component(comp)->has)
                 add_components(context, comp->name);
 
@@ -55,7 +55,7 @@ namespace editor::EntityCreator
         context.not_append_types->swap(comps);
 
         // 不显示所有编辑器组件
-        for (let comp : comps)
+        for (let _, comp : comps)
             if (!comp->name->beginwith("Editor::"))
                 context.not_append_types->add(comp);
 
@@ -87,17 +87,19 @@ namespace editor::EntityCreator
         using je::gui;
         BeginChildSize("append_components", width, 0.);
             Text("新实体组件");
-            for(let component_type : context.has_append_types)
+            for(let _, component_type : context.has_append_types)
                 show_component(component_type->name());
         EndChild();
 
         if(BeginDragDropTarget())
         {
-            let mut data = "";
-            if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
+            match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
             {
+            value(data)?
                 // 有组件被拖动至此
                 add_components(context, data);
+            none?
+                ;
             }
             EndDragDropTarget();
         }
@@ -108,17 +110,20 @@ namespace editor::EntityCreator
         using je::gui;
         BeginChildSize("usable_components", width, 0.);
             Text("可用组件");
-            for(let component_type : context.not_append_types)
+            for(let _, component_type : context.not_append_types)
                 show_component(component_type->name());
         EndChild();
 
         if(BeginDragDropTarget())
         {
             let mut data = "";
-            if (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE", ref data))
+            match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
             {
+            value(data)?
                 // 有组件被拖动至此
                 remove_components(context, data);
+            none?
+                ;
             }
             EndDragDropTarget();
         }
@@ -126,7 +131,7 @@ namespace editor::EntityCreator
 
     func reset_context_cur_components(context: EntityContext)
     {
-        for (let append_component : context.has_append_types)
+        for (let _, append_component : context.has_append_types)
             context.not_append_types->add(append_component);
         context.has_append_types->clear();
     }
@@ -246,9 +251,9 @@ namespace editor::EntityCreator
     {
         using je::gui;
 
-        let mut open = true;
-        BeginAttrOpen(context.edit_entity->has ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
-            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+        let mut open = BeginAttrOpen(context.edit_entity->has 
+            ? F"编辑实体{context.edit_entity->val->editor::name}##{JobID()}"
+            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
    
             if (menu_bar(context))
             {
@@ -287,10 +292,11 @@ namespace editor::EntityCreator
                 open = false;
             }
 
-            InputText("名称", ref context.name);
+            InputText("名称", context.name)
+                ->> \newtext = context.name = newtext;
+                ;
 
-            let mut available_width = 0.;
-            GetContentRegionAvail(ref available_width, 0./* 不关心高度 */);
+            let (available_width, _) = GetContentRegionAvail();
 
             show_append_components(context, available_width / 2.);
             SameLine();

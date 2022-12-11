@@ -5,12 +5,12 @@ import je.gui;
 
 import builtin.Editor.generic.form.msgbox;
 
-public func Editor_ScriptEditor(ref open:bool)
+public func Editor_ScriptEditor(reqopen: mutable<bool>)
 {
     using je::gui;
-    if(!open) return FormAction::Close;
+    if(!reqopen->get) return FormAction::Close;
 
-    BeginAttrOpen("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize, ref open);
+    let open = BeginAttrOpen("Woolang脚本", WindowsAttribute::ImGuiWindowFlags_NoResize);
 
     static let mut textbuf = 
 @"import woo.std;
@@ -31,7 +31,13 @@ je::log("Helloworld, JoyEngine.");
         vm->close();
     }
 
-    InputTextMultilineSize("##", ref textbuf, 500.0, 300.0);
+    match (InputTextMultilineSize("##", textbuf, 500.0, 300.0))
+    {
+    value(update_text)?
+        textbuf = update_text;
+    none?
+        ;
+    }
 
     End();
 

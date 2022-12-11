@@ -31,7 +31,7 @@ namespace editor::WorldCreator
         let all_systems = []mut: typeof(context.not_append_types);
         context.not_append_types->swap(all_systems);
     
-        for (let sys : all_systems)
+        for (let _, sys : all_systems)
             // 不显示所有编辑器/图形系统
             if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
                 if (sys->name()->beginwith("Translation::"))
@@ -56,20 +56,20 @@ namespace editor::WorldCreator
         let all_systems = []mut: typeof(context.not_append_types);
         context.not_append_types->swap(all_systems);
     
-        for (let sys : all_systems)
+        for (let _, sys : all_systems)
             // 不显示所有编辑器/图形系统
             if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
                 context.not_append_types->add(sys);
 
         // 处理一下已经创建/添加的系统
-        for (let actived_sys : world->editor::get_systems_types())
+        for (let _, actived_sys : world->editor::get_systems_types())
             if (!actived_sys->name()->beginwith("Editor::") && !actived_sys->name()->beginwith("Graphic::"))
                 active_systems(context, actived_sys->name());
 
         match(Project::GetCurrentProject()->FindWorld(world))
         {
         value(proj_world)?
-            for (let actived_sys : proj_world.runtime_systems)
+            for (let _, actived_sys : proj_world.runtime_systems)
                 append_systems(context, actived_sys->name());
         none?
             ;
@@ -149,17 +149,19 @@ namespace editor::WorldCreator
         using je::gui;
         BeginChildSize("active_system", width, height);
             Text("环境系统（编辑/运行时生效）");
-            for(let component_type : context.has_active_types)
+            for(let _, component_type : context.has_active_types)
                 show_system(component_type->name());
         EndChild();
 
         if(BeginDragDropTarget())
         {
-            let mut data = "";
-            if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
+            match (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE"))
             {
+            value(data)?
                 // 有组件被拖动至此
                 active_systems(context, data);
+            none?
+                ;
             }
             EndDragDropTarget();
         }
@@ -170,17 +172,19 @@ namespace editor::WorldCreator
         using je::gui;
         BeginChildSize("append_system", width, height);
             Text("运行时系统（运行时生效）");
-            for(let component_type : context.has_append_types)
+            for(let _, component_type : context.has_append_types)
                 show_system(component_type->name());
         EndChild();
 
         if(BeginDragDropTarget())
         {
-            let mut data = "";
-            if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
+            match (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE"))
             {
+            value(data)?
                 // 有组件被拖动至此
                 append_systems(context, data);
+            none?
+                ;
             }
             EndDragDropTarget();
         }
@@ -191,17 +195,20 @@ namespace editor::WorldCreator
         using je::gui;
         BeginChildSize("usable_system", width, 0.);
             Text("可用系统");
-            for(let component_type : context.not_append_types)
+            for(let _, component_type : context.not_append_types)
                 show_system(component_type->name());
         EndChild();
 
         if(BeginDragDropTarget())
         {
             let mut data = "";
-            if (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE", ref data))
+            match (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE"))
             {
+            value(data)?
                 // 有组件被拖动至此
                 unuse_systems(context, data);
+            none?
+                ;
             }
             EndDragDropTarget();
         }
@@ -233,9 +240,8 @@ namespace editor::WorldCreator
     {
         using je::gui;
 
-        let mut open = true;
-        BeginAttrOpen(context.edit_world->has() ? "编辑世界##{JobID()}" | "创建新世界##{JobID()}", 
-            WindowsAttribute::ImGuiWindowFlags_MenuBar, ref open);
+        let mut open = BeginAttrOpen(context.edit_world->has() ? "编辑世界##{JobID()}" | "创建新世界##{JobID()}", 
+            WindowsAttribute::ImGuiWindowFlags_MenuBar);
 
             if (menu_bar(context))
             {
@@ -248,10 +254,10 @@ namespace editor::WorldCreator
 
                         created_world->editor::set_name(context.name);
 
-                        for (let active_sys : context.has_active_types)
+                        for (let _, active_sys : context.has_active_types)
                             created_world->add_system(active_sys);
 
-                        for (let active_sys : context.has_append_types)
+                        for (let _, active_sys : context.has_append_types)
                             project_world.runtime_systems->add(active_sys);
                     }
                     value(world)?
@@ -282,10 +288,11 @@ namespace editor::WorldCreator
                 open = false;
             }
 
-            InputText("名称", ref context.name);
+            InputText("名称", context.name)
+                ->> \new_text = context.name = new_text;
+                ;
 
-            let mut available_width = 0., mut available_height = 0.;
-            GetContentRegionAvail(ref available_width, ref available_height);
+            let (available_width, available_height) = GetContentRegionAvail();
 
             BeginGroup();
                 show_append_systems(context, available_width / 2., available_height * 2. / 3.);

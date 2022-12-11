@@ -29,10 +29,12 @@ struct jegl_shader_value
         FLOAT4x4 = 0x0400,
 
         TEXTURE2D = 0x0800,
-        TEXTURE_CUBE = 0X1000,
-        TEXTURE2D_MS = 0X2000,
+        TEXTURE_CUBE = 0x1000,
+        TEXTURE2D_MS = 0x2000,
 
-        INTEGER = 0x3000,
+        INTEGER = 0x4000,
+
+        STRUCT = 0x8000,
 
     };
 
@@ -316,8 +318,8 @@ WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args, size_t
 {
     jegl_shader_value* texture2d_val = (jegl_shader_value*)wo_pointer(args + 0);
     assert(texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D
-    || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D_MS
-    || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE_CUBE);
+        || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D_MS
+        || texture2d_val->get_type() == jegl_shader_value::type::TEXTURE_CUBE);
 
     texture2d_val->m_uniform_texture_channel = (int)wo_int(args + 1);
     return wo_ret_val(vm, args + 0);
@@ -494,26 +496,32 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
     }
     jegl_shader_value::type result_type = (jegl_shader_value::type)wo_int(args + 0);
     wo_string_t operation = wo_string(args + 1);
-    auto* reduce_func = get_const_reduce_func(operation, _types.data(), _types.size());
-    if (!reduce_func)
-        return wo_ret_halt(vm, "Cannot do this operations: no matched operation with these types.");
 
-    if (result_is_const)
+    if (operation[0] == '.')
+        ;
+    else
     {
-        auto* result = (*reduce_func)(_args.size(), _args.data());
-        if (result) // if result == nullptr, there is no method for constant, calc it in shader~
+        auto* reduce_func = get_const_reduce_func(operation, _types.data(), _types.size());
+        if (!reduce_func)
+            return wo_ret_halt(vm, "Cannot do this operations: no matched operation with these types.");
+
+        if (result_is_const)
         {
-            if (result->get_type() != result_type)
+            auto* result = (*reduce_func)(_args.size(), _args.data());
+            if (result) // if result == nullptr, there is no method for constant, calc it in shader~
             {
-                _free_shader_value(result);
-                return wo_ret_halt(vm, "Cannot do this operations: return type dis-matched.");
+                if (result->get_type() != result_type)
+                {
+                    _free_shader_value(result);
+                    return wo_ret_halt(vm, "Cannot do this operations: return type dis-matched.");
+                }
+                return wo_ret_gchandle(vm, result, nullptr, _free_shader_value);
             }
-            return wo_ret_gchandle(vm, result, nullptr, _free_shader_value);
         }
     }
 
     jegl_shader_value* val =
-        new jegl_shader_value(result_type, wo_string(args + 1), argc - 2);
+        new jegl_shader_value(result_type, operation, argc - 2);
     for (size_t i = 2; i < argc; ++i)
         val->set_used_val(i - 2, _args[i - 2]);
 
@@ -588,11 +596,28 @@ struct shader_value_outs
     }
 };
 
+struct shader_struct_define
+{
+    // If binding_place == jeecs::typing::INVALID_UINT32, it is a struct define.
+    // or else, it will be a uniform block declear;
+    uint32_t binding_place;
+    std::string name;
+
+    struct struct_variable
+    {
+        std::string name;
+        jegl_shader_value::type type;
+
+        shader_struct_define* struct_type_may_nil;
+    };
+
+    std::vector<struct_variable> variables;
+};
+
 struct shader_configs
 {
     jegl_shader::depth_test_method m_depth_test;
     jegl_shader::depth_mask_method m_depth_mask;
-    jegl_shader::alpha_test_method m_alpha_test;
     jegl_shader::blend_method m_blend_src, m_blend_dst;
     jegl_shader::cull_mode m_cull_mode;
 };
@@ -602,13 +627,57 @@ struct shader_wrapper
     shader_value_outs* vertex_out;
     shader_value_outs* fragment_out;
     shader_configs shader_config;
+    shader_struct_define** shader_struct_define_may_uniform_block;
 
     ~shader_wrapper()
     {
+        assert(nullptr != shader_struct_define_may_uniform_block);
+
+        auto** block = shader_struct_define_may_uniform_block;
+        while (nullptr != *block)
+        {
+            delete (*block);
+            ++block;
+        }
+        delete[] shader_struct_define_may_uniform_block;
+
         delete vertex_out;
         delete fragment_out;
     }
 };
+
+WO_API wo_api jeecs_shader_create_struct_define(wo_vm vm, wo_value args, size_t argc)
+{
+    shader_struct_define* block = new shader_struct_define;
+    block->binding_place = jeecs::typing::INVALID_UINT32;
+    block->name = wo_string(args + 0);
+    return wo_ret_pointer(vm, block);
+}
+
+WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args, size_t argc)
+{
+    shader_struct_define* block = (shader_struct_define*)wo_pointer(args + 0);
+    block->binding_place = wo_int(args + 1);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args, size_t argc)
+{
+    shader_struct_define* block = (shader_struct_define*)wo_pointer(args + 0);
+
+    shader_struct_define::struct_variable variable_member_define;
+    variable_member_define.type = (jegl_shader_value::type)wo_int(args + 1);
+    variable_member_define.name = wo_string(args + 2);
+
+    if (variable_member_define.type == jegl_shader_value::type::STRUCT)
+        variable_member_define.struct_type_may_nil = (shader_struct_define*)wo_pointer(wo_struct_get(args + 3, 1));
+    else
+        variable_member_define.struct_type_may_nil = nullptr;
+
+    block->variables.push_back(variable_member_define);
+
+    return wo_ret_void(vm);
+}
 
 WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size_t argc)
 {
@@ -635,10 +704,10 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size
 WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t argc)
 {
     shader_value_outs* values = (shader_value_outs*)wo_pointer(args + 0);
-    wo_value out_struct = args + 1;
 
     uint16_t fragmentin_size = (uint16_t)values->out_values.size();
-    wo_set_struct(out_struct, fragmentin_size);
+    wo_value out_struct = wo_push_struct(vm, fragmentin_size);
+
     for (uint16_t i = 0; i < fragmentin_size; i++)
     {
         auto* val = new jegl_shader_value(values->out_values[i]->get_type());
@@ -655,17 +724,25 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
 
     config.m_depth_test = (jegl_shader::depth_test_method)wo_int(wo_struct_get(args + 2, 0));
     config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(wo_struct_get(args + 2, 1));
-    config.m_alpha_test = (jegl_shader::alpha_test_method)wo_int(wo_struct_get(args + 2, 2));
-    config.m_blend_src = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 3));
-    config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 4));
-    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 5));
+    config.m_blend_src = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 2));
+    config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 3));
+    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 4));
+
+    shader_struct_define** ubos = nullptr;
+    size_t ubo_count = wo_lengthof(args + 3);
+
+    ubos = new shader_struct_define * [ubo_count + 1];
+    for (size_t i = 0; i < ubo_count; ++i)
+        ubos[i] = (shader_struct_define*)wo_pointer(wo_arr_get(args + 3, i));
+    ubos[ubo_count] = nullptr;
 
     return wo_ret_gchandle(vm,
         new shader_wrapper
         {
             (shader_value_outs*)wo_pointer(args + 0),
             (shader_value_outs*)wo_pointer(args + 1),
-            config
+            config,
+            ubos
         }, nullptr,
         [](void* ptr) {
             delete (shader_wrapper*)ptr;
@@ -722,10 +799,12 @@ public enum shader_value_type
     FLOAT4x4 = 0x0400,
 
     TEXTURE2D = 0x0800,
-    TEXTURE_CUBE = 0X1000,
-    TEXTURE2D_MS = 0X2000,
+    TEXTURE_CUBE = 0x1000,
+    TEXTURE2D_MS = 0x2000,
 
-    INTEGER = 0x3000,
+    INTEGER = 0x4000,
+
+    STRUCT = 0x8000,
 }
 
 public using float = gchandle;
@@ -741,6 +820,8 @@ public using texture2d = gchandle;
 public using texture2dms = gchandle;
 public using texturecube = gchandle;
 public using integer = gchandle;
+
+public using structure = gchandle;
 
 private func _type_is_same<AT, BT>()=> bool
 {
@@ -773,6 +854,8 @@ private func _get_type_enum<ShaderValueT>()=> shader_value_type
         return shader_value_type::TEXTURE_CUBE;
     else if (_type_is_same:<ShaderValueT, integer>())
         return shader_value_type::INTEGER;
+    else if (_type_is_same:<ShaderValueT, structure>())
+        return shader_value_type::STRUCT;
 
     std::halt("Unknown type, not shader type?");
 }
@@ -863,9 +946,9 @@ namespace fragment_in
     public func create<VertexOutT>(data_from_vert: vertex_out)=> VertexOutT
     {
         extern("libjoyecs", "jeecs_shader_create_fragment_in")
-        func _parse_vertex_out_to_struct<VertexOutT>(vout: vertex_out, ref _out_struct: dynamic)=> VertexOutT;
+        func _parse_vertex_out_to_struct<VertexOutT>(vout: vertex_out)=> VertexOutT;
 
-        return _parse_vertex_out_to_struct:<VertexOutT>(data_from_vert, nil: dynamic);
+        return _parse_vertex_out_to_struct:<VertexOutT>(data_from_vert);
     }
 }
 
@@ -888,27 +971,31 @@ namespace float
 
     public func create(...)=> float{return apply_operation:<float>("float", ......);}
 
-    public func operator + (a:float, b:float)=> float
+    public func operator + <T>(a:float, b:T)=> float
+        where b is float || b is real;
     {
         return apply_operation:<float>("+", a, b);
     }
-    public func operator - (a:float, b:float)=> float
+    public func operator - <T>(a:float, b:T)=> float
+        where b is float || b is real;
     {
         return apply_operation:<float>("-", a, b);
     }
-    public func operator * <T>(a:float, b:T)=> T
-        where b is float 
+    public func operator * <T>(a:float, b:T)
+        where b is real 
+            || b is float 
             || b is float2 
             || b is float3 
             || b is float4;
     {
-        if (b is float)
+        if (b is float || b is real)
             return apply_operation:<float>("*", a, b);
         else
             return b * a;
     }
 
-    public func operator / (a:float, b:float)=> float
+    public func operator / <T>(a:float, b:T)=> float
+        where b is float || b is real;
     {
         return apply_operation:<float>("/", a, b);
     }
@@ -934,12 +1021,13 @@ namespace float2
         return apply_operation:<float2>("-", a, b);
     }
     public func operator * <T>(a:float2, b:T)=> float2
-        where b is float || b is float2;
+        where b is real || b is float || b is float2;
     {
         return apply_operation:<float2>("*", a, b);
     }
 
-    public func operator / (a:float2, b:float)=> float2
+    public func operator / <T>(a:float2, b: T)=> float2
+        where b is real || b is float || b is float2;
     {
         return apply_operation:<float2>("/", a, b);
     }
@@ -976,16 +1064,18 @@ namespace float3
         return apply_operation:<float3>("-", a, b);
     }
     public func operator * <T>(a:float3, b:T)=> float3
-        where b is float || b is float3;
+        where b is real || b is float || b is float3;
     {
         return apply_operation:<float3>("*", a, b);
     }
 
-    public func operator / (a:float3, b:float)=> float3
+    public func operator / <T>(a:float3, b: T)=> float3
+        where b is real || b is float || b is float3;
     {
         return apply_operation:<float3>("/", a, b);
     }
 }
+)" R"(
 namespace float4
 {
     extern("libjoyecs", "jeecs_shader_float4_create")
@@ -1070,17 +1160,16 @@ namespace float4
         return apply_operation:<float4>("-", a, b);
     }
     public func operator * <T>(a:float4, b:T)=> float4
-        where b is float || b is float4;
+        where b is real || b is float || b is float4;
     {
         return apply_operation:<float4>("*", a, b);
     }
 
-    public func operator / (a:float4, b:float)=> float4
+    public func operator /<T>(a:float4, b: T)=> float4
+        where b is real || b is float || b is float4;
     {
         return apply_operation:<float4>("/", a, b);
     }
-
-    )" R"(
 }
 
 namespace float4x4
@@ -1110,7 +1199,6 @@ namespace shader
     using ShaderConfig = struct {
         mut ztest     : ZConfig,
         mut zwrite    : GConfig,
-        mut alpha     : GConfig,
         mut blend_src : BlendConfig,
         mut blend_dst : BlendConfig,
         mut cull      : CullConfig
@@ -1119,17 +1207,19 @@ namespace shader
     {
         ztest = LESS,
         zwrite = ENABLE,
-        alpha = DISABLE,
         blend_src = ONE,
         blend_dst = ZERO,
         cull = NONE,
     };
 
+    let struct_uniform_blocks_decls = []mut: vec<struct_define>;
+
     extern("libjoyecs", "jeecs_shader_wrap_result_pack")
     private func _wraped_shader(
         vertout: vertex_out, 
         fragout: fragment_out, 
-        shader_config: ShaderConfig)=> shader_wrapper;
+        shader_config: ShaderConfig,
+        struct_or_uniform_block_decl_list: array<struct_define>)=> shader_wrapper;
 
     private extern func generate()
     {
@@ -1144,7 +1234,7 @@ namespace shader
         let f_out = frag(f_in);
         let fragment_out_result = fragment_out::create(f_out);
 
-        return _wraped_shader(vertext_out_result, fragment_out_result, configs);
+        return _wraped_shader(vertext_out_result, fragment_out_result, configs, struct_uniform_blocks_decls->toarray);
     }
 
     namespace debug
@@ -1157,9 +1247,13 @@ namespace shader
     }
 }
 public let float_zero = float::new(0.);
+public let float_one = float::new(1.);
 public let float2_zero = float2::new(0., 0.);
+public let float2_one = float2::new(1., 1.);
 public let float3_zero = float3::new(0., 0., 0.);
+public let float3_one = float3::new(1., 1., 1.);
 public let float4_zero = float4::new(0., 0., 0., 0.);
+public let float4_one = float4::new(1., 1., 1., 1.);
 public let float4x4_unit = float4x4::new(
     1., 0., 0., 0.,
     0., 1., 0., 0.,
@@ -1167,8 +1261,6 @@ public let float4x4_unit = float4x4::new(
     0., 0., 0., 1.);
 
 // Default uniform
-public let je_time = shared_uniform:<float4>("JOYENGINE_TIMES");
-
 public let je_m = uniform("JOYENGINE_TRANS_M", float4x4_unit);
 public let je_v = uniform("JOYENGINE_TRANS_V", float4x4_unit);
 public let je_p = uniform("JOYENGINE_TRANS_P", float4x4_unit);
@@ -1179,6 +1271,13 @@ public let je_p = uniform("JOYENGINE_TRANS_P", float4x4_unit);
 public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4_unit);
 public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4_unit);
 public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4_unit);
+
+public let je_local_scale = uniform("JOYENGINE_LOCAL_SCALE", float3_one);
+
+public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2_one);
+public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2_zero);
+
+public let je_color = uniform("JOYENGINE_MAIN_COLOR", float4_one);
 
 public func texture(tex:texture2d, uv:float2)=> float4
 {
@@ -1193,24 +1292,39 @@ public func texture_fastms(tex:texture2dms, uv:float2)=> float4
     return apply_operation:<float4>("JEBUILTIN_TextureFastMs", tex, uv);
 }
 
-public func lerp<T>(a: T, b: T, uv:float)=> T
-{
-    return apply_operation:<T>("lerp", a, b, uv);
-}
-
-public func step(a: float, b: float)=> float
+public func step<T, U>(a: T, b: U)=> float
+    where a is float || a is real
+        , b is float || b is real;
 {
     return apply_operation:<float>("step", a, b);
 }
 
+public func uvtrans(uv: float2, tiling: float2, offset: float2)
+{
+    return uv * tiling + offset;
+}
+
 // Math functions
 
-let const is_glvalue<T> = 
-    std::declval:<T>() is float
+let is_glvalue<T> = 
+    std::declval:<T>() is real
+    || std::declval:<T>() is int
+    || std::declval:<T>() is float
     || std::declval:<T>() is float2
     || std::declval:<T>() is float3
     || std::declval:<T>() is float4
 ;
+
+let is_float<T> = 
+    std::declval:<T>() is real
+    || std::declval:<T>() is float
+;
+
+public func lerp<T>(a: T, b: T, uv:float)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("lerp", a, b, uv);
+}
 
 public func sin<T>(a: T)=> T
     where is_glvalue:<T>;
@@ -1226,6 +1340,64 @@ public func tan<T>(a: T)=> T
     where is_glvalue:<T>;
 {
     return apply_operation:<T>("tan", a);
+}
+
+public func abs<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("abs", a);
+}
+
+public func pow<T>(a: T, b: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("pow", a, b);
+}
+
+public func max<T>(a: T, b: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("max", a, b);
+}
+
+public func min<T>(a: T, b: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("min", a, b);
+}
+
+public func normalize<T>(a: T)=> T
+    where is_glvalue:<T> && !is_float:<T>;
+{
+    return apply_operation:<T>("normalize", a);
+}
+
+public func movement(trans4x4: float4x4)=> float3
+{
+    return apply_operation:<float3>("JEBUILTIN_Movement", trans4x4);
+}
+
+public func clamp<T, FT>(a: T, b: FT, c: FT)=> T
+    where is_glvalue:<T> && (is_float:<FT> || b is T);
+{
+    return apply_operation:<T>("clamp", a, b, c);
+}
+
+public func dot<T>(a: T, b: T)=> float
+    where is_glvalue:<T> && !(is_float:<T>);
+{
+    return apply_operation:<float>("dot", a, b);
+}
+
+public func cross(a: float3, b: float3)=> float3
+{
+    return apply_operation:<float3>("cross", a, b);
+}
+
+public func length<T>(a: T)=> float
+    where is_glvalue:<T> && !(is_float:<T>);
+{
+    return apply_operation:<float>("length", a);
 }
 
 // Engine builtin function
@@ -1247,23 +1419,23 @@ enum ZConfig
     GREATER_EQUAL,
     ALWAYS,
 }
-public let const OFF = ZConfig::OFF;
-public let const NEVER = ZConfig::NEVER;
-public let const LESS = ZConfig::LESS;
-public let const EQUAL = ZConfig::EQUAL;
-public let const GREATER = ZConfig::GREATER;
-public let const LESS_EQUAL = ZConfig::LESS_EQUAL;
-public let const NOT_EQUAL = ZConfig::NOT_EQUAL;
-public let const GREATER_EQUAL = ZConfig::GREATER_EQUAL;
-public let const ALWAYS = ZConfig::ALWAYS;
+public let OFF = ZConfig::OFF;
+public let NEVER = ZConfig::NEVER;
+public let LESS = ZConfig::LESS;
+public let EQUAL = ZConfig::EQUAL;
+public let GREATER = ZConfig::GREATER;
+public let LESS_EQUAL = ZConfig::LESS_EQUAL;
+public let NOT_EQUAL = ZConfig::NOT_EQUAL;
+public let GREATER_EQUAL = ZConfig::GREATER_EQUAL;
+public let ALWAYS = ZConfig::ALWAYS;
 
 enum GConfig
 {
     DISABLE = 0,
     ENABLE
 }
-public let const DISABLE = GConfig::DISABLE;
-public let const ENABLE = GConfig::ENABLE;
+public let DISABLE = GConfig::DISABLE;
+public let ENABLE = GConfig::ENABLE;
 
 enum BlendConfig
 {
@@ -1289,20 +1461,20 @@ enum BlendConfig
     ONE_MINUS_CONST_ALPHA,
 }
 
-public let const ZERO = BlendConfig::ZERO;
-public let const ONE = BlendConfig::ONE;
-public let const SRC_COLOR = BlendConfig::SRC_COLOR;
-public let const SRC_ALPHA = BlendConfig::SRC_ALPHA;
-public let const ONE_MINUS_SRC_ALPHA = BlendConfig::ONE_MINUS_SRC_ALPHA;
-public let const ONE_MINUS_SRC_COLOR = BlendConfig::ONE_MINUS_SRC_COLOR;
-public let const DST_COLOR = BlendConfig::DST_COLOR;
-public let const DST_ALPHA = BlendConfig::DST_ALPHA;
-public let const ONE_MINUS_DST_ALPHA = BlendConfig::ONE_MINUS_DST_ALPHA;
-public let const ONE_MINUS_DST_COLOR = BlendConfig::ONE_MINUS_DST_COLOR;
-public let const CONST_COLOR = BlendConfig::CONST_COLOR;
-public let const ONE_MINUS_CONST_COLOR = BlendConfig::ONE_MINUS_CONST_COLOR;
-public let const CONST_ALPHA = BlendConfig::CONST_ALPHA;
-public let const ONE_MINUS_CONST_ALPHA = BlendConfig::ONE_MINUS_CONST_ALPHA;
+public let ZERO = BlendConfig::ZERO;
+public let ONE = BlendConfig::ONE;
+public let SRC_COLOR = BlendConfig::SRC_COLOR;
+public let SRC_ALPHA = BlendConfig::SRC_ALPHA;
+public let ONE_MINUS_SRC_ALPHA = BlendConfig::ONE_MINUS_SRC_ALPHA;
+public let ONE_MINUS_SRC_COLOR = BlendConfig::ONE_MINUS_SRC_COLOR;
+public let DST_COLOR = BlendConfig::DST_COLOR;
+public let DST_ALPHA = BlendConfig::DST_ALPHA;
+public let ONE_MINUS_DST_ALPHA = BlendConfig::ONE_MINUS_DST_ALPHA;
+public let ONE_MINUS_DST_COLOR = BlendConfig::ONE_MINUS_DST_COLOR;
+public let CONST_COLOR = BlendConfig::CONST_COLOR;
+public let ONE_MINUS_CONST_COLOR = BlendConfig::ONE_MINUS_CONST_COLOR;
+public let CONST_ALPHA = BlendConfig::CONST_ALPHA;
+public let ONE_MINUS_CONST_ALPHA = BlendConfig::ONE_MINUS_CONST_ALPHA;
 
 enum CullConfig
 {
@@ -1312,10 +1484,10 @@ enum CullConfig
     ALL,
 }
 
-public let const NONE = CullConfig::NONE;
-public let const FRONT = CullConfig::FRONT;
-public let const BACK = CullConfig::BACK;
-public let const ALL = CullConfig::ALL;
+public let NONE = CullConfig::NONE;
+public let FRONT = CullConfig::FRONT;
+public let BACK = CullConfig::BACK;
+public let ALL = CullConfig::ALL;
 
 public func ZTEST(zconfig: ZConfig)
 {
@@ -1327,27 +1499,20 @@ public func ZWRITE(zwrite: GConfig)
     shader::configs.zwrite = zwrite;
 }
 
-public func ALPHA(aenable: GConfig)
-{
-    shader::configs.alpha = aenable;
-    std::println("'ALPHA' option for alpha-test is obsoleted, please use 'alphatest' function instead.");
-}
-
 public func BLEND(src: BlendConfig, dst: BlendConfig)
 {
     shader::configs.blend_src = src;
     shader::configs.blend_dst = dst;
 }
 
-
 public func CULL(cull: CullConfig)
 {
     shader::configs.cull = cull;
 }
-
+)" R"(
 #macro VAO_STRUCT
 {
-    let eat_token = func(ref expect_name: string, expect_type: std::token_type)
+    let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
                         let (token, out_result) = lexer->next();
                         if (token != expect_type)
@@ -1363,7 +1528,7 @@ public func CULL(cull: CullConfig)
                         return option::value(out_result);
                     };
 
-    // using VAO_STRUCT vin = struct { ...
+    // using VAO_STRUCT vin { ...
     // 0. Get struct name, then eat '{'
     let vao_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
@@ -1397,7 +1562,7 @@ public func CULL(cull: CullConfig)
     //  OK We have current vao struct info, built struct out
     let mut out_struct_decl = F"public using {vao_struct_name} = struct {"{"}\n";
 
-    for(let (vao_member_name, vao_shader_type) : struct_infos)
+    for(let _, (vao_member_name, vao_shader_type) : struct_infos)
         out_struct_decl += F"{vao_member_name} : {vao_shader_type}, \n";
 
     out_struct_decl += "};\n";
@@ -1412,7 +1577,7 @@ public func CULL(cull: CullConfig)
 
     let mut vinid = 0;
 
-    for(let (vao_member_name, vao_shader_type) : struct_infos)
+    for(let _, (vao_member_name, vao_shader_type) : struct_infos)
     {
         out_struct_decl += F"{vao_member_name} = vertex_data_in->in:<{vao_shader_type}>({vinid}), \n";
         vinid += 1;
@@ -1422,6 +1587,209 @@ public func CULL(cull: CullConfig)
     lexer->lex(out_struct_decl);
 }
 
+namespace structure
+{
+    public func get<ElemT>(self: structure, name: string)
+    {
+        return apply_operation:<ElemT>("." + name, self);
+    }
+}
+
+using struct_define = handle
+{
+    extern("libjoyecs", "jeecs_shader_append_struct_member")
+    func _append_member(self: struct_define, type: shader_value_type, name: string, st: option<struct_define>)=> void;
+
+    public func create(name: string)
+    {
+        extern("libjoyecs", "jeecs_shader_create_struct_define")
+        func _create(name: string)=> struct_define;
+    
+        let block = _create(name);
+        shader::struct_uniform_blocks_decls->add(block);
+        return block;
+    }
+    public func append_member<T>(self: struct_define, name: string)
+    {
+        _append_member(self, _get_type_enum:<T>(), name, option::none);
+    }
+    public func append_struct_member(self: struct_define, name: string, struct_type: struct_define)
+    {
+        _append_member(self, shader_value_type::STRUCT, name, option::value(struct_type));
+    }
+    
+    extern("libjoyecs", "jeecs_shader_bind_struct_as_uniform_buffer")
+    func bind_as_uniform_buffer(self: struct_define, binding_place: int)=> void;
+    
+}
+
+#macro GRAPHIC_STRUCT
+{
+    let eat_token = func(expect_name: string, expect_type: std::token_type)
+                    {
+                        let (token, out_result) = lexer->next();
+                        if (token != expect_type)
+                            lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
+                        return out_result;
+                    };
+    let try_eat_token = func(expect_type: std::token_type)=> option<string>
+                    {
+                        let (token, out_result) = lexer->peek();
+                        if (token != expect_type)
+                            return option::none;
+                        lexer->next;
+                        return option::value(out_result);
+                    };
+
+    // using GRAPHIC_STRUCT example { ...
+    // 0. Get struct name, then eat '{'
+    let graphic_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+    eat_token("{", std::token_type::l_left_curly_braces);
+    
+    // 1. Get struct item name.
+    let struct_infos = []mut: vec<(string, (string, bool))>;
+    while (true)
+    {
+        if (try_eat_token(std::token_type::l_right_curly_braces)->has())
+            // Meet '}', end work!
+            break;
+
+        let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        eat_token(":", std::token_type::l_typecast);
+
+        // Shader type only have a identifier and without template.
+        let is_struct = try_eat_token(std::token_type::l_struct);
+        let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->has)));
+
+        if (!try_eat_token(std::token_type::l_comma)->has())
+        {
+            eat_token("}", std::token_type::l_right_curly_braces);
+            break;
+        }
+    }
+    // End, need a ';' here.
+    eat_token(";", std::token_type::l_semicolon);
+
+    //  OK We have current struct info, built struct out
+    let mut out_struct_decl = F"public let {graphic_struct_name} = struct_define::create(\"{graphic_struct_name}\");";
+    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+        if (is_struct_type)
+            out_struct_decl += F"{graphic_struct_name}->append_struct_member(\"{vao_member_name}\", {vao_shader_type});\n";
+        else
+            out_struct_decl += F"{graphic_struct_name}->append_member:<{vao_shader_type}>(\"{vao_member_name}\");\n";
+
+    out_struct_decl += F"public using {graphic_struct_name}_t = structure\n\{\n";
+    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    {
+        out_struct_decl += F"    public func {vao_member_name}(self: {graphic_struct_name}_t)\n\{\n        ";
+        
+        if (is_struct_type)
+            out_struct_decl += F"return self: gchandle: structure->get:<structure>(\"{vao_member_name}\"): gchandle: {vao_shader_type}_t;\n";
+        else
+            out_struct_decl += F"return self: gchandle: structure->get:<{vao_shader_type}>(\"{vao_member_name}\");\n";
+
+        out_struct_decl += "    }\n";
+    }
+    out_struct_decl += "}\n";
+
+    lexer->lex(out_struct_decl);
+}
+
+using uniform_block = struct_define
+{
+    public func create(name: string, binding_place: int)
+    {
+        let ubo = struct_define::create(name);
+        ubo->bind_as_uniform_buffer(binding_place);
+
+        return ubo: handle: uniform_block;
+    }
+
+    public func append_uniform<T>(self: uniform_block, name: string)
+    {
+        self: handle: struct_define->append_member:<T>(name);
+        return shared_uniform:<T>(name);
+    }
+
+    public func append_struct_uniform(self: uniform_block, name: string, struct_type: struct_define)
+    {
+        self: handle: struct_define->append_struct_member(name, struct_type);
+        return shared_uniform:<structure>(name);
+    }
+}
+
+#macro UNIFORM_BUFFER
+{
+    let eat_token = func(expect_name: string, expect_type: std::token_type)
+                    {
+                        let (token, out_result) = lexer->next();
+                        if (token != expect_type)
+                            lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
+                        return out_result;
+                    };
+    let try_eat_token = func(expect_type: std::token_type)=> option<string>
+                    {
+                        let (token, out_result) = lexer->peek();
+                        if (token != expect_type)
+                            return option::none;
+                        lexer->next;
+                        return option::value(out_result);
+                    };
+
+    // using UNIFORM_BUFFER example = BIND_PLACE { ...
+    // 0. Get struct name, then eat '{'
+    let graphic_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+    eat_token("=", std::token_type::l_assign);
+
+    let bind_place = eat_token("INTEGER", std::token_type::l_literal_integer): int;
+
+    eat_token("{", std::token_type::l_left_curly_braces);
+    
+    // 1. Get struct item name.
+    let struct_infos = []mut: vec<(string, (string, bool))>;
+    while (true)
+    {
+        if (try_eat_token(std::token_type::l_right_curly_braces)->has())
+            // Meet '}', end work!
+            break;
+
+        let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        eat_token(":", std::token_type::l_typecast);
+
+        // Shader type only have a identifier and without template.
+        let is_struct = try_eat_token(std::token_type::l_struct);
+        let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
+
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->has)));
+
+        if (!try_eat_token(std::token_type::l_comma)->has())
+        {
+            eat_token("}", std::token_type::l_right_curly_braces);
+            break;
+        }
+    }
+    // End, need a ';' here.
+    eat_token(";", std::token_type::l_semicolon);
+
+    //  OK We have current struct info, built struct out
+    let mut out_struct_decl = F"public let {graphic_struct_name} = uniform_block::create(\"{graphic_struct_name}\", {bind_place});";
+    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+        if (is_struct_type)
+            out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_struct_uniform(\"{vao_member_name->upper}\", {vao_shader_type}): gchandle: {vao_shader_type}_t;\n";
+        else
+            out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_uniform:<{vao_shader_type}>(\"{vao_member_name->upper}\");\n";
+
+    lexer->lex(out_struct_decl);
+}
+
+UNIFORM_BUFFER JOYENGINE_DEFAULT = 0
+{
+    je_time: float4,
+};
 )";
 
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)
@@ -1430,7 +1798,6 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
 
     write_to_shader->m_depth_test = shader_wrapper_ptr->shader_config.m_depth_test;
     write_to_shader->m_depth_mask = shader_wrapper_ptr->shader_config.m_depth_mask;
-    write_to_shader->m_alpha_test = shader_wrapper_ptr->shader_config.m_alpha_test;
     write_to_shader->m_blend_src_mode = shader_wrapper_ptr->shader_config.m_blend_src;
     write_to_shader->m_blend_dst_mode = shader_wrapper_ptr->shader_config.m_blend_dst;
     write_to_shader->m_cull_mode = shader_wrapper_ptr->shader_config.m_cull_mode;

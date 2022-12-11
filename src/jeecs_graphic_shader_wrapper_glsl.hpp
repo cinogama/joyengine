@@ -8,9 +8,9 @@ public:
 
     std::unordered_set<std::string> _used_builtin_func;
 
-    static std::string get_type_name(jegl_shader_value* val)
+    static std::string get_type_name_from_type(jegl_shader_value::type ty)
     {
-        switch (val->get_type())
+        switch (ty)
         {
         case jegl_shader_value::type::FLOAT:
             return "float";
@@ -37,6 +37,10 @@ public:
             return "unknown";
             break;
         }
+    }
+    static std::string get_type_name(jegl_shader_value* val)
+    {
+        return get_type_name_from_type(val->get_type());
     }
     bool get_var_name(jegl_shader_value* val, std::string& var_name, bool is_in_fragment)
     {
@@ -247,19 +251,51 @@ uniform_information get_uniform_info(const std::string& name, jegl_shader_value*
     return std::make_tuple(name, uniform_type, init_value);
 }
 
+std::string _generate_uniform_block_for_glsl(shader_wrapper* wrap)
+{
+    auto** block_iter = wrap->shader_struct_define_may_uniform_block;
+    std::string result;
+
+    while (nullptr != *block_iter)
+    {
+        auto* block = *block_iter;
+
+        if (!block->variables.empty())
+        {
+            std::string uniform_block_decl =
+                block->binding_place == jeecs::typing::INVALID_UINT32
+                ? "struct " + block->name + "\n{\n"
+                : "layout (std140, binding = " + std::to_string(block->binding_place) + ") uniform " + block->name + "\n{\n";
+
+            for (auto& variable_inform : block->variables)
+                if (variable_inform.type == jegl_shader_value::type::STRUCT)
+                    uniform_block_decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
+                else
+                    uniform_block_decl += "    " + _glsl_wrapper_contex::get_type_name_from_type(variable_inform.type) + " " + variable_inform.name + ";\n";
+
+            result += uniform_block_decl + "};\n";
+        }
+        ++block_iter;
+    }
+
+    return result;
+}
+
+std::string _glsl_pragma()
+{
+    return R"(
+#version 330
+#extension GL_ARB_shading_language_420pack : enable
+)";
+}
+
 std::string _generate_code_for_glsl_vertex(shader_wrapper* wrap)
 {
     _glsl_wrapper_contex contex;
     std::string          body_result;
     std::string          io_declear;
 
-    const std::string    unifrom_block = R"(
-layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
-{
-    vec4 JOYENGINE_TIMES;
-};
-
-)";
+    const std::string    unifrom_block = _generate_uniform_block_for_glsl(wrap);
 
     std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
     for (auto* out_val : wrap->vertex_out->out_values)
@@ -269,6 +305,16 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
     std::string built_in_srcs;
     for (auto& builtin_func_name : contex._used_builtin_func)
     {
+        if (builtin_func_name == "JEBUILTIN_Movement")
+        {
+            const std::string unifrom_block = R"(
+vec3 JEBUILTIN_Movement(mat4 trans)
+{
+    return vec3(trans[3][0], trans[3][1], trans[3][2]);
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
     }
 
 
@@ -301,10 +347,11 @@ layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
     body_result += "\n}";
 
     return std::move(
-        "// Vertex shader source\n#version 330\n" 
-        + unifrom_block 
-        + built_in_srcs 
-        + io_declear 
+        "// Vertex shader source\n"
+        + _glsl_pragma()
+        + unifrom_block
+        + built_in_srcs
+        + io_declear
         + body_result);
 }
 
@@ -314,13 +361,7 @@ std::string _generate_code_for_glsl_fragment(shader_wrapper* wrap)
     std::string          body_result;
     std::string          io_declear;
 
-    const std::string    unifrom_block = R"(
-layout (std140) uniform _JE_UNIFORM_DATA_BLOCK
-{
-    vec4 JOYENGINE_TIMES;
-};
-
-)";
+    const std::string    unifrom_block = _generate_uniform_block_for_glsl(wrap);
 
 
     std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
@@ -369,6 +410,16 @@ vec4 JEBUILTIN_TextureFastMs(sampler2DMS tex, vec2 uv)
 )";
             built_in_srcs += unifrom_block;
         }
+        else if (builtin_func_name == "JEBUILTIN_Movement")
+        {
+            const std::string unifrom_block = R"(
+vec3 JEBUILTIN_Movement(mat4 trans)
+{
+    return vec3(trans[3][0], trans[3][1], trans[3][2]);
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
     }
 
     for (auto& uniformdecl : contex._uniform_value)
@@ -401,9 +452,10 @@ vec4 JEBUILTIN_TextureFastMs(sampler2DMS tex, vec2 uv)
     body_result += "\n}";
 
     return std::move(
-        "// Fragment shader source\n#version 330\n" 
-        + unifrom_block 
-        + built_in_srcs 
-        + io_declear 
+        "// Fragment shader source\n"
+        + _glsl_pragma()
+        + unifrom_block
+        + built_in_srcs
+        + io_declear
         + body_result);
 }

@@ -217,7 +217,7 @@ namespace jeecs
 
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
         {
-            if (_inputs.l_buttom_pushed || _inputs.r_buttom_pushed)
+            if (_inputs.l_buttom_pushed)
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
 
@@ -396,7 +396,7 @@ public let frag =
             {
                 if (_grab_axis_translation == &trans && _camera_porjection)
                 {
-                    advise_lock_mouse = true;
+                    // advise_lock_mouse = true;
 
                     math::vec4 p0 = trans.world_position;
                     p0.w = 1.0f;
@@ -417,7 +417,7 @@ public let frag =
                         editing_rot_may_null
                     );
 
-                    _grab_last_pos = {};
+                    _grab_last_pos = cur_mouse_pos;
                 }
             }
             else
@@ -639,6 +639,8 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
                     if (nullptr == bad_uniforms)
                         bad_uniforms = entity->add_component<jeecs::Editor::BadShadersUniform>();
 
+                    assert(bad_uniforms != nullptr);
+
                     auto& new_bad_shad_uniform_buf = bad_uniforms->uniforms[new_shader.get()];
 
                     // 1.1 If bad uniforms already has old_shader's data, update them..
@@ -651,9 +653,9 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
 
                         new_bad_shad_uniform_buf = res;
                     }
-                    else
+                    else if (shad->enabled())
                     {
-                        assert(shad->enabled() == true);
+                        // Store old-enabled-shader data.
                         auto uni_var = shad_res->m_raw_shader_data->m_custom_uniforms;
                         while (uni_var)
                         {
@@ -674,7 +676,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
                             uni_var = uni_var->m_next;
                         }
                     }
-                    else
+                    else if (bad_uniforms)
                     {
                         auto& old_bad_shad_uniform_buf = bad_uniforms->uniforms[shad.get()];
                         for (auto& [name, dat] : old_bad_shad_uniform_buf)
