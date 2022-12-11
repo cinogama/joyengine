@@ -641,9 +641,11 @@ public let frag =
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_mix_light_effect_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_point_light_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_parallel_light_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_point_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_parallel_pass;
             DeferLight2DHost(jegl_thread* _ctx)
                 : _m_belong_context(_ctx)
             {
@@ -701,8 +703,8 @@ public func frag(vf: v2f)
 }
 )");
 
-                _defer_light2d_shadow_shape_pass
-                    = new shader("je/defer_light2d_shadow_shape.shader", R"(
+                _defer_light2d_shadow_shape_point_pass
+                    = new shader("je/defer_light2d_shadow_point_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -749,8 +751,8 @@ public func frag(vf: v2f)
 }
 )");
 
-                _defer_light2d_shadow_pass
-                    = new shader("je/defer_light2d_shadow_main.shader", R"(
+                _defer_light2d_shadow_point_pass
+                    = new shader("je/defer_light2d_shadow_point.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -778,6 +780,91 @@ public func vert(v: vin)
     let vpos = je_mv * float4::create(v.vertex, 1.);
 
     let shadow_vdir = float3::create(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+}
+
+public func frag(vf: v2f)
+{
+    return fout{shadow_factor = float::new(1.)};
+}
+)");
+                _defer_light2d_shadow_shape_parallel_pass
+                    = new shader("je/defer_light2d_shadow_parallel_shape.shader", R"(
+import je.shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (BACK);
+
+VAO_STRUCT vin 
+{
+    vertex: float3,
+    uv: float2,
+};
+
+using v2f = struct{
+    pos: float4,
+    uv: float2,
+};
+
+using fout = struct{
+    shadow_factor: float,
+};
+
+public func vert(v: vin)
+{
+    let light2d_vdir = (je_v * float4::create(je_color->xyz, 1.))->xyz - movement(je_v);
+    let shadow_scale_factor = je_color->w;
+
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
+    
+    return v2f{
+        pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos, 1.),
+        uv = uvtrans(v.uv, je_tiling, je_offset),
+    };
+}
+public func frag(vf: v2f)
+{
+    let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
+    let final_shadow = alphatest(float4::create(float3_one, texture(main_texture, vf.uv)->w));
+
+    return fout{
+        shadow_factor = final_shadow->x
+    };
+}
+)");
+
+                _defer_light2d_shadow_parallel_pass
+                    = new shader("je/defer_light2d_shadow_parallel.shader", R"(
+import je.shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
+
+VAO_STRUCT vin
+{
+    vertex: float3,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    shadow_factor: float,
+};
+
+public func vert(v: vin)
+{
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vdir = (je_v * je_color)->xyz - movement(je_v);
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+
+    let shadow_vdir = float3::create(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
     
     return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
 }
@@ -900,7 +987,7 @@ public func frag(vf: v2f)
     let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
 
     let V = normalize(float3_zero - FVPos);
-    let L = normalize(vf.lvdir);
+    let L = normalize(float3_zero - vf.lvdir);
     let H = normalize(V + L);
 
     let distance = float_one;
@@ -1414,18 +1501,38 @@ public func frag(vf: v2f)
 
                                 jegl_clear_framebuffer(light2d_shadow_aim_buffer);
 
-                                const auto& main_shadow_pass = light2d_host->_defer_light2d_shadow_pass;
+                                const auto& point_shadow_pass =
+                                    lightarch.point == nullptr ?
+                                    light2d_host->_defer_light2d_shadow_parallel_pass :
+                                    light2d_host->_defer_light2d_shadow_point_pass;
+                                const auto& shape_shadow_pass =
+                                    lightarch.point == nullptr ?
+                                    light2d_host->_defer_light2d_shadow_shape_parallel_pass :
+                                    light2d_host->_defer_light2d_shadow_shape_point_pass;
+
                                 const auto& sub_shadow_pass = light2d_host->_defer_light2d_shadow_sub_pass;
-                                const auto& shape_shadow_pass = light2d_host->_defer_light2d_shadow_shape_pass;
 
                                 // Let shader know where is the light (through je_color: float4)
-                                jegl_using_resource(main_shadow_pass->resouce());
-                                jegl_uniform_float4(main_shadow_pass->resouce(),
-                                    main_shadow_pass->m_builtin->m_builtin_uniform_color,
-                                    lightarch.translation->world_position.x,
-                                    lightarch.translation->world_position.y,
-                                    lightarch.translation->world_position.z,
-                                    1.f);
+                                jegl_using_resource(point_shadow_pass->resouce());
+
+                                if (lightarch.point == nullptr)
+                                {
+                                    jeecs::math::vec3 rotated_light_dir =
+                                        lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
+                                    jegl_uniform_float4(point_shadow_pass->resouce(),
+                                        point_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                        rotated_light_dir.x,
+                                        rotated_light_dir.y,
+                                        rotated_light_dir.z,
+                                        1.f);
+                                }
+                                else
+                                    jegl_uniform_float4(point_shadow_pass->resouce(),
+                                        point_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                        lightarch.translation->world_position.x,
+                                        lightarch.translation->world_position.y,
+                                        lightarch.translation->world_position.z,
+                                        1.f);
 
                                 int64_t this_depth_layer = INT64_MAX;
                                 const size_t block_entity_count = m_2dblock_list.size();
@@ -1474,11 +1581,24 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             NEED_AND_SET_UNIFORM(offset, float2, blockarch.textures->offset.x, blockarch.textures->offset.y);
                                         }
 
-                                        NEED_AND_SET_UNIFORM(color, float4,
-                                            lightarch.translation->world_position.x,
-                                            lightarch.translation->world_position.y,
-                                            lightarch.translation->world_position.z,
-                                            lightarch.shadow->shape_shadow_scale);
+                                        if (lightarch.point == nullptr)
+                                        {
+                                            jeecs::math::vec3 rotated_light_dir =
+                                                lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
+                                            jegl_uniform_float4(shape_shadow_pass->resouce(),
+                                                shape_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                                rotated_light_dir.x,
+                                                rotated_light_dir.y,
+                                                rotated_light_dir.z,
+                                                lightarch.shadow->shape_shadow_scale);
+                                        }
+                                        else
+                                            jegl_uniform_float4(shape_shadow_pass->resouce(),
+                                                shape_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                                lightarch.translation->world_position.x,
+                                                lightarch.translation->world_position.y,
+                                                lightarch.translation->world_position.z,
+                                                lightarch.shadow->shape_shadow_scale);
 
                                         if (blockarch.textures != nullptr)
                                         {
@@ -1572,12 +1692,12 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                     // 1. Prepare m_light_pos/je_mvp
                                     block_in_current_layer.push_back(&blockarch);
                                     {
-                                        jegl_using_resource(main_shadow_pass->resouce());
-                                        auto* builtin_uniform = main_shadow_pass->m_builtin;
+                                        jegl_using_resource(point_shadow_pass->resouce());
+                                        auto* builtin_uniform = point_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
 if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(main_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+ jegl_uniform_##TYPE(point_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
                                         const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
