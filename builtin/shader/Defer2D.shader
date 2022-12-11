@@ -37,6 +37,11 @@ using fout = struct {
     vnormalize_r: float4,
 };
 
+func invscale_f3_2_f4(v: float3)
+{
+    return float4::create(v / je_local_scale, 1.);
+}
+
 public func vert(v: vin)
 {
     let vspace_position = je_mv * float4::create(v.vertex, 1.);
@@ -46,11 +51,11 @@ public func vert(v: vin)
         pos  = je_p * vspace_position,
         vpos = vspace_position->xyz,
         uv   = uvtrans(v.uv, je_tiling, je_offset),
-        vtangent_x = (je_v * float4::create((je_m * float4::new(1., 0., 0., 1.))->xyz - m_movement, 1.))
+        vtangent_x = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(1., 0., 0.)))->xyz - m_movement, 1.))
             ->xyz - v_movement,
-        vtangent_y = (je_v * float4::create((je_m * float4::new(0., 1., 0., 1.))->xyz - m_movement, 1.))
+        vtangent_y = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(0., 1., 0.)))->xyz - m_movement, 1.))
             ->xyz - v_movement,
-        vtangent_z = (je_v * float4::create((je_m * float4::new(0., 0., -1., 1.))->xyz - m_movement, 1.))
+        vtangent_z = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(0., 0., -1.)))->xyz - m_movement, 1.))
             ->xyz - v_movement,
     };
 }

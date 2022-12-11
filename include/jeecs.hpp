@@ -709,6 +709,7 @@ struct jegl_shader
         uint32_t m_builtin_uniform_mvp = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_mv = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_vp = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_local_scale = jeecs::typing::INVALID_UINT32;
 
         uint32_t m_builtin_uniform_tiling = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_offset = jeecs::typing::INVALID_UINT32;

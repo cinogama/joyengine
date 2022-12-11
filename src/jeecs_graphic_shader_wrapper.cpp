@@ -1272,6 +1272,8 @@ public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4_unit);
 public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4_unit);
 public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4_unit);
 
+public let je_local_scale = uniform("JOYENGINE_LOCAL_SCALE", float3_one);
+
 public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2_one);
 public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2_zero);
 

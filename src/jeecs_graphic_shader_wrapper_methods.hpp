@@ -230,7 +230,7 @@ reduce_method{return nullptr; }} },
 reduce_method{return nullptr; }} },
 
 { "JEBUILTIN_Movement", {jegl_shader_value::FLOAT4x4,
-reduce_method{return new jegl_shader_value(args[0]->m_float4x4[0][3], args[0]->m_float4x4[1][3], args[0]->m_float4x4[2][3]); }} },
+reduce_method{return new jegl_shader_value(args[0]->m_float4x4[3][0], args[0]->m_float4x4[3][1], args[0]->m_float4x4[3][2]); }} },
 
 { "sin", {jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },

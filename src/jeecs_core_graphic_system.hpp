@@ -648,7 +648,7 @@ public let frag =
                 : _m_belong_context(_ctx)
             {
                 using namespace jeecs::graphic;
-                _no_shadow = new texture(1, 1, jegl_texture::texture_format::MONO);
+                _no_shadow = new texture(1, 1, jegl_texture::texture_format::RGBA);
                 _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
 
                 _screen_vertex = new vertex(jegl_vertex::vertex_type::QUADS,
@@ -837,9 +837,9 @@ public func frag(vf: v2f)
     };
 }
 )");
-                _defer_light2d_parallel_light_pass = 
+                _defer_light2d_parallel_light_pass =
                     new shader("je/defer_light2d_parallel_light.shader",
-                    R"(
+                        R"(
 import je.shader;
 import je.shader.pbr;
 
@@ -866,7 +866,7 @@ using fout = struct{
 public func vert(v: vin)
 {
     let pos = je_mvp * float4::create(v.vertex, 1.);
-    let lmdir = (je_m * float4::new(0., -1./100., 1./100., 1.))->xyz - movement(je_m);
+    let lmdir = (je_m * float4::new(0., -1., 1., 1.))->xyz - movement(je_m);
     let lvdir = (je_v * float4::create(lmdir, 1.))->xyz - movement(je_v);
 
     return v2f{
@@ -1498,6 +1498,14 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                         jegl_draw_vertex(using_shape->resouce());
 #undef NEED_AND_SET_UNIFORM
 
+                                        // 2. Cancel/Cover shadow.
+                                        auto next_block2d_arch = block2d_iter + 1;
+
+                                        current_layer =
+                                            next_block2d_arch == block2d_end ?
+                                            INT64_MAX :
+                                            current_layer;
+
                                         if (current_entity_id >= block_entity_count
                                             || current_layer != this_depth_layer)
                                         {
@@ -1588,7 +1596,13 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                     }
                                     // 
                                     // 2. Cancel/Cover shadow.
-                                    int64_t current_layer = (int64_t)(blockarch.translation->world_position.z * 100.f);
+                                    auto next_block2d_arch = block2d_iter + 1;
+
+                                    int64_t current_layer =
+                                        next_block2d_arch == block2d_end ?
+                                        INT64_MAX :
+                                        (int64_t)(next_block2d_arch->translation->world_position.z * 100.f);
+
                                     if (current_entity_id >= block_entity_count
                                         || current_layer != this_depth_layer)
                                     {
@@ -1727,6 +1741,11 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                            NEED_AND_SET_UNIFORM(local_scale, float3,
+                                rendentity.translation->local_scale.x,
+                                rendentity.translation->local_scale.y,
+                                rendentity.translation->local_scale.z);
 
                             NEED_AND_SET_UNIFORM(tiling, float2, _using_tiling->x, _using_tiling->y);
                             NEED_AND_SET_UNIFORM(offset, float2, _using_offset->x, _using_offset->y);
