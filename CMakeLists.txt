@@ -25,11 +25,11 @@ add_subdirectory("3rd/woolang")
 
 if(WIN32)
     add_custom_target(COPY_ENGINE_FILES 
-        COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\include\" /Y /E /I /D)
+        COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\include\" /Y /S /I /D)
     add_custom_target(COPY_WOOLANG_FILES 
         COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\woolang\\include\\wo.h\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\include\" /Y /I /D)
     add_custom_target(COPY_BUILTIN_FILES 
-        COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\\" /Y /E /I /D)
+        COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\\" /Y /S /I /D)
 else()
     add_custom_target(COPY_ENGINE_FILES 
         COMMAND mkdir -p \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/include/\" && cp \"${CMAKE_CURRENT_SOURCE_DIR}/include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\" -r)
