@@ -615,8 +615,8 @@ func display_icon_in_console()
         ->map(\f: font = display_text(f, text)
                 where text = "Joy{scale:0.75}{offset:(0.2, -0.1)}4.x{scale:1}\nEngine";);
     je::log("");
-    je::log("JoyEngine 4.x (C)Cinogama project. 2022.");
-    je::log("Powered by woolang, (C)Cinogama project. 2021-2022.");
+    je::log(F"{je::editor::build_version()} (C)Cinogama project. 2022.");
+    je::log(F"Powered by {je::editor::woolang_version()}, (C)Cinogama project. 2021-2022.");
 }
 
 /////////////////////

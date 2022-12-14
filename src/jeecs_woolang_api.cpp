@@ -12,6 +12,12 @@ WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, je_build_version());
 }
 
+WO_API wo_api wojeapi_woolang_version(wo_vm vm, wo_value args, size_t argc)
+{
+    std::string woolang_version_info = "Woolang ";
+    return wo_ret_string(vm, (woolang_version_info + wo_version() + " " + wo_compile_date()).c_str());
+}
+
 WO_API wo_api wojeapi_get_rendering_world(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_option_ptr(vm, jedbg_get_rendering_world(wo_pointer(args + 0)));
@@ -1334,6 +1340,9 @@ namespace je
     {
         extern("libjoyecs", "wojeapi_build_version")
         public func build_version()=> string;
+    
+        extern("libjoyecs", "wojeapi_woolang_version")
+        public func woolang_version()=> string;
 
         extern("libjoyecs", "wojeapi_crc64_file")
         public func crc64file(file_path: string)=> option<int>;
