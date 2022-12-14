@@ -58,13 +58,17 @@ shortcut::register([je::keycode::L_CTRL, je::keycode::A,],
 shortcut::register([je::keycode::L_CTRL, je::keycode::P,], 
     \= display_debug_camera_viewport = !display_debug_camera_viewport;);
 shortcut::register([je::keycode::L_CTRL, je::keycode::S,], func(){
-    match(Project::GetCurrentProject()->SaveProject())
-    {
-    ok(_)?
-        launch(MsgBox, ("保存项目成功", "项目及世界的变更已应用"));
-    err(msg)?
-        launch(MsgBox, ("保存项目失败", msg));
-    }
+    // 如果还在编辑中，则不允许保存
+    if (!GameDebug::is_debugging())
+        match(Project::GetCurrentProject()->SaveProject())
+        {
+        ok(_)?
+            msgbox("保存项目成功", "项目及世界的变更已应用");
+        err(msg)?
+            msgbox("保存项目失败", msg);
+        }
+    else
+        msgbox("保存项目失败", "尚在调试运行中，此时不允许保存");
 });
 shortcut::register([je::keycode::L_CTRL, je::keycode::ESC,], func(){
     if (GameDebug::is_debugging())
@@ -297,7 +301,7 @@ func Editor_CameraViewport()
             if (!je::input::keydown(je::keycode::MOUSE_R_BUTTION))
             {
                 noclick_flag = true;
-                if (std::time() - right_key_down_time < 0.1)
+                if (std::time() - right_key_down_time < 0.3)
                     OpenPopup("RightClickContextMenu");
             }
         }
@@ -316,6 +320,11 @@ func Editor_CameraViewport()
 
         if (BeginPopup("RightClickContextMenu"))
         {
+            MenuItemEnabled(je::entity::editor::editing()
+                ->> \e = e->editor::name;
+                -> valor("未选中实体"),
+                false);
+
             if (MenuItem("新建实体"))
                 launch(EntityCreator::show, (EntityCreator::create_context(),));
             Separator();
@@ -323,8 +332,6 @@ func Editor_CameraViewport()
 
             EndPopup();
         }
-        
-        
     }
     none?
         Text("未找到编辑器渲染使用的摄像机或无法获取摄像机的渲染结果，因此无法执行渲染操作");
