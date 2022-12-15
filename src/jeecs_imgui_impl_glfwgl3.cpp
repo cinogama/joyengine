@@ -21,7 +21,10 @@ import woo.std;
 import je;
 
 namespace je::gui
-{
+{    
+    public alias ImVec2 = (real, real);
+    public alias Color32RGBA = (int, int, int, int);
+
     public enum WindowsAttribute
     {
         ImGuiWindowFlags_None                   = 0,
@@ -83,13 +86,16 @@ namespace je::gui
     public func JobID()=> handle;
 
     extern("libjoyecs", "je_gui_get_window_pos")
-    public func GetWindowPos()=> (real, real);
+    public func GetWindowPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_pos")
-    public func GetMousePos()=> (real, real);
+    public func GetMousePos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_cursor_pos")
-    public func GetCursorPos()=> (real, real);
+    public func GetCursorPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_item_rect_size")
-    public func GetItemRectSize()=> (real, real);
+    public func GetItemRectSize()=> ImVec2;
+
+    extern("libjoyecs", "je_gui_get_item_rect")
+    public func GetItemRect()=> (ImVec2, ImVec2);
 
     extern("libjoyecs", "je_gui_begin")
     public func Begin(title:string)=> bool;
@@ -126,7 +132,10 @@ namespace je::gui
     extern("libjoyecs", "je_gui_button")
     public func Button(msg:string)=> bool;
     extern("libjoyecs", "je_gui_button")
-    public func ButtonSize(msg:string, sizex: real, sizey: real)=> bool;
+    public func ButtonSize(msg:string, size: ImVec2)=> bool;
+
+    extern("libjoyecs", "je_gui_invisible_button")
+    public func InvisibleButton(msg:string, size: ImVec2)=> bool;
 
     extern("libjoyecs", "je_gui_begin_main_menu_bar")
     public func BeginMainMenuBar()=> bool;
@@ -145,7 +154,8 @@ namespace je::gui
     {
         return MenuItemShortcutSelectedEnabled(text, "", selected, enable);
     }
-
+)"
+R"(
     extern("libjoyecs", "je_gui_end_main_menu_bar")
     public func EndMainMenuBar()=> void;
 
@@ -219,6 +229,60 @@ namespace je::gui
     extern("libjoyecs", "je_gui_beginpopup_contextwindow")
     public func BeginPopupContextWindow()=>bool;
 
+    public enum TabBarAttribute
+    {
+        ImGuiTabBarFlags_None                           = 0,
+        ImGuiTabBarFlags_Reorderable                    = 1,   // Allow manually dragging tabs to re-order them + New tabs are appended at the end of list
+        ImGuiTabBarFlags_AutoSelectNewTabs              = 2,   // Automatically select new tabs when they appear
+        ImGuiTabBarFlags_TabListPopupButton             = 4,   // Disable buttons to open the tab list popup
+        ImGuiTabBarFlags_NoCloseWithMiddleMouseButton   = 8,   // Disable behavior of closing tabs (that are submitted with p_open != NULL) with middle mouse button. You can still repro this behavior on user's side with if (IsItemHovered() && IsMouseClicked(2)) *p_open = false.
+        ImGuiTabBarFlags_NoTabListScrollingButtons      = 16,   // Disable scrolling buttons (apply when fitting policy is ImGuiTabBarFlags_FittingPolicyScroll)
+        ImGuiTabBarFlags_NoTooltip                      = 32,   // Disable tooltips when hovering a tab
+        ImGuiTabBarFlags_FittingPolicyResizeDown        = 64,   // Resize tabs when they don't fit
+        ImGuiTabBarFlags_FittingPolicyScroll            = 128,   // Add scroll buttons when tabs don't fit
+        // ImGuiTabBarFlags_FittingPolicyMask_             = ImGuiTabBarFlags_FittingPolicyResizeDown | ImGuiTabBarFlags_FittingPolicyScroll,
+        // ImGuiTabBarFlags_FittingPolicyDefault_          = ImGuiTabBarFlags_FittingPolicyResizeDown
+    }
+
+    public enum TabItemAttribute
+    {
+        ImGuiTabItemFlags_None                          = 0,
+        ImGuiTabItemFlags_UnsavedDocument               = 1,   // Display a dot next to the title + tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
+        ImGuiTabItemFlags_SetSelected                   = 2,   // Trigger flag to programmatically make the tab selected when calling BeginTabItem()
+        ImGuiTabItemFlags_NoCloseWithMiddleMouseButton  = 4,   // Disable behavior of closing tabs (that are submitted with p_open != NULL) with middle mouse button. You can still repro this behavior on user's side with if (IsItemHovered() && IsMouseClicked(2)) *p_open = false.
+        ImGuiTabItemFlags_NoPushId                      = 8,   // Don't call PushID(tab->ID)/PopID() on BeginTabItem()/EndTabItem()
+        ImGuiTabItemFlags_NoTooltip                     = 16,   // Disable tooltip for the given tab
+        ImGuiTabItemFlags_NoReorder                     = 32,   // Disable reordering this tab or having another tab cross over this tab
+        ImGuiTabItemFlags_Leading                       = 64,   // Enforce the tab position to the left of the tab bar (after the tab list popup button)
+        ImGuiTabItemFlags_Trailing                      = 128    // Enforce the tab position to the right of the tab bar (before the scrolling buttons)
+    }
+
+    extern("libjoyecs", "je_gui_begintabbar")
+    public func BeginTabBarAttr(label: string, attr: TabBarAttribute)=> bool;
+    public func BeginTabBar(label: string)
+    {
+        return BeginTabBarAttr(label, TabBarAttribute::ImGuiTabBarFlags_None);
+    } 
+    extern("libjoyecs", "je_gui_endtabbar")
+    public func EndTabBar()=> void;
+
+    extern("libjoyecs", "je_gui_begintabitem")
+    public func BeginTabItemAttr(label: string, attr: TabItemAttribute)=> bool;
+    extern("libjoyecs", "je_gui_begintabitem_open")
+    public func BeginTabItemAttrOpen(label: string, attr: TabItemAttribute)=> (bool /* show */, bool /* open */);
+
+    public func BeginTabItem(label: string)
+    {
+        return BeginTabItemAttr(label, TabItemAttribute::ImGuiTabItemFlags_None);
+    }
+    public func BeginTabItemOpen(label: string)
+    {
+        return BeginTabItemAttrOpen(label, TabItemAttribute::ImGuiTabItemFlags_None);
+    }
+
+    extern("libjoyecs", "je_gui_endtabitem")
+    public func EndTabItem()=> void;
+    
     public enum PopupAttribute
     {
         NONE
@@ -304,6 +368,25 @@ namespace je::gui
 
 )"
 R"(
+    extern("libjoyecs", "je_gui_push_clip_rect")
+    public func PushClipRect(from: ImVec2, to: ImVec2)=> void;
+
+    extern("libjoyecs", "je_gui_pop_clip_rect")
+    public func PopClipRect()=> void;
+
+    using DrawListT = handle
+    {
+        extern("libjoyecs", "je_gui_draw_list_add_rect_filled")
+        public func AddRectFilled(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_text")
+        public func AddText(self: DrawListT, pos: ImVec2, color: Color32RGBA, text: string)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_image")
+        public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture)=> void;
+    }
+    extern("libjoyecs", "je_gui_get_window_draw_list")
+    public func GetWindowDrawList()=> DrawListT;
 
     extern("libjoyecs", "je_gui_imagebutton")
     public func ImageButton(tex: je::graphic::texture)=> bool;
@@ -313,7 +396,7 @@ R"(
     public func ImageButtonSize(tex: je::graphic::texture, width: real, height: real)=> bool;
 
     extern("libjoyecs", "je_gui_content_region_avail")
-    public func GetContentRegionAvail()=> (real, real);
+    public func GetContentRegionAvail()=> ImVec2;
 
     public enum DragAttribute
     {
@@ -517,6 +600,28 @@ WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_val(vm, ret);
 }
 
+WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args, size_t argc)
+{
+    auto&& isizemin = ImGui::GetItemRectMin();
+    auto&& isizemax = ImGui::GetItemRectMax();
+
+    wo_value ret = wo_push_struct(vm, 2);
+
+    wo_value minpos = wo_struct_get(ret, 0);
+    wo_value maxpos = wo_struct_get(ret, 1);
+
+    wo_set_struct(minpos, 2);
+    wo_set_struct(maxpos, 2);
+
+    wo_set_float(wo_struct_get(minpos, 0), isizemin.x);
+    wo_set_float(wo_struct_get(minpos, 1), isizemin.y);
+
+    wo_set_float(wo_struct_get(maxpos, 0), isizemax.x);
+    wo_set_float(wo_struct_get(maxpos, 1), isizemax.y);
+
+    return wo_ret_val(vm, ret);
+}
+
 WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::PushID(wo_string(args + 0));
@@ -543,6 +648,104 @@ WO_API wo_api je_gui_beginpopup_contextwindow(wo_vm vm, wo_value args, size_t ar
     if (argc)
         return wo_ret_bool(vm, ImGui::BeginPopupContextWindow(wo_string(args + 0)));
     return wo_ret_bool(vm, ImGui::BeginPopupContextWindow());
+}
+
+WO_API wo_api je_gui_begintabbar(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::BeginTabBar(wo_string(args + 0), (ImGuiTabBarFlags)wo_int(args + 1)));
+}
+
+WO_API wo_api je_gui_endtabbar(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::EndTabBar();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_begintabitem(wo_vm vm, wo_value args, size_t argc)
+{
+    bool display = ImGui::BeginTabItem(wo_string(args + 0), nullptr, (ImGuiTabBarFlags)wo_int(args + 1));
+    return wo_ret_bool(vm, display);
+}
+
+WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args, size_t argc)
+{
+    bool open = true;
+    bool display = ImGui::BeginTabItem(wo_string(args + 0), &open, (ImGuiTabBarFlags)wo_int(args + 1));
+
+    wo_value ret = wo_push_struct(vm, 2);
+    wo_set_bool(wo_struct_get(ret, 0), display);
+    wo_set_bool(wo_struct_get(ret, 1), open);
+
+    return wo_ret_val(vm, ret);
+}
+
+ImVec2 val2vec2(wo_value v)
+{
+    return ImVec2(wo_float(wo_struct_get(v, 0)), wo_float(wo_struct_get(v, 1)));
+}
+
+WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value from = args + 0;
+    wo_value to = args + 1;
+    ImGui::PushClipRect(
+        val2vec2(from),
+        val2vec2(to),
+        true);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_pop_clip_rect(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::PopClipRect();
+
+    return wo_ret_void(vm);
+}
+
+ImU32 val2color32(wo_value v)
+{
+    return IM_COL32(
+        wo_int(wo_struct_get(v, 0)), 
+        wo_int(wo_struct_get(v, 1)),
+        wo_int(wo_struct_get(v, 2)),
+        wo_int(wo_struct_get(v, 3)));
+}
+
+WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_pointer(vm, ImGui::GetWindowDrawList());
+}
+
+WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddRectFilled(val2vec2(args+1), val2vec2(args+2), val2color32(args+3));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddText(val2vec2(args + 1), val2color32(args + 2), wo_string(args + 3));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 3);
+    jegl_using_resource((*texture)->resouce());
+
+    list->AddImage((ImTextureID)(*texture)->resouce()->m_uint1, val2vec2(args + 1), val2vec2(args + 2), ImVec2(0, 1), ImVec2(1, 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_endtabitem(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::EndTabItem();
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_beginpopup(wo_vm vm, wo_value args, size_t argc)
@@ -775,11 +978,16 @@ WO_API wo_api je_gui_text_disabled(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_button(wo_vm vm, wo_value args, size_t argc)
 {
-    if (argc == 3)
-        return wo_ret_bool(vm, ImGui::Button(wo_string(args + 0),
-            ImVec2(wo_float(args + 1), wo_float(args + 2))));
+    if (argc == 2)
+        return wo_ret_bool(vm, ImGui::Button(wo_string(args + 0), val2vec2(args + 1)));
     return wo_ret_bool(vm, ImGui::Button(wo_string(args + 0)));
 }
+
+WO_API wo_api je_gui_invisible_button(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::InvisibleButton(wo_string(args + 0), val2vec2(args + 1)));
+}
+
 WO_API wo_api je_gui_begin_main_menu_bar(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_bool(vm, ImGui::BeginMainMenuBar());
@@ -928,7 +1136,7 @@ WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_checkbox(wo_vm vm, wo_value args, size_t argc)
 {
-    bool checked = wo_bool(args+1);
+    bool checked = wo_bool(args + 1);
     if (ImGui::Checkbox(wo_string(args + 0), &checked))
         return wo_ret_option_bool(vm, checked);
     return wo_ret_option_none(vm);

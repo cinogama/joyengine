@@ -6,6 +6,7 @@ import builtin.Editor.generic.form.inputbox;
 import builtin.Editor.generic.form.askbox;
 
 import entitycreator;
+import imageeditor;
 
 using je::gui;
 
@@ -37,6 +38,15 @@ namespace editor::EntityList
     public func context_for_entity(entity: option<je::entity>)
     {
         let has_editable_entity = entity->has;
+        if (MenuItemEnabled("绘制", has_editable_entity))
+        {
+            drawpannel::drawedit(entity->val);
+        }
+        if (MenuItemEnabled("编辑组件", has_editable_entity))
+        {
+            launch(EntityCreator::show, (EntityCreator::edit_context(entity->val),));
+        }
+        Separator();
         if (MenuItemEnabled("删除", has_editable_entity))
         {
             generic::askbox("删除实体",
@@ -49,10 +59,6 @@ namespace editor::EntityList
                                     F"请输入新名称",
                                     entity->val->editor::name(),
                                     \text: string = entity->val->editor::set_name(text);));
-        }
-        if (MenuItemEnabled("编辑组件", has_editable_entity))
-        {
-            launch(EntityCreator::show, (EntityCreator::edit_context(entity->val),));
         }
     }
     private func context_menu(entity: je::entity)

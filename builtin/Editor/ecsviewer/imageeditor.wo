@@ -1,0 +1,128 @@
+import je;
+import je.gui;
+
+import builtin.Editor.generic.form.msgbox;
+
+using je;
+using je::gui;
+using generic;
+
+namespace drawpannel
+{
+    public func edittexture(e: option<entity>, images: array<(int, mut option<graphic::texture>)>)
+    {
+        let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None);
+
+        if (BeginTabBar("##draw_textures"))
+        {
+            for (let index, (passid, texture) : images)
+            {
+                e   
+                =>> \e = e->editor::valid ? option::value(e) | option::none;
+                ->> \e = images[index][1] = e->editor::graphic::get_textures->get(passid) 
+                    =>> \t = t->isvalid? option::value(t) | option::none;
+                    ;
+                ;
+                 
+                let texture_path = texture->>\t=t->path;->valor("不存在");
+                if (BeginTabItem(F"通道{passid}: {texture_path}"))
+                {
+                    match (texture)
+                    {
+                    value(tex)?
+                    {
+                        let (tex_width, tex_height) = tex->size;
+                        let drawlist = GetWindowDrawList();
+
+                        InvisibleButton("##draw_space", GetContentRegionAvail());
+                        let (p0, p1) = GetItemRect();
+                        let (lux, luy) = p0;
+
+                        PushClipRect(p0, p1);
+                        drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+                        drawlist->AddImage(
+                            (lux + 0., luy + 0.), 
+                            (lux + 10. * tex_width:real, luy + 10. * tex_height:real), 
+                            tex);
+                        PopClipRect();
+                    }
+                    none?
+                    {
+                        if (e->has && e->val->editor::valid)
+                        {
+                            Text("当前实体不存在对应通道的纹理");
+                            if (Button("点击此按钮添加"))
+                                std::panic("TODO");
+                        }
+                        else
+                            Text("实体不存在");
+                        
+                    }
+                    }
+                    
+
+                    EndTabItem();
+                }
+            }
+            EndTabBar();
+        }
+        End();
+
+        if (open)
+            return FormAction::Nothing;
+        return FormAction::Close;
+    }
+
+    public func drawedit(e: entity)
+    {
+        // 检查实体有没有纹理组件，然后遍历检查所有纹理是否都存在，有没有没有路径的问题
+        // 如果发现不正常的纹理就给个提示
+
+        if (!e->editor::get_component(typeinfo::load_from_name("Renderer::Textures")->val)->has)
+        {
+            msgbox("无法绘制当前实体", "当前实体不包含 Renderer::Textures 组件，无法绘制");
+            return;
+        }
+
+        let textures = e->editor::graphic::get_textures();
+
+        // 这个大大的傻逼代码作用是获取当前实体使用的所有纹理通道
+        let used_texture_id_pass = e->editor::graphic::get_shaders()
+            =>> \shader = shader->get_uniforms()
+                    ->  unmapping
+                    ->> \nv = nv[1];
+                    =>> func(uniformval)
+                        {
+                            match (uniformval)
+                            {
+                            texture(id)?
+                                return [id];
+                            integer(_)?;
+                            float(_)?;
+                            float2(_)?;
+                            float3(_)?;
+                            float4(_)?;
+                            others?;
+                            }
+                            return [];
+                        }
+            ;
+            ->> \id = (id, nil);
+            ->  mapping
+            ->  unmapping // remove all repeated elems.
+            ->> \idn = idn[0];
+        ;
+
+        if (used_texture_id_pass->empty)
+        {
+            msgbox("无法绘制当前实体", "当前实体不使用任何纹理，因此无法编辑");
+            return;
+        }
+
+        // OK
+        launch(edittexture, (option::value(e), 
+            used_texture_id_pass 
+                ->> \id = (id, mut textures->get(id));
+        ));
+    }
+}
