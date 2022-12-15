@@ -89,6 +89,8 @@ namespace je::gui
     public func GetWindowPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_pos")
     public func GetMousePos()=> ImVec2;
+    extern("libjoyecs", "je_gui_get_mouse_delta_pos")
+    public func GetMouseDeltaPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_cursor_pos")
     public func GetCursorPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_item_rect_size")
@@ -215,6 +217,12 @@ R"(
     public func IsItemToggledOpen()=> bool;
     extern("libjoyecs", "je_gui_is_itemhovered")
     public func IsItemHovered()=> bool;
+
+    extern("libjoyecs", "je_gui_is_item_active")
+    public func IsItemActive()=> bool;
+
+    extern("libjoyecs", "je_gui_is_mouse_dragging")
+    public func IsMouseDragging(attr: ImGuiMouseButton)=> bool;
 
     extern("libjoyecs", "je_gui_set_tooltip")
     public func SetTooltip(msg: string)=> bool;
@@ -579,6 +587,17 @@ WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_val(vm, ret);
 }
 
+WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    auto&& mdpos = ImGui::GetIO().MouseDelta;
+
+    wo_value ret = wo_push_struct(vm, 2);
+    wo_set_float(wo_struct_get(ret, 0), mdpos.x);
+    wo_set_float(wo_struct_get(ret, 1), mdpos.y);
+
+    return wo_ret_val(vm, ret);
+}
+
 WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args, size_t argc)
 {
     auto&& cpos = ImGui::GetCursorPos();
@@ -706,7 +725,7 @@ WO_API wo_api je_gui_pop_clip_rect(wo_vm vm, wo_value args, size_t argc)
 ImU32 val2color32(wo_value v)
 {
     return IM_COL32(
-        wo_int(wo_struct_get(v, 0)), 
+        wo_int(wo_struct_get(v, 0)),
         wo_int(wo_struct_get(v, 1)),
         wo_int(wo_struct_get(v, 2)),
         wo_int(wo_struct_get(v, 3)));
@@ -720,7 +739,7 @@ WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args, size_t argc)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
-    list->AddRectFilled(val2vec2(args+1), val2vec2(args+2), val2color32(args+3));
+    list->AddRectFilled(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3));
     return wo_ret_void(vm);
 }
 
@@ -827,6 +846,16 @@ WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_bool(vm, ImGui::IsItemHovered());
+}
+
+WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::IsItemActive());
+}
+
+WO_API wo_api je_gui_is_mouse_dragging(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::IsMouseDragging((ImGuiMouseButton)wo_int(args + 0)));
 }
 
 WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args, size_t argc)

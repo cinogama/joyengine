@@ -563,7 +563,7 @@ JE_API size_t      jeecs_file_read(
     jeecs_file* file);
 
 // If ignore_crc64 == true, cache will always work even if origin file changed.
-JE_API jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, bool ignore_crc64);
+JE_API jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, wo_integer_t virtual_crc64);
 // If usecrc64 != 0, cache file will use it instead of reading from origin file.
 JE_API void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_integer_t usecrc64);
 JE_API size_t jeecs_write_cache_file(const void* write_buffer, size_t elem_size, size_t count, void* file);
@@ -975,7 +975,7 @@ JE_API jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long 
 
 JE_API void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
 JE_API void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
-JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src);
+JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool is_virtual_file);
 JE_API jegl_resource* jegl_load_shader(const char* path);
 
 JE_API jegl_resource* jegl_create_uniformbuf(
@@ -1013,12 +1013,12 @@ JE_API jegl_thread* jegl_current_thread();
 JE_API void je_io_set_keystate(jeecs::input::keycode keycode, bool keydown);
 JE_API void je_io_set_mousepos(int group, int x, int y);
 JE_API void je_io_set_windowsize(int x, int y);
-JE_API void je_io_set_wheel(float count);
+JE_API void je_io_set_wheel(int group, float count);
 
 JE_API bool je_io_is_keydown(jeecs::input::keycode keycode);
 JE_API void je_io_mouse_pos(int group, int* x, int* y);
 JE_API void je_io_windowsize(int* x, int* y);
-JE_API float je_io_wheel();
+JE_API float je_io_wheel(int group);
 
 JE_API void je_io_lock_mouse(bool lock, int x, int y);
 JE_API bool je_io_should_lock_mouse(int* x, int* y);
@@ -4018,7 +4018,7 @@ namespace jeecs
             jegl_shader::builtin_uniform_location* m_builtin;
 
             explicit shader(const std::string& name_path, const std::string& src)
-                : resource_basic(jegl_load_shader_source(name_path.c_str(), src.c_str()))
+                : resource_basic(jegl_load_shader_source(name_path.c_str(), src.c_str(), true))
                 , m_builtin(nullptr)
             {
                 if (enabled())
@@ -5448,9 +5448,9 @@ namespace jeecs
         {
             return je_io_is_keydown(key);
         }
-        inline float wheel(keycode key)
+        inline float wheel(int group)
         {
-            return je_io_wheel();
+            return je_io_wheel(group);
         }
         inline math::ivec2 mousepos(int group)
         {

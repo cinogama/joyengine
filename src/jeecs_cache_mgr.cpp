@@ -35,7 +35,7 @@ wo_integer_t _crc64_of_file(const char* filepath)
     return crc64_result;
 }
 
-jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, bool ignore_crc64)
+jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, wo_integer_t virtual_crc64)
 {
     using namespace std;
 
@@ -65,7 +65,7 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
         }
 
         // 2. Check crc64 of current file;
-        wo_integer_t crc64_result = ignore_crc64 ? 0 : _crc64_of_file(filepath);
+        wo_integer_t crc64_result = virtual_crc64 == -1 ? 0 : (virtual_crc64 ? virtual_crc64 : _crc64_of_file(filepath));
 
         wo_integer_t cache_crc64 = 0;
         jeecs_file_read(&cache_crc64, sizeof(wo_integer_t), 1, cache_file);
@@ -80,7 +80,7 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
                 return nullptr;
             }
         }
-        else if (!ignore_crc64)
+        else if (virtual_crc64 != -1)
             jeecs::debug::logwarn("Found cache file when loading '%s', but origin file missing.", filepath);
         return cache_file;
     }
@@ -91,7 +91,7 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
 {
     using namespace std;
 
-    wo_integer_t crc64_result = usecrc64 == 0 ?_crc64_of_file(filepath) : usecrc64;
+    wo_integer_t crc64_result = usecrc64 == 0 ? _crc64_of_file(filepath) : usecrc64;
     if (crc64_result == 0)
     {
         jeecs::debug::logwarn("Empty or failed to read file: '%s'", filepath);
@@ -99,6 +99,9 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
     }
 
     string file_cache_path = filepath + ".jecache4"s;
+    if (filepath[0] == '*')
+        file_cache_path = wo_exe_path() + file_cache_path.substr(1);
+
     FILE* f = fopen(file_cache_path.c_str(), "wb");
 
     if (f == nullptr)

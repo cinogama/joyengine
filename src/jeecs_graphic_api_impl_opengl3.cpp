@@ -58,7 +58,7 @@ void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod
 
 void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
 {
-    je_io_set_wheel(je_io_wheel() + yoffset);
+    je_io_set_wheel(0, je_io_wheel(0) + yoffset);
 }
 
 void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)

@@ -462,7 +462,7 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::te
 
 bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::texture_sampling* samp)
 {
-    if (jeecs_file* image_cache = jeecs_load_cache_file(path, IMAGE_CACHE_VERSION, true))
+    if (jeecs_file* image_cache = jeecs_load_cache_file(path, IMAGE_CACHE_VERSION, -1))
     {
         jeecs_file_read(samp, sizeof(jegl_texture::texture_sampling), 1, image_cache);
         jeecs_file_close(image_cache);
@@ -695,15 +695,16 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
     return shader;
 }
 
-void _jegl_create_shader_cache(jegl_resource* shader_resource, bool virtual_file)
+void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virtual_file_crc64)
 {
     assert(shader_resource->m_path != nullptr
         && shader_resource->m_raw_shader_data
         && shader_resource->m_type == jegl_resource::type::SHADER);
 
-    int
-
-    if (auto* cachefile = jeecs_create_cache_file(shader_resource->m_path, SHADER_CACHE_VERSION, 0))
+    if (auto* cachefile = jeecs_create_cache_file(
+        shader_resource->m_path, 
+        SHADER_CACHE_VERSION, 
+        virtual_file_crc64))
     {
         auto* raw_shader_data = shader_resource->m_raw_shader_data;
 
@@ -764,8 +765,19 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, bool virtual_file
 }
 
 
-jegl_resource* jegl_load_shader_source(const char* path, const char* src)
+jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool is_virtual_file)
 {
+    if (is_virtual_file)
+    {
+        if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, wo_crc64_str(src)))
+        {
+            auto* shader_resource = _jegl_load_shader_cache(shader_cache);
+            shader_resource->m_path = jeecs::basic::make_new_string(path);
+
+            return shader_resource;
+        }
+    }
+
     wo_vm vmm = wo_create_vm();
     if (!wo_load_source(vmm, path, src))
     {
@@ -796,7 +808,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
         shader->m_raw_shader_data = _shader;
         shader->m_path = jeecs::basic::make_new_string(path);
 
-        _jegl_create_shader_cache(shader);
+        _jegl_create_shader_cache(shader, is_virtual_file ? wo_crc64_str(src) : 0);
 
         wo_close_vm(vmm);
         return shader;
@@ -812,7 +824,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src)
 
 jegl_resource* jegl_load_shader(const char* path)
 {
-    if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, false))
+    if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, 0))
     {
         auto* shader_resource = _jegl_load_shader_cache(shader_cache);
         shader_resource->m_path = jeecs::basic::make_new_string(path);
@@ -827,8 +839,7 @@ jegl_resource* jegl_load_shader(const char* path)
 
         jeecs_file_close(texfile);
 
-
-        return jegl_load_shader_source(path, src);
+        return jegl_load_shader_source(path, src, false);
     }
     jeecs::debug::logerr("Fail to open file: '%s'", path);
     return _jegl_create_died_shader(path);

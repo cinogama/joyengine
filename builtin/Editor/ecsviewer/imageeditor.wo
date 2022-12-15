@@ -9,7 +9,22 @@ using generic;
 
 namespace drawpannel
 {
-    public func edittexture(e: option<entity>, images: array<(int, mut option<graphic::texture>)>)
+    using DrawContextT = struct{
+        mut scale: real,
+        mut offset_x: real,
+        mut offset_y: real,
+    };
+
+    func _delta_wheel()
+    {
+        static let mut _w = input::wheel();
+        let _nw = input::wheel();
+        let delta = _nw - _w;
+        _w = _nw;
+        return delta;
+    }
+
+    func edittexture(e: option<entity>, images: array<(int, mut option<graphic::texture>)>, context: DrawContextT)
     {
         let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None);
 
@@ -35,14 +50,26 @@ namespace drawpannel
                         let drawlist = GetWindowDrawList();
 
                         InvisibleButton("##draw_space", GetContentRegionAvail());
+                        if (IsItemActive() || IsItemHovered())
+                        {
+                            if (IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
+                            {
+                                let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
+                                context.offset_x += mousedelta_x;
+                                context.offset_y += mousedelta_y;
+                            }
+                            context.scale += _delta_wheel();
+                        }
+
                         let (p0, p1) = GetItemRect();
                         let (lux, luy) = p0;
 
                         PushClipRect(p0, p1);
                         drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
                         drawlist->AddImage(
-                            (lux + 0., luy + 0.), 
-                            (lux + 10. * tex_width:real, luy + 10. * tex_height:real), 
+                            (lux + context.offset_x, luy + context.offset_y), 
+                            (lux + context.scale * tex_width:real + context.offset_x, 
+                            luy + context.scale * tex_height:real + context.offset_y), 
                             tex);
                         PopClipRect();
                     }
@@ -122,7 +149,12 @@ namespace drawpannel
         // OK
         launch(edittexture, (option::value(e), 
             used_texture_id_pass 
-                ->> \id = (id, mut textures->get(id));
+                ->> \id = (id, mut textures->get(id));,
+            DrawContextT{
+                scale = 10.,
+                offset_x = 0.,
+                offset_y = 0.,
+            }
         ));
     }
 }

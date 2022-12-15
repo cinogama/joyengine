@@ -622,6 +622,11 @@ WO_API wo_api wojeapi_input_keydown(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, jeecs::input::keydown((jeecs::input::keycode)wo_int(args + 0)));
 }
 
+WO_API wo_api wojeapi_wheel_count(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_float(vm, jeecs::input::wheel(0));
+}
+
 WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
 {
     auto winsz = jeecs::input::windowsize();
@@ -1469,6 +1474,9 @@ namespace je
 
     namespace input
     {
+        extern("libjoyecs", "wojeapi_wheel_count")
+        public func wheel()=> real;
+
         extern("libjoyecs", "wojeapi_input_keydown")
         public func keydown(kcode: keycode)=> bool;
 

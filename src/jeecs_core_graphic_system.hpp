@@ -162,7 +162,7 @@ namespace jeecs
             default_texture->pix(0, 1).set({ 0.f, 0.f, 0.f, 1.f });
             default_texture->pix(1, 0).set({ 0.f, 0.f, 0.f, 1.f });
 
-            default_shader = new graphic::shader("je/builtin_default.shader", R"(
+            default_shader = new graphic::shader("*/builtin/builtin_default.shader", R"(
 // Default shader
 import je.shader;
 
@@ -663,7 +663,7 @@ public let frag =
                     { 3, 2 });
 
                 _defer_light2d_shadow_sub_pass
-                    = new shader("je/defer_light2d_shadow_sub.shader", R"(
+                    = new shader("*/builtin/defer_light2d_shadow_sub.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -704,7 +704,7 @@ public func frag(vf: v2f)
 )");
 
                 _defer_light2d_shadow_shape_point_pass
-                    = new shader("je/defer_light2d_shadow_point_shape.shader", R"(
+                    = new shader("*/builtin/defer_light2d_shadow_point_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -752,7 +752,7 @@ public func frag(vf: v2f)
 )");
 
                 _defer_light2d_shadow_point_pass
-                    = new shader("je/defer_light2d_shadow_point.shader", R"(
+                    = new shader("*/builtin/defer_light2d_shadow_point.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -790,7 +790,7 @@ public func frag(vf: v2f)
 }
 )");
                 _defer_light2d_shadow_shape_parallel_pass
-                    = new shader("je/defer_light2d_shadow_parallel_shape.shader", R"(
+                    = new shader("*/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -837,7 +837,7 @@ public func frag(vf: v2f)
 )");
 
                 _defer_light2d_shadow_parallel_pass
-                    = new shader("je/defer_light2d_shadow_parallel.shader", R"(
+                    = new shader("*/builtin/defer_light2d_shadow_parallel.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -876,7 +876,7 @@ public func frag(vf: v2f)
 )");
 
                 _defer_light2d_mix_light_effect_pass
-                    = new shader("je/defer_light2d_mix_light.shader",
+                    = new shader("*/builtin/defer_light2d_mix_light.shader",
                         R"(
 import je.shader;
 
@@ -925,7 +925,7 @@ public func frag(vf: v2f)
 }
 )");
                 _defer_light2d_parallel_light_pass =
-                    new shader("je/defer_light2d_parallel_light.shader",
+                    new shader("*/builtin/defer_light2d_parallel_light.shader",
                         R"(
 import je.shader;
 import je.shader.pbr;
@@ -1017,7 +1017,7 @@ public func frag(vf: v2f)
 
 )");
                 _defer_light2d_point_light_pass
-                    = new shader("je/defer_light2d_point_light.shader",
+                    = new shader("*/builtin/defer_light2d_point_light.shader",
                         R"(
 import je.shader;
 import je.shader.pbr;
