@@ -87,11 +87,11 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
     return nullptr;
 }
 
-void* jeecs_create_cache_file(const char* filepath, uint32_t format_version)
+void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_integer_t usecrc64)
 {
     using namespace std;
 
-    wo_integer_t crc64_result = _crc64_of_file(filepath);
+    wo_integer_t crc64_result = usecrc64 == 0 ?_crc64_of_file(filepath) : usecrc64;
     if (crc64_result == 0)
     {
         jeecs::debug::logwarn("Empty or failed to read file: '%s'", filepath);

@@ -473,7 +473,7 @@ bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::texture_s
 
 bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::texture_sampling samp)
 {
-    if (void* image_cache = jeecs_create_cache_file(path, IMAGE_CACHE_VERSION))
+    if (void* image_cache = jeecs_create_cache_file(path, IMAGE_CACHE_VERSION, 0))
     {
         jeecs_write_cache_file(&samp, sizeof(jegl_texture::texture_sampling), 1, image_cache);
         jeecs_close_cache_file(image_cache);
@@ -695,13 +695,15 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
     return shader;
 }
 
-void _jegl_create_shader_cache(jegl_resource* shader_resource)
+void _jegl_create_shader_cache(jegl_resource* shader_resource, bool virtual_file)
 {
     assert(shader_resource->m_path != nullptr
         && shader_resource->m_raw_shader_data
         && shader_resource->m_type == jegl_resource::type::SHADER);
 
-    if (auto* cachefile = jeecs_create_cache_file(shader_resource->m_path, SHADER_CACHE_VERSION))
+    int
+
+    if (auto* cachefile = jeecs_create_cache_file(shader_resource->m_path, SHADER_CACHE_VERSION, 0))
     {
         auto* raw_shader_data = shader_resource->m_raw_shader_data;
 

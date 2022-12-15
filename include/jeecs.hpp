@@ -564,7 +564,8 @@ JE_API size_t      jeecs_file_read(
 
 // If ignore_crc64 == true, cache will always work even if origin file changed.
 JE_API jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, bool ignore_crc64);
-JE_API void* jeecs_create_cache_file(const char* filepath, uint32_t format_version);
+// If usecrc64 != 0, cache file will use it instead of reading from origin file.
+JE_API void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_integer_t usecrc64);
 JE_API size_t jeecs_write_cache_file(const void* write_buffer, size_t elem_size, size_t count, void* file);
 JE_API void jeecs_close_cache_file(void* file);
 
