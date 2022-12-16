@@ -13,6 +13,7 @@ namespace drawpannel
         mut scale: real,
         mut offset_x: real,
         mut offset_y: real,
+        mut drawtool: DrawToolT,
     };
 
     func _delta_wheel()
@@ -23,6 +24,66 @@ namespace drawpannel
         _w = _nw;
         return delta;
     }
+
+    using Nothing = ()
+    {
+        func OnMouseDown(self: Nothing, target: graphic::texture, pos: (int, int))
+        {
+        }
+        func OnMouseHold(self: Nothing, target: graphic::texture, pos: (int, int))
+        {
+        }
+        func OnMouseUp(self: Nothing, target: graphic::texture, pos: (int, int))
+        {
+        }
+    }
+    using Pen = ()
+    {
+        func OnMouseDown(self: Pen, target: graphic::texture, pos: (int, int))
+        {
+        }
+        func OnMouseHold(self: Pen, target: graphic::texture, pos: (int, int))
+        {
+        }
+        func OnMouseUp(self: Pen, target: graphic::texture, pos: (int, int))
+        {
+        }
+    }
+
+    using DrawToolT = struct{
+        name: string,
+        on_mouse_down: (graphic::texture, (int, int))=>void,
+        on_mouse_hold: (graphic::texture, (int, int))=>void,
+        on_mouse_up: (graphic::texture, (int, int))=>void,
+    }
+    {
+        func create<T>(name: string, instance: T)
+        {
+            return DrawToolT{
+                name = name,
+                on_mouse_down = \t: graphic::texture,p: (int, int) = instance->OnMouseDown(t, p);,
+                on_mouse_hold = \t: graphic::texture,p: (int, int) = instance->OnMouseHold(t, p);,
+                on_mouse_up = \t: graphic::texture,p: (int, int) = instance->OnMouseUp(t, p);,
+            };
+        }
+        func OnMouseDown(self: DrawToolT, target: graphic::texture, pos: (int, int))
+        {
+            return self.on_mouse_down(target, pos);
+        }
+        func OnMouseHold(self: DrawToolT, target: graphic::texture, pos: (int, int))
+        {
+            return self.on_mouse_hold(target, pos);
+        }
+        func OnMouseUp(self: DrawToolT, target: graphic::texture, pos: (int, int))
+        {
+            return self.on_mouse_up(target, pos);
+        }
+    }
+
+    let all_draw_tools = [
+        DrawToolT::create("无", (): Nothing),
+        DrawToolT::create("钢笔", (): Pen)
+    ];
 
     func edittexture(e: option<entity>, images: array<(int, mut option<graphic::texture>)>, context: DrawContextT)
     {
@@ -42,6 +103,18 @@ namespace drawpannel
                 let texture_path = texture->>\t=t->path;->valor("不存在");
                 if (BeginTabItem(F"通道{passid}: {texture_path}"))
                 {
+                    // OK 在这里显示一下绘图工具箱
+                    BeginGroup();
+                    Text(F"当前工具: \n {context.drawtool.name}");
+                    for (let _, tool : all_draw_tools)
+                    {
+                        if (ButtonSize(tool.name, (100., 0.)))
+                            context.drawtool = tool;
+                    }
+                    EndGroup();
+
+                    SameLine();
+
                     match (texture)
                     {
                     value(tex)?
@@ -59,10 +132,14 @@ namespace drawpannel
                                 context.offset_y += mousedelta_y;
                             }
                             context.scale += _delta_wheel();
+
+                            if (context.scale < 1.)
+                                context.scale = 1.;
                         }
 
                         let (p0, p1) = GetItemRect();
                         let (lux, luy) = p0;
+                        let (rbx, rby) = p1;
 
                         PushClipRect(p0, p1);
                         drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
@@ -71,6 +148,49 @@ namespace drawpannel
                             (lux + context.scale * tex_width:real + context.offset_x, 
                             luy + context.scale * tex_height:real + context.offset_y), 
                             tex);
+                        
+                        // OK 如果缩放大于5，就顺手画一下网格
+                        if (context.scale >= 5.)
+                        {
+                            for (let mut yoffset = 0.; yoffset <= tex_height:real * context.scale; yoffset += context.scale)
+                                drawlist->AddLine(
+                                    (lux + context.offset_x, luy + context.offset_y + yoffset), 
+                                    (lux + context.offset_x + tex_width:real * context.scale, luy + context.offset_y + yoffset), 
+                                    (0, 0, 0, 20));
+                            for (let mut xoffset = 0.; xoffset <= tex_width:real * context.scale; xoffset += context.scale)
+                                drawlist->AddLine(
+                                    (lux + context.offset_x + xoffset, luy + context.offset_y), 
+                                    (lux + context.offset_x + xoffset, luy + context.offset_y + tex_height:real * context.scale), 
+                                    (0, 0, 0, 20));
+                        }
+
+                        // 获取鼠标所在的像素位置，高亮这一块儿
+                        let (mposx, mposy) = GetMousePos();
+                        let mpixx = ((mposx - lux - context.offset_x) / context.scale): int: real;
+                        let mpixy = ((mposy - luy - context.offset_y) / context.scale): int: real;
+
+                        if (mpixx >= 0. && mpixx < tex_width:real && mpixy >= 0. && mpixy < tex_height:real)
+                        {
+                            // Ok 鼠标指向的像素位置是合法的，高亮！
+                            let highlight_p0 = (mpixx * context.scale + context.offset_x + lux, mpixy * context.scale + context.offset_y + luy);
+                            let highlight_p1 = ((mpixx + 1.) * context.scale + context.offset_x + lux, (mpixy + 1.) * context.scale + context.offset_y + luy);
+                            drawlist->AddRectFilled(highlight_p0, highlight_p1, (255, 255, 255, 100));
+                        }
+
+                        // 不过需要注意的是，引擎使用的像素坐标原点不是左上角，而是左下角，所以这里需要做一次简单变换
+                        let mepixx = mpixx: int;
+                        let mepixy = tex_height - 1 - mpixy: int;
+
+                        // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
+                        // TODO: 处理右键
+
+                        std::panic("TODO"); 
+
+                        if (input::keydown(keycode::MOUSE_L_BUTTION))
+                            context.mouse_down = option::value(keycode::MOUSE_L_BUTTION);
+                        else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                            context.mouse_down = option::value(keycode::MOUSE_R_BUTTION);
+
                         PopClipRect();
                     }
                     none?
@@ -154,6 +274,7 @@ namespace drawpannel
                 scale = 10.,
                 offset_x = 0.,
                 offset_y = 0.,
+                drawtool = all_draw_tools[0],
             }
         ));
     }

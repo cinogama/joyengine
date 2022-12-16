@@ -392,6 +392,9 @@ R"(
 
         extern("libjoyecs", "je_gui_draw_list_add_image")
         public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_line")
+        public func AddLine(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA)=> void;
     }
     extern("libjoyecs", "je_gui_get_window_draw_list")
     public func GetWindowDrawList()=> DrawListT;
@@ -758,6 +761,13 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
     jegl_using_resource((*texture)->resouce());
 
     list->AddImage((ImTextureID)(*texture)->resouce()->m_uint1, val2vec2(args + 1), val2vec2(args + 2), ImVec2(0, 1), ImVec2(1, 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_draw_list_add_line(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddLine(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3));
     return wo_ret_void(vm);
 }
 
