@@ -988,7 +988,9 @@ WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(), wo_int(args + 1), wo_int(args + 2));
+    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(), 
+        wo_int(wo_struct_get(args + 1, 0)), 
+        wo_int(wo_struct_get(args + 1, 1)));
 
     return wo_ret_gchandle(vm, pix, args + 0, [](void* ptr)
         {
@@ -1013,10 +1015,10 @@ WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args, size_t ar
     auto* pix = (jeecs::graphic::texture::pixel*)wo_pointer(args + 0);
     auto color = jeecs::math::vec4();
 
-    color.x = wo_float(args + 1);
-    color.y = wo_float(args + 2);
-    color.z = wo_float(args + 3);
-    color.w = wo_float(args + 4);
+    color.x = wo_float(wo_struct_get(args + 1, 0));
+    color.y = wo_float(wo_struct_get(args + 1, 1));
+    color.z = wo_float(wo_struct_get(args + 1, 2));
+    color.w = wo_float(wo_struct_get(args + 1, 3));
 
     pix->set(color);
 
@@ -1577,13 +1579,13 @@ namespace je
             public func size(self: texture)=> (int, int);
 
             extern("libjoyecs", "wojeapi_texture_get_pixel")
-            public func pix(self: texture, x: int, y: int)=> pixel;
+            public func pix(self: texture, pos: (int, int))=> pixel;
 
             public using pixel = gchandle;
             namespace pixel
             {
                 extern("libjoyecs", "wojeapi_texture_set_pixel_color")
-                public func set_color(self: pixel, r: real, g: real, b: real, a: real)=> void;
+                public func set_color(self: pixel, rgba: (real,real,real,real))=> void;
 
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
                 public func get_color(self: pixel)=> (real, real, real, real);

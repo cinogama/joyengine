@@ -667,6 +667,8 @@ struct jegl_texture
 
     texture_format  m_format;
     texture_sampling m_sampling;
+
+    bool            m_modified;
 };
 
 struct jegl_vertex
@@ -892,6 +894,7 @@ struct jegl_graphic_api
 
     using init_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
+    using update_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
 
     using draw_vertex_func_t = void(*)(jegl_resource*);
@@ -3945,6 +3948,7 @@ namespace jeecs
                 }
                 inline void set(const math::vec4& value) const noexcept
                 {
+                    _m_texture->m_modified = true;
                     switch (_m_texture->m_format)
                     {
                     case jegl_texture::texture_format::MONO:

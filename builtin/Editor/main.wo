@@ -601,7 +601,7 @@ func display_icon_in_console()
         {
             let mut out_line = "";
             for (let mut x = 0; x < width; x += 1)
-                out_line += chtex->pix(x, y)->get_color[3] <= 0.175 ? "  " | "■";
+                out_line += chtex->pix((x, y))->get_color[3] <= 0.175 ? "  " | "■";
 
             je::log(F"{out_line}|");
         }

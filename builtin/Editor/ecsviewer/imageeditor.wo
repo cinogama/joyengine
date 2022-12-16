@@ -14,6 +14,9 @@ namespace drawpannel
         mut offset_x: real,
         mut offset_y: real,
         mut drawtool: DrawToolT,
+
+        mut mousedown: bool,
+        mut mousekey: option<keycode>,
     };
 
     func _delta_wheel()
@@ -44,6 +47,11 @@ namespace drawpannel
         }
         func OnMouseHold(self: Pen, target: graphic::texture, pos: (int, int))
         {
+            let (px, py) = pos;
+            let (w, h) = target->size;
+
+            if (px >= 0 && px < w && py >= 0 && py < h)
+                target->pix(pos)->set_color((0., 0., 0., 1.));
         }
         func OnMouseUp(self: Pen, target: graphic::texture, pos: (int, int))
         {
@@ -80,12 +88,12 @@ namespace drawpannel
         }
     }
 
-    let all_draw_tools = [
-        DrawToolT::create("无", (): Nothing),
-        DrawToolT::create("钢笔", (): Pen)
-    ];
+    let all_draw_tools = {
+        ["无"] = \=DrawToolT::create("无", (): Nothing);,
+        ["钢笔"] = \=DrawToolT::create("钢笔", (): Pen);,
+    };
 
-    func edittexture(e: option<entity>, images: array<(int, mut option<graphic::texture>)>, context: DrawContextT)
+    func edittexture(images: array<(int, mut option<graphic::texture>)>, context: DrawContextT)
     {
         let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None);
 
@@ -93,23 +101,16 @@ namespace drawpannel
         {
             for (let index, (passid, texture) : images)
             {
-                e   
-                =>> \e = e->editor::valid ? option::value(e) | option::none;
-                ->> \e = images[index][1] = e->editor::graphic::get_textures->get(passid) 
-                    =>> \t = t->isvalid? option::value(t) | option::none;
-                    ;
-                ;
-                 
                 let texture_path = texture->>\t=t->path;->valor("不存在");
                 if (BeginTabItem(F"通道{passid}: {texture_path}"))
                 {
                     // OK 在这里显示一下绘图工具箱
                     BeginGroup();
                     Text(F"当前工具: \n {context.drawtool.name}");
-                    for (let _, tool : all_draw_tools)
+                    for (let name, tool_create_method : all_draw_tools)
                     {
-                        if (ButtonSize(tool.name, (100., 0.)))
-                            context.drawtool = tool;
+                        if (ButtonSize(name, (100., 0.)))
+                            context.drawtool = tool_create_method();
                     }
                     EndGroup();
 
@@ -125,7 +126,8 @@ namespace drawpannel
                         InvisibleButton("##draw_space", GetContentRegionAvail());
                         if (IsItemActive() || IsItemHovered())
                         {
-                            if (IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
+                            if (input::keydown(keycode::L_CTRL) 
+                                && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
                             {
                                 let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
                                 context.offset_x += mousedelta_x;
@@ -182,29 +184,37 @@ namespace drawpannel
                         let mepixy = tex_height - 1 - mpixy: int;
 
                         // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
-                        // TODO: 处理右键
-
-                        std::panic("TODO"); 
-
-                        if (input::keydown(keycode::MOUSE_L_BUTTION))
-                            context.mouse_down = option::value(keycode::MOUSE_L_BUTTION);
-                        else if (input::keydown(keycode::MOUSE_R_BUTTION))
-                            context.mouse_down = option::value(keycode::MOUSE_R_BUTTION);
+                        let mut first_click = false;
+                        if (context.mousedown == false)
+                        {
+                            first_click = true;
+                            if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                context.mousekey = option::value(keycode::MOUSE_L_BUTTION);
+                            else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                                context.mousekey = option::value(keycode::MOUSE_R_BUTTION);
+                            else
+                                first_click = false;
+                        }
+                        if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
+                        {
+                            context.mousedown = true;
+                            if (first_click)
+                                context.drawtool->OnMouseDown(tex, (mepixx, mepixy));
+                            else
+                                context.drawtool->OnMouseHold(tex, (mepixx, mepixy));
+                        }
+                        else
+                        {
+                            if (context.mousedown)
+                                context.drawtool->OnMouseUp(tex, (mepixx, mepixy));
+                            context.mousedown = false;
+                            context.mousekey = option::none;
+                        }
 
                         PopClipRect();
                     }
                     none?
-                    {
-                        if (e->has && e->val->editor::valid)
-                        {
-                            Text("当前实体不存在对应通道的纹理");
-                            if (Button("点击此按钮添加"))
-                                std::panic("TODO");
-                        }
-                        else
-                            Text("实体不存在");
-                        
-                    }
+                        Text("不存在对应通道的纹理");
                     }
                     
 
@@ -267,14 +277,17 @@ namespace drawpannel
         }
 
         // OK
-        launch(edittexture, (option::value(e), 
+        launch(edittexture, (
             used_texture_id_pass 
                 ->> \id = (id, mut textures->get(id));,
             DrawContextT{
                 scale = 10.,
                 offset_x = 0.,
                 offset_y = 0.,
-                drawtool = all_draw_tools[0],
+                drawtool = all_draw_tools["无"](),
+
+                mousedown = false,
+                mousekey = option::none,
             }
         ));
     }

@@ -456,6 +456,7 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::te
     texture->m_raw_texture_data->m_height = height;
     texture->m_raw_texture_data->m_format = format;
     texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
+    texture->m_raw_texture_data->m_modified = false;
 
     return texture;
 }
@@ -517,7 +518,7 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
         texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;
-
+        texture->m_raw_texture_data->m_modified = false;
         // Read samping config from cache file...
         if (!_jegl_read_texture_sampling_cache(path, &texture->m_raw_texture_data->m_sampling))
             texture->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::DEFAULT;

@@ -660,10 +660,18 @@ inline void _gl_using_shader_program(jegl_resource* resource)
     glUseProgram(resource->m_uint1);
 }
 
-inline void _gl_using_texture2d(jegl_resource* resource)
+inline void _gl_using_texture2d(jegl_thread* gthread, jegl_resource* resource)
 {
     assert(resource->m_raw_texture_data);
-    auto bind_texture_type = GL_TEXTURE_2D;
+
+    if (resource->m_raw_texture_data->m_modified)
+    {
+        resource->m_raw_texture_data->m_modified = false;
+        // Modified, free current resource id, reload one.
+        glDeleteTextures(1, &resource->m_uint1);
+
+        gl_init_resource(gthread, resource);
+    }
 
     if (0 != (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::MSAA_MASK))
         glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, resource->m_uint1);
@@ -678,7 +686,7 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
     if (resource->m_type == jegl_resource::type::SHADER)
         _gl_using_shader_program(resource);
     else if (resource->m_type == jegl_resource::type::TEXTURE)
-        _gl_using_texture2d(resource);
+        _gl_using_texture2d(gthread, resource);
     else if (resource->m_type == jegl_resource::type::VERTEX)
         glBindVertexArray(resource->m_uint1);
     else if (resource->m_type == jegl_resource::type::FRAMEBUF)
