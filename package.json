@@ -1,0 +1,18 @@
+{
+    "config" : [
+        "release_x64", "debug_x64"
+    ],
+    "dependence" : {
+        "process" : {
+            "mirror" : "https://gitlab.cinogama.com/cinogamaproject/woolangpackages",
+            "path" : "build/pkg",
+            "version" : "1.0.0"
+        }
+    },
+    "name" : "joyengineecs",
+    "version" : "1.0.0",
+    "woolang" : {
+        "mirror" : "https://gitlab.cinogama.com/cinogamaproject",
+        "version" : "1.0.0"
+    }
+}
