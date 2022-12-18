@@ -505,6 +505,7 @@ jegl_resource* jegl_load_texture(const char* path)
         );
 
         delete[] fbuf;
+        jeecs_file_close(texfile);
 
         if (texture->m_raw_texture_data->m_pixels == nullptr)
         {

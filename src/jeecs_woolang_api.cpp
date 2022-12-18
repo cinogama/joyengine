@@ -209,7 +209,7 @@ WO_API wo_api wojeapi_update_texture_sampling_method_by_path(wo_vm vm, wo_value 
 {
     //extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
     //public func update_texture_sampling_method_by_path(path: string, method: texture_sampling)=> result<void, string>;
-    if (_jegl_write_texture_sampling_cache(wo_string(args + 0), (jegl_texture::texture_sampling)wo_int(args+1)))
+    if (_jegl_write_texture_sampling_cache(wo_string(args + 0), (jegl_texture::texture_sampling)wo_int(args + 1)))
         return wo_ret_ok_void(vm);
     return wo_ret_err_string(vm, "Failed to write image sampling method, maybe image file not exist.");
 }
@@ -988,8 +988,8 @@ WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(), 
-        wo_int(wo_struct_get(args + 1, 0)), 
+    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(),
+        wo_int(wo_struct_get(args + 1, 0)),
         wo_int(wo_struct_get(args + 1, 1)));
 
     return wo_ret_gchandle(vm, pix, args + 0, [](void* ptr)
@@ -997,6 +997,43 @@ WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
             delete (jeecs::graphic::texture::pixel*)ptr;
         });
 }
+
+WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
+    auto tex_raw = loaded_texture->get()->resouce()->m_raw_texture_data;
+    if (tex_raw->m_pixels)
+    {
+        auto memsz = tex_raw->m_width * tex_raw->m_height *
+            (tex_raw->m_format & jegl_texture::texture_format::COLOR_DEPTH_MASK);
+        if (memsz > 0)
+        {
+            auto* membuf = malloc(memsz);
+            memcpy(membuf, tex_raw->m_pixels, memsz);
+            return wo_ret_ok_gchandle(vm, membuf, nullptr, [](void* buf) {free(buf); });
+        }
+    }
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_texture_restore_snapshot(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    auto* texture_buf = wo_pointer(args + 1);
+
+    auto tex_raw = loaded_texture->get()->resouce()->m_raw_texture_data;
+    if (tex_raw->m_pixels)
+    {
+        auto memsz = tex_raw->m_width * tex_raw->m_height *
+            (tex_raw->m_format & jegl_texture::texture_format::COLOR_DEPTH_MASK);
+        memcpy(tex_raw->m_pixels, texture_buf, memsz);
+
+        return wo_ret_bool(vm, true);
+    }
+    return wo_ret_bool(vm, false);
+}
+
 WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args, size_t argc)
 {
     auto* pix = (jeecs::graphic::texture::pixel*)wo_pointer(args + 0);
@@ -1589,6 +1626,17 @@ namespace je
 
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
                 public func get_color(self: pixel)=> (real, real, real, real);
+            }
+
+            namespace editor
+            {
+                public using snapshot_t = gchandle;
+
+                extern("libjoyecs", "wojeapi_texture_take_snapshot")
+                public func snapshot(self: texture)=> option<snapshot_t>;
+
+                extern("libjoyecs", "wojeapi_texture_restore_snapshot")
+                public func restore_snapshot(self: texture, snapshot: snapshot_t)=> bool;
             }
         }
 

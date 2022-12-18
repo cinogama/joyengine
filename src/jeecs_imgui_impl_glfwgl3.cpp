@@ -326,6 +326,12 @@ R"(
     extern("libjoyecs", "je_gui_checkbox")
     public func CheckBox(label: string, checked: bool)=> option<bool>;
 
+    extern("libjoyecs", "je_gui_colorpicker4")
+    public func ColorPicker4(label:string, color: (real, real, real, real))=> option<(real, real, real, real)>;
+
+    extern("libjoyecs", "je_gui_colorbutton")
+    public func ColorButton(label:string, color: (real, real, real, real))=> bool;
+
     extern("libjoyecs", "je_gui_input_text_box")
     public func InputText(label:string, buffer: string)=> option<string>;
 
@@ -704,6 +710,14 @@ WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args, size_t argc)
 ImVec2 val2vec2(wo_value v)
 {
     return ImVec2(wo_float(wo_struct_get(v, 0)), wo_float(wo_struct_get(v, 1)));
+}
+ImVec4 val2vec4(wo_value v)
+{
+    return ImVec4(
+        wo_float(wo_struct_get(v, 0)),
+        wo_float(wo_struct_get(v, 1)), 
+        wo_float(wo_struct_get(v, 2)),
+        wo_float(wo_struct_get(v, 3)));
 }
 
 WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args, size_t argc)
@@ -1161,6 +1175,30 @@ WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args, size_t argc)
     wo_set_float(wo_struct_get(result, 1), sz.y);
 
     return wo_ret_val(vm, result);
+}
+
+WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::ColorButton(wo_string(args + 0), val2vec4(args + 1)));
+}
+WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args, size_t argc)
+{
+    float rgba[4] = {
+        wo_float(wo_struct_get(args + 1,0)),
+        wo_float(wo_struct_get(args + 1,1)),
+        wo_float(wo_struct_get(args + 1,2)),
+        wo_float(wo_struct_get(args + 1,3)), };
+
+    if (ImGui::ColorPicker4(wo_string(args + 0), rgba))
+    {
+        wo_value result = wo_push_struct(vm, 4);
+        wo_set_float(wo_struct_get(result, 0), rgba[0]);
+        wo_set_float(wo_struct_get(result, 1), rgba[1]);
+        wo_set_float(wo_struct_get(result, 2), rgba[2]);
+        wo_set_float(wo_struct_get(result, 3), rgba[3]);
+        return wo_ret_option_val(vm, result);
+    }
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)

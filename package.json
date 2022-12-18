@@ -1,8 +1,14 @@
 {
     "config" : [
-        "release_x64", "debug_x64"
+        "release_x64",
+        "debug_x64"
     ],
     "dependence" : {
+        "math": {
+            "mirror": "https://gitlab.cinogama.com/cinogamaproject/woolangpackages",
+            "path": "build/pkg",
+            "version": "1.0.0"
+        },
         "process" : {
             "mirror" : "https://gitlab.cinogama.com/cinogamaproject/woolangpackages",
             "path" : "build/pkg",

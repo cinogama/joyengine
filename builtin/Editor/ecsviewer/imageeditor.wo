@@ -9,6 +9,8 @@ using generic;
 
 namespace drawpannel
 {
+    alias color4_t = (real, real, real, real);
+
     using DrawContextT = struct{
         mut scale: real,
         mut offset_x: real,
@@ -16,7 +18,13 @@ namespace drawpannel
         mut drawtool: DrawToolT,
 
         mut mousedown: bool,
-        mut mousekey: option<keycode>,
+
+        mut usecolor: color4_t,
+        mut maincolor: color4_t,
+        mut subcolor: color4_t,
+
+        edited_textures: map<graphic::texture, void>, // TODO: 图片的历史记录也放在这里
+        // 傻逼键盘迟早得换！
     };
 
     func _delta_wheel()
@@ -30,61 +38,61 @@ namespace drawpannel
 
     using Nothing = ()
     {
-        func OnMouseDown(self: Nothing, target: graphic::texture, pos: (int, int))
+        func OnMouseDown(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
         {
         }
-        func OnMouseHold(self: Nothing, target: graphic::texture, pos: (int, int))
+        func OnMouseHold(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
         {
         }
-        func OnMouseUp(self: Nothing, target: graphic::texture, pos: (int, int))
+        func OnMouseUp(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
         {
         }
     }
     using Pen = ()
     {
-        func OnMouseDown(self: Pen, target: graphic::texture, pos: (int, int))
+        func OnMouseDown(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
         {
         }
-        func OnMouseHold(self: Pen, target: graphic::texture, pos: (int, int))
+        func OnMouseHold(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
         {
             let (px, py) = pos;
             let (w, h) = target->size;
 
             if (px >= 0 && px < w && py >= 0 && py < h)
-                target->pix(pos)->set_color((0., 0., 0., 1.));
+                target->pix(pos)->set_color(color);
         }
-        func OnMouseUp(self: Pen, target: graphic::texture, pos: (int, int))
+        func OnMouseUp(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
         {
         }
     }
 
     using DrawToolT = struct{
         name: string,
-        on_mouse_down: (graphic::texture, (int, int))=>void,
-        on_mouse_hold: (graphic::texture, (int, int))=>void,
-        on_mouse_up: (graphic::texture, (int, int))=>void,
+        on_mouse_down: (graphic::texture, color4_t, (int, int))=>void,
+        on_mouse_hold: (graphic::texture, color4_t, (int, int))=>void,
+        on_mouse_up: (graphic::texture, color4_t, (int, int))=>void,
     }
     {
         func create<T>(name: string, instance: T)
         {
             return DrawToolT{
                 name = name,
-                on_mouse_down = \t: graphic::texture,p: (int, int) = instance->OnMouseDown(t, p);,
-                on_mouse_hold = \t: graphic::texture,p: (int, int) = instance->OnMouseHold(t, p);,
-                on_mouse_up = \t: graphic::texture,p: (int, int) = instance->OnMouseUp(t, p);,
+                on_mouse_down = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseDown(t, c, p);,
+                on_mouse_hold = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseHold(t, c, p);,
+                on_mouse_up = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseUp(t, c, p);,
             };
         }
-        func OnMouseDown(self: DrawToolT, target: graphic::texture, pos: (int, int))
+        func OnMouseDown(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
         {
-            return self.on_mouse_down(target, pos);
+            return self.on_mouse_down(target, color, pos);
         }
-        func OnMouseHold(self: DrawToolT, target: graphic::texture, pos: (int, int))
+        func OnMouseHold(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
         {
-            return self.on_mouse_hold(target, pos);
+            return self.on_mouse_hold(target, color, pos);
         }
-        func OnMouseUp(self: DrawToolT, target: graphic::texture, pos: (int, int))
+        func OnMouseUp(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
         {
-            return self.on_mouse_up(target, pos);
+            return self.on_mouse_up(target, color, pos);
         }
     }
 
@@ -106,6 +114,29 @@ namespace drawpannel
                 {
                     // OK 在这里显示一下绘图工具箱
                     BeginGroup();
+                    
+                    if (ColorButton("##main_color", context.maincolor) )
+                        OpenPopup("MainColorPicker");
+                    SameLine();
+                    if (ColorButton("##sub_color", context.subcolor) )
+                        OpenPopup("SubColorPicker");
+
+                    let mut enable_draw = true;
+                    if (BeginPopup("MainColorPicker"))
+                    {
+                        enable_draw = false;
+                        ColorPicker4("##main_color_picker", context.maincolor)
+                            ->> \c = context.maincolor = c;;
+                        EndPopup();
+                    }
+                    if (BeginPopup("SubColorPicker"))
+                    {
+                        enable_draw = false;
+                        ColorPicker4("##sub_color_picker", context.subcolor)
+                            ->> \c = context.subcolor = c;;
+                        EndPopup();
+                    }
+
                     Text(F"当前工具: \n {context.drawtool.name}");
                     for (let name, tool_create_method : all_draw_tools)
                     {
@@ -123,7 +154,9 @@ namespace drawpannel
                         let (tex_width, tex_height) = tex->size;
                         let drawlist = GetWindowDrawList();
 
-                        InvisibleButton("##draw_space", GetContentRegionAvail());
+                        let (avaliw, avalih) = GetContentRegionAvail();
+
+                        InvisibleButton("##draw_space", (avaliw->\x=x<=100.?100.|x;, avalih->\x=x<=100.?100.|x;));
                         if (IsItemActive() || IsItemHovered())
                         {
                             if (input::keydown(keycode::L_CTRL) 
@@ -183,32 +216,44 @@ namespace drawpannel
                         let mepixx = mpixx: int;
                         let mepixy = tex_height - 1 - mpixy: int;
 
+                        if (input::keydown(keycode::MOUSE_M_BUTTION)
+                            && mepixx >= 0 && mepixx < tex_width
+                            && mepixy >= 0 && mepixy < tex_height)
+                            context.maincolor = tex->pix((mepixx, mepixy))->get_color;
+
                         // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
-                        let mut first_click = false;
-                        if (context.mousedown == false)
+                        // NOTE: CTRL 按下时不执行绘制操作
+                        if (! input::keydown(keycode::L_CTRL) && enable_draw)
                         {
-                            first_click = true;
-                            if (input::keydown(keycode::MOUSE_L_BUTTION))
-                                context.mousekey = option::value(keycode::MOUSE_L_BUTTION);
-                            else if (input::keydown(keycode::MOUSE_R_BUTTION))
-                                context.mousekey = option::value(keycode::MOUSE_R_BUTTION);
+                            let mut first_click = false;
+                            if (context.mousedown == false)
+                            {
+                                first_click = true;
+                                if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                    context.usecolor = context.maincolor;
+                                else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                                    context.usecolor = context.subcolor;
+                                else
+                                    first_click = false;
+                            }
+                            if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
+                            {
+                                // 图片被编辑过了，储存起来，窗口关闭时询问保存！
+                                if (!context.edited_textures->find(tex))
+                                    context.edited_textures->set(tex, nil);
+
+                                context.mousedown = true;
+                                if (first_click)
+                                    context.drawtool->OnMouseDown(tex, context.usecolor, (mepixx, mepixy));
+                                else
+                                    context.drawtool->OnMouseHold(tex, context.usecolor, (mepixx, mepixy));
+                            }
                             else
-                                first_click = false;
-                        }
-                        if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
-                        {
-                            context.mousedown = true;
-                            if (first_click)
-                                context.drawtool->OnMouseDown(tex, (mepixx, mepixy));
-                            else
-                                context.drawtool->OnMouseHold(tex, (mepixx, mepixy));
-                        }
-                        else
-                        {
-                            if (context.mousedown)
-                                context.drawtool->OnMouseUp(tex, (mepixx, mepixy));
-                            context.mousedown = false;
-                            context.mousekey = option::none;
+                            {
+                                if (context.mousedown)
+                                    context.drawtool->OnMouseUp(tex, context.usecolor, (mepixx, mepixy));
+                                context.mousedown = false;
+                            }
                         }
 
                         PopClipRect();
@@ -227,6 +272,39 @@ namespace drawpannel
 
         if (open)
             return FormAction::Nothing;
+
+        // 遍历所有被编辑过的图片，询问是否需要保存
+        for (let edited_texture, _ : context.edited_textures)
+        {
+            alias float = real;
+            
+            launch(func(){
+                let mut open = true;
+                BeginAttr(F"是否需要保存", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+                {
+                    Text(F"纹理:\n{edited_texture->path}\n已经被编辑了，是否需要保存？");
+                    let (avali_width, _) = GetContentRegionAvail();
+                    if (ButtonSize("是，覆盖原图片", (avali_width: float, 0.)) )
+                    {
+                        std::panic("TODO;");
+                        open = false;
+                    }
+                    if (ButtonSize(F"是，保存到/Draw/{je::filesys::filename(edited_texture->path)}", (avali_width: float, 0.)) )
+                    {
+                        std::panic("TODO;");
+                        open = false;
+                    }
+                    if (ButtonSize("不保存此文件", (avali_width: float, 0.)) )
+                        open = false;
+                }
+                End();
+
+                if (!open)
+                    return FormAction::Close;
+                return FormAction::Nothing;            
+            }, ());
+        }
+
         return FormAction::Close;
     }
 
@@ -287,7 +365,12 @@ namespace drawpannel
                 drawtool = all_draw_tools["无"](),
 
                 mousedown = false,
-                mousekey = option::none,
+
+                usecolor = (1., 1., 1., 1.),
+                maincolor = (1., 1., 1., 1.),
+                subcolor = (0., 0., 0., 0.),
+
+                edited_textures = {}mut,
             }
         ));
     }

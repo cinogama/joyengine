@@ -6,7 +6,18 @@ import je.gui;
 
 import platform;
 
+import pkg.process;
+
 using je::gui;
+
+// 启动个进程，等待进程结束，如果进程成功执行并以0作为退出码，则返回true
+func start_process(process: string, args: array<string>)
+{
+    return process::create(process, args)
+        =>> \pid = pid->wait->okay;
+        ->> \status = status == 0 ? true | false;
+        ->  valor(false);
+}
 
 using CxxProjectBuildConfig = struct {
     // 配置名称
@@ -16,10 +27,10 @@ using CxxProjectBuildConfig = struct {
     cmake: string,
 
     // 当前配置编译前，CMake需要的命令行参数
-    cmake_option: string,
+    cmake_option: array<string>,
 
     // 当前配置编译时执行的命令
-    built_command: string,
+    built_command: array<string>,
 };
 
 public using CxxProject = struct {
@@ -466,8 +477,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32_debug.lib")
                     ->replace("$$JE_WOOLANG_LIB$$", "libwoo32_debug.lib")
                     ->replace("$$JE_POSTFIX$$", "32_debug"),
-                cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=DEBUG",
-                built_command = "-p:Configuration=Debug",
+                cmake_option = ["-G", "Visual Studio 16 2019", "-A", "x86", "-DCMAKE_BUILD_TYPE=DEBUG"],
+                built_command = ["-p:Configuration=Debug",],
             },
             ["win32_release_x86"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x86",
@@ -475,8 +486,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32.lib")
                     ->replace("$$JE_WOOLANG_LIB$$", "libwoo32.lib")
                     ->replace("$$JE_POSTFIX$$", "32"),
-                cmake_option = "-G \"Visual Studio 16 2019\" -A x86 -DCMAKE_BUILD_TYPE=RELEASE",
-                built_command = "-p:Configuration=Release",
+                cmake_option = ["-G", "Visual Studio 16 2019", "-A", "x86", "-DCMAKE_BUILD_TYPE=RELEASE"],
+                built_command = ["-p:Configuration=Release",],
             },
             ["win32_debug_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_debug_x64",
@@ -484,8 +495,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs_debug.lib")
                     ->replace("$$JE_WOOLANG_LIB$$", "libwoo_debug.lib")
                     ->replace("$$JE_POSTFIX$$", "_debug"),
-                cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=DEBUG",
-                built_command = "-p:Configuration=Debug",
+                cmake_option = ["-G", "Visual Studio 16 2019", "-A", "x64", "-DCMAKE_BUILD_TYPE=DEBUG"],
+                built_command = ["-p:Configuration=Debug",],
             },
             ["win32_release_x64"] = CxxProjectBuildConfig{ 
                 config = "win32_release_x64",
@@ -493,8 +504,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs.lib")
                     ->replace("$$JE_WOOLANG_LIB$$", "libwoo.lib")
                     ->replace("$$JE_POSTFIX$$", ""),
-                cmake_option = "-G \"Visual Studio 16 2019\" -A x64 -DCMAKE_BUILD_TYPE=RELEASE",
-                built_command = "-p:Configuration=Release",
+                cmake_option = ["-G", "Visual Studio 16 2019", "-A", "x64", "-DCMAKE_BUILD_TYPE=RELEASE"],
+                built_command = ["-p:Configuration=Release",],
             } 
         };
 
@@ -707,33 +718,34 @@ $$REGISTER_SYSTEM_TYPES$$
             return result::err(context.display_msg);
         }
 
-        let cmake_command = F"{utils::WrapPath(CMAKE_PATH)} {utils::WrapPath(self.path)} -B {utils::WrapPath(self.path + "msvcbuild_" + config)} {conf->val.cmake_option} -DJEMODULE_BUILT_AIM=\"{config}\"";
-        
-        context.display_msg = F"正在使用CMake生成编译配置\n{cmake_command}";
+        context.display_msg = F"正在使用CMake生成编译配置\n{config}";
         context.progress = 15;
 
-        if (open(cmake_command) != 0)
+        if (start_process(CMAKE_PATH, 
+            [CMAKE_PATH, self.path, "-B", self.path + "msvcbuild_" + config, F"-DJEMODULE_BUILT_AIM=\"{config}\""]
+                ->connect(conf->val.cmake_option)) != true)
         {
             context.display_msg = "CMake生成失败";
             return result::err(context.display_msg);
         }
 
-        let msvc_proj_path = utils::WrapPath(F"{self.path}msvcbuild_{config}/builder/{config}/{self.name}.vcxproj");
+        let msvc_proj_path = F"{self.path}msvcbuild_{config}/builder/{config}/{self.name->replace(" ", "_")}.vcxproj";
         let msvc_compile_result_path = F"{self.path}msvcbuild_{config}/compile.log";
 
         delete(msvc_compile_result_path);
 
-        let build_command = F"{utils::WrapPath(MSVC_PATH)} {msvc_proj_path} {conf->val.built_command} -v:quiet -fl -flp:logfile={utils::WrapPath(msvc_compile_result_path)} && echo Finished";
-
-        context.display_msg = F"正在构建二进制文件\n{build_command}";
+        context.display_msg = F"正在构建二进制文件\n{config}";
         context.progress = 45;
 
-        let compile_result_statu_code = open(build_command);
+        let compile_result_statu_code = start_process(MSVC_PATH, [
+            MSVC_PATH, msvc_proj_path, "-v:quiet", "-fl",
+            F"-flp:logfile={msvc_compile_result_path}" 
+        ]->connect(conf->val.built_command));
         let compile_result = readall(msvc_compile_result_path);
 
         context.massive_msg = option::value(compile_result->valor("没有找到编译日志，查看控制台获取更多信息"));
 
-        if (compile_result_statu_code != 0)
+        if (compile_result_statu_code != true)
         {
             context.display_msg = "C++编译失败";
             return result::err(context.display_msg);

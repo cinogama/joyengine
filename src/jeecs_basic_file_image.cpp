@@ -23,16 +23,18 @@ jeecs_file* jeecs_file_open(const char* path)
 
         return jefhandle;
     }
-    jeecs::debug::logerr("Fail to open file: '%s'.", path);
+    jeecs::debug::logerr("Fail to open file: '%s'(%d).", path, (int)errno);
     return nullptr;
 }
 void jeecs_file_close(jeecs_file* file)
 {
-    if (file)
-    {
-        fclose(file->m_native_file_handle);
-        jeecs::basic::destroy_free(file);
-    }
+    assert(file != nullptr && file->m_native_file_handle != nullptr);
+    auto close_state = fclose(file->m_native_file_handle);
+
+    if (close_state != 0)
+        jeecs::debug::logerr("Fail to close file(%d:%d).", (int)close_state, (int)errno);
+
+    jeecs::basic::destroy_free(file);
 }
 size_t jeecs_file_read(
     void* out_buffer,
