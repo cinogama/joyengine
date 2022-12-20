@@ -35,18 +35,75 @@ void je_init(int argc, char** argv)
     wo_virtual_source(jeecs_filesys_woolang_api_path, jeecs_filesys_woolang_api_src, false);
 }
 
+wo_vm try_open_cached_binary()
+{
+    wo_integer_t expect_crc = 0;
+    FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.jecache4").c_str(), "rb");
+    if (srccrc == nullptr)
+        return nullptr;
+
+    size_t readcount = fread(&expect_crc, sizeof(expect_crc), 1, srccrc);
+    fclose(srccrc);
+
+    if (readcount < 1)
+        return nullptr;
+
+    wo_integer_t src_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/Editor").c_str());
+    if (src_crc64 != expect_crc)
+        return nullptr;
+
+    wo_vm vmm = wo_create_vm();
+    if (wo_load_file(vmm, (std::string(wo_exe_path()) + "/builtin/editor.woo.jecache4").c_str()))
+        return vmm;
+
+    jeecs::debug::logwarn("Failed to load editor compile cache:\n%s",
+        wo_get_compile_error(vmm, WO_NEED_COLOR));
+
+    wo_close_vm(vmm);
+    return nullptr;
+}
+
 bool jedbg_editor(void)
 {
     bool failed_in_start_editor = false;
 
-    wo_vm vmm = wo_create_vm();
-    if (wo_load_file(vmm, "builtin/Editor/main.wo"))
-        wo_run(vmm);
-    else
+    wo_vm vmm = try_open_cached_binary();
+
+    if (vmm == nullptr)
     {
-        jeecs::debug::logerr(wo_get_compile_error(vmm, WO_NEED_COLOR));
-        failed_in_start_editor = true;
+        vmm = wo_create_vm();
+        if (wo_load_file(vmm, (std::string(wo_exe_path()) + "/builtin/Editor/main.wo").c_str()))
+        {
+            size_t binary_length;
+            void* buffer = wo_dump_binary(vmm, &binary_length);;
+
+            FILE* objdump = fopen((std::string(wo_exe_path()) + "/builtin/editor.woo.jecache4").c_str(), "wb");
+            if (objdump != nullptr)
+            {
+                size_t writelen = fwrite(buffer, 1, binary_length, objdump);
+                assert(writelen == binary_length);
+                fclose(objdump);
+            }
+            auto src_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/Editor").c_str());
+            FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.jecache4").c_str(), "wb");
+            if (srccrc != nullptr)
+            {
+                size_t writecount = fwrite(&src_crc64, sizeof(src_crc64), 1, srccrc);
+                assert(writecount == 1);
+                fclose(srccrc);
+            }
+            wo_free_binary(buffer);
+        }
+        else
+        {
+            jeecs::debug::logerr(wo_get_compile_error(vmm, WO_NEED_COLOR));
+            failed_in_start_editor = true;
+        }
     }
+
+    if (failed_in_start_editor == false)
+        wo_run(vmm);
+
     wo_close_vm(vmm);
 
     return !failed_in_start_editor;
