@@ -620,7 +620,7 @@ func display_icon_in_console()
 }
 
 /////////////////////
-
+// 启动编辑器和引擎环境！
 /////////////////////
 
 display_icon_in_console();
