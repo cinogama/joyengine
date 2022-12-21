@@ -1205,11 +1205,11 @@ namespace shader
     };
     let configs = ShaderConfig
     {
-        ztest = LESS,
-        zwrite = ENABLE,
-        blend_src = ONE,
-        blend_dst = ZERO,
-        cull = NONE,
+        ztest = mut LESS,
+        zwrite = mut ENABLE,
+        blend_src = mut ONE,
+        blend_dst = mut ZERO,
+        cull = mut NONE,
     };
 
     let struct_uniform_blocks_decls = []mut: vec<struct_define>;

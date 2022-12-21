@@ -167,7 +167,7 @@ namespace editor::Project
         ]);
 
         let world = World{
-            path = option::none,
+            path = mut option::none,
             instance = world_instance,
             runtime_systems = []mut,
         };
@@ -269,11 +269,11 @@ namespace editor::Project
             path = option::none, // 默认项目不带有path信息，这种项目是不可以被用于保存的
             engine_version = je::editor::build_version(),
             // NOTE: 默认系统应该内置在引擎里，如果获取不到这里直接爆炸
-            graphic_system = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
-            editor_system = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val,
+            graphic_system = mut je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
+            editor_system = mut je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,
             native_modules = {}mut,
-            about_info = "此项目为默认项目，不可用于实际使用\n(C)Cinogama.",
+            about_info = mut "此项目为默认项目，不可用于实际使用\n(C)Cinogama.",
         });
     }
 
@@ -283,11 +283,11 @@ namespace editor::Project
             name = name,
             path = option::value(je::filesys::normalize(path)),
             engine_version = je::editor::build_version(),
-            graphic_system = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
-            editor_system = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val,
+            graphic_system = mut je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
+            editor_system = mut je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val,
             worlds = []mut,
             native_modules = {}mut,
-            about_info = "你可以在这里放一些对项目的描述信息\n(C)Copyright.",
+            about_info = mut "你可以在这里放一些对项目的描述信息\n(C)Copyright.",
         };
 
         if (create_file)

@@ -249,7 +249,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                     ->mapping
                     ->map(\k: string, v: result<CxxProjectBuildConfig, string> 
                         = (k, v->okay->val);),
-                module_instance = option::none,
+                module_instance = mut option::none,
                 };
 
             // 最后，编译一下当前平台
@@ -382,7 +382,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                 // 如果文件打不开，直接在这里爆炸
                 ->map(\conf: string = (conf, generate_cmake_doc(conf)->okay->val);)
                 ->mapping,
-            module_instance = option::none,
+            module_instance = mut option::none,
             };
         
         let current_je_proj = editor::Project::GetCurrentProject();
@@ -528,12 +528,12 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
         // 起个线程跑编译，然后弄个窗口显示一下进度
 
         let context = compile_context{
-            display_msg = "正在开始编译，请稍等……", 
-            progress = 0, 
-            show = true,
-            compile_thread = option::none,
-            compile_result = option::none,
-            massive_msg = option::none,
+            display_msg = mut "正在开始编译，请稍等……", 
+            progress = mut 0, 
+            show = mut true,
+            compile_thread = mut option::none,
+            compile_result = mut option::none,
+            massive_msg = mut option::none,
             };
         je::gui::launch(func(){
             context.show = BeginAttrOpen(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None);

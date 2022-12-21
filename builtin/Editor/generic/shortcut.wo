@@ -17,7 +17,7 @@ namespace shortcut
 	{
 		let hotkey = ShortcutKeyStateAndAction { 
 			keys = hotkeys, 
-			state = false,
+			state = mut false,
 			action = action,
 		};
 		registered_keys->add(hotkey);

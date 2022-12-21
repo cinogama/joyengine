@@ -19,7 +19,7 @@ namespace editor::EntityCreator
     public func edit_context(entity: je::entity)=> EntityContext
     {
         let context = EntityContext{
-            name = entity->editor::name,
+            name = mut entity->editor::name,
             edit_entity = option::value(entity),
             has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
@@ -45,7 +45,7 @@ namespace editor::EntityCreator
     public func create_context()=> EntityContext
     {
         let context = EntityContext{
-            name = "New entity",
+            name = mut "New entity",
             edit_entity = option::none,
             has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,

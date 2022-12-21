@@ -2026,7 +2026,7 @@ R"(
                                                 not_top_entities->add(e);
                                             return result;
                                        },
-                        m_current_entity = option::none:<entity>,
+                        m_current_entity = mut option::none:<entity>,
                         m_all_entity_list = entitys,
                         m_not_top_entities = not_top_entities,
                         m_outed_entities = []mut: vec<entity>,
@@ -2042,7 +2042,7 @@ R"(
                                        {
                                             return e->is_child_of(parent_entity);
                                        },
-                        m_current_entity = option::none:<entity>,
+                        m_current_entity = mut option::none:<entity>,
                         m_all_entity_list = self.m_all_entity_list,
                         m_not_top_entities = []mut: vec<entity>,
                         m_outed_entities = self.m_outed_entities,

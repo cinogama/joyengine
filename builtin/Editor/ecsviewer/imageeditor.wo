@@ -359,16 +359,16 @@ namespace drawpannel
             used_texture_id_pass 
                 ->> \id = (id, mut textures->get(id));,
             DrawContextT{
-                scale = 10.,
-                offset_x = 0.,
-                offset_y = 0.,
-                drawtool = all_draw_tools["无"](),
+                scale = mut 10.,
+                offset_x = mut 0.,
+                offset_y = mut 0.,
+                drawtool = mut all_draw_tools["无"](),
 
-                mousedown = false,
+                mousedown = mut false,
 
-                usecolor = (1., 1., 1., 1.),
-                maincolor = (1., 1., 1., 1.),
-                subcolor = (0., 0., 0., 0.),
+                usecolor = mut (1., 1., 1., 1.),
+                maincolor = mut (1., 1., 1., 1.),
+                subcolor = mut (0., 0., 0., 0.),
 
                 edited_textures = {}mut,
             }

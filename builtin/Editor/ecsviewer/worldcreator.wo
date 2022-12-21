@@ -21,7 +21,7 @@ namespace editor::WorldCreator
     public func create_context()=> WorldContext
     {
         let context = WorldContext{
-            name = "New world",
+            name = mut "New world",
             edit_world = option::none,
             has_append_types = []mut,
             has_active_types = []mut,
@@ -46,7 +46,7 @@ namespace editor::WorldCreator
     public func edit_context(world: je::world)=> WorldContext
     {
         let context = WorldContext{
-            name = world->editor::name(),
+            name = mut world->editor::name(),
             edit_world = option::value(world),
             has_append_types = []mut,
             has_active_types = []mut,

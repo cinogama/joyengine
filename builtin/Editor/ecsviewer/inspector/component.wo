@@ -61,7 +61,7 @@ namespace editor::Inspector::Component
                     let current_component_types = 
                         component_chain{ 
                             m_map = {}mut, 
-                            m_component_type = option::none:<je::typeinfo> 
+                            m_component_type = mut option::none:<je::typeinfo> 
                         };
                     for (let _, component_type : current_entity->editor::get_components_types())
                     {
@@ -80,7 +80,7 @@ namespace editor::Inspector::Component
                             current_types = current_types.m_map->getorset(name, 
                                 component_chain{
                                     m_map = {}mut,
-                                    m_component_type = option::none:<je::typeinfo>
+                                    m_component_type = mut option::none:<je::typeinfo>
                                 });
                         }
 

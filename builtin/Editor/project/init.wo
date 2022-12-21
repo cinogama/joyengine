@@ -43,7 +43,7 @@ namespace editor::Project
             ->map(\rootpath: string = Path{
                 name = rootpath,
                 path = rootpath,
-                childs = option::none};);
+                childs = mut option::none};);
     }
     private func _GetChildPaths(path: Path, update: bool)
     {
@@ -56,7 +56,7 @@ namespace editor::Project
                     ->map(\child_path: string = Path{
                         name = je::filesys::filename(child_path),
                         path = child_path,
-                        childs = option::none
+                        childs = mut option::none
                     };);
 
             path.childs = option::value(arr);            

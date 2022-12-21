@@ -107,7 +107,7 @@ namespace test::memory_leak::ComponentModify
 										je::typeinfo::load_from_name("Camera::OrthoProjection")->val(),
 										je::typeinfo::load_from_name("Camera::PerspectiveProjection")->val(),
 										je::typeinfo::load_from_name("Camera::Viewport")->val(),]),
-								count = 0,
+								count = mut 0,
 							  }, testing));
 		}
 
