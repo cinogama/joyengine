@@ -1,6 +1,8 @@
 import je;
 import je.gui;
 
+import pkg.image;
+
 import builtin.Editor.generic.form.msgbox;
 
 using je;
@@ -10,6 +12,21 @@ using generic;
 namespace drawpannel
 {
     alias color4_t = (real, real, real, real);
+
+    func save_texture_to_path(tex: graphic::texture, path: string)
+    {
+        let (w, h) = tex->size();
+        let saving_img = image::create(w, h);
+
+        for (let mut x = 0; x < w; x += 1)
+            for (let mut y = 0; y < h; y += 1)
+                saving_img->setpix((x, y), tex->pix((x, y))->get_color);
+
+        let result = saving_img->save(path);
+        if (!result)
+            msgbox("图像保存失败", F"无法保存图像到{path}");
+        return result;
+    }
 
     using DrawContextT = struct{
         mut scale: real,
@@ -287,13 +304,20 @@ namespace drawpannel
                     let (avali_width, _) = GetContentRegionAvail();
                     if (ButtonSize("是，覆盖原图片", (avali_width: float, 0.)) )
                     {
-                        std::panic("TODO;");
-                        open = false;
+                        if (je::filesys::externname(edited_texture->path)->lower != "png")
+                            msgbox("无法保存文件", 
+                                F"仅支持保存png文件，原文件为{je::filesys::externname(edited_texture->path)}");
+                        else if (save_texture_to_path(edited_texture, edited_texture->path))
+                            open = false;
                     }
-                    if (ButtonSize(F"另存为/Draw/{je::filesys::filename(edited_texture->path)}", (avali_width: float, 0.)) )
+                    if (ButtonSize(F"另存为/Draw/{je::filesys::purename(edited_texture->path)}.png", (avali_width: float, 0.)) )
                     {
-                        std::panic("TODO;");
-                        open = false;
+                        let projpath = editor::Project::GetCurrentProject().path->val;
+
+                        je::filesys::mkdir(F"{projpath}/Draw");
+
+                        if (save_texture_to_path(edited_texture, F"{projpath}/Draw/{je::filesys::purename(edited_texture->path)}.png"))
+                            open = false;
                     }
                     if (ButtonSize("不保存此文件", (avali_width: float, 0.)) )
                         open = false;
