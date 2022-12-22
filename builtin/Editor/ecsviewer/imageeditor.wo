@@ -121,7 +121,7 @@ namespace drawpannel
                     if (ColorButton("##sub_color", context.subcolor) )
                         OpenPopup("SubColorPicker");
 
-                    let mut enable_draw = true;
+                    let mut enable_draw = !input::keydown(keycode::L_CTRL);
                     if (BeginPopup("MainColorPicker"))
                     {
                         enable_draw = false;
@@ -171,6 +171,8 @@ namespace drawpannel
                             if (context.scale < 1.)
                                 context.scale = 1.;
                         }
+                        else if (!context.mousedown)
+                            enable_draw = false;
 
                         let (p0, p1) = GetItemRect();
                         let (lux, luy) = p0;
@@ -222,8 +224,7 @@ namespace drawpannel
                             context.maincolor = tex->pix((mepixx, mepixy))->get_color;
 
                         // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
-                        // NOTE: CTRL 按下时不执行绘制操作
-                        if (! input::keydown(keycode::L_CTRL) && enable_draw)
+                        if (enable_draw)
                         {
                             let mut first_click = false;
                             if (context.mousedown == false)
@@ -280,7 +281,7 @@ namespace drawpannel
             
             launch(func(){
                 let mut open = true;
-                BeginAttr(F"是否需要保存", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+                BeginAttr(F"是否需要保存##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
                 {
                     Text(F"纹理:\n{edited_texture->path}\n已经被编辑了，是否需要保存？");
                     let (avali_width, _) = GetContentRegionAvail();
@@ -289,7 +290,7 @@ namespace drawpannel
                         std::panic("TODO;");
                         open = false;
                     }
-                    if (ButtonSize(F"是，保存到/Draw/{je::filesys::filename(edited_texture->path)}", (avali_width: float, 0.)) )
+                    if (ButtonSize(F"另存为/Draw/{je::filesys::filename(edited_texture->path)}", (avali_width: float, 0.)) )
                     {
                         std::panic("TODO;");
                         open = false;

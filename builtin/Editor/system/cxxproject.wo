@@ -15,7 +15,7 @@ func start_process(process: string, args: array<string>)
 {
     return process::create(process, args)
         =>> \pid = pid->wait->okay;
-        ->> \status = status == 0 ? true | false;
+        ->> \status = status == 0: process::status_t ? true | false;
         ->  valor(false);
 }
 
