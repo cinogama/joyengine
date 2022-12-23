@@ -120,7 +120,20 @@ namespace drawpannel
 
     func edittexture(images: array<(int, mut option<graphic::texture>)>, context: DrawContextT)
     {
-        let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None);
+        let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
+
+        if (BeginMenuBar())
+        {
+            if (BeginMenu("文件"))
+            {
+                if (MenuItem("画布尺寸"))
+                    std::panic("TODO;");
+
+                EndMenu();
+            }
+
+            EndMenuBar();
+        }
 
         if (BeginTabBar("##draw_textures"))
         {

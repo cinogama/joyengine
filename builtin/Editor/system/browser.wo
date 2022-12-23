@@ -1,6 +1,7 @@
 import woo.std;
 import je.gui;
 import je.filesys;
+import pkg.image;
 
 import openfile;
 import cxxproject;
@@ -193,6 +194,13 @@ namespace editor::Browser
                                 ? force_update()
                                 | generic::msgbox("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = je::filesys::normalize(current_work_path) + filename;);
+                }
+                if (BeginMenu(F"纹理"))
+                {
+                    if (MenuItem(F"空白纹理"))
+                        std::panic("TODO;");
+                        
+                    EndMenu();
                 }
                 Separator();
                 if (BeginMenu("着色器脚本"))
