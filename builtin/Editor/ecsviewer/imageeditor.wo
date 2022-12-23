@@ -139,7 +139,7 @@ namespace drawpannel
         {
             for (let index, (passid, texture) : images)
             {
-                let texture_path = texture->>\t=t->path;->valor("不存在");
+                let texture_path = texture->>\t=t->path->valor("<内置>");->valor("不存在");
                 if (BeginTabItem(F"通道{passid}: {texture_path}"))
                 {
                     // OK 在这里显示一下绘图工具箱
@@ -313,23 +313,23 @@ namespace drawpannel
                 let mut open = true;
                 BeginAttr(F"是否需要保存##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
                 {
-                    Text(F"纹理:\n{edited_texture->path}\n已经被编辑了，是否需要保存？");
+                    Text(F"纹理:\n{edited_texture->path->valor("<内置>")}\n已经被编辑了，是否需要保存？");
                     let (avali_width, _) = GetContentRegionAvail();
                     if (ButtonSize("是，覆盖原图片", (avali_width: float, 0.)) )
                     {
-                        if (je::filesys::externname(edited_texture->path)->lower != "png")
+                        if (je::filesys::externname(edited_texture->path->valor("<内置>"))->lower != "png")
                             msgbox("无法保存文件", 
-                                F"仅支持保存png文件，原文件为{je::filesys::externname(edited_texture->path)}");
-                        else if (save_texture_to_path(edited_texture, edited_texture->path))
+                                F"仅支持保存png文件，原文件为{je::filesys::externname(edited_texture->path->valor("<内置>"))}");
+                        else if (save_texture_to_path(edited_texture, edited_texture->path->valor("<内置>")))
                             open = false;
                     }
-                    if (ButtonSize(F"另存为/Draw/{je::filesys::purename(edited_texture->path)}.png", (avali_width: float, 0.)) )
+                    if (ButtonSize(F"另存为/Draw/{je::filesys::purename(edited_texture->path->valor("<内置>"))}.png", (avali_width: float, 0.)) )
                     {
                         let projpath = editor::Project::GetCurrentProject().path->val;
 
                         je::filesys::mkdir(F"{projpath}/Draw");
 
-                        if (save_texture_to_path(edited_texture, F"{projpath}/Draw/{je::filesys::purename(edited_texture->path)}.png"))
+                        if (save_texture_to_path(edited_texture, F"{projpath}/Draw/{je::filesys::purename(edited_texture->path->valor("<内置>"))}.png"))
                             open = false;
                     }
                     if (ButtonSize("不保存此文件", (avali_width: float, 0.)) )

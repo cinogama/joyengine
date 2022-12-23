@@ -14,6 +14,54 @@ namespace editor::Browser
 {
     public let mut editor_need_hiding_file = true;
 
+    func create_image(default_name: string, location: string, generator: (image)=> void)
+    {
+        let create_context = (mut 16, mut 16, mut default_name);
+        launch(
+            func(context: (mut int, mut int, mut string))
+            {
+                let mut open = true;
+                Begin(F"在{location}创建纹理");
+                Text("文件名");
+                context[2] = InputText("##imagename", context[2])->valor(context[2]);
+
+                Text("宽");
+                SameLine();
+                context[0] = InputInt("##width", context[0])->valor(context[0]);
+
+                Text("高");
+                SameLine();
+                context[1] = InputInt("##height", context[1])->valor(context[1]);
+
+                if (Button("创建"))
+                {
+                    let img = image::create(context[0], context[1]);
+
+                    generator(img);
+
+                    let aimpath = F"{location}/{context[2]}.png";
+                    if (!img->save(aimpath))
+                        generic::msgbox("创建失败", F"无法写入{aimpath}");
+                    else
+                    {
+                        open = false;
+                        force_update();
+                    }
+                }
+                SameLine();
+
+                if (Button("取消"))
+                    open = false;
+
+                End();
+
+                if (open)
+                    return FormAction::Nothing;
+                return FormAction::Close;
+            }, (create_context, )
+        );
+    }
+
     union FileType
     {
         path(je::graphic::texture),
@@ -198,7 +246,19 @@ namespace editor::Browser
                 if (BeginMenu(F"纹理"))
                 {
                     if (MenuItem(F"空白纹理"))
-                        std::panic("TODO;");
+                        create_image("White", current_work_path, func(img){
+                            let (w, h) = img->size;
+                            for (let mut x = 0 ; x < w; x += 1)
+                                for (let mut y = 0 ; y < h; y += 1)
+                                    img->setpix((x, y), (1., 1., 1., 1.));
+                        });
+                    if (MenuItem(F"透明纹理"))
+                        create_image("Empty", current_work_path, func(img){
+                            let (w, h) = img->size;
+                            for (let mut x = 0 ; x < w; x += 1)
+                                for (let mut y = 0 ; y < h; y += 1)
+                                    img->setpix((x, y), (0., 0., 0., 0.));
+                        });
                         
                     EndMenu();
                 }

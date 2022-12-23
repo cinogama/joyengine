@@ -11,7 +11,7 @@ using je;
 namespace editor::Serialize
 {
     alias texture_inform = string;
-    func get_entity_texture_passes(saving_entity: entity)=> dict<int, texture_inform>
+    func get_entity_texture_passes(saving_entity: entity)=> dict<int, option<texture_inform>>
     {
         // 获取实体绑定的通道和纹理信息
         return saving_entity
@@ -79,7 +79,8 @@ namespace editor::Serialize
                     {
                         ["name"] = saving_entity->editor::name: dynamic, 
                         ["components"] = m: dynamic,
-                        ["textures"] = saving_entity->get_entity_texture_passes: dynamic,
+                        // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
+                        ["textures"] = saving_entity->get_entity_texture_passes->forall(\k,v=v->has;): dynamic,
                         ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
                     };);
 	}

@@ -1371,8 +1371,8 @@ WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args, size_t argc)
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
     if (auto str = (*texture)->resouce()->m_path)
-        return wo_ret_string(vm, str);
-    return wo_ret_string(vm, "< Built-in texture >");
+        return wo_ret_option_string(vm, str);
+    return wo_ret_option_none(vm);
 }
 
 const char* jeecs_woolang_api_path = "je.wo";
@@ -1607,7 +1607,7 @@ namespace je
             public func create(width: int, height: int)=> texture;
 
             extern("libjoyecs", "wojeapi_texture_path")
-            public func path(self: texture)=> string;
+            public func path(self: texture)=> option<string>;
 
             extern("libjoyecs", "wojeapi_texture_is_valid")
             public func isvalid(self: texture)=> bool;

@@ -9,7 +9,6 @@ import builtin.Editor.generic.form.askbox;
 import builtin.Editor.generic.form.msgbox;
 import builtin.Editor.generic.widget.dragfile;
 
-
 namespace editor::Inspector::Material
 {
     union shader_option
@@ -87,7 +86,7 @@ namespace editor::Inspector::Material
                     {
                         let texture_path = 
                             textures->get(id)
-                                    ->map(\tex = tex->path;)
+                                    ->map(\tex = tex->path->valor("<内置>");)
                                     ->valor(F"<没有绑定到通道{id}的纹理>");
                                 
                         match (generic::DragFile(name, texture_path))
