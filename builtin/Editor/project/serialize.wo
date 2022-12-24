@@ -80,7 +80,8 @@ namespace editor::Serialize
                         ["name"] = saving_entity->editor::name: dynamic, 
                         ["components"] = m: dynamic,
                         // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
-                        ["textures"] = saving_entity->get_entity_texture_passes->forall(\k,v=v->has;): dynamic,
+                        ["textures"] = saving_entity->get_entity_texture_passes
+                            =>> \k, v = v->has ? {[k] = v->val} | {}; : dynamic,
                         ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
                     };);
 	}

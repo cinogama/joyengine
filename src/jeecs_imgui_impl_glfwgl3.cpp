@@ -85,6 +85,11 @@ namespace je::gui
     extern("libjoyecs", "je_gui_job_vm_handle")
     public func JobID()=> handle;
 
+    extern("libjoyecs", "je_gui_set_clip_board_text")
+    public func SetClipboardText(text: string)=> ImVec2;
+    extern("libjoyecs", "je_gui_get_clip_board_text")
+    public func GetClipboardText()=> string;
+
     extern("libjoyecs", "je_gui_get_window_pos")
     public func GetWindowPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_pos")
@@ -573,6 +578,17 @@ WO_API wo_api je_gui_set_next_item_open(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_set_clip_board_text(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::SetClipboardText(wo_string(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm, ImGui::GetClipboardText());
+}
+
 //
 WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args, size_t argc)
 {
@@ -715,7 +731,7 @@ ImVec4 val2vec4(wo_value v)
 {
     return ImVec4(
         wo_float(wo_struct_get(v, 0)),
-        wo_float(wo_struct_get(v, 1)), 
+        wo_float(wo_struct_get(v, 1)),
         wo_float(wo_struct_get(v, 2)),
         wo_float(wo_struct_get(v, 3)));
 }

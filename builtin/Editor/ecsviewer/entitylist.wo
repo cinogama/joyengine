@@ -46,6 +46,17 @@ namespace editor::EntityList
         {
             launch(EntityCreator::show, (EntityCreator::edit_context(entity->val),));
         }
+        if (MenuItemEnabled("复制", has_editable_entity))
+        {
+            match (editor::Serialize::save_entity(entity->val))
+            {
+            value(entity_dat)?
+                SetClipboardText(entity_dat: string);
+            none?
+                generic::msgbox("复制实体失败", "复制了一个不合法的实体");
+            }
+            
+        }
         Separator();
         if (MenuItemEnabled("删除", has_editable_entity))
         {
@@ -203,6 +214,7 @@ namespace editor::EntityList
             match (get_current_entity())
             {
                 value(selected_entity)?
+
                     if (selected_entity == entity)
                         attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                 none?
