@@ -8,7 +8,7 @@ import builtin.Editor.generic.form.msgbox;
 
 namespace editor::WorldCreator
 {
-    private let icon_image = je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/System.png");
+    private let icon_image = je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/System.png")->val;
 
     using WorldContext  = struct {
         mut name  : string,

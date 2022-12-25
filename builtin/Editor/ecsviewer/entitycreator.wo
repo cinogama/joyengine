@@ -8,7 +8,7 @@ import builtin.Editor.generic.form.msgbox;
 
 namespace editor::EntityCreator
 {
-    private let icon_image = je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/Component.png");
+    private let icon_image = je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/Component.png")->val;
     using EntityContext = struct {
         mut name  : string,
         edit_entity      : option<je::entity>,

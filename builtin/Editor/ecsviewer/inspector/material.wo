@@ -94,7 +94,10 @@ namespace editor::Inspector::Material
                             Drag(path)?
                             {
                                 // 拖动文件到这里，加载这个纹理，然后绑定
-                                entity->editor::graphic::bind_texture(id, je::graphic::texture::load(path));
+                                je::graphic::texture::load(path)
+                                    ->> \tex = entity->editor::graphic::bind_texture(id, tex);
+                                    ->  or(\=generic::msgbox("加载纹理失败", F"无法加载文件{path}作为纹理");)
+                                    ;
                             }
                             None?
                                 ; // 没任何变化，啥也不干

@@ -209,8 +209,9 @@ namespace editor::Serialize
             ->map(func(textures: dynamic)
                 {
                     for (let passid, path : textures: dict)
-                        entity->editor::graphic::bind_texture(passid as int,
-                            graphic::texture::load(path as string));
+                        graphic::texture::load(path as string)
+                            ->> \tex = entity->editor::graphic::bind_texture(passid as int, tex);
+                            ;
                 });
 
         // 如果数据里面有name字段，那就设置一下实体名字

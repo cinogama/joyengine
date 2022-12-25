@@ -7,6 +7,11 @@
 std::atomic_flag log_buffer_mx = {};
 std::list<std::pair<int, std::string>> log_buffer;
 
+WO_API wo_api wojeapi_generate_uid(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm, je_uid_generate().to_string().c_str());
+}
+
 WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_string(vm, je_build_version());
@@ -967,11 +972,16 @@ WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = new jeecs::graphic::texture(wo_string(args + 0));
-    return wo_ret_gchandle(vm,
-        new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
-        [](void* ptr) {
-            delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
-        });
+
+    if (loaded_texture->enabled())
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
+            [](void* ptr) {
+                delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
+            });
+
+    delete loaded_texture;
+    return wo_ret_option_none(vm);
 }
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1383,6 +1393,9 @@ const char* jeecs_woolang_api_src = R"(
 import woo.std;
 namespace je
 {
+    extern("libjoyecs", "wojeapi_generate_uid")
+        public func uid()=> string;
+
     namespace editor
     {
         extern("libjoyecs", "wojeapi_build_version")
@@ -1604,7 +1617,7 @@ namespace je
         public using texture = gchandle
         {
             extern("libjoyecs", "wojeapi_texture_open")
-            public func load(path: string)=> texture;
+            public func load(path: string)=> option<texture>;
 
             extern("libjoyecs", "wojeapi_texture_create")
             public func create(width: int, height: int)=> texture;

@@ -382,23 +382,76 @@ namespace drawpannel
         }
 
         // OK
-        launch(edittexture, (
-            used_texture_id_pass 
-                ->> \id = (id, textures->get(id)->or(\=graphic::texture::create(16, 16);));,
-            DrawContextT{
-                scale = mut 10.,
-                offset_x = mut 0.,
-                offset_y = mut 0.,
-                drawtool = mut all_draw_tools["无"](),
+        let has_no_exist_texture = ! used_texture_id_pass
+            ->> \id = textures->get(id)->has;
+            ->  reduce(\l, r = l ? r | l;)
+            ->  valor(true);
+            ;
 
-                mousedown = mut false,
+        if (has_no_exist_texture)
+        {
+            generic::askbox("是否自动创建纹理？", F"尝试绘制实体{e->editor::name} {e->editor::chunkinfo}\n"
+                + "但是此实体的一部分通道纹理并未创建，是否需要自动创建？", 
+                func (need_auto_gen)
+                {
+                    if (need_auto_gen)
+                    {
+                        launch(edittexture, (
+                            used_texture_id_pass 
+                                ->> \id = (id, textures->get(id)->or(func(){
+                                    let img = image::create(16, 16);
+                                    for (let mut x = 0; x < 16; x += 1)
+                                        for (let mut y = 0; y < 16; y += 1)
+                                            img->setpix((x,y), (1.,1.,1.,1.));
 
-                usecolor = mut (1., 1., 1., 1.),
-                maincolor = mut (1., 1., 1., 1.),
-                subcolor = mut (0., 0., 0., 0.),
+                                    let projpath = editor::Project::GetCurrentProject().path->val;
+                                    je::filesys::mkdir(F"{projpath}/Draw");
 
-                edited_textures = {}mut,
-            }
-        ));
+                                    let mut imgfile = je::uid();
+                                    while (je::filesys::exist(F"{projpath}/Draw/{imgfile}.png"))
+                                        imgfile = je::uid();
+
+                                    img->save(F"{projpath}/Draw/{imgfile}.png");
+                                    let tex = graphic::texture::load(F"{projpath}/Draw/{imgfile}.png")->val;
+                                    e->editor::graphic::bind_texture(id, tex);
+                                    return tex;
+                                }));,
+                            DrawContextT{
+                                scale = mut 10.,
+                                offset_x = mut 0.,
+                                offset_y = mut 0.,
+                                drawtool = mut all_draw_tools["无"](),
+
+                                mousedown = mut false,
+
+                                usecolor = mut (1., 1., 1., 1.),
+                                maincolor = mut (1., 1., 1., 1.),
+                                subcolor = mut (0., 0., 0., 0.),
+
+                                edited_textures = {}mut,
+                            }
+                        ));
+                    }
+                });
+        }
+        else 
+            launch(edittexture, (
+                used_texture_id_pass 
+                    ->> \id = (id, textures->get(id)->val);,
+                DrawContextT{
+                    scale = mut 10.,
+                    offset_x = mut 0.,
+                    offset_y = mut 0.,
+                    drawtool = mut all_draw_tools["无"](),
+
+                    mousedown = mut false,
+
+                    usecolor = mut (1., 1., 1., 1.),
+                    maincolor = mut (1., 1., 1., 1.),
+                    subcolor = mut (0., 0., 0., 0.),
+
+                    edited_textures = {}mut,
+                }
+            ));
     }
 }
