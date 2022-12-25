@@ -210,6 +210,20 @@ namespace editor::EntityCreator
                     add_components(context, "Renderer::Textures");
                 }
 
+                if (MenuItem("完整带阴影渲染实体"))
+                {
+                    reset_context_cur_components(context);
+                    add_components(context, "Transform::LocalPosition");
+                    add_components(context, "Transform::LocalRotation");
+                    add_components(context, "Transform::LocalScale");
+                    add_components(context, "Transform::LocalToWorld");
+                    add_components(context, "Transform::Translation");
+                    add_components(context, "Renderer::Shape");
+                    add_components(context, "Renderer::Shaders");
+                    add_components(context, "Renderer::Textures");
+                    add_components(context, "Light2D::Block");
+                }
+
                 if (MenuItem("摄像机（透视）"))
                 {
                     reset_context_cur_components(context);

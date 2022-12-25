@@ -223,8 +223,7 @@ namespace editor::Browser
 
         if (path
             ->map(\_: anything = BeginPopupContextItem();)
-            ->or(\ = BeginPopupContextWindow();)
-            ->val)
+            ->or(\ = BeginPopupContextWindow();))
         {
             if (BeginMenu(F"新建..."))
             {

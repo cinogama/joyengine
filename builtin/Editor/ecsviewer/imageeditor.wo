@@ -29,16 +29,16 @@ namespace drawpannel
     }
 
     using DrawContextT = struct{
-        mut scale: real,
-        mut offset_x: real,
-        mut offset_y: real,
-        mut drawtool: DrawToolT,
+        scale:      mut real,
+        offset_x:   mut real,
+        offset_y:   mut real,
+        drawtool:   mut DrawToolT,
 
-        mut mousedown: bool,
+        mousedown:  mut bool,
 
-        mut usecolor: color4_t,
-        mut maincolor: color4_t,
-        mut subcolor: color4_t,
+        usecolor:   mut color4_t,
+        maincolor:  mut color4_t,
+        subcolor:   mut color4_t,
 
         edited_textures: map<graphic::texture, void>, // TODO: 图片的历史记录也放在这里
         // 傻逼键盘迟早得换！
@@ -118,7 +118,7 @@ namespace drawpannel
         ["钢笔"] = \=DrawToolT::create("钢笔", (): Pen);,
     };
 
-    func edittexture(images: array<(int, mut option<graphic::texture>)>, context: DrawContextT)
+    func edittexture(images: array<(int, graphic::texture)>, context: DrawContextT)
     {
         let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
 
@@ -131,7 +131,6 @@ namespace drawpannel
 
                 EndMenu();
             }
-
             EndMenuBar();
         }
 
@@ -139,7 +138,7 @@ namespace drawpannel
         {
             for (let index, (passid, texture) : images)
             {
-                let texture_path = texture->>\t=t->path->valor("<内置>");->valor("不存在");
+                let texture_path = texture->path->valor("<内置>");
                 if (BeginTabItem(F"通道{passid}: {texture_path}"))
                 {
                     // OK 在这里显示一下绘图工具箱
@@ -177,123 +176,113 @@ namespace drawpannel
 
                     SameLine();
 
-                    match (texture)
-                    {
-                    value(tex)?
-                    {
-                        let (tex_width, tex_height) = tex->size;
-                        let drawlist = GetWindowDrawList();
+                    let (tex_width, tex_height) = texture->size;
+                    let drawlist = GetWindowDrawList();
 
-                        let (avaliw, avalih) = GetContentRegionAvail();
+                    let (avaliw, avalih) = GetContentRegionAvail();
 
-                        InvisibleButton("##draw_space", (avaliw->\x=x<=100.?100.|x;, avalih->\x=x<=100.?100.|x;));
-                        if (IsItemActive() || IsItemHovered())
+                    InvisibleButton("##draw_space", (avaliw->\x=x<=100.?100.|x;, avalih->\x=x<=100.?100.|x;));
+                    if (IsItemActive() || IsItemHovered())
+                    {
+                        if (input::keydown(keycode::L_CTRL) 
+                            && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
                         {
-                            if (input::keydown(keycode::L_CTRL) 
-                                && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
-                            {
-                                let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
-                                context.offset_x += mousedelta_x;
-                                context.offset_y += mousedelta_y;
-                            }
-                            context.scale += _delta_wheel();
-
-                            if (context.scale < 1.)
-                                context.scale = 1.;
+                            let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
+                            context.offset_x += mousedelta_x;
+                            context.offset_y += mousedelta_y;
                         }
-                        else if (!context.mousedown)
-                            enable_draw = false;
+                        context.scale += _delta_wheel();
 
-                        let (p0, p1) = GetItemRect();
-                        let (lux, luy) = p0;
-                        let (rbx, rby) = p1;
+                        if (context.scale < 1.)
+                            context.scale = 1.;
+                    }
+                    else if (!context.mousedown)
+                        enable_draw = false;
 
-                        PushClipRect(p0, p1);
-                        drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
-                        drawlist->AddImage(
-                            (lux + context.offset_x, luy + context.offset_y), 
-                            (lux + context.scale * tex_width:real + context.offset_x, 
-                            luy + context.scale * tex_height:real + context.offset_y), 
-                            tex);
+                    let (p0, p1) = GetItemRect();
+                    let (lux, luy) = p0;
+                    let (rbx, rby) = p1;
+
+                    PushClipRect(p0, p1);
+                    drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+                    drawlist->AddImage(
+                        (lux + context.offset_x, luy + context.offset_y), 
+                        (lux + context.scale * tex_width:real + context.offset_x, 
+                        luy + context.scale * tex_height:real + context.offset_y), 
+                        texture);
                         
-                        // OK 如果缩放大于5，就顺手画一下网格
-                        if (context.scale >= 5.)
+                    // OK 如果缩放大于5，就顺手画一下网格
+                    if (context.scale >= 5.)
+                    {
+                        for (let mut yoffset = 0.; yoffset <= tex_height:real * context.scale; yoffset += context.scale)
+                            drawlist->AddLine(
+                                (lux + context.offset_x, luy + context.offset_y + yoffset), 
+                                (lux + context.offset_x + tex_width:real * context.scale, luy + context.offset_y + yoffset), 
+                                (0, 0, 0, 20));
+                        for (let mut xoffset = 0.; xoffset <= tex_width:real * context.scale; xoffset += context.scale)
+                            drawlist->AddLine(
+                                (lux + context.offset_x + xoffset, luy + context.offset_y), 
+                                (lux + context.offset_x + xoffset, luy + context.offset_y + tex_height:real * context.scale), 
+                                (0, 0, 0, 20));
+                    }
+
+                    // 获取鼠标所在的像素位置，高亮这一块儿
+                    let (mposx, mposy) = GetMousePos();
+                    let mpixx = ((mposx - lux - context.offset_x) / context.scale): int: real;
+                    let mpixy = ((mposy - luy - context.offset_y) / context.scale): int: real;
+
+                    if (mpixx >= 0. && mpixx < tex_width:real && mpixy >= 0. && mpixy < tex_height:real)
+                    {
+                        // Ok 鼠标指向的像素位置是合法的，高亮！
+                        let highlight_p0 = (mpixx * context.scale + context.offset_x + lux, mpixy * context.scale + context.offset_y + luy);
+                        let highlight_p1 = ((mpixx + 1.) * context.scale + context.offset_x + lux, (mpixy + 1.) * context.scale + context.offset_y + luy);
+                        drawlist->AddRectFilled(highlight_p0, highlight_p1, (255, 255, 255, 100));
+                    }
+
+                    // 不过需要注意的是，引擎使用的像素坐标原点不是左上角，而是左下角，所以这里需要做一次简单变换
+                    let mepixx = mpixx: int;
+                    let mepixy = tex_height - 1 - mpixy: int;
+
+                    if (input::keydown(keycode::MOUSE_M_BUTTION)
+                        && mepixx >= 0 && mepixx < tex_width
+                        && mepixy >= 0 && mepixy < tex_height)
+                        context.maincolor = texture->pix((mepixx, mepixy))->get_color;
+
+                    // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
+                    if (enable_draw)
+                    {
+                        let mut first_click = false;
+                        if (context.mousedown == false)
                         {
-                            for (let mut yoffset = 0.; yoffset <= tex_height:real * context.scale; yoffset += context.scale)
-                                drawlist->AddLine(
-                                    (lux + context.offset_x, luy + context.offset_y + yoffset), 
-                                    (lux + context.offset_x + tex_width:real * context.scale, luy + context.offset_y + yoffset), 
-                                    (0, 0, 0, 20));
-                            for (let mut xoffset = 0.; xoffset <= tex_width:real * context.scale; xoffset += context.scale)
-                                drawlist->AddLine(
-                                    (lux + context.offset_x + xoffset, luy + context.offset_y), 
-                                    (lux + context.offset_x + xoffset, luy + context.offset_y + tex_height:real * context.scale), 
-                                    (0, 0, 0, 20));
-                        }
-
-                        // 获取鼠标所在的像素位置，高亮这一块儿
-                        let (mposx, mposy) = GetMousePos();
-                        let mpixx = ((mposx - lux - context.offset_x) / context.scale): int: real;
-                        let mpixy = ((mposy - luy - context.offset_y) / context.scale): int: real;
-
-                        if (mpixx >= 0. && mpixx < tex_width:real && mpixy >= 0. && mpixy < tex_height:real)
-                        {
-                            // Ok 鼠标指向的像素位置是合法的，高亮！
-                            let highlight_p0 = (mpixx * context.scale + context.offset_x + lux, mpixy * context.scale + context.offset_y + luy);
-                            let highlight_p1 = ((mpixx + 1.) * context.scale + context.offset_x + lux, (mpixy + 1.) * context.scale + context.offset_y + luy);
-                            drawlist->AddRectFilled(highlight_p0, highlight_p1, (255, 255, 255, 100));
-                        }
-
-                        // 不过需要注意的是，引擎使用的像素坐标原点不是左上角，而是左下角，所以这里需要做一次简单变换
-                        let mepixx = mpixx: int;
-                        let mepixy = tex_height - 1 - mpixy: int;
-
-                        if (input::keydown(keycode::MOUSE_M_BUTTION)
-                            && mepixx >= 0 && mepixx < tex_width
-                            && mepixy >= 0 && mepixy < tex_height)
-                            context.maincolor = tex->pix((mepixx, mepixy))->get_color;
-
-                        // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
-                        if (enable_draw)
-                        {
-                            let mut first_click = false;
-                            if (context.mousedown == false)
-                            {
-                                first_click = true;
-                                if (input::keydown(keycode::MOUSE_L_BUTTION))
-                                    context.usecolor = context.maincolor;
-                                else if (input::keydown(keycode::MOUSE_R_BUTTION))
-                                    context.usecolor = context.subcolor;
-                                else
-                                    first_click = false;
-                            }
-                            if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
-                            {
-                                // 图片被编辑过了，储存起来，窗口关闭时询问保存！
-                                if (!context.edited_textures->find(tex))
-                                    context.edited_textures->set(tex, nil);
-
-                                context.mousedown = true;
-                                if (first_click)
-                                    context.drawtool->OnMouseDown(tex, context.usecolor, (mepixx, mepixy));
-                                else
-                                    context.drawtool->OnMouseHold(tex, context.usecolor, (mepixx, mepixy));
-                            }
+                            first_click = true;
+                            if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                context.usecolor = context.maincolor;
+                            else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                                context.usecolor = context.subcolor;
                             else
-                            {
-                                if (context.mousedown)
-                                    context.drawtool->OnMouseUp(tex, context.usecolor, (mepixx, mepixy));
-                                context.mousedown = false;
-                            }
+                                first_click = false;
                         }
+                        if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
+                        {
+                            // 图片被编辑过了，储存起来，窗口关闭时询问保存！
+                            if (!context.edited_textures->find(texture))
+                                context.edited_textures->set(texture, nil);
 
-                        PopClipRect();
+                            context.mousedown = true;
+                            if (first_click)
+                                context.drawtool->OnMouseDown(texture, context.usecolor, (mepixx, mepixy));
+                            else
+                                context.drawtool->OnMouseHold(texture, context.usecolor, (mepixx, mepixy));
+                        }
+                        else
+                        {
+                            if (context.mousedown)
+                                context.drawtool->OnMouseUp(texture, context.usecolor, (mepixx, mepixy));
+                            context.mousedown = false;
+                        }
                     }
-                    none?
-                        Text("不存在对应通道的纹理");
-                    }
-                    
 
+                    PopClipRect();
                     EndTabItem();
                 }
             }
@@ -395,7 +384,7 @@ namespace drawpannel
         // OK
         launch(edittexture, (
             used_texture_id_pass 
-                ->> \id = (id, mut textures->get(id));,
+                ->> \id = (id, textures->get(id)->or(\=graphic::texture::create(16, 16);));,
             DrawContextT{
                 scale = mut 10.,
                 offset_x = mut 0.,

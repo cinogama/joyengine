@@ -63,8 +63,7 @@ namespace editor::Project
                         oldpath == real_saving_path 
                         ? result::ok(normalize(oldpath))
                         | result::err((normalize(oldpath), normalize(real_saving_path)));)
-                    ->or(\=result::ok(normalize(real_saving_path));)
-                    ->val;
+                    ->or(\=result::ok(normalize(real_saving_path)););
 
             let mut ask_msg = "";
 
@@ -427,15 +426,11 @@ namespace editor::Project
             proj.graphic_system = data
                 ->get("graphic_system": dynamic)
                 ->bind(\n = typeinfo::load_from_name(n as string);)
-                ->or(\ = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val;)
-                ->reduce
-                ->val;
+                ->or(\ = je::typeinfo::load_from_name(DEFAULT_GRAPHIC_SYSTEM_NAME)->val;);
             proj.editor_system = data
                 ->get("editor_system": dynamic)
                 ->bind(\n = typeinfo::load_from_name(n as string);)
-                ->or(\ = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val;)
-                ->reduce
-                ->val;
+                ->or(\ = je::typeinfo::load_from_name(DEFAULT_EDITOR_SYSTEM_NAME)->val;);
 
             je::editor::restart_graphic_interface(F"JoyEngine 4.0 - {proj_name}",
                 window_size[0]: int, window_size[1]: int, 60, false);

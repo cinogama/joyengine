@@ -978,6 +978,9 @@ WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
     auto* loaded_texture = new jeecs::graphic::texture(
         wo_int(args + 0), wo_int(args + 1), jegl_texture::texture_format::RGBA);
 
+    memset(loaded_texture->resouce()->m_raw_texture_data->m_pixels, 255,
+        wo_int(args + 0) * wo_int(args + 1) * jegl_texture::texture_format::RGBA);
+
     return wo_ret_gchandle(vm,
         new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
         [](void* ptr) {
