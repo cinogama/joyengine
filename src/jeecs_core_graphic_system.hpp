@@ -1626,6 +1626,9 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             INT64_MAX :
                                             current_layer;
 
+                                        if (this_depth_layer == INT64_MAX)
+                                            this_depth_layer = current_layer;
+
                                         if (current_entity_id >= block_entity_count
                                             || current_layer != this_depth_layer)
                                         {
@@ -1722,6 +1725,9 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                         next_block2d_arch == block2d_end ?
                                         INT64_MAX :
                                         (int64_t)(next_block2d_arch->translation->world_position.z * 100.f);
+
+                                    if (this_depth_layer == INT64_MAX)
+                                        this_depth_layer = current_layer;
 
                                     if (current_entity_id >= block_entity_count
                                         || current_layer != this_depth_layer)
