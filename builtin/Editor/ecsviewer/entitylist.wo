@@ -12,7 +12,7 @@ using je::gui;
 
 namespace editor::EntityList
 {
-    // TODO; Display entity with Editor::Invisable?
+    // 是否显示带有 Editor::Invisable 组件的实体
     let mut enable_display_invisable_entity = false;
 
     public func set_enable_show_invisable_entity(setting: bool)
