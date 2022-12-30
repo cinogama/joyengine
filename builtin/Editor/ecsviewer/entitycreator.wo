@@ -45,7 +45,7 @@ namespace editor::EntityCreator
     public func create_context()=> EntityContext
     {
         let context = EntityContext{
-            name = mut "New entity",
+            name = mut "新实体",
             edit_entity = option::none,
             has_append_types = []mut,
             not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
@@ -190,6 +190,7 @@ namespace editor::EntityCreator
                 if (MenuItem("带有Transform的空实体"))
                 {
                     reset_context_cur_components(context);
+                    context.name = "空实体";
                     add_components(context, "Transform::LocalPosition");
                     add_components(context, "Transform::LocalRotation");
                     add_components(context, "Transform::LocalScale");
@@ -200,6 +201,7 @@ namespace editor::EntityCreator
                 if (MenuItem("完整渲染实体"))
                 {
                     reset_context_cur_components(context);
+                    context.name = "实体";
                     add_components(context, "Transform::LocalPosition");
                     add_components(context, "Transform::LocalRotation");
                     add_components(context, "Transform::LocalScale");
@@ -213,6 +215,7 @@ namespace editor::EntityCreator
                 if (MenuItem("完整带阴影渲染实体"))
                 {
                     reset_context_cur_components(context);
+                    context.name = "阴影实体";
                     add_components(context, "Transform::LocalPosition");
                     add_components(context, "Transform::LocalRotation");
                     add_components(context, "Transform::LocalScale");
@@ -227,6 +230,7 @@ namespace editor::EntityCreator
                 if (MenuItem("摄像机（透视）"))
                 {
                     reset_context_cur_components(context);
+                    context.name = "摄像机";
                     add_components(context, "Transform::LocalPosition");
                     add_components(context, "Transform::LocalRotation");
                     add_components(context, "Transform::LocalScale");
@@ -241,6 +245,7 @@ namespace editor::EntityCreator
                 if (MenuItem("摄像机（平行）"))
                 {
                     reset_context_cur_components(context);
+                    context.name = "摄像机";
                     add_components(context, "Transform::LocalPosition");
                     add_components(context, "Transform::LocalRotation");
                     add_components(context, "Transform::LocalScale");
@@ -250,6 +255,34 @@ namespace editor::EntityCreator
                     add_components(context, "Camera::Projection");
                     add_components(context, "Camera::OrthoProjection");
                     add_components(context, "Camera::Viewport");
+                }
+
+                if (MenuItem("2D光源（点）"))
+                {
+                    reset_context_cur_components(context);
+                    context.name = "2D点光源";
+                    add_components(context, "Transform::LocalPosition");
+                    add_components(context, "Transform::LocalRotation");
+                    add_components(context, "Transform::LocalScale");
+                    add_components(context, "Transform::LocalToWorld");
+                    add_components(context, "Transform::Translation");
+                    add_components(context, "Light2D::Color");
+                    add_components(context, "Light2D::Point");
+                    add_components(context, "Light2D::Shadow");
+                }
+
+                if (MenuItem("2D光源（平行）"))
+                {
+                    reset_context_cur_components(context);
+                    context.name = "2D平行光源";
+                    add_components(context, "Transform::LocalPosition");
+                    add_components(context, "Transform::LocalRotation");
+                    add_components(context, "Transform::LocalScale");
+                    add_components(context, "Transform::LocalToWorld");
+                    add_components(context, "Transform::Translation");
+                    add_components(context, "Light2D::Color");
+                    add_components(context, "Light2D::Parallel");
+                    add_components(context, "Light2D::Shadow");
                 }
 
                 EndMenu();

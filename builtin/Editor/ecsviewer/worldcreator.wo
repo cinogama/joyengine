@@ -21,7 +21,7 @@ namespace editor::WorldCreator
     public func create_context()=> WorldContext
     {
         let context = WorldContext{
-            name = mut "New world",
+            name = mut "新世界",
             edit_world = option::none,
             has_append_types = []mut,
             has_active_types = []mut,
