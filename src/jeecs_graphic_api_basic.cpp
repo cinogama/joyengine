@@ -43,6 +43,10 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                     });
             } while (0);
 
+            if (!thread->m_apis->pre_update_interface(thread, custom_interface))
+                // graphic thread want to exit. mark stop update
+                thread->m_stop_update = true;
+
             auto* del_res = _destroing_graphic_resources.pick_all();
             while (del_res)
             {

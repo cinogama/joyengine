@@ -126,6 +126,15 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     return nullptr;
 }
 
+bool gl_pre_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
+{
+    assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
+
+    glfwSwapBuffers(WINDOWS_HANDLE);
+
+    return true;
+}
+
 bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 {
     assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
@@ -154,13 +163,6 @@ bool gl_lateupdate(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
     assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
 
     jegui_update();
-
-    je_clock_sleep_until(_last_swap_buffer_tpoint += 1. / 60.);
-    if (je_clock_time() - _last_swap_buffer_tpoint >= 1.0)
-        _last_swap_buffer_tpoint = je_clock_time();
-
-    glfwSwapBuffers(WINDOWS_HANDLE);
-
     return true;
 }
 
@@ -799,6 +801,7 @@ void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 {
     write_to_apis->init_interface = gl_startup;
+    write_to_apis->pre_update_interface = gl_pre_update;
     write_to_apis->update_interface = gl_update;
     write_to_apis->late_update_interface = gl_lateupdate;
     write_to_apis->shutdown_interface = gl_shutdown;
