@@ -231,7 +231,6 @@ namespace editor::EntityList
             }
             if(BeginDragDropTarget())
             {
-                let mut drag_entity_chunkinfo = "";
                 match (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE"))
                 {
                 value(drag_entity_chunkinfo)?
