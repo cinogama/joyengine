@@ -112,17 +112,20 @@ public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: 
     let bias = 2.;
 
     let bias_weight = [
-        (-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
-        (-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
-        (-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
-        (-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
-        (-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
+        (0., 0., 1.)
+        //(-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
+        //(-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
+        //(-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
+        //(-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
+        //(-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
     ];
+
+    let reso_inv = float2_one / reso;
 
     for (let _, (x, y, weight) : bias_weight)
     {
         shadow_factor = shadow_factor + texture(
-            shadow, uv + (float2_one / reso) * float2::create(x, y) * bias
+            shadow, uv + reso_inv * float2::create(x, y) * bias
         )->x * weight;
         
     }
@@ -928,7 +931,6 @@ public func frag(vf: v2f)
                     new shader("*/builtin/defer_light2d_parallel_light.shader",
                         R"(
 import je.shader;
-import je.shader.pbr;
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -1020,7 +1022,6 @@ public func frag(vf: v2f)
                     = new shader("*/builtin/defer_light2d_point_light.shader",
                         R"(
 import je.shader;
-import je.shader.pbr;
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -1304,7 +1305,6 @@ public func frag(vf: v2f)
                                     (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
                                     (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
 
-                            // TODO; Generate & bind shadow buffer.
                             bool need_update = light2dpass->defer_rend_aim == nullptr
                                 || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
                                 || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
@@ -1313,10 +1313,11 @@ public func frag(vf: v2f)
                                 light2dpass->defer_rend_aim
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            jegl_texture::texture_format::RGBA, // Albedo
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // VPos_Metallic
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // VNorm_Roughness
-                                            jegl_texture::texture_format::DEPTH, //Depth
+                                            jegl_texture::texture_format::RGBA, // 漫反射颜色
+                                            jegl_texture::texture_format::RGBA, // 自发光颜色，用于法线反射或者发光物体的颜色参数，
+                                                                                // 最终混合shader会将此参数用于光照计算
+                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16),// 视空间坐标(RGB) Alpha通道暂时留空
+                                            jegl_texture::texture_format::DEPTH, // 深度缓冲区
                                         });
                                 light2dpass->defer_light_effect
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
@@ -1329,8 +1330,7 @@ public func frag(vf: v2f)
                 .exec(
                     [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
                     {
-                        // TODO: Need Impl AnyOf
-                            // RendOb will be input to a chain and used for swap
+                        // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace(
                             renderer_arch{
                                 rendqueue, &trans, shape, shads, texs
