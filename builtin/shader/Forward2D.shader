@@ -1,4 +1,4 @@
-// Defer2D.shader
+// Forward2D.shader
 // (C)Cinogama project. 2022. 版权所有
 
 import je.shader;
@@ -23,18 +23,10 @@ using v2f = struct {
 };
 
 using fout = struct {
-    // 漫反射颜色
-    albedo   : float4,
-
-    // 视空间坐标及金属度
-    //  xyz: 视空间坐标
-    //  w: 金属度
-    vposition_m: float4,
-
-    // 视空间法线及糙度
-    //  xyz: 视空间法线
-    //  w: 粗糙度
-    vnormalize_r: float4,
+    albedo              : float4, // 漫反射颜色，在光照处理中用于计算颜色
+    self_luminescence   : float4, // 自发光颜色，最终混合颜色公式中将叠加此颜色
+    visual_coordinates  : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，决定后处理光照的影响系数
+                                  // w 系数暂时留空，应当设置为1
 };
 
 func invscale_f3_2_f4(v: float3)
@@ -75,27 +67,16 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
     );
 }
 
-func hdr_map(a: float)
-{
-    return step(0., a)* a / (a + float_one) + step(a, float_zero) * a / (float_one - a);
-}
-func hdr_map_float3(a: float3)
-{
-    return float3::create(hdr_map(a->x), hdr_map(a->y), hdr_map(a->z));
-}
-
 public func frag(vf: v2f)
 {
     let Albedo = uniform_texture:<texture2d>("Albedo", 0);
     let Normalize = uniform_texture:<texture2d>("Normalize", 1);
-    let Metallic = uniform_texture:<texture2d>("Metallic", 2);
-    let Roughness = uniform_texture:<texture2d>("Roughness", 3);
 
     let vnormal = transed_normal_tangent_map(Normalize, vf);
 
     return fout{
         albedo = texture(Albedo, vf.uv),
-        vposition_m = float4::create(vf.vpos, texture(Metallic, vf.uv)->x),
-        vnormalize_r = float4::create(vnormal, texture(Roughness, vf.uv)->x),
+        self_luminescence = float4_zero,
+        visual_coordinates = float4::create(vf.vpos, 1.),
     };
 }

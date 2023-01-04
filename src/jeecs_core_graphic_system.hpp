@@ -665,8 +665,9 @@ public let frag =
                     },
                     { 3, 2 });
 
+                // 用于消除阴影对象本身的阴影
                 _defer_light2d_shadow_sub_pass
-                    = new shader("*/builtin/defer_light2d_shadow_sub.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_sub.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -704,10 +705,11 @@ public func frag(vf: v2f)
         shadow_factor = final_shadow->x
     };
 }
-)");
+)") };
 
+                // 用于产生点光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_point_pass
-                    = new shader("*/builtin/defer_light2d_shadow_point_shape.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_point_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -735,7 +737,6 @@ public func vert(v: vin)
     let shadow_scale_factor = je_color->w;
 
     let vpos = je_mv * float4::create(v.vertex, 1.);
-
     let shadow_vpos = normalize((vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w)) * shadow_scale_factor;
     
     return v2f{
@@ -752,10 +753,11 @@ public func frag(vf: v2f)
         shadow_factor = final_shadow->x
     };
 }
-)");
+)") };
 
+                // 用于产生点光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_point_pass
-                    = new shader("*/builtin/defer_light2d_shadow_point.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_point.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -791,9 +793,11 @@ public func frag(vf: v2f)
 {
     return fout{shadow_factor = float::new(1.)};
 }
-)");
+)") };
+
+                // 用于产生平行光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_parallel_pass
-                    = new shader("*/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -837,10 +841,11 @@ public func frag(vf: v2f)
         shadow_factor = final_shadow->x
     };
 }
-)");
+)") };
 
+                // 用于产生平行光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_parallel_pass
-                    = new shader("*/builtin/defer_light2d_shadow_parallel.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_parallel.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -876,10 +881,119 @@ public func frag(vf: v2f)
 {
     return fout{shadow_factor = float::new(1.)};
 }
-)");
+)") };
+
+                // 平行光照处理
+                _defer_light2d_parallel_light_pass
+                    = { new shader("*/builtin/defer_light2d_parallel_light.shader",
+                        R"(
+import je.shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ONE);
+CULL    (BACK);
+
+VAO_STRUCT vin
+{
+    vertex: float3,
+    // uv: float2, // We don't care uv, we will use port position as uv.
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    color: float4
+};
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = float4::create(v.vertex, 0.5) * 2.,
+    };
+}
+
+public func frag(vf: v2f)
+{
+    // let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
+    // let self_lumine = uniform_texture:<texture2d>("SelfLuminescence", 1);
+    // let visual_coord = uniform_texture:<texture2d>("VisualCoordinates", 2);
+    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
+
+    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
+
+    let shadow_factor = texture(shadow_buffer, uv)->x;
+
+    let result = je_color->xyz * je_color->w * (float_one - shadow_factor);
+
+    return fout{
+        color = float4::create(result, 0.),
+    };
+}
+
+)")
+                };
+
+                // 点光照处理
+                _defer_light2d_point_light_pass
+                    = { new shader("*/builtin/defer_light2d_point_light.shader",
+                        R"(
+import je.shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ONE);
+CULL    (BACK);
+
+VAO_STRUCT vin
+{
+    vertex: float3,
+    uv: float2, // We will use uv to decided light fade.
+};
+
+using v2f = struct{
+    pos: float4,
+    uv: float2
+};
+
+using fout = struct{
+    color: float4
+};
+
+public func vert(v: vin)
+{
+    let pos = je_mvp * float4::create(v.vertex, 1.);
+
+    return v2f{
+        pos = pos,
+        uv = v.uv
+    };
+}
+
+public func frag(vf: v2f)
+{
+    // let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
+    // let self_lumine = uniform_texture:<texture2d>("SelfLuminescence", 1);
+    // let visual_coord = uniform_texture:<texture2d>("VisualCoordinates", 2);
+    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
+    let distance = clamp(float_one - length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
+    let shadow_factor = texture(shadow_buffer, uv)->x;
+
+    let result = je_color->xyz * je_color->w * distance * (float_one - shadow_factor);
+
+    return fout{
+        color = float4::create(result, 0.),
+    };
+}
+
+)")
+                };
 
                 _defer_light2d_mix_light_effect_pass
-                    = new shader("*/builtin/defer_light2d_mix_light.shader",
+                    = { new shader("*/builtin/defer_light2d_mix_light.shader",
                         R"(
 import je.shader;
 
@@ -917,7 +1031,7 @@ public func frag(vf: v2f)
 
     let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2)) ;
     let light_color_rgb = texture(light_buffer, vf.uv)->xyz;
-    let mixed_color_rgb = albedo_color_rgb * 0.03 + light_color_rgb;
+    let mixed_color_rgb = albedo_color_rgb * (light_color_rgb + float3::new(0.03, 0.03, 0.03));
 
     let hdr_color_rgb           = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
     let hdr_ambient_with_gamma  = pow(hdr_color_rgb, float3::new(1./2.2, 1./2.2, 1./2.2,));
@@ -926,190 +1040,7 @@ public func frag(vf: v2f)
         color = float4::create(hdr_ambient_with_gamma, 1.)
     };
 }
-)");
-                _defer_light2d_parallel_light_pass =
-                    new shader("*/builtin/defer_light2d_parallel_light.shader",
-                        R"(
-import je.shader;
-
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-BLEND   (ONE, ONE);
-CULL    (BACK);
-
-VAO_STRUCT vin
-{
-    vertex: float3,
-    // uv: float2, // We don't care uv, we will use port position as uv.
-};
-
-using v2f = struct{
-    pos: float4,
-    lvdir: float3,
-};
-
-using fout = struct{
-    color: float4
-};
-
-public func vert(v: vin)
-{
-    let pos = je_mvp * float4::create(v.vertex, 1.);
-    let lmdir = (je_m * float4::new(0., -1., 1., 1.))->xyz - movement(je_m);
-    let lvdir = (je_v * float4::create(lmdir, 1.))->xyz - movement(je_v);
-
-    return v2f{
-        pos = pos,
-        lvdir = normalize(lvdir),
-    };
-}
-
-public func frag(vf: v2f)
-{
-    let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
-    let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
-    let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
-    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
-
-    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
-
-    let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
-    let vpos_m = texture(vpos_m_buffer, uv);
-    let vnorm_r = texture(vnorm_r_buffer, uv);
-    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
-
-    // Calculate light results.
-    let intensity = je_color->w;
-    let N = vnorm_r->xyz;
-    let roughness = vnorm_r->w;
-    let metallic = vpos_m->w;
-
-    let FVPos = vpos_m->xyz;
-
-    let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
-
-    let V = normalize(float3_zero - FVPos);
-    let L = normalize(float3_zero - vf.lvdir);
-    let H = normalize(V + L);
-
-    let distance = float_one;
-    let attenuation = float_one / (distance * distance);
-    let radiance = intensity * je_color->xyz * attenuation;
-
-    let NDF = DistributionGGX(N, H, roughness);
-    let G = GeometrySmith(N, V, L, roughness);
-    let F = FresnelSchlick(max(dot(H, V), float_one), F0);
-
-    let nominator = NDF * G * F;
-    let denominator = max(dot(N, V), float_zero)
-        * max(dot(N, L), float_zero) 
-        + float::new(0.001);
-    let specular = nominator / denominator;
-    
-    let kS = F;
-    let kD = (float3_one - kS) * (float_one - metallic);
-    let NdotL = max(dot(N, L), float_zero);
-
-    let result = (kD * albedo / PI + specular) * radiance * NdotL * (float_one - shadow_factor);
-
-    return fout{
-        color = float4::create(result, 0.),
-    };
-}
-
-)");
-                _defer_light2d_point_light_pass
-                    = new shader("*/builtin/defer_light2d_point_light.shader",
-                        R"(
-import je.shader;
-
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-BLEND   (ONE, ONE);
-CULL    (BACK);
-
-VAO_STRUCT vin
-{
-    vertex: float3,
-    // uv: float2, // We don't care uv, we will use port position as uv.
-};
-
-using v2f = struct{
-    pos: float4,
-    lpos: float3,
-};
-
-using fout = struct{
-    color: float4
-};
-
-public func vert(v: vin)
-{
-    let pos = je_mvp * float4::create(v.vertex, 1.);
-    let lpos = je_mv * float4::new(0., 0., 0., 1.);
-
-    return v2f{
-        pos = pos,
-        lpos = lpos->xyz,
-    };
-}
-
-public func frag(vf: v2f)
-{
-    let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
-    let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
-    let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
-    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
-
-    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
-
-    let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
-    let vpos_m = texture(vpos_m_buffer, uv);
-    let vnorm_r = texture(vnorm_r_buffer, uv);
-    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
-
-    // Calculate light results.
-    let intensity = je_color->w;
-    let N = vnorm_r->xyz;
-    let roughness = vnorm_r->w;
-    let metallic = vpos_m->w;
-
-    let FVPos = vpos_m->xyz;
-    let LVPos = vf.lpos;
-    let VL2FDiff = LVPos - FVPos;
-
-    let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
-
-    let V = normalize(float3_zero - FVPos);
-    let L = normalize(VL2FDiff);
-    let H = normalize(V + L);
-
-    let distance = length(VL2FDiff);
-    let attenuation = float_one / (distance * distance);
-    let radiance = intensity * je_color->xyz * attenuation;
-
-    let NDF = DistributionGGX(N, H, roughness);
-    let G = GeometrySmith(N, V, L, roughness);
-    let F = FresnelSchlick(max(dot(H, V), float_one), F0);
-
-    let nominator = NDF * G * F;
-    let denominator = max(dot(N, V), float_zero)
-        * max(dot(N, L), float_zero) 
-        + float::new(0.001);
-    let specular = nominator / denominator;
-    
-    let kS = F;
-    let kD = (float3_one - kS) * (float_one - metallic);
-    let NdotL = max(dot(N, L), float_zero);
-
-    let result = (kD * albedo / PI + specular) * radiance * NdotL * (float_one - shadow_factor);
-
-    return fout{
-        color = float4::create(result, 0.),
-    };
-}
-
-)");
+)") };
             }
 
             static DeferLight2DHost* instance(jegl_thread* glcontext)
@@ -1314,9 +1245,8 @@ public func frag(vf: v2f)
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
                                             jegl_texture::texture_format::RGBA, // 漫反射颜色
-                                            jegl_texture::texture_format::RGBA, // 自发光颜色，用于法线反射或者发光物体的颜色参数，
-                                                                                // 最终混合shader会将此参数用于光照计算
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16),// 视空间坐标(RGB) Alpha通道暂时留空
+                                            jegl_texture::texture_format::RGBA, // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
+                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
                                             jegl_texture::texture_format::DEPTH, // 深度缓冲区
                                         });
                                 light2dpass->defer_light_effect
@@ -1894,8 +1824,12 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         jegl_clear_framebuffer_color(current_camera.light2DPass->defer_light_effect->resouce());
 
                         // Bind attachment
+                        // 在应用光照时，只需要使用视空间坐标，其他附件均不使用，但是考虑到各种乱七八糟的问题，这里还是都绑定一下
+                        // 绑定漫反射颜色通道
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(0)->resouce(), 0);
+                        // 绑定自发光通道
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(1)->resouce(), 1);
+                        // 绑定视空间坐标通道
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(2)->resouce(), 2);
 
                         for (auto& light2d : m_2dlight_list)
@@ -1908,8 +1842,11 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             jeecs::graphic::shader* using_light_shader_pass = nullptr;
                             if (light2d.point != nullptr)
                                 using_light_shader_pass = light2d_host->_defer_light2d_point_light_pass;
-                            else if (light2d.parallel != nullptr)
+                            else
+                            {
+                                assert(light2d.parallel != nullptr);
                                 using_light_shader_pass = light2d_host->_defer_light2d_parallel_light_pass;
+                            }
 
                             jegl_using_resource(using_light_shader_pass->resouce());
 
