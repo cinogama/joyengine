@@ -977,14 +977,16 @@ public func frag(vf: v2f)
     // let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
     // let self_lumine = uniform_texture:<texture2d>("SelfLuminescence", 1);
     // let visual_coord = uniform_texture:<texture2d>("VisualCoordinates", 2);
+
     let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
-    let distance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+    let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+
     let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
     let shadow_factor = texture(shadow_buffer, uv)->x;
 
     let decay = je_offset->x;
 
-    let fade_factor = pow(float_one - distance, decay);
+    let fade_factor = pow(float_one - uvdistance, decay);
     let result = je_color->xyz * je_color->w * (float_one - shadow_factor) * fade_factor;
 
     return fout{
