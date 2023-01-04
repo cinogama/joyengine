@@ -978,17 +978,19 @@ public func frag(vf: v2f)
     // let self_lumine = uniform_texture:<texture2d>("SelfLuminescence", 1);
     // let visual_coord = uniform_texture:<texture2d>("VisualCoordinates", 2);
     let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
-    let distance = clamp(float_one - length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+    let distance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
     let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
     let shadow_factor = texture(shadow_buffer, uv)->x;
 
-    let result = je_color->xyz * je_color->w * distance * (float_one - shadow_factor);
+    let decay = je_offset->x;
+
+    let fade_factor = pow(float_one - distance, decay);
+    let result = je_color->xyz * je_color->w * (float_one - shadow_factor) * fade_factor;
 
     return fout{
         color = float4::create(result, 0.),
     };
 }
-
 )")
                 };
 
@@ -1851,6 +1853,18 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             }
 
                             jegl_using_resource(using_light_shader_pass->resouce());
+
+                            if (light2d.point != nullptr)
+                            {
+                                using_light_shader_pass = light2d_host->_defer_light2d_point_light_pass;
+
+                                jegl_uniform_float2(
+                                    using_light_shader_pass->resouce(),
+                                    using_light_shader_pass->m_builtin->m_builtin_uniform_offset,
+                                    light2d.point->decay,
+                                    0.f  // Reserved.
+                                );
+                            }
 
                             jegl_uniform_float2(
                                 using_light_shader_pass->resouce(),

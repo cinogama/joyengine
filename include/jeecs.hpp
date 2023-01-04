@@ -5036,7 +5036,12 @@ namespace jeecs
 
         struct Point
         {
+            float decay = 10.f;
 
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Point::decay, "decay");
+            }
         };
 
         struct CameraPass
