@@ -1027,11 +1027,13 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let albedo_buffer   = uniform_texture:<texture2d>("Albedo", 0);
-    let light_buffer    = uniform_texture:<texture2d>("Light", 1);
+    let self_lumine     = uniform_texture:<texture2d>("SelfLuminescence", 1);
+    let light_buffer    = uniform_texture:<texture2d>("Light", 2);
 
-    let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2)) ;
+    let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let light_color_rgb = texture(light_buffer, vf.uv)->xyz;
-    let mixed_color_rgb = albedo_color_rgb * (light_color_rgb + float3::new(0.03, 0.03, 0.03));
+    let self_lumine_color_rgb = texture(self_lumine, vf.uv)->xyz;
+    let mixed_color_rgb = self_lumine_color_rgb + albedo_color_rgb * (light_color_rgb + float3::new(0.03, 0.03, 0.03));
 
     let hdr_color_rgb           = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
     let hdr_ambient_with_gamma  = pow(hdr_color_rgb, float3::new(1./2.2, 1./2.2, 1./2.2,));
@@ -1904,8 +1906,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                         jegl_using_resource(light2d_host->_defer_light2d_mix_light_effect_pass->resouce());
 
-                        // Bind light effect to textre-pass-1, because pass-0 is used for storing
-                        jegl_using_texture(current_camera.light2DPass->defer_light_effect->get_attachment(0)->resouce(), 1);
+                        // 通道1 存有自发光信息，因此光照信息储存到通道2
+                        jegl_using_texture(current_camera.light2DPass->defer_light_effect->get_attachment(0)->resouce(), 2);
 
                         jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
 
