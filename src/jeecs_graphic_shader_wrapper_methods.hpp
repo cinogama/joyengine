@@ -292,9 +292,6 @@ reduce_method{return new jegl_shader_value(-args[0]->m_float2[0], -args[0]->m_fl
 { "JEBUILTIN_Negative", {jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(-args[0]->m_float); }} },
 
-{ "JEBUILTIN_Movement", {jegl_shader_value::FLOAT4x4,
-reduce_method{return new jegl_shader_value(args[0]->m_float4x4[3][0], args[0]->m_float4x4[3][1], args[0]->m_float4x4[3][2]); }} },
-
 { "pow", {jegl_shader_value::FLOAT4, jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },
 { "pow", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3,

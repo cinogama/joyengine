@@ -702,7 +702,7 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
-    let final_shadow = alphatest(float4::create(float3_zero, texture(main_texture, vf.uv)->w));
+    let final_shadow = alphatest(float4::create(je_color->xyz, texture(main_texture, vf.uv)->w));
 
     return fout{
         shadow_factor = final_shadow->x
@@ -918,6 +918,28 @@ public func vert(v: vin)
     };
 }
 
+public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
+{
+    let mut shadow_factor = float_zero;
+    let bias = 2.;
+
+    let bias_weight = [
+        (-1., 1., 0.08),    (0., 1., 0.08),     (1., 1., 0.08),
+        (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.08),
+        (-1., -1., 0.08),   (0., -1., 0.08),    (1., -1., 0.08),
+    ];
+
+    let reso_inv = float2_one / reso;
+
+    for (let _, (x, y, weight) : bias_weight)
+    {
+        shadow_factor = shadow_factor + texture(
+            shadow, uv + reso_inv * float2::create(x, y) * bias
+        )->x * weight;  
+    }
+    return clamp(shadow_factor, 0., 1.);
+}
+
 public func frag(vf: v2f)
 {
     // let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
@@ -927,7 +949,7 @@ public func frag(vf: v2f)
 
     let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
 
-    let shadow_factor = texture(shadow_buffer, uv)->x;
+    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
 
     let result = je_color->xyz * je_color->w * (float_one - shadow_factor);
 
@@ -977,6 +999,30 @@ public func vert(v: vin)
     };
 }
 
+public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
+{
+    let mut shadow_factor = float_zero;
+    let bias = 2.;
+
+    let bias_weight = [
+        (-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
+        (-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
+        (-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
+        (-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
+        (-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
+    ];
+
+    let reso_inv = float2_one / reso;
+
+    for (let _, (x, y, weight) : bias_weight)
+    {
+        shadow_factor = shadow_factor + texture(
+            shadow, uv + reso_inv * float2::create(x, y) * bias
+        )->x * weight;  
+    }
+    return clamp(shadow_factor, 0., 1.);
+}
+
 public func frag(vf: v2f)
 {
     // let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
@@ -990,7 +1036,7 @@ public func frag(vf: v2f)
     let vposition = texture(visual_coord, uv);
     let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
     let fgdistance = distance(vposition->xyz, vf.vpos->xyz / vf.vpos->w);
-    let shadow_factor = texture(shadow_buffer, uv)->x;
+    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
 
     let decay = je_offset->x;
 
@@ -1045,7 +1091,8 @@ public func frag(vf: v2f)
     let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let light_color_rgb = texture(light_buffer, vf.uv)->xyz;
     let self_lumine_color_rgb = texture(self_lumine, vf.uv)->xyz;
-    let mixed_color_rgb = self_lumine_color_rgb + albedo_color_rgb * (light_color_rgb + float3::new(0.03, 0.03, 0.03));
+    let mixed_color_rgb = max(float3_zero, albedo_color_rgb 
+        * (self_lumine_color_rgb + light_color_rgb + float3::new(0.03, 0.03, 0.03)));
 
     let hdr_color_rgb           = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
     let hdr_ambient_with_gamma  = pow(hdr_color_rgb, float3::new(1./2.2, 1./2.2, 1./2.2,));
@@ -1531,6 +1578,7 @@ public func frag(vf: v2f)
                                         auto& blockarch = *block2d_iter;
 
                                         int64_t current_layer = (int64_t)(blockarch.translation->world_position.z * 100.f);
+
                                         if (current_layer <= lightarch.translation->world_position.z * 100.f)
                                             break;
 
@@ -1541,8 +1589,8 @@ public func frag(vf: v2f)
                                         auto* builtin_uniform = shape_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(shape_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(shape_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
                                         const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
@@ -1630,8 +1678,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                                 auto* builtin_uniform = sub_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
                                                 const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
 
                                                 math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
@@ -1644,6 +1692,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                                 NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                                                 NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                                 NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                                NEED_AND_SET_UNIFORM(color, float4, 0.f, 0.f, 0.f, 0.f);
 
                                                 if (block_in_layer->textures != nullptr)
                                                 {
@@ -1680,8 +1730,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                         auto* builtin_uniform = point_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(point_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(point_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
                                         const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
@@ -1730,8 +1780,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             auto* builtin_uniform = sub_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
                                             const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
 
                                             math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
@@ -1744,6 +1794,11 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                            if (blockarch.translation->world_position.z < lightarch.translation->world_position.z)
+                                                NEED_AND_SET_UNIFORM(color, float4, 1.f, 1.f, 1.f, 1.f);
+                                            else
+                                                NEED_AND_SET_UNIFORM(color, float4, 0.f, 0.f, 0.f, 0.f);
 
                                             if (block_in_layer->textures != nullptr)
                                             {
@@ -1838,8 +1893,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                             auto* builtin_uniform = (*using_shader)->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
 
                             NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
                             NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
@@ -1913,12 +1968,15 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 );
                             }
 
-                            jegl_uniform_float2(
-                                using_light_shader_pass->resouce(),
-                                using_light_shader_pass->m_builtin->m_builtin_uniform_tiling,
-                                current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_width,
-                                current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_height
-                            );
+                            if (light2d.shadow != nullptr)
+                            {
+                                jegl_uniform_float2(
+                                    using_light_shader_pass->resouce(),
+                                    using_light_shader_pass->m_builtin->m_builtin_uniform_tiling,
+                                    light2d.shadow->resolution_width,
+                                    light2d.shadow->resolution_height
+                                );
+                            }
 
                             jegl_uniform_float4(using_light_shader_pass->resouce(),
                                 using_light_shader_pass->m_builtin->m_builtin_uniform_color,
@@ -1930,9 +1988,9 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                             auto* builtin_uniform = using_light_shader_pass->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
     jegl_uniform_##TYPE(using_light_shader_pass->resouce(),\
-    builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+    builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
 
                             const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
 

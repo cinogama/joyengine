@@ -80,17 +80,19 @@ public func frag(vf: v2f)
     {
         // 点光源照射部分
         let lvpos = je_v * float4::create(light->position->xyz, 1.);
-        let ldir = normalize(vf.vpos - lvpos->xyz / lvpos->w);
-        let point_light_factor = vnormal->dot(ldir->negative) * light->factors->x;
+        let f2l = vf.vpos - lvpos->xyz / lvpos->w;
+        let ldistance = length(f2l);
+        let ldir = normalize(f2l);
+        let point_light_factor = vnormal->dot(ldir->negative) * light->factors->x / (ldistance + 1.);
 
         // 平行光源照射部分
         let parallel_light_factor = vnormal->dot(light->direction->xyz->negative) * light->factors->y;
 
         // 最终光照产生的法线效果
-        let light_effect_factor = point_light_factor + parallel_light_factor;
+        let light_effect_factor = max(float_zero, point_light_factor + parallel_light_factor);
 
         normal_effect_self_luminescence =
-            float4::create(light->color->xyz * light_effect_factor * light->color->w, 0.) +
+            light->color->w * light_effect_factor * float4::create(light->color->xyz, 0.) +
             normal_effect_self_luminescence;
     }
 
