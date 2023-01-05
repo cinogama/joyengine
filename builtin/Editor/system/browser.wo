@@ -267,7 +267,8 @@ namespace editor::Browser
                     static let editor_origin_shader = {
                         ["空白着色器"] = "MonoColor",
                         ["无光着色器"] = "Unlit",
-                        ["后向2D光照着色器"] = "Defer2D",
+                        ["2D光照着色器"] = "Forward2D",
+                        ["2D光照着色器（法线）"] = "Forward2DNormal",
                     };
 
                     let create_shader_at = func(shader_name: string, shader_src: string)

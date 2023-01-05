@@ -1348,6 +1348,12 @@ public func abs<T>(a: T)=> T
     return apply_operation:<T>("abs", a);
 }
 
+public func negative<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("JEBUILTIN_Negative", a);
+}
+
 public func pow<T>(a: T, b: T)=> T
     where is_glvalue:<T>;
 {
@@ -1398,6 +1404,12 @@ public func length<T>(a: T)=> float
     where is_glvalue:<T> && !(is_float:<T>);
 {
     return apply_operation:<float>("length", a);
+}
+
+public func distance<T>(a: T, b: T)=> float
+    where is_glvalue:<T> && !(is_float:<T>);
+{
+    return apply_operation:<float>("distance", a, b);
 }
 
 // Engine builtin function

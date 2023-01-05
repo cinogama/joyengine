@@ -12,6 +12,8 @@
 #include <queue>
 #include <list>
 
+#define JE_MAX_SHADOW_LIGHT_COUNT 16
+
 const char* shader_light2d_path = "je/shader/light2d.wo";
 const char* shader_light2d_src = R"(
 // JoyEngineECS RScene shader for light2d-system
@@ -25,9 +27,10 @@ public let MAX_SHADOW_LIGHT_COUNT = 16;
 GRAPHIC_STRUCT Light2D
 {
     color:      float4,  // color->xyz is color, color->w is intensity.
-    position:   float4,  
-    direction:  float4,  // direction->xyz is dir, direction->w is angle in radians.
-    _padding:   float4,
+    position:   float4,  // position->xyz used for point-light
+    direction:  float4,  // direction->xyz used for parallel-light
+    factors:    float4,  // factors->x & y used for effect position or direction.
+                         // factors->z is point-light-decay
 };
 
 UNIFORM_BUFFER JOYENGINE_LIGHT2D = 1
@@ -45,14 +48,14 @@ public let je_light2ds = func(){
     return lights->toarray;
 }();
 
-public let je_shadow2ds = func(){
-    let shadows = []mut: vec<texture2d>;
-
-    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
-        shadows->add(uniform_texture:<texture2d>("JE_SHADOW2D_{i}", 16 + i));
-
-    return shadows->toarray;
-}();
+//public let je_shadow2ds = func(){
+//    let shadows = []mut: vec<texture2d>;
+//
+//    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
+//        shadows->add(uniform_texture:<texture2d>("JE_SHADOW2D_{i}", 16 + i));
+//
+//    return shadows->toarray;
+//}();
 
 )";
 
@@ -112,17 +115,20 @@ public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: 
     let bias = 2.;
 
     let bias_weight = [
-        (-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
-        (-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
-        (-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
-        (-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
-        (-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
+        (0., 0., 1.)
+        //(-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
+        //(-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
+        //(-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
+        //(-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
+        //(-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
     ];
+
+    let reso_inv = float2_one / reso;
 
     for (let _, (x, y, weight) : bias_weight)
     {
         shadow_factor = shadow_factor + texture(
-            shadow, uv + (float2_one / reso) * float2::create(x, y) * bias
+            shadow, uv + reso_inv * float2::create(x, y) * bias
         )->x * weight;
         
     }
@@ -662,8 +668,9 @@ public let frag =
                     },
                     { 3, 2 });
 
+                // 用于消除阴影对象本身的阴影
                 _defer_light2d_shadow_sub_pass
-                    = new shader("*/builtin/defer_light2d_shadow_sub.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_sub.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -695,16 +702,17 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
-    let final_shadow = alphatest(float4::create(float3_zero, texture(main_texture, vf.uv)->w));
+    let final_shadow = alphatest(float4::create(je_color->xyz, texture(main_texture, vf.uv)->w));
 
     return fout{
         shadow_factor = final_shadow->x
     };
 }
-)");
+)") };
 
+                // 用于产生点光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_point_pass
-                    = new shader("*/builtin/defer_light2d_shadow_point_shape.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_point_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -732,7 +740,6 @@ public func vert(v: vin)
     let shadow_scale_factor = je_color->w;
 
     let vpos = je_mv * float4::create(v.vertex, 1.);
-
     let shadow_vpos = normalize((vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w)) * shadow_scale_factor;
     
     return v2f{
@@ -749,10 +756,11 @@ public func frag(vf: v2f)
         shadow_factor = final_shadow->x
     };
 }
-)");
+)") };
 
+                // 用于产生点光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_point_pass
-                    = new shader("*/builtin/defer_light2d_shadow_point.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_point.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -788,9 +796,11 @@ public func frag(vf: v2f)
 {
     return fout{shadow_factor = float::new(1.)};
 }
-)");
+)") };
+
+                // 用于产生平行光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_parallel_pass
-                    = new shader("*/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -834,10 +844,11 @@ public func frag(vf: v2f)
         shadow_factor = final_shadow->x
     };
 }
-)");
+)") };
 
+                // 用于产生平行光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_parallel_pass
-                    = new shader("*/builtin/defer_light2d_shadow_parallel.shader", R"(
+                    = { new shader("*/builtin/defer_light2d_shadow_parallel.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -873,10 +884,174 @@ public func frag(vf: v2f)
 {
     return fout{shadow_factor = float::new(1.)};
 }
-)");
+)") };
+
+                // 平行光照处理
+                _defer_light2d_parallel_light_pass
+                    = { new shader("*/builtin/defer_light2d_parallel_light.shader",
+                        R"(
+import je.shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ONE);
+CULL    (BACK);
+
+VAO_STRUCT vin
+{
+    vertex: float3,
+    // uv: float2, // We don't care uv, we will use port position as uv.
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    color: float4
+};
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = float4::create(v.vertex, 0.5) * 2.,
+    };
+}
+
+public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
+{
+    let mut shadow_factor = float_zero;
+    let bias = 2.;
+
+    let bias_weight = [
+        (-1., 1., 0.08),    (0., 1., 0.08),     (1., 1., 0.08),
+        (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.08),
+        (-1., -1., 0.08),   (0., -1., 0.08),    (1., -1., 0.08),
+    ];
+
+    let reso_inv = float2_one / reso;
+
+    for (let _, (x, y, weight) : bias_weight)
+    {
+        shadow_factor = shadow_factor + texture(
+            shadow, uv + reso_inv * float2::create(x, y) * bias
+        )->x * weight;  
+    }
+    return clamp(shadow_factor, 0., 1.);
+}
+
+public func frag(vf: v2f)
+{
+    // let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
+    // let self_lumine = uniform_texture:<texture2d>("SelfLuminescence", 1);
+    // let visual_coord = uniform_texture:<texture2d>("VisualCoordinates", 2);
+    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
+
+    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
+
+    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
+
+    let result = je_color->xyz * je_color->w * (float_one - shadow_factor);
+
+    return fout{
+        color = float4::create(result, 0.),
+    };
+}
+
+)")
+                };
+
+                // 点光照处理
+                _defer_light2d_point_light_pass
+                    = { new shader("*/builtin/defer_light2d_point_light.shader",
+                        R"(
+import je.shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ONE);
+CULL    (BACK);
+
+VAO_STRUCT vin
+{
+    vertex: float3,
+    uv: float2, // We will use uv to decided light fade.
+};
+
+using v2f = struct{
+    pos: float4,
+    vpos: float4,
+    uv: float2
+};
+
+using fout = struct{
+    color: float4
+};
+
+public func vert(v: vin)
+{
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+
+    return v2f{
+        pos = je_p * vpos,
+        vpos = vpos,
+        uv = v.uv
+    };
+}
+
+public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
+{
+    let mut shadow_factor = float_zero;
+    let bias = 2.;
+
+    let bias_weight = [
+        (-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
+        (-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
+        (-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
+        (-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
+        (-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
+    ];
+
+    let reso_inv = float2_one / reso;
+
+    for (let _, (x, y, weight) : bias_weight)
+    {
+        shadow_factor = shadow_factor + texture(
+            shadow, uv + reso_inv * float2::create(x, y) * bias
+        )->x * weight;  
+    }
+    return clamp(shadow_factor, 0., 1.);
+}
+
+public func frag(vf: v2f)
+{
+    // let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
+    // let self_lumine = uniform_texture:<texture2d>("SelfLuminescence", 1);
+    let visual_coord = uniform_texture:<texture2d>("VisualCoordinates", 2);
+
+    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
+   
+    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
+
+    let vposition = texture(visual_coord, uv);
+    let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+    let fgdistance = distance(vposition->xyz, vf.vpos->xyz / vf.vpos->w);
+    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
+
+    let decay = je_offset->x;
+
+    let fade_factor = pow(float_one - uvdistance, decay);
+    let result = je_color->xyz * je_color->w * (float_one - shadow_factor) * fade_factor;
+
+    return fout{
+        color = float4::create(result / (fgdistance + 1.0), 0.),
+    };
+}
+)")
+                };
 
                 _defer_light2d_mix_light_effect_pass
-                    = new shader("*/builtin/defer_light2d_mix_light.shader",
+                    = { new shader("*/builtin/defer_light2d_mix_light.shader",
                         R"(
 import je.shader;
 
@@ -910,11 +1085,14 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let albedo_buffer   = uniform_texture:<texture2d>("Albedo", 0);
-    let light_buffer    = uniform_texture:<texture2d>("Light", 1);
+    let self_lumine     = uniform_texture:<texture2d>("SelfLuminescence", 1);
+    let light_buffer    = uniform_texture:<texture2d>("Light", 2);
 
-    let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2)) ;
+    let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let light_color_rgb = texture(light_buffer, vf.uv)->xyz;
-    let mixed_color_rgb = albedo_color_rgb * 0.03 + light_color_rgb;
+    let self_lumine_color_rgb = texture(self_lumine, vf.uv)->xyz;
+    let mixed_color_rgb = max(float3_zero, albedo_color_rgb 
+        * (self_lumine_color_rgb + light_color_rgb + float3::new(0.03, 0.03, 0.03)));
 
     let hdr_color_rgb           = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
     let hdr_ambient_with_gamma  = pow(hdr_color_rgb, float3::new(1./2.2, 1./2.2, 1./2.2,));
@@ -923,192 +1101,7 @@ public func frag(vf: v2f)
         color = float4::create(hdr_ambient_with_gamma, 1.)
     };
 }
-)");
-                _defer_light2d_parallel_light_pass =
-                    new shader("*/builtin/defer_light2d_parallel_light.shader",
-                        R"(
-import je.shader;
-import je.shader.pbr;
-
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-BLEND   (ONE, ONE);
-CULL    (BACK);
-
-VAO_STRUCT vin
-{
-    vertex: float3,
-    // uv: float2, // We don't care uv, we will use port position as uv.
-};
-
-using v2f = struct{
-    pos: float4,
-    lvdir: float3,
-};
-
-using fout = struct{
-    color: float4
-};
-
-public func vert(v: vin)
-{
-    let pos = je_mvp * float4::create(v.vertex, 1.);
-    let lmdir = (je_m * float4::new(0., -1., 1., 1.))->xyz - movement(je_m);
-    let lvdir = (je_v * float4::create(lmdir, 1.))->xyz - movement(je_v);
-
-    return v2f{
-        pos = pos,
-        lvdir = normalize(lvdir),
-    };
-}
-
-public func frag(vf: v2f)
-{
-    let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
-    let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
-    let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
-    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
-
-    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
-
-    let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
-    let vpos_m = texture(vpos_m_buffer, uv);
-    let vnorm_r = texture(vnorm_r_buffer, uv);
-    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
-
-    // Calculate light results.
-    let intensity = je_color->w;
-    let N = vnorm_r->xyz;
-    let roughness = vnorm_r->w;
-    let metallic = vpos_m->w;
-
-    let FVPos = vpos_m->xyz;
-
-    let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
-
-    let V = normalize(float3_zero - FVPos);
-    let L = normalize(float3_zero - vf.lvdir);
-    let H = normalize(V + L);
-
-    let distance = float_one;
-    let attenuation = float_one / (distance * distance);
-    let radiance = intensity * je_color->xyz * attenuation;
-
-    let NDF = DistributionGGX(N, H, roughness);
-    let G = GeometrySmith(N, V, L, roughness);
-    let F = FresnelSchlick(max(dot(H, V), float_one), F0);
-
-    let nominator = NDF * G * F;
-    let denominator = max(dot(N, V), float_zero)
-        * max(dot(N, L), float_zero) 
-        + float::new(0.001);
-    let specular = nominator / denominator;
-    
-    let kS = F;
-    let kD = (float3_one - kS) * (float_one - metallic);
-    let NdotL = max(dot(N, L), float_zero);
-
-    let result = (kD * albedo / PI + specular) * radiance * NdotL * (float_one - shadow_factor);
-
-    return fout{
-        color = float4::create(result, 0.),
-    };
-}
-
-)");
-                _defer_light2d_point_light_pass
-                    = new shader("*/builtin/defer_light2d_point_light.shader",
-                        R"(
-import je.shader;
-import je.shader.pbr;
-
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-BLEND   (ONE, ONE);
-CULL    (BACK);
-
-VAO_STRUCT vin
-{
-    vertex: float3,
-    // uv: float2, // We don't care uv, we will use port position as uv.
-};
-
-using v2f = struct{
-    pos: float4,
-    lpos: float3,
-};
-
-using fout = struct{
-    color: float4
-};
-
-public func vert(v: vin)
-{
-    let pos = je_mvp * float4::create(v.vertex, 1.);
-    let lpos = je_mv * float4::new(0., 0., 0., 1.);
-
-    return v2f{
-        pos = pos,
-        lpos = lpos->xyz,
-    };
-}
-
-public func frag(vf: v2f)
-{
-    let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
-    let vpos_m_buffer = uniform_texture:<texture2d>("VPositionM", 1);
-    let vnorm_r_buffer = uniform_texture:<texture2d>("VNormalR", 2);
-    let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
-
-    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
-
-    let albedo = pow(texture(albedo_buffer, uv)->xyz, float3::new(2.2, 2.2, 2.2));
-    let vpos_m = texture(vpos_m_buffer, uv);
-    let vnorm_r = texture(vnorm_r_buffer, uv);
-    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_tiling, uv);
-
-    // Calculate light results.
-    let intensity = je_color->w;
-    let N = vnorm_r->xyz;
-    let roughness = vnorm_r->w;
-    let metallic = vpos_m->w;
-
-    let FVPos = vpos_m->xyz;
-    let LVPos = vf.lpos;
-    let VL2FDiff = LVPos - FVPos;
-
-    let F0 = lerp(float3::new(0.04, 0.04, 0.04), albedo, metallic);
-
-    let V = normalize(float3_zero - FVPos);
-    let L = normalize(VL2FDiff);
-    let H = normalize(V + L);
-
-    let distance = length(VL2FDiff);
-    let attenuation = float_one / (distance * distance);
-    let radiance = intensity * je_color->xyz * attenuation;
-
-    let NDF = DistributionGGX(N, H, roughness);
-    let G = GeometrySmith(N, V, L, roughness);
-    let F = FresnelSchlick(max(dot(H, V), float_one), F0);
-
-    let nominator = NDF * G * F;
-    let denominator = max(dot(N, V), float_zero)
-        * max(dot(N, L), float_zero) 
-        + float::new(0.001);
-    let specular = nominator / denominator;
-    
-    let kS = F;
-    let kD = (float3_one - kS) * (float_one - metallic);
-    let NdotL = max(dot(N, L), float_zero);
-
-    let result = (kD * albedo / PI + specular) * radiance * NdotL * (float_one - shadow_factor);
-
-    return fout{
-        color = float4::create(result, 0.),
-    };
-}
-
-)");
+)") };
             }
 
             static DeferLight2DHost* instance(jegl_thread* glcontext)
@@ -1198,15 +1191,29 @@ public func frag(vf: v2f)
         size_t WINDOWS_HEIGHT = 0;
 
         jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_default_uniform_buffer;
+        jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_light2d_uniform_buffer;
         struct default_uniform_buffer_data_t
         {
             jeecs::math::vec4 time;
+        };
+        struct light2d_uniform_buffer_data_t
+        {
+            struct light2d_info
+            {
+                jeecs::math::vec4 color;
+                jeecs::math::vec4 position;
+                jeecs::math::vec4 direction;
+                jeecs::math::vec4 factors;
+            };
+
+            light2d_info l2ds[JE_MAX_SHADOW_LIGHT_COUNT];
         };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
             : EmptyGraphicPipelineSystem(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
+            m_light2d_uniform_buffer = new jeecs::graphic::uniformbuffer(1, sizeof(light2d_uniform_buffer_data_t));
         }
 
         ~DeferLight2DGraphicPipelineSystem()
@@ -1304,7 +1311,6 @@ public func frag(vf: v2f)
                                     (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
                                     (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
 
-                            // TODO; Generate & bind shadow buffer.
                             bool need_update = light2dpass->defer_rend_aim == nullptr
                                 || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
                                 || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
@@ -1313,15 +1319,15 @@ public func frag(vf: v2f)
                                 light2dpass->defer_rend_aim
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            jegl_texture::texture_format::RGBA, // Albedo
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // VPos_Metallic
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // VNorm_Roughness
-                                            jegl_texture::texture_format::DEPTH, //Depth
+                                            jegl_texture::texture_format::RGBA, // 漫反射颜色
+                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
+                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
+                                            jegl_texture::texture_format::DEPTH, // 深度缓冲区
                                         });
                                 light2dpass->defer_light_effect
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // LightResult
+                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 光渲染结果
                                         });
                             }
                         }
@@ -1329,8 +1335,7 @@ public func frag(vf: v2f)
                 .exec(
                     [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
                     {
-                        // TODO: Need Impl AnyOf
-                            // RendOb will be input to a chain and used for swap
+                        // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace(
                             renderer_arch{
                                 rendqueue, &trans, shape, shads, texs
@@ -1454,7 +1459,30 @@ public func frag(vf: v2f)
                 sizeof(math::vec4),
                 &shader_time);
 
+            light2d_uniform_buffer_data_t l2dbuf = {};
+            // Update l2d buffer here.
+            size_t light_count = 0;
+            for (auto& lightarch : m_2dlight_list)
+            {
+                l2dbuf.l2ds[light_count].color = lightarch.color->color;
+                l2dbuf.l2ds[light_count].position = lightarch.translation->world_position;
+                l2dbuf.l2ds[light_count].direction = lightarch.translation->world_rotation
+                    * math::vec3(0.f, -1.f, 1.f).unit();
+                l2dbuf.l2ds[light_count].factors = math::vec4(
+                    lightarch.point != nullptr ? 1.f : 0.f,
+                    lightarch.parallel != nullptr ? 1.f : 0.f,
+                    0.f, 0.f);
+
+                ++light_count;
+            }
+            m_light2d_uniform_buffer->update_buffer(
+                0,
+                sizeof(light2d_uniform_buffer_data_t),
+                &l2dbuf
+            );
+
             jegl_using_resource(m_default_uniform_buffer->resouce());
+            jegl_using_resource(m_light2d_uniform_buffer->resouce());
 
             for (; !m_camera_list.empty(); m_camera_list.pop())
             {
@@ -1518,7 +1546,7 @@ public func frag(vf: v2f)
                                 if (lightarch.point == nullptr)
                                 {
                                     jeecs::math::vec3 rotated_light_dir =
-                                        lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
+                                        lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 1.f).unit();
                                     jegl_uniform_float4(point_shadow_pass->resouce(),
                                         point_shadow_pass->m_builtin->m_builtin_uniform_color,
                                         rotated_light_dir.x,
@@ -1550,6 +1578,7 @@ public func frag(vf: v2f)
                                         auto& blockarch = *block2d_iter;
 
                                         int64_t current_layer = (int64_t)(blockarch.translation->world_position.z * 100.f);
+
                                         if (current_layer <= lightarch.translation->world_position.z * 100.f)
                                             break;
 
@@ -1560,8 +1589,8 @@ public func frag(vf: v2f)
                                         auto* builtin_uniform = shape_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(shape_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(shape_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
                                         const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
@@ -1649,8 +1678,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                                 auto* builtin_uniform = sub_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
                                                 const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
 
                                                 math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
@@ -1663,6 +1692,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                                 NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                                                 NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                                 NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                                NEED_AND_SET_UNIFORM(color, float4, 0.f, 0.f, 0.f, 0.f);
 
                                                 if (block_in_layer->textures != nullptr)
                                                 {
@@ -1699,8 +1730,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                         auto* builtin_uniform = point_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(point_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(point_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
                                         const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
@@ -1749,8 +1780,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             auto* builtin_uniform = sub_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
                                             const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
 
                                             math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
@@ -1763,6 +1794,11 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                            if (blockarch.translation->world_position.z < lightarch.translation->world_position.z)
+                                                NEED_AND_SET_UNIFORM(color, float4, 1.f, 1.f, 1.f, 1.f);
+                                            else
+                                                NEED_AND_SET_UNIFORM(color, float4, 0.f, 0.f, 0.f, 0.f);
 
                                             if (block_in_layer->textures != nullptr)
                                             {
@@ -1857,8 +1893,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                             auto* builtin_uniform = (*using_shader)->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+ jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
 
                             NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
                             NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
@@ -1894,8 +1930,12 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         jegl_clear_framebuffer_color(current_camera.light2DPass->defer_light_effect->resouce());
 
                         // Bind attachment
+                        // 在应用光照时，只需要使用视空间坐标，其他附件均不使用，但是考虑到各种乱七八糟的问题，这里还是都绑定一下
+                        // 绑定漫反射颜色通道
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(0)->resouce(), 0);
+                        // 绑定自发光通道
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(1)->resouce(), 1);
+                        // 绑定视空间坐标通道
                         jegl_using_texture(current_camera.light2DPass->defer_rend_aim->get_attachment(2)->resouce(), 2);
 
                         for (auto& light2d : m_2dlight_list)
@@ -1908,17 +1948,35 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             jeecs::graphic::shader* using_light_shader_pass = nullptr;
                             if (light2d.point != nullptr)
                                 using_light_shader_pass = light2d_host->_defer_light2d_point_light_pass;
-                            else if (light2d.parallel != nullptr)
+                            else
+                            {
+                                assert(light2d.parallel != nullptr);
                                 using_light_shader_pass = light2d_host->_defer_light2d_parallel_light_pass;
+                            }
 
                             jegl_using_resource(using_light_shader_pass->resouce());
 
-                            jegl_uniform_float2(
-                                using_light_shader_pass->resouce(),
-                                using_light_shader_pass->m_builtin->m_builtin_uniform_tiling,
-                                current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_width,
-                                current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_height
-                            );
+                            if (light2d.point != nullptr)
+                            {
+                                using_light_shader_pass = light2d_host->_defer_light2d_point_light_pass;
+
+                                jegl_uniform_float2(
+                                    using_light_shader_pass->resouce(),
+                                    using_light_shader_pass->m_builtin->m_builtin_uniform_offset,
+                                    light2d.point->decay,
+                                    0.f  // Reserved.
+                                );
+                            }
+
+                            if (light2d.shadow != nullptr)
+                            {
+                                jegl_uniform_float2(
+                                    using_light_shader_pass->resouce(),
+                                    using_light_shader_pass->m_builtin->m_builtin_uniform_tiling,
+                                    light2d.shadow->resolution_width,
+                                    light2d.shadow->resolution_height
+                                );
+                            }
 
                             jegl_uniform_float4(using_light_shader_pass->resouce(),
                                 using_light_shader_pass->m_builtin->m_builtin_uniform_color,
@@ -1930,9 +1988,9 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                             auto* builtin_uniform = using_light_shader_pass->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
     jegl_uniform_##TYPE(using_light_shader_pass->resouce(),\
-    builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+    builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
 
                             const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
 
@@ -1967,8 +2025,8 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                         jegl_using_resource(light2d_host->_defer_light2d_mix_light_effect_pass->resouce());
 
-                        // Bind light effect to textre-pass-1, because pass-0 is used for storing
-                        jegl_using_texture(current_camera.light2DPass->defer_light_effect->get_attachment(0)->resouce(), 1);
+                        // 通道1 存有自发光信息，因此光照信息储存到通道2
+                        jegl_using_texture(current_camera.light2DPass->defer_light_effect->get_attachment(0)->resouce(), 2);
 
                         jegl_draw_vertex(light2d_host->_screen_vertex->resouce());
 
