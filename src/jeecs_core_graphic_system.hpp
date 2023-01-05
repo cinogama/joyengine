@@ -1795,7 +1795,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
-                                            if (blockarch.translation->world_position.z < lightarch.translation->world_position.z)
+                                            if (block_in_layer->translation->world_position.z < lightarch.translation->world_position.z)
                                                 NEED_AND_SET_UNIFORM(color, float4, 1.f, 1.f, 1.f, 1.f);
                                             else
                                                 NEED_AND_SET_UNIFORM(color, float4, 0.f, 0.f, 0.f, 0.f);

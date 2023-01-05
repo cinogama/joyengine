@@ -8,8 +8,8 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
-// extern "C" __declspec(dllexport) int NvOptimusEnablement = 0x00000001;
-// extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 0x00000001;
+extern "C" __declspec(dllexport) int NvOptimusEnablement = 0x00000001;
+extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 0x00000001;
 
 int main(int argc, char** argv)
 {

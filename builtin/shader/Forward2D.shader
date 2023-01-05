@@ -15,6 +15,7 @@ VAO_STRUCT vin{
 
 using v2f = struct {
     pos     : float4,
+    vpos    : float3,
     uv      : float2,
 };
 
@@ -32,8 +33,10 @@ func invscale_f3_2_f4(v: float3)
 
 public func vert(v: vin)
 {
+    let vpos = je_mv * float4::create(v.vertex, 1.);
     return v2f{
-        pos  = je_mvp * float4::create(v.vertex, 1.),
+        pos  = je_p * vpos,
+        vpos = vpos->xyz / vpos->w,
         uv   = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
