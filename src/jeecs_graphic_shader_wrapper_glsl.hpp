@@ -315,6 +315,28 @@ vec3 JEBUILTIN_Movement(mat4 trans)
 )";
             built_in_srcs += unifrom_block;
         }
+        else if (builtin_func_name == "JEBUILTIN_Negative")
+        {
+            const std::string unifrom_block = R"(
+float JEBUILTIN_Negative(float v)
+{
+    return -v;
+}
+vec2 JEBUILTIN_Negative(vec2 v)
+{
+    return -v;
+}
+vec3 JEBUILTIN_Negative(vec3 v)
+{
+    return -v;
+}
+vec4 JEBUILTIN_Negative(vec4 v)
+{
+    return -v;
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
     }
 
 
@@ -416,6 +438,28 @@ vec4 JEBUILTIN_TextureFastMs(sampler2DMS tex, vec2 uv)
 vec3 JEBUILTIN_Movement(mat4 trans)
 {
     return vec3(trans[3][0], trans[3][1], trans[3][2]);
+}
+)";
+            built_in_srcs += unifrom_block;
+        }
+        else if (builtin_func_name == "JEBUILTIN_Negative")
+        {
+            const std::string unifrom_block = R"(
+float JEBUILTIN_Negative(float v)
+{
+    return -v;
+}
+vec2 JEBUILTIN_Negative(vec2 v)
+{
+    return -v;
+}
+vec3 JEBUILTIN_Negative(vec3 v)
+{
+    return -v;
+}
+vec4 JEBUILTIN_Negative(vec4 v)
+{
+    return -v;
 }
 )";
             built_in_srcs += unifrom_block;

@@ -15,11 +15,7 @@ VAO_STRUCT vin{
 
 using v2f = struct {
     pos     : float4,
-    vpos    : float3,
     uv      : float2,
-    vtangent_x : float3, 
-    vtangent_y : float3,
-    vtangent_z : float3,
 };
 
 using fout = struct {
@@ -36,44 +32,15 @@ func invscale_f3_2_f4(v: float3)
 
 public func vert(v: vin)
 {
-    let vspace_position = je_mv * float4::create(v.vertex, 1.);
-    let m_movement = movement(je_m);
-    let v_movement = movement(je_v);
     return v2f{
-        pos  = je_p * vspace_position,
-        vpos = vspace_position->xyz,
+        pos  = je_mvp * float4::create(v.vertex, 1.),
         uv   = uvtrans(v.uv, je_tiling, je_offset),
-        vtangent_x = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(1., 0., 0.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
-        vtangent_y = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(0., 1., 0.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
-        vtangent_z = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(0., 0., -1.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
     };
-}
-
-func get_normal_from_map(normal_map: texture2d, uv : float2)
-{
-    return (float::new(2.) * texture(normal_map, uv)->xyz) - float3::new(1., 1., 1.);
-}
-
-func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
-{
-    let normal_from_map = get_normal_from_map(normal_map, vertex_info.uv);
-    return normalize(
-        vertex_info.vtangent_x * normal_from_map->x +
-        vertex_info.vtangent_y * normal_from_map->y +
-        vertex_info.vtangent_z * normal_from_map->z
-    );
 }
 
 public func frag(vf: v2f)
 {
     let Albedo = uniform_texture:<texture2d>("Albedo", 0);
-    let Normalize = uniform_texture:<texture2d>("Normalize", 1);
-
-    let vnormal = transed_normal_tangent_map(Normalize, vf);
-
     return fout{
         albedo = texture(Albedo, vf.uv),
         self_luminescence = float4_zero,

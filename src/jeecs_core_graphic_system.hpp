@@ -12,6 +12,8 @@
 #include <queue>
 #include <list>
 
+#define JE_MAX_SHADOW_LIGHT_COUNT 16
+
 const char* shader_light2d_path = "je/shader/light2d.wo";
 const char* shader_light2d_src = R"(
 // JoyEngineECS RScene shader for light2d-system
@@ -25,9 +27,10 @@ public let MAX_SHADOW_LIGHT_COUNT = 16;
 GRAPHIC_STRUCT Light2D
 {
     color:      float4,  // color->xyz is color, color->w is intensity.
-    position:   float4,  
-    direction:  float4,  // direction->xyz is dir, direction->w is angle in radians.
-    _padding:   float4,
+    position:   float4,  // position->xyz used for point-light
+    direction:  float4,  // direction->xyz used for parallel-light
+    factors:    float4,  // factors->x & y used for effect position or direction.
+                         // factors->z is point-light-decay
 };
 
 UNIFORM_BUFFER JOYENGINE_LIGHT2D = 1
@@ -45,14 +48,14 @@ public let je_light2ds = func(){
     return lights->toarray;
 }();
 
-public let je_shadow2ds = func(){
-    let shadows = []mut: vec<texture2d>;
-
-    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
-        shadows->add(uniform_texture:<texture2d>("JE_SHADOW2D_{i}", 16 + i));
-
-    return shadows->toarray;
-}();
+//public let je_shadow2ds = func(){
+//    let shadows = []mut: vec<texture2d>;
+//
+//    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
+//        shadows->add(uniform_texture:<texture2d>("JE_SHADOW2D_{i}", 16 + i));
+//
+//    return shadows->toarray;
+//}();
 
 )";
 
@@ -955,6 +958,7 @@ VAO_STRUCT vin
 
 using v2f = struct{
     pos: float4,
+    vpos: float4,
     uv: float2
 };
 
@@ -964,10 +968,11 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    let pos = je_mvp * float4::create(v.vertex, 1.);
+    let vpos = je_mv * float4::create(v.vertex, 1.);
 
     return v2f{
-        pos = pos,
+        pos = je_p * vpos,
+        vpos = vpos,
         uv = v.uv
     };
 }
@@ -976,12 +981,15 @@ public func frag(vf: v2f)
 {
     // let albedo_buffer = uniform_texture:<texture2d>("Albedo", 0);
     // let self_lumine = uniform_texture:<texture2d>("SelfLuminescence", 1);
-    // let visual_coord = uniform_texture:<texture2d>("VisualCoordinates", 2);
+    let visual_coord = uniform_texture:<texture2d>("VisualCoordinates", 2);
 
     let shadow_buffer = uniform_texture:<texture2d>("Shadow", 3);
-    let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
-
+   
     let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
+
+    let vposition = texture(visual_coord, uv);
+    let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+    let fgdistance = distance(vposition->xyz, vf.vpos->xyz / vf.vpos->w);
     let shadow_factor = texture(shadow_buffer, uv)->x;
 
     let decay = je_offset->x;
@@ -990,7 +998,7 @@ public func frag(vf: v2f)
     let result = je_color->xyz * je_color->w * (float_one - shadow_factor) * fade_factor;
 
     return fout{
-        color = float4::create(result, 0.),
+        color = float4::create(result / (fgdistance + 1.0), 0.),
     };
 }
 )")
@@ -1136,15 +1144,29 @@ public func frag(vf: v2f)
         size_t WINDOWS_HEIGHT = 0;
 
         jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_default_uniform_buffer;
+        jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_light2d_uniform_buffer;
         struct default_uniform_buffer_data_t
         {
             jeecs::math::vec4 time;
+        };
+        struct light2d_uniform_buffer_data_t
+        {
+            struct light2d_info
+            {
+                jeecs::math::vec4 color;
+                jeecs::math::vec4 position;
+                jeecs::math::vec4 direction;
+                jeecs::math::vec4 factors;
+            };
+
+            light2d_info l2ds[JE_MAX_SHADOW_LIGHT_COUNT];
         };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
             : EmptyGraphicPipelineSystem(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
+            m_light2d_uniform_buffer = new jeecs::graphic::uniformbuffer(1, sizeof(light2d_uniform_buffer_data_t));
         }
 
         ~DeferLight2DGraphicPipelineSystem()
@@ -1251,14 +1273,14 @@ public func frag(vf: v2f)
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
                                             jegl_texture::texture_format::RGBA, // 漫反射颜色
-                                            jegl_texture::texture_format::RGBA, // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
+                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
                                             jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
                                             jegl_texture::texture_format::DEPTH, // 深度缓冲区
                                         });
                                 light2dpass->defer_light_effect
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // LightResult
+                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 光渲染结果
                                         });
                             }
                         }
@@ -1390,7 +1412,30 @@ public func frag(vf: v2f)
                 sizeof(math::vec4),
                 &shader_time);
 
+            light2d_uniform_buffer_data_t l2dbuf = {};
+            // Update l2d buffer here.
+            size_t light_count = 0;
+            for (auto& lightarch : m_2dlight_list)
+            {
+                l2dbuf.l2ds[light_count].color = lightarch.color->color;
+                l2dbuf.l2ds[light_count].position = lightarch.translation->world_position;
+                l2dbuf.l2ds[light_count].direction = lightarch.translation->world_rotation
+                    * math::vec3(0.f, -1.f, 1.f).unit();
+                l2dbuf.l2ds[light_count].factors = math::vec4(
+                    lightarch.point != nullptr ? 1.f : 0.f,
+                    lightarch.parallel != nullptr ? 1.f : 0.f,
+                    0.f, 0.f);
+
+                ++light_count;
+            }
+            m_light2d_uniform_buffer->update_buffer(
+                0,
+                sizeof(light2d_uniform_buffer_data_t),
+                &l2dbuf
+            );
+
             jegl_using_resource(m_default_uniform_buffer->resouce());
+            jegl_using_resource(m_light2d_uniform_buffer->resouce());
 
             for (; !m_camera_list.empty(); m_camera_list.pop())
             {
@@ -1454,7 +1499,7 @@ public func frag(vf: v2f)
                                 if (lightarch.point == nullptr)
                                 {
                                     jeecs::math::vec3 rotated_light_dir =
-                                        lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
+                                        lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 1.f).unit();
                                     jegl_uniform_float4(point_shadow_pass->resouce(),
                                         point_shadow_pass->m_builtin->m_builtin_uniform_color,
                                         rotated_light_dir.x,
