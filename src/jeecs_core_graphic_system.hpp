@@ -12,7 +12,8 @@
 #include <queue>
 #include <list>
 
-#define JE_MAX_SHADOW_LIGHT_COUNT 16
+#define JE_MAX_2D_LIGHT_COUNT 16
+#define JE_MAX_2D_SHADOW_0 16
 
 const char* shader_light2d_path = "je/shader/light2d.wo";
 const char* shader_light2d_src = R"(
@@ -48,14 +49,14 @@ public let je_light2ds = func(){
     return lights->toarray;
 }();
 
-//public let je_shadow2ds = func(){
-//    let shadows = []mut: vec<texture2d>;
-//
-//    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
-//        shadows->add(uniform_texture:<texture2d>("JE_SHADOW2D_{i}", 16 + i));
-//
-//    return shadows->toarray;
-//}();
+public let je_shadow2ds = func(){
+    let shadows = []mut: vec<texture2d>;
+
+    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
+        shadows->add(uniform_texture:<texture2d>(F"JOYENGINE_SHADOW2D_{i}", 16 + i));
+
+    return shadows->toarray;
+}();
 
 )";
 
@@ -924,9 +925,9 @@ public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: 
     let bias = 2.;
 
     let bias_weight = [
-        (-1., 1., 0.08),    (0., 1., 0.08),     (1., 1., 0.08),
+        /*(-1., 1., 0.08),*/    (0., 1., 0.08),     /*(1., 1., 0.08),*/
         (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.08),
-        (-1., -1., 0.08),   (0., -1., 0.08),    (1., -1., 0.08),
+        /*(-1., -1., 0.08),*/   (0., -1., 0.08),    /*(1., -1., 0.08),*/
     ];
 
     let reso_inv = float2_one / reso;
@@ -1005,11 +1006,9 @@ public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: 
     let bias = 2.;
 
     let bias_weight = [
-        (-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
-        (-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
-        (-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
-        (-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
-        (-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
+        /*(-1., 1., 0.08),*/    (0., 1., 0.08),     /*(1., 1., 0.08),*/
+        (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.08),
+        /*(-1., -1., 0.08),*/   (0., -1., 0.08),    /*(1., -1., 0.08),*/
     ];
 
     let reso_inv = float2_one / reso;
@@ -1206,7 +1205,7 @@ public func frag(vf: v2f)
                 jeecs::math::vec4 factors;
             };
 
-            light2d_info l2ds[JE_MAX_SHADOW_LIGHT_COUNT];
+            light2d_info l2ds[JE_MAX_2D_LIGHT_COUNT];
         };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
@@ -1433,6 +1432,8 @@ public func frag(vf: v2f)
         {
             std::list<renderer_arch> m_renderer_entities;
 
+            auto* light2d_host = DeferLight2DHost::instance(glthread);
+
             while (!m_renderer_list.empty())
             {
                 m_renderer_entities.push_back(m_renderer_list.top());
@@ -1464,6 +1465,9 @@ public func frag(vf: v2f)
             size_t light_count = 0;
             for (auto& lightarch : m_2dlight_list)
             {
+                if (light_count >= JE_MAX_2D_LIGHT_COUNT)
+                    break;
+
                 l2dbuf.l2ds[light_count].color = lightarch.color->color;
                 l2dbuf.l2ds[light_count].position = lightarch.translation->world_position;
                 l2dbuf.l2ds[light_count].direction = lightarch.translation->world_rotation
@@ -1472,6 +1476,18 @@ public func frag(vf: v2f)
                     lightarch.point != nullptr ? 1.f : 0.f,
                     lightarch.parallel != nullptr ? 1.f : 0.f,
                     0.f, 0.f);
+
+                if (lightarch.shadow != nullptr)
+                {
+                    assert(lightarch.shadow->shadow_buffer!=nullptr); 
+                    jegl_using_texture(lightarch.shadow->shadow_buffer->get_attachment(0)->resouce(), 
+                        JE_MAX_2D_SHADOW_0 + light_count);
+                }
+                else
+                {
+                    jegl_using_texture(light2d_host->_no_shadow->resouce(),
+                        JE_MAX_2D_SHADOW_0 + light_count);
+                }
 
                 ++light_count;
             }
@@ -1514,8 +1530,6 @@ public func frag(vf: v2f)
                     if (current_camera.light2DPass != nullptr)
                     {
                         assert(current_camera.light2DPass->defer_rend_aim != nullptr);
-
-                        auto* light2d_host = DeferLight2DHost::instance(glthread);
 
                         // Walk throw all light, rend shadows to light's ShadowBuffer.
                         for (auto& lightarch : m_2dlight_list)

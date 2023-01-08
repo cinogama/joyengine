@@ -76,7 +76,7 @@ public func frag(vf: v2f)
     let vnormal = transed_normal_tangent_map(Normalize, vf);
 
     let mut normal_effect_self_luminescence = float4_zero;
-    for (let _, light : je_light2ds)
+    for (let index, light : je_light2ds)
     {
         // 点光源照射部分
         let lvpos = je_v * float4::create(light->position->xyz, 1.);
@@ -91,9 +91,15 @@ public func frag(vf: v2f)
         // 最终光照产生的法线效果
         let light_effect_factor = max(float_zero, point_light_factor + parallel_light_factor);
 
+        // 获取阴影, 如果当前像素被此灯光的阴影遮盖，则得到系数 0. 否则得到 1.
+        let shadow_factor = float_one - texture(je_shadow2ds[index], (vf.pos->xy / vf.pos->w + float2_one)/ 2.)->x;
+
         normal_effect_self_luminescence =
-            light->color->w * light_effect_factor * float4::create(light->color->xyz, 0.) +
-            normal_effect_self_luminescence;
+            shadow_factor
+            * light->color->w 
+            * light_effect_factor 
+            * float4::create(light->color->xyz, 0.) 
+            + normal_effect_self_luminescence;
     }
 
     return fout{
