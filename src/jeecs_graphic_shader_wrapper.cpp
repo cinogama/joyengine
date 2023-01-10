@@ -1540,7 +1540,7 @@ public func CULL(cull: CullConfig)
                         return option::value(out_result);
                     };
 
-    // using VAO_STRUCT vin { ...
+    // using VAO_STRUCT! vin { ...
     // 0. Get struct name, then eat '{'
     let vao_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
@@ -1798,7 +1798,7 @@ using uniform_block = struct_define
     lexer->lex(out_struct_decl);
 }
 
-UNIFORM_BUFFER JOYENGINE_DEFAULT = 0
+UNIFORM_BUFFER! JOYENGINE_DEFAULT = 0
 {
     je_time: float4,
 };

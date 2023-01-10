@@ -162,7 +162,7 @@ namespace jeecs
                 static basic::resource<graphic::shader> shad = new graphic::shader("*/builtin/drawline.shader", R"(
         import je.shader;
         
-        VAO_STRUCT vin {
+        VAO_STRUCT! vin {
             vertex : float3,
         };
         using v2f = struct {
@@ -271,7 +271,7 @@ import je.shader;
         
 ZTEST (ALWAYS);
         
-VAO_STRUCT vin {
+VAO_STRUCT! vin {
     vertex : float3,
     color  : float3
 };

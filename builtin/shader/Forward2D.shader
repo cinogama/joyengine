@@ -8,7 +8,7 @@ ZWRITE  (ENABLE);
 BLEND   (ONE, ZERO);
 CULL    (NONE);
 
-VAO_STRUCT vin{
+VAO_STRUCT! vin{
     vertex  : float3,
     uv      : float2,
 };
