@@ -305,23 +305,6 @@ public let frag =
 
     struct DefaultGraphicPipelineSystem : public EmptyGraphicPipelineSystem
     {
-        DefaultGraphicPipelineSystem(game_world w)
-            : EmptyGraphicPipelineSystem(w)
-        {
-        }
-
-        ~DefaultGraphicPipelineSystem()
-        {
-        }
-
-        void LateUpdate()
-        {
-            UpdateFrame(this);
-        }
-    };
-
-    struct DefaultGraphicPipelineSystem : public EmptyGraphicPipelineSystem
-    {
         using Translation = Transform::Translation;
 
         using Rendqueue = Renderer::Rendqueue;
