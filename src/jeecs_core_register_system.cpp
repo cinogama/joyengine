@@ -5,6 +5,7 @@
 #include "jeecs_core_translation_system.hpp"
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_editor_system.hpp"
+#include "jeecs_core_physics_system.hpp"
 
 const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
 {
@@ -27,6 +28,8 @@ const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const ch
 void jeecs_entry_register_core_systems()
 {
     jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
+
+    jeecs::typing::type_info::of<jeecs::PhysicsUpdatingSystem>("Physics::PhysicsUpdatingSystem");
 
     jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
     jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
