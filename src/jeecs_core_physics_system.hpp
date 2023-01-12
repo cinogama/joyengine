@@ -6,16 +6,23 @@
 #   include "jeecs.hpp"
 #endif
 
+#include <box2d/box2d.h>
+
 namespace jeecs
 {
-    struct PhysicsUpdatingSystem :public game_system
+    struct Physics2DUpdatingSystem :public game_system
     {
-        PhysicsUpdatingSystem(game_world world) :game_system(world)
+        b2World m_physics_world;
+
+        Physics2DUpdatingSystem(game_world world) :game_system(world)
+            , m_physics_world(b2Vec2(0.f, -9.8f))
         {
+            m_physics_world.SetAllowSleeping(true);
         }
 
         void PreUpdate()
         {
+
         }
 
         void Update()
