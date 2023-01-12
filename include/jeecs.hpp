@@ -5002,6 +5002,41 @@ namespace jeecs
         };
     }
 
+    namespace Physics2D
+    {
+        struct Rigidbody
+        {
+            void* native_rigidbody = nullptr;
+        };
+        struct Kinematics
+        {
+            math::vec2 linear_velocity = {};
+            float angular_velocity = 0.f;
+            float linear_damping = 0.f;
+            float angular_damping = 0.f;
+            float gravity_scale = 1.f;
+            float mass = 0.f;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Kinematics::linear_velocity, "linear_velocity");
+                typing::register_member(&Kinematics::angular_velocity, "angular_velocity");
+                typing::register_member(&Kinematics::linear_damping, "linear_damping");
+                typing::register_member(&Kinematics::angular_damping, "angular_damping");
+                typing::register_member(&Kinematics::gravity_scale, "gravity_scale");
+                typing::register_member(&Kinematics::mass, "mass");
+            }
+        };
+        struct Collider
+        {
+
+        };
+        struct Bullet
+        {
+
+        };
+    }
+
     namespace Light2D
     {
         struct Color
@@ -5440,6 +5475,11 @@ namespace jeecs
             type_info::of<Light2D::Point>("Light2D::Point");
             type_info::of<Light2D::CameraPass>("Light2D::CameraPass");
             type_info::of<Light2D::Block>("Light2D::Block");
+
+            type_info::of<Physics2D::Rigidbody>("Physics2D::Rigidbody");
+            type_info::of<Physics2D::Kinematics>("Physics2D::Kinematics");
+            type_info::of<Physics2D::Collider>("Physics2D::Collider");
+            type_info::of<Physics2D::Bullet>("Physics2D::Bullet");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();
