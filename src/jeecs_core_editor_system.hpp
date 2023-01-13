@@ -413,7 +413,7 @@ public let frag =
 
                     editing_pos->set_world_position(
                         editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * mover.axis),
-                        editing_trans,
+                        *editing_trans,
                         editing_rot_may_null
                     );
 
