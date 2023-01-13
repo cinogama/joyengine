@@ -3567,11 +3567,14 @@ namespace jeecs
                 return x != q.x || y != q.y || z != q.z || w != q.w;
             }
 
-            constexpr quat(float _x, float _y, float _z, float _w) noexcept
-                : x(_x / (_x * _x + _y * _y + _z * _z + _w * _w))
-                , y(_y / (_x * _x + _y * _y + _z * _z + _w * _w))
-                , z(_z / (_x * _x + _y * _y + _z * _z + _w * _w))
-                , w(_w / (_x * _x + _y * _y + _z * _z + _w * _w)) { }
+            inline quat(float _x, float _y, float _z, float _w) noexcept
+            {
+                auto len = sqrt(_x * _x + _y * _y + _z * _z + _w * _w);
+                x = _x / len;
+                y = _y / len;
+                z = _z / len;
+                w = _w / len;
+            }
 
             constexpr quat() noexcept
                 : x(0.f)
@@ -3717,7 +3720,7 @@ namespace jeecs
                 return quat(a.x * sv, a.y * sv, a.z * sv, cv);
             }
 
-            static inline constexpr quat lerp(const quat& a, const quat& b, float t)
+            static inline quat lerp(const quat& a, const quat& b, float t)
             {
                 return quat((1 - t) * a.x + t * b.x,
                     (1 - t) * a.y + t * b.y,
@@ -3781,11 +3784,11 @@ namespace jeecs
                 return quat::axis_angle(axis.unit(), angle);
             }
 
-            inline constexpr quat conjugate() const noexcept
+            inline quat conjugate() const noexcept
             {
                 return quat(-x, -y, -z, w);
             }
-            inline constexpr quat inverse() const noexcept
+            inline quat inverse() const noexcept
             {
                 return quat(-x, -y, -z, w);
             }
@@ -3797,7 +3800,7 @@ namespace jeecs
                 return vec3(RAD2DEG * yaw, RAD2DEG * pitch, RAD2DEG * roll);
             }
 
-            inline constexpr quat operator * (const quat& _quat) const noexcept
+            inline quat operator * (const quat& _quat) const noexcept
             {
                 float w1 = w;
                 float w2 = _quat.w;
@@ -4769,6 +4772,7 @@ namespace jeecs
             }
             inline void set_world_rotation(const math::quat& _rot, const Translation& translation) noexcept
             {
+                auto x = get_parent_world_rotation(translation).inverse();
                 rot = _rot * get_parent_world_rotation(translation).inverse();
             }
 

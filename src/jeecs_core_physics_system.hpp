@@ -23,6 +23,15 @@ namespace jeecs
 
         void PreUpdate()
         {
+           
+        }
+
+        void Update()
+        {
+        }
+
+        void LateUpdate()
+        {
             b2BodyDef default_rigidbody_config;
             select_from(this->get_world()).exec(
                 [this, &default_rigidbody_config](
@@ -94,7 +103,7 @@ namespace jeecs
                             auto collider_size = entity_scaled_size * boxcollider->scale;
 
                             b2PolygonShape box_shape;
-                            box_shape.SetAsBox(collider_size.x, collider_size.y, { 0.f,0.f }, localrotation.rot.euler_angle().z / math::RAD2DEG);
+                            box_shape.SetAsBox(collider_size.x / 2.f, collider_size.y / 2.f, { 0.f,0.f }, localrotation.rot.euler_angle().z / math::RAD2DEG);
 
                             b2FixtureDef box_shape_fixture_define;
                             box_shape_fixture_define.shape = &box_shape;
@@ -123,15 +132,6 @@ namespace jeecs
 
                 // 物理引擎在此处进行物理解算
                 m_physics_world.Step(delta_time(), 8, 3);
-
-        }
-
-        void Update()
-        {
-        }
-
-        void LateUpdate()
-        {
         }
     };
 }
