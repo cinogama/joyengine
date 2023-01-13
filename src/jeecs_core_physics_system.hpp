@@ -27,33 +27,103 @@ namespace jeecs
             select_from(this->get_world()).exec(
                 [this, &default_rigidbody_config](
                     Transform::Translation& translation,
+                    Transform::LocalPosition& localposition,
+                    Transform::LocalRotation& localrotation,
+                    Renderer::Shape* rendshape,
                     Physics2D::Rigidbody& rigidbody,
+                    Physics2D::Mass* mass,
                     Physics2D::Kinematics* kinematics,
-                    Physics2D::Collider* collider,
-                    Physics2D::Bullet* bullet
+                    Physics2D::Restitution* restitution,
+                    Physics2D::Friction* friction,
+                    Physics2D::Bullet* bullet,
+                    Physics2D::BoxCollider* boxcollider
                     )
                 {
                     if (rigidbody.native_rigidbody == nullptr)
-                        rigidbody.native_rigidbody = m_physics_world.CreateBody(&default_rigidbody_config);
-
-                    b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
-
-                    rigidbody_instance->SetBullet(bullet != nullptr);
-
-                    if (kinematics == nullptr)
                     {
-                        rigidbody_instance->SetType(b2_staticBody);
-                        // rigidbody_instance->mass
+                        default_rigidbody_config.position = { translation.world_position.x, translation.world_position.y };
+                        rigidbody.native_rigidbody = m_physics_world.CreateBody(&default_rigidbody_config);
                     }
                     else
                     {
-                        if (kinematics->mass == 0.f)
+                        // 从刚体获取解算完成之后的坐标
+                        b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
+                        auto& new_position = rigidbody_instance->GetPosition();
+
+                        localposition.set_world_position(
+                            math::vec3(new_position.x, new_position.y, translation.world_position.z),
+                            translation, &localrotation);
+
+                        auto&& world_angle = translation.world_rotation.euler_angle();
+                        world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
+
+                        localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
+                    }
+
+                    b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
+
+                    // 如果实体有 Physics2D::Bullet 组件，那么就适用高精度碰撞
+                    rigidbody_instance->SetBullet(bullet != nullptr);
+
+                    bool need_remove_old_fixture = false;
+                    auto* old_rigidbody_fixture = rigidbody_instance->GetFixtureList();
+                    // 开始创建碰撞体
+
+                    // 获取实体的网格大小，如果没有，那么默认就是 1，1
+                    // TODO: 考虑网格本身改变的情况，不过应该没人会去动网格
+                    auto&& rendshape_mesh_size =
+                        rendshape && rendshape->vertex && rendshape->vertex->enabled()
+                        ? math::vec2(
+                            rendshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
+                            rendshape->vertex->resouce()->m_raw_vertex_data->m_size_y)
+                        : math::vec2(1.f, 1.f);
+
+                    auto entity_scaled_size = rendshape_mesh_size
+                        * math::vec2(translation.local_scale.x, translation.local_scale.y);
+
+                    if (boxcollider != nullptr)
+                    {
+                        if (old_rigidbody_fixture == nullptr
+                            || old_rigidbody_fixture != boxcollider->native_fixture)
+                        {
+                            // 引擎暂时不支持一个实体有多个fixture，这里标记一下，移除旧的。
+
+                            // TODO: 这里有个BUG待查，东西碰撞会有空隙，需要看看是啥情况
+                            need_remove_old_fixture = true;
+
+                            auto collider_size = entity_scaled_size * boxcollider->scale;
+
+                            b2PolygonShape box_shape;
+                            box_shape.SetAsBox(collider_size.x, collider_size.y, { 0.f,0.f }, localrotation.rot.euler_angle().z / math::RAD2DEG);
+
+                            b2FixtureDef box_shape_fixture_define;
+                            box_shape_fixture_define.shape = &box_shape;
+                            box_shape_fixture_define.density = mass ? mass->density : 0.f;
+                            box_shape_fixture_define.friction = friction ? friction->value : 0.f;
+                            box_shape_fixture_define.restitution = restitution ? restitution->value : 0.f;
+                            boxcollider->native_fixture =
+                                rigidbody_instance->CreateFixture(&box_shape_fixture_define);
+                        }
+                    }
+
+                    if (need_remove_old_fixture && old_rigidbody_fixture != nullptr)
+                        rigidbody_instance->DestroyFixture(old_rigidbody_fixture);
+
+                    if (kinematics == nullptr)
+                        rigidbody_instance->SetType(b2_staticBody);
+                    else
+                    {
+                        if (mass == nullptr)
                             rigidbody_instance->SetType(b2_kinematicBody);
                         else
                             rigidbody_instance->SetType(b2_dynamicBody);
-                        // rigidbody_instance->mass
                     }
-                });
+
+                }).anyof<Physics2D::BoxCollider>();
+
+                // 物理引擎在此处进行物理解算
+                m_physics_world.Step(delta_time(), 8, 3);
+
         }
 
         void Update()

@@ -2886,6 +2886,8 @@ namespace jeecs
 
     namespace math
     {
+        constexpr static float RAD2DEG = 57.29578f;
+
         template<typename T>
         static T clamp(T src, T min, T max)
         {
@@ -3554,7 +3556,6 @@ namespace jeecs
 
         struct quat
         {
-            constexpr static float RAD2DEG = 57.29578f;
             float x, y, z, w;
 
             inline constexpr bool operator == (const quat& q) const noexcept
@@ -4330,7 +4331,7 @@ namespace jeecs
         {
             const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
             const float ZRANGE = znear - zfar;
-            const float TAN_HALF_FOV = tanf(angle / math::quat::RAD2DEG / 2.0f);
+            const float TAN_HALF_FOV = tanf(angle / math::RAD2DEG / 2.0f);
 
             auto m = out_proj_mat;
             m[0][0] = 1.0f / (TAN_HALF_FOV * WIDTH_HEIGHT_RATIO);
@@ -4364,7 +4365,7 @@ namespace jeecs
         {
             const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
             const float ZRANGE = znear - zfar;
-            const float TAN_HALF_FOV = tanf(angle / math::quat::RAD2DEG / 2.0f);
+            const float TAN_HALF_FOV = tanf(angle / math::RAD2DEG / 2.0f);
 
 
             auto m = out_proj_mat;
@@ -4762,14 +4763,12 @@ namespace jeecs
         struct LocalRotation
         {
             math::quat rot;
-            inline math::quat get_parent_world_rotation(const Translation* translation)const noexcept
+            inline math::quat get_parent_world_rotation(const Translation& translation)const noexcept
             {
-                assert(translation != nullptr);
-                return translation->world_rotation * rot.inverse();
+                return translation.world_rotation * rot.inverse();
             }
-            inline void set_world_rotation(const math::quat& _rot, const Translation* translation) noexcept
+            inline void set_world_rotation(const math::quat& _rot, const Translation& translation) noexcept
             {
-                assert(translation != nullptr);
                 rot = _rot * get_parent_world_rotation(translation).inverse();
             }
 
@@ -4782,23 +4781,20 @@ namespace jeecs
         struct LocalPosition
         {
             math::vec3 pos;
-            inline math::vec3 get_parent_world_position(const Translation* translation, const LocalRotation* rotation) const noexcept
+            inline math::vec3 get_parent_world_position(const Translation& translation, const LocalRotation* rotation) const noexcept
             {
-                assert(translation != nullptr);
                 if (rotation)
-                    return translation->world_position - rotation->get_parent_world_rotation(translation) * pos;
+                    return translation.world_position - rotation->get_parent_world_rotation(translation) * pos;
                 else
-                    return translation->world_position - translation->world_rotation * pos;
+                    return translation.world_position - translation.world_rotation * pos;
             }
 
-            void set_world_position(const math::vec3& _pos, const Translation* translation, const LocalRotation* rotation) noexcept
+            void set_world_position(const math::vec3& _pos, const Translation& translation, const LocalRotation* rotation) noexcept
             {
-                assert(translation != nullptr);
-
                 if (rotation)
                     pos = rotation->get_parent_world_rotation(translation).inverse() * (_pos - get_parent_world_position(translation, rotation));
                 else
-                    pos = translation->world_rotation.inverse() * (_pos - get_parent_world_position(translation, nullptr));
+                    pos = translation.world_rotation.inverse() * (_pos - get_parent_world_position(translation, nullptr));
             }
 
             static void JERefRegsiter()
@@ -5008,6 +5004,31 @@ namespace jeecs
         {
             void* native_rigidbody = nullptr;
         };
+        struct Mass
+        {
+            float density = 1.f;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Mass::density, "density");
+            }
+        };
+        struct Friction
+        {
+            float value = 1.f;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Friction::value, "value");
+            }
+        };
+        struct Restitution
+        {
+            float value = 1.f;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Restitution::value, "value");
+            }
+        };
         struct Kinematics
         {
             math::vec2 linear_velocity = {};
@@ -5015,7 +5036,6 @@ namespace jeecs
             float linear_damping = 0.f;
             float angular_damping = 0.f;
             float gravity_scale = 1.f;
-            float mass = 0.f;
 
             static void JERefRegsiter()
             {
@@ -5024,16 +5044,21 @@ namespace jeecs
                 typing::register_member(&Kinematics::linear_damping, "linear_damping");
                 typing::register_member(&Kinematics::angular_damping, "angular_damping");
                 typing::register_member(&Kinematics::gravity_scale, "gravity_scale");
-                typing::register_member(&Kinematics::mass, "mass");
             }
-        };
-        struct Collider
-        {
-
         };
         struct Bullet
         {
 
+        };
+        struct BoxCollider
+        {
+            void* native_fixture = nullptr;
+            math::vec2 scale = {1.f, 1.f};
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&BoxCollider::scale, "scale");
+            }
         };
     }
 
@@ -5478,8 +5503,11 @@ namespace jeecs
 
             type_info::of<Physics2D::Rigidbody>("Physics2D::Rigidbody");
             type_info::of<Physics2D::Kinematics>("Physics2D::Kinematics");
-            type_info::of<Physics2D::Collider>("Physics2D::Collider");
+            type_info::of<Physics2D::Mass>("Physics2D::Mass");
             type_info::of<Physics2D::Bullet>("Physics2D::Bullet");
+            type_info::of<Physics2D::BoxCollider>("Physics2D::BoxCollider");
+            type_info::of<Physics2D::Restitution>("Physics2D::Restitution");
+            type_info::of<Physics2D::Friction>("Physics2D::Friction");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();
