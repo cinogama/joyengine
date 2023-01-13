@@ -5064,6 +5064,16 @@ namespace jeecs
                 typing::register_member(&BoxCollider::scale, "scale");
             }
         };
+        struct CircleCollider
+        {
+            void* native_fixture = nullptr;
+            float scale = 1.f;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&CircleCollider::scale, "scale");
+            }
+        };
     }
 
     namespace Light2D
@@ -5510,6 +5520,7 @@ namespace jeecs
             type_info::of<Physics2D::Mass>("Physics2D::Mass");
             type_info::of<Physics2D::Bullet>("Physics2D::Bullet");
             type_info::of<Physics2D::BoxCollider>("Physics2D::BoxCollider");
+            type_info::of<Physics2D::CircleCollider>("Physics2D::CircleCollider"); 
             type_info::of<Physics2D::Restitution>("Physics2D::Restitution");
             type_info::of<Physics2D::Friction>("Physics2D::Friction");
 

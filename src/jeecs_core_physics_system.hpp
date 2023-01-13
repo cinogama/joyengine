@@ -45,7 +45,8 @@ namespace jeecs
                     Physics2D::Restitution* restitution,
                     Physics2D::Friction* friction,
                     Physics2D::Bullet* bullet,
-                    Physics2D::BoxCollider* boxcollider
+                    Physics2D::BoxCollider* boxcollider,
+                    Physics2D::CircleCollider* circlecollider
                     )
                 {
                     if (rigidbody.native_rigidbody == nullptr)
@@ -96,8 +97,6 @@ namespace jeecs
                             || old_rigidbody_fixture != boxcollider->native_fixture)
                         {
                             // 引擎暂时不支持一个实体有多个fixture，这里标记一下，移除旧的。
-
-                            // TODO: 这里有个BUG待查，东西碰撞会有空隙，需要看看是啥情况
                             need_remove_old_fixture = true;
 
                             auto collider_size = entity_scaled_size * boxcollider->scale;
@@ -114,6 +113,28 @@ namespace jeecs
                                 rigidbody_instance->CreateFixture(&box_shape_fixture_define);
                         }
                     }
+                    else if (circlecollider != nullptr)
+                    {
+                        if (old_rigidbody_fixture == nullptr
+                            || old_rigidbody_fixture != circlecollider->native_fixture)
+                        {
+                            // 引擎暂时不支持一个实体有多个fixture，这里标记一下，移除旧的。
+                            need_remove_old_fixture = true;
+
+                            auto collider_size = entity_scaled_size * circlecollider->scale;
+
+                            b2CircleShape circle_shape;
+                            circle_shape.m_radius = std::max(collider_size.x / 2.f, collider_size.y / 2.f);
+                            
+                            b2FixtureDef circle_shape_fixture_define;
+                            circle_shape_fixture_define.shape = &circle_shape;
+                            circle_shape_fixture_define.density = mass ? mass->density : 0.f;
+                            circle_shape_fixture_define.friction = friction ? friction->value : 0.f;
+                            circle_shape_fixture_define.restitution = restitution ? restitution->value : 0.f;
+                            circlecollider->native_fixture =
+                                rigidbody_instance->CreateFixture(&circle_shape_fixture_define);
+                        }
+                    }
 
                     if (need_remove_old_fixture && old_rigidbody_fixture != nullptr)
                         rigidbody_instance->DestroyFixture(old_rigidbody_fixture);
@@ -128,7 +149,7 @@ namespace jeecs
                             rigidbody_instance->SetType(b2_dynamicBody);
                     }
 
-                }).anyof<Physics2D::BoxCollider>();
+                }).anyof<Physics2D::BoxCollider, Physics2D::CircleCollider>();
 
                 // 物理引擎在此处进行物理解算
                 m_physics_world.Step(delta_time(), 8, 3);
