@@ -6,7 +6,7 @@ import pkg.image;
 import openfile;
 import cxxproject;
 
-import builtin.woolib.tools;
+import builtin.Editor.woolib.tools;
 
 using je::gui;
 
