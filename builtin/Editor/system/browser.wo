@@ -1,6 +1,8 @@
 import woo.std;
+import woo.file;
+import woo.shell;
+
 import je.gui;
-import je.filesys;
 import pkg.image;
 
 import openfile;
@@ -88,18 +90,18 @@ namespace editor::Browser
     }
     
     // 支持作为图片格式的拓展名
-    let IMAGE_FILE_EXTERN_NAMES = ["png", "jpg", "bmp", "psd",];
+    let IMAGE_FILE_EXTERN_NAMES = [".png", ".jpg", ".bmp", ".psd",];
 
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
-        ["png"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
-        ["jpg"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
-        ["bmp"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
-        ["psd"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
-        ["shader"] = FileType::shader(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")->val),
-        ["jemodule4"] = FileType::path(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/CppProgram.png")->val),
-        ["jecache4"] = FileType::cache(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/JoyEngineCSP-Dev.png")->val),
-        ["jeworld"] = FileType::world(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/World.png")->val),
+        [".png"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
+        [".jpg"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
+        [".bmp"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
+        [".psd"] = FileType::image(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/TextureFile.png")->val),
+        [".shader"] = FileType::shader(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/ShaderFile.png")->val),
+        [".jemodule4"] = FileType::path(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/CppProgram.png")->val),
+        [".jecache4"] = FileType::cache(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/JoyEngineCSP-Dev.png")->val),
+        [".jeworld"] = FileType::world(je::graphic::texture::load(F"{std::exepath()}builtin/Editor/icon/World.png")->val),
     };
 
     // 根据文件拓展名返回文件的类型
@@ -143,7 +145,7 @@ namespace editor::Browser
     {
         func should_hide(self: PathInfo)
         {
-            static let HIDING_FILE_TYPE = ["jecache4"];
+            static let HIDING_FILE_TYPE = [".jecache4"];
             
             if (editor_need_hiding_file)
                 return HIDING_FILE_TYPE->find(self.externname) != -1;
@@ -186,13 +188,13 @@ namespace editor::Browser
 
             // 当前目录的子项目尚未获取，在这里获取一下塞进去
             let sublist = 
-                je::filesys::childs(self.path)
+                std::file::subpath(self.path)
                     ->unwarp
                     ->map(\current_subpath: string = PathInfo{
                         path = current_subpath, 
-                        name = je::filesys::filename(current_subpath),
-                        externname = je::filesys::externname(current_subpath),
-                        type = mutable::create(je::filesys::isdir(current_subpath)?
+                        name = std::file::filename(current_subpath),
+                        externname = std::file::extension(current_subpath),
+                        type = mutable::create(std::file::isdir(current_subpath)?
                                 PathType::dir(option::none) | PathType::file),
                     };);
 
@@ -205,7 +207,7 @@ namespace editor::Browser
 
     func set_current_work_path(path: string)
     {
-        assert(je::filesys::isdir(path));
+        assert(std::file::isdir(path));
         current_work_path = path;
     }
 
@@ -229,18 +231,18 @@ namespace editor::Browser
             {
                 if (MenuItem(F"目录"))
                     generic::inputbox("新建目录", F"在{current_work_path}新建目录", "NewDir",
-                        \dirname: string = je::filesys::mkdir(je::filesys::normalize(current_work_path) + dirname)
+                        \dirname: string = std::file::mkdir(std::file::normalize(current_work_path) + "/" + dirname)
                             ->map(\_:anything = force_update();)
-                            ->or(\reason: string = generic::msgbox("创建目录失败", reason);););
+                            ->or(\errid = generic::msgbox("失败", F"创建目录失败{errid}");););
                 if (MenuItem(F"空文件"))
                 {
                     generic::inputbox("新建空文件", F"在{current_work_path}新建空文件", "NewFile.txt",
-                        \filename: string = je::filesys::exist(file_path)
+                        \filename: string = std::file::exist(file_path)
                             ? generic::msgbox("创建空文件失败", "同名文件已经存在")
-                            | je::file::writeall(file_path, "") 
+                            | std::file::writeall(file_path, "") 
                                 ? force_update()
                                 | generic::msgbox("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = je::filesys::normalize(current_work_path) + filename;);
+                        where file_path = std::file::normalize(current_work_path) + "/" + filename;);
                 }
                 if (BeginMenu(F"纹理"))
                 {
@@ -273,8 +275,8 @@ namespace editor::Browser
 
                     let create_shader_at = func(shader_name: string, shader_src: string)
                     {
-                        let shader_path = je::filesys::normalize(F"{current_work_path}/{shader_name}.shader");
-                        if (!je::file::writeall(shader_path, shader_src))
+                        let shader_path = std::file::normalize(F"{current_work_path}/{shader_name}.shader");
+                        if (!std::file::writeall(shader_path, shader_src))
                             generic::msgbox("创建着色器失败", F"无法写入{shader_path}");
                         else
                             force_update();
@@ -285,7 +287,7 @@ namespace editor::Browser
                             generic::inputbox("创建着色器", F"将在{current_work_path}创建{shader_display_name}：",
                                 shader_path_name,
                                 \shader_name: string = 
-                                    je::file::readall(F"{std::exepath()}builtin/shader/{shader_path_name}.shader")
+                                    std::file::readall(F"{std::exepath()}builtin/shader/{shader_path_name}.shader")
                                         ->> \src = create_shader_at(shader_name, src);
                                         ->  or(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
                                     ;
@@ -312,7 +314,7 @@ namespace editor::Browser
             ->map(\_: anything = Separator(););
                         
             if (MenuItem("在资源管理器中显示"))
-                je::filesys::open(F"explorer \"{je::filesys::normalize(current_work_path)->replace("/", "\\")}\"");
+                std::shell(F"explorer \"{std::file::normalize(current_work_path)->replace("/", "\\")}\"");
 
             if (MenuItem(F"刷新"))
                 force_update();
@@ -324,7 +326,7 @@ namespace editor::Browser
     func crc_path(path)
     {
         // 给定一个路径，计算整个路径的全部crc
-        using je::filesys;
+        using std::file;
         using je::editor;
         let normalized_path =  path->normalize;
         let pure_path = \p: string = p->beginwith(normalized_path) ? p->sub(normalized_path->len)| p;;
@@ -336,7 +338,7 @@ namespace editor::Browser
         }
 
         return normalized_path
-            -> allchilds()
+            -> allsubpath()
             -> okay
             =>> \childs = childs
                 ->>\child = normalize(child);
@@ -386,10 +388,10 @@ namespace editor::Browser
 
     func file_item_menu(path: PathInfo)
     {
-        let NOT_MODIFIABLE_FILES = ["jeproj4", "jemodule4"];
+        let NOT_MODIFIABLE_FILES = [".jeproj4", ".jemodule4"];
         let is_modifiable_file = NOT_MODIFIABLE_FILES->find(path.externname) == -1;
 
-        if (path.externname == "shader")
+        if (path.externname == ".shader")
         {
             if (MenuItem(F"更新此着色器"))
             {
@@ -405,12 +407,12 @@ namespace editor::Browser
             }
             Separator();
         }
-        else if (path.externname == "jemodule4")
+        else if (path.externname == ".jemodule4")
         {
             if (MenuItem(F"重新编译此模块"))
             {
                 match(Project::GetCurrentProject().native_modules
-                    ->get(je::filesys::normalize(path.path)))
+                    ->get(std::file::normalize(path.path)))
                 {
                 value(mod)?
                     try_update_recompile(mod);
@@ -433,21 +435,21 @@ namespace editor::Browser
             }
             if (MenuItem(F"组件/系统..."))
             {
-                let components = je::filesys::childs(F"{path.path}components")
+                let components = std::file::subpath(F"{path.path}components")
                         ->okay
                         ->map(\s: array<string> = s
-                             ->forall(\f = je::filesys::externname(f) == "hpp";)
+                             ->forall(\f = std::file::extension(f) == ".hpp";)
                              ->map(\f = fname->subto(0, fname->len - 4)
-                                where fname = je::filesys::filename(f);)
+                                where fname = std::file::filename(f);)
                             ;)
                         ->valor([])
                         ->tovec;
-                let systems = je::filesys::childs(F"{path.path}systems")
+                let systems = std::file::subpath(F"{path.path}systems")
                     ->okay
                     ->map(\s: array<string> = s
-                         ->forall(\f = je::filesys::externname(f) == "hpp";)
+                         ->forall(\f = std::file::extension(f) == ".hpp";)
                          ->map(\f = fname->subto(0, fname->len - 4)
-                            where fname = je::filesys::filename(f);)
+                            where fname = std::file::filename(f);)
                         ;)
                     ->valor([])
                     ->tovec;
@@ -460,13 +462,13 @@ namespace editor::Browser
                         let file_path = F"{path.path}components/{s}.hpp";
 
                         if (MenuItem("在VSCode中打开"))
-                            je::filesys::open(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
+                            std::shell(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
                         if (MenuItem("移除此组件"))
-                            generic::askbox("确认移除组件？", F"是否从模块{je::filesys::filename(path.path)}中移除组件{s}?",
+                            generic::askbox("确认移除组件？", F"是否从模块{std::file::filename(path.path)}中移除组件{s}?",
                                 func(sure: bool){
                                     if (!sure) return;
                                     components->remove(components->find(s));
-                                    je::filesys::delete(file_path);
+                                    std::file::remove(file_path);
                                 });
                         EndPopup();
                     }
@@ -480,14 +482,14 @@ namespace editor::Browser
                         let file_path = F"{path.path}systems/{s}.cpp";
 
                         if (MenuItem("在VSCode中打开"))
-                            je::filesys::open(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
+                            std::shell(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
                         if (MenuItem("移除此系统"))
-                            generic::askbox("确认移除系统？", F"是否从模块{je::filesys::filename(path.path)}中移除系统{s}?",
+                            generic::askbox("确认移除系统？", F"是否从模块{std::file::filename(path.path)}中移除系统{s}?",
                                 func(sure: bool){
                                     if (!sure) return
                                     systems->remove(systems->find(s));
-                                    je::filesys::delete(F"{path.path}systems/{s}.hpp");
-                                    je::filesys::delete(file_path);
+                                    std::file::remove(F"{path.path}systems/{s}.hpp");
+                                    std::file::remove(file_path);
                                 });
                         EndPopup();
                     }
@@ -495,19 +497,19 @@ namespace editor::Browser
 
                 launch(func(mut open: bool)
                 {
-                    open = BeginAttrOpen(F"模块{je::filesys::filename(path.path)}当前组件和系统", 
+                    open = BeginAttrOpen(F"模块{std::file::filename(path.path)}当前组件和系统", 
                         WindowsAttribute::ImGuiWindowFlags_MenuBar);
                     if (BeginMenuBar())
                     {
                         if (BeginMenu("创建..."))
                         {
                             if (MenuItem("新系统"))
-                                generic::inputbox("创建新系统", F"为模块{je::filesys::filename(path.path)}创建系统", "NewSystem",
+                                generic::inputbox("创建新系统", F"为模块{std::file::filename(path.path)}创建系统", "NewSystem",
                                     func(name: string)
                                     {
                                         if (systems->find(name) != -1)
                                         {
-                                            generic::msgbox("创建系统失败", F"模块{je::filesys::filename(path.path)}已经存在一个同名系统");
+                                            generic::msgbox("创建系统失败", F"模块{std::file::filename(path.path)}已经存在一个同名系统");
                                             return;
                                         }
 
@@ -555,22 +557,22 @@ namespace $$MODULE_NAME$$
     }
 }
 "@;
-                                        let module_name = je::filesys::purename(path.path);
+                                        let module_name = std::file::purename(path.path);
                                         let system_name = name;
 
-                                        if (!je::file::writeall(F"{path.path}systems/{system_name}.hpp", 
+                                        if (!std::file::writeall(F"{path.path}systems/{system_name}.hpp", 
                                             system_header
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$SYSTEM_NAME$$", system_name))
                                             ||
-                                            !je::file::writeall(F"{path.path}systems/{system_name}.cpp", 
+                                            !std::file::writeall(F"{path.path}systems/{system_name}.cpp", 
                                             system_src
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$SYSTEM_NAME$$", system_name))
                                             )
                                         {
-                                            je::filesys::delete(F"{path.path}systems/{system_name}.hpp");
-                                            je::filesys::delete(F"{path.path}systems/{system_name}.cpp");
+                                            std::file::remove(F"{path.path}systems/{system_name}.hpp");
+                                            std::file::remove(F"{path.path}systems/{system_name}.cpp");
 
                                             generic::msgbox("创建系统失败", "无法创建和写入系统源文件");
                                         }
@@ -584,12 +586,12 @@ namespace $$MODULE_NAME$$
                                     });
                             //End of create new system
                             if (MenuItem("新组件"))
-                                generic::inputbox("创建新组件", F"为模块{je::filesys::filename(path.path)}创建组件", "NewComponent",
+                                generic::inputbox("创建新组件", F"为模块{std::file::filename(path.path)}创建组件", "NewComponent",
                                     func(name: string)
                                     {
                                         if (components->find(name) != -1)
                                         {
-                                            generic::msgbox("创建组件失败", F"模块{je::filesys::filename(path.path)}已经存在一个同名组件");
+                                            generic::msgbox("创建组件失败", F"模块{std::file::filename(path.path)}已经存在一个同名组件");
                                             return;
                                         }
 
@@ -610,16 +612,16 @@ namespace $$MODULE_NAME$$
     };
 }
 "@;
-                                        let module_name = je::filesys::purename(path.path);
+                                        let module_name = std::file::purename(path.path);
                                         let component_name = name;
 
-                                        if (!je::file::writeall(F"{path.path}components/{component_name}.hpp", 
+                                        if (!std::file::writeall(F"{path.path}components/{component_name}.hpp", 
                                             component_header
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$COMPONENT_NAME$$", component_name))
                                             )
                                         {
-                                            je::filesys::delete(F"{path.path}components/{component_name}.hpp");
+                                            std::file::remove(F"{path.path}components/{component_name}.hpp");
                                             generic::msgbox("创建组件失败", "无法创建和写入组件源文件");
                                         }
                                         else
@@ -792,9 +794,9 @@ namespace $$MODULE_NAME$$
         if (MenuItemEnabled("重命名", is_modifiable_file))
         {
             generic::inputbox("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
-                \newname: string = je::filesys::move(path.path, je::filesys::parent(path.path) + newname)
+                \newname: string = std::file::move(path.path, std::file::parent(path.path) + newname)
                     ->map(\_: anything = force_update();)
-                    ->or(\reason: string = generic::msgbox("重命名失败", reason);););
+                    ->or(\errid = generic::msgbox("失败", F"重命名失败({errid})");););
         }
         if (MenuItemEnabled("删除", is_modifiable_file))
         {
@@ -802,9 +804,9 @@ namespace $$MODULE_NAME$$
                 func(sure: bool)
                 {
                     if (!sure) return;
-                    je::filesys::delete(path.path)
+                    std::file::remove(path.path)
                         ->> \_ = force_update();
-                        ->  or(\reason = generic::msgbox("删除失败", reason);)
+                        ->  or(\errid = generic::msgbox("失败", F"删除失败({errid})");)
                         ;
                 });
         }
@@ -880,13 +882,13 @@ namespace $$MODULE_NAME$$
             }
 
             now_item_in_path =
-                je::filesys::childs(current_work_path)
+                std::file::subpath(current_work_path)
                     ->unwarp
                     ->> \subpath = PathInfo{ 
                             path = subpath,
-                            name = je::filesys::filename(subpath),
-                            externname = je::filesys::externname(subpath),
-                            type = mutable::create(je::filesys::isdir(subpath)
+                            name = std::file::filename(subpath),
+                            externname = std::file::extension(subpath),
+                            type = mutable::create(std::file::isdir(subpath)
                                 ? PathType::dir(option::none) 
                                 | PathType::file),
                         };
@@ -935,8 +937,8 @@ namespace $$MODULE_NAME$$
 
         static let _root = PathInfo {
                 path = root_path,
-                name = je::filesys::filename(root_path),
-                externname = je::filesys::externname(root_path),
+                name = std::file::filename(root_path),
+                externname = std::file::extension(root_path),
                 type = mutable::create(PathType::dir(option::none)),
             };
 
@@ -995,7 +997,7 @@ namespace $$MODULE_NAME$$
                 BeginChildSize("tools_bar", 0., 40.);
                     // TODO 此处放一些返回上一层之类的按钮
                     if (Button("U"))
-                        current_work_path = je::filesys::parent(current_work_path);
+                        current_work_path = std::file::parent(current_work_path);
                     SameLine();
                     Text(current_work_path);
                 EndChild();

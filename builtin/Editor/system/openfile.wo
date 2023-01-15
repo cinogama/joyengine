@@ -3,9 +3,9 @@
 
 import woo.std;
 import woo.thread;
+import woo.shell;
 
 import je.gui;
-import je.filesys;
 
 import builtin.Editor.generic.form.msgbox;
 
@@ -15,7 +15,7 @@ using generic;
 namespace editor::OpenFile
 {
 	let registed_open_method = {
-		["jeworld"] = \p: Browser::PathInfo = Project::GetCurrentProject()
+		[".jeworld"] = \p: Browser::PathInfo = Project::GetCurrentProject()
 			->LoadWorld(p.path)
 			->map(\w: Project::World = w.instance->WorldList::SwitchEditingWorld;);,
 	}: dict<string, (Browser::PathInfo)=>void>;
@@ -27,10 +27,9 @@ namespace editor::OpenFile
 		value(action)?
 			action(file);
 		none?
-			// je::filesys::open本质上是一个system("...")函数
 			// 后续考虑一下是否要求所有文件必须提前注册打开方法，
 			// 否则 launch(MsgBox, ("打开文件失败", F"无法打开未知类型({file.externname})的文件")); 
-			je::filesys::open(file.path);
+			std::shell(file.path);
 		}
 	}
 

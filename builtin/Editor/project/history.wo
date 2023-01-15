@@ -2,10 +2,10 @@
 // 项目历史管理，创建新项目或者加载项目会对历史记录有影响
 
 import woo.std;
-import je.filesys;
+import woo.file;
 
 using std;
-using je::file;
+using std::file;
 
 namespace editor::Project
 {
@@ -26,8 +26,8 @@ namespace editor::Project
 	// 更新历史记录
 	public func update_project_history(proj_path: string)
 	{
-		let regular_proj_path = je::filesys::normalize(proj_path);
-
+		let regular_proj_path = std::file::normalize(proj_path);
+		
 		let historys = get_project_histroy();
 
 		writeall(HISTORY_FILE, historys

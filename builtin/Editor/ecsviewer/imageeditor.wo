@@ -306,19 +306,19 @@ namespace drawpannel
                     let (avali_width, _) = GetContentRegionAvail();
                     if (ButtonSize("是，覆盖原图片", (avali_width: float, 0.)) )
                     {
-                        if (je::filesys::externname(edited_texture->path->valor("<内置>"))->lower != "png")
+                        if (std::file::extension(edited_texture->path->valor("<内置>"))->lower != ".png")
                             msgbox("无法保存文件", 
-                                F"仅支持保存png文件，原文件为{je::filesys::externname(edited_texture->path->valor("<内置>"))}");
+                                F"仅支持保存png文件，原文件为{std::file::extension(edited_texture->path->valor("<内置>"))}");
                         else if (save_texture_to_path(edited_texture, edited_texture->path->valor("<内置>")))
                             open = false;
                     }
-                    if (ButtonSize(F"另存为/Draw/{je::filesys::purename(edited_texture->path->valor("<内置>"))}.png", (avali_width: float, 0.)) )
+                    if (ButtonSize(F"另存为/Draw/{std::file::purename(edited_texture->path->valor("<内置>"))}.png", (avali_width: float, 0.)) )
                     {
                         let projpath = editor::Project::GetCurrentProject().path->val;
 
-                        je::filesys::mkdir(F"{projpath}/Draw");
+                        std::file::mkdir(F"{projpath}/Draw");
 
-                        if (save_texture_to_path(edited_texture, F"{projpath}/Draw/{je::filesys::purename(edited_texture->path->valor("<内置>"))}.png"))
+                        if (save_texture_to_path(edited_texture, F"{projpath}/Draw/{std::file::purename(edited_texture->path->valor("<内置>"))}.png"))
                             open = false;
                     }
                     if (ButtonSize("不保存此文件", (avali_width: float, 0.)) )
@@ -405,10 +405,10 @@ namespace drawpannel
                                             img->setpix((x,y), (1.,1.,1.,1.));
 
                                     let projpath = editor::Project::GetCurrentProject().path->val;
-                                    je::filesys::mkdir(F"{projpath}/Draw");
+                                    std::file::mkdir(F"{projpath}/Draw");
 
                                     let mut imgfile = je::uid();
-                                    while (je::filesys::exist(F"{projpath}/Draw/{imgfile}.png"))
+                                    while (std::file::exist(F"{projpath}/Draw/{imgfile}.png"))
                                         imgfile = je::uid();
 
                                     img->save(F"{projpath}/Draw/{imgfile}.png");

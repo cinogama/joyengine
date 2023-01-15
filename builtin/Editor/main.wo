@@ -1,9 +1,9 @@
 import woo.std;
 import woo.debug;
+import woo.file;
 
 import je.gui;
 import je;
-import je.filesys;
 
 import ecsviewer.worldlist;
 import ecsviewer.entitylist;

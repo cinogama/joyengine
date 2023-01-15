@@ -29,7 +29,7 @@ namespace editor::Project
 
         return arr
             ->map(\ch: char = [ch]->str + ":/";)
-            ->forall(\path: string = je::filesys::isdir(path););
+            ->forall(\path: string = std::file::isdir(path););
     }
 
     using Path = struct {
@@ -50,11 +50,11 @@ namespace editor::Project
         if (update || !path.childs->has)
         {
             let arr = 
-                je::filesys::childs(path.path)
+                std::file::subpath(path.path)
                     ->unwarp
-                    ->forall(\child_path: string = je::filesys::isdir(child_path);)
+                    ->forall(\child_path: string = std::file::isdir(child_path);)
                     ->map(\child_path: string = Path{
-                        name = je::filesys::filename(child_path),
+                        name = std::file::filename(child_path),
                         path = child_path,
                         childs = mut option::none
                     };);
@@ -106,7 +106,7 @@ namespace editor::Project
             ->  forall(\r = r->has;)
             ->  reduce(\l,r = l;)
             ->  reduce
-            =>> \p = je::filesys::isdir(p) ? option::value(p) | option::none;
+            =>> \p = std::file::isdir(p) ? option::value(p) | option::none;
             ;
     }
 
@@ -119,9 +119,9 @@ namespace editor::Project
 
         func open_proj_path(create_proj_in: string)
         {
-            let projname = je::filesys::filename(create_proj_in);
+            let projname = std::file::purename(create_proj_in);
             let proj_data = 
-                je::file::readall(F"{create_proj_in}/{projname}.jeproj4")
+                std::file::readall(F"{create_proj_in}/{projname}.jeproj4")
                     ->bind(\json: string = json->todict;);
 
             match (proj_data)
