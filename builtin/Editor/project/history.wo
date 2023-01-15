@@ -26,10 +26,12 @@ namespace editor::Project
 	// 更新历史记录
 	public func update_project_history(proj_path: string)
 	{
+		let regular_proj_path = je::filesys::normalize(proj_path);
+
 		let historys = get_project_histroy();
 
 		writeall(HISTORY_FILE, historys
-			->erase(historys->find(proj_path))
-			->inlay(0, proj_path): string);
+			->erase(historys->find(regular_proj_path))
+			->inlay(0, regular_proj_path): string);
 	}
 }

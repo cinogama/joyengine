@@ -180,17 +180,15 @@ namespace editor::EntityCreator
                 // TODO: 实例化实体，至少要有一个组件
                 create_entity = true;
             }
-            if (BeginMenu("常用实体"))
+            if (BeginMenu("常用组件集合"))
             {
                 if (MenuItem("重置列表"))
                     reset_context_cur_components(context);
 
                 Separator();
 
-                if (MenuItem("带有Transform的空实体"))
+                if (MenuItem("坐标与变换"))
                 {
-                    reset_context_cur_components(context);
-                    context.name = "空实体";
                     add_components(context, "Transform::LocalPosition");
                     add_components(context, "Transform::LocalRotation");
                     add_components(context, "Transform::LocalScale");
@@ -198,44 +196,20 @@ namespace editor::EntityCreator
                     add_components(context, "Transform::Translation");
                 }
 
-                if (MenuItem("完整渲染实体"))
+                if (MenuItem("基本渲染"))
                 {
-                    reset_context_cur_components(context);
-                    context.name = "实体";
-                    add_components(context, "Transform::LocalPosition");
-                    add_components(context, "Transform::LocalRotation");
-                    add_components(context, "Transform::LocalScale");
-                    add_components(context, "Transform::LocalToWorld");
-                    add_components(context, "Transform::Translation");
                     add_components(context, "Renderer::Shape");
                     add_components(context, "Renderer::Shaders");
                     add_components(context, "Renderer::Textures");
                 }
 
-                if (MenuItem("完整带阴影渲染实体"))
+                if (MenuItem("2D阴影"))
                 {
-                    reset_context_cur_components(context);
-                    context.name = "阴影实体";
-                    add_components(context, "Transform::LocalPosition");
-                    add_components(context, "Transform::LocalRotation");
-                    add_components(context, "Transform::LocalScale");
-                    add_components(context, "Transform::LocalToWorld");
-                    add_components(context, "Transform::Translation");
-                    add_components(context, "Renderer::Shape");
-                    add_components(context, "Renderer::Shaders");
-                    add_components(context, "Renderer::Textures");
                     add_components(context, "Light2D::Block");
                 }
 
                 if (MenuItem("摄像机（透视）"))
                 {
-                    reset_context_cur_components(context);
-                    context.name = "摄像机";
-                    add_components(context, "Transform::LocalPosition");
-                    add_components(context, "Transform::LocalRotation");
-                    add_components(context, "Transform::LocalScale");
-                    add_components(context, "Transform::LocalToWorld");
-                    add_components(context, "Transform::Translation");
                     add_components(context, "Camera::Clip");
                     add_components(context, "Camera::Projection");
                     add_components(context, "Camera::PerspectiveProjection");
@@ -244,13 +218,6 @@ namespace editor::EntityCreator
 
                 if (MenuItem("摄像机（平行）"))
                 {
-                    reset_context_cur_components(context);
-                    context.name = "摄像机";
-                    add_components(context, "Transform::LocalPosition");
-                    add_components(context, "Transform::LocalRotation");
-                    add_components(context, "Transform::LocalScale");
-                    add_components(context, "Transform::LocalToWorld");
-                    add_components(context, "Transform::Translation");
                     add_components(context, "Camera::Clip");
                     add_components(context, "Camera::Projection");
                     add_components(context, "Camera::OrthoProjection");
@@ -259,13 +226,6 @@ namespace editor::EntityCreator
 
                 if (MenuItem("2D光源（点）"))
                 {
-                    reset_context_cur_components(context);
-                    context.name = "2D点光源";
-                    add_components(context, "Transform::LocalPosition");
-                    add_components(context, "Transform::LocalRotation");
-                    add_components(context, "Transform::LocalScale");
-                    add_components(context, "Transform::LocalToWorld");
-                    add_components(context, "Transform::Translation");
                     add_components(context, "Light2D::Color");
                     add_components(context, "Light2D::Point");
                     add_components(context, "Light2D::Shadow");
@@ -273,16 +233,35 @@ namespace editor::EntityCreator
 
                 if (MenuItem("2D光源（平行）"))
                 {
-                    reset_context_cur_components(context);
-                    context.name = "2D平行光源";
-                    add_components(context, "Transform::LocalPosition");
-                    add_components(context, "Transform::LocalRotation");
-                    add_components(context, "Transform::LocalScale");
-                    add_components(context, "Transform::LocalToWorld");
-                    add_components(context, "Transform::Translation");
                     add_components(context, "Light2D::Color");
                     add_components(context, "Light2D::Parallel");
                     add_components(context, "Light2D::Shadow");
+                }
+
+                if (MenuItem("2D物理（静态）"))
+                {
+                    add_components(context, "Physics2D::Rigidbody");
+                    add_components(context, "Physics2D::BoxCollider");
+                    add_components(context, "Physics2D::Friction");
+                }
+
+                if (MenuItem("2D物理（动力学）"))
+                {
+                    add_components(context, "Physics2D::Rigidbody");
+                    add_components(context, "Physics2D::BoxCollider");
+                    add_components(context, "Physics2D::Friction");
+                    add_components(context, "Physics2D::Kinematics");
+                    add_components(context, "Physics2D::Mass");
+                }
+
+                if (MenuItem("2D物理（高速动力学）"))
+                {
+                    add_components(context, "Physics2D::Rigidbody");
+                    add_components(context, "Physics2D::BoxCollider");
+                    add_components(context, "Physics2D::Friction");
+                    add_components(context, "Physics2D::Kinematics");
+                    add_components(context, "Physics2D::Mass");
+                    add_components(context, "Physics2D::Bullet");
                 }
 
                 EndMenu();
