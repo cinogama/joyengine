@@ -23,7 +23,7 @@ namespace jeecs
 
         void PreUpdate()
         {
-           
+
         }
 
         void Update()
@@ -33,12 +33,12 @@ namespace jeecs
         void LateUpdate()
         {
             b2BodyDef default_rigidbody_config;
+
             select_from(this->get_world()).exec(
                 [this, &default_rigidbody_config](
                     Transform::Translation& translation,
                     Transform::LocalPosition& localposition,
                     Transform::LocalRotation& localrotation,
-                    Renderer::Shape* rendshape,
                     Physics2D::Rigidbody& rigidbody,
                     Physics2D::Mass* mass,
                     Physics2D::Kinematics* kinematics,
@@ -46,113 +46,135 @@ namespace jeecs
                     Physics2D::Friction* friction,
                     Physics2D::Bullet* bullet,
                     Physics2D::BoxCollider* boxcollider,
-                    Physics2D::CircleCollider* circlecollider
-                    )
+                    Physics2D::CircleCollider* circlecollider,
+                    Renderer::Shape* rendshape)
                 {
                     if (rigidbody.native_rigidbody == nullptr)
                     {
                         default_rigidbody_config.position = { translation.world_position.x, translation.world_position.y };
+                        default_rigidbody_config.angle = localrotation.rot.euler_angle().z / math::RAD2DEG;
                         rigidbody.native_rigidbody = m_physics_world.CreateBody(&default_rigidbody_config);
                     }
                     else
                     {
-                        // ´Ó¸ÕÌå»ñÈ¡½âËãÍê³ÉÖ®ºóµÄ×ø±ê
-                        b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
-                        auto& new_position = rigidbody_instance->GetPosition();
-
-                        localposition.set_world_position(
-                            math::vec3(new_position.x, new_position.y, translation.world_position.z),
-                            translation, &localrotation);
-
-                        auto&& world_angle = translation.world_rotation.euler_angle();
-                        world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
-
-                        localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
-                    }
-
-                    b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
-
-                    // Èç¹ûÊµÌåÓĞ Physics2D::Bullet ×é¼ş£¬ÄÇÃ´¾ÍÊÊÓÃ¸ß¾«¶ÈÅö×²
-                    rigidbody_instance->SetBullet(bullet != nullptr);
-
-                    bool need_remove_old_fixture = false;
-                    auto* old_rigidbody_fixture = rigidbody_instance->GetFixtureList();
-                    // ¿ªÊ¼´´½¨Åö×²Ìå
-
-                    // »ñÈ¡ÊµÌåµÄÍø¸ñ´óĞ¡£¬Èç¹ûÃ»ÓĞ£¬ÄÇÃ´Ä¬ÈÏ¾ÍÊÇ 1£¬1
-                    // TODO: ¿¼ÂÇÍø¸ñ±¾Éí¸Ä±äµÄÇé¿ö£¬²»¹ıÓ¦¸ÃÃ»ÈË»áÈ¥¶¯Íø¸ñ
-                    auto&& rendshape_mesh_size =
-                        rendshape && rendshape->vertex && rendshape->vertex->enabled()
-                        ? math::vec2(
-                            rendshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
-                            rendshape->vertex->resouce()->m_raw_vertex_data->m_size_y)
-                        : math::vec2(1.f, 1.f);
-
-                    auto entity_scaled_size = rendshape_mesh_size
-                        * math::vec2(translation.local_scale.x, translation.local_scale.y);
-
-                    if (boxcollider != nullptr)
-                    {
-                        if (old_rigidbody_fixture == nullptr
-                            || old_rigidbody_fixture != boxcollider->native_fixture)
+                        // TODO: æ£€æŸ¥åˆšä½“å†…çš„åŠ¨åŠ›å­¦å’Œå˜æ¢å±æ€§ï¼Œä»ç»„ä»¶åŒæ­¥åˆ°ç‰©ç†å¼•æ“
+                        if (kinematics != nullptr)
                         {
-                            // ÒıÇæÔİÊ±²»Ö§³ÖÒ»¸öÊµÌåÓĞ¶à¸öfixture£¬ÕâÀï±ê¼ÇÒ»ÏÂ£¬ÒÆ³ı¾ÉµÄ¡£
-                            need_remove_old_fixture = true;
-
-                            auto collider_size = entity_scaled_size * boxcollider->scale;
-
-                            b2PolygonShape box_shape;
-                            box_shape.SetAsBox(collider_size.x / 2.f, collider_size.y / 2.f, { 0.f,0.f }, localrotation.rot.euler_angle().z / math::RAD2DEG);
-
-                            b2FixtureDef box_shape_fixture_define;
-                            box_shape_fixture_define.shape = &box_shape;
-                            box_shape_fixture_define.density = mass ? mass->density : 0.f;
-                            box_shape_fixture_define.friction = friction ? friction->value : 0.f;
-                            box_shape_fixture_define.restitution = restitution ? restitution->value : 0.f;
-                            boxcollider->native_fixture =
-                                rigidbody_instance->CreateFixture(&box_shape_fixture_define);
-                        }
-                    }
-                    else if (circlecollider != nullptr)
-                    {
-                        if (old_rigidbody_fixture == nullptr
-                            || old_rigidbody_fixture != circlecollider->native_fixture)
-                        {
-                            // ÒıÇæÔİÊ±²»Ö§³ÖÒ»¸öÊµÌåÓĞ¶à¸öfixture£¬ÕâÀï±ê¼ÇÒ»ÏÂ£¬ÒÆ³ı¾ÉµÄ¡£
-                            need_remove_old_fixture = true;
-
-                            auto collider_size = entity_scaled_size * circlecollider->scale;
-
-                            b2CircleShape circle_shape;
-                            circle_shape.m_radius = std::max(collider_size.x / 2.f, collider_size.y / 2.f);
                             
-                            b2FixtureDef circle_shape_fixture_define;
-                            circle_shape_fixture_define.shape = &circle_shape;
-                            circle_shape_fixture_define.density = mass ? mass->density : 0.f;
-                            circle_shape_fixture_define.friction = friction ? friction->value : 0.f;
-                            circle_shape_fixture_define.restitution = restitution ? restitution->value : 0.f;
-                            circlecollider->native_fixture =
-                                rigidbody_instance->CreateFixture(&circle_shape_fixture_define);
                         }
                     }
 
-                    if (need_remove_old_fixture && old_rigidbody_fixture != nullptr)
-                        rigidbody_instance->DestroyFixture(old_rigidbody_fixture);
+            b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
 
-                    if (kinematics == nullptr)
-                        rigidbody_instance->SetType(b2_staticBody);
-                    else
-                    {
-                        if (mass == nullptr)
-                            rigidbody_instance->SetType(b2_kinematicBody);
-                        else
-                            rigidbody_instance->SetType(b2_dynamicBody);
-                    }
+            // å¦‚æœå®ä½“æœ‰ Physics2D::Bullet ç»„ä»¶ï¼Œé‚£ä¹ˆå°±é€‚ç”¨é«˜ç²¾åº¦ç¢°æ’
+            rigidbody_instance->SetBullet(bullet != nullptr);
+
+            bool need_remove_old_fixture = false;
+            auto* old_rigidbody_fixture = rigidbody_instance->GetFixtureList();
+            // å¼€å§‹åˆ›å»ºç¢°æ’ä½“
+
+            // è·å–å®ä½“çš„ç½‘æ ¼å¤§å°ï¼Œå¦‚æœæ²¡æœ‰ï¼Œé‚£ä¹ˆé»˜è®¤å°±æ˜¯ 1ï¼Œ1
+            // TODO: è€ƒè™‘ç½‘æ ¼æœ¬èº«æ”¹å˜çš„æƒ…å†µï¼Œä¸è¿‡åº”è¯¥æ²¡äººä¼šå»åŠ¨ç½‘æ ¼
+            auto&& rendshape_mesh_size =
+                rendshape && rendshape->vertex && rendshape->vertex->enabled()
+                ? math::vec2(
+                    rendshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
+                    rendshape->vertex->resouce()->m_raw_vertex_data->m_size_y)
+                : math::vec2(1.f, 1.f);
+
+            auto entity_scaled_size = rendshape_mesh_size
+                * math::vec2(translation.local_scale.x, translation.local_scale.y);
+
+            if (boxcollider != nullptr)
+            {
+                if (old_rigidbody_fixture == nullptr
+                    || old_rigidbody_fixture != boxcollider->native_fixture)
+                {
+                    // å¼•æ“æš‚æ—¶ä¸æ”¯æŒä¸€ä¸ªå®ä½“æœ‰å¤šä¸ªfixtureï¼Œè¿™é‡Œæ ‡è®°ä¸€ä¸‹ï¼Œç§»é™¤æ—§çš„ã€‚
+                    need_remove_old_fixture = true;
+
+                    auto collider_size = entity_scaled_size * boxcollider->scale;
+
+                    b2PolygonShape box_shape;
+                    box_shape.SetAsBox(collider_size.x / 2.f, collider_size.y / 2.f);
+
+                    b2FixtureDef box_shape_fixture_define;
+                    box_shape_fixture_define.shape = &box_shape;
+                    box_shape_fixture_define.density = mass ? mass->density : 0.f;
+                    box_shape_fixture_define.friction = friction ? friction->value : 0.f;
+                    box_shape_fixture_define.restitution = restitution ? restitution->value : 0.f;
+                    boxcollider->native_fixture =
+                        rigidbody_instance->CreateFixture(&box_shape_fixture_define);
+                }
+            }
+            else if (circlecollider != nullptr)
+            {
+                if (old_rigidbody_fixture == nullptr
+                    || old_rigidbody_fixture != circlecollider->native_fixture)
+                {
+                    // å¼•æ“æš‚æ—¶ä¸æ”¯æŒä¸€ä¸ªå®ä½“æœ‰å¤šä¸ªfixtureï¼Œè¿™é‡Œæ ‡è®°ä¸€ä¸‹ï¼Œç§»é™¤æ—§çš„ã€‚
+                    need_remove_old_fixture = true;
+
+                    auto collider_size = entity_scaled_size * circlecollider->scale;
+
+                    b2CircleShape circle_shape;
+                    circle_shape.m_radius = std::max(collider_size.x / 2.f, collider_size.y / 2.f);
+
+                    b2FixtureDef circle_shape_fixture_define;
+                    circle_shape_fixture_define.shape = &circle_shape;
+                    circle_shape_fixture_define.density = mass ? mass->density : 0.f;
+                    circle_shape_fixture_define.friction = friction ? friction->value : 0.f;
+                    circle_shape_fixture_define.restitution = restitution ? restitution->value : 0.f;
+                    circlecollider->native_fixture =
+                        rigidbody_instance->CreateFixture(&circle_shape_fixture_define);
+                }
+            }
+
+            if (need_remove_old_fixture && old_rigidbody_fixture != nullptr)
+                rigidbody_instance->DestroyFixture(old_rigidbody_fixture);
+
+            if (kinematics == nullptr)
+                rigidbody_instance->SetType(b2_staticBody);
+            else
+            {
+                if (mass == nullptr)
+                    rigidbody_instance->SetType(b2_kinematicBody);
+                else
+                    rigidbody_instance->SetType(b2_dynamicBody);
+            }
 
                 }).anyof<Physics2D::BoxCollider, Physics2D::CircleCollider>();
 
-                // ÎïÀíÒıÇæÔÚ´Ë´¦½øĞĞÎïÀí½âËã
+                // ç‰©ç†å¼•æ“åœ¨æ­¤å¤„è¿›è¡Œç‰©ç†è§£ç®—
                 m_physics_world.Step(delta_time(), 8, 3);
+
+                // TODO: åœ¨æ­¤å¤„å°†åŠ¨åŠ›å­¦æ•°æ®æ›´æ–°åˆ°ç»„ä»¶ä¸Š
+                select().exec(
+                    [](
+                        Transform::Translation& translation,
+                        Transform::LocalPosition& localposition,
+                        Transform::LocalRotation& localrotation,
+                        Physics2D::Rigidbody& rigidbody
+                        ) {
+                            if (rigidbody.native_rigidbody != nullptr)
+                            {
+                                // ä»åˆšä½“è·å–è§£ç®—å®Œæˆä¹‹åçš„åæ ‡
+                                b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
+                                auto& new_position = rigidbody_instance->GetPosition();
+
+                                localposition.set_world_position(
+                                    math::vec3(new_position.x, new_position.y, translation.world_position.z),
+                                    translation, &localrotation);
+
+                                auto&& world_angle = translation.world_rotation.euler_angle();
+                                world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
+
+                                localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
+
+                                // TODO: æ£€æŸ¥åˆšä½“å†…çš„åŠ¨åŠ›å­¦å±æ€§ï¼Œä»ç‰©ç†å¼•æ“åŒæ­¥åˆ°ç»„ä»¶
+                            }
+                    }
+                );
         }
     };
 }
