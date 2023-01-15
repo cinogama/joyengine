@@ -42,7 +42,7 @@ public using CxxProject = struct {
 }
 {
     // Cmake所在路径，项目会使用此路径指示的cmake
-    let CMAKE_PATH = F"{std::exepath()}builtin/cmake/win32/bin/cmake.exe"; 
+    let CMAKE_PATH = F"{std::exepath()}builtin/cmake/bin/cmake.exe"; 
     let MSVC_PATH = F"{std::env("MSBUILD")->val}/MSBuild.exe";
 
     // C++模块样例，创建项目文件时会复制这个目录
@@ -50,6 +50,22 @@ public using CxxProject = struct {
 
     // 引擎的头文件路径
     public let ENGINE_HEADER_PATH = F"{std::exepath()}builtin/include/";
+
+    let MSVC_TARGET_KEYWORDS = {
+        [2017] = "Visual Studio 15 2017",
+        [2019] = "Visual Studio 16 2019",
+        [2022] = "Visual Studio 17 2022",
+    };
+
+    let USING_MSVC_TARGET = MSVC_TARGET_KEYWORDS[
+        MSVC_TARGET_KEYWORDS
+            ->   unmapping
+            ->> \ver_and_config = ver_and_config[0];
+            ->  forall(\ver = std::env("MSBUILD")->val->find(ver as int: string) != -1;)
+            ->  reduce(\l, r = l > r ? l | r;)
+            ->  val
+        ];
+
 
     // 引擎的库目录
     let ENGINE_CORE_LIBRARYS_LOCATE_PATH = std::exepath();
@@ -87,7 +103,7 @@ public using CxxProject = struct {
     {
         using std::file;
         using std::file;
-
+     
         // 从引擎根目录更新引擎相关头文件和库文件
         if (!exist(cxx_proj_path))
             return result::err(F"无法找到C++模块项目，{cxx_proj_path}目录不存在");
@@ -283,6 +299,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     func load_library_of_platform(self: CxxProject, config: string)
     {
         assert(!self.module_instance->has);
+
         match (search_file_in(get_current_runtime_path(self->get_runtime_path(config))->val, ".dll"))
         {
         value(p)? 
@@ -328,7 +345,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     }
     func get_runtime_path(self: CxxProject, config: string)
     {
-        return F"{self.path}runtime/{config}/";
+        return F"{self.path}/runtime/{config}";
     }
     func update_library_of_platform(self: CxxProject, config: string)
     {
@@ -342,16 +359,16 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         let newest_runtime_path = get_newest_runtime_path(self->get_runtime_path(config));
 
-        match (search_file_in(F"{self.path}build/{config}", ".dll"))
+        match (search_file_in(F"{self.path}/build/{config}", ".dll"))
         {
         value(p)? 
-            assert(copy(p, F"{newest_runtime_path}{filename(p)}")->isok);
+            assert(copy(p, F"{newest_runtime_path}/{filename(p)}")->isok);
         none? std::panic("Output binary file not found;");
         }
 
         // 调试时，vs调试器可能会自动附加pdb，导致重新编译失败
         // 为了避免蠢蛋vs干蠢事，这里直接把pdb文件移到runtime目录下
-        match (search_file_in(F"{self.path}build/{config}", ".pdb"))
+        match (search_file_in(F"{self.path}/build/{config}", ".pdb"))
         {
         value(p)?
             assert(move(p, F"{newest_runtime_path}/{filename(p)}")->isok);
@@ -479,7 +496,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32_debug.lib")
                     ->replace("$$JE_WOOLANG_LIB$$", "libwoo32_debug.lib")
                     ->replace("$$JE_POSTFIX$$", "32_debug"),
-                cmake_option = ["-A", "Win32", "-DCMAKE_BUILD_TYPE=DEBUG"],
+                cmake_option = ["-G", USING_MSVC_TARGET, "-A", "Win32", "-DCMAKE_BUILD_TYPE=DEBUG"],
                 built_command = ["-p:Configuration=Debug",],
             },
             ["win32_release_x86"] = CxxProjectBuildConfig{ 
@@ -488,7 +505,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32.lib")
                     ->replace("$$JE_WOOLANG_LIB$$", "libwoo32.lib")
                     ->replace("$$JE_POSTFIX$$", "32"),
-                cmake_option = ["-A", "Win32", "-DCMAKE_BUILD_TYPE=RELEASE"],
+                cmake_option = ["-G", USING_MSVC_TARGET, "-A", "Win32", "-DCMAKE_BUILD_TYPE=RELEASE"],
                 built_command = ["-p:Configuration=Release",],
             },
             ["win32_debug_x64"] = CxxProjectBuildConfig{ 
@@ -497,7 +514,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs_debug.lib")
                     ->replace("$$JE_WOOLANG_LIB$$", "libwoo_debug.lib")
                     ->replace("$$JE_POSTFIX$$", "_debug"),
-                cmake_option = ["-A", "x64", "-DCMAKE_BUILD_TYPE=DEBUG"],
+                cmake_option = ["-G", USING_MSVC_TARGET, "-A", "x64", "-DCMAKE_BUILD_TYPE=DEBUG"],
                 built_command = ["-p:Configuration=Debug",],
             },
             ["win32_release_x64"] = CxxProjectBuildConfig{ 
@@ -506,7 +523,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs.lib")
                     ->replace("$$JE_WOOLANG_LIB$$", "libwoo.lib")
                     ->replace("$$JE_POSTFIX$$", ""),
-                cmake_option = ["-A", "x64", "-DCMAKE_BUILD_TYPE=RELEASE"],
+                cmake_option = ["-G", USING_MSVC_TARGET, "-A", "x64", "-DCMAKE_BUILD_TYPE=RELEASE"],
                 built_command = ["-p:Configuration=Release",],
             } 
         };

@@ -287,7 +287,7 @@ namespace editor::Browser
                             generic::inputbox("创建着色器", F"将在{current_work_path}创建{shader_display_name}：",
                                 shader_path_name,
                                 \shader_name: string = 
-                                    std::file::readall(F"{std::exepath()}builtin/shader/{shader_path_name}.shader")
+                                    std::file::readall(F"{std::exepath()}/builtin/shader/{shader_path_name}.shader")
                                         ->> \src = create_shader_at(shader_name, src);
                                         ->  or(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
                                     ;
@@ -342,7 +342,7 @@ namespace editor::Browser
             -> okay
             =>> \childs = childs
                 ->>\child = normalize(child);
-                ->> \child = isfile(child)? pchild + crc64file(child)->val: string | pchild
+                ->> \child = isfile(child)? std::file::filename(pchild) + crc64file(child)->val: string | pchild
                     where pchild = pure_path(child);
                 ->  reduce(\l, r = l + r;)
                 ->> \str = crc64str(str);
@@ -354,7 +354,7 @@ namespace editor::Browser
     {
         // 检查一下引擎的提供的文件，确认是否需要重新编译
         let engine_path_crc64 = crc_path(CxxProject::ENGINE_HEADER_PATH);
-        let specify_module_path_crc64 = crc_path(F"{mod.path}engine/include");
+        let specify_module_path_crc64 = crc_path(F"{mod.path}/engine/include");
 
         if (engine_path_crc64 == specify_module_path_crc64)
         {
