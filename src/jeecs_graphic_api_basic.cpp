@@ -68,8 +68,9 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                 else
                 {
                     // Free this
-                    jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!"
-                        , cur_del_res->m_destroy_resource);
+                    if (cur_del_res->m_destroy_resource->m_graphic_thread != nullptr)
+                        jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
+                            cur_del_res->m_destroy_resource);
                     delete cur_del_res->m_destroy_resource;
                     delete cur_del_res;
                 }
@@ -708,8 +709,8 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         && shader_resource->m_type == jegl_resource::type::SHADER);
 
     if (auto* cachefile = jeecs_create_cache_file(
-        shader_resource->m_path, 
-        SHADER_CACHE_VERSION, 
+        shader_resource->m_path,
+        SHADER_CACHE_VERSION,
         virtual_file_crc64))
     {
         auto* raw_shader_data = shader_resource->m_raw_shader_data;

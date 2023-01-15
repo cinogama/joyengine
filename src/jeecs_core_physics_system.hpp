@@ -30,41 +30,59 @@ namespace jeecs
         {
         }
 
-        void LateUpdate()
+        inline static bool check_if_need_update_vec2(const b2Vec2& a, const math::vec2& b) noexcept
         {
-            b2BodyDef default_rigidbody_config;
+            if (a.x == b.x && a.y == b.y)
+                return false;
+            return true;
+        }
+        inline static bool check_if_need_update_float(float a, float b) noexcept
+        {
+            if (a == b)
+                return false;
+            return true;
+        }
 
-            select_from(this->get_world()).exec(
-                [this, &default_rigidbody_config](
-                    Transform::Translation& translation,
-                    Transform::LocalPosition& localposition,
-                    Transform::LocalRotation& localrotation,
-                    Physics2D::Rigidbody& rigidbody,
-                    Physics2D::Mass* mass,
-                    Physics2D::Kinematics* kinematics,
-                    Physics2D::Restitution* restitution,
-                    Physics2D::Friction* friction,
-                    Physics2D::Bullet* bullet,
-                    Physics2D::BoxCollider* boxcollider,
-                    Physics2D::CircleCollider* circlecollider,
-                    Renderer::Shape* rendshape)
-                {
-                    if (rigidbody.native_rigidbody == nullptr)
-                    {
-                        default_rigidbody_config.position = { translation.world_position.x, translation.world_position.y };
-                        default_rigidbody_config.angle = localrotation.rot.euler_angle().z / math::RAD2DEG;
-                        rigidbody.native_rigidbody = m_physics_world.CreateBody(&default_rigidbody_config);
-                    }
-                    else
-                    {
-                        // TODO: 检查刚体内的动力学和变换属性，从组件同步到物理引擎
-                        if (kinematics != nullptr)
-                        {
-                            
-                        }
-                    }
+        void UpdateBeforeSimulate(
+            Transform::Translation& translation,
+            Transform::LocalPosition& localposition,
+            Transform::LocalRotation& localrotation,
+            Physics2D::Rigidbody& rigidbody,
+            Physics2D::Mass* mass,
+            Physics2D::Kinematics* kinematics,
+            Physics2D::Restitution* restitution,
+            Physics2D::Friction* friction,
+            Physics2D::Bullet* bullet,
+            Physics2D::BoxCollider* boxcollider,
+            Physics2D::CircleCollider* circlecollider,
+            Renderer::Shape* rendshape)
+        {
+            if (rigidbody.native_rigidbody == nullptr)
+            {
+                b2BodyDef default_rigidbody_config;
+
+                default_rigidbody_config.position = { translation.world_position.x, translation.world_position.y };
+                default_rigidbody_config.angle = localrotation.rot.euler_angle().z / math::RAD2DEG;
+                rigidbody.native_rigidbody = m_physics_world.CreateBody(&default_rigidbody_config);
+            }
 
             b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
+
+            // TODO: 检查刚体内的动力学和变换属性，从组件同步到物理引擎
+            if (kinematics != nullptr)
+            {
+                if (check_if_need_update_vec2(rigidbody_instance->GetLinearVelocity(), kinematics->linear_velocity))
+                    rigidbody_instance->SetLinearVelocity({ kinematics->linear_velocity.x, kinematics->linear_velocity.y });
+                if (check_if_need_update_float(rigidbody_instance->GetAngularVelocity(), kinematics->angular_velocity))
+                    rigidbody_instance->SetAngularVelocity(kinematics->angular_velocity);
+
+                if (check_if_need_update_float(rigidbody_instance->GetLinearDamping(), kinematics->linear_damping))
+                    rigidbody_instance->SetLinearDamping(kinematics->linear_damping);
+                if (check_if_need_update_float(rigidbody_instance->GetAngularDamping(), kinematics->angular_damping))
+                    rigidbody_instance->SetAngularDamping(kinematics->angular_damping);
+                if (check_if_need_update_float(rigidbody_instance->GetGravityScale(), kinematics->gravity_scale))
+                    rigidbody_instance->SetAngularDamping(kinematics->gravity_scale);
+            }
 
             // 如果实体有 Physics2D::Bullet 组件，那么就适用高精度碰撞
             rigidbody_instance->SetBullet(bullet != nullptr);
@@ -142,39 +160,53 @@ namespace jeecs
                 else
                     rigidbody_instance->SetType(b2_dynamicBody);
             }
+        }
 
-                }).anyof<Physics2D::BoxCollider, Physics2D::CircleCollider>();
+        void LateUpdate()
+        {
+            b2BodyDef default_rigidbody_config;
 
-                // 物理引擎在此处进行物理解算
-                m_physics_world.Step(delta_time(), 8, 3);
+            select_from(this->get_world())
+                .exec(&Physics2DUpdatingSystem::UpdateBeforeSimulate)
+                .anyof<Physics2D::BoxCollider, Physics2D::CircleCollider>();
 
-                // TODO: 在此处将动力学数据更新到组件上
-                select().exec(
-                    [](
-                        Transform::Translation& translation,
-                        Transform::LocalPosition& localposition,
-                        Transform::LocalRotation& localrotation,
-                        Physics2D::Rigidbody& rigidbody
-                        ) {
-                            if (rigidbody.native_rigidbody != nullptr)
+            // 物理引擎在此处进行物理解算
+            m_physics_world.Step(delta_time(), 8, 3);
+
+            // TODO: 在此处将动力学数据更新到组件上
+            select().exec(
+                [](
+                    Transform::Translation& translation,
+                    Transform::LocalPosition& localposition,
+                    Transform::LocalRotation& localrotation,
+                    Physics2D::Rigidbody& rigidbody,
+                    Physics2D::Kinematics* kinematics
+                    ) {
+                        if (rigidbody.native_rigidbody != nullptr)
+                        {
+                            // 从刚体获取解算完成之后的坐标
+                            b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
+                            auto& new_position = rigidbody_instance->GetPosition();
+
+                            localposition.set_world_position(
+                                math::vec3(new_position.x, new_position.y, translation.world_position.z),
+                                translation, &localrotation);
+
+                            auto&& world_angle = translation.world_rotation.euler_angle();
+                            world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
+
+                            localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
+
+                            // TODO: 检查刚体内的动力学属性，从物理引擎同步到组件
+
+                            if (kinematics != nullptr)
                             {
-                                // 从刚体获取解算完成之后的坐标
-                                b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
-                                auto& new_position = rigidbody_instance->GetPosition();
-
-                                localposition.set_world_position(
-                                    math::vec3(new_position.x, new_position.y, translation.world_position.z),
-                                    translation, &localrotation);
-
-                                auto&& world_angle = translation.world_rotation.euler_angle();
-                                world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
-
-                                localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
-
-                                // TODO: 检查刚体内的动力学属性，从物理引擎同步到组件
+                                kinematics->linear_velocity = math::vec2{ rigidbody_instance->GetLinearVelocity().x, rigidbody_instance->GetLinearVelocity().y };
+                                kinematics->angular_velocity = rigidbody_instance->GetAngularVelocity();
                             }
-                    }
-                );
+                        }
+                }
+            );
         }
     };
 }
