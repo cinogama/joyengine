@@ -18,10 +18,6 @@
 	path = 3rd/woolang
 	url = https://gitlab.cinogama.com/cinogamaproject/woolang.git
 	branch = master
-[submodule "build/builtin/cmake/win32"]
-	path = build/builtin/cmake/win32
-	url = https://gitlab.cinogama.com/cinogamaproject/cmake3.20-win32x64
-	branch = master
 [submodule "3rd/box2d"]
 	path = 3rd/box2d
 	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/box2d.git
