@@ -241,9 +241,9 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
 
         let r = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
-            ->  error   // result<_, int> => option<int>
+            ->  flip
             ->> \errid = F"复制文件失败({errid})";
-            ->  error   // option<string> => result<anything, int>
+            ->  flip
             =>> \_ = update_engine_file(cxx_proj_path);;
         if (r->iserr)
         {

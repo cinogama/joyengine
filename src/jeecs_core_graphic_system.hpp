@@ -1581,67 +1581,70 @@ public func frag(vf: v2f)
                                         ++current_entity_id;
                                         block_in_current_layer.push_back(&blockarch);
 
-                                        jegl_using_resource(shape_shadow_pass->resouce());
-                                        auto* builtin_uniform = shape_shadow_pass->m_builtin;
+                                        if (blockarch.block->shadow)
+                                        {
+                                            jegl_using_resource(shape_shadow_pass->resouce());
+                                            auto* builtin_uniform = shape_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
 do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
  jegl_uniform_##TYPE(shape_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
-                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
+                                            const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
-                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+                                            math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                            math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
-                                        NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
-                                        NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
-                                        NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+                                            NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                                            NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                                            NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
 
-                                        NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
-                                        NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
-                                        NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+                                            NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
+                                            NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                                            NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
-                                        if (blockarch.textures != nullptr)
-                                        {
-                                            NEED_AND_SET_UNIFORM(tiling, float2, blockarch.textures->tiling.x, blockarch.textures->tiling.y);
-                                            NEED_AND_SET_UNIFORM(offset, float2, blockarch.textures->offset.x, blockarch.textures->offset.y);
-                                        }
+                                            if (blockarch.textures != nullptr)
+                                            {
+                                                NEED_AND_SET_UNIFORM(tiling, float2, blockarch.textures->tiling.x, blockarch.textures->tiling.y);
+                                                NEED_AND_SET_UNIFORM(offset, float2, blockarch.textures->offset.x, blockarch.textures->offset.y);
+                                            }
 
-                                        if (lightarch.point == nullptr)
-                                        {
-                                            jeecs::math::vec3 rotated_light_dir =
-                                                lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
-                                            jegl_uniform_float4(shape_shadow_pass->resouce(),
-                                                shape_shadow_pass->m_builtin->m_builtin_uniform_color,
-                                                rotated_light_dir.x,
-                                                rotated_light_dir.y,
-                                                rotated_light_dir.z,
-                                                lightarch.shadow->shape_shadow_scale);
-                                        }
-                                        else
-                                            jegl_uniform_float4(shape_shadow_pass->resouce(),
-                                                shape_shadow_pass->m_builtin->m_builtin_uniform_color,
-                                                lightarch.translation->world_position.x,
-                                                lightarch.translation->world_position.y,
-                                                lightarch.translation->world_position.z,
-                                                lightarch.shadow->shape_shadow_scale);
-
-                                        if (blockarch.textures != nullptr)
-                                        {
-                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0);
-                                            if (main_texture != nullptr)
-                                                jegl_using_texture(main_texture->resouce(), 0);
+                                            if (lightarch.point == nullptr)
+                                            {
+                                                jeecs::math::vec3 rotated_light_dir =
+                                                    lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
+                                                jegl_uniform_float4(shape_shadow_pass->resouce(),
+                                                    shape_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                                    rotated_light_dir.x,
+                                                    rotated_light_dir.y,
+                                                    rotated_light_dir.z,
+                                                    lightarch.shadow->shape_shadow_scale);
+                                            }
                                             else
-                                                jegl_using_texture(host()->default_texture->resouce(), 0);
-                                        }
+                                                jegl_uniform_float4(shape_shadow_pass->resouce(),
+                                                    shape_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                                    lightarch.translation->world_position.x,
+                                                    lightarch.translation->world_position.y,
+                                                    lightarch.translation->world_position.z,
+                                                    lightarch.shadow->shape_shadow_scale);
 
-                                        jeecs::graphic::vertex* using_shape = (blockarch.shape == nullptr
-                                            || blockarch.shape->vertex == nullptr
-                                            || !blockarch.shape->vertex->enabled())
-                                            ? host()->default_shape_quad
-                                            : blockarch.shape->vertex;
+                                            if (blockarch.textures != nullptr)
+                                            {
+                                                jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0);
+                                                if (main_texture != nullptr)
+                                                    jegl_using_texture(main_texture->resouce(), 0);
+                                                else
+                                                    jegl_using_texture(host()->default_texture->resouce(), 0);
+                                            }
 
-                                        jegl_draw_vertex(using_shape->resouce());
+                                            jeecs::graphic::vertex* using_shape = (blockarch.shape == nullptr
+                                                || blockarch.shape->vertex == nullptr
+                                                || !blockarch.shape->vertex->enabled())
+                                                ? host()->default_shape_quad
+                                                : blockarch.shape->vertex;
+
+                                            jegl_draw_vertex(using_shape->resouce());
 #undef NEED_AND_SET_UNIFORM
+                                        }
 
                                         // 2. Cancel/Cover shadow.
                                         auto next_block2d_arch = block2d_iter + 1;
@@ -1721,6 +1724,8 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                                     // 1. Prepare m_light_pos/je_mvp
                                     block_in_current_layer.push_back(&blockarch);
+
+                                    if (blockarch.block->shadow)
                                     {
                                         jegl_using_resource(point_shadow_pass->resouce());
                                         auto* builtin_uniform = point_shadow_pass->m_builtin;

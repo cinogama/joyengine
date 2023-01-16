@@ -5173,10 +5173,12 @@ namespace jeecs
             };
 
             block_mesh mesh;
+            bool shadow = true;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&Block::mesh, "mesh");
+                typing::register_member(&Block::shadow, "shadow");
             }
         };
     }
