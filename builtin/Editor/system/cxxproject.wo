@@ -299,7 +299,6 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
     func load_library_of_platform(self: CxxProject, config: string)
     {
         assert(!self.module_instance->has);
-
         match (search_file_in(get_current_runtime_path(self->get_runtime_path(config))->val, ".dll"))
         {
         value(p)? 

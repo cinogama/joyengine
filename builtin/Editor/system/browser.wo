@@ -418,7 +418,7 @@ namespace editor::Browser
                     try_update_recompile(mod);
                 none?
                     generic::askbox("是否加载此模块？", 
-                        F"正在要求重新编译模块{path.path}，但此模块尚未被加载\n是否现在加载并重新编译？",
+                        F"正在要求重新编译模块{path.path}\n但此模块尚未被加载。\n是否现在加载并重新编译？",
                         func (sure: bool)
                         {
                             if (!sure) return;
@@ -435,7 +435,7 @@ namespace editor::Browser
             }
             if (MenuItem(F"组件/系统..."))
             {
-                let components = std::file::subpath(F"{path.path}components")
+                let components = std::file::subpath(F"{path.path}/components")
                         ->okay
                         ->map(\s: array<string> = s
                              ->forall(\f = std::file::extension(f) == ".hpp";)
@@ -444,7 +444,7 @@ namespace editor::Browser
                             ;)
                         ->valor([])
                         ->tovec;
-                let systems = std::file::subpath(F"{path.path}systems")
+                let systems = std::file::subpath(F"{path.path}/systems")
                     ->okay
                     ->map(\s: array<string> = s
                          ->forall(\f = std::file::extension(f) == ".hpp";)
@@ -459,7 +459,7 @@ namespace editor::Browser
                     Selectable(s);
                     if (BeginPopupContextItem())
                     {
-                        let file_path = F"{path.path}components/{s}.hpp";
+                        let file_path = F"{path.path}/components/{s}.hpp";
 
                         if (MenuItem("在VSCode中打开"))
                             std::shell(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
@@ -479,7 +479,7 @@ namespace editor::Browser
                     Selectable(s);
                     if (BeginPopupContextItem())
                     {
-                        let file_path = F"{path.path}systems/{s}.cpp";
+                        let file_path = F"{path.path}/systems/{s}.cpp";
 
                         if (MenuItem("在VSCode中打开"))
                             std::shell(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
@@ -488,7 +488,7 @@ namespace editor::Browser
                                 func(sure: bool){
                                     if (!sure) return
                                     systems->remove(systems->find(s));
-                                    std::file::remove(F"{path.path}systems/{s}.hpp");
+                                    std::file::remove(F"{path.path}/systems/{s}.hpp");
                                     std::file::remove(file_path);
                                 });
                         EndPopup();
@@ -560,27 +560,27 @@ namespace $$MODULE_NAME$$
                                         let module_name = std::file::purename(path.path);
                                         let system_name = name;
 
-                                        if (!std::file::writeall(F"{path.path}systems/{system_name}.hpp", 
+                                        if (!std::file::writeall(F"{path.path}/systems/{system_name}.hpp", 
                                             system_header
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$SYSTEM_NAME$$", system_name))
                                             ||
-                                            !std::file::writeall(F"{path.path}systems/{system_name}.cpp", 
+                                            !std::file::writeall(F"{path.path}/systems/{system_name}.cpp", 
                                             system_src
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$SYSTEM_NAME$$", system_name))
                                             )
                                         {
-                                            std::file::remove(F"{path.path}systems/{system_name}.hpp");
-                                            std::file::remove(F"{path.path}systems/{system_name}.cpp");
+                                            std::file::remove(F"{path.path}/systems/{system_name}.hpp");
+                                            std::file::remove(F"{path.path}/systems/{system_name}.cpp");
 
                                             generic::msgbox("创建系统失败", "无法创建和写入系统源文件");
                                         }
                                         else
                                         {
                                             generic::msgbox("创建系统成功", "系统已创建到\n" 
-                                                + F"{path.path}systems/{system_name}.hpp\n"
-                                                + F"{path.path}systems/{system_name}.cpp");
+                                                + F"{path.path}/systems/{system_name}.hpp\n"
+                                                + F"{path.path}/systems/{system_name}.cpp");
                                             systems->add(system_name);
                                         }
                                     });
@@ -615,7 +615,7 @@ namespace $$MODULE_NAME$$
                                         let module_name = std::file::purename(path.path);
                                         let component_name = name;
 
-                                        if (!std::file::writeall(F"{path.path}components/{component_name}.hpp", 
+                                        if (!std::file::writeall(F"{path.path}/components/{component_name}.hpp", 
                                             component_header
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$COMPONENT_NAME$$", component_name))
@@ -627,7 +627,7 @@ namespace $$MODULE_NAME$$
                                         else
                                         {
                                             generic::msgbox("创建组件成功", "组件已创建到\n" 
-                                                + F"{path.path}components/{component_name}.hpp");
+                                                + F"{path.path}/components/{component_name}.hpp");
                                             components->add(component_name);
                                         }
                                     });
