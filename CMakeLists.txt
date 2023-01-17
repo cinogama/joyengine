@@ -37,13 +37,13 @@ if(WIN32)
         COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\cmake\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\cmake\" /Y /S /I /D)
 else()
     add_custom_target(COPY_BUILTIN_FILES 
-        COMMAND mkdir -p \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/\" && cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\" -r)
+        COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin\" -r)
     add_custom_target(COPY_ENGINE_FILES 
-        COMMAND mkdir -p \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/include/\" && cp \"${CMAKE_CURRENT_SOURCE_DIR}/include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\" -r)
+        COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/include\" -r)
     add_custom_target(COPY_WOOLANG_FILES 
-        COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include/wo.h\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\")
+        COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include/wo.h\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin\")
     add_custom_target(COPY_CMAKE_FILES 
-        COMMAND mkdir -p \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/3rd/cmake/\" && cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin/cmake\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/\" -r)
+        COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/3rd/cmake\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin\" -r)
 endif()
 
 add_subdirectory("src")
@@ -54,9 +54,9 @@ include_directories("3rd/woolang/include")
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
 add_executable(jedriver ${jedriver_src})
 
-add_dependencies(jedriver COPY_WOOLANG_FILES)
-add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
+add_dependencies(COPY_CMAKE_FILES COPY_BUILTIN_FILES)
 add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
-add_dependencies(jedriver COPY_CMAKE_FILES)
+add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
+add_dependencies(jedriver COPY_WOOLANG_FILES)
 
 target_link_libraries(jedriver joyecs)
