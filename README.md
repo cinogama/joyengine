@@ -20,6 +20,10 @@ Thanks to the [stb](https://github.com/nothings/stb) library for providing vario
 
 Thanks to [imgui](https://github.com/ocornut/imgui) for taking the pain out of writing a messy UI, they seem to be called `Dear ImGui` now.
 
+感谢 [box2d](https://box2d.org/)提供了良好的物理效果，这真的是个很棒的物理引擎，非常感谢。
+
+Thanks to [box2d](https://box2d.org/) for providing nice physical effects, This is really a great physics engine, thanks a lot.
+
 感谢 [woolang](https://github.com/cinogama/woolang) 给JoyEngine提供了一门强类型和静态类型的脚本语言，感谢它的创作者——@mr_cino，额，好像就是我。那么谢谢我自己。
 
 Thanks to [woolang](https://github.com/cinogama/woolang) for providing JoyEngine with a strongly typed and statically typed scripting language, and thanks to its creator - @mr_cino, well, it seems to be me. Then thank myself.
