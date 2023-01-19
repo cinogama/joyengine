@@ -11,6 +11,7 @@ include_directories("../3rd/imgui")
 include_directories("../3rd/imgui/backends")
 include_directories("../3rd/imgui/misc/cpp")
 include_directories("../3rd/box2d/include")
+include_directories("../3rd/freealut/include")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
@@ -63,4 +64,4 @@ else()
 endif()
 
 target_link_libraries(joyecs ${jeecs_system_libs})
-target_link_libraries(joyecs woolang glew_s glfw box2d)
+target_link_libraries(joyecs woolang glew_s glfw box2d alut)

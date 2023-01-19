@@ -17,7 +17,9 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 # WHY DYNAMIC? FREEALUT IS LGPL, JOYENGINE WILL OPENSOURCE WITH APACHE2.0
 set(OPENAL_INCLUDE_DIR "3rd/openalsdk/include")
-set(OPENAL_LIBRARY "3rd/openalsdk/libs")
+include_directories(${OPENAL_INCLUDE_DIR})
+
+set(ENV{OPENALDIR} "${CMAKE_CURRENT_SOURCE_DIR}/3rd/openalsdk")
 
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic freealut" FORCE)
 add_subdirectory("3rd/freealut")
@@ -30,7 +32,6 @@ set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
-
 
 if(WIN32)
     add_custom_target(COPY_BUILTIN_FILES 
