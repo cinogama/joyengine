@@ -49,7 +49,6 @@ else()
 	add_library(joyecs STATIC ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_glfw_gl3_src})
 endif()
 
-
 set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)
 set_target_properties(joyecs PROPERTIES PREFIX "")
 
@@ -64,4 +63,4 @@ else()
 endif()
 
 target_link_libraries(joyecs ${jeecs_system_libs})
-target_link_libraries(joyecs woolang glew_s glfw box2d alut)
+target_link_libraries(joyecs woolang glew_s glfw box2d ${OPENAL_LIBRARY})

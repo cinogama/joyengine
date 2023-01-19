@@ -21,8 +21,6 @@ include_directories(${OPENAL_INCLUDE_DIR})
 
 set(ENV{OPENALDIR} "${CMAKE_CURRENT_SOURCE_DIR}/3rd/openalsdk")
 
-set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic freealut" FORCE)
-add_subdirectory("3rd/freealut")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
@@ -60,6 +58,16 @@ include_directories("3rd/woolang/include")
 
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
 add_executable(jedriver ${jedriver_src})
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+	set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "")
+	set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "_debug")
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+	set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "32")
+	set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "32_debug")
+else()
+	message(FATAL_ERROR "Unknown platform")
+endif()
 
 add_dependencies(COPY_CMAKE_FILES COPY_BUILTIN_FILES)
 add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
