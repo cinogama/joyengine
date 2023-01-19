@@ -17,6 +17,9 @@ extern const char* gui_api_src;
 extern const char* jeecs_woolang_api_path;
 extern const char* jeecs_woolang_api_src;
 
+void jeal_init();
+void jeal_finish();
+
 void je_init(int argc, char** argv)
 {
     je_log_strat();
@@ -29,6 +32,8 @@ void je_init(int argc, char** argv)
     wo_virtual_source(shader_light2d_path, shader_light2d_src, false);
     wo_virtual_source(shader_pbr_path, shader_pbr_src, false);
     wo_virtual_source(gui_api_path, gui_api_src, false);
+
+    jeal_init();
 }
 
 wo_vm try_open_cached_binary()
@@ -107,6 +112,8 @@ bool jedbg_editor(void)
 
 void je_finish()
 {
+    jeal_finish();
+
     je_log_shutdown();
     wo_finish();
 }

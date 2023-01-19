@@ -1035,6 +1035,21 @@ JE_API void* je_module_load(const char* name, const char* path);
 JE_API void* je_module_func(void* lib, const char* funcname);
 JE_API void je_module_unload(void* lib);
 
+// Audio
+struct jeal_device;
+struct jeal_source;
+struct jeal_buffer;
+
+JE_API jeal_device**    jeal_get_all_devices();
+JE_API const char*      jeal_device_name(jeal_device* device);
+JE_API void             jeal_using_device(jeal_device* device);
+
+JE_API jeal_buffer*     jeal_load_buffer_from_wav(const char* filename);
+JE_API void             jeal_close_buffer(jeal_buffer* buffer);
+
+JE_API jeal_source*     jeal_open_source();
+JE_API void             jeal_close_source(jeal_source* source);
+
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
 

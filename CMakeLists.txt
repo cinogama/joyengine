@@ -16,6 +16,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 set(ENV{OPENALDIR} "${CMAKE_CURRENT_SOURCE_DIR}/3rd/openalsdk")
+include(FindOpenAL)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")
@@ -66,7 +67,7 @@ else()
 endif()
 
 add_dependencies(COPY_CMAKE_FILES COPY_BUILTIN_FILES)
-add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
+add_dependencies(COPY_ENGINE_FILES COPY_CMAKE_FILES)
 add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
 add_dependencies(jedriver COPY_WOOLANG_FILES)
 
