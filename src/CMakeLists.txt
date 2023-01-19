@@ -11,7 +11,7 @@ include_directories("../3rd/imgui")
 include_directories("../3rd/imgui/backends")
 include_directories("../3rd/imgui/misc/cpp")
 include_directories("../3rd/box2d/include")
-include_directories("../3rd/freealut/include")
+include_directories("../3rd/openalsdk/include")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
