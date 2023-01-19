@@ -220,7 +220,7 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
         jeecs::debug::logerr("Invalid wav file: '%s', bad data size.", filename);
         delete[]data;
         jeecs_file_close(wav_file);
-        return false;
+        return nullptr;
     }
 
     //Now we set the variables that we passed in with the
