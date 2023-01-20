@@ -317,6 +317,23 @@ void jeal_source_velocity(jeal_source* source, float x, float y, float z)
     alSource3f(source->m_openal_source, AL_VELOCITY, x, y, z);
 }
 
+size_t jeal_source_get_byte_offset(jeal_source* source)
+{
+    ALint byte_offset;
+    alGetSourcei(source->m_openal_source, AL_BYTE_OFFSET, &byte_offset);
+    return byte_offset;
+}
+
+void jeal_source_set_byte_offset(jeal_source* source, size_t byteoffset)
+{
+    alSourcei(source->m_openal_source, AL_BYTE_OFFSET, (ALint)byteoffset);
+}
+
+void jeal_source_speed(jeal_source* source, float playspeed)
+{
+    alSourcef(source->m_openal_source, AL_PITCH, playspeed);
+}
+
 void jeal_listener_position(float x, float y, float z)
 {
     alListener3f(AL_POSITION, x, y, z);
@@ -330,4 +347,9 @@ void jeal_listener_velocity(float x, float y, float z)
 void jeal_listener_direction(float x, float y, float z)
 {
     alListener3f(AL_DIRECTION, x, y, z);
+}
+
+void jeal_listener_pitch(jeal_source* source, float playspeed)
+{
+    alListenerf(AL_PITCH, playspeed);
 }
