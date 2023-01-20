@@ -1049,6 +1049,10 @@ JE_API void             jeal_close_buffer(jeal_buffer* buffer);
 
 JE_API jeal_source*     jeal_open_source();
 JE_API void             jeal_close_source(jeal_source* source);
+JE_API void             jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer);
+JE_API void             jeal_source_play(jeal_source* source);
+JE_API void             jeal_source_pause(jeal_source* source);
+JE_API void             jeal_source_stop(jeal_source* source);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API

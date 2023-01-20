@@ -17,6 +17,11 @@ struct jeal_source
 struct jeal_buffer
 {
     ALuint m_openal_buffer;
+    const void* m_data;
+    ALsizei m_size;
+    ALsizei m_frequency;
+    ALsizei m_byterate;
+    ALenum m_format;
 };
 
 void jeal_init()
@@ -151,7 +156,6 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
     WAVE_Format wave_format;
     RIFF_Header riff_header;
     WAVE_Data wave_data;
-    unsigned char* data;
 
     jeecs_file* wav_file = jeecs_file_open(filename);
     if (wav_file == nullptr)
@@ -212,51 +216,52 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
     }
 
     //Allocate memory for data
-    data = new unsigned char[wave_data.subChunk2Size];
+    void* data = malloc(wave_data.subChunk2Size);
 
     // Read in the sound data into the soundData variable
     if (!jeecs_file_read(data, wave_data.subChunk2Size, 1, wav_file))
     {
         jeecs::debug::logerr("Invalid wav file: '%s', bad data size.", filename);
-        delete[]data;
+        free(data);
         jeecs_file_close(wav_file);
         return nullptr;
     }
 
     //Now we set the variables that we passed in with the
     //data from the structs
-    ALsizei size = wave_data.subChunk2Size;
-    ALsizei frequency = wave_format.sampleRate;
-    // ALsizei byteRate = wave_format.byteRate;
-    ALenum format = AL_NONE;
+    jeal_buffer* audio_buffer = new jeal_buffer;
+    audio_buffer->m_data = data;
+    audio_buffer->m_size = wave_data.subChunk2Size;
+    audio_buffer->m_frequency = wave_format.sampleRate;
+    audio_buffer->m_byterate = wave_format.byteRate;
+    audio_buffer->m_format = AL_NONE;
 
     //The format is worked out by looking at the number of
     //channels and the bits per sample.
     if (wave_format.numChannels == 1)
     {
         if (wave_format.bitsPerSample == 8)
-            format = AL_FORMAT_MONO8;
+            audio_buffer->m_format = AL_FORMAT_MONO8;
         else if (wave_format.bitsPerSample == 16)
-            format = AL_FORMAT_MONO16;
+            audio_buffer->m_format = AL_FORMAT_MONO16;
     }
     else if (wave_format.numChannels == 2)
     {
         if (wave_format.bitsPerSample == 8)
-            format = AL_FORMAT_STEREO8;
+            audio_buffer->m_format = AL_FORMAT_STEREO8;
         else if (wave_format.bitsPerSample == 16)
-            format = AL_FORMAT_STEREO16;
+            audio_buffer->m_format = AL_FORMAT_STEREO16;
     }
 
-    jeal_buffer* audio_buffer = new jeal_buffer;
     alGenBuffers(1, &audio_buffer->m_openal_buffer);
 
     //now we put our data into the openAL buffer and
     //check for success
-    alBufferData(audio_buffer->m_openal_buffer, format, (const void*)data, size, frequency);
-
-    //errorCheck();
-    //clean up and return true if successful
-    delete[]data;
+    alBufferData(audio_buffer->m_openal_buffer,
+        audio_buffer->m_format,
+        audio_buffer->m_data,
+        audio_buffer->m_size,
+        audio_buffer->m_frequency);
 
     jeecs_file_close(wav_file);
 
@@ -266,5 +271,26 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
 void jeal_close_buffer(jeal_buffer* buffer)
 {
     alDeleteBuffers(1, &buffer->m_openal_buffer);
+    free((void*)buffer->m_data);
     delete buffer;
+}
+
+void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
+{
+    alSourcei(source->m_openal_source, AL_BUFFER, buffer->m_openal_buffer);
+}
+
+void jeal_source_play(jeal_source* source)
+{
+    alSourcePlay(source->m_openal_source);
+}
+
+void jeal_source_pause(jeal_source* source)
+{
+    alSourcePause(source->m_openal_source);
+}
+
+void jeal_source_stop(jeal_source* source)
+{
+    alSourceStop(source->m_openal_source);
 }
