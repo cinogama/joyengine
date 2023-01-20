@@ -20,12 +20,23 @@ int main(int argc, char** argv)
         using namespace jeecs;
         using namespace std;
 
-        jeecs::enrty::module_entry();
+        jeal_using_device(jeal_get_all_devices()[0]);
+        auto* source = jeal_open_source();
+        auto* buffer = jeal_load_buffer_from_wav("Chipmaster.wav", true);
+
+        jeal_source_set_buffer(source, buffer);
+        jeal_source_play(source);
+
+        enrty::module_entry();
         {
             jedbg_editor();
             je_clock_sleep_for(1);
         }
-        jeecs::enrty::module_leave();
+        enrty::module_leave();
+
+        jeal_source_stop(source);
+        jeal_close_source(source);
+        jeal_close_buffer(buffer);
     }
     je_finish();
 }

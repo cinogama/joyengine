@@ -22,6 +22,7 @@ struct jeal_buffer
     ALsizei m_frequency;
     ALsizei m_byterate;
     ALenum m_format;
+    bool m_loop;
 };
 
 void jeal_init()
@@ -129,7 +130,7 @@ void jeal_close_source(jeal_source* source)
     delete source;
 }
 
-jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
+jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop)
 {
     struct WAVE_Data {//Wav文件数据体模块
         char subChunkID[4]; //should contain the word data
@@ -235,6 +236,7 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
     audio_buffer->m_frequency = wave_format.sampleRate;
     audio_buffer->m_byterate = wave_format.byteRate;
     audio_buffer->m_format = AL_NONE;
+    audio_buffer->m_loop = loop;
 
     //The format is worked out by looking at the number of
     //channels and the bits per sample.
@@ -275,8 +277,19 @@ void jeal_close_buffer(jeal_buffer* buffer)
     delete buffer;
 }
 
+size_t jeal_buffer_byte_size(jeal_buffer* buffer)
+{
+    return buffer->m_size;
+}
+
+size_t jeal_buffer_byte_rate(jeal_buffer* buffer)
+{
+    return buffer->m_byterate;
+}
+
 void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
 {
+    alSourcei(source->m_openal_source, AL_LOOPING, buffer->m_loop ? 1 : 0);
     alSourcei(source->m_openal_source, AL_BUFFER, buffer->m_openal_buffer);
 }
 
@@ -293,4 +306,28 @@ void jeal_source_pause(jeal_source* source)
 void jeal_source_stop(jeal_source* source)
 {
     alSourceStop(source->m_openal_source);
+}
+
+void jeal_source_position(jeal_source* source, float x, float y, float z)
+{
+    alSource3f(source->m_openal_source, AL_POSITION, x, y, z);
+}
+void jeal_source_velocity(jeal_source* source, float x, float y, float z)
+{
+    alSource3f(source->m_openal_source, AL_VELOCITY, x, y, z);
+}
+
+void jeal_listener_position(float x, float y, float z)
+{
+    alListener3f(AL_POSITION, x, y, z);
+}
+
+void jeal_listener_velocity(float x, float y, float z)
+{
+    alListener3f(AL_VELOCITY, x, y, z);
+}
+
+void jeal_listener_direction(float x, float y, float z)
+{
+    alListener3f(AL_DIRECTION, x, y, z);
 }
