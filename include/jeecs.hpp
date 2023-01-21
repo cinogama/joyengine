@@ -1040,6 +1040,13 @@ struct jeal_device;
 struct jeal_source;
 struct jeal_buffer;
 
+enum class jeal_state
+{
+    STOPPED,
+    PLAYING,
+    PAUSED,
+};
+
 JE_API jeal_device**    jeal_get_all_devices();
 JE_API const char*      jeal_device_name(jeal_device* device);
 JE_API void             jeal_using_device(jeal_device* device);
@@ -1060,11 +1067,14 @@ JE_API void             jeal_source_velocity(jeal_source* source, float x, float
 JE_API size_t           jeal_source_get_byte_offset(jeal_source* source);
 JE_API void             jeal_source_set_byte_offset(jeal_source* source, size_t byteoffset);
 JE_API void             jeal_source_pitch(jeal_source* source, float playspeed);
+JE_API void             jeal_source_volume(jeal_source* source, float volume);
+JE_API jeal_state       jeal_source_get_state(jeal_source* source);
 
 JE_API void             jeal_listener_position(float x, float y, float z);
 JE_API void             jeal_listener_velocity(float x, float y, float z);
 JE_API void             jeal_listener_direction(float x, float y, float z);
-JE_API void             jeal_listener_pitch(jeal_source* source, float playspeed);
+JE_API void             jeal_listener_pitch(float playspeed);
+JE_API void             jeal_listener_volume(float volume);
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
 

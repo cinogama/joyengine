@@ -4,6 +4,8 @@
 #include <al.h>
 #include <alc.h>
 
+#include <unordered_set>
+
 static jeal_device** _jegl_device_list = nullptr;
 struct jeal_device
 {
@@ -13,6 +15,10 @@ struct jeal_device
 struct jeal_source
 {
     ALuint m_openal_source;
+
+    // 当前源最后播放的 buffer，不过需要注意，
+    // 如果source的状态处于stopped，那么这个地方的buffer就应该被视为无效的
+    jeal_buffer* m_last_played_buffer; 
 };
 struct jeal_buffer
 {
@@ -24,6 +30,12 @@ struct jeal_buffer
     ALenum m_format;
     bool m_loop;
 };
+
+std::mutex _jeal_all_sources_mx;
+std::unordered_set<jeal_source*> _jeal_all_sources;
+
+std::mutex _jeal_all_buffers_mx;
+std::unordered_set<jeal_buffer*> _jeal_all_buffers;
 
 void jeal_init()
 {
@@ -62,7 +74,12 @@ void jeal_init()
 
 void jeal_finish()
 {
-    // TODO: 在此检查是否有尚未关闭的声源和声音缓存，按照规矩，此处应该全部清退干净
+    // 在此检查是否有尚未关闭的声源和声音缓存，按照规矩，此处应该全部清退干净
+    std::lock_guard g1(_jeal_all_sources_mx);
+    std::lock_guard g2(_jeal_all_buffers_mx);
+    assert(_jeal_all_sources.empty());
+    assert(_jeal_all_buffers.empty());
+
     auto** current_device_pointer = _jegl_device_list;
     while (*current_device_pointer != nullptr)
     {
@@ -101,11 +118,17 @@ const char* jeal_device_name(jeal_device* device)
 
 void jeal_using_device(jeal_device* device)
 {
+    std::lock_guard g1(_jeal_all_sources_mx);
+    std::lock_guard g2(_jeal_all_buffers_mx);
+
     assert(device != nullptr);
     ALCcontext* current_context = alcGetCurrentContext();
     if (current_context != nullptr)
     {
-        // TODO: 在此储存声源状态和声音样本，并在更新设备后恢复
+        // 遍历所有 buffer 和 source，获取相关信息，在创建新的上下文之后恢复
+
+        TODO HERE TODO HERE;
+
         if (AL_FALSE == alcMakeContextCurrent(nullptr))
             jeecs::debug::logerr("Failed to clear current context.");
         alcDestroyContext(current_context);
@@ -120,12 +143,22 @@ void jeal_using_device(jeal_device* device)
 jeal_source* jeal_open_source()
 {
     jeal_source* audio_source = new jeal_source;
+
+    std::lock_guard g1(_jeal_all_sources_mx);
+    {
+        _jeal_all_sources.insert(audio_source);
+    }
     alGenSources(1, &audio_source->m_openal_source);
+
     return audio_source;
 }
 
 void jeal_close_source(jeal_source* source)
 {
+    std::lock_guard g1(_jeal_all_sources_mx);
+    {
+        _jeal_all_sources.erase(source);
+    }
     alDeleteSources(1, &source->m_openal_source);
     delete source;
 }
@@ -228,6 +261,8 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop)
         return nullptr;
     }
 
+    jeecs_file_close(wav_file);
+
     //Now we set the variables that we passed in with the
     //data from the structs
     jeal_buffer* audio_buffer = new jeal_buffer;
@@ -255,6 +290,11 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop)
             audio_buffer->m_format = AL_FORMAT_STEREO16;
     }
 
+    std::lock_guard g1(_jeal_all_buffers_mx);
+    {
+        _jeal_all_buffers.insert(audio_buffer);
+    }
+
     alGenBuffers(1, &audio_buffer->m_openal_buffer);
 
     //now we put our data into the openAL buffer and
@@ -265,13 +305,15 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop)
         audio_buffer->m_size,
         audio_buffer->m_frequency);
 
-    jeecs_file_close(wav_file);
-
     return audio_buffer;
 }
 
 void jeal_close_buffer(jeal_buffer* buffer)
 {
+    std::lock_guard g1(_jeal_all_buffers_mx);
+    {
+        _jeal_all_buffers.erase(buffer);
+    }
     alDeleteBuffers(1, &buffer->m_openal_buffer);
     free((void*)buffer->m_data);
     delete buffer;
@@ -329,9 +371,31 @@ void jeal_source_set_byte_offset(jeal_source* source, size_t byteoffset)
     alSourcei(source->m_openal_source, AL_BYTE_OFFSET, (ALint)byteoffset);
 }
 
-void jeal_source_speed(jeal_source* source, float playspeed)
+void jeal_source_pitch(jeal_source* source, float playspeed)
 {
     alSourcef(source->m_openal_source, AL_PITCH, playspeed);
+}
+
+void jeal_source_volume(jeal_source* source, float volume)
+{
+    alSourcef(source->m_openal_source, AL_GAIN, volume);
+}
+
+jeal_state jeal_source_get_state(jeal_source* source)
+{
+    ALint state;
+    alGetSourcei(source->m_openal_source, AL_SOURCE_STATE, &state);
+
+    switch (state)
+    {
+    case AL_PLAYING:
+        return jeal_state::PLAYING;
+    case AL_PAUSED:
+        return jeal_state::PAUSED;
+    default:
+        assert(state == AL_INITIAL || state == AL_STOPPED);
+        return jeal_state::STOPPED;
+    }
 }
 
 void jeal_listener_position(float x, float y, float z)
@@ -349,7 +413,12 @@ void jeal_listener_direction(float x, float y, float z)
     alListener3f(AL_DIRECTION, x, y, z);
 }
 
-void jeal_listener_pitch(jeal_source* source, float playspeed)
+void jeal_listener_pitch(float playspeed)
 {
     alListenerf(AL_PITCH, playspeed);
+}
+
+void jeal_listener_volume(jeal_source* source, float volume)
+{
+    alListenerf(AL_GAIN, volume);
 }
