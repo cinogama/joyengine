@@ -18,7 +18,7 @@ struct jeal_source
 
     // 当前源最后播放的 buffer，不过需要注意，
     // 如果source的状态处于stopped，那么这个地方的buffer就应该被视为无效的
-    jeal_buffer* m_last_played_buffer; 
+    jeal_buffer* m_last_played_buffer;
 };
 struct jeal_buffer
 {
@@ -66,10 +66,13 @@ void jeal_init()
 
     if (devices.size() == 0)
         jeecs::debug::logfatal("No audio device found.");
-
+   
     _jegl_device_list = new jeal_device * [devices.size() + 1];
     memcpy(_jegl_device_list, devices.data(), devices.size() * sizeof(jeal_device*));
     _jegl_device_list[devices.size()] = nullptr;
+
+    // 使用默认设备
+    jeal_using_device(jeal_get_all_devices()[0]);
 }
 
 void jeal_finish()
@@ -116,18 +119,88 @@ const char* jeal_device_name(jeal_device* device)
     return device->m_device_name;
 }
 
+void _jeal_update_buffer_instance(jeal_buffer* buffer)
+{
+    alGenBuffers(1, &buffer->m_openal_buffer);
+
+    //now we put our data into the openAL buffer and
+    //check for success
+    alBufferData(buffer->m_openal_buffer,
+        buffer->m_format,
+        buffer->m_data,
+        buffer->m_size,
+        buffer->m_frequency);
+}
+void _jeal_update_source(jeal_source* source)
+{
+    alGenSources(1, &source->m_openal_source);
+}
+
 void jeal_using_device(jeal_device* device)
 {
     std::lock_guard g1(_jeal_all_sources_mx);
     std::lock_guard g2(_jeal_all_buffers_mx);
 
+    struct source_restoring_information
+    {
+        jeal_source* m_source;
+        jeecs::math::vec3 m_position;
+        jeecs::math::vec3 m_velocity;
+        jeecs::math::vec3 m_direction;
+        size_t m_offset;
+        float m_pitch;
+        float m_volume;
+        jeal_state m_state;
+        jeal_buffer* m_playing_buffer;
+    };
+    source_restoring_information listener_information;
+    std::vector<source_restoring_information> sources_information;
+
     assert(device != nullptr);
     ALCcontext* current_context = alcGetCurrentContext();
     if (current_context != nullptr)
     {
-        // 遍历所有 buffer 和 source，获取相关信息，在创建新的上下文之后恢复
+        // 保存listener信息
+        alGetListener3f(AL_POSITION,
+            &listener_information.m_position.x,
+            &listener_information.m_position.y,
+            &listener_information.m_position.z);
+        alGetListener3f(AL_VELOCITY,
+            &listener_information.m_velocity.x,
+            &listener_information.m_velocity.y,
+            &listener_information.m_velocity.z);
+        alGetListener3f(AL_DIRECTION,
+            &listener_information.m_direction.x,
+            &listener_information.m_direction.y,
+            &listener_information.m_direction.z);
+        alGetListenerf(AL_PITCH,
+            &listener_information.m_pitch);
+        alGetListenerf(AL_GAIN,
+            &listener_information.m_volume);
 
-        TODO HERE TODO HERE;
+        // 遍历所有 source，获取相关信息，在创建新的上下文之后恢复
+        for (auto* source : _jeal_all_sources)
+        {
+            source_restoring_information src_info;
+            src_info.m_source = source;
+            alGetSource3f(source->m_openal_source, AL_POSITION,
+                &src_info.m_position.x,
+                &src_info.m_position.y,
+                &src_info.m_position.z);
+            alGetSource3f(source->m_openal_source, AL_VELOCITY,
+                &src_info.m_velocity.x,
+                &src_info.m_velocity.y,
+                &src_info.m_velocity.z);
+            src_info.m_offset = jeal_source_get_byte_offset(source);
+            alGetSourcef(source->m_openal_source, AL_PITCH,
+                &src_info.m_pitch);
+            alGetSourcef(source->m_openal_source, AL_GAIN,
+                &src_info.m_volume);
+            src_info.m_state = jeal_source_get_state(source);
+            src_info.m_playing_buffer = source->m_last_played_buffer;
+
+            sources_information.emplace_back(src_info);
+        }
 
         if (AL_FALSE == alcMakeContextCurrent(nullptr))
             jeecs::debug::logerr("Failed to clear current context.");
@@ -138,6 +211,59 @@ void jeal_using_device(jeal_device* device)
         jeecs::debug::logerr("Failed to create context for device: %s.", device->m_device_name);
     else if (AL_FALSE == alcMakeContextCurrent(current_context))
         jeecs::debug::logerr("Failed to active context for device: %s.", device->m_device_name);
+    else
+    {
+        // OK, Restore buffer, listener and source.
+        for (auto* buffer : _jeal_all_buffers)
+            _jeal_update_buffer_instance(buffer);
+
+        jeal_listener_position(
+            listener_information.m_position.x, 
+            listener_information.m_position.y, 
+            listener_information.m_position.z);
+        jeal_listener_velocity(
+            listener_information.m_velocity.x,
+            listener_information.m_velocity.y,
+            listener_information.m_velocity.z);
+        jeal_listener_direction(
+            listener_information.m_direction.x,
+            listener_information.m_direction.y,
+            listener_information.m_direction.z);
+        jeal_listener_pitch(listener_information.m_pitch);
+        jeal_listener_volume(listener_information.m_volume);
+
+        for (auto& src_info : sources_information)
+        {
+            _jeal_update_source(src_info.m_source);
+
+            jeal_source_position(
+                src_info.m_source,
+                src_info.m_position.x,
+                src_info.m_position.y, 
+                src_info.m_position.z);
+            jeal_source_velocity(
+                src_info.m_source,
+                src_info.m_velocity.x,
+                src_info.m_velocity.y,
+                src_info.m_velocity.z);
+            jeal_source_pitch(
+                src_info.m_source,
+                src_info.m_pitch);
+            jeal_source_volume(
+                src_info.m_source,
+                src_info.m_volume);
+
+            if (src_info.m_state != jeal_state::STOPPED)
+            {
+                jeal_source_set_buffer(src_info.m_source, src_info.m_playing_buffer);
+                jeal_source_set_byte_offset(src_info.m_source, src_info.m_offset);
+                if (src_info.m_state == jeal_state::PAUSED)
+                    jeal_source_pause(src_info.m_source);
+                else
+                    jeal_source_play(src_info.m_source);
+            }
+        }
+    }
 }
 
 jeal_source* jeal_open_source()
@@ -145,10 +271,9 @@ jeal_source* jeal_open_source()
     jeal_source* audio_source = new jeal_source;
 
     std::lock_guard g1(_jeal_all_sources_mx);
-    {
-        _jeal_all_sources.insert(audio_source);
-    }
-    alGenSources(1, &audio_source->m_openal_source);
+    _jeal_all_sources.insert(audio_source);
+
+    _jeal_update_source(audio_source);
 
     return audio_source;
 }
@@ -291,19 +416,9 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop)
     }
 
     std::lock_guard g1(_jeal_all_buffers_mx);
-    {
-        _jeal_all_buffers.insert(audio_buffer);
-    }
+    _jeal_all_buffers.insert(audio_buffer);
 
-    alGenBuffers(1, &audio_buffer->m_openal_buffer);
-
-    //now we put our data into the openAL buffer and
-    //check for success
-    alBufferData(audio_buffer->m_openal_buffer,
-        audio_buffer->m_format,
-        audio_buffer->m_data,
-        audio_buffer->m_size,
-        audio_buffer->m_frequency);
+    _jeal_update_buffer_instance(audio_buffer);
 
     return audio_buffer;
 }
@@ -331,6 +446,7 @@ size_t jeal_buffer_byte_rate(jeal_buffer* buffer)
 
 void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
 {
+    source->m_last_played_buffer = buffer;
     alSourcei(source->m_openal_source, AL_LOOPING, buffer->m_loop ? 1 : 0);
     alSourcei(source->m_openal_source, AL_BUFFER, buffer->m_openal_buffer);
 }
@@ -418,7 +534,7 @@ void jeal_listener_pitch(float playspeed)
     alListenerf(AL_PITCH, playspeed);
 }
 
-void jeal_listener_volume(jeal_source* source, float volume)
+void jeal_listener_volume(float volume)
 {
     alListenerf(AL_GAIN, volume);
 }
