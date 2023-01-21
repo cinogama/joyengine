@@ -4,6 +4,16 @@
 
 A game engine based on ECS architecture implemented in C++ and Woolang. 
 
+## 编译说明（How to compile）
+
+编译 JoyEngine 前，需要安装OpenAL-SDK，对于Windows用户而言，SDK已经随着子模块一并拉取到 3rd 目录下了，不需要额外的配置，若运行时提示找不到 `OpenAL32.dll`，可通过安装 3rd 目录下的 `oalinst.exe` 安装所需的库。
+
+对于其他平台，需要手动安装SDK，以 Ubuntu 为例，可以执行：
+
+```shell
+apt install libopenal-dev
+```
+
 ---
 
 ## 鸣谢（Acknowledgments）

@@ -20,12 +20,12 @@ int main(int argc, char** argv)
         using namespace jeecs;
         using namespace std;
 
-        jeecs::enrty::module_entry();
+        enrty::module_entry();
         {
             jedbg_editor();
             je_clock_sleep_for(1);
         }
-        jeecs::enrty::module_leave();
+        enrty::module_leave();
     }
     je_finish();
 }

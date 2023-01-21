@@ -26,3 +26,7 @@
 	path = 3rd/cmake
 	url = https://gitlab.cinogama.com/cinogamaproject/cmake3.20-win32x64.git
 	branch = master
+[submodule "3rd/openalsdk"]
+	path = 3rd/openalsdk
+	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/openalsdk.git
+	branch = master

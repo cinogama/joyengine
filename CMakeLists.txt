@@ -15,6 +15,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
+set(ENV{OPENALDIR} "${CMAKE_CURRENT_SOURCE_DIR}/3rd/openalsdk")
+include(FindOpenAL)
+
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
@@ -24,7 +27,6 @@ set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
-
 
 if(WIN32)
     add_custom_target(COPY_BUILTIN_FILES 
@@ -54,8 +56,18 @@ include_directories("3rd/woolang/include")
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
 add_executable(jedriver ${jedriver_src})
 
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+	set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "")
+	set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "_debug")
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+	set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "32")
+	set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "32_debug")
+else()
+	message(FATAL_ERROR "Unknown platform")
+endif()
+
 add_dependencies(COPY_CMAKE_FILES COPY_BUILTIN_FILES)
-add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
+add_dependencies(COPY_ENGINE_FILES COPY_CMAKE_FILES)
 add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
 add_dependencies(jedriver COPY_WOOLANG_FILES)
 
