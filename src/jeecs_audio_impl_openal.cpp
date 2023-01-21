@@ -70,9 +70,6 @@ void jeal_init()
     _jegl_device_list = new jeal_device * [devices.size() + 1];
     memcpy(_jegl_device_list, devices.data(), devices.size() * sizeof(jeal_device*));
     _jegl_device_list[devices.size()] = nullptr;
-
-    // 使用默认设备
-    jeal_using_device(jeal_get_all_devices()[0]);
 }
 
 void jeal_finish()
