@@ -66,7 +66,7 @@ void jeal_init()
 
     if (devices.size() == 0)
         jeecs::debug::logfatal("No audio device found.");
-   
+
     _jegl_device_list = new jeal_device * [devices.size() + 1];
     memcpy(_jegl_device_list, devices.data(), devices.size() * sizeof(jeal_device*));
     _jegl_device_list[devices.size()] = nullptr;
@@ -143,7 +143,6 @@ void jeal_using_device(jeal_device* device)
         jeal_source* m_source;
         jeecs::math::vec3 m_position;
         jeecs::math::vec3 m_velocity;
-        jeecs::math::vec3 m_direction;
         size_t m_offset;
         float m_pitch;
         float m_volume;
@@ -151,6 +150,8 @@ void jeal_using_device(jeal_device* device)
         jeal_buffer* m_playing_buffer;
     };
     source_restoring_information listener_information;
+    float listener_orientation[6] = {};
+
     std::vector<source_restoring_information> sources_information;
 
     assert(device != nullptr);
@@ -166,10 +167,7 @@ void jeal_using_device(jeal_device* device)
             &listener_information.m_velocity.x,
             &listener_information.m_velocity.y,
             &listener_information.m_velocity.z);
-        alGetListener3f(AL_DIRECTION,
-            &listener_information.m_direction.x,
-            &listener_information.m_direction.y,
-            &listener_information.m_direction.z);
+        alGetListenerfv(AL_ORIENTATION, listener_orientation);
         alGetListenerf(AL_PITCH,
             &listener_information.m_pitch);
         alGetListenerf(AL_GAIN,
@@ -215,17 +213,20 @@ void jeal_using_device(jeal_device* device)
             _jeal_update_buffer_instance(buffer);
 
         jeal_listener_position(
-            listener_information.m_position.x, 
-            listener_information.m_position.y, 
+            listener_information.m_position.x,
+            listener_information.m_position.y,
             listener_information.m_position.z);
         jeal_listener_velocity(
             listener_information.m_velocity.x,
             listener_information.m_velocity.y,
             listener_information.m_velocity.z);
         jeal_listener_direction(
-            listener_information.m_direction.x,
-            listener_information.m_direction.y,
-            listener_information.m_direction.z);
+            listener_orientation[0],
+            listener_orientation[1], 
+            listener_orientation[2], 
+            listener_orientation[3], 
+            listener_orientation[4], 
+            listener_orientation[5]);
         jeal_listener_pitch(listener_information.m_pitch);
         jeal_listener_volume(listener_information.m_volume);
 
@@ -236,7 +237,7 @@ void jeal_using_device(jeal_device* device)
             jeal_source_position(
                 src_info.m_source,
                 src_info.m_position.x,
-                src_info.m_position.y, 
+                src_info.m_position.y,
                 src_info.m_position.z);
             jeal_source_velocity(
                 src_info.m_source,
@@ -521,9 +522,10 @@ void jeal_listener_velocity(float x, float y, float z)
     alListener3f(AL_VELOCITY, x, y, z);
 }
 
-void jeal_listener_direction(float x, float y, float z)
+void jeal_listener_direction(float forwardx, float forwardy, float forwardz, float upx, float upy, float upz)
 {
-    alListener3f(AL_DIRECTION, x, y, z);
+    float orientation[] = { forwardx, forwardy, forwardz, upx, upy, upz };
+    alListenerfv(AL_ORIENTATION, orientation);
 }
 
 void jeal_listener_pitch(float playspeed)

@@ -1072,7 +1072,7 @@ JE_API jeal_state       jeal_source_get_state(jeal_source* source);
 
 JE_API void             jeal_listener_position(float x, float y, float z);
 JE_API void             jeal_listener_velocity(float x, float y, float z);
-JE_API void             jeal_listener_direction(float x, float y, float z);
+JE_API void             jeal_listener_direction(float forwardx, float forwardy, float forwardz, float upx, float upy, float upz);
 JE_API void             jeal_listener_pitch(float playspeed);
 JE_API void             jeal_listener_volume(float volume);
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
