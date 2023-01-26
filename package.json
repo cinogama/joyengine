@@ -7,17 +7,17 @@
     ],
     "dependence" : {
         "image" : {
-            "mirror" : "https://gitlab.cinogama.com/cinogamaproject/woolangpackages",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "path" : "build/pkg",
             "version" : "1.0.0"
         },
         "math" : {
-            "mirror" : "https://gitlab.cinogama.com/cinogamaproject/woolangpackages",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "path" : "build/pkg",
             "version" : "1.0.0"
         },
         "process" : {
-            "mirror" : "https://gitlab.cinogama.com/cinogamaproject/woolangpackages",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "path" : "build/pkg",
             "version" : "1.0.0"
         }
@@ -25,7 +25,7 @@
     "name" : "joyengineecs",
     "version" : "1.0.0",
     "woolang" : {
-        "mirror" : "https://gitlab.cinogama.com/cinogamaproject",
+        "remote" : "https://git.cinogama.net/cinogamaproject",
         "version" : "1.0.0"
     }
 }
