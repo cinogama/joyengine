@@ -1,32 +1,32 @@
 [submodule "3rd/glew"]
 	path = 3rd/glew
-	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/glew-2.2.0.git
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/glew-2.2.0.git
 	branch = master
 [submodule "3rd/glfw"]
 	path = 3rd/glfw
-	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/glfw.git
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/glfw.git
 	branch = 3.3-stable
 [submodule "3rd/stb"]
 	path = 3rd/stb
-	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/stb.git
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/stb.git
 	branch = master
 [submodule "3rd/imgui"]
 	path = 3rd/imgui
-	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/imgui
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/imgui
 	branch = stable_v1_87
 [submodule "3rd/woolang"]
 	path = 3rd/woolang
-	url = https://gitlab.cinogama.com/cinogamaproject/woolang.git
+	url = https://git.cinogama.net/cinogamaproject/woolang.git
 	branch = master
 [submodule "3rd/box2d"]
 	path = 3rd/box2d
-	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/box2d.git
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git
 	branch = master_v2_4_1
 [submodule "3rd/cmake"]
 	path = 3rd/cmake
-	url = https://gitlab.cinogama.com/cinogamaproject/cmake3.20-win32x64.git
+	url = https://git.cinogama.net/cinogamaproject/cmake3.20-win32x64.git
 	branch = master
 [submodule "3rd/openalsdk"]
 	path = 3rd/openalsdk
-	url = https://gitlab.cinogama.com/cinogamaproject/joyengineecs/openalsdk.git
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/openalsdk.git
 	branch = master
