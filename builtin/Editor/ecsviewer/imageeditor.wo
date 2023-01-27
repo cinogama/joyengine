@@ -118,21 +118,9 @@ namespace drawpannel
         ["钢笔"] = \=DrawToolT::create("钢笔", (): Pen);,
     };
 
-    func edittexture(images: array<(int, graphic::texture)>, context: DrawContextT)
+    func edittexture(images: array<(int, mut graphic::texture)>, context: DrawContextT)
     {
         let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
-
-        if (BeginMenuBar())
-        {
-            if (BeginMenu("文件"))
-            {
-                if (MenuItem("画布尺寸"))
-                    std::panic("TODO;");
-
-                EndMenu();
-            }
-            EndMenuBar();
-        }
 
         if (BeginTabBar("##draw_textures"))
         {
@@ -141,6 +129,20 @@ namespace drawpannel
                 let texture_path = texture->path->valor("<内置>");
                 if (BeginTabItem(F"通道{passid}: {texture_path}"))
                 {
+                    if (BeginMenuBar())
+                    {
+                        if (BeginMenu("文件"))
+                        {
+                            if (MenuItem("画布尺寸"))
+                                // 更新画布尺寸之后，创建新的纹理对象覆盖到数组里
+                                std::panic("TODO;")
+                                
+
+                            EndMenu();
+                        }
+                        EndMenuBar();
+                    }
+
                     // OK 在这里显示一下绘图工具箱
                     BeginGroup();
                     
@@ -398,7 +400,7 @@ namespace drawpannel
                     {
                         launch(edittexture, (
                             used_texture_id_pass 
-                                ->> \id = (id, textures->get(id)->or(func(){
+                                ->> \id = (id, mut textures->get(id)->or(func(){
                                     let img = image::create(16, 16);
                                     for (let mut x = 0; x < 16; x += 1)
                                         for (let mut y = 0; y < 16; y += 1)
@@ -437,7 +439,7 @@ namespace drawpannel
         else 
             launch(edittexture, (
                 used_texture_id_pass 
-                    ->> \id = (id, textures->get(id)->val);,
+                    ->> \id = (id, mut textures->get(id)->val);,
                 DrawContextT{
                     scale = mut 10.,
                     offset_x = mut 0.,

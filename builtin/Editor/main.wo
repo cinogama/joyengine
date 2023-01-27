@@ -412,6 +412,7 @@ func Editor_MainMenuBar()
         {
             if (MenuItemShortcut("调试运行", "使用Ctrl+Esc终止调试"))
                 GameDebug::start_debug();
+            Separator();
             if (MenuItem("项目设置"))
                 editor::Project::GetCurrentProject()->config_form();
             EndMenu();

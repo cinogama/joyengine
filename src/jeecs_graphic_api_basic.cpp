@@ -225,7 +225,7 @@ void jegl_using_resource(jegl_resource* resource)
         resource->m_graphic_thread_version = _current_graphic_thread->m_version;
     }
     if (_current_graphic_thread != resource->m_graphic_thread)
-        return jeecs::debug::logerr("This resource has been used in graphic thread:%p.", resource->m_graphic_thread);
+        return jeecs::debug::logerr("This resource has been used in graphic thread: %p.", resource->m_graphic_thread);
     if (resource->m_graphic_thread_version != _current_graphic_thread->m_version)
     {
         need_init_resouce = true;
