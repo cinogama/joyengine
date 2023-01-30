@@ -216,7 +216,6 @@ namespace jeecs_impl
 
             void command_close_entity(jeecs::typing::entity_id_in_chunk_t eid) noexcept
             {
-                // TODO: MULTI-THREAD PROBLEM
                 _m_entities_meta[eid].m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
                 ++_m_entities_meta[eid].m_version;
                 _m_entities_meta[eid].m_in_used.clear();
@@ -2129,8 +2128,17 @@ void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
     return chunk->get_arch_type()->get_arch_mgr()->get_world();
 }
 
-bool je_ecs_world_validate_entity(const jeecs::game_entity* entity)
+bool je_ecs_entity_is_valid(const jeecs::game_entity* entity)
 {
+    // NOTE: 需要注意，此函数仅考虑了实体所在的世界恒定存在的情况，所以待检查实体
+    //       所在世界已经销毁，那么调用此函数可能导致崩溃，因为实体所在chunk已经
+    //       被释放，可能已经挪作它用。
+    //       只能说目前没有愉快的方法可以检查实体是否有效，除非遍历universe中的所
+    //       有世界，并遍历所有世界的 arch manager，在arch manager所有的chunk中寻找
+    //       但这么做开销太大了。而且实际上这个函数并不应该作为业务函数使用。甚至不
+    //       该向外提供；其他entity方法尚可用于业务中，用于动态改变组件状态等。
+    //       而这个函数只用于编辑器环境中，用来给编辑器的垃圾代码擦屁股。
+    //       * 考虑移除此函数
     if (auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk)
         return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
     return false;

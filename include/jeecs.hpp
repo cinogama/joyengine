@@ -527,7 +527,7 @@ JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
-JE_API bool je_ecs_world_validate_entity(const jeecs::game_entity* entity);
+JE_API bool je_ecs_entity_is_valid(const jeecs::game_entity* entity);
 JE_API const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity);
 JE_API const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
@@ -2911,7 +2911,7 @@ namespace jeecs
 
     inline bool game_entity::valid() const noexcept
     {
-        return je_ecs_world_validate_entity(this);
+        return je_ecs_entity_is_valid(this);
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept
