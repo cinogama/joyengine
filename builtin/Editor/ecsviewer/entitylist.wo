@@ -238,7 +238,7 @@ namespace editor::EntityList
                     {
                         // 自己拖到自己身上肯定就寄了，只处理不同的实体。
                         je::entity::editor::find_entity_by_chunkinfo(drag_entity_chunkinfo)
-                            ->map(\e: je::entity = set_parent(e, entity););
+                            ->set_parent(entity);
                     }
                 none?
                     ;

@@ -313,8 +313,6 @@ namespace jeecs
 
         inline void close() const noexcept;
 
-        inline bool valid() const noexcept;
-
         inline std::string name();
 
         inline std::string name(const std::string& _name);
@@ -527,7 +525,6 @@ JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
-JE_API bool je_ecs_entity_is_valid(const jeecs::game_entity* entity);
 JE_API const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity);
 JE_API const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
@@ -1047,16 +1044,16 @@ enum class jeal_state
     PAUSED,
 };
 
-JE_API jeal_device**    jeal_get_all_devices();
-JE_API const char*      jeal_device_name(jeal_device* device);
+JE_API jeal_device** jeal_get_all_devices();
+JE_API const char* jeal_device_name(jeal_device* device);
 JE_API void             jeal_using_device(jeal_device* device);
 
-JE_API jeal_buffer*     jeal_load_buffer_from_wav(const char* filename, bool loop);
+JE_API jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop);
 JE_API void             jeal_close_buffer(jeal_buffer* buffer);
 JE_API size_t           jeal_buffer_byte_size(jeal_buffer* buffer);
 JE_API size_t           jeal_buffer_byte_rate(jeal_buffer* buffer);
 
-JE_API jeal_source*     jeal_open_source();
+JE_API jeal_source* jeal_open_source();
 JE_API void             jeal_close_source(jeal_source* source);
 JE_API void             jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer);
 JE_API void             jeal_source_play(jeal_source* source);
@@ -1659,7 +1656,7 @@ namespace jeecs
                 }
                 else if constexpr (std::is_convertible<T, std::string>::value)
                     return basic::make_new_string(*(const T*)_ptr);
-                
+
                 static auto call_once = []() {
                     debug::logfatal("This type: '%s' have no function named 'to_string'."
                         , typeid(T).name());
@@ -1779,8 +1776,8 @@ namespace jeecs
                     if (!-- * ref_count)
                     {
                         // Recycle
-                        
-                            release_func(ptr);
+
+                        release_func(ptr);
 
                         ref_count->~CounterT();
                         je_mem_free(ref_count);
@@ -2843,48 +2840,6 @@ namespace jeecs
         return game_universe(je_ecs_world_in_universe(handle()));
     }
 
-    namespace editor
-    {
-        static std::string dump_entity_editor_information(const jeecs::game_entity& e)
-        {
-#ifdef JE_ENABLE_DEBUG_API
-            if (e.valid())
-            {
-                // Get all components.
-                const typing::type_info** component_types = jedbg_get_all_components_from_entity(&e);
-
-                std::string result = "{";
-                bool first_component = true;
-                for (auto** cur_component = component_types; *cur_component; ++cur_component)
-                {
-                    if (first_component)
-                    {
-                        first_component = false;
-                        result += ",";
-                    }
-
-                    const typing::type_info* type = *cur_component;
-                    result += std::string("\"") + type->m_typename + "\":{\"";
-
-                    result += basic::make_cpp_string(type->m_member_types->m_member_name) + "\":\"";
-                    // TODO: Store all member datas.
-
-                    result += "}";
-                }
-                result += "}";
-                je_mem_free(component_types);
-
-                return result;
-            }
-            else
-                debug::logerr("Current entity is invalid when dumping editor informations.");
-#else
-            debug::logerr("If you want to dump entity's editor information, you must #define JE_ENABLE_DEBUG_API.");
-#endif
-            return "";
-        }
-    }
-
     template<typename T>
     inline T* game_entity::get_component()const noexcept
     {
@@ -2907,11 +2862,6 @@ namespace jeecs
         auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return je_ecs_world_entity_remove_component(je_ecs_world_of_entity(this), this, type);
-    }
-
-    inline bool game_entity::valid() const noexcept
-    {
-        return je_ecs_entity_is_valid(this);
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept
@@ -5097,7 +5047,7 @@ namespace jeecs
         struct BoxCollider
         {
             void* native_fixture = nullptr;
-            math::vec2 scale = {1.f, 1.f};
+            math::vec2 scale = { 1.f, 1.f };
 
             static void JERefRegsiter()
             {
@@ -5562,7 +5512,7 @@ namespace jeecs
             type_info::of<Physics2D::Mass>("Physics2D::Mass");
             type_info::of<Physics2D::Bullet>("Physics2D::Bullet");
             type_info::of<Physics2D::BoxCollider>("Physics2D::BoxCollider");
-            type_info::of<Physics2D::CircleCollider>("Physics2D::CircleCollider"); 
+            type_info::of<Physics2D::CircleCollider>("Physics2D::CircleCollider");
             type_info::of<Physics2D::Restitution>("Physics2D::Restitution");
             type_info::of<Physics2D::Friction>("Physics2D::Friction");
 

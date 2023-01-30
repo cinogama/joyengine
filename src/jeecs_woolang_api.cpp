@@ -510,17 +510,8 @@ WO_API wo_api wojeapi_find_entity_with_chunk_info(wo_vm vm, wo_value args, size_
     jeecs::game_entity* entity = new jeecs::game_entity();
     sscanf(wo_string(args + 0), "[%p:%zuv%zu]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version);
 
-    if (entity->valid())
-        return wo_ret_option_gchandle(vm, entity,
-            nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
-    delete entity;
-    return wo_ret_option_none(vm);
-}
-
-WO_API wo_api wojeapi_is_entity_valid(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, entity->valid());
+    return wo_ret_gchandle(vm, entity,
+        nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
 }
 
 WO_API wo_api wojeapi_get_all_components_types_from_entity(wo_vm vm, wo_value args, size_t argc)
@@ -1152,26 +1143,24 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     wo_value out_map = wo_push_map(vm);
 
-    if (entity->valid())
+    if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
     {
-        if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
-        {
-            wo_value key = wo_push_empty(vm);
+        wo_value key = wo_push_empty(vm);
 
-            for (auto& texture : textures->textures)
-            {
-                if (!texture.m_texture)
-                    return wo_ret_halt(vm, "Texture cannot be nullptr.");
-                wo_set_int(key, (wo_integer_t)texture.m_pass_id);
-                wo_set_gchandle(wo_map_set(out_map, key, nullptr),
-                    new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
-                    [](void* ptr) {
-                        delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
-                    });
-            }
-            wo_pop_stack(vm);
+        for (auto& texture : textures->textures)
+        {
+            if (!texture.m_texture)
+                return wo_ret_halt(vm, "Texture cannot be nullptr.");
+            wo_set_int(key, (wo_integer_t)texture.m_pass_id);
+            wo_set_gchandle(wo_map_set(out_map, key, nullptr),
+                new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
+                [](void* ptr) {
+                    delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+                });
         }
+        wo_pop_stack(vm);
     }
+    
     return wo_ret_val(vm, out_map);
 }
 
@@ -1179,9 +1168,10 @@ WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args, size_t ar
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
-    if (entity->valid())
-        if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
-            textures->bind_texture(wo_int(args + 1), *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2));
+    if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
+        textures->bind_texture(wo_int(args + 1), *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2));
+
+    // TODO: 如果当前实体不包含jeecs::Renderer::Textures组件，在此panic?
 
     return wo_ret_void(vm);
 }
@@ -1191,22 +1181,21 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     wo_value out_array = wo_push_arr(vm, 0);
 
-    if (entity->valid())
+    if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
     {
-        if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+        for (auto& shader : shaders->shaders)
         {
-            for (auto& shader : shaders->shaders)
-            {
-                if (!shader)
-                    return wo_ret_halt(vm, "Shader cannot be nullptr.");
-                wo_set_gchandle(wo_arr_add(out_array, nullptr),
-                    new jeecs::basic::resource<jeecs::graphic::shader>(shader), nullptr,
-                    [](void* ptr) {
-                        delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
-                    });
-            }
+            if (!shader)
+                return wo_ret_halt(vm, "Shader cannot be nullptr.");
+            wo_set_gchandle(wo_arr_add(out_array, nullptr),
+                new jeecs::basic::resource<jeecs::graphic::shader>(shader), nullptr,
+                [](void* ptr) {
+                    delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+                });
         }
     }
+    
+    // TODO: 如果当前实体不包含jeecs::Renderer::Shaders组件，在此panic?
     return wo_ret_val(vm, out_array);
 }
 
@@ -1217,20 +1206,20 @@ WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     wo_value shader_array = args + 1;
 
-    if (entity->valid())
+    if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
     {
-        if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+        shaders->shaders.clear();
+        size_t arrsize = wo_lengthof(shader_array);
+        for (size_t i = 0; i < arrsize; ++i)
         {
-            shaders->shaders.clear();
-            size_t arrsize = wo_lengthof(shader_array);
-            for (size_t i = 0; i < arrsize; ++i)
-            {
-                jeecs::basic::resource<jeecs::graphic::shader>* shader =
-                    (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(wo_arr_get(shader_array, i));
-                shaders->shaders.push_back(*shader);
-            }
+            jeecs::basic::resource<jeecs::graphic::shader>* shader =
+                (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(wo_arr_get(shader_array, i));
+            shaders->shaders.push_back(*shader);
         }
     }
+
+    // TODO: 如果当前实体不包含jeecs::Renderer::Shaders组件，在此panic?
+
     return wo_ret_void(vm);
 }
 
@@ -1979,10 +1968,7 @@ R"(
             public func chunkinfo(self: entity)=> string;
 
             extern("libjoyecs", "wojeapi_find_entity_with_chunk_info")
-            public func find_entity_by_chunkinfo(chunkinfo: string)=> option<entity>;
-
-            extern("libjoyecs", "wojeapi_is_entity_valid")
-            public func valid(self: entity)=> bool;
+            public func find_entity_by_chunkinfo(chunkinfo: string)=> entity;
 
             public func get_components_types(self: entity)=> array<typeinfo>
             {

@@ -6,6 +6,7 @@
 #include <thread>
 #include <condition_variable>
 #include <unordered_map>
+#include <optional>
 
 #ifdef NDEBUG
 #   define DEBUG_ARCH_LOG(...) ((void)0)
@@ -2128,22 +2129,6 @@ void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
     return chunk->get_arch_type()->get_arch_mgr()->get_world();
 }
 
-bool je_ecs_entity_is_valid(const jeecs::game_entity* entity)
-{
-    // NOTE: 需要注意，此函数仅考虑了实体所在的世界恒定存在的情况，所以待检查实体
-    //       所在世界已经销毁，那么调用此函数可能导致崩溃，因为实体所在chunk已经
-    //       被释放，可能已经挪作它用。
-    //       只能说目前没有愉快的方法可以检查实体是否有效，除非遍历universe中的所
-    //       有世界，并遍历所有世界的 arch manager，在arch manager所有的chunk中寻找
-    //       但这么做开销太大了。而且实际上这个函数并不应该作为业务函数使用。甚至不
-    //       该向外提供；其他entity方法尚可用于业务中，用于动态改变组件状态等。
-    //       而这个函数只用于编辑器环境中，用来给编辑器的垃圾代码擦屁股。
-    //       * 考虑移除此函数
-    if (auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk)
-        return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
-    return false;
-}
-
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
 void** jedbg_get_all_worlds_in_universe(void* _universe)
 {
@@ -2234,7 +2219,7 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeec
 }
 
 static void* _editor_universe;
-static jeecs::game_entity _editor_entity;
+static std::optional<jeecs::game_entity> _editor_entity;
 
 void jedbg_set_editor_universe(void* universe_handle)
 {
@@ -2250,7 +2235,7 @@ void jedbg_set_editing_entity(const jeecs::game_entity* _entity)
     if (_entity)
         _editor_entity = *_entity;
     else
-        _editor_entity._m_in_chunk = nullptr;
+        _editor_entity = std::nullopt;
 }
 
 const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world)
@@ -2276,8 +2261,8 @@ const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _w
 
 const jeecs::game_entity* jedbg_get_editing_entity()
 {
-    if (_editor_entity.valid())
-        return &_editor_entity;
+    if (_editor_entity.has_value())
+        return &_editor_entity.value();
     return nullptr;
 }
 
