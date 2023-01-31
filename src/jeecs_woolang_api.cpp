@@ -1115,12 +1115,17 @@ WO_API wo_api wojeapi_character_get_texture(wo_vm vm, wo_value args, size_t argc
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_shader = new jeecs::graphic::shader(wo_string(args + 0));
-    return wo_ret_gchandle(vm,
-        new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
-        [](void* ptr) {
-            delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
-        });
 
+    if (loaded_shader->enabled())
+    {
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
+            [](void* ptr) {
+                delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+            });
+    }
+    delete loaded_shader;
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
@@ -1150,7 +1155,7 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
         for (auto& texture : textures->textures)
         {
             if (!texture.m_texture)
-                return wo_ret_halt(vm, "Texture cannot be nullptr.");
+                return wo_ret_panic(vm, "Texture cannot be nullptr.");
             wo_set_int(key, (wo_integer_t)texture.m_pass_id);
             wo_set_gchandle(wo_map_set(out_map, key, nullptr),
                 new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
@@ -1221,14 +1226,6 @@ WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc
     // TODO: 如果当前实体不包含jeecs::Renderer::Shaders组件，在此panic?
 
     return wo_ret_void(vm);
-}
-
-
-
-WO_API wo_api wojeapi_shader_is_valid(wo_vm vm, wo_value args, size_t argc)
-{
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, (*shader)->enabled());
 }
 
 WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t argc)
@@ -1348,12 +1345,6 @@ WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
     if (auto str = (*shader)->resouce()->m_path)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in shader >");
-}
-
-WO_API wo_api wojeapi_texture_is_valid(wo_vm vm, wo_value args, size_t argc)
-{
-    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, (*texture)->enabled());
 }
 
 WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args, size_t argc)
@@ -1614,9 +1605,6 @@ namespace je
             extern("libjoyecs", "wojeapi_texture_path")
             public func path(self: texture)=> option<string>;
 
-            extern("libjoyecs", "wojeapi_texture_is_valid")
-            public func isvalid(self: texture)=> bool;
-
             extern("libjoyecs", "wojeapi_texture_get_size")
             public func size(self: texture)=> (int, int);
 
@@ -1666,13 +1654,10 @@ namespace je
         public using shader = gchandle
         {
             extern("libjoyecs", "wojeapi_shader_open")
-            public func load(path: string)=> shader;
+            public func load(path: string)=> option<shader>;
             
             extern("libjoyecs", "wojeapi_shader_create")
             public func create(vpath: string, src: string)=> option<shader>;
-
-            extern("libjoyecs", "wojeapi_shader_is_valid")
-            public func isvalid(self: shader)=> bool;
 
             extern("libjoyecs", "wojeapi_shader_path")
             public func path(self: shader)=> string;
@@ -1883,7 +1868,7 @@ R"(
 
         namespace editor
         {
-            public func store_uniform_dat_for_bad_shader_update<T>(self: entity, shad: graphic::shader, name: string, val: T)
+            public func store_uniform_dat_for_bad_shader_update<T>(self: entity, shad_path: string, name: string, val: T)
                 where std::declval:<T>() is int
                        || std::declval:<T>() is real
                        || std::declval:<T>() is (real, real)
@@ -1893,37 +1878,37 @@ R"(
                 if (std::declval:<T>() is int)
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
-                    func _set_uniform_int(e: entity, shad: graphic::shader, name: string, val: int)=> void;
+                    func _set_uniform_int(e: entity, shad_path: string, name: string, val: int)=> void;
 
-                    _set_uniform_int(self, shad, name, val);
+                    _set_uniform_int(self, shad_path, name, val);
                 }
                 else if (std::declval:<T>() is real)
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
-                    func _set_uniform_float(e: entity, shad: graphic::shader, name: string, val: real)=> void;
+                    func _set_uniform_float(e: entity, shad_path: string, name: string, val: real)=> void;
 
-                    _set_uniform_float(self, shad, name, val);
+                    _set_uniform_float(self, shad_path, name, val);
                 }
                 else if (std::declval:<T>() is (real, real))
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
-                    func _set_uniform_float2(e: entity, shad: graphic::shader, name: string, x: real, y: real)=> void;
+                    func _set_uniform_float2(e: entity, shad_path: string, name: string, x: real, y: real)=> void;
                     let (x, y) = val;
-                    _set_uniform_float2(self, shad, name, x, y);
+                    _set_uniform_float2(self, shad_path, name, x, y);
                 }
                 else if (std::declval:<T>() is (real, real, real))
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
-                    func _set_uniform_float3(e: entity, shad: graphic::shader, name: string, x: real, y: real, z: real)=> void;
+                    func _set_uniform_float3(e: entity, shad_path: string, name: string, x: real, y: real, z: real)=> void;
                     let (x, y, z) = val;
-                    _set_uniform_float3(self, shad, name, x, y, z);
+                    _set_uniform_float3(self, shad_path, name, x, y, z);
                 }
                 else if (std::declval:<T>() is (real, real, real, real))
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
-                    func _set_uniform_float4(e: entity, shad: graphic::shader, name: string, x: real, y: real, z: real, w: real)=> void;
+                    func _set_uniform_float4(e: entity, shad_path: string, name: string, x: real, y: real, z: real, w: real)=> void;
                     let (x, y, z, w) = val;
-                    _set_uniform_float4(self, shad, name, x, y, z, w);
+                    _set_uniform_float4(self, shad_path, name, x, y, z, w);
                 }
                 else
                     std::panic("Here should not been exec.");

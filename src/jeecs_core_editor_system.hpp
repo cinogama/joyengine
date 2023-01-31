@@ -40,7 +40,7 @@ namespace jeecs
         struct BadShadersUniform
         {
             using uniform_inform = std::map<std::string, jegl_shader::unifrom_variables>;
-            std::map<graphic::shader*, uniform_inform> uniforms;
+            std::map<std::string, uniform_inform> uniforms;
         };
     }
 
@@ -502,13 +502,13 @@ public let frag =
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 1);
+    wo_string_t shader_path = wo_string(args + 1);
 
     jeecs::Editor::BadShadersUniform* badShadersUniform = entity->get_component<jeecs::Editor::BadShadersUniform>();
     if (nullptr == badShadersUniform)
         return wo_ret_panic(vm, "Failed to store uniforms for bad shader, entity has not 'Editor::BadShadersUniform'.");
 
-    auto& bad_uniform_var = badShadersUniform->uniforms[shader->get()][wo_string(args + 2)];
+    auto& bad_uniform_var = badShadersUniform->uniforms[shader_path][wo_string(args + 2)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT;
     bad_uniform_var.n = wo_int(args + 3);
@@ -518,13 +518,13 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, siz
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 1);
+    wo_string_t shader_path = wo_string(args + 1);
 
     jeecs::Editor::BadShadersUniform* badShadersUniform = entity->get_component<jeecs::Editor::BadShadersUniform>();
     if (nullptr == badShadersUniform)
         return wo_ret_panic(vm, "Failed to store uniforms for bad shader, entity has not 'Editor::BadShadersUniform'.");
 
-    auto& bad_uniform_var = badShadersUniform->uniforms[shader->get()][wo_string(args + 2)];
+    auto& bad_uniform_var = badShadersUniform->uniforms[shader_path][wo_string(args + 2)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT;
     bad_uniform_var.x = wo_float(args + 3);
@@ -534,13 +534,13 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args, s
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 1);
+    wo_string_t shader_path = wo_string(args + 1);
 
     jeecs::Editor::BadShadersUniform* badShadersUniform = entity->get_component<jeecs::Editor::BadShadersUniform>();
     if (nullptr == badShadersUniform)
         return wo_ret_panic(vm, "Failed to store uniforms for bad shader, entity has not 'Editor::BadShadersUniform'.");
 
-    auto& bad_uniform_var = badShadersUniform->uniforms[shader->get()][wo_string(args + 2)];
+    auto& bad_uniform_var = badShadersUniform->uniforms[shader_path][wo_string(args + 2)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT2;
     bad_uniform_var.x = wo_float(args + 3);
@@ -551,13 +551,13 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args, 
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 1);
+    wo_string_t shader_path = wo_string(args + 1);
 
     jeecs::Editor::BadShadersUniform* badShadersUniform = entity->get_component<jeecs::Editor::BadShadersUniform>();
     if (nullptr == badShadersUniform)
         return wo_ret_panic(vm, "Failed to store uniforms for bad shader, entity has not 'Editor::BadShadersUniform'.");
 
-    auto& bad_uniform_var = badShadersUniform->uniforms[shader->get()][wo_string(args + 2)];
+    auto& bad_uniform_var = badShadersUniform->uniforms[shader_path][wo_string(args + 2)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT3;
     bad_uniform_var.x = wo_float(args + 3);
@@ -569,13 +569,13 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args, 
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 1);
+    wo_string_t shader_path = wo_string(args + 1);
 
     jeecs::Editor::BadShadersUniform* badShadersUniform = entity->get_component<jeecs::Editor::BadShadersUniform>();
     if (nullptr == badShadersUniform)
         return wo_ret_panic(vm, "Failed to store uniforms for bad shader, entity has not 'Editor::BadShadersUniform'.");
 
-    auto& bad_uniform_var = badShadersUniform->uniforms[shader->get()][wo_string(args + 2)];
+    auto& bad_uniform_var = badShadersUniform->uniforms[shader_path][wo_string(args + 2)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT4;
     bad_uniform_var.x = wo_float(args + 3);
@@ -641,10 +641,10 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
 
                     assert(bad_uniforms != nullptr);
 
-                    auto& new_bad_shad_uniform_buf = bad_uniforms->uniforms[new_shader.get()];
+                    auto& new_bad_shad_uniform_buf = bad_uniforms->uniforms[new_shad];
 
                     // 1.1 If bad uniforms already has old_shader's data, update them..
-                    auto fnd = bad_uniforms->uniforms.find(shad.get());
+                    auto fnd = bad_uniforms->uniforms.find(old_shad);
                     if (fnd != bad_uniforms->uniforms.end())
                     {
                         assert(shad->enabled() == false);
@@ -678,10 +678,10 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
                     }
                     else if (bad_uniforms)
                     {
-                        auto& old_bad_shad_uniform_buf = bad_uniforms->uniforms[shad.get()];
+                        auto& old_bad_shad_uniform_buf = bad_uniforms->uniforms[old_shad];
                         for (auto& [name, dat] : old_bad_shad_uniform_buf)
                             update_shader(&dat, name, new_shader);
-                        bad_uniforms->uniforms.erase(shad.get());
+                        bad_uniforms->uniforms.erase(old_shad);
                     }
                 }
                 shad = new_shader;
