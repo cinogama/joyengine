@@ -88,16 +88,13 @@ WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_restart_graphic_interface(wo_vm vm, wo_value args, size_t argc)
 {
-    void* cur_universe = jedbg_get_editor_universe();
-    if (!cur_universe)
-        return wo_ret_panic(vm, "No current universe found.");
-
+    void* cur_universe = wo_pointer(args + 0);
     jegl_interface_config config;
-    config.m_title = wo_string(args + 0);
-    config.m_resolution_x = config.m_windows_width = wo_int(args + 1);
-    config.m_resolution_y = config.m_windows_height = wo_int(args + 2);
-    config.m_fps = wo_int(args + 3);
-    config.m_fullscreen = wo_bool(args + 4);
+    config.m_title = wo_string(args + 1);
+    config.m_resolution_x = config.m_windows_width = wo_int(args + 2);
+    config.m_resolution_y = config.m_windows_height = wo_int(args + 3);
+    config.m_fps = wo_int(args + 4);
+    config.m_fullscreen = wo_bool(args + 5);
     jegl_reboot_graphic_thread(jedbg_get_editing_graphic_thread(cur_universe), config);
 
     return wo_ret_void(vm);
@@ -221,27 +218,12 @@ WO_API wo_api wojeapi_update_texture_sampling_method_by_path(wo_vm vm, wo_value 
 
 
 // ECS UNIVERSE
-WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
-{
-    void* universe = jedbg_get_editor_universe();
-    if (!universe)
-        return wo_ret_halt(vm, "failed to get editor universe.");
-    return wo_ret_pointer(vm, universe);
-}
-
 WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args, size_t argc)
 {
     void* universe = je_ecs_universe_create();
-    return wo_ret_pointer(vm, universe);
-}
-
-WO_API wo_api wojeapi_set_current_universe(wo_vm vm, wo_value args, size_t argc)
-{
-    void* universe = wo_pointer(args + 0);
-
-    jedbg_set_editor_universe(universe);
-
-    return wo_ret_void(vm);
+    return wo_ret_gchandle(vm, universe, nullptr, [](void* universe) {
+        jeecs::game_universe::destroy_universe(jeecs::game_universe(universe));
+    });
 }
 
 WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args, size_t argc)
@@ -253,12 +235,6 @@ WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_wait_universe(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_universe(wo_pointer(args + 0)).wait();
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api wojeapi_close_universe(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_universe::destroy_universe(jeecs::game_universe(wo_pointer(args + 0)));
     return wo_ret_void(vm);
 }
 
@@ -644,12 +620,6 @@ WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t a
 }
 
 // ECS OTHER
-WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_universe(jedbg_get_editor_universe()).stop();
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api wojeapi_log(wo_vm vm, wo_value args, size_t argc)
 {
     std::string disp;
@@ -1165,7 +1135,7 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
         }
         wo_pop_stack(vm);
     }
-    
+
     return wo_ret_val(vm, out_map);
 }
 
@@ -1199,7 +1169,7 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
                 });
         }
     }
-    
+
     // TODO: 如果当前实体不包含jeecs::Renderer::Shaders组件，在此panic?
     return wo_ret_val(vm, out_array);
 }
@@ -1410,6 +1380,7 @@ namespace je
 
         extern("libjoyecs", "wojeapi_restart_graphic_interface")
         public func restart_graphic_interface(
+            u: universe,
             title: string, 
             reso_x: int, 
             reso_y: int,
@@ -1526,9 +1497,6 @@ namespace je
         extern("libjoyecs", "wojeapi_input_window_size")
         public func window_size()=> (int, int);
     }
-
-    extern("libjoyecs", "wojeapi_exit")
-    public func exit()=> void;
 
     public using typeinfo = handle;
     namespace typeinfo
@@ -1754,45 +1722,36 @@ namespace je
         }
     }
 
-    public using universe = handle;
+    public using universe = gchandle;
     namespace universe
     {
-        extern("libjoyecs", "wojeapi_get_edit_universe")
-        public func current()=> universe;
+        extern("libjoyecs", "wojeapi_create_universe")
+        public func create()=> universe;
 
-        extern("libjoyecs", "wojeapi_create_world_in_universe")
-        public func create_world(self: universe)=> world;
+        public func close(self: universe)
+        {
+            self: gchandle->close();
+        }
+
+        extern("libjoyecs", "wojeapi_stop_universe")
+        public func stop(self: universe)=> void;
+
+        extern("libjoyecs", "wojeapi_wait_universe")
+        public func wait(self: universe)=> void;
 
         namespace editor
         {
-            extern("libjoyecs", "wojeapi_create_universe")
-            public func create()=> universe;
-
-            extern("libjoyecs", "wojeapi_set_current_universe")
-            public func set_current_universe(self: universe)=> void;
-
-            extern("libjoyecs", "wojeapi_stop_universe")
-            public func stop(self: universe)=> void;
-
-            extern("libjoyecs", "wojeapi_wait_universe")
-            public func wait(self: universe)=> void;
-
-            extern("libjoyecs", "wojeapi_close_universe")
-            public func close(self: universe)=> void;
-        
-            public func worlds_list(self: universe)
-            {
-                extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
-                public func _get_all_worlds(universe:universe) => array<world>;
-
-                return _get_all_worlds(self);
-            }
+            extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
+            public func worlds_list(self: universe)=> array<world>;
         }
     }
 
     public using world = handle;
     namespace world
     {
+        extern("libjoyecs", "wojeapi_create_world_in_universe")
+        public func create(self: universe)=> world;
+
         extern("libjoyecs", "wojeapi_close_world")
         public func close(self: world) => void;
 
@@ -1800,13 +1759,8 @@ namespace je
         public func add_system(self: world, systype: typeinfo)=> bool;
 )"
 R"(
-        public func rend()=> option<world>
-        {
-            extern("libjoyecs", "wojeapi_get_rendering_world")
-            func _get_rendering_world(u: universe)=> option<world>;
-
-            return _get_rendering_world(universe::current());
-        }
+        extern("libjoyecs", "wojeapi_get_rendering_world")
+        public func rend(u: universe)=> option<world>;
 
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
         public func add_entity(self: world, components: array<typeinfo>)=> entity;

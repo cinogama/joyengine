@@ -1,36 +1,17 @@
 import woo.std;
-
+import woo.thread;
 import je;
+import builtin.api.welcome.demo;
+import builtin.api.universe.context;
 
-using je::graphic;
+jeapi::welcome::display_copyright_msg();
 
-func display_text(f: font, msg: string)
-{
-    let chtex = f->load_string(msg);
-    let (width, height) = chtex->size;
+jeapi::universe::startup(func(universe){
+	
+	// 创建一个默认世界用于渲染
+	let w = universe->je::world::create;
+	w->add_system(je::typeinfo::load_from_name("Graphic::DefaultGraphicPipelineSystem")->val);
 
-    let mut display_bar = "-";
-    for (let mut x = 0; x < width; x += 1)
-        display_bar += "--";
+	// TODO: Universe 就是全部环境，加载项目就直接干掉这个Universe，重新搞一个新的
 
-    je::log(display_bar);
-    for (let mut y = 0; y < height; y += 1)
-    {
-        let mut out_line = "";
-        for (let mut x = 0; x < width; x += 1)
-            out_line += chtex->pix((x, y))->get_color[3] <= 0.175 ? "  " | "■";
-
-        je::log(F"{out_line}|");
-    }
-    je::log(display_bar);
-
-    chtex: gchandle->close();
-    f: gchandle->close();
-}
-
-font::load(@"builtin/cino_ipix_12px.ttf"@, 14)
-    ->map(\f: font = display_text(f, text)
-            where text = "Joy{scale:0.75}{offset:(0.2, -0.1)}4.x{scale:1}\nEngine";);
-je::log("");
-je::log(F"{je::editor::build_version()} (C)Cinogama project. 2022.");
-je::log(F"Powered by {je::editor::woolang_version()}, (C)Cinogama project. 2021-2022.");
+});

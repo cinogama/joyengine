@@ -1,0 +1,44 @@
+// builtin.api.welcome.demo
+// 嗯，大憨批程序，就是一个用来显示欢迎信息的小实例
+
+import je;
+
+namespace jeapi::welcome
+{
+	public func display_copyright_msg()
+	{	
+		using je::graphic;
+
+        match (font::load(@"*/builtin/font/cino_ipix_12px.ttf"@, 12))
+        {
+        value(f)?
+        {
+            let chtex = f->load_string("Joy{scale:0.75}{offset:(0.2, -0.1)}4.x{scale:1}\nEngine");
+            let (width, height) = chtex->size;
+
+            let mut display_bar = "-";
+            for (let mut x = 0; x < width; x += 1)
+                display_bar += "--";
+
+            je::log(display_bar);
+            for (let mut y = 0; y < height; y += 1)
+            {
+                let mut out_line = "";
+                for (let mut x = 0; x < width; x += 1)
+                    out_line += chtex->pix((x, y))->get_color[3] <= 0.1 ? "  " | "■";
+
+                je::log(F"{out_line}|");
+            }
+            je::log(display_bar);
+
+            chtex: gchandle->close();
+            f: gchandle->close();        
+        }
+        none?
+            ;
+        }
+
+        je::log(F"{je::editor::build_version()} (C)Cinogama project. 2022.");
+        je::log(F"Powered by {je::editor::woolang_version()}, (C)Cinogama project. 2021-2022.");
+	}
+}

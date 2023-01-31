@@ -2218,18 +2218,8 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeec
     return outresult;
 }
 
-static void* _editor_universe;
 static std::optional<jeecs::game_entity> _editor_entity;
 
-void jedbg_set_editor_universe(void* universe_handle)
-{
-    _editor_universe = universe_handle;
-}
-
-void* jedbg_get_editor_universe(void)
-{
-    return _editor_universe;
-}
 void jedbg_set_editing_entity(const jeecs::game_entity* _entity)
 {
     if (_entity)

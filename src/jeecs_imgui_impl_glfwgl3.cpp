@@ -1461,7 +1461,7 @@ void jegui_init(void* window_handle, bool reboot)
 
     ImGuiIO& io = ImGui::GetIO();
 
-    auto* ttf_file = jeecs_file_open((wo_exe_path() + std::string("builtin/cino_ipix_12px.ttf")).c_str());
+    auto* ttf_file = jeecs_file_open((wo_exe_path() + std::string("builtin/font/cino_ipix_12px.ttf")).c_str());
     if (ttf_file)
     {
         auto* file_buf = je_mem_alloc(ttf_file->m_file_length);
