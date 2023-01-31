@@ -36,6 +36,13 @@ void je_init(int argc, char** argv)
     jeal_init();
 }
 
+wo_integer_t crc64_of_source_and_api()
+{
+    wo_integer_t api_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/api").c_str());
+    wo_integer_t src_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/editor").c_str());
+    return src_crc64 * api_crc64;
+}
+
 wo_vm try_open_cached_binary()
 {
     wo_integer_t expect_crc = 0;
@@ -49,8 +56,7 @@ wo_vm try_open_cached_binary()
     if (readcount < 1)
         return nullptr;
 
-    wo_integer_t src_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/Editor").c_str());
-    if (src_crc64 != expect_crc)
+    if (crc64_of_source_and_api() != expect_crc)
         return nullptr;
 
     wo_vm vmm = wo_create_vm();
@@ -73,7 +79,7 @@ bool jedbg_editor(void)
     if (vmm == nullptr)
     {
         vmm = wo_create_vm();
-        if (wo_load_file(vmm, (std::string(wo_exe_path()) + "/builtin/Editor/main.wo").c_str()))
+        if (wo_load_file(vmm, (std::string(wo_exe_path()) + "/builtin/editor/main.wo").c_str()))
         {
             size_t binary_length;
             void* buffer = wo_dump_binary(vmm, &binary_length);;
@@ -85,11 +91,11 @@ bool jedbg_editor(void)
                 assert(writelen == binary_length);
                 fclose(objdump);
             }
-            auto src_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/Editor").c_str());
+            auto api_src_crc64 = crc64_of_source_and_api();
             FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.jecache4").c_str(), "wb");
             if (srccrc != nullptr)
             {
-                size_t writecount = fwrite(&src_crc64, sizeof(src_crc64), 1, srccrc);
+                size_t writecount = fwrite(&api_src_crc64, sizeof(api_src_crc64), 1, srccrc);
                 assert(writecount == 1);
                 fclose(srccrc);
             }
