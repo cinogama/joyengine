@@ -1,0 +1,7 @@
+//  builtin.api.rend.main
+// 用于渲染相关
+
+namespace jeapi::rend
+{
+
+}

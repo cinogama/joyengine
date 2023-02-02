@@ -1,17 +1,39 @@
 import woo.std;
 import woo.thread;
 import je;
-import builtin.api.welcome.demo;
-import builtin.api.universe.context;
+import builtin.api.welcome.main;
+import builtin.editor.environment.main;
+import builtin.editor.project.main;
 
 jeapi::welcome::display_copyright_msg();
 
-jeapi::universe::startup(func(universe){
-	
-	// 创建一个默认世界用于渲染
-	let w = universe->je::world::create;
-	w->add_system(je::typeinfo::load_from_name("Graphic::DefaultGraphicPipelineSystem")->val);
+using je::gui;
 
-	// TODO: Universe 就是全部环境，加载项目就直接干掉这个Universe，重新搞一个新的
+let u = editor::Environment::create();
+{
+    let w = u->create_world;
+    w->add_system(je::typeinfo::load("Graphic::DefaultGraphicPipelineSystem")->val);
 
-});
+    launch(func(){
+        Begin("TEST");
+        let clicked = Button("点这里，创建演示项目");
+        End();
+
+        if (clicked)
+        {
+            u->close();
+            return FormAction::Close;
+        }            
+        return FormAction::Nothing;
+    }, ());
+
+    u->wait();
+}
+
+let demo_proj = editor::Project::create("Demo", std::exepath());
+
+    let root_world = demo_proj.m_env->create_world;
+    root_world->add_system(demo_proj->get_config_graphic_pipeline);
+    root_world->add_system(demo_proj->get_config_editor_system);
+
+demo_proj->wait();

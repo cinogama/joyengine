@@ -5,9 +5,9 @@ import je;
 
 namespace jeapi::welcome
 {
-	public func display_copyright_msg()
-	{	
-		using je::graphic;
+    public func display_copyright_msg()
+    {    
+        using je::graphic;
 
         match (font::load(@"*/builtin/font/cino_ipix_12px.ttf"@, 12))
         {
@@ -40,5 +40,5 @@ namespace jeapi::welcome
 
         je::log(F"{je::editor::build_version()} (C)Cinogama project. 2022.");
         je::log(F"Powered by {je::editor::woolang_version()}, (C)Cinogama project. 2021-2022.");
-	}
+    }
 }

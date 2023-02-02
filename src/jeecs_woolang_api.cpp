@@ -1530,10 +1530,10 @@ namespace je
             }
         }
         extern("libjoyecs", "wojeapi_type_of")
-        public func load_from_name(name: string)=> option<typeinfo>;
+        public func load(name: string)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_of")
-        public func load_from_id(id: int)=> option<typeinfo>;
+        public func loadid(id: int)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_id")
         public func id(self: typeinfo)=> int;
@@ -1765,13 +1765,13 @@ R"(
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
         public func add_entity(self: world, components: array<typeinfo>)=> entity;
 
+        extern("libjoyecs", "wojeapi_remove_system_from_world")
+        public func remove_system(self: world, sysinfo: typeinfo)=> void;
+    
         namespace editor
         {
             extern("libjoyecs", "wojeapi_get_system_from_world")
             public func get_system(self: world, systype: typeinfo)=> option<handle>;
-
-            extern("libjoyecs", "wojeapi_remove_system_from_world")
-            public func remove_system(self: world, sysinfo: typeinfo)=> void;
 
             extern("libjoyecs", "wojeapi_get_world_name")
             public func name(self: world)=> string;

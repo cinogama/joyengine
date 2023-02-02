@@ -1,0 +1,147 @@
+// project.main
+// 用于储存编辑中的项目信息
+
+import je;
+import je.gui;
+
+import config;
+
+import builtin.editor.environment.main;
+
+namespace editor
+{
+    let  
+        DEFAULT_GRAPHIC_SYSTEM_NAME = "Graphic::DefaultGraphicPipelineSystem",
+        DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
+
+    public using Project = struct{
+        m_name: string,    // 项目的名称，不能更改
+        m_path: string,    // 项目所在的目录
+        m_env: Environment, // 项目环境
+        m_configs: map<string, Project::IConfig>, // 配置信息
+    }
+    {
+        func _create_default_configs(env: Environment)
+        {
+            using je;
+            using je::gui;
+
+            return {
+                /* 引擎的默认图形管线 */
+                ["JE_PROJECT_GRAPHIC_PIPELINE"] = IConfig::create(Config::create(
+                    typeinfo::load(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
+                    func(origin_graphic_pipeline)
+                    {
+                        let USABLE_GRAPHIC_SYSTEMS = typeinfo::editor::get_all_systems_types()
+                                ->  forall(\t = t->name->beginwith("Graphic::"););
+                        let USABLE_GRAPHIC_SYSTEM_NAMES =  USABLE_GRAPHIC_SYSTEMS
+                                ->> \t = t->name;;
+
+                        return Combo("图形管线", 
+                            USABLE_GRAPHIC_SYSTEM_NAMES, 
+                            USABLE_GRAPHIC_SYSTEM_NAMES->find(origin_graphic_pipeline->name))
+                            =>> \index = USABLE_GRAPHIC_SYSTEMS->get(index);;
+                    },
+                    func(oldval, newval)
+                    {
+                        // 移除当前世界中的老渲染管线，换个新的
+                        match (world::rend(env->get_universe))
+                        {
+                        value(current_rend_world)?
+                        {
+                            current_rend_world->remove_system(oldval);
+                            current_rend_world->add_system(newval);
+                        }
+                        none?
+                            je::logwarn("设置管线时未发现渲染中的世界，跳过更新世界");
+                        }
+                        
+                        return true;
+                    },
+                    \val = val->name;,
+                    \str = typeinfo::load(str);,
+                )),
+                /* 引擎的默认编辑器系统 */
+                ["JE_PROJECT_EDITOR_SYSTEM"] = IConfig::create(Config::create(
+                    typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->val,
+                    func(origin_editor_system)
+                    {
+                        let USABLE_EDITOR_SYSTEMS = typeinfo::editor::get_all_systems_types()
+                                ->  forall(\t = t->name->beginwith("Editor::"););
+                        let USABLE_EDITOR_SYSTEM_NAMES =  USABLE_EDITOR_SYSTEMS
+                                ->> \t = t->name;;
+
+                        return Combo("编辑系统", 
+                            USABLE_EDITOR_SYSTEM_NAMES, 
+                            USABLE_EDITOR_SYSTEM_NAMES->find(origin_editor_system->name))
+                            =>> \index = USABLE_EDITOR_SYSTEMS->get(index);;
+                    },
+                    func(oldval, newval)
+                    {
+                        // 移除当前世界中的老编辑系统，换个新的
+                        match (world::rend(env->get_universe))
+                        {
+                        value(current_rend_world)?
+                        {
+                            current_rend_world->remove_system(oldval);
+                            current_rend_world->add_system(newval);
+                        }
+                        none?
+                            je::logwarn("设置编辑系统时未发现渲染中的世界，跳过更新世界");
+                        }
+                        
+                        return true;
+                    },
+                    \val = val->name;,
+                    \str = typeinfo::load(str);,
+                )),
+                /* 项目的描述信息 */
+                ["JE_PROJECT_DESCRIBE"] = IConfig::create(Config::create(
+                    "新项目，你可以在这里编辑项目的描述文本",
+                    func(origin_text)
+                    {
+                        Text("项目描述");
+                        return InputTextMultilineSize("##", origin_text, 400., 200.);
+                    },
+                    \o,n = true;,
+                    \val = val;,
+                    \str = option::value(str);,
+                )),
+            }mut;
+        }
+        public func create(name: string, path: string)
+        {
+            let env = Environment::create();
+
+            // NOTE: 立即创建一个新世界并开始渲染，否则GUI协程就没法跑了
+
+            return Project{
+                m_name = name,
+                m_path = path,
+                m_env = env,
+                m_configs = _create_default_configs(env),
+            };
+        }
+        public func wait(self: Project)
+        {
+            self.m_env->wait();
+        }
+
+        public func get_config_graphic_pipeline(self: Project)
+        {
+            return self.m_configs->get("JE_PROJECT_GRAPHIC_PIPELINE")
+                ->> \config = config->tostring;
+                ->  valor(DEFAULT_GRAPHIC_SYSTEM_NAME)
+                ->  je::typeinfo::load
+                ->  val;
+        }
+        public func get_config_editor_system(self: Project)
+        {
+            return self.m_configs->get("JE_PROJECT_EDITOR_SYSTEM")
+                ->> \config = config->tostring;
+                ->  valor(DEFAULT_GRAPHIC_SYSTEM_NAME)
+                ->  je::typeinfo::load
+                ->  val;
+        }
+    }
+}
