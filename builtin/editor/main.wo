@@ -4,6 +4,7 @@ import je;
 import builtin.api.welcome.main;
 import builtin.editor.environment.main;
 import builtin.editor.project.main;
+import builtin.editor.gui.main;
 
 jeapi::welcome::display_copyright_msg();
 
@@ -13,7 +14,6 @@ let u = editor::Environment::create();
 {
     let w = u->create_world;
     w->add_system(je::typeinfo::load("Graphic::DefaultGraphicPipelineSystem")->val);
-
     launch(func(){
         Begin("TEST");
         let clicked = Button("点这里，创建演示项目");
@@ -26,14 +26,8 @@ let u = editor::Environment::create();
         }            
         return FormAction::Nothing;
     }, ());
-
     u->wait();
 }
 
-let demo_proj = editor::Project::create("Demo", std::exepath());
-
-    let root_world = demo_proj.m_env->create_world;
-    root_world->add_system(demo_proj->get_config_graphic_pipeline);
-    root_world->add_system(demo_proj->get_config_editor_system);
-
-demo_proj->wait();
+// TODO: 开启选定的项目，然后拿去编辑
+editor::gui::edit_project(editor::Project::create("Demo", std::exepath()));

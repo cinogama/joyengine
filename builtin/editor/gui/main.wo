@@ -1,0 +1,47 @@
+// gui.main
+// 用于启动和维持项目的编辑器界面
+
+import builtin.editor.project.main;
+
+import builtin.editor.gui.main_menu;
+
+namespace editor::gui
+{
+    public using EditorContext = struct {
+        m_stopped: mut bool,
+        m_project: Project,
+    }
+    {
+        public func is_stopped(self: EditorContext)
+        {
+            return self.m_stopped;
+        }
+    }
+
+    public func edit_project(proj: Project)
+    {
+        // 这又是个傻逼函数，传入一个项目实例，为这个项目实例创建基本运行环境
+        // 然后启一堆编辑窗口，直到项目被关闭
+        
+        // TODO: 如果项目已有世界，则直接使用
+        let root_world = proj->creat_new_world;
+
+        // 为新建的世界加载图形管线系统和编辑系统
+        root_world->add_system(proj->get_config_graphic_pipeline);
+        root_world->add_system(proj->get_config_editor_system);
+
+        // TODO: 在此启动编辑器窗口
+        let context = EditorContext{
+            m_stopped = mut false,
+            m_project = proj,
+        };
+
+        context->show_main_menu;
+
+        // 等待，直到项目被关闭
+        proj->wait;
+
+        // 项目退出了，将编辑器上下文置为 stop, 用于指示窗口应当关闭
+        context.m_stopped = true;
+    }
+}

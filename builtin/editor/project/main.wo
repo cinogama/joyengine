@@ -143,5 +143,13 @@ namespace editor
                 ->  je::typeinfo::load
                 ->  val;
         }
+        public func get_env(self: Project)
+        {
+            return self.m_env;
+        }
+        public func creat_new_world(self: Project)
+        {
+            return self->get_env->create_world;
+        }
     }
 }

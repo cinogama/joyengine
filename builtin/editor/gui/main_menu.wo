@@ -1,0 +1,30 @@
+// gui.main_menu
+// 用于显示编辑器的主菜单栏
+
+import je.gui;
+
+import builtin.editor.gui.main;
+
+using je::gui;
+
+namespace editor::gui
+{
+	func _main_menu(context: EditorContext)
+	{
+		BeginMainMenuBar();
+		if (BeginMenu("JoyEngine"))
+		{
+		EndMenu();
+		}
+		EndMainMenuBar();
+
+		if (context->is_stopped)
+			return FormAction::Close;
+		return FormAction::Nothing;
+	}
+
+	public func show_main_menu(context: EditorContext)
+	{
+		launch(_main_menu, (context,));
+	}
+}
