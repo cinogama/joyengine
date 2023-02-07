@@ -1,4 +1,5 @@
 import woo.std;
+import woo.debug;
 import woo.thread;
 import je;
 import builtin.api.welcome.main;

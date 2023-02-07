@@ -4,6 +4,7 @@
 import builtin.editor.project.main;
 
 import builtin.editor.gui.main_menu;
+import builtin.editor.gui.edit_forms;
 
 namespace editor::gui
 {
@@ -12,9 +13,28 @@ namespace editor::gui
         m_project: Project,
     }
     {
-        public func is_stopped(self: EditorContext)
+        protected func is_stopped(self: EditorContext)
         {
             return self.m_stopped;
+        }
+        public func get_project(self: EditorContext)
+        {
+            return self.m_project;
+        }
+        public func launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
+            where f(args...) is anything;
+        {
+            je::gui::launch(func(){
+                let result = f(args...);
+
+                if (self->is_stopped)
+                    return je::gui::FormAction::Close;
+
+                if (result is je::gui::FormAction)
+                    return result;
+
+                return je::gui::FormAction::Nothing;
+            }, ());
         }
     }
 
@@ -22,21 +42,16 @@ namespace editor::gui
     {
         // 这又是个傻逼函数，传入一个项目实例，为这个项目实例创建基本运行环境
         // 然后启一堆编辑窗口，直到项目被关闭
-        
-        // TODO: 如果项目已有世界，则直接使用
-        let root_world = proj->creat_new_world;
 
-        // 为新建的世界加载图形管线系统和编辑系统
-        root_world->add_system(proj->get_config_graphic_pipeline);
-        root_world->add_system(proj->get_config_editor_system);
-
-        // TODO: 在此启动编辑器窗口
+        // 创建基础运行环境
         let context = EditorContext{
             m_stopped = mut false,
             m_project = proj,
         };
 
-        context->show_main_menu;
+        // 开启主菜单
+        show_main_menu(context);
+        show_edit_forms(context);
 
         // 等待，直到项目被关闭
         proj->wait;

@@ -4,69 +4,69 @@ import je;
 
 namespace shortcut
 {
-	private using ShortcutKeyStateAndAction = struct
-	{
-		keys : array<je::keycode>,
-		mut state : bool,
-		action : ()=>void,
-	};
+    private using ShortcutKeyStateAndAction = struct
+    {
+        keys : array<je::keycode>,
+        mut state : bool,
+        action : ()=>void,
+    };
 
-	private let registered_keys = []mut: vec<ShortcutKeyStateAndAction>;
+    private let registered_keys = []mut: vec<ShortcutKeyStateAndAction>;
 
-	public func register(hotkeys : array<je::keycode>, action: ()=>void)
-	{
-		let hotkey = ShortcutKeyStateAndAction { 
-			keys = hotkeys, 
-			state = mut false,
-			action = action,
-		};
-		registered_keys->add(hotkey);
-		return hotkey;
-	}
+    public func register(hotkeys : array<je::keycode>, action: ()=>void)
+    {
+        let hotkey = ShortcutKeyStateAndAction { 
+            keys = hotkeys, 
+            state = mut false,
+            action = action,
+        };
+        registered_keys->add(hotkey);
+        return hotkey;
+    }
 
-	public func active(hotkeys : array<je::keycode>)
-	{
-		func operator == (a: array<je::keycode>, b: array<je::keycode>)
-		{
-			if (a->len() != b->len())
-				return false;
-			for (let index, code : a)
-				if (b[index] != code)
-					return false;
-			return true;
-		}
+    public func active(hotkeys : array<je::keycode>)
+    {
+        func operator == (a: array<je::keycode>, b: array<je::keycode>)
+        {
+            if (a->len() != b->len())
+                return false;
+            for (let index, code : a)
+                if (b[index] != code)
+                    return false;
+            return true;
+        }
 
-		for (let _, hotkey : registered_keys)
-		{
-			if (hotkey.keys == hotkeys)
-				hotkey.state = true;
-		}
-	}
+        for (let _, hotkey : registered_keys)
+        {
+            if (hotkey.keys == hotkeys)
+                hotkey.state = true;
+        }
+    }
 
-	public func update()
-	{
-		using je;
-		using je::input;
+    public func update()
+    {
+        using je;
+        using je::input;
 
-		// 每一帧检查一次，看看有没有对应的热键处于按下状态
+        // 每一帧检查一次，看看有没有对应的热键处于按下状态
 
-		// 遍历热键注册表
-		for (let _, hotkey : registered_keys)
-		{
-			let mut state = true;
-			for (let _, key : hotkey.keys)
-				if (!keydown(key))
-				{
-					state = false;
-					break;
-				}
+        // 遍历热键注册表
+        for (let _, hotkey : registered_keys)
+        {
+            let mut state = true;
+            for (let _, key : hotkey.keys)
+                if (!keydown(key))
+                {
+                    state = false;
+                    break;
+                }
 
-			if (!state && hotkey.state)
-				// 上一帧热键按下，这一帧烂掉，激活action
-				hotkey.action();
+            if (!state && hotkey.state)
+                // 上一帧热键按下，这一帧烂掉，激活action
+                hotkey.action();
 
-			hotkey.state = state;
-		}
-		
-	}
+            hotkey.state = state;
+        }
+        
+    }
 }

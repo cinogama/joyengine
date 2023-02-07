@@ -9,22 +9,19 @@ using je::gui;
 
 namespace editor::gui
 {
-	func _main_menu(context: EditorContext)
-	{
-		BeginMainMenuBar();
-		if (BeginMenu("JoyEngine"))
-		{
-		EndMenu();
-		}
-		EndMainMenuBar();
+    public func show_main_menu(context: EditorContext)
+    {
+        context->launch_editor_form(func(){
+            BeginMainMenuBar();
+            if (BeginMenu("JoyEngine"))
+            {
+                if (MenuItem("退出编辑器"))
+                    // 关闭环境正在编辑的项目，退出
+                    context->get_project->close();
 
-		if (context->is_stopped)
-			return FormAction::Close;
-		return FormAction::Nothing;
-	}
-
-	public func show_main_menu(context: EditorContext)
-	{
-		launch(_main_menu, (context,));
-	}
+                EndMenu();
+            }
+            EndMainMenuBar();
+        }, ());
+    }
 }

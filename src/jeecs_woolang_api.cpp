@@ -226,6 +226,12 @@ WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args, size_t argc)
     });
 }
 
+WO_API wo_api wojeapi_get_universe_from_world(wo_vm vm, wo_value args, size_t argc)
+{
+    void* universe = je_ecs_world_in_universe(wo_pointer(args + 0));
+    return wo_ret_pointer(vm, universe);
+}
+
 WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_universe(wo_pointer(args + 0)).stop();
@@ -1770,6 +1776,9 @@ R"(
     
         namespace editor
         {
+            extern("libjoyecs", "wojeapi_get_universe_from_world")
+            public func located_universe(self: world)=> universe;
+
             extern("libjoyecs", "wojeapi_get_system_from_world")
             public func get_system(self: world, systype: typeinfo)=> option<handle>;
 
