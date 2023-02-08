@@ -146,7 +146,7 @@ namespace editor
         func _get_project_world(self: Project, world: je::world)
         {
             return self.m_worlds
-                -> forall(\pw = std::equalbyte(pw.m_world_instance, world);)
+                -> forall(\pw = pw.m_world_instance == world;)
                 -> get(0);
         }
 
@@ -206,16 +206,29 @@ namespace editor
 
         public func create_new_world(self: Project, new_world_file_path: string)
         {
-            // 有新建世界进来，关掉默认世界（如果有的话）
-            self.m_default_worlds->>\w = w->close;;
-            self.m_default_worlds = option::none;
-
             let world = ProjectWorld {
                 m_world_instance = self.m_env->create_world,
                 m_world_path = new_world_file_path,
             };
-
+            
             self.m_worlds->add(world);
+
+            // 有新建世界进来，关掉默认世界（如果有的话）
+            match (self.m_default_worlds)
+            {
+            value(default_world)?
+            {
+                default_world->close;
+                self.m_default_worlds = option::none;
+
+                // 在此处重置编辑中世界，因为之前在渲染默认时间，
+                // 移除默认世界之后，如果没有设置渲染世界，就寄了
+                // 必须成功!
+                self->reset_editing_world(world.m_world_instance)->unwarp;
+            }
+            none?
+                ;
+            }
             return world.m_world_instance;
         }
         public func destroy_world(self: Project, world: je::world)=> result<anything, string>

@@ -18,7 +18,7 @@ namespace editor::Project
             tostring: (T)=>string,
             parse: (string)=>option<T>)
         {
-            return Config:<T>{
+            return Config{
                 m_value = mut val,
                 m_widget = widget,
                 m_update_callback = callback,

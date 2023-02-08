@@ -13,14 +13,20 @@ namespace editor::gui::edit_forms
         {
             show->set(BeginOpen("世界列表##jeeditor"));
 
+            if (Button("Fuck!"))
+            {
+                context->get_project->create_new_world("");
+            }
+
             let (avail_width, avail_height) = GetContentRegionAvail();
             if (BeginListBox("##", avail_width, avail_height))
             {
-                // TODO:
-                
+                context->get_project->get_all_worlds
+                    ->> \w = SelectableSelected(F"{w->editor::name}##{w as je::world: handle}", false);
+                    ;
+
                 EndListBox();
             }
-
             End();
         }
     }
