@@ -712,7 +712,7 @@ WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t ar
     {
         auto* val = new jegl_shader_value(values->out_values[i]->get_type());
         val->m_shader_in_index = i;
-        wo_set_gchandle(wo_struct_get(out_struct, i), val, nullptr, _free_shader_value);
+        wo_set_gchandle(wo_struct_get(out_struct, i), vm, val, nullptr, _free_shader_value);
     }
 
     return wo_ret_val(vm, out_struct);

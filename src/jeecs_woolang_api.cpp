@@ -356,7 +356,7 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
     auto entity_iter = entities;
     while (*entity_iter)
     {
-        wo_set_gchandle(wo_arr_add(out_arr, nullptr), *(entity_iter++), nullptr,
+        wo_set_gchandle(wo_arr_add(out_arr, nullptr), vm, *(entity_iter++), nullptr,
             [](void* entity_ptr) {
                 jedbg_free_entity((jeecs::game_entity*)entity_ptr);
             });
@@ -1133,7 +1133,7 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
             if (!texture.m_texture)
                 return wo_ret_panic(vm, "Texture cannot be nullptr.");
             wo_set_int(key, (wo_integer_t)texture.m_pass_id);
-            wo_set_gchandle(wo_map_set(out_map, key, nullptr),
+            wo_set_gchandle(wo_map_set(out_map, key, nullptr), vm,
                 new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
                 [](void* ptr) {
                     delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
@@ -1168,7 +1168,7 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
         {
             if (!shader)
                 return wo_ret_halt(vm, "Shader cannot be nullptr.");
-            wo_set_gchandle(wo_arr_add(out_array, nullptr),
+            wo_set_gchandle(wo_arr_add(out_array, nullptr), vm,
                 new jeecs::basic::resource<jeecs::graphic::shader>(shader), nullptr,
                 [](void* ptr) {
                     delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
