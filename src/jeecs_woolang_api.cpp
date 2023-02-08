@@ -88,16 +88,13 @@ WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_restart_graphic_interface(wo_vm vm, wo_value args, size_t argc)
 {
-    void* cur_universe = jedbg_get_editor_universe();
-    if (!cur_universe)
-        return wo_ret_panic(vm, "No current universe found.");
-
+    void* cur_universe = wo_pointer(args + 0);
     jegl_interface_config config;
-    config.m_title = wo_string(args + 0);
-    config.m_resolution_x = config.m_windows_width = wo_int(args + 1);
-    config.m_resolution_y = config.m_windows_height = wo_int(args + 2);
-    config.m_fps = wo_int(args + 3);
-    config.m_fullscreen = wo_bool(args + 4);
+    config.m_title = wo_string(args + 1);
+    config.m_resolution_x = config.m_windows_width = wo_int(args + 2);
+    config.m_resolution_y = config.m_windows_height = wo_int(args + 3);
+    config.m_fps = wo_int(args + 4);
+    config.m_fullscreen = wo_bool(args + 5);
     jegl_reboot_graphic_thread(jedbg_get_editing_graphic_thread(cur_universe), config);
 
     return wo_ret_void(vm);
@@ -221,27 +218,18 @@ WO_API wo_api wojeapi_update_texture_sampling_method_by_path(wo_vm vm, wo_value 
 
 
 // ECS UNIVERSE
-WO_API wo_api wojeapi_get_edit_universe(wo_vm vm, wo_value args, size_t argc)
-{
-    void* universe = jedbg_get_editor_universe();
-    if (!universe)
-        return wo_ret_halt(vm, "failed to get editor universe.");
-    return wo_ret_pointer(vm, universe);
-}
-
 WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args, size_t argc)
 {
     void* universe = je_ecs_universe_create();
-    return wo_ret_pointer(vm, universe);
+    return wo_ret_gchandle(vm, universe, nullptr, [](void* universe) {
+        jeecs::game_universe::destroy_universe(jeecs::game_universe(universe));
+    });
 }
 
-WO_API wo_api wojeapi_set_current_universe(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_get_universe_from_world(wo_vm vm, wo_value args, size_t argc)
 {
-    void* universe = wo_pointer(args + 0);
-
-    jedbg_set_editor_universe(universe);
-
-    return wo_ret_void(vm);
+    void* universe = je_ecs_world_in_universe(wo_pointer(args + 0));
+    return wo_ret_pointer(vm, universe);
 }
 
 WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args, size_t argc)
@@ -253,12 +241,6 @@ WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_wait_universe(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_universe(wo_pointer(args + 0)).wait();
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api wojeapi_close_universe(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_universe::destroy_universe(jeecs::game_universe(wo_pointer(args + 0)));
     return wo_ret_void(vm);
 }
 
@@ -374,7 +356,7 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
     auto entity_iter = entities;
     while (*entity_iter)
     {
-        wo_set_gchandle(wo_arr_add(out_arr, nullptr), *(entity_iter++), nullptr,
+        wo_set_gchandle(wo_arr_add(out_arr, nullptr), vm, *(entity_iter++), nullptr,
             [](void* entity_ptr) {
                 jedbg_free_entity((jeecs::game_entity*)entity_ptr);
             });
@@ -510,17 +492,8 @@ WO_API wo_api wojeapi_find_entity_with_chunk_info(wo_vm vm, wo_value args, size_
     jeecs::game_entity* entity = new jeecs::game_entity();
     sscanf(wo_string(args + 0), "[%p:%zuv%zu]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version);
 
-    if (entity->valid())
-        return wo_ret_option_gchandle(vm, entity,
-            nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
-    delete entity;
-    return wo_ret_option_none(vm);
-}
-
-WO_API wo_api wojeapi_is_entity_valid(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, entity->valid());
+    return wo_ret_gchandle(vm, entity,
+        nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
 }
 
 WO_API wo_api wojeapi_get_all_components_types_from_entity(wo_vm vm, wo_value args, size_t argc)
@@ -653,12 +626,6 @@ WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t a
 }
 
 // ECS OTHER
-WO_API wo_api wojeapi_exit(wo_vm vm, wo_value args, size_t argc)
-{
-    jeecs::game_universe(jedbg_get_editor_universe()).stop();
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api wojeapi_log(wo_vm vm, wo_value args, size_t argc)
 {
     std::string disp;
@@ -1124,12 +1091,17 @@ WO_API wo_api wojeapi_character_get_texture(wo_vm vm, wo_value args, size_t argc
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_shader = new jeecs::graphic::shader(wo_string(args + 0));
-    return wo_ret_gchandle(vm,
-        new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
-        [](void* ptr) {
-            delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
-        });
 
+    if (loaded_shader->enabled())
+    {
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
+            [](void* ptr) {
+                delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+            });
+    }
+    delete loaded_shader;
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
@@ -1152,26 +1124,24 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     wo_value out_map = wo_push_map(vm);
 
-    if (entity->valid())
+    if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
     {
-        if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
-        {
-            wo_value key = wo_push_empty(vm);
+        wo_value key = wo_push_empty(vm);
 
-            for (auto& texture : textures->textures)
-            {
-                if (!texture.m_texture)
-                    return wo_ret_halt(vm, "Texture cannot be nullptr.");
-                wo_set_int(key, (wo_integer_t)texture.m_pass_id);
-                wo_set_gchandle(wo_map_set(out_map, key, nullptr),
-                    new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
-                    [](void* ptr) {
-                        delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
-                    });
-            }
-            wo_pop_stack(vm);
+        for (auto& texture : textures->textures)
+        {
+            if (!texture.m_texture)
+                return wo_ret_panic(vm, "Texture cannot be nullptr.");
+            wo_set_int(key, (wo_integer_t)texture.m_pass_id);
+            wo_set_gchandle(wo_map_set(out_map, key, nullptr), vm,
+                new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
+                [](void* ptr) {
+                    delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+                });
         }
+        wo_pop_stack(vm);
     }
+
     return wo_ret_val(vm, out_map);
 }
 
@@ -1179,9 +1149,10 @@ WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args, size_t ar
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
-    if (entity->valid())
-        if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
-            textures->bind_texture(wo_int(args + 1), *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2));
+    if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
+        textures->bind_texture(wo_int(args + 1), *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2));
+
+    // TODO: 如果当前实体不包含jeecs::Renderer::Textures组件，在此panic?
 
     return wo_ret_void(vm);
 }
@@ -1191,22 +1162,21 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     wo_value out_array = wo_push_arr(vm, 0);
 
-    if (entity->valid())
+    if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
     {
-        if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+        for (auto& shader : shaders->shaders)
         {
-            for (auto& shader : shaders->shaders)
-            {
-                if (!shader)
-                    return wo_ret_halt(vm, "Shader cannot be nullptr.");
-                wo_set_gchandle(wo_arr_add(out_array, nullptr),
-                    new jeecs::basic::resource<jeecs::graphic::shader>(shader), nullptr,
-                    [](void* ptr) {
-                        delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
-                    });
-            }
+            if (!shader)
+                return wo_ret_halt(vm, "Shader cannot be nullptr.");
+            wo_set_gchandle(wo_arr_add(out_array, nullptr), vm,
+                new jeecs::basic::resource<jeecs::graphic::shader>(shader), nullptr,
+                [](void* ptr) {
+                    delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
+                });
         }
     }
+
+    // TODO: 如果当前实体不包含jeecs::Renderer::Shaders组件，在此panic?
     return wo_ret_val(vm, out_array);
 }
 
@@ -1217,29 +1187,21 @@ WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     wo_value shader_array = args + 1;
 
-    if (entity->valid())
+    if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
     {
-        if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+        shaders->shaders.clear();
+        size_t arrsize = wo_lengthof(shader_array);
+        for (size_t i = 0; i < arrsize; ++i)
         {
-            shaders->shaders.clear();
-            size_t arrsize = wo_lengthof(shader_array);
-            for (size_t i = 0; i < arrsize; ++i)
-            {
-                jeecs::basic::resource<jeecs::graphic::shader>* shader =
-                    (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(wo_arr_get(shader_array, i));
-                shaders->shaders.push_back(*shader);
-            }
+            jeecs::basic::resource<jeecs::graphic::shader>* shader =
+                (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(wo_arr_get(shader_array, i));
+            shaders->shaders.push_back(*shader);
         }
     }
+
+    // TODO: 如果当前实体不包含jeecs::Renderer::Shaders组件，在此panic?
+
     return wo_ret_void(vm);
-}
-
-
-
-WO_API wo_api wojeapi_shader_is_valid(wo_vm vm, wo_value args, size_t argc)
-{
-    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, (*shader)->enabled());
 }
 
 WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t argc)
@@ -1361,12 +1323,6 @@ WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, "< Built-in shader >");
 }
 
-WO_API wo_api wojeapi_texture_is_valid(wo_vm vm, wo_value args, size_t argc)
-{
-    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, (*texture)->enabled());
-}
-
 WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args, size_t argc)
 {
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
@@ -1430,6 +1386,7 @@ namespace je
 
         extern("libjoyecs", "wojeapi_restart_graphic_interface")
         public func restart_graphic_interface(
+            u: universe,
             title: string, 
             reso_x: int, 
             reso_y: int,
@@ -1547,9 +1504,6 @@ namespace je
         public func window_size()=> (int, int);
     }
 
-    extern("libjoyecs", "wojeapi_exit")
-    public func exit()=> void;
-
     public using typeinfo = handle;
     namespace typeinfo
     {
@@ -1582,10 +1536,10 @@ namespace je
             }
         }
         extern("libjoyecs", "wojeapi_type_of")
-        public func load_from_name(name: string)=> option<typeinfo>;
+        public func load(name: string)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_of")
-        public func load_from_id(id: int)=> option<typeinfo>;
+        public func loadid(id: int)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_id")
         public func id(self: typeinfo)=> int;
@@ -1624,9 +1578,6 @@ namespace je
 
             extern("libjoyecs", "wojeapi_texture_path")
             public func path(self: texture)=> option<string>;
-
-            extern("libjoyecs", "wojeapi_texture_is_valid")
-            public func isvalid(self: texture)=> bool;
 
             extern("libjoyecs", "wojeapi_texture_get_size")
             public func size(self: texture)=> (int, int);
@@ -1677,13 +1628,10 @@ namespace je
         public using shader = gchandle
         {
             extern("libjoyecs", "wojeapi_shader_open")
-            public func load(path: string)=> shader;
+            public func load(path: string)=> option<shader>;
             
             extern("libjoyecs", "wojeapi_shader_create")
             public func create(vpath: string, src: string)=> option<shader>;
-
-            extern("libjoyecs", "wojeapi_shader_is_valid")
-            public func isvalid(self: shader)=> bool;
 
             extern("libjoyecs", "wojeapi_shader_path")
             public func path(self: shader)=> string;
@@ -1780,45 +1728,36 @@ namespace je
         }
     }
 
-    public using universe = handle;
+    public using universe = gchandle;
     namespace universe
     {
-        extern("libjoyecs", "wojeapi_get_edit_universe")
-        public func current()=> universe;
+        extern("libjoyecs", "wojeapi_create_universe")
+        public func create()=> universe;
 
-        extern("libjoyecs", "wojeapi_create_world_in_universe")
-        public func create_world(self: universe)=> world;
+        public func close(self: universe)
+        {
+            self: gchandle->close();
+        }
+
+        extern("libjoyecs", "wojeapi_stop_universe")
+        public func stop(self: universe)=> void;
+
+        extern("libjoyecs", "wojeapi_wait_universe")
+        public func wait(self: universe)=> void;
 
         namespace editor
         {
-            extern("libjoyecs", "wojeapi_create_universe")
-            public func create()=> universe;
-
-            extern("libjoyecs", "wojeapi_set_current_universe")
-            public func set_current_universe(self: universe)=> void;
-
-            extern("libjoyecs", "wojeapi_stop_universe")
-            public func stop(self: universe)=> void;
-
-            extern("libjoyecs", "wojeapi_wait_universe")
-            public func wait(self: universe)=> void;
-
-            extern("libjoyecs", "wojeapi_close_universe")
-            public func close(self: universe)=> void;
-        
-            public func worlds_list(self: universe)
-            {
-                extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
-                public func _get_all_worlds(universe:universe) => array<world>;
-
-                return _get_all_worlds(self);
-            }
+            extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
+            public func worlds_list(self: universe)=> array<world>;
         }
     }
 
     public using world = handle;
     namespace world
     {
+        extern("libjoyecs", "wojeapi_create_world_in_universe")
+        public func create(self: universe)=> world;
+
         extern("libjoyecs", "wojeapi_close_world")
         public func close(self: world) => void;
 
@@ -1826,24 +1765,22 @@ namespace je
         public func add_system(self: world, systype: typeinfo)=> bool;
 )"
 R"(
-        public func rend()=> option<world>
-        {
-            extern("libjoyecs", "wojeapi_get_rendering_world")
-            func _get_rendering_world(u: universe)=> option<world>;
-
-            return _get_rendering_world(universe::current());
-        }
+        extern("libjoyecs", "wojeapi_get_rendering_world")
+        public func rend(u: universe)=> option<world>;
 
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
         public func add_entity(self: world, components: array<typeinfo>)=> entity;
 
+        extern("libjoyecs", "wojeapi_remove_system_from_world")
+        public func remove_system(self: world, sysinfo: typeinfo)=> void;
+    
         namespace editor
         {
+            extern("libjoyecs", "wojeapi_get_universe_from_world")
+            public func located_universe(self: world)=> universe;
+
             extern("libjoyecs", "wojeapi_get_system_from_world")
             public func get_system(self: world, systype: typeinfo)=> option<handle>;
-
-            extern("libjoyecs", "wojeapi_remove_system_from_world")
-            public func remove_system(self: world, sysinfo: typeinfo)=> void;
 
             extern("libjoyecs", "wojeapi_get_world_name")
             public func name(self: world)=> string;
@@ -1894,7 +1831,7 @@ R"(
 
         namespace editor
         {
-            public func store_uniform_dat_for_bad_shader_update<T>(self: entity, shad: graphic::shader, name: string, val: T)
+            public func store_uniform_dat_for_bad_shader_update<T>(self: entity, shad_path: string, name: string, val: T)
                 where std::declval:<T>() is int
                        || std::declval:<T>() is real
                        || std::declval:<T>() is (real, real)
@@ -1904,37 +1841,37 @@ R"(
                 if (std::declval:<T>() is int)
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
-                    func _set_uniform_int(e: entity, shad: graphic::shader, name: string, val: int)=> void;
+                    func _set_uniform_int(e: entity, shad_path: string, name: string, val: int)=> void;
 
-                    _set_uniform_int(self, shad, name, val);
+                    _set_uniform_int(self, shad_path, name, val);
                 }
                 else if (std::declval:<T>() is real)
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
-                    func _set_uniform_float(e: entity, shad: graphic::shader, name: string, val: real)=> void;
+                    func _set_uniform_float(e: entity, shad_path: string, name: string, val: real)=> void;
 
-                    _set_uniform_float(self, shad, name, val);
+                    _set_uniform_float(self, shad_path, name, val);
                 }
                 else if (std::declval:<T>() is (real, real))
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
-                    func _set_uniform_float2(e: entity, shad: graphic::shader, name: string, x: real, y: real)=> void;
+                    func _set_uniform_float2(e: entity, shad_path: string, name: string, x: real, y: real)=> void;
                     let (x, y) = val;
-                    _set_uniform_float2(self, shad, name, x, y);
+                    _set_uniform_float2(self, shad_path, name, x, y);
                 }
                 else if (std::declval:<T>() is (real, real, real))
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
-                    func _set_uniform_float3(e: entity, shad: graphic::shader, name: string, x: real, y: real, z: real)=> void;
+                    func _set_uniform_float3(e: entity, shad_path: string, name: string, x: real, y: real, z: real)=> void;
                     let (x, y, z) = val;
-                    _set_uniform_float3(self, shad, name, x, y, z);
+                    _set_uniform_float3(self, shad_path, name, x, y, z);
                 }
                 else if (std::declval:<T>() is (real, real, real, real))
                 {
                     extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
-                    func _set_uniform_float4(e: entity, shad: graphic::shader, name: string, x: real, y: real, z: real, w: real)=> void;
+                    func _set_uniform_float4(e: entity, shad_path: string, name: string, x: real, y: real, z: real, w: real)=> void;
                     let (x, y, z, w) = val;
-                    _set_uniform_float4(self, shad, name, x, y, z, w);
+                    _set_uniform_float4(self, shad_path, name, x, y, z, w);
                 }
                 else
                     std::panic("Here should not been exec.");
@@ -1979,10 +1916,7 @@ R"(
             public func chunkinfo(self: entity)=> string;
 
             extern("libjoyecs", "wojeapi_find_entity_with_chunk_info")
-            public func find_entity_by_chunkinfo(chunkinfo: string)=> option<entity>;
-
-            extern("libjoyecs", "wojeapi_is_entity_valid")
-            public func valid(self: entity)=> bool;
+            public func find_entity_by_chunkinfo(chunkinfo: string)=> entity;
 
             public func get_components_types(self: entity)=> array<typeinfo>
             {

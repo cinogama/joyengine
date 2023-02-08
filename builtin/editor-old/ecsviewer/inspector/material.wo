@@ -55,7 +55,13 @@ namespace editor::Inspector::Material
         {
             Drag(shader_path)?
             {
-                shader_operation = shader_option::AddShader(je::graphic::shader::load(shader_path));
+                match (je::graphic::shader::load(shader_path))
+                {
+                value(shader)?
+                    shader_operation = shader_option::AddShader(shader);
+                none?
+                    generic::msgbox("加载着色器失败", F"无法加载文件{shader_path}作为着色器");
+                }
             }
             None? /* 没有文件拖入，不干任何事情 */;
         }
@@ -163,8 +169,19 @@ namespace editor::Inspector::Material
                             {
                                 Drag(shader_path)?
                                 {
-                                    shaders = shaders->append(je::graphic::shader::load(shader_path));
-                                    shaders_has_updated = true;
+                                    // TODO: 为啥会有两个地方加载shader，这个地方的代码写得跟鬼一样
+                                    //      检查代码实现，上面也有一个加载shader，两边代码一模一样，
+                                    //      搞什么鬼
+                                    match (je::graphic::shader::load(shader_path))
+                                    {
+                                    value(shader)?
+                                    {
+                                        shaders = shaders->append(shader);
+                                        shaders_has_updated = true;
+                                    }
+                                    none?
+                                        generic::msgbox("加载着色器失败", F"无法加载文件{shader_path}作为着色器");
+                                    }
                                 }
                                 None? /* 没有文件拖入，不干任何事情 */;
                             }

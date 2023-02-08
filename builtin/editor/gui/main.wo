@@ -1,0 +1,62 @@
+// gui.main
+// 用于启动和维持项目的编辑器界面
+
+import builtin.editor.project.main;
+
+import builtin.editor.gui.main_menu;
+import builtin.editor.gui.edit_forms;
+
+namespace editor::gui
+{
+    public using EditorContext = struct {
+        m_stopped: mut bool,
+        m_project: Project,
+    }
+    {
+        protected func is_stopped(self: EditorContext)
+        {
+            return self.m_stopped;
+        }
+        public func get_project(self: EditorContext)
+        {
+            return self.m_project;
+        }
+        public func launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
+            where f(args...) is anything;
+        {
+            je::gui::launch(func(){
+                let result = f(args...);
+
+                if (self->is_stopped)
+                    return je::gui::FormAction::Close;
+
+                if (result is je::gui::FormAction)
+                    return result;
+
+                return je::gui::FormAction::Nothing;
+            }, ());
+        }
+    }
+
+    public func edit_project(proj: Project)
+    {
+        // 这又是个傻逼函数，传入一个项目实例，为这个项目实例创建基本运行环境
+        // 然后启一堆编辑窗口，直到项目被关闭
+
+        // 创建基础运行环境
+        let context = EditorContext{
+            m_stopped = mut false,
+            m_project = proj,
+        };
+
+        // 开启主菜单
+        show_main_menu(context);
+        show_edit_forms(context);
+
+        // 等待，直到项目被关闭
+        proj->wait;
+
+        // 项目退出了，将编辑器上下文置为 stop, 用于指示窗口应当关闭
+        context.m_stopped = true;
+    }
+}

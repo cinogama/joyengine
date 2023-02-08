@@ -1,0 +1,7 @@
+// builtin.api.universe.main
+// 用于简单管理引擎上下文的简单工具
+
+namespace jeapi::universe
+{
+    
+}

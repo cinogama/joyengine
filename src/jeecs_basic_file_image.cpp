@@ -18,7 +18,7 @@ jeecs_file* jeecs_file_open(const char* path)
         jefhandle->m_native_file_handle = fhandle;
 
         struct stat cfstat;
-        stat(path, &cfstat);
+        stat(path_str.c_str(), &cfstat);
         jefhandle->m_file_length = cfstat.st_size;
 
         return jefhandle;

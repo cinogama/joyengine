@@ -1,0 +1,18 @@
+// gui.edit_forms
+// 用于显示和编辑的窗口们
+
+import builtin.editor.gui.main;
+import builtin.editor.gui.edit_forms.worlds_list;
+
+namespace editor::gui
+{
+    public func show_edit_forms(context: EditorContext)
+    {
+        let open_worlds_list = mutable::create(true);
+        let open_entities_list = mutable::create(true);
+
+        context->launch_editor_form(func(){
+            edit_forms::show_world_lists(context, open_worlds_list);
+        }, ());
+    }
+}

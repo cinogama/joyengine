@@ -1,0 +1,34 @@
+import woo.std;
+import woo.debug;
+
+import je;
+import builtin.api.welcome.main;
+import builtin.editor.environment.main;
+import builtin.editor.project.main;
+import builtin.editor.gui.main;
+
+jeapi::welcome::display_copyright_msg();
+
+using je::gui;
+
+let u = editor::Environment::create();
+{
+    let w = u->create_world;
+    w->add_system(je::typeinfo::load("Graphic::DefaultGraphicPipelineSystem")->val);
+    launch(func(){
+        Begin("TEST");
+        let clicked = Button("点这里，创建演示项目");
+        End();
+
+        if (clicked)
+        {
+            u->close();
+            return FormAction::Close;
+        }            
+        return FormAction::Nothing;
+    }, ());
+    u->wait();
+}
+
+// TODO: 开启选定的项目，然后拿去编辑
+editor::gui::edit_project(editor::Project::create("Demo", std::exepath()));

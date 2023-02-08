@@ -1,0 +1,256 @@
+// project.main
+// 用于储存编辑中的项目信息
+
+import je;
+import je.gui;
+
+import config;
+
+import builtin.editor.environment.main;
+import builtin.api.rend.main;
+
+namespace editor
+{
+    let  
+        DEFAULT_GRAPHIC_SYSTEM_NAME = "Graphic::DefaultGraphicPipelineSystem",
+        DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
+
+    public using ProjectWorld = struct{
+        m_world_instance: je::world,
+        m_world_path: string,
+    };
+
+    public using Project = struct{
+        m_name: string,    // 项目的名称，不能更改
+        m_path: string,    // 项目所在的目录
+        m_env: Environment, // 项目环境
+        m_configs: map<string, Project::IConfig>, // 配置信息，是的，这是个map，意味着开发者可以自己加点配置项目
+        m_worlds: vec<ProjectWorld>,
+        m_default_worlds: mut option<je::world>, // 如果项目没有世界，那么创建一个默认的临时世界挂在这里，保证gui能跑
+    }
+    {
+        func _create_default_configs(env: Environment)
+        {
+            using je;
+            using je::gui;
+
+            return {
+                /* 引擎的默认图形管线 */
+                ["JE_PROJECT_GRAPHIC_PIPELINE"] = IConfig::create(Config::create(
+                    typeinfo::load(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
+                    func(origin_graphic_pipeline)
+                    {
+                        let USABLE_GRAPHIC_SYSTEMS = typeinfo::editor::get_all_systems_types()
+                                ->  forall(\t = t->name->beginwith("Graphic::"););
+                        let USABLE_GRAPHIC_SYSTEM_NAMES =  USABLE_GRAPHIC_SYSTEMS
+                                ->> \t = t->name;;
+
+                        return Combo("图形管线", 
+                            USABLE_GRAPHIC_SYSTEM_NAMES, 
+                            USABLE_GRAPHIC_SYSTEM_NAMES->find(origin_graphic_pipeline->name))
+                            =>> \index = USABLE_GRAPHIC_SYSTEMS->get(index);;
+                    },
+                    func(oldval, newval)
+                    {
+                        // 移除当前世界中的老渲染管线，换个新的
+                        match (world::rend(env->get_universe))
+                        {
+                        value(current_rend_world)?
+                        {
+                            current_rend_world->remove_system(oldval);
+                            current_rend_world->add_system(newval);
+                        }
+                        none?
+                            je::logwarn("设置管线时未发现渲染中的世界，跳过更新世界");
+                        }
+                        
+                        return true;
+                    },
+                    \val = val->name;,
+                    \str = typeinfo::load(str);,
+                )),
+                /* 引擎的默认编辑器系统 */
+                ["JE_PROJECT_EDITOR_SYSTEM"] = IConfig::create(Config::create(
+                    typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->val,
+                    func(origin_editor_system)
+                    {
+                        let USABLE_EDITOR_SYSTEMS = typeinfo::editor::get_all_systems_types()
+                                ->  forall(\t = t->name->beginwith("Editor::"););
+                        let USABLE_EDITOR_SYSTEM_NAMES =  USABLE_EDITOR_SYSTEMS
+                                ->> \t = t->name;;
+
+                        return Combo("编辑系统", 
+                            USABLE_EDITOR_SYSTEM_NAMES, 
+                            USABLE_EDITOR_SYSTEM_NAMES->find(origin_editor_system->name))
+                            =>> \index = USABLE_EDITOR_SYSTEMS->get(index);;
+                    },
+                    func(oldval, newval)
+                    {
+                        // 移除当前世界中的老编辑系统，换个新的
+                        match (world::rend(env->get_universe))
+                        {
+                        value(current_rend_world)?
+                        {
+                            current_rend_world->remove_system(oldval);
+                            current_rend_world->add_system(newval);
+                        }
+                        none?
+                            je::logwarn("设置编辑系统时未发现渲染中的世界，跳过更新世界");
+                        }
+                        
+                        return true;
+                    },
+                    \val = val->name;,
+                    \str = typeinfo::load(str);,
+                )),
+                /* 项目的描述信息 */
+                ["JE_PROJECT_DESCRIBE"] = IConfig::create(Config::create(
+                    "新项目，你可以在这里编辑项目的描述文本",
+                    func(origin_text)
+                    {
+                        Text("项目描述");
+                        return InputTextMultilineSize("##", origin_text, 400., 200.);
+                    },
+                    \o,n = true;,
+                    \val = val;,
+                    \str = option::value(str);,
+                )),
+            }mut;
+        }
+        public func create(name: string, path: string)
+        {
+            let env = Environment::create();
+
+            let proj = Project{
+                m_name = name,
+                m_path = path,
+                m_env = env,
+                m_configs = _create_default_configs(env),
+                m_worlds = []mut,
+                m_default_worlds = mut option::none,
+            };
+
+            // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了
+            proj->_run_default_world;
+            return proj;
+        }
+        public func close(self: Project)
+        {
+            self.m_env->close;
+        }
+        public func wait(self: Project)
+        {
+            self.m_env->wait;
+        }
+
+        func _get_project_world(self: Project, world: je::world)
+        {
+            return self.m_worlds
+                -> forall(\pw = pw.m_world_instance == world;)
+                -> get(0);
+        }
+
+        public func reset_editing_world(self: Project, world: je::world)=> result<anything, string>
+        {
+            if (self->_get_project_world(world)->has)
+            {
+                // 将编辑器系统从旧编辑世界中移除，这里要求新编辑世界必须属于项目
+                // 但不要求旧编辑世界，因为旧编辑世界可能是默认世界
+
+                je::world::rend(self.m_env->get_universe)
+                    ->> \rw = rw->remove_system(self->get_config_editor_system);;
+                jeapi::rend::reset_rend_world(world, self->get_config_graphic_pipeline);
+                world->add_system(self->get_config_editor_system);
+
+                return result::ok(nil);
+            }
+            return result::err("给定的世界不属于当前项目");
+        }
+
+        func _run_default_world(self: Project)
+        {
+            assert(self.m_worlds->empty);
+            assert(self.m_default_worlds->has == false);
+
+            let default_world = self.m_env->create_world;
+            jeapi::rend::reset_rend_world(default_world, self->get_config_graphic_pipeline);
+            self.m_default_worlds = option::value(default_world);
+        }
+
+        public func get_config(self: Project, config_name: string)
+        {
+            return self.m_configs->get(config_name);
+        }
+
+        public func get_config_graphic_pipeline(self: Project)
+        {
+            return self->get_config("JE_PROJECT_GRAPHIC_PIPELINE")
+                ->> \config = config->tostring;
+                ->  valor(DEFAULT_GRAPHIC_SYSTEM_NAME)
+                ->  je::typeinfo::load
+                ->  val;
+        }
+        public func get_config_editor_system(self: Project)
+        {
+            return self->get_config("JE_PROJECT_EDITOR_SYSTEM")
+                ->> \config = config->tostring;
+                ->  valor(DEFAULT_EDITOR_SYSTEM_NAME)
+                ->  je::typeinfo::load
+                ->  val;
+        }
+
+        public func get_all_worlds(self: Project)
+        {
+            return self.m_worlds->>\pw = pw.m_world_instance;;
+        }
+
+        public func create_new_world(self: Project, new_world_file_path: string)
+        {
+            let world = ProjectWorld {
+                m_world_instance = self.m_env->create_world,
+                m_world_path = new_world_file_path,
+            };
+            
+            self.m_worlds->add(world);
+
+            // 有新建世界进来，关掉默认世界（如果有的话）
+            match (self.m_default_worlds)
+            {
+            value(default_world)?
+            {
+                default_world->close;
+                self.m_default_worlds = option::none;
+
+                // 在此处重置编辑中世界，因为之前在渲染默认时间，
+                // 移除默认世界之后，如果没有设置渲染世界，就寄了
+                // 必须成功!
+                self->reset_editing_world(world.m_world_instance)->unwarp;
+            }
+            none?
+                ;
+            }
+            return world.m_world_instance;
+        }
+        public func destroy_world(self: Project, world: je::world)=> result<anything, string>
+        {
+            // 使用create_new_world创建的世界，务必使用destroy_world销毁，不应该close
+            match (self->_get_project_world(world))
+            {
+            value(w)?
+            {
+                self.m_worlds->remove(self.m_worlds->find(w));
+                world->close;
+
+                // 如果还有世界，那么选择第一个作为编辑中世界顶替，否则起用默认世界
+                self.m_worlds->get(0)
+                    ->> \w = self->reset_editing_world(w.m_world_instance)->unwarp; // 必须成功
+                    ->  or(\= self->_run_default_world;);
+                
+                return result::ok(nil);
+            }
+            none?
+                return result::err("无法销毁不属于项目的世界");
+            }
+        }
+    }
+}

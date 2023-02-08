@@ -135,7 +135,7 @@ namespace drawpannel
                         {
                             if (MenuItem("画布尺寸"))
                                 // 更新画布尺寸之后，创建新的纹理对象覆盖到数组里
-                                std::panic("TODO;")
+                                std::panic("TODO;");
                                 
 
                             EndMenu();

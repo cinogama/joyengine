@@ -6,6 +6,7 @@
 #include <thread>
 #include <condition_variable>
 #include <unordered_map>
+#include <optional>
 
 #ifdef NDEBUG
 #   define DEBUG_ARCH_LOG(...) ((void)0)
@@ -216,7 +217,6 @@ namespace jeecs_impl
 
             void command_close_entity(jeecs::typing::entity_id_in_chunk_t eid) noexcept
             {
-                // TODO: MULTI-THREAD PROBLEM
                 _m_entities_meta[eid].m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
                 ++_m_entities_meta[eid].m_version;
                 _m_entities_meta[eid].m_in_used.clear();
@@ -2129,13 +2129,6 @@ void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
     return chunk->get_arch_type()->get_arch_mgr()->get_world();
 }
 
-bool je_ecs_world_validate_entity(const jeecs::game_entity* entity)
-{
-    if (auto* chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk)
-        return chunk->is_entity_valid(entity->_m_id, entity->_m_version);
-    return false;
-}
-
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
 void** jedbg_get_all_worlds_in_universe(void* _universe)
 {
@@ -2225,24 +2218,14 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeec
     return outresult;
 }
 
-static void* _editor_universe;
-static jeecs::game_entity _editor_entity;
+static std::optional<jeecs::game_entity> _editor_entity;
 
-void jedbg_set_editor_universe(void* universe_handle)
-{
-    _editor_universe = universe_handle;
-}
-
-void* jedbg_get_editor_universe(void)
-{
-    return _editor_universe;
-}
 void jedbg_set_editing_entity(const jeecs::game_entity* _entity)
 {
     if (_entity)
         _editor_entity = *_entity;
     else
-        _editor_entity._m_in_chunk = nullptr;
+        _editor_entity = std::nullopt;
 }
 
 const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world)
@@ -2268,8 +2251,8 @@ const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _w
 
 const jeecs::game_entity* jedbg_get_editing_entity()
 {
-    if (_editor_entity.valid())
-        return &_editor_entity;
+    if (_editor_entity.has_value())
+        return &_editor_entity.value();
     return nullptr;
 }
 
