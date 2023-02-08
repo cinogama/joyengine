@@ -1526,17 +1526,17 @@ public func CULL(cull: CullConfig)
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->next();
+                        let (token, out_result) = lexer->nexttoken();
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
     let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
-                        let (token, out_result) = lexer->peek();
+                        let (token, out_result) = lexer->peektoken();
                         if (token != expect_type)
                             return option::none;
-                        lexer->next;
+                        lexer->nexttoken;
                         return option::value(out_result);
                     };
 
@@ -1639,17 +1639,17 @@ using struct_define = handle
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->next();
+                        let (token, out_result) = lexer->nexttoken();
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
     let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
-                        let (token, out_result) = lexer->peek();
+                        let (token, out_result) = lexer->peektoken();
                         if (token != expect_type)
                             return option::none;
-                        lexer->next;
+                        lexer->nexttoken;
                         return option::value(out_result);
                     };
 
@@ -1737,17 +1737,17 @@ using uniform_block = struct_define
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->next();
+                        let (token, out_result) = lexer->nexttoken();
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
     let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
-                        let (token, out_result) = lexer->peek();
+                        let (token, out_result) = lexer->peektoken();
                         if (token != expect_type)
                             return option::none;
-                        lexer->next;
+                        lexer->nexttoken;
                         return option::value(out_result);
                     };
 
