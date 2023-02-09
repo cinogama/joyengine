@@ -2,16 +2,22 @@
 // 用于显示和编辑项目中的世界
 
 import je.gui;
+import builtin.editor.gui.widget.icon_button;
+
 using je::gui;
 
 namespace editor::gui::edit_forms
 {
-    public func show_world_lists(context: EditorContext, show: mutable<bool>)
+    public func show_worlds_list(context: EditorContext, show: mutable<bool>)
     {
         // 世界编辑窗口
         if (show->get)
         {
             show->set(BeginOpen("世界列表##jeeditor"));
+
+            static let img = je::graphic::texture::load("*/builtin/editor-old/icon/File.png")->val;
+
+            widget::IconButton(img, "草字头", option::none);
 
             if (Button("Fuck!"))
             {

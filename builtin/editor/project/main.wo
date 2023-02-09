@@ -149,7 +149,17 @@ namespace editor
                 -> forall(\pw = pw.m_world_instance == world;)
                 -> get(0);
         }
+        public func get_editing_world(self: Project)
+        {
+            // 项目肯定得有渲染中实体，即便可能是default-world，这里就不bind了
+            // 为空就直接panic
+            let rending_world = je::world::rend(self.m_env->get_universe)->val;
+            
+            if (!self->_get_project_world(rending_world)->has)
+                return option::none;
 
+            return option::value(rending_world);
+        }
         public func reset_editing_world(self: Project, world: je::world)=> result<anything, string>
         {
             if (self->_get_project_world(world)->has)
@@ -238,13 +248,16 @@ namespace editor
             {
             value(w)?
             {
+                // 如果当前编辑中的世界就是待删除的世界，那么需要更新新的编辑世界
+                if (self->get_editing_world->>\rw = rw == world;->valor(false))
+                    // 如果还有世界，那么选择第一个作为编辑中世界顶替，否则起用默认世界
+                    self.m_worlds->get(0)
+                        ->> \w = self->reset_editing_world(w.m_world_instance)->unwarp; // 必须成功
+                        ->  or(\= self->_run_default_world;);
+
+                // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
                 self.m_worlds->remove(self.m_worlds->find(w));
                 world->close;
-
-                // 如果还有世界，那么选择第一个作为编辑中世界顶替，否则起用默认世界
-                self.m_worlds->get(0)
-                    ->> \w = self->reset_editing_world(w.m_world_instance)->unwarp; // 必须成功
-                    ->  or(\= self->_run_default_world;);
                 
                 return result::ok(nil);
             }

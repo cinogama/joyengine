@@ -12,7 +12,7 @@ namespace editor::gui
         let open_entities_list = mutable::create(true);
 
         context->launch_editor_form(func(){
-            edit_forms::show_world_lists(context, open_worlds_list);
+            edit_forms::show_worlds_list(context, open_worlds_list);
         }, ());
     }
 }

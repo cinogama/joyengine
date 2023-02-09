@@ -1,0 +1,39 @@
+// gui.public_widget.icon_button
+// 带图标的按钮控件
+
+import je;
+import je.gui;
+
+using je;
+using je::gui;
+using je::graphic;
+
+namespace editor::gui::widget
+{
+    public func IconButton(img: texture, text: string, context_menu: option<()=>void>)
+    {
+        let mut clicked = false;
+        BeginGroup();
+        {
+            PushIDStr(text);
+            clicked = ImageButtonSize(img, 32., 32.);
+            PopID();
+
+            context_menu
+                ->> func(menufunc)
+                {
+                    if (BeginPopupContextItem())
+                    {
+                        menufunc();
+                        EndPopup();
+                    }
+                };
+
+            SameLine();
+            Text(text);
+        }
+        EndGroup();
+
+        return clicked;
+    }
+}
