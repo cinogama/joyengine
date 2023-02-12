@@ -1,4 +1,4 @@
-// gui.public_widget.icon_button
+// gui.widget.icon_button
 // 带图标的按钮控件
 
 import je;
@@ -19,7 +19,7 @@ namespace editor::gui::widget
             clicked = ImageButtonSize(img, 32., 32.);
             PopID();
 
-            context_menu
+            do context_menu
                 ->> func(menufunc)
                 {
                     if (BeginPopupContextItem())

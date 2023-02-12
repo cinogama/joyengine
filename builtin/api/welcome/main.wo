@@ -31,8 +31,8 @@ namespace jeapi::welcome
             }
             je::log(display_bar);
 
-            chtex: gchandle->close();
-            f: gchandle->close();        
+            do chtex: gchandle->close();
+            do f: gchandle->close();        
         }
         none?
             ;

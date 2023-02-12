@@ -116,7 +116,7 @@ namespace je::gui
     }
 
     extern("libjoyecs", "je_gui_end")
-    public func End()=> bool;
+    public func End()=> void;
 
     extern("libjoyecs", "je_gui_begin_child")
     public func BeginChild(title:string)=> bool;
@@ -450,9 +450,9 @@ R"(
     {
         if (BeginDragDropSource())
         {
-            SetDragDropPayload(type, payload);
-                holddo();
-            EndDragDropSource();
+            do SetDragDropPayload(type, payload);
+            holddo();
+            do EndDragDropSource();
         }
     }
 
@@ -461,7 +461,7 @@ R"(
     extern("libjoyecs", "je_gui_accept_drag_drop_payload")
     public func AcceptDragDropPayload(type: string)=> option<string>;
     extern("libjoyecs", "je_gui_end_accept_drop_source")
-    public func EndDragDropTarget()=> bool;
+    public func EndDragDropTarget()=> void;
 
     public func AcceptDrag(types: array<string>)=> option<(string, string)>
     {

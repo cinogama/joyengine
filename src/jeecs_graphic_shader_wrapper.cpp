@@ -1526,7 +1526,7 @@ public func CULL(cull: CullConfig)
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->nexttoken();
+                        let (token, out_result) = lexer->nexttoken;
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
@@ -1536,7 +1536,7 @@ public func CULL(cull: CullConfig)
                         let (token, out_result) = lexer->peektoken();
                         if (token != expect_type)
                             return option::none;
-                        lexer->nexttoken;
+                        do lexer->nexttoken;
                         return option::value(out_result);
                     };
 
@@ -1544,7 +1544,7 @@ public func CULL(cull: CullConfig)
     // 0. Get struct name, then eat '{'
     let vao_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
-    eat_token("{", std::token_type::l_left_curly_braces);
+    do eat_token("{", std::token_type::l_left_curly_braces);
     
     // 1. Get struct item name.
     let struct_infos = []mut: vec<(string, string)>;
@@ -1555,7 +1555,7 @@ public func CULL(cull: CullConfig)
             break;
 
         let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
-        eat_token(":", std::token_type::l_typecast);
+        do eat_token(":", std::token_type::l_typecast);
 
         // Shader type only have a identifier and without template.
         let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
@@ -1564,12 +1564,12 @@ public func CULL(cull: CullConfig)
 
         if (!try_eat_token(std::token_type::l_comma)->has())
         {
-            eat_token("}", std::token_type::l_right_curly_braces);
+            do eat_token("}", std::token_type::l_right_curly_braces);
             break;
         }
     }
     // End, need a ';' here.
-    eat_token(";", std::token_type::l_semicolon);
+    do eat_token(";", std::token_type::l_semicolon);
 
     //  OK We have current vao struct info, built struct out
     let mut out_struct_decl = F"public using {vao_struct_name} = struct {"{"}\n";
@@ -1639,7 +1639,7 @@ using struct_define = handle
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->nexttoken();
+                        let (token, out_result) = lexer->nexttoken;
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
@@ -1649,7 +1649,7 @@ using struct_define = handle
                         let (token, out_result) = lexer->peektoken();
                         if (token != expect_type)
                             return option::none;
-                        lexer->nexttoken;
+                        do lexer->nexttoken;
                         return option::value(out_result);
                     };
 
@@ -1657,7 +1657,7 @@ using struct_define = handle
     // 0. Get struct name, then eat '{'
     let graphic_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
-    eat_token("{", std::token_type::l_left_curly_braces);
+    do eat_token("{", std::token_type::l_left_curly_braces);
     
     // 1. Get struct item name.
     let struct_infos = []mut: vec<(string, (string, bool))>;
@@ -1668,7 +1668,7 @@ using struct_define = handle
             break;
 
         let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
-        eat_token(":", std::token_type::l_typecast);
+        do eat_token(":", std::token_type::l_typecast);
 
         // Shader type only have a identifier and without template.
         let is_struct = try_eat_token(std::token_type::l_struct);
@@ -1678,12 +1678,12 @@ using struct_define = handle
 
         if (!try_eat_token(std::token_type::l_comma)->has())
         {
-            eat_token("}", std::token_type::l_right_curly_braces);
+            do eat_token("}", std::token_type::l_right_curly_braces);
             break;
         }
     }
     // End, need a ';' here.
-    eat_token(";", std::token_type::l_semicolon);
+    do eat_token(";", std::token_type::l_semicolon);
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = struct_define::create(\"{graphic_struct_name}\");";
@@ -1737,7 +1737,7 @@ using uniform_block = struct_define
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->nexttoken();
+                        let (token, out_result) = lexer->nexttoken;
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
@@ -1747,7 +1747,7 @@ using uniform_block = struct_define
                         let (token, out_result) = lexer->peektoken();
                         if (token != expect_type)
                             return option::none;
-                        lexer->nexttoken;
+                        do lexer->nexttoken;
                         return option::value(out_result);
                     };
 
@@ -1755,11 +1755,11 @@ using uniform_block = struct_define
     // 0. Get struct name, then eat '{'
     let graphic_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
-    eat_token("=", std::token_type::l_assign);
+    do eat_token("=", std::token_type::l_assign);
 
     let bind_place = eat_token("INTEGER", std::token_type::l_literal_integer): int;
 
-    eat_token("{", std::token_type::l_left_curly_braces);
+    do eat_token("{", std::token_type::l_left_curly_braces);
     
     // 1. Get struct item name.
     let struct_infos = []mut: vec<(string, (string, bool))>;
@@ -1770,7 +1770,7 @@ using uniform_block = struct_define
             break;
 
         let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
-        eat_token(":", std::token_type::l_typecast);
+        do eat_token(":", std::token_type::l_typecast);
 
         // Shader type only have a identifier and without template.
         let is_struct = try_eat_token(std::token_type::l_struct);
@@ -1780,12 +1780,12 @@ using uniform_block = struct_define
 
         if (!try_eat_token(std::token_type::l_comma)->has())
         {
-            eat_token("}", std::token_type::l_right_curly_braces);
+            do eat_token("}", std::token_type::l_right_curly_braces);
             break;
         }
     }
     // End, need a ';' here.
-    eat_token(";", std::token_type::l_semicolon);
+    do eat_token(";", std::token_type::l_semicolon);
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = uniform_block::create(\"{graphic_struct_name}\", {bind_place});";

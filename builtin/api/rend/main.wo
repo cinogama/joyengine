@@ -10,12 +10,12 @@ namespace jeapi::rend
         static let GRAPHIC_PIPELINE_SYSTEMS = je::typeinfo::editor::get_all_systems_types()
             -> forall(\t = t->name->beginwith("Graphic::"););
 
-        je::world::rend(aim_world->editor::located_universe)
+        do je::world::rend(aim_world->editor::located_universe)
             ->> \old = GRAPHIC_PIPELINE_SYSTEMS
                 ->  forall(\gst = old->editor::get_system(gst)->has;)
                 ->> \gst = old->remove_system(gst);
                 ;
             ;
-        aim_world->add_system(graphic_pipeline);
+        do aim_world->add_system(graphic_pipeline);
     }
 }

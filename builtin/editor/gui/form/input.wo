@@ -1,0 +1,48 @@
+// gui.form.input
+// 输入窗口
+
+import je.gui;
+import builtin.editor.gui.main;
+
+using je::gui;
+
+namespace editor::gui::form
+{
+    public func input(
+        context: EditorContext,
+        title: string, 
+        text: string, 
+        defaultval: string, 
+        okevent: (string)=> void)
+    {
+        context->launch_editor_form(func(inputval: mutable<string>)
+        {
+            let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+            Text(text);
+            do InputText("##", inputval->get)
+                ->> \val = inputval->set(val);
+                ;
+            SameLine();
+            if (Button("还原"))
+                inputval->set(defaultval);
+
+            if (Button("确定"))
+            {
+                okevent(inputval->get);
+                open = false;
+            }
+            SameLine();
+            if (Button("取消"))
+                open = false;
+
+            End();
+
+            if (open)
+                return FormAction::Nothing;
+            return FormAction::Close;
+
+        }, (mutable::create(defaultval),));
+    }
+}

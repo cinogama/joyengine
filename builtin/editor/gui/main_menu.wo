@@ -12,7 +12,7 @@ namespace editor::gui
     public func show_main_menu(context: EditorContext)
     {
         context->launch_editor_form(func(){
-            BeginMainMenuBar();
+            do BeginMainMenuBar();
             if (BeginMenu("JoyEngine"))
             {
                 if (MenuItem("退出编辑器"))

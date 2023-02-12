@@ -1736,7 +1736,7 @@ namespace je
 
         public func close(self: universe)
         {
-            self: gchandle->close();
+            return self: gchandle->close();
         }
 
         extern("libjoyecs", "wojeapi_stop_universe")

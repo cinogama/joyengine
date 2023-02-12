@@ -1,0 +1,65 @@
+// gui.form.msg
+// 信息窗口
+
+import je;
+import je.gui;
+import builtin.editor.gui.main;
+
+using je::gui;
+using je::graphic;
+
+namespace editor::gui::form
+{
+    public func msg(
+        context: EditorContext,
+        title: string, 
+        text: string)
+    {
+        context->launch_editor_form(func()
+        {
+            let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+            Text(text);
+
+            if (Button("确认"))
+                open = false;
+
+            End();
+
+            if (open)
+                return FormAction::Nothing;
+            return FormAction::Close;
+
+        }, ());
+    }
+
+    public func errmsg(
+        context: EditorContext,
+        title: string, 
+        text: string)
+    {
+        context->launch_editor_form(func()
+        {
+            let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+            static let WARNICON = texture::load("*/builtin/icon/warning.png")->val;
+            Image(WARNICON);
+
+            SameLine();
+
+            Text(text);
+
+            if (Button("确认"))
+                open = false;
+
+            End();
+
+            if (open)
+                return FormAction::Nothing;
+            return FormAction::Close;
+
+        }, ());
+    }
+}

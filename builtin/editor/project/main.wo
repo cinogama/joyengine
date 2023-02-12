@@ -58,7 +58,7 @@ namespace editor
                         value(current_rend_world)?
                         {
                             current_rend_world->remove_system(oldval);
-                            current_rend_world->add_system(newval);
+                            do current_rend_world->add_system(newval);
                         }
                         none?
                             je::logwarn("设置管线时未发现渲染中的世界，跳过更新世界");
@@ -92,7 +92,7 @@ namespace editor
                         value(current_rend_world)?
                         {
                             current_rend_world->remove_system(oldval);
-                            current_rend_world->add_system(newval);
+                            do current_rend_world->add_system(newval);
                         }
                         none?
                             je::logwarn("设置编辑系统时未发现渲染中的世界，跳过更新世界");
@@ -149,6 +149,10 @@ namespace editor
                 -> forall(\pw = pw.m_world_instance == world;)
                 -> get(0);
         }
+        public func is_project_world(self: Project, world: je::world)
+        {
+            return self->_get_project_world(world)->has;
+        }
         public func get_editing_world(self: Project)
         {
             // 项目肯定得有渲染中实体，即便可能是default-world，这里就不bind了
@@ -166,11 +170,21 @@ namespace editor
             {
                 // 将编辑器系统从旧编辑世界中移除，这里要求新编辑世界必须属于项目
                 // 但不要求旧编辑世界，因为旧编辑世界可能是默认世界
+                let editing_world = self->get_editing_world();
 
-                je::world::rend(self.m_env->get_universe)
-                    ->> \rw = rw->remove_system(self->get_config_editor_system);;
+                match (editing_world)
+                {
+                value(last_edit_world)?
+                {
+                    if (last_edit_world == world)
+                        return result::ok(nil); // 新老世界相同，跳过更新
+
+                    last_edit_world->remove_system(self->get_config_editor_system);
+                }
+                none?;
+                }
                 jeapi::rend::reset_rend_world(world, self->get_config_graphic_pipeline);
-                world->add_system(self->get_config_editor_system);
+                do world->add_system(self->get_config_editor_system);
 
                 return result::ok(nil);
             }
@@ -229,7 +243,7 @@ namespace editor
             value(default_world)?
             {
                 default_world->close;
-                self.m_default_worlds = option::none;
+                do self.m_default_worlds = option::none;
 
                 // 在此处重置编辑中世界，因为之前在渲染默认时间，
                 // 移除默认世界之后，如果没有设置渲染世界，就寄了
@@ -249,20 +263,24 @@ namespace editor
             value(w)?
             {
                 // 如果当前编辑中的世界就是待删除的世界，那么需要更新新的编辑世界
-                if (self->get_editing_world->>\rw = rw == world;->valor(false))
+                let need_update_new_editing_world = 
+                    self->get_editing_world->>\rw = rw == world;->valor(false);
+               
+                // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
+                self.m_worlds->remove(self.m_worlds->find(w));
+
+                if (need_update_new_editing_world)
                     // 如果还有世界，那么选择第一个作为编辑中世界顶替，否则起用默认世界
                     self.m_worlds->get(0)
                         ->> \w = self->reset_editing_world(w.m_world_instance)->unwarp; // 必须成功
                         ->  or(\= self->_run_default_world;);
 
-                // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
-                self.m_worlds->remove(self.m_worlds->find(w));
                 world->close;
                 
                 return result::ok(nil);
             }
             none?
-                return result::err("无法销毁不属于项目的世界");
+                return result::err("期待销毁的世界不存在");
             }
         }
     }
