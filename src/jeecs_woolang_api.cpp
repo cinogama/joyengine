@@ -476,7 +476,8 @@ WO_API wo_api wojeapi_get_entity_name(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_set_entity_name(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    return wo_ret_string(vm, entity->name(wo_string(args + 1)).c_str());
+    entity->name(wo_string(args + 1));
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args, size_t argc)
@@ -1910,7 +1911,7 @@ R"(
             public func name(self: entity)=> string;
 
             extern("libjoyecs", "wojeapi_set_entity_name")
-            public func set_name(self: entity, name: string)=> string;
+            public func set_name(self: entity, name: string)=> void;
 
             extern("libjoyecs", "wojeapi_get_entity_chunk_info")
             public func chunkinfo(self: entity)=> string;
@@ -1983,7 +1984,7 @@ R"(
                     };
                 }
 
-                public func childs(self: entity_iter)
+                public func childs_iter(self: entity_iter)
                 {
                     let parent_entity = self.m_current_entity->val();
                     return entity_iter{
@@ -2003,7 +2004,7 @@ R"(
                 {
                     return self;
                 }
-                public func next(self: entity_iter)=> option<(entity_iter, entity)>
+                public func next(self: entity_iter)=> option<(entity)>
                 {
                     let current_iter = self.m_cur_iter;
 
@@ -2014,7 +2015,7 @@ R"(
                             self.m_current_entity = option::value(out_entity);
                             self.m_outed_entities->add(out_entity);
 
-                            return option::value((self, out_entity));
+                            return option::value((out_entity,));
                         }
                     }
 
@@ -2038,7 +2039,7 @@ R"(
                             self.m_current_entity = option::value(top);
                             self.m_outed_entities->add(top);
 
-                            return option::value((self, top));
+                            return option::value((top,));
                         }
                     }
                     return option::none;

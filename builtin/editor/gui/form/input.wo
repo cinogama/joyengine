@@ -9,13 +9,12 @@ using je::gui;
 namespace editor::gui::form
 {
     public func input(
-        context: EditorContext,
         title: string, 
         text: string, 
         defaultval: string, 
         okevent: (string)=> void)
     {
-        context->launch_editor_form(func(inputval: mutable<string>)
+        launch(func(inputval: mutable<string>)
         {
             let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
                 WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);

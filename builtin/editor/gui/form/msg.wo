@@ -11,11 +11,10 @@ using je::graphic;
 namespace editor::gui::form
 {
     public func msg(
-        context: EditorContext,
         title: string, 
         text: string)
     {
-        context->launch_editor_form(func()
+        launch(func()
         {
             let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
                 WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
@@ -35,11 +34,10 @@ namespace editor::gui::form
     }
 
     public func errmsg(
-        context: EditorContext,
         title: string, 
         text: string)
     {
-        context->launch_editor_form(func()
+        launch(func()
         {
             let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
                 WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);

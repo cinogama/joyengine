@@ -1,0 +1,29 @@
+// api.dbg.main
+// debug相关API，通常是些不怎么安全合适的接口函数
+
+import je;
+
+namespace jeapi::debug
+{
+    public using EntityChilds = struct{
+        e: je::entity, 
+        childs: array<EntityChilds>
+    };
+    public func get_all_entities_layer_from_world(world: je::world)
+    {
+        // 从世界中获取带有层级关系的实体
+        func get_entity_and_childs(iter: je::entity::editor::entity_iter)=> array<EntityChilds>
+        {
+            let result = []mut: vec<EntityChilds>;
+            for (let curentity : iter)
+            {
+                result->add(EntityChilds{
+                    e = curentity, 
+                    childs = get_entity_and_childs(iter->childs_iter),
+                    });
+            }
+            return result->unsafe::cast:<array<EntityChilds>>;
+        }
+        return get_entity_and_childs(world->editor::top_entity_iter);
+    }
+}

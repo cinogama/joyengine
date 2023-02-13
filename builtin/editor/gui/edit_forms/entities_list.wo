@@ -1,0 +1,85 @@
+// gui.edit_forms.entities_list
+// 用于显示和编辑当前编辑世界中的实体
+
+import je.gui;
+import builtin.editor.gui.widget.icon_button;
+import builtin.editor.gui.form.input;
+import builtin.editor.gui.form.ask;
+import builtin.api.dbg.main;
+
+using je::gui;
+
+namespace editor::gui::edit_forms
+{
+    func display_entity_and_child_tree(context: EditorContext, w: je::world, e: jeapi::debug::EntityChilds)
+    {
+        let treenode_attribute = 
+            (e.childs->empty 
+                ? TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
+                | TreeNodeAttribute::ImGuiTreeNodeFlags_None)
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+            // + get_current_entity()->>\ce = ce == e.e 
+            //  ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
+            //  | TreeNodeAttribute::ImGuiTreeNodeFlags_None;
+            ;
+        let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->editor::chunkinfo}", 
+            treenode_attribute);
+
+        // Context menu
+        if (BeginPopupContextItem())
+        {
+            if (MenuItem("重命名"))
+            {
+                form::input(
+                    "重命名", 
+                    "请输入实体的新名称", 
+                    e.e->editor::name, 
+                    func(newname){
+                        if (context->get_project->validate_world_entity_or_warning(w, e.e))
+                            e.e->editor::set_name(newname);
+                    });
+            }
+            if (MenuItem("销毁"))
+            {
+            }
+            EndPopup();
+        }
+
+        if (showchild)
+        {
+            do e.childs->>\ce = display_entity_and_child_tree(context, w, ce);;
+            TreePop();
+        }
+    }
+    public func show_entities_list(context: EditorContext, show: mutable<bool>)
+    {
+        if (show->get)
+        {
+            do show->set(BeginOpen("实体列表##jeeditor"));
+            match (context->get_project->get_editing_world)
+            {
+            value(current_editing_world)?
+            {
+                if (Button("debug"))
+                {
+                    context->get_project->create_new_entity(
+                        current_editing_world, 
+                        [je::typeinfo::load("Transform::Translation")->val]
+                        )
+                        ->unwarp
+                        ->editor::set_name("DebugEntity");
+                }
+
+                do jeapi::debug::get_all_entities_layer_from_world(current_editing_world)
+                    ->> \ec = display_entity_and_child_tree(context, current_editing_world, ec);
+                    ;
+            }
+            none?
+                Text("没有正在编辑中的世界");
+            }
+            End();
+        }
+    }
+}

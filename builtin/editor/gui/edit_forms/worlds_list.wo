@@ -5,7 +5,6 @@ import je.gui;
 import builtin.editor.gui.widget.icon_button;
 import builtin.editor.gui.form.input;
 import builtin.editor.gui.form.ask;
-import builtin.editor.gui.form.msg;
 
 using je::gui;
 
@@ -20,9 +19,9 @@ namespace editor::gui::edit_forms
 
             static let img = je::graphic::texture::load("*/builtin/editor-old/icon/File.png")->val;
 
-            do widget::IconButton(img, "草字头", option::none);
+            // do widget::IconButton(img, "图形按钮", option::none);
 
-            if (Button("Fuck!"))
+            if (Button("debug"))
                 do context->get_project->create_new_world("");
 
             let (avail_width, avail_height) = GetContentRegionAvail();
@@ -43,31 +42,34 @@ namespace editor::gui::edit_forms
                     {
                         if (MenuItem("重命名世界"))
                         {
-                            context->form::input(
+                            form::input(
                                 "重命名", 
                                 "请输入世界的新名称", 
                                 world->editor::name, 
                                 func(newname){
-                                    if (!context->get_project->is_project_world(world))
-                                        context->form::errmsg("重命名失败", "世界不存在于项目中");
-                                    else
+                                    if (context->get_project->validate_world_or_warning(world))
+                                    {
                                         world->editor::set_name(newname);
+                                    }
                                 });
                         }
                         if (MenuItem("关闭"))
                         {
-                            context->form::ask(
+                            form::ask(
                                 "确认？", 
                                 "即将关闭世界，是否保存世界的变动？",
                                 func(save_world)
                                 {
-                                    if (save_world)
-                                        std::panic("TODO;");
+                                    if (context->get_project->validate_world_or_warning(world))
+                                    {
+                                        if (save_world)
+                                            std::panic("TODO;");
 
-                                    do context->get_project->destroy_world(world)
-                                        -> error
-                                        ->> \errinfo = context->form::errmsg("关闭世界失败", errinfo);
-                                        ;
+                                        do context->get_project->destroy_world(world)
+                                            -> error
+                                            ->> \errinfo = form::errmsg("关闭世界失败", errinfo);
+                                            ;
+                                    }
                                 });
                         }
                         EndPopup();
