@@ -18,6 +18,10 @@ apt install libopenal-dev
 
 ## 鸣谢（Acknowledgments）
 
+感谢 [OpenAL](http://www.openal.org/) 为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用到OpenAL 1.1基于LGPL协议开源（或许是吧，我在维基百科上看到了各种复杂的说法），并且使用的是官方网站上提供的原始版本的SDK，并没有做出任何修改。
+
+Thanks to [OpenAL](http://www.openal.org/) for providing great sound support for this engine, but it needs to be additionally explained that the engine uses OpenAL 1.1 and is open source based on the LGPL protocol (maybe, I am in Wikipedia has seen various complicated statements), and used the original version of the SDK provided on the official website without any modification.
+
 感谢 [glew](https://github.com/nigels-com/glew)、[glfw](https://www.glfw.org/)为引擎的渲染提供OpenGL拓展和界面接口。
 
 Thanks to [glew](https://github.com/nigels-com/glew) and [glfw](https://www.glfw.org/) for providing OpenGL extension and interface for engine rendering.
