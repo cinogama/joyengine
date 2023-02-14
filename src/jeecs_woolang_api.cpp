@@ -1767,7 +1767,7 @@ namespace je
         namespace editor
         {
             extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
-            public func worlds_list(self: universe)=> array<world>;
+            public func get_all_worlds(self: universe)=> array<world>;
         }
     }
 
@@ -2194,7 +2194,7 @@ R"(
                 for (let name, type, addr : self->iter_member())
                     result->set(name, (type, addr));
 
-                return result->todict; 
+                return result->unsafe::cast:<dict<string, (typeinfo, native_value)>>; 
             }
         }
     }

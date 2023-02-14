@@ -34,48 +34,51 @@ namespace jeapi::debug
         // 将UID放进处理队列中，如果实际上没有找到此实体，那么就弹窗报警
         request_list->getorset(euid, []mut)->add(operation);
     }
-    public func get_all_entities_layer_from_world(world: je::world)
+    public func update_safety_entity_operation_requests(universe: je::universe)
     {
+        // 找个地方每帧/几帧调用一下
+        if (request_list->empty)
+            return;
+
         let current_request = {}mut: typeof(request_list);
         current_request->swap(request_list);
 
+        // 获取所有的世界，并从中获取所有的实体
+        do universe->editor::get_all_worlds
+            =>> \w = w->editor::get_all_entities;
+            ->> func(e)
+            {
+                let euid = get_entity_editor_uid(e);
+                do current_request->get(euid)
+                    ->> \jobs = jobs
+                        ->> \job = job(e);;
+                    ->> \_ = current_request->remove(euid);
+                    ;
+            };
+
+        for (let euid, jobs : current_request)
+        {
+            do jobs->> \_ = gui::form::errmsg(
+                "失败", F"操作无法完成，不存在的实体：\n{euid}");;
+        }
+    }
+
+    public func get_all_entities_layer_from_world(world: je::world)
+    {
         // 从世界中获取带有层级关系的实体
-        func get_entity_and_childs(
-            iter: je::entity::editor::entity_iter, 
-            requests: typeof(request_list))=> array<EntityChilds>
+        func get_entity_and_childs(iter: je::entity::editor::entity_iter)=> array<EntityChilds>
         {
             let result = []mut: vec<EntityChilds>;
             for (let curentity : iter)
-            {
-                let euid = get_entity_editor_uid(curentity);
-                
-                match (requests->get(euid))
-                {
-                value(job_queue)?
-                {
-                    do job_queue->>\job = job(curentity);;
-                    requests->remove(euid);
-                }
-                none?
-                    ; // Do nothing.
-                }
-                
+            {                
                 result->add(EntityChilds{
                     e = curentity, 
-                    uid = euid,
-                    childs = get_entity_and_childs(
-                        iter->childs_iter, requests),
+                    uid = get_entity_editor_uid(curentity),
+                    childs = get_entity_and_childs(iter->childs_iter),
                     });
             }
             return result->unsafe::cast:<array<EntityChilds>>;
         }
-        let result = get_entity_and_childs(world->editor::top_entity_iter, current_request);
-        
-        for (let euid, jobs : current_request)
-        {
-            do jobs ->> \_ = gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{euid}");;
-        }
-
-        return result;
+        return get_entity_and_childs(world->editor::top_entity_iter);
     }
 }

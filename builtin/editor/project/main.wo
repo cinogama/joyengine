@@ -143,6 +143,10 @@ namespace editor
         {
             self.m_env->wait;
         }
+        public func get_env(self: Project)
+        {
+            return self.m_env;
+        }
 
         func _get_project_world(self: Project, world: je::world)
         {

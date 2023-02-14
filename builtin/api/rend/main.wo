@@ -9,7 +9,7 @@ namespace jeapi::rend
     {
         static let GRAPHIC_PIPELINE_SYSTEMS = je::typeinfo::editor::get_all_systems_types()
             -> forall(\t = t->name->beginwith("Graphic::"););
-        std::debug::breakdown();
+
         do je::world::rend(aim_world->editor::located_universe)
             ->> \old = GRAPHIC_PIPELINE_SYSTEMS
                 ->  forall(\gst = old->editor::get_system(gst)->has;)

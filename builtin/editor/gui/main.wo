@@ -28,12 +28,11 @@ namespace editor::gui
                 let result = f(args...);
 
                 if (self->is_stopped)
-                    return je::gui::FormAction::Close;
-
-                if (result is je::gui::FormAction)
+                    return false;
+                else if (result is bool)
                     return result;
 
-                return je::gui::FormAction::Nothing;
+                return true;
             }, ());
         }
     }

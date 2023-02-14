@@ -29,8 +29,6 @@ namespace editor::gui::edit_forms
         // Context menu
         if (BeginPopupContextItem())
         {
-            do MenuItemEnabled(F"DEBUG:{e.uid}", false);
-
             if (MenuItem("重命名"))
             {
                 jeapi::gui::form::input(
@@ -46,7 +44,7 @@ namespace editor::gui::edit_forms
             {
                 jeapi::gui::form::ask(
                     "确认？", 
-                    F"即将删除实体{e.e->editor::name}\n是否同时删除其全部子实体？", 
+                    F"即将销毁实体{e.e->editor::name}\n是否同时销毁其全部子实体？", 
                     func(close_child_entity){
                         func close_entity_impl(e, close_all)
                         {

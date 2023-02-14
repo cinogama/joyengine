@@ -25,9 +25,7 @@ namespace jeapi::gui::form
 
             End();
 
-            if (open)
-                return FormAction::Nothing;
-            return FormAction::Close;
+            return open;
 
         }, ());
     }
@@ -53,9 +51,7 @@ namespace jeapi::gui::form
 
             End();
 
-            if (open)
-                return FormAction::Nothing;
-            return FormAction::Close;
+            return open;
 
         }, ());
     }

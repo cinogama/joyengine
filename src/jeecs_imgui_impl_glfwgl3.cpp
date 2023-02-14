@@ -496,30 +496,15 @@ R"(
     private func _launch<LT, FT, ATs>(coloop:LT, job_func:FT, args: ATs)=> void
         where coloop(job_func, args) is anything;
 
-    public union FormAction
-    {
-        Nothing,
-        Close,
-    }
-
     private func dialog<FT, ATs>(job_func:FT, args: ATs)=> void
-        where job_func(args...) is FormAction;
+        where job_func(args...) is bool;
     {
-        while (true)
-        {
-            match (job_func(args...))
-            {
-                Nothing?
-                    /* do nothing */;
-                Close?
-                    break;
-            }
+        while (job_func(args...))
             std::yield();
-        }
     }
 
     public func launch<FT, ATs>(job_func: FT, args: ATs)=> void
-        where job_func(args...) is FormAction;
+        where job_func(args...) is bool;
     {
         return _launch(dialog:<FT, ATs>, job_func, args);
     }

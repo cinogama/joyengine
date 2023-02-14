@@ -35,9 +35,7 @@ namespace jeapi::gui::form
                 open = false;
             End();
 
-            if (open)
-                return FormAction::Nothing;
-            return FormAction::Close;
+            return open;
 
         }, ());
     }
