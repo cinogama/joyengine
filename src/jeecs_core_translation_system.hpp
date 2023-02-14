@@ -10,7 +10,7 @@ namespace jeecs
 {
     struct TranslationUpdatingSystem :public game_system
     {
-        using ChildAnchor = Transform::ChildAnchor;
+        using Anchor = Transform::Anchor;
         using LocalPosition = Transform::LocalPosition;
         using LocalRotation = Transform::LocalRotation;
         using LocalScale = Transform::LocalScale;
@@ -57,7 +57,7 @@ namespace jeecs
         {
         }
 
-        void UpdateAnchorTransPair(ChildAnchor& anchor, Translation& trans)
+        void UpdateAnchorTransPair(Anchor& anchor, Translation& trans)
         {
             m_anchor_list[anchor.uid].m_translation = &trans;
         }

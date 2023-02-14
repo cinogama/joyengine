@@ -1,0 +1,31 @@
+// gui.edit_forms.inspector
+// 用于显示和编辑选选中实体的组件
+
+import je.gui;
+import builtin.api.gui.form.input;
+import builtin.api.gui.form.ask;
+
+using je::gui;
+
+namespace editor::gui::edit_forms
+{
+    public func show_inspector(context: EditorContext, show: mutable<bool>)
+    {
+        if (show->get)
+        {
+            do show->set(BeginOpen("检视面板##jeeditor"));
+
+            // 1. 获取当前编辑中的实体，
+
+            // 2. 遍历实体的非Editor组件
+
+            // 2.1 遍历组件的成员
+
+            // 3. 遍历实体的材质（如果有
+
+            // 3.1 遍历材质的Uniform数据和纹理信息
+
+            End();
+        }
+    }
+}

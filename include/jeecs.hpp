@@ -4719,7 +4719,7 @@ namespace jeecs
         // An entity without childs and parent will contain these components:
         // LocalPosition/LocalRotation/LocalScale and using LocalToWorld to apply
         // local transform to Translation
-        // If an entity have childs, it will have ChildAnchor 
+        // If an entity have childs, it will have Anchor 
         // If an entity have parent, it will have LocalToParent and without
         // LocalToWorld.
         /*
@@ -4812,13 +4812,13 @@ namespace jeecs
             }
         };
 
-        struct ChildAnchor
+        struct Anchor
         {
             typing::uid_t uid = je_uid_generate();
 
             static void JERefRegsiter()
             {
-                typing::register_member(&ChildAnchor::uid, "uid");
+                typing::register_member(&Anchor::uid, "uid");
             }
         };
 
@@ -5488,7 +5488,7 @@ namespace jeecs
             type_info::of<Transform::LocalPosition>("Transform::LocalPosition");
             type_info::of<Transform::LocalRotation>("Transform::LocalRotation");
             type_info::of<Transform::LocalScale>("Transform::LocalScale");
-            type_info::of<Transform::ChildAnchor>("Transform::ChildAnchor");
+            type_info::of<Transform::Anchor>("Transform::Anchor");
             type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
             type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
             type_info::of<Transform::Translation>("Transform::Translation");

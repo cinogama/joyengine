@@ -236,7 +236,7 @@ namespace jeecs
         }
 
         void UpdateAndCreateMover(game_entity mover_entity,
-            Transform::ChildAnchor& anchor,
+            Transform::Anchor& anchor,
             Transform::LocalPosition& position,
             Transform::LocalRotation& rotation,
             Transform::LocalScale& scale,

@@ -4,14 +4,18 @@
 import builtin.editor.gui.main;
 import builtin.editor.gui.edit_forms.worlds_list;
 import builtin.editor.gui.edit_forms.entities_list;
+import builtin.editor.gui.edit_forms.inspector;
+
 namespace editor::gui
 {
     public func show_edit_forms(context: EditorContext)
     {
         let open_worlds_list = mutable::create(true);
         let open_entities_list = mutable::create(true);
+        let open_inspector = mutable::create(true);
 
         context->launch_editor_form(edit_forms::show_worlds_list, (context, open_worlds_list));
         context->launch_editor_form(edit_forms::show_entities_list, (context, open_entities_list));
+        context->launch_editor_form(edit_forms::show_inspector, (context, open_inspector));
     }
 }
