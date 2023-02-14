@@ -3,12 +3,11 @@
 
 import je;
 import je.gui;
-import builtin.editor.gui.main;
 
 using je::gui;
 using je::graphic;
 
-namespace editor::gui::form
+namespace jeapi::gui::form
 {
     public func msg(
         title: string, 

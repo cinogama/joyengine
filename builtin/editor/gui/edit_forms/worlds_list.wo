@@ -2,9 +2,8 @@
 // 用于显示和编辑项目中的世界
 
 import je.gui;
-import builtin.editor.gui.widget.icon_button;
-import builtin.editor.gui.form.input;
-import builtin.editor.gui.form.ask;
+import builtin.api.gui.form.input;
+import builtin.api.gui.form.ask;
 
 using je::gui;
 
@@ -42,7 +41,7 @@ namespace editor::gui::edit_forms
                     {
                         if (MenuItem("重命名世界"))
                         {
-                            form::input(
+                            jeapi::gui::form::input(
                                 "重命名", 
                                 "请输入世界的新名称", 
                                 world->editor::name, 
@@ -55,7 +54,7 @@ namespace editor::gui::edit_forms
                         }
                         if (MenuItem("关闭"))
                         {
-                            form::ask(
+                            jeapi::gui::form::ask(
                                 "确认？", 
                                 "即将关闭世界，是否保存世界的变动？",
                                 func(save_world)
@@ -67,7 +66,7 @@ namespace editor::gui::edit_forms
 
                                         do context->get_project->destroy_world(world)
                                             -> error
-                                            ->> \errinfo = form::errmsg("关闭世界失败", errinfo);
+                                            ->> \errinfo = jeapi::gui::form::errmsg("关闭世界失败", errinfo);
                                             ;
                                     }
                                 });

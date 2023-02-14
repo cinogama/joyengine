@@ -8,7 +8,7 @@ using je;
 using je::gui;
 using je::graphic;
 
-namespace editor::gui::widget
+namespace jeapi::gui::widget
 {
     public func IconButton(img: texture, text: string, context_menu: option<()=>void>)
     {

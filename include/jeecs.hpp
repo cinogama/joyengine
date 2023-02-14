@@ -1928,7 +1928,16 @@ namespace jeecs
         {
         };
 
-        struct member_info;
+        struct member_info
+        {
+            const type_info* m_class_type;
+
+            const char* m_member_name;
+            const type_info* m_member_type;
+            ptrdiff_t m_member_offset;
+
+            member_info* m_next_member;
+        };
 
         struct type_info
         {
@@ -2108,17 +2117,17 @@ namespace jeecs
                 assert(is_system());
                 m_late_update(addr);
             }
-        };
+            inline const member_info* find_member_by_name(const char* name) const noexcept
+            {
+                auto* member_info_ptr = m_member_types;
+                while (member_info_ptr!=nullptr)
+                {
+                    if (strcmp(member_info_ptr->m_member_name, name) == 0)
+                        return member_info_ptr;
 
-        struct member_info
-        {
-            const type_info* m_class_type;
-
-            const char* m_member_name;
-            const type_info* m_member_type;
-            ptrdiff_t m_member_offset;
-
-            member_info* m_next_member;
+                    member_info_ptr = member_info_ptr->m_next_member;
+                }
+            }
         };
 
         template<typename ClassT, typename MemberT>
@@ -4805,11 +4814,11 @@ namespace jeecs
 
         struct ChildAnchor
         {
-            typing::uid_t anchor_uid = je_uid_generate();
+            typing::uid_t uid = je_uid_generate();
 
             static void JERefRegsiter()
             {
-                typing::register_member(&ChildAnchor::anchor_uid, "anchor_uid");
+                typing::register_member(&ChildAnchor::uid, "uid");
             }
         };
 

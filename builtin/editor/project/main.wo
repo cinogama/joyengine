@@ -8,7 +8,7 @@ import config;
 
 import builtin.editor.environment.main;
 import builtin.api.rend.main;
-import builtin.editor.gui.form.msg;
+import builtin.api.gui.form.msg;
 
 namespace editor
 {
@@ -19,7 +19,6 @@ namespace editor
     public using ProjectWorld = struct{
         m_world_instance: je::world,
         m_world_path: string,
-        m_entities: map<string, je::entity>
     };
 
     public using Project = struct{
@@ -171,22 +170,7 @@ namespace editor
             if (self->is_project_world(world))
                 return true;
                 
-            gui::form::errmsg("错误", "请求的世界不存在"); 
-            return false;
-        }
-        public func validate_world_entity_or_warning(self: Project, world: je::world, entity: je::entity)
-        {
-            match (self->_get_project_world(world))
-            {
-            value(w)?
-            {
-                if (w.m_entities->find(entity->editor::chunkinfo))
-                    return true;
-
-                gui::form::errmsg("错误", "请求的实体不存在");
-            }
-            none? gui::form::errmsg("错误", "请求的世界不存在");
-            }
+            jeapi::gui::form::errmsg("错误", "请求的世界不存在"); 
             return false;
         }
         public func reset_editing_world(self: Project, world: je::world)=> result<anything, string>
@@ -258,7 +242,6 @@ namespace editor
             let world = ProjectWorld {
                 m_world_instance = self.m_env->create_world,
                 m_world_path = new_world_file_path,
-                m_entities = {}mut,
             };
             
             self.m_worlds->add(world);
@@ -280,44 +263,6 @@ namespace editor
                 ;
             }
             return world.m_world_instance;
-        }
-        // 创建和销毁世界及实体必须通过 Project API 进行，除非在调试状态
-        // 由于ECS的特性，通过引擎底层的API检验世界实例是否合法尚且可能，
-        // 但是实体实际上是不存在的，无法检验实体索引的合法性。因此必须通过
-        // 编辑器管理
-        // 另外，如果处于调试环境下，所有的检查将被放开，因为运行时不在编辑器的
-        // 控制之下。
-        public func create_new_entity(self: Project, world: je::world, compts: array<je::typeinfo>)
-        {
-            match (self->_get_project_world(world))
-            {
-            value(w)?
-            {
-                let new_entity = world->add_entity(compts);
-                w.m_entities->set(new_entity->editor::chunkinfo, new_entity);
-
-                return result::ok(new_entity);
-            }
-            none?
-                return result::err("试图在非项目所属的世界创建实体");
-            }
-        }
-        public func destroy_entity(self: Project, world: je::world, entity: je::entity)
-        {
-            match (self->_get_project_world(world))
-            {
-            value(w)?
-            {
-                if (! w.m_entities->find(entity->editor::chunkinfo))
-                    return result::err("无法销毁不存在的实体");
-
-                w.m_entities->remove(entity->editor::chunkinfo);
-                entity->close();
-                return result::ok(nil);
-            }
-            none?
-                return result::err("无法在当前世界中销毁实体，指定的世界不存在");
-            }
         }
         public func destroy_world(self: Project, world: je::world)=> result<anything, string>
         {

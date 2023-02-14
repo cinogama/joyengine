@@ -59,7 +59,7 @@ namespace jeecs
 
         void UpdateAnchorTransPair(ChildAnchor& anchor, Translation& trans)
         {
-            m_anchor_list[anchor.anchor_uid].m_translation = &trans;
+            m_anchor_list[anchor.uid].m_translation = &trans;
         }
 
         void LocalToWorldUpdate(LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToWorld& l2w)

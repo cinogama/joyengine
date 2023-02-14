@@ -145,7 +145,7 @@ namespace jeecs_impl
             return _m_type_holder_list;
         }
 
-        // ATTENTION: This function do not promise for thread safe.
+        // ATTENTION: This function do not promise for thread safe for adding new member.
         void register_member_by_id(jeecs::typing::typeid_t classid,
             const jeecs::typing::type_info* _membertype,
             const char* _member_name,

@@ -18,6 +18,15 @@ namespace jeecs
         {
             // Entity with this component will not display in editor, and will not be saved.
         };
+        struct Anchor
+        {
+            typing::uid_t uid = je_uid_generate();
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Anchor::uid, "uid");
+            }
+        };
         struct EditorWalker
         {
             // Walker entity will have a child camera and controled by user.
@@ -350,7 +359,7 @@ public let frag =
                 axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
                     axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
                     axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
-                    anchor.anchor_uid;
+                    anchor.uid;
             }
             if (const game_entity* current = jedbg_get_editing_entity())
             {

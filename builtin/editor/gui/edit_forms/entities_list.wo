@@ -2,9 +2,8 @@
 // 用于显示和编辑当前编辑世界中的实体
 
 import je.gui;
-import builtin.editor.gui.widget.icon_button;
-import builtin.editor.gui.form.input;
-import builtin.editor.gui.form.ask;
+import builtin.api.gui.form.input;
+import builtin.api.gui.form.ask;
 import builtin.api.dbg.main;
 
 using je::gui;
@@ -30,19 +29,35 @@ namespace editor::gui::edit_forms
         // Context menu
         if (BeginPopupContextItem())
         {
+            do MenuItemEnabled(F"DEBUG:{e.uid}", false);
+
             if (MenuItem("重命名"))
             {
-                form::input(
+                jeapi::gui::form::input(
                     "重命名", 
                     "请输入实体的新名称", 
                     e.e->editor::name, 
                     func(newname){
-                        if (context->get_project->validate_world_entity_or_warning(w, e.e))
-                            e.e->editor::set_name(newname);
+                        jeapi::debug::safety_entity_operation(e.uid, 
+                            \e = e->editor::set_name(newname););
                     });
             }
             if (MenuItem("销毁"))
             {
+                jeapi::gui::form::ask(
+                    "确认？", 
+                    F"即将删除实体{e.e->editor::name}\n是否同时删除其全部子实体？", 
+                    func(close_child_entity){
+                        func close_entity_impl(e, close_all)
+                        {
+                            jeapi::debug::safety_entity_operation(e.uid, 
+                                \e = e->close(););
+                            if (close_all)
+                                for (let _, ce : e.childs)
+                                    close_entity_impl(ce, close_all);
+                        }
+                        close_entity_impl(e, close_child_entity);
+                    });
             }
             EndPopup();
         }
@@ -64,11 +79,9 @@ namespace editor::gui::edit_forms
             {
                 if (Button("debug"))
                 {
-                    context->get_project->create_new_entity(
-                        current_editing_world, 
+                    current_editing_world->add_entity(
                         [je::typeinfo::load("Transform::Translation")->val]
                         )
-                        ->unwarp
                         ->editor::set_name("DebugEntity");
                 }
 

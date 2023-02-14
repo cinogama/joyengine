@@ -223,7 +223,7 @@ WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args, size_t argc)
     void* universe = je_ecs_universe_create();
     return wo_ret_gchandle(vm, universe, nullptr, [](void* universe) {
         jeecs::game_universe::destroy_universe(jeecs::game_universe(universe));
-    });
+        });
 }
 
 WO_API wo_api wojeapi_get_universe_from_world(wo_vm vm, wo_value args, size_t argc)
@@ -400,7 +400,7 @@ WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (auto* anc = entity->get_component<jeecs::Transform::ChildAnchor>())
-        return wo_ret_option_string(vm, anc->anchor_uid.to_string().c_str());
+        return wo_ret_option_string(vm, anc->uid.to_string().c_str());
 
     return wo_ret_option_none(vm);
 }
@@ -434,7 +434,7 @@ WO_API wo_api wojeapi_set_parent(wo_vm vm, wo_value args, size_t argc)
         if (entity->get_component<jeecs::Transform::LocalToWorld>())
             entity->remove_component<jeecs::Transform::LocalToWorld>();
 
-        l2p->parent_uid = ca->anchor_uid;
+        l2p->parent_uid = ca->uid;
         return wo_ret_bool(vm, true);
     }
 
@@ -553,7 +553,7 @@ WO_API wo_api wojeapi_is_child_of_entity(wo_vm vm, wo_value args, size_t argc)
 
     if (l2p && archor)
     {
-        return wo_ret_bool(vm, l2p->parent_uid == archor->anchor_uid);
+        return wo_ret_bool(vm, l2p->parent_uid == archor->uid);
     }
     return wo_ret_bool(vm, false);
 }
@@ -593,6 +593,24 @@ WO_API wo_api wojeapi_member_iterator_next(wo_vm vm, wo_value args, size_t argc)
     iter->iter = iter->iter->m_next_member;
 
     return wo_ret_option_val(vm, result);
+}
+
+WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args, size_t argc)
+{
+    void* component_addr = wo_pointer(args + 0);
+    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+    wo_string_t member_name = wo_string(args + 2);
+
+    if (auto* member_info = component_type->find_member_by_name(member_name))
+    {
+        wo_value result = wo_push_struct(vm, 2);
+        wo_set_pointer(wo_struct_get(result, 0),(wo_ptr_t)member_info->m_member_type);
+        wo_set_handle(wo_struct_get(result, 1),
+            (wo_handle_t)(member_info->m_member_offset + (intptr_t)component_addr));
+        return wo_ret_option_val(vm, result);
+    }
+    else
+        return wo_ret_option_none(vm);
 }
 
 // INPUTS
@@ -2142,6 +2160,14 @@ R"(
     {
         namespace editor
         {
+            public func get_member(self: component, name: string)
+            {
+                extern("libjoyecs", "wojeapi_get_components_member")
+                func _get_member(addr: handle, type: typeinfo, name: string)=> option<(typeinfo, native_value)>;
+
+                return _get_member(self.addr, self.type, name);
+            }
+
             public using member_iterator = gchandle;
             namespace member_iterator
             {

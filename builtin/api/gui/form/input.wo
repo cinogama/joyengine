@@ -2,11 +2,9 @@
 // 输入窗口
 
 import je.gui;
-import builtin.editor.gui.main;
-
 using je::gui;
 
-namespace editor::gui::form
+namespace jeapi::gui::form
 {
     public func input(
         title: string, 

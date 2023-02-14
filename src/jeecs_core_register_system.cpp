@@ -35,6 +35,7 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
 
     jeecs::typing::type_info::of<jeecs::Editor::Name>("Editor::Name");
+    jeecs::typing::type_info::of<jeecs::Editor::Anchor>("Editor::Anchor");
     jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
     jeecs::typing::type_info::of<jeecs::Editor::Invisable>("Editor::Invisable");
     jeecs::typing::type_info::of<jeecs::Editor::EditorLife>("Editor::EditorLife");
