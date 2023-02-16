@@ -471,8 +471,7 @@ R"(
                 ->> \type = (type, AcceptDragDropPayload(type));
                 ->  forall(\accept_type_result = accept_result->has
                     where (_, accept_result) = accept_type_result;)
-                ->  reduce(\l, r = (l[0], l[1]);)
-                ->  reduce
+                ->  get(0)
                 ->> \e = (e[0], e[1]->val);
                 ;
 
@@ -494,7 +493,7 @@ R"(
 
     extern("libjoyecs", "je_gui_launch")
     private func _launch<LT, FT, ATs>(coloop:LT, job_func:FT, args: ATs)=> void
-        where coloop(job_func, args) is anything;
+        where coloop(job_func, args) is void;
 
     private func dialog<FT, ATs>(job_func:FT, args: ATs)=> void
         where job_func(args...) is bool;

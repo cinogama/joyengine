@@ -177,7 +177,7 @@ namespace editor
             jeapi::gui::form::errmsg("错误", "请求的世界不存在"); 
             return false;
         }
-        public func reset_editing_world(self: Project, world: je::world)=> result<anything, string>
+        public func reset_editing_world(self: Project, world: je::world)=> result<void, string>
         {
             if (self->is_project_world(world))
             {
@@ -190,7 +190,7 @@ namespace editor
                 value(last_edit_world)?
                 {
                     if (last_edit_world == world)
-                        return result::ok(nil); // 新老世界相同，跳过更新
+                        return result::ok(do nil); // 新老世界相同，跳过更新
 
                     last_edit_world->remove_system(self->get_config_editor_system);
                 }
@@ -199,7 +199,7 @@ namespace editor
                 jeapi::rend::reset_rend_world(world, self->get_config_graphic_pipeline);
                 do world->add_system(self->get_config_editor_system);
 
-                return result::ok(nil);
+                return result::ok(do nil);
             }
             return result::err("给定的世界不属于当前项目");
         }
@@ -268,7 +268,7 @@ namespace editor
             }
             return world.m_world_instance;
         }
-        public func destroy_world(self: Project, world: je::world)=> result<anything, string>
+        public func destroy_world(self: Project, world: je::world)=> result<void, string>
         {
             // 使用create_new_world创建的世界，务必使用destroy_world销毁，不应该close
             match (self->_get_project_world(world))
@@ -290,7 +290,7 @@ namespace editor
 
                 world->close;
                 
-                return result::ok(nil);
+                return result::ok(do nil);
             }
             none?
                 return result::err("期待销毁的世界不存在");

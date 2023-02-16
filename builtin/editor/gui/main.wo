@@ -22,7 +22,7 @@ namespace editor::gui
             return self.m_project;
         }
         public func launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
-            where f(args...) is anything;
+            where f(args...) is bool || f(args...) is void;
         {
             je::gui::launch(func(){
                 let result = f(args...);
