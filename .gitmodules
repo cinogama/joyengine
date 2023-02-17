@@ -17,7 +17,7 @@
 [submodule "3rd/woolang"]
 	path = 3rd/woolang
 	url = https://git.cinogama.net/cinogamaproject/woolang.git
-	branch = master
+	branch = release
 [submodule "3rd/box2d"]
 	path = 3rd/box2d
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git

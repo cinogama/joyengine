@@ -1,5 +1,5 @@
 cd 3rd/woolang
-git checkout master
+git checkout release
 git pull
 cd ../..
 baozi install
