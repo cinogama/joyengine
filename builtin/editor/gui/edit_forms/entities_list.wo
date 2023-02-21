@@ -19,9 +19,9 @@ namespace editor::gui::edit_forms
             + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
             + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
             + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
-            // + get_current_entity()->>\ce = ce == e.e 
-            //  ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
-            //  | TreeNodeAttribute::ImGuiTreeNodeFlags_None;
+            + (context->get_editing_entity()->>\eeid = eeid == e.uid;->valor(false) 
+                ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
+                | TreeNodeAttribute::ImGuiTreeNodeFlags_None);
             ;
         let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->editor::chunkinfo}", 
             treenode_attribute);
@@ -36,8 +36,7 @@ namespace editor::gui::edit_forms
                     "请输入实体的新名称", 
                     e.e->editor::name, 
                     func(newname){
-                        jeapi::debug::safety_entity_operation(e.uid, 
-                            \e = e->editor::set_name(newname););
+                        e.uid->justdo(\e = e->editor::set_name(newname););
                     });
             }
             if (MenuItem("销毁"))
@@ -48,8 +47,7 @@ namespace editor::gui::edit_forms
                     func(close_child_entity){
                         func close_entity_impl(e, close_all)
                         {
-                            jeapi::debug::safety_entity_operation(e.uid, 
-                                \e = e->close(););
+                            e.uid->justdo(\e = e->close(););
                             if (close_all)
                                 for (let _, ce : e.childs)
                                     close_entity_impl(ce, close_all);
@@ -59,6 +57,8 @@ namespace editor::gui::edit_forms
             }
             EndPopup();
         }
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
+            context->set_editing_entity(option::value(e.e));
 
         if (showchild)
         {
@@ -77,9 +77,8 @@ namespace editor::gui::edit_forms
             {
                 if (Button("debug"))
                 {
-                    current_editing_world->add_entity(
-                        [je::typeinfo::load("Transform::Translation")->val]
-                        )
+                    current_editing_world->add_entity([
+                        je::typeinfo::load("Transform::Translation")->val])
                         ->editor::set_name("DebugEntity");
                 }
 

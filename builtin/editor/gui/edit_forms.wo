@@ -16,6 +16,7 @@ namespace editor::gui
 
         context->launch_editor_form(edit_forms::show_worlds_list, (context, open_worlds_list));
         context->launch_editor_form(edit_forms::show_entities_list, (context, open_entities_list));
-        context->launch_editor_form(edit_forms::show_inspector, (context, open_inspector));
+        context->launch_editor_form(edit_forms::show_inspector, 
+            (context, open_inspector, edit_forms::InspectorContext::new()));
     }
 }

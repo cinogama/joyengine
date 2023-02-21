@@ -9,22 +9,48 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
-    public func show_inspector(context: EditorContext, show: mutable<bool>)
+    public using InspectorContext = struct {
+        current_entity: mut option<je::entity>,
+    }
+    {
+        public func new()
+        {
+            return InspectorContext{
+                current_entity = mut option::none,
+            };
+        }
+    }
+    public func show_inspector(context: EditorContext, show: mutable<bool>, insctx: InspectorContext)
     {
         if (show->get)
         {
+            // 要求获取当前编辑中的实体并更新，需要注意这一操作未必实时
+            std::panic("TODO: 如果整个世界直接销毁，此处更新得到的实体无法验证并没有错误冗余，会直接爆炸");
+            context->dosth_at_editing_entity(\oe = insctx.current_entity = oe;);
+
             do show->set(BeginOpen("检视面板##jeeditor"));
 
             // 1. 获取当前编辑中的实体，
+            match (insctx.current_entity)
+            {
+            value(cur_e)?
+            { 
+                for (let ctype, component: cur_e->editor::get_components)
+                {
+                    Text(ctype->name);
+                    // TODO;
+                }
+                // 2. 遍历实体的非Editor组件
 
-            // 2. 遍历实体的非Editor组件
+                // 2.1 遍历组件的成员
 
-            // 2.1 遍历组件的成员
+                // 3. 遍历实体的材质（如果有
 
-            // 3. 遍历实体的材质（如果有
-
-            // 3.1 遍历材质的Uniform数据和纹理信息
-
+                // 3.1 遍历材质的Uniform数据和纹理信息
+            }
+            none?
+                TextDisabled("没有编辑中的实体");
+            }
             End();
         }
     }

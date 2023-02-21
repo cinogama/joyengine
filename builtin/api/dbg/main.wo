@@ -6,15 +6,31 @@ import builtin.api.gui.form.msg;
 
 namespace jeapi::debug
 {
-    public alias uid_t = string;
+    public using Eeid = string
+    {
+        public func dosth(self: Eeid, f: (option<je::entity>)=>void)
+        {
+            safety_entity_operation(self, f);
+        }
+        public func justdo(self: Eeid, f: (je::entity)=>void)
+        {
+            self->dosth(func(oe){
+                match (oe)
+                {
+                value(e)? f(e);
+                none? gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{self}");
+                }
+            });
+        }
+    }
 
     public using EntityChilds = struct{
         e: je::entity, 
-        uid: uid_t,
+        uid: Eeid,
         childs: array<EntityChilds>
     };
 
-    public func get_entity_editor_uid(entity: je::entity)
+    public func get_entity_editor_id(entity: je::entity)=> Eeid
     {
         static let EditorAnchorTypeID = je::typeinfo::load("Editor::Anchor")->val;
                       
@@ -25,15 +41,21 @@ namespace jeapi::debug
             -> val...
             -> \type, nval = nval->to_string(type);
             ;
-        return anchor_uid;
-    }
 
-    let request_list = {}mut: map<uid_t, vec<(je::entity)=>void>>;
-    public func safety_entity_operation(euid: uid_t, operation: (je::entity)=>void)
+        // 字符串非常容易和其他东西混在一起，为了保证类型的纯净，
+        // 我们使用新类型 Eeid
+        return anchor_uid as string: Eeid;
+    }
+    
+    alias OperationCallback = (option<je::entity>)=>void;
+
+    let request_list = {}mut: map<Eeid, vec<OperationCallback>>;
+    func safety_entity_operation(euid: Eeid, operation: OperationCallback)
     {
         // 将UID放进处理队列中，如果实际上没有找到此实体，那么就弹窗报警
         request_list->getorset(euid, []mut)->add(operation);
     }
+
     public func update_safety_entity_operation_requests(universe: je::universe)
     {
         // 找个地方每帧/几帧调用一下
@@ -48,18 +70,18 @@ namespace jeapi::debug
             =>> \w = w->editor::get_all_entities;
             ->> func(e)
             {
-                let euid = get_entity_editor_uid(e);
+                let euid = get_entity_editor_id(e);
                 do current_request->get(euid)
                     ->> \jobs = jobs
-                        ->> \job = job(e);;
+                        ->> \job = job(option::value(e));;
                     ->> \_ = current_request->remove(euid);
                     ;
             };
 
         for (let euid, jobs : current_request)
         {
-            do jobs->> \_ = gui::form::errmsg(
-                "失败", F"操作无法完成，不存在的实体：\n{euid}");;
+            do jobs->> \job = job(option::none);;
+            // gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{euid}");;
         }
     }
 
@@ -73,7 +95,7 @@ namespace jeapi::debug
             {                
                 result->add(EntityChilds{
                     e = curentity, 
-                    uid = get_entity_editor_uid(curentity),
+                    uid = get_entity_editor_id(curentity),
                     childs = get_entity_and_childs(iter->childs_iter),
                     });
             }

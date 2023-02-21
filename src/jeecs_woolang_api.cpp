@@ -1937,6 +1937,16 @@ R"(
             extern("libjoyecs", "wojeapi_find_entity_with_chunk_info")
             public func find_entity_by_chunkinfo(chunkinfo: string)=> entity;
 
+            public func get_components(self: entity)
+            {
+                return self->get_components_types()
+                    // If current entity died, we can still get types from chunk, but 
+                    // failed to get component instance. Check here.
+                    =>> \tid = comp->has ? [(tid, comp->val)] | []
+                        where comp = self->get_component(tid);
+                    ->  mapping;
+            }
+
             public func get_components_types(self: entity)=> array<typeinfo>
             {
                 extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")

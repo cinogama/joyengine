@@ -13,10 +13,7 @@ namespace editor::gui
     public func show_main_menu(context: EditorContext)
     {
         context->launch_editor_form(func(){
-
-            // 更新一下对实体的请求
-            jeapi::debug::update_safety_entity_operation_requests(
-                context->get_project->get_env->get_universe);
+            context->update_api();
 
             do BeginMainMenuBar();
             if (BeginMenu("JoyEngine"))
