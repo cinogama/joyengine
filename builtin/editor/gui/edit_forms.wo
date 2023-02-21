@@ -14,9 +14,8 @@ namespace editor::gui
         let open_entities_list = mutable::create(true);
         let open_inspector = mutable::create(true);
 
-        context->launch_editor_form(edit_forms::show_worlds_list, (context, open_worlds_list));
-        context->launch_editor_form(edit_forms::show_entities_list, (context, open_entities_list));
-        context->launch_editor_form(edit_forms::show_inspector, 
-            (context, open_inspector, edit_forms::InspectorContext::new()));
+        context->fixed_launch_editor_form(edit_forms::show_worlds_list, (context, open_worlds_list));
+        context->fixed_launch_editor_form(edit_forms::show_entities_list, (context, open_entities_list));
+        context->fixed_launch_editor_form(edit_forms::show_inspector, (context, open_inspector));
     }
 }

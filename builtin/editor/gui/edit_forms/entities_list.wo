@@ -19,6 +19,7 @@ namespace editor::gui::edit_forms
             + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
             + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
             + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+            // 如果当前实体被选中，那么高亮
             + (context->get_editing_entity()->>\eeid = eeid == e.uid;->valor(false) 
                 ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
                 | TreeNodeAttribute::ImGuiTreeNodeFlags_None);

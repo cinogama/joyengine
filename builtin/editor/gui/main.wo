@@ -14,6 +14,9 @@ namespace editor::gui
 
         // 这玩意儿存着被选中的实体索引，用于对此实体执行安全操作。
         m_editing_entity_chunkinfo: mut option<jeapi::debug::Eeid>,
+
+        // 这里放着必须照顺序执行的事务委托
+        m_fix_update_jobs: vec<()=>bool>,
     }
     {
         // 由 main_menu 负责调用此函数，更新api和实体请求
@@ -28,6 +31,12 @@ namespace editor::gui
                 }); 
             none?;
             }
+
+            // 在此处运行和更新固定更新逻辑
+            self.m_fix_update_jobs->copy(self.m_fix_update_jobs
+                =>> \job_delegate = job_delegate() ? [job_delegate]mut | []mut;
+                );
+
             // 更新一下对实体的请求
             jeapi::debug::update_safety_entity_operation_requests(
                 self->get_project->get_env->get_universe);
@@ -39,6 +48,14 @@ namespace editor::gui
         public func get_project(self: EditorContext)
         {
             return self.m_project;
+        }
+        public func fixed_launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
+            where f(args...) is bool || f(args...) is void;
+        {
+            if (f(args...) is bool)
+                self.m_fix_update_jobs->add(\=f(args...););
+            else
+                self.m_fix_update_jobs->add(func(){f(args...); return true;});
         }
         public func launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
             where f(args...) is bool || f(args...) is void;
@@ -81,6 +98,7 @@ namespace editor::gui
             m_stopped = mut false,
             m_project = proj,
             m_editing_entity_chunkinfo = mut option::none,
+            m_fix_update_jobs = []mut,
         };
 
         // 开启主菜单
