@@ -79,6 +79,7 @@ namespace editor::gui::edit_forms
                 if (Button("debug"))
                 {
                     current_editing_world->add_entity([
+                        je::typeinfo::load("Transform::LocalScale")->val,
                         je::typeinfo::load("Transform::Translation")->val])
                         ->editor::set_name("DebugEntity");
                 }

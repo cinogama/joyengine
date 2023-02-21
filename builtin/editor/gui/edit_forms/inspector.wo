@@ -21,15 +21,40 @@ namespace editor::gui::edit_forms
                 {
                 value(cur_e)?
                 { 
+                    // 2. 遍历实体的非Editor组件
+                    let grouped_components = {}mut: map<string, vec<(je::typeinfo, je::component)>>;
                     for (let ctype, component: cur_e->editor::get_components)
                     {
-                        Text(ctype->name);
-                        // TODO;
+                        let names = ctype->name->split("::");
+                        let groupname = names->len >= 2 ? names[0] | "<无>";
+                        
+                        grouped_components->getorset(groupname, []mut)
+                                ->add((ctype, component));
                     }
-                    // 2. 遍历实体的非Editor组件
-    
-                    // 2.1 遍历组件的成员
-    
+
+                    for (let groupname, components: grouped_components)
+                    {
+                        if (groupname == "Editor")
+                            // 事编辑器组件，跳过显示，不然就露馅了
+                            continue;
+                        
+                        if (TreeNode(groupname))
+                        {
+                            for (let _, (ctype, component) : components)
+                            {
+                                // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
+                                TextDisabled(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;));
+
+                                for (let mname, mvalue: component->editor::members)
+                                {
+                                    Text(mname);
+                                    // TODO 支持编辑值，不过得先支持一下各种类型对应的编辑组件;
+                                }
+                                // 2.1 遍历组件的成员
+                            }
+                            TreePop();
+                        }
+                    }
                     // 3. 遍历实体的材质（如果有
     
                     // 3.1 遍历材质的Uniform数据和纹理信息
