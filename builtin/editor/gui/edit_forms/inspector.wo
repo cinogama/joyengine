@@ -4,6 +4,7 @@
 import je.gui;
 import builtin.api.gui.form.input;
 import builtin.api.gui.form.ask;
+import builtin.api.gui.type_edit_widget_mgr;
 
 using je::gui;
 
@@ -45,10 +46,18 @@ namespace editor::gui::edit_forms
                                 // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
                                 TextDisabled(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;));
 
-                                for (let mname, mvalue: component->editor::members)
+                                for (let mname, (mtype, mvalue): component->editor::members)
                                 {
+                                    do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
+                                    SameLine();
+                                    BeginGroup();
+
                                     Text(mname);
                                     // TODO 支持编辑值，不过得先支持一下各种类型对应的编辑组件;
+                                    do jeapi::gui::edit_cur_native_value(mname, mtype, mvalue);
+
+                                    // TODO: 检查字段更新然后干点啥事儿？
+                                    EndGroup();
                                 }
                                 // 2.1 遍历组件的成员
                             }

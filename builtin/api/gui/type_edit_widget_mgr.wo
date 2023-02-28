@@ -1,0 +1,51 @@
+// type_edit_widget_mgr.wo
+// 管理类型及对应数据的
+
+import je;
+import je.gui;
+
+using je;
+using je::gui;
+
+namespace jeapi::gui
+{
+    public alias TypedEditorMethod = (string/*token*/, je::native_value)=>bool;
+
+    let _registed_editor_methods = {}mut: map<je::typeinfo, TypedEditorMethod>;
+    
+    public func register_editor_for_native_value(type: je::typeinfo, method: TypedEditorMethod)
+    {
+        if (_registed_editor_methods->find(type))
+            std::panic(F"不允许重复添加{type->name}的编辑方法");
+            
+        _registed_editor_methods->set(type, method);
+    }
+    public func edit_cur_native_value(tag: string, type: je::typeinfo, native_value: je::native_value)
+    {
+        let mut result = false;
+        do InvisibleButton(F"##{tag}$PADDING", (2., 1.));
+        SameLine();
+        BeginGroup();
+        match (_registed_editor_methods->get(type))
+        {
+        value(method)?
+            result = method(tag, native_value);
+        none?
+            // TODO: 支持一下自定义字段
+            TextDisabled(F"<无可用控件>");
+        }
+        EndGroup();
+
+        return result;
+    }
+
+    register_editor_for_native_value(je::typeinfo::float, func(tag, nvalue){
+        return InputFloat(F"##{tag}", nvalue->float)->>\fv = nvalue->set_float(fv);->has;
+    });
+    register_editor_for_native_value(je::typeinfo::float2, func(tag, nvalue){
+        return InputFloat2(F"##{tag}", nvalue->float2...)->>\fv2 = nvalue->set_float2(fv2...);->has;
+    });
+    register_editor_for_native_value(je::typeinfo::float3, func(tag, nvalue){
+        return InputFloat3(F"##{tag}", nvalue->float3...)->>\fv3 = nvalue->set_float3(fv3...);->has;
+    });
+}
