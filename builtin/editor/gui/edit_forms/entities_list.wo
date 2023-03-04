@@ -27,9 +27,7 @@ namespace editor::gui::edit_forms
         let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->editor::chunkinfo}", 
             treenode_attribute);
 
-        // Context menu
-        if (BeginPopupContextItem())
-        {
+        jeapi::gui::context_menu(func(){
             if (MenuItem("重命名"))
             {
                 jeapi::gui::form::input(
@@ -56,8 +54,8 @@ namespace editor::gui::edit_forms
                         close_entity_impl(e, close_child_entity);
                     });
             }
-            EndPopup();
-        }
+        });
+
         if (IsItemClickedLeft() && !IsItemToggledOpen())
             context->set_editing_entity(option::value(e.e));
 

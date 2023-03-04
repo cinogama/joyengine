@@ -5,6 +5,7 @@ import je.gui;
 import builtin.api.gui.form.input;
 import builtin.api.gui.form.ask;
 import builtin.api.gui.type_edit_widget_mgr;
+import builtin.api.gui.context_menu;
 
 using je::gui;
 
@@ -39,30 +40,45 @@ namespace editor::gui::edit_forms
                             // 事编辑器组件，跳过显示，不然就露馅了
                             continue;
                         
-                        if (TreeNode(groupname))
+                        assert(TreeNodeEx(groupname, TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf));
+
+                        for (let _, (ctype, component) : components)
                         {
-                            for (let _, (ctype, component) : components)
-                            {
-                                // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
-                                TextDisabled(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;));
-
-                                for (let mname, (mtype, mvalue): component->editor::members)
+                            // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
+                            assert(TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;),
+                                TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf));
+                            
+                            jeapi::gui::context_menu(func(){
+                                if (MenuItem(F"移除 {ctype->name}"))
                                 {
-                                    do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
-                                    SameLine();
-                                    BeginGroup();
+                                    let eeid = jeapi::debug::get_entity_editor_id(cur_e);
+                                    let ename = cur_e->editor::name;
 
-                                    Text(mname);
-                                    // TODO 支持编辑值，不过得先支持一下各种类型对应的编辑组件;
-                                    do jeapi::gui::edit_cur_native_value(mname, mtype, mvalue);
-
-                                    // TODO: 检查字段更新然后干点啥事儿？
-                                    EndGroup();
+                                    jeapi::gui::form::ask(
+                                        "确认？", 
+                                        F"即将从实体{ename}中移除组件{ctype->name}，是否确认？", 
+                                        func(asure){
+                                            eeid->justdo(\e=e->editor::remove_component(ctype););
+                                        });
                                 }
-                                // 2.1 遍历组件的成员
+                            });
+
+                            for (let mname, (mtype, mvalue): component->editor::members)
+                            {
+                                do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
+                                SameLine();
+                                BeginGroup();
+
+                                Text(mname);
+                                
+                                // TODO: 检查字段更新然后干点啥事儿？
+                                do jeapi::gui::edit_cur_native_value(mname, mtype, mvalue);
+
+                                EndGroup();
                             }
                             TreePop();
                         }
+                        TreePop();
                     }
                     // 3. 遍历实体的材质（如果有
     
