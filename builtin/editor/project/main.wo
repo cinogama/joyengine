@@ -250,6 +250,52 @@ namespace editor
             
             self.m_worlds->add(world);
 
+            do world.m_world_instance->add_system(
+                je::typeinfo::load("Translation::TranslationUpdatingSystem")->val);
+
+            // 创建默认世界之后，自动顺便创建调试使用的摄像机
+            let camera_walker = world.m_world_instance->add_entity([
+                // Transform 族组件
+                je::typeinfo::load("Transform::LocalPosition")->val,
+                je::typeinfo::load("Transform::LocalRotation")->val,
+                je::typeinfo::load("Transform::LocalToWorld")->val,
+                je::typeinfo::load("Transform::Translation")->val,
+                je::typeinfo::load("Transform::Anchor")->val,
+                // Editor 族组件
+                je::typeinfo::load("Editor::Invisable")->val,
+                je::typeinfo::load("Editor::EditorWalker")->val,
+            ]);
+            // 摄像机，同时负责x轴旋转
+            let editor_camera = world.m_world_instance->add_entity([
+                // Transform 族组件
+                je::typeinfo::load("Transform::LocalRotation")->val,
+                je::typeinfo::load("Transform::LocalToParent")->val,
+                je::typeinfo::load("Transform::Translation")->val,
+                // Editor 族组件
+                je::typeinfo::load("Editor::Invisable")->val,
+                je::typeinfo::load("Editor::EditorWalker")->val,
+                // Camera 族组件
+                je::typeinfo::load("Camera::PerspectiveProjection")->val,
+                je::typeinfo::load("Camera::Projection")->val,
+                je::typeinfo::load("Camera::RendToFramebuffer")->val,
+            ]);
+            editor_camera->je::editor::apply_camera_framebuf_setting(320, 240);
+            do editor_camera->editor::set_parent(camera_walker, true);
+    
+            // 移动器，这里只创建根实体，具体的轴由编辑器系统生成
+            do world.m_world_instance->add_entity([
+                // Transform 族组件
+                je::typeinfo::load("Transform::LocalPosition")->val,
+                je::typeinfo::load("Transform::LocalRotation")->val,
+                je::typeinfo::load("Transform::LocalScale")->val,
+                je::typeinfo::load("Transform::Anchor")->val,
+                je::typeinfo::load("Transform::Translation")->val,
+                je::typeinfo::load("Transform::LocalToWorld")->val,
+                // Editor 族组件
+                je::typeinfo::load("Editor::Invisable")->val,
+                je::typeinfo::load("Editor::EntityMoverRoot")->val,
+            ]);
+
             // 有新建世界进来，关掉默认世界（如果有的话）
             match (self.m_default_worlds)
             {

@@ -6,8 +6,21 @@ import builtin.api.gui.form.msg;
 
 namespace jeapi::debug
 {
-    public using Eeid = string
+    public using Eeid = je::entity::editor::euid_t
     {
+        namespace editor
+        {
+            public func select(self: option<Eeid>)
+            {
+                // 这个类型转换确实很屑，嘻嘻嘻……
+                je::entity::editor::set_editing_uid(self->>\v=v as Eeid: string: je::entity::editor::euid_t;);
+            }
+            public func editing()
+            {
+                // 这个类型转换还是很屑，嘻嘻嘻……
+                return je::entity::editor::get_editing_uid()->>\v=v as je::entity::editor::euid_t: string: Eeid;;
+            }
+        }
         public func dosth(self: Eeid, f: (option<je::entity>)=>void)
         {
             safety_entity_operation(self, f);

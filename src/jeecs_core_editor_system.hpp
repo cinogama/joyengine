@@ -6,6 +6,8 @@
 #   include "jeecs.hpp"
 #endif
 
+#include <optional>
+
 namespace jeecs
 {
     namespace Editor
@@ -88,6 +90,9 @@ namespace jeecs
             // Why write an empty constructor function here?
             // It's a bug of clang/gcc, fuck!
             input_msg()noexcept {}
+
+            // selected_entity 用于储存当前被选择的实体，仅用于编辑窗口中，可能为空
+            std::optional<jeecs::game_entity> selected_entity;
         };
 
         inline static input_msg _inputs = {};
@@ -361,7 +366,7 @@ public let frag =
                     axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
                     anchor.uid;
             }
-            if (const game_entity* current = jedbg_get_editing_entity())
+            if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
             {
                 if (auto* trans = current->get_component<Transform::Translation>())
                 {
@@ -387,7 +392,7 @@ public let frag =
             Renderer::Shape* shape,
             Renderer::Shaders& shaders)
         {
-            auto* editing_entity = jedbg_get_editing_entity();
+            const auto* editing_entity = _inputs.selected_entity ? &_inputs.selected_entity.value(): nullptr;
             Transform::LocalPosition* editing_pos = editing_entity
                 ? editing_entity->get_component<Transform::LocalPosition>()
                 : nullptr;
@@ -465,8 +470,15 @@ public let frag =
             _inputs.l_buttom_pushed = input::first_down(_inputs.l_buttom);
             _inputs.r_buttom_click = input::is_up(_inputs.r_buttom);
             _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
+            _inputs.selected_entity = std::nullopt;
 
             select_from(get_world())
+                // 获取被选中的实体
+                .exec([this](game_entity e, Editor::Anchor& anchor) 
+                    {
+                        if (anchor.uid == jedbg_get_editing_entity_uid())
+                            _inputs.selected_entity = std::optional(e);
+                    })
                 // Move walker(root)
                 .exec(&DefaultEditorSystem::MoveWalker).contain<Editor::EditorWalker>().except<Camera::Projection>()
                 // Move walker(camera)
@@ -482,23 +494,34 @@ public let frag =
 
             if (nullptr == _grab_axis_translation)
             {
+                auto _set_editing_entity = [](const jeecs::game_entity& e)
+                {
+                    jeecs::Editor::Anchor* anchor = e.get_component<jeecs::Editor::Anchor>();
+                    if (anchor == nullptr)
+                        anchor = e.add_component<jeecs::Editor::Anchor>();
+
+                    assert(anchor != nullptr);
+
+                    jedbg_set_editing_entity_uid(anchor->uid);
+                };
+
                 if (!selected_list.empty())
                 {
-                    const game_entity* e = jedbg_get_editing_entity();
+                    const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
                     if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
                         [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
                         fnd != selected_list.end())
                     {
                         if (++fnd == selected_list.end())
-                            jedbg_set_editing_entity(&selected_list.begin()->entity);
+                            _set_editing_entity(selected_list.begin()->entity);
                         else
-                            jedbg_set_editing_entity(&fnd->entity);
+                            _set_editing_entity(fnd->entity);
                     }
                     else
-                        jedbg_set_editing_entity(&selected_list.begin()->entity);
+                        _set_editing_entity(selected_list.begin()->entity);
                 }
                 else if (_inputs.l_buttom_pushed)
-                    jedbg_set_editing_entity(nullptr);
+                    jedbg_set_editing_entity_uid(jeecs::typing::uid_t{/* 000... */});
             }
 
             je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);

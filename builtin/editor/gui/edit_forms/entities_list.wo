@@ -24,6 +24,11 @@ namespace editor::gui::edit_forms
                 ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
                 | TreeNodeAttribute::ImGuiTreeNodeFlags_None);
             ;
+
+        if (e.e->editor::get_component(je::typeinfo::load("Editor::Invisable")->val)->has)
+            // 不可见实体，不准看！
+            return;
+
         let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->editor::chunkinfo}", 
             treenode_attribute);
 
@@ -78,8 +83,11 @@ namespace editor::gui::edit_forms
                 {
                     current_editing_world->add_entity([
                         je::typeinfo::load("Transform::LocalScale")->val,
-                        je::typeinfo::load("Transform::Translation")->val])
-                        ->editor::set_name("DebugEntity");
+                        je::typeinfo::load("Transform::LocalPosition")->val,
+                        je::typeinfo::load("Transform::LocalToWorld")->val,
+                        je::typeinfo::load("Transform::Translation")->val,
+                        je::typeinfo::load("Renderer::Shaders")->val,
+                        ])->editor::set_name("DebugEntity");
                 }
 
                 do jeapi::debug::get_all_entities_layer_from_world(current_editing_world)

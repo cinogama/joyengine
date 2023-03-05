@@ -5,6 +5,7 @@ import builtin.editor.gui.main;
 import builtin.editor.gui.edit_forms.worlds_list;
 import builtin.editor.gui.edit_forms.entities_list;
 import builtin.editor.gui.edit_forms.inspector;
+import builtin.editor.gui.edit_forms.viewport;
 
 namespace editor::gui
 {
@@ -13,9 +14,11 @@ namespace editor::gui
         let open_worlds_list = mutable::create(true);
         let open_entities_list = mutable::create(true);
         let open_inspector = mutable::create(true);
+        let open_viewport = mutable::create(true);
 
         context->fixed_launch_editor_form(edit_forms::show_worlds_list, (context, open_worlds_list));
         context->fixed_launch_editor_form(edit_forms::show_entities_list, (context, open_entities_list));
         context->fixed_launch_editor_form(edit_forms::show_inspector, (context, open_inspector));
+        context->fixed_launch_editor_form(edit_forms::show_viewport, (context, open_viewport));
     }
 }

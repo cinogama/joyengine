@@ -69,7 +69,7 @@ namespace editor::gui::edit_forms
                                 SameLine();
                                 BeginGroup();
 
-                                Text(mname);
+                                TextDisabled(mname);
                                 
                                 // TODO: 检查字段更新然后干点啥事儿？
                                 do jeapi::gui::edit_cur_native_value(mname, mtype, mvalue);

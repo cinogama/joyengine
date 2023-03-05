@@ -1,0 +1,145 @@
+// gui.edit_forms.viewport
+// 用于显示画面！是最主要的编辑器窗口
+
+import je.gui;
+import builtin.api.gui.form.input;
+import builtin.api.gui.form.ask;
+
+using je::gui;
+
+namespace editor::gui::edit_forms
+{
+    public func show_viewport(context: EditorContext, show: mutable<bool>)
+    {
+        if (show->get)
+        {
+            // 坏！不过之后再来改吧
+            static let mut windows_moveable = true;
+
+            show->set(BeginAttrOpen("调试器视口", 
+                WindowsAttribute::ImGuiWindowFlags_MenuBar
+                + (windows_moveable 
+                    ? WindowsAttribute::ImGuiWindowFlags_None
+                    | WindowsAttribute::ImGuiWindowFlags_NoMove)));
+
+            let debug_camera_entity = context->get_project->get_editing_world
+                =>> \w = w->editor::get_all_entities
+                    ->forall(\e = 
+                        e->editor::get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
+                        && e->editor::get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
+                    ;)
+                    ->reduce(\l, r = l;)
+                    ;
+            ;
+
+            if (BeginMenuBar())
+            {
+                if (MenuItem("调试运行"))
+                    std::panic("TODO;");
+                if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
+                {
+                    let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPass")->val;
+                    if (debug_camera_entity->val->editor::get_component(l2d_camera_pass_component_type)->has)
+                        debug_camera_entity->val->editor::remove_component(l2d_camera_pass_component_type);
+                    else
+                        do debug_camera_entity->val->editor::add_component(l2d_camera_pass_component_type);
+                }
+                EndMenuBar();
+            }
+
+            match(debug_camera_entity =>> \camera = je::editor::get_framebuf_texture(camera, 0);)
+            {
+            value(frametex)?
+                {
+                    let (frame_tex_width, frame_tex_height) = frametex->size;
+
+                    let (available_width, available_height) = GetContentRegionAvail();
+
+                    let (wx, wy) = GetWindowPos();
+                    let (lupx, lupy) = GetCursorPos();
+
+                    ImageSize(frametex, available_width: int, available_height: int);
+
+                    let (itemw, itemh) = GetItemRectSize();
+                    let (mx, my) = GetMousePos();
+                    let (offsetx, offsety) = (mx - lupx - wx, my - lupy - wy);
+
+                    if (IsItemHovered())
+                    {
+                        // 在渲染区域内！
+
+                        windows_moveable = false;
+
+                        let uniform_mpos_x = 2. * ((offsetx:int - itemw:int/2):real / itemw), 
+                            uniform_mpos_y = -2. * ((offsety:int - itemh:int/2):real / itemh);
+
+                        je::editor::enable_editor_system(true);
+                        je::editor::update_editor_mouse_pos(
+                            uniform_mpos_x, 
+                            uniform_mpos_y, 
+                            wx:int + lupx:int + (itemw:int/2), 
+                            wy:int + lupy:int + (itemh:int/2));
+
+                        static let 
+                            mut right_key_down_time = 0., 
+                            mut noclick_flag = true;
+
+                        if (je::input::keydown(je::keycode::MOUSE_R_BUTTION) && noclick_flag)
+                        {
+                            noclick_flag = false;
+                            right_key_down_time = std::time();
+                        }
+
+                        if (!je::input::keydown(je::keycode::MOUSE_R_BUTTION))
+                        {
+                            noclick_flag = true;
+                            if (std::time() - right_key_down_time < 0.3)
+                                OpenPopup("RightClickContextMenu");
+                        }
+                    }
+                    else
+                    {
+                        windows_moveable = true;
+                        je::editor::enable_editor_system(false);
+                    }
+
+                    if (frame_tex_width != available_width: int || frame_tex_height != available_height: int)
+                    {
+                        debug_camera_entity
+                            ->val
+                            ->je::editor::apply_camera_framebuf_setting(available_width: int, available_height: int);
+                    }
+
+                    // if (BeginPopup("RightClickContextMenu"))
+                    // {
+                    //     // if (MenuItem("新建实体"))
+                    //     //     launch(EntityCreator::show, (EntityCreator::create_context(),));
+                    //     // if (MenuItem("粘贴实体"))
+                    //     // {
+                    //     //     let c = je::gui::GetClipboardText();
+                    //     //     match (je::world::rend()
+                    //     //         =>> \w = c->todict 
+                    //     //             =>> \dic = editor::Serialize::restore_entity(w, dic);
+                    //     //         ;)
+                    //     //     {
+                    //     //     value(e)?
+                    //     //         generic::msgbox("创建了新实体", F"已创建 {e->editor::name} {e->editor::chunkinfo}");
+                    //     //     none?
+                    //     //         generic::msgbox("复制实体失败", "无法创建实体，剪贴板内没有有效的数据");
+                    //     //     }
+                    //     // }
+                    //     // Separator();
+                    //     // 此处放一些和实体编辑器相关的功能
+                    //     std::panic("TODO");
+
+                    //     EndPopup();
+                    // }
+                }
+            none?
+                Text("未找到编辑器渲染使用的摄像机或无法获取摄像机的渲染结果，因此无法预览渲染结果");
+            }
+
+            End();
+        }
+    }
+}

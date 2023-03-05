@@ -2218,14 +2218,11 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeec
     return outresult;
 }
 
-static std::optional<jeecs::game_entity> _editor_entity;
+static jeecs::typing::uid_t _editor_entity_uid;
 
-void jedbg_set_editing_entity(const jeecs::game_entity* _entity)
+void jedbg_set_editing_entity_uid(const jeecs::typing::uid_t& uid)
 {
-    if (_entity)
-        _editor_entity = *_entity;
-    else
-        _editor_entity = std::nullopt;
+    _editor_entity_uid = uid;
 }
 
 const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world)
@@ -2249,11 +2246,9 @@ const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _w
 
 }
 
-const jeecs::game_entity* jedbg_get_editing_entity()
+jeecs::typing::uid_t jedbg_get_editing_entity_uid()
 {
-    if (_editor_entity.has_value())
-        return &_editor_entity.value();
-    return nullptr;
+    return _editor_entity_uid;
 }
 
 void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job)

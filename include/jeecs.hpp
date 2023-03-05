@@ -137,6 +137,11 @@ namespace jeecs
                 return a == uid.a && b == uid.b;
             }
 
+            inline bool operator != (const uuid& uid) const noexcept
+            {
+                return !(this->operator==(uid));
+            }
+
             inline std::string to_string() const
             {
                 char buf[sizeof(a) * 2 + sizeof(b) * 2 + 2];
@@ -1100,9 +1105,9 @@ JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(v
 
 JE_API bool jedbg_editor(void);
 
-JE_API void jedbg_set_editing_entity(const jeecs::game_entity* _entity);
+JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::uid_t& uid);
 
-JE_API const jeecs::game_entity* jedbg_get_editing_entity();
+JE_API jeecs::typing::uid_t jedbg_get_editing_entity_uid();
 
 // NOTE: Get graphic thread
 JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
@@ -1604,7 +1609,7 @@ namespace jeecs
                 using _true_type = std::true_type;
 
                 template<typename V>
-                static auto _tester(int)->_true_type<decltype(new V())>;
+                static auto _tester(int) -> _true_type<decltype(new V())>;
                 template<typename V>
                 static std::false_type _tester(...);
 
@@ -2120,7 +2125,7 @@ namespace jeecs
             inline const member_info* find_member_by_name(const char* name) const noexcept
             {
                 auto* member_info_ptr = m_member_types;
-                while (member_info_ptr!=nullptr)
+                while (member_info_ptr != nullptr)
                 {
                     if (strcmp(member_info_ptr->m_member_name, name) == 0)
                         return member_info_ptr;
@@ -3755,8 +3760,8 @@ namespace jeecs
                     c1 = sin(theta - t_theta) * inv_sin_theta;
                 }
                 c2 *= sign; // or c1 *= sign
-                            // just affects the overrall sign of the output
-                            // interpolate
+                // just affects the overrall sign of the output
+                // interpolate
                 return quat(a.x * c1 + b.x * c2, a.y * c1 + b.y * c2, a.z * c1 + b.z * c2, a.w * c1 + b.w * c2);
             }
             static inline float delta_angle(const quat& lhs, const quat& rhs)
@@ -4680,20 +4685,20 @@ namespace jeecs
                                                 correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size)
                                             );
 
-                                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
+                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
 
-                                            float src_alpha = psrc.w * TEXT_COLOR.w;
+                            float src_alpha = psrc.w * TEXT_COLOR.w;
 
-                                            pdst.set(
-                                                math::vec4(
-                                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
-                                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
-                                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
-                                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
-                                                )
-                                            );
+                            pdst.set(
+                                math::vec4(
+                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
+                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
+                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
+                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
+                                )
+                            );
                                         }
-                                    ); // end of  for each
+                            ); // end of  for each
                                 }
                             );
                             next_ch_x += gcs->m_adv_x;

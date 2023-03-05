@@ -47,8 +47,8 @@ WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc
     std::function<void(int, const char*)>* callbacks =
         new std::function<void(int, const char*)>([&](int level, const char* msg) {
         while (log_buffer_mx.test_and_set());
-        log_buffer.push_back({ level, msg });
-        log_buffer_mx.clear();
+    log_buffer.push_back({ level, msg });
+    log_buffer_mx.clear();
             });
 
     return wo_ret_handle(vm,
@@ -161,7 +161,7 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args, siz
         );
     }
     else
-        jeecs::debug::logerr("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");
+        jeecs::debug::logfatal("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");
     return wo_ret_void(vm);
 }
 
@@ -374,26 +374,24 @@ WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_get_editing_entity(wo_vm vm, wo_value args, size_t argc)
-{
-    if (const jeecs::game_entity* cur_entity = jedbg_get_editing_entity())
-    {
-        jeecs::game_entity* entity = new jeecs::game_entity(*cur_entity);
-        return wo_ret_option_gchandle(vm, entity, nullptr,
-            [](void* entity_ptr) {
-                delete (jeecs::game_entity*)entity_ptr;
-            });
-    }
-    return wo_ret_option_none(vm);
-}
-
 WO_API wo_api wojeapi_set_editing_entity(wo_vm vm, wo_value args, size_t argc)
 {
+    jeecs::typing::uid_t uid{ /*0000*/ };
     if (argc)
-        jedbg_set_editing_entity((jeecs::game_entity*)wo_pointer(args + 0));
-    else
-        jedbg_set_editing_entity(nullptr);
+        uid.parse(wo_string(args + 0));
+
+    jedbg_set_editing_entity_uid(uid);
     return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_get_editing_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::typing::uid_t uid = jedbg_get_editing_entity_uid();
+
+    if (uid != jeecs::typing::uid_t{})
+        return wo_ret_ok_string(vm, uid.to_string().c_str());
+    
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args, size_t argc)
@@ -604,7 +602,7 @@ WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args, size_t argc
     if (auto* member_info = component_type->find_member_by_name(member_name))
     {
         wo_value result = wo_push_struct(vm, 2);
-        wo_set_pointer(wo_struct_get(result, 0),(wo_ptr_t)member_info->m_member_type);
+        wo_set_pointer(wo_struct_get(result, 0), (wo_ptr_t)member_info->m_member_type);
         wo_set_handle(wo_struct_get(result, 1),
             (wo_handle_t)(member_info->m_member_offset + (intptr_t)component_addr));
         return wo_ret_option_val(vm, result);
@@ -1896,13 +1894,12 @@ R"(
                     std::panic("Here should not been exec.");
             }
 
-            extern("libjoyecs", "wojeapi_get_editing_entity")
-            public func editing()=> option<entity>;
+            public using euid_t = string;
 
-            public func set_editing(self: option<entity>)
+            public func set_editing_uid(self: option<euid_t>)
             {
                 extern("libjoyecs", "wojeapi_set_editing_entity")
-                public func _set_editing_entity(e: entity)=> void;
+                public func _set_editing_entity(euid: euid_t)=> void;
                 extern("libjoyecs", "wojeapi_set_editing_entity")
                 public func _reset_editing_entity()=> void;
 
@@ -1912,6 +1909,9 @@ R"(
                 none? _reset_editing_entity();
                 }
             }
+
+            extern("libjoyecs", "wojeapi_get_editing_entity")
+            public func get_editing_uid()=> option<euid_t>;
 
             extern("libjoyecs", "wojeapi_set_parent")
             public func set_parent(self: entity, parent: entity, force: bool)=> bool;
