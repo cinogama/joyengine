@@ -1,0 +1,295 @@
+// api.serialize.main
+// 负责提供序列化和反序列化实体、世界的功能
+
+import je;
+import builtin.api.gui.form.msg;
+
+using je;
+
+namespace jeapi
+{
+    namespace serialize
+    {
+        alias texture_inform = string;
+        func get_entity_texture_passes(saving_entity: entity)=> dict<int, option<texture_inform>>
+        {
+            // 获取实体绑定的通道和纹理信息
+            return saving_entity
+                ->  editor::graphic::get_textures
+                ->> \pass, tex = (pass, tex->path);
+                ;
+        }
+
+        alias shader_inform = dict<string, array<dynamic>>;
+        //                          uniform_name uniform_vals
+        func get_entity_shaders_informs(saving_entity: entity)=> array<array/*(string, shader_inform)*/>
+        {
+            // 获取实体绑定的shader和uniform信息, uniform 信息仅包括int/float/float2，3，4类型的信息
+            // {[shader_path] = shader_inform}
+            return saving_entity
+                ->  editor::graphic::get_shaders
+                ->> \shad = [shad->path: dynamic, shad_uniforms_dats(): dynamic]
+                    where shad_uniforms_dats = func(){
+                        let result = {}mut: map<string, array<dynamic>>;
+                        for(let name, uniform_val : shad->get_uniforms())
+                        {
+                            if (name->beginwith("JOYENGINE_"))
+                                continue; // 引擎的内置shader-uniform变量，跳过
+                            match (uniform_val)
+                            {
+                                integer(n)? 
+                                    result->set(name, [n: dynamic]);
+                                float(x)?
+                                    result->set(name, [x: dynamic]);
+                                float2((x, y))?
+                                    result->set(name, [x: dynamic, y: dynamic]);
+                                float3((x, y, z))?
+                                    result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
+                                float4((x, y, z, w))?
+                                    result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
+                                texture(id)? /* do nothing */;
+                                others? /* do nothing */;
+                            }
+                        }
+                        return result->todict;
+                    };;
+        }
+
+        public func entity(saving_entity: je::entity)=> option<dict<string, dynamic>>
+        {
+            return
+                // TODO: 实体使用的shader和纹理路径亦需要额外做一下处理，
+                //       最后打包时考虑这种蛋疼问题
+                saving_entity
+                    ->  editor::get_components_types()
+                    ->  forall(\t = !t->name->beginwith("Editor::");)
+                    =>> \t = component->has ? [(t, component->val)] | []
+                        where
+                            component = saving_entity->editor::get_component(t);
+                    ->> \tc = (t->name, collect_members())
+                        where 
+                            collect_members = func(){
+                                let result = {}mut: map<string, mut string>; 
+                                for (let name, (type, addr) : c->editor::members())
+                                    result[name] = addr->to_string(type);
+                                return result->todict;
+                            },
+                            (t, c) = tc;
+                    ->  mapping
+                    // 如果一个实体没有任何组件，那么就等于不存在，实际上编辑器应该避免只有编辑器
+                    // 组件的实体出现在世界中，但是如果真的发生了，那么就视为option::none;
+                    ->  \m = m->empty? option::none | option::value(m);
+                    ->> \m = 
+                        {
+                            ["name"] = saving_entity->editor::name: dynamic, 
+                            ["components"] = m: dynamic,
+                            // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
+                            ["textures"] = saving_entity->get_entity_texture_passes
+                                =>> \k, v = v->has ? {[k] = v->val} | {}; : dynamic,
+                            ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
+                        };;
+        }
+        public func world(w: je::world)=> dict<string, dynamic>
+        {
+            static let INVISABLE = je::typeinfo::load("Editor::Invisable")->val;
+
+            alias entity_info_t = dict<string, dynamic>;
+
+            let entities_json_list = 
+                w->editor::get_all_entities
+                    // 跳过编辑器上的不可见实体
+                    ->  forall(\e = !e->editor::get_component(INVISABLE)->has;)
+                    =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e);;
+
+            let editing_systems_type_list = 
+                w->editor::get_systems_types
+                    ->> \st = st->name;
+                    ->  forall(\n = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
+
+            // let runtime_systems_type_list = 
+            //     world.runtime_systems
+            //         ->map(\st: typeinfo = st->name;)
+            //         ->forall(\n: string = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
+    
+            return {
+                ["name"] = w->editor::name: dynamic,
+                ["entities"] = entities_json_list: dynamic,
+                ["systems"] = editing_systems_type_list: dynamic,
+                // ["runtime_systems"] = runtime_systems_type_list: dynamic,
+            };
+        }
+    }
+
+    namespace deserialize
+    {
+        // 用于设置实体中shader的uniform参数，如果shader是挂掉的，那么设置uniform到BadShadersUniform里等待更新
+        func restore_shader_of_entity(e: je::entity, shad: option<je::graphic::shader>, spath: string, uname: string, val: array)
+        {
+            assert(val->len > 0);
+            if (val[0] is int)
+            {
+                assert(val->len == 1);
+                shad->has
+                    ? shad->val->set_uniform(uname, val[0] as int)
+                    | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname, val[0] as int);
+            }
+            else if (val[0] is real)
+            {
+                if (val->len == 1)
+                    shad->has
+                        ? shad->val->set_uniform(uname, val[0] as real)
+                        | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname,  val[0] as real);
+                else if (val->len == 2)
+                    shad->has
+                        ? shad->val->set_uniform(uname, (val[0] as real, val[1] as real))
+                        | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname, (val[0] as real, val[1] as real));
+                else if (val->len == 3)
+                    shad->has
+                        ? shad->val->set_uniform(uname, (val[0] as real, val[1] as real, val[2] as real))
+                        | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname, (val[0] as real, val[1] as real, val[2] as real));
+                else if (val->len == 4)
+                    shad->has
+                        ? shad->val->set_uniform(uname, (val[0] as real, val[1] as real, val[2] as real, val[3] as real))
+                        | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname, (val[0] as real, val[1] as real, val[2] as real, val[3] as real));
+                else
+                    std::panic("invalid uniform value length when restore.");
+            }
+            else
+                std::panic("invalid uniform type when restore.");
+        }
+        func _typeinfo_or_warning(typename: string)
+        {
+            let tinfo = je::typeinfo::load(typename);
+            if (!tinfo->has)
+            {
+                je::logerr(F"无法找到{typename}，请检查是否有模块未加载成功");
+                jeapi::gui::form::errmsg("找不到类型", F"无法找到{typename}，请检查是否有模块未加载成功");
+            }
+            return tinfo;
+        }
+        public func entity(w: je::world, entity_dat: dict<string, dynamic>)=> option<je::entity>
+        {
+            let component_types_dat = entity_dat
+                ->  get("components")
+                ->> \cs = cs as dict
+                    ->  unmapping
+                    ->> \kv = (kv[0] as string, kv[1] as dict);
+                    ->> \td = (_typeinfo_or_warning(td[0]), 
+                            td[1]->unmapping
+                                ->> \p = (p[0] as string, p[1] as string);
+                                ->  mapping)
+                        ;
+                    ->  forall(\td = td[0]->has;)
+                    ->> \td = (td[0]->val, td[1]);
+                    ;
+                ->  valor([]);
+
+            if (component_types_dat->empty)
+                return option::none;
+
+            // 开始加载shader
+            let shaders_and_dat = entity_dat->get("shaders")
+                ->> func(shaders: dynamic)
+                    {
+                        let shads = []mut: vec<(option<graphic::shader>, string, dict)>;
+                        for (let _, shader_path_dat_pair : shaders: array)
+                        {
+                            let spath = shader_path_dat_pair: array[0] as string;
+                            let s = graphic::shader::load(spath);
+                            shads->add((s, spath, shader_path_dat_pair: array[1] as dict));
+                        }
+                        return shads->toarray;
+                    };
+
+            // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
+            let entity_has_bad_shader = shaders_and_dat
+                =>> \sds = sds
+                    ->> \sd = !sd[0]->has;
+                    ->  reduce(\l: bool, r: bool = l?l|r;)
+                    ;
+                ->  valor(false);
+
+            let entity = w->add_entity(
+                component_types_dat
+                    ->> \tp = tp[0];
+                    ->  connect(entity_has_bad_shader 
+                            ? [je::typeinfo::load("Editor::BadShadersUniform")->val] 
+                            | [])
+                    ->  connect([je::typeinfo::load("Editor::Name")->val]));
+
+            // 开始应用数据
+            do component_types_dat
+                ->> \cdata = compmaynotfound
+                        ->> \comp = comp->editor::members
+                            ->  unmapping
+                            ->> \pair = dat->get(mname)
+                                ->> \mdat = mvalue->parse(mtype, mdat);
+                                where (mname,(mtype, mvalue)) = pair
+                                ;
+                            ;
+                    where compmaynotfound = entity->editor::get_component(ctype)
+                        , (ctype, dat) = cdata
+                    ;
+                ;
+            // 考虑一下异步加载？
+            // 开始加载shader
+            entity->editor::graphic::set_shaders(
+                shaders_and_dat
+                    ->valor([])
+                    =>> func(sd)
+                        {
+                            let (s, spath, sdat) = sd;
+                            for (let uname, uval : sdat)
+                                restore_shader_of_entity(entity, s, spath, uname as string, uval as array);
+                            return s->has ? [s->val] | [];
+                        }
+                );
+
+            // 开始加载texture
+            do entity_dat->get("textures")
+                ->> func(textures)
+                    {
+                        for (let passid, path : textures: dict)
+                            do graphic::texture::load(path as string)
+                                ->> \tex = entity->editor::graphic::bind_texture(passid as int, tex);
+                                ;
+                    };
+
+            do entity_dat
+                ->  get("name")
+                ->> \n = entity->editor::set_name(n as string);;
+
+            return option::value(entity);
+        }
+        public func world(u: je::universe, dat: dict<string, dynamic>)=> je::world
+        {
+            let w = u->je::world::create;
+            do dat->get("name")->>\name = w->editor::set_name(name as string);;
+            // world.runtime_systems->copy(
+            //     dat->get("runtime_systems")
+            //         ->map(\d: dynamic = d as array<dynamic>;)
+            //         ->map(\rtsyss: array<dynamic> = rtsyss
+            //             ->map(\tname: dynamic = _typeinfo_or_warning(tname as string);)
+            //             ->forall(\t: option<je::typeinfo> = t->has;)  // TODO: 类型没找到弹个框
+            //             ->map(\t: option<je::typeinfo> = t->val;);)
+            //         ->valor([]));
+            do dat->get("systems")
+                ->> \d = d as array<dynamic>
+                    =>> \tname = t->has 
+                        ? [w->add_system(t->val)] 
+                        | [] 
+                        where t = _typeinfo_or_warning(tname as string);
+                    ;
+                ;
+            do dat->get("entities")
+                ->> \es = es as array<dynamic>
+                    ->> \edat = deserialize::entity(w, entity_dat)
+                        where entity_dat = edat as dict->>\k, v = (k as string, v);
+                        ;
+                    ;
+                ;
+            return w;
+        }
+    }
+}
+
