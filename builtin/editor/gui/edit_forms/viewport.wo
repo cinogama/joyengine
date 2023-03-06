@@ -67,7 +67,6 @@ namespace editor::gui::edit_forms
                     if (IsItemHovered())
                     {
                         // 在渲染区域内！
-
                         windows_moveable = false;
 
                         let uniform_mpos_x = 2. * ((offsetx:int - itemw:int/2):real / itemw), 

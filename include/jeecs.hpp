@@ -2344,6 +2344,22 @@ namespace jeecs
         }
     };
 
+    /*
+    * 早上好，这一站我们来到了选择器，JoyEngine中第二混乱的东西
+    * 
+    * 实际上只要和ArchSystem扯上关系，就永远不可能干净。很不幸，选择器正是一根搅屎棍，它负责从
+    * ArchSystem管理的区域内按照我们的需求，分离出满足我们需求的ArchType，再从上面把合法的组件
+    * 一个个摘出来递到我们面前。
+    * 
+    * 在这里——jeecs.hpp中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
+    * ArchSystem中，有一个名为je_ecs_world_update_dependences_archinfo的函数。这个函数在黑暗处
+    * 负责在适当的实际更新选择器的筛选结果。
+    * 
+    * 为了优雅，背后就得承担代价；为了性能我们就得做出牺牲。伟大的圣窝窝头，这么做真的值得吗？
+    * 
+    *                                                                   ——虔诚的窝窝头信徒
+    *                                                                       mr_cino
+    */
     struct selector
     {
         size_t                      m_curstep = 0;

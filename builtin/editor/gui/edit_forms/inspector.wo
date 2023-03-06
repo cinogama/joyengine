@@ -40,13 +40,15 @@ namespace editor::gui::edit_forms
                             // 事编辑器组件，跳过显示，不然就露馅了
                             continue;
                         
-                        assert(TreeNodeEx(groupname, TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf));
+                        TextDisabled(groupname);
 
-                        for (let _, (ctype, component) : components)
+                        BeginGroup();
+                        for (let _, (ctype, component) : components->>\tc = (tc[0]->name, tc);->mapping)
                         {
                             // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
                             assert(TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;),
-                                TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf));
+                                TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf 
+                                + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen));
                             
                             jeapi::gui::context_menu(func(){
                                 if (MenuItem(F"移除 {ctype->name}"))
@@ -58,7 +60,30 @@ namespace editor::gui::edit_forms
                                         "确认？", 
                                         F"即将从实体{ename}中移除组件{ctype->name}，是否确认？", 
                                         func(asure){
-                                            eeid->justdo(\e=e->editor::remove_component(ctype););
+                                            if (asure)
+                                                eeid->justdo(\e=e->editor::remove_component(ctype););
+                                        });
+                                }
+                                if (MenuItem(F"重置"))
+                                {
+                                    let eeid = jeapi::debug::get_entity_editor_id(cur_e);
+                                    let ename = cur_e->editor::name;
+
+                                    jeapi::gui::form::ask(
+                                        "确认？", 
+                                        F"即将重置组件{ctype->name}，是否确认？", 
+                                        func(asure){
+                                            eeid->justdo(func(e){
+                                                if (asure)
+                                                {
+                                                    // 非常简单，要求移除，然后重新添加组件
+                                                    // NOTE: 顺便说明一下，JoyEngine的ArchSystem对于一次性
+                                                    //       给定所有组件，然后创建实体。理论上性能开销小于
+                                                    //       逐个追加组件。
+                                                    e->editor::remove_component(ctype);
+                                                    do e->editor::add_component(ctype);
+                                                }
+                                            });
                                         });
                                 }
                             });
@@ -78,7 +103,7 @@ namespace editor::gui::edit_forms
                             }
                             TreePop();
                         }
-                        TreePop();
+                        EndGroup();
                     }
                     // 3. 遍历实体的材质（如果有
     
