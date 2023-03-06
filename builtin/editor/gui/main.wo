@@ -13,7 +13,7 @@ namespace editor::gui
         m_project: Project,
 
         // 这玩意儿存着被选中的实体索引，用于对此实体执行安全操作。
-        m_editing_entity_chunkinfo: mut option<jeapi::debug::Eeid>,
+        m_editing_entity_euid: mut option<jeapi::debug::Eeid>,
 
         // 这里放着必须照顺序执行的事务委托
         m_fix_update_jobs: vec<()=>bool>,
@@ -22,12 +22,13 @@ namespace editor::gui
         // 由 main_menu 负责调用此函数，更新api和实体请求
         public func update_api(self: EditorContext)
         {
-            match (self.m_editing_entity_chunkinfo)
+            match (self.m_editing_entity_euid := 
+                jeapi::debug::Eeid::editor::editing())
             {
             value(eid)? 
                 eid->dosth(func(oentity){
                     if (oentity->has == false)
-                        self.m_editing_entity_chunkinfo = none;
+                        self->set_editing_entity(none);
                 }); 
             none?;
             }
@@ -73,15 +74,17 @@ namespace editor::gui
         }
         public func set_editing_entity(self: EditorContext, e: option<je::entity>)
         {
-            self.m_editing_entity_chunkinfo = e->>\e = jeapi::debug::get_entity_editor_id(e);;
+            jeapi::debug::Eeid::editor::select(
+                self.m_editing_entity_euid := e
+                    ->>\e = jeapi::debug::get_entity_editor_id(e););
         }
         public func get_editing_entity(self: EditorContext)
         {
-            return self.m_editing_entity_chunkinfo;
+            return self.m_editing_entity_euid;
         }
         public func dosth_at_editing_entity(self: EditorContext, f: (option<je::entity>)=> void)
         {
-            do self.m_editing_entity_chunkinfo
+            do self.m_editing_entity_euid
                 ->> \eid = eid->dosth(f);
                 ->  or(\= f(option::none);)
                 ;
@@ -97,7 +100,7 @@ namespace editor::gui
         let context = EditorContext{
             m_stopped = mut false,
             m_project = proj,
-            m_editing_entity_chunkinfo = mut option::none,
+            m_editing_entity_euid = mut option::none,
             m_fix_update_jobs = []mut,
         };
 
