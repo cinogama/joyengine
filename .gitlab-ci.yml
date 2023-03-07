@@ -18,7 +18,7 @@ build:
     paths:
         - "build/*"
   tags:
-    - ubuntu1804_cicd
+    - ubuntu20
 
 # run tests using the binary built before
 # test:
