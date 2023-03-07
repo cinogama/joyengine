@@ -2368,12 +2368,6 @@ namespace jeecs
         jeecs::vector<dependence>   m_steps;
 
         game_system* m_system_instance = nullptr;
-
-        selector(game_system* game_sys)
-            : m_system_instance(game_sys)
-        {
-        }
-
     private:
         template<size_t ArgN, typename FT>
         void _apply_dependence(dependence& dep)
@@ -2676,10 +2670,12 @@ namespace jeecs
             return true;
         }
     public:
-        selector()
+        selector(game_system* game_sys)
+            : m_system_instance(game_sys)
         {
             jeecs::debug::loginfo("New selector(%p) created.", this);
         }
+
         ~selector()
         {
             for (auto& step : m_steps)
