@@ -14,6 +14,15 @@ A game engine based on ECS architecture implemented in C++ and Woolang.
 apt install libopenal-dev
 ```
 
+另外可能需要安装些别的东西，这里列出来方便直接使用
+
+```shell
+apt install libx11-dev libxext-dev libxtst-dev libxrender-dev libxmu-dev libxmuu-dev 
+apt install libxrandr-dev libxinerama-dev libxcursor-dev 
+apt install libgl1-mesa-dev libglu1-mesa-dev
+
+```
+
 ---
 
 ## 鸣谢（Acknowledgments）
