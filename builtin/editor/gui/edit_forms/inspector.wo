@@ -51,7 +51,7 @@ namespace editor::gui::edit_forms
                                 + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen));
                             
                             jeapi::gui::context_menu(func(){
-                                if (MenuItem(F"移除 {ctype->name}"))
+                                if (MenuItem(F"移除"))
                                 {
                                     let eeid = jeapi::debug::get_entity_editor_id(cur_e);
                                     let ename = cur_e->editor::name;

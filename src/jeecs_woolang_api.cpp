@@ -2017,7 +2017,7 @@ R"(
                     let parent_entity = self.m_current_entity->val();
                     return entity_iter{
                         m_cur_iter = self.m_all_entity_list->iter(),
-                        m_judge_func = \e = e->is_child_of(parent_entity),
+                        m_judge_func = \e = e->is_child_of(parent_entity);,
                         m_current_entity = mut option::none:<entity>,
                         m_all_entity_list = self.m_all_entity_list,
                         m_not_top_entities = []mut: vec<entity>,
