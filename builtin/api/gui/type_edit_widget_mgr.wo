@@ -15,7 +15,7 @@ namespace jeapi::gui
     
     public func register_editor_for_native_value(type: je::typeinfo, method: TypedEditorMethod)
     {
-        if (_registed_editor_methods->find(type))
+        if (_registed_editor_methods->contain(type))
             std::panic(F"不允许重复添加{type->name}的编辑方法");
             
         _registed_editor_methods->set(type, method);
