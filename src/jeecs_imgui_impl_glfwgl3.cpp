@@ -420,6 +420,9 @@ R"(
     extern("libjoyecs", "je_gui_content_region_avail")
     public func GetContentRegionAvail()=> ImVec2;
 
+    extern("libjoyecs", "je_gui_set_next_window_size_constraints")
+    public func SetNextWindowSizeConstraints(minsz: ImVec2, maxsz: ImVec2)=> void;
+
     public enum DragAttribute
     {
         ImGuiDragDropFlags_None                         = 0,
@@ -1175,6 +1178,12 @@ WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args, size_t argc)
     wo_set_float(wo_struct_get(result, 1), sz.y);
 
     return wo_ret_val(vm, result);
+}
+
+WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::SetNextWindowSizeConstraints(val2vec2(args + 0), val2vec2(args + 1));
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args, size_t argc)

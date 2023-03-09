@@ -6,6 +6,8 @@ import builtin.api.gui.form.input;
 import builtin.api.gui.form.ask;
 import builtin.api.dbg.main;
 
+import builtin.editor.gui.edit_forms.entity_creator;
+
 using je::gui;
 
 namespace editor::gui::edit_forms
@@ -74,7 +76,17 @@ namespace editor::gui::edit_forms
     {
         if (show->get)
         {
-            do show->set(BeginOpen("实体列表##jeeditor"));
+            do show->set(BeginAttrOpen("实体列表##jeeditor",
+                WindowsAttribute::ImGuiWindowFlags_MenuBar));
+
+            if (BeginMenuBar())
+            {
+                if (MenuItem("创建新实体"))
+                    launch(show_entity_creator, (EntityContext::create(),));//launch(EntityCreator::show, (EntityCreator::create_context(),));
+    
+                EndMenuBar();
+            }
+            
             match (context->get_project->get_editing_world)
             {
             value(current_editing_world)?

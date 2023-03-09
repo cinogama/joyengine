@@ -173,7 +173,7 @@ namespace jeecs
                     graphic::vertex::type::LINES,
                     { 0,0,0,
                       0,0,1000 }, { 3 });
-                static basic::resource<graphic::shader> shad = new graphic::shader("*/builtin/drawline.shader", R"(
+                static basic::resource<graphic::shader> shad = new graphic::shader("!/builtin/drawline.shader", R"(
         import je.shader;
         
         VAO_STRUCT! vin {
@@ -279,7 +279,7 @@ namespace jeecs
                     = 0.1f;
 
                 static basic::resource<graphic::shader>
-                    axis_shader = new graphic::shader("*/builtin/mover_axis.shader",
+                    axis_shader = new graphic::shader("!/builtin/mover_axis.shader",
                         R"(
 import je.shader;
         

@@ -1,0 +1,206 @@
+import je.gui;
+
+using je::gui;
+
+namespace editor::gui::edit_forms
+{
+    let icon_image = je::graphic::texture::load(F"!/builtin/editor-old/icon/Component.png")->val;
+    using EntityContext = struct {
+        mut name  : string,
+        edit_entity      : option<jeapi::debug::Eeid>,
+        has_append_types : vec<je::typeinfo>,
+        not_append_types : vec<je::typeinfo>,
+    }
+    {
+        public func create()
+        {
+            let context = EntityContext{
+                name = mut "新实体",
+                edit_entity = option::none,
+                has_append_types = []mut,
+                not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
+            };
+    
+            let comps = []mut: typeof(context.not_append_types);
+            context.not_append_types->swap(comps);
+    
+            // 不显示所有编辑器组件
+            for (let _, comp : comps)
+                if (!comp->name->beginwith("Editor::"))
+                    context.not_append_types->add(comp);
+    
+            return context;
+        }
+        public func edit(entity: je::entity)
+        {
+            let context = EntityContext{
+                name = mut entity->editor::name,
+                edit_entity = option::value(entity->jeapi::debug::get_entity_editor_id),
+                has_append_types = []mut,
+                not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
+            };
+    
+            let comps = []mut: typeof(context.not_append_types);
+            context.not_append_types->swap(comps);
+    
+            // 不显示所有编辑器组件
+            for (let _, comp : comps)
+                if (!comp->name()->beginwith("Editor::"))
+                    context.not_append_types->add(comp);
+    
+            // 把当前已有的组件处理一下
+            let all_comps = context.not_append_types->dup();
+            for (let _, comp : all_comps)
+                if (entity->editor::get_component(comp)->has)
+                    context->add_components(comp->name);
+    
+            return context;
+        }
+
+        func remove_components(context: EntityContext, type_name: string)
+        {
+            match(je::typeinfo::load(type_name))
+            {
+                value(type)?
+                    if (context.not_append_types->find(type) == -1)
+                    {
+                        context.not_append_types->add(type);
+                        context.has_append_types->remove(context.has_append_types->find(type));
+                    }
+                none?
+                    je::logfatal("Cannot find component type named: ", type_name);
+            }
+            
+        }
+        func add_components(context: EntityContext, type_name: string)
+        {
+            match(je::typeinfo::load(type_name))
+            {
+                value(type)?
+                    if (context.has_append_types->find(type) == -1)
+                    {
+                        context.has_append_types->add(type);
+                        context.not_append_types->remove(context.not_append_types->find(type));
+                    }
+                none?
+                    je::logfatal("Cannot find component type named: ", type_name);
+            }
+        }
+    }
+
+    func _get_entity_name_and_scope(typename: string)
+    {
+        let rfnd = typename->rfind(":");
+        if (rfnd == -1)
+            return (typename, "");
+        else
+            return (typename->sub(rfnd + 1), typename->subto(0, rfnd - 1));
+    }
+
+    func show_component(typename: string, scopename: string, purename: string)
+    {
+        BeginGroup();
+            PushIDStr(typename);
+                do ImageButtonScale(icon_image, 0.075);
+            PopID();
+            if (BeginDragDropSource())
+            {
+                if (SetDragDropPayload("JEDITOR_COMPONENT_TYPE", typename))
+                    Text(F"Component: {typename}");
+                
+                EndDragDropSource();
+            } 
+            SameLine();
+            Text(purename);
+        EndGroup();
+    }
+
+    func show_components(typenames: array<string>)
+    {
+        let scoped_type = {}mut: map<string, vec<(string, string, string)>>;
+
+        do typenames
+            ->> \n = _get_entity_name_and_scope(n)...
+                ->  \pname, pscope = scoped_type->getorset(pscope, []mut)->add((n, pscope, pname));
+                ;
+            ;
+
+        for (let pscope, pnameinfos: scoped_type)
+        {
+            TextDisabled(pscope);
+
+            for (let _, pnameinfo: pnameinfos)
+            {
+                do InvisibleButton(F"##{pscope}$PADDING", (2., 1.));
+                SameLine();
+                show_component(pnameinfo...);
+            }
+        }
+    }
+
+    func show_append_components(context: EntityContext, width: real)
+    {
+        using je::gui;
+        do BeginChildSize("append_components", width, 0.);
+            Text("新实体组件");
+            show_components(context.has_append_types->>\t = t->name;->unsafe::cast:<array<string>>);
+        EndChild();
+
+        if(BeginDragDropTarget())
+        {
+            match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
+            {
+            value(data)?
+                // 有组件被拖动至此
+                context->add_components(data);
+            none?
+                ;
+            }
+            EndDragDropTarget();
+        }
+    }
+
+    func show_usable_components(context: EntityContext, width: real)
+    {
+        using je::gui;
+        do BeginChildSize("usable_components", width, 0.);
+            Text("可用组件");
+            show_components(context.not_append_types->>\t = t->name;->unsafe::cast:<array<string>>);
+        EndChild();
+
+        if(BeginDragDropTarget())
+        {
+            let mut data = "";
+            match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
+            {
+            value(data)?
+                // 有组件被拖动至此
+                context->remove_components(data);
+            none?
+                ;
+            }
+            EndDragDropTarget();
+        }
+    }
+
+    public func show_entity_creator(context: EntityContext)
+    {
+        SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
+        let mut open = BeginAttrOpen(context.edit_entity->has 
+            ? F"编辑实体{context.name}##{JobID()}"
+            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
+
+        do InputText("名称", context.name)
+            ->> \newtext = context.name = newtext;
+            ;
+        
+        let (available_width, _) = GetContentRegionAvail();
+
+        show_append_components(context, available_width / 2.);
+        SameLine();
+        show_usable_components(context, available_width / 2.);
+
+        End();
+        return open;
+    }
+}

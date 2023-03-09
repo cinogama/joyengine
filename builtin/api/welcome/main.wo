@@ -9,7 +9,7 @@ namespace jeapi::welcome
     {    
         using je::graphic;
 
-        match (font::load(@"*/builtin/font/cino_ipix_12px.ttf"@, 12))
+        match (font::load(@"!/builtin/font/cino_ipix_12px.ttf"@, 12))
         {
         value(f)?
         {

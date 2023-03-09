@@ -8,7 +8,7 @@ jeecs_file* jeecs_file_open(const char* path)
 {
     // TODO: Open file in work path.
     std::string path_str = path;
-    if (path[0] == '*')
+    if (path[0] == '!')
         path_str = wo_exe_path() + path_str.substr(1);
 
     FILE* fhandle = fopen(path_str.c_str(), "rb");
