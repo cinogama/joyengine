@@ -12,6 +12,45 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
+    func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: je::entity)
+    {
+        for (let _, child: cur.childs)
+        {
+            if (child.e == checking)
+                return true;
+            if (child->_is_ancestor(checking))
+                return true;
+        }
+        return false;
+    }
+    func _set_parent(child: je::entity, parent: jeapi::debug::EntityChilds)
+    {
+        static let LocalToParent = je::typeinfo::load("Transform::LocalToParent")->val(),
+                   LocalToWorld  = je::typeinfo::load("Transform::LocalToWorld")->val();
+
+        if (parent->_is_ancestor(child))
+        {
+            // 如果正在设置的子实体是父实体的祖先节点，需要先调整顺序
+            /*
+            ?       ? --- P
+            |       |
+            C   =>  C
+            |  
+            P
+            */
+            // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把父节点设置为L2W
+            do child->editor::get_parent_uid()
+                 ->> \uid = parent.e->editor::set_parent_with_uid(uid, true);
+                 ->or(func(){
+                    if (parent.e->editor::get_component(LocalToParent)->has())
+                        parent.e->editor::remove_component(LocalToParent);
+                    if (!parent.e->editor::get_component(LocalToWorld)->has())
+                        do parent.e->editor::add_component(LocalToWorld);
+                    return true;
+                 });
+        }
+        do child->editor::set_parent(parent.e, true);
+    }
     func display_entity_and_child_tree(context: EditorContext, w: je::world, e: jeapi::debug::EntityChilds)
     {
         let treenode_attribute = 
@@ -34,7 +73,35 @@ namespace editor::gui::edit_forms
         let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->editor::chunkinfo}", 
             treenode_attribute);
 
+        if (BeginDragDropSource())
+        {
+            do SetDragDropPayload("JEDITOR_ENTITY_INSTANCE", e.uid as jeapi::debug::Eeid: string);
+                Text(F"实体: {e.e->editor::name()}");
+            EndDragDropSource();
+        }
+        if(BeginDragDropTarget())
+        {
+            match (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE"))
+            {
+            value(drag_uid)?
+                if (drag_uid as string: jeapi::debug::Eeid != e.uid)
+                {
+                    // 自己拖到自己身上肯定就寄了，只处理不同的实体。
+                    drag_uid as string: jeapi::debug::Eeid->justdo(
+                        \c = _set_parent(c, e);
+                    );
+                }
+            none?
+                ;
+            }
+            EndDragDropTarget();
+        }
+
         jeapi::gui::context_menu(func(){
+            if (MenuItem("编辑"))
+            {
+                launch(show_entity_creator, (context, EntityContext::edit(e.e)));
+            }
             if (MenuItem("重命名"))
             {
                 jeapi::gui::form::input(
@@ -82,7 +149,7 @@ namespace editor::gui::edit_forms
             if (BeginMenuBar())
             {
                 if (MenuItem("创建新实体"))
-                    launch(show_entity_creator, (EntityContext::create(),));//launch(EntityCreator::show, (EntityCreator::create_context(),));
+                    launch(show_entity_creator, (context, EntityContext::create()));
     
                 EndMenuBar();
             }
@@ -91,17 +158,6 @@ namespace editor::gui::edit_forms
             {
             value(current_editing_world)?
             {
-                if (Button("debug"))
-                {
-                    current_editing_world->add_entity([
-                        je::typeinfo::load("Transform::LocalScale")->val,
-                        je::typeinfo::load("Transform::LocalPosition")->val,
-                        je::typeinfo::load("Transform::LocalToWorld")->val,
-                        je::typeinfo::load("Transform::Translation")->val,
-                        je::typeinfo::load("Renderer::Shaders")->val,
-                        ])->editor::set_name("DebugEntity");
-                }
-
                 do jeapi::debug::get_all_entities_layer_from_world(current_editing_world)
                     ->> \ec = display_entity_and_child_tree(context, current_editing_world, ec);
                     ;

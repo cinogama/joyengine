@@ -86,6 +86,13 @@ namespace editor::gui::edit_forms
                     je::logfatal("Cannot find component type named: ", type_name);
             }
         }
+
+        func reset_context_cur_components(context: EntityContext)
+        {
+            for (let _, append_component : context.has_append_types)
+                context.not_append_types->add(append_component);
+            context.has_append_types->clear();
+        }
     }
 
     func _get_entity_name_and_scope(typename: string)
@@ -100,19 +107,21 @@ namespace editor::gui::edit_forms
     func show_component(typename: string, scopename: string, purename: string)
     {
         BeginGroup();
-            PushIDStr(typename);
-                do ImageButtonScale(icon_image, 0.075);
-            PopID();
-            if (BeginDragDropSource())
-            {
-                if (SetDragDropPayload("JEDITOR_COMPONENT_TYPE", typename))
-                    Text(F"Component: {typename}");
-                
-                EndDragDropSource();
-            } 
-            SameLine();
-            Text(purename);
+        PushIDStr(typename);
+        let clicked = ImageButtonScale(icon_image, 0.075);
+        PopID();
+        if (BeginDragDropSource())
+        {
+            if (SetDragDropPayload("JEDITOR_COMPONENT_TYPE", typename))
+                Text(F"Component: {typename}");
+            
+            EndDragDropSource();
+        } 
+        SameLine();
+        Text(purename);
         EndGroup();
+
+        return clicked;
     }
 
     func show_components(typenames: array<string>)
@@ -125,6 +134,7 @@ namespace editor::gui::edit_forms
                 ;
             ;
 
+        let mut clicked_component = option::none: option<string>;
         for (let pscope, pnameinfos: scoped_type)
         {
             TextDisabled(pscope);
@@ -133,17 +143,21 @@ namespace editor::gui::edit_forms
             {
                 do InvisibleButton(F"##{pscope}$PADDING", (2., 1.));
                 SameLine();
-                show_component(pnameinfo...);
+                if (show_component(pnameinfo...))
+                    clicked_component = option::value(pnameinfo[0]);
             }
         }
+        return clicked_component;
     }
 
     func show_append_components(context: EntityContext, width: real)
     {
         using je::gui;
         do BeginChildSize("append_components", width, 0.);
-            Text("新实体组件");
-            show_components(context.has_append_types->>\t = t->name;->unsafe::cast:<array<string>>);
+        Text("新实体组件");
+        do show_components(context.has_append_types->>\t = t->name;->unsafe::cast:<array<string>>)
+            ->> \typename = context->add_components(typename);
+            ;
         EndChild();
 
         if(BeginDragDropTarget())
@@ -164,8 +178,10 @@ namespace editor::gui::edit_forms
     {
         using je::gui;
         do BeginChildSize("usable_components", width, 0.);
-            Text("可用组件");
-            show_components(context.not_append_types->>\t = t->name;->unsafe::cast:<array<string>>);
+        Text("可用组件");
+        do show_components(context.not_append_types->>\t = t->name;->unsafe::cast:<array<string>>)
+            ->> \typename = context->remove_components(typename);
+            ;
         EndChild();
 
         if(BeginDragDropTarget())
@@ -183,22 +199,165 @@ namespace editor::gui::edit_forms
         }
     }
 
-    public func show_entity_creator(context: EntityContext)
+    func entity_creator_menu(context: EntityContext)
     {
-        SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
-        let mut open = BeginAttrOpen(context.edit_entity->has 
-            ? F"编辑实体{context.name}##{JobID()}"
+        let mut create_entity = false;
+
+        if (BeginMenuBar())
+        {
+            let menu_button_text = context.edit_entity->has ? "应用" | "创建";
+
+            if (MenuItemEnabled(menu_button_text, context.name != "" 
+                            && !context.has_append_types->empty))
+            {
+                // TODO: 实例化实体，至少要有一个组件
+                create_entity = true;
+            }
+            if (BeginMenu("常用组件集合"))
+            {
+                if (MenuItem("重置列表"))
+                    context->reset_context_cur_components();
+
+                Separator();
+
+                if (MenuItem("坐标与变换"))
+                {
+                    context->add_components("Transform::LocalPosition");
+                    context->add_components("Transform::LocalRotation");
+                    context->add_components("Transform::LocalScale");
+                    context->add_components("Transform::LocalToWorld");
+                    context->add_components("Transform::Translation");
+                }
+
+                if (MenuItem("基本渲染"))
+                {
+                    context->add_components("Renderer::Shape");
+                    context->add_components("Renderer::Shaders");
+                    context->add_components("Renderer::Textures");
+                }
+
+                if (MenuItem("2D阴影"))
+                {
+                    context->add_components("Light2D::Block");
+                }
+
+                if (MenuItem("摄像机（透视）"))
+                {
+                    context->add_components("Camera::Clip");
+                    context->add_components("Camera::Projection");
+                    context->add_components("Camera::PerspectiveProjection");
+                    context->add_components("Camera::Viewport");
+                }
+
+                if (MenuItem("摄像机（平行）"))
+                {
+                    context->add_components("Camera::Clip");
+                    context->add_components("Camera::Projection");
+                    context->add_components("Camera::OrthoProjection");
+                    context->add_components("Camera::Viewport");
+                }
+
+                if (MenuItem("2D光源（点）"))
+                {
+                    context->add_components("Light2D::Color");
+                    context->add_components("Light2D::Point");
+                    context->add_components("Light2D::Shadow");
+                }
+
+                if (MenuItem("2D光源（平行）"))
+                {
+                    context->add_components("Light2D::Color");
+                    context->add_components("Light2D::Parallel");
+                    context->add_components("Light2D::Shadow");
+                }
+
+                if (MenuItem("2D物理（静态）"))
+                {
+                    context->add_components("Physics2D::Rigidbody");
+                    context->add_components("Physics2D::BoxCollider");
+                    context->add_components("Physics2D::Friction");
+                }
+
+                if (MenuItem("2D物理（动力学）"))
+                {
+                    context->add_components("Physics2D::Rigidbody");
+                    context->add_components("Physics2D::BoxCollider");
+                    context->add_components("Physics2D::Friction");
+                    context->add_components("Physics2D::Kinematics");
+                    context->add_components("Physics2D::Mass");
+                }
+
+                if (MenuItem("2D物理（高速动力学）"))
+                {
+                    context->add_components("Physics2D::Rigidbody");
+                    context->add_components("Physics2D::BoxCollider");
+                    context->add_components("Physics2D::Friction");
+                    context->add_components("Physics2D::Kinematics");
+                    context->add_components("Physics2D::Mass");
+                    context->add_components("Physics2D::Bullet");
+                }
+
+                EndMenu();
+            }
+
+            EndMenuBar();
+        }
+
+        return create_entity;
+    }
+
+    public func show_entity_creator(context: EditorContext, entity_context: EntityContext)
+    {
+        je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
+        let mut open = BeginAttrOpen(entity_context.edit_entity->has 
+            ? F"编辑实体##{JobID()}"
             | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
 
-        do InputText("名称", context.name)
-            ->> \newtext = context.name = newtext;
+        if (entity_creator_menu(entity_context))
+        {
+            match (entity_context.edit_entity)
+            {
+            value(eeid)?
+                {
+                    eeid->justdo(func(e){
+                        // 0. 获取准备新增的组件
+                        let add_components = entity_context.has_append_types->forall(
+                            \type: je::typeinfo = !e->editor::get_component(type)->has;);
+                        // 1. 获取即将移除的组件
+                        let removing_components = entity_context.not_append_types->forall(
+                                \type: je::typeinfo = e->editor::get_component(type)->has;);
+
+                        do add_components->map(\t: je::typeinfo = e->editor::add_component(t););
+                        do removing_components->map(\t: je::typeinfo = e->editor::remove_component(t););
+
+                        e->editor::set_name(entity_context.name);
+                    });
+                    open = false;
+                }
+            none?
+                match (context->get_project->get_editing_world)
+                {
+                value(w)?
+                    {
+                        w->add_entity(entity_context.has_append_types->toarray)
+                            ->editor::set_name(entity_context.name);
+                        
+                        open = false;
+                    }
+                none? jeapi::gui::form::errmsg("失败", F"操作无法完成，没有正在编辑中的世界");
+                }
+            }
+        }
+
+        do InputText("名称", entity_context.name)
+            ->> \newtext = entity_context.name = newtext;
             ;
         
         let (available_width, _) = GetContentRegionAvail();
 
-        show_append_components(context, available_width / 2.);
+        show_append_components(entity_context, available_width / 2.);
         SameLine();
-        show_usable_components(context, available_width / 2.);
+        show_usable_components(entity_context, available_width / 2.);
 
         End();
         return open;

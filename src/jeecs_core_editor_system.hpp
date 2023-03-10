@@ -7,6 +7,7 @@
 #endif
 
 #include <optional>
+#include <set>
 
 namespace jeecs
 {
@@ -113,7 +114,7 @@ namespace jeecs
                 return distance < s.distance;
             }
         };
-        std::set<SelectedResult> selected_list;
+        std::multiset<SelectedResult> selected_list;
 
         const Transform::Translation* _grab_axis_translation = nullptr;
         math::vec2 _grab_last_pos;
