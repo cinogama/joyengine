@@ -16,6 +16,7 @@ namespace editor::gui::edit_forms
         if (show->get)
         {
             context->dosth_at_editing_entity(func(current_entity_may_none){
+                je::gui::SetNextWindowSizeConstraints((250., 400.), (250., 4000.));
                 do show->set(BeginOpen("检视面板##jeeditor"));
 
                 // 1. 获取当前编辑中的实体，

@@ -15,7 +15,7 @@ namespace editor::gui::edit_forms
         {
             // 坏！不过之后再来改吧
             static let mut windows_moveable = true;
-
+            je::gui::SetNextWindowSizeConstraints((300., 200.), (2000., 1100.));
             show->set(BeginAttrOpen("调试器视口", 
                 WindowsAttribute::ImGuiWindowFlags_MenuBar
                 + (windows_moveable 
@@ -135,7 +135,7 @@ namespace editor::gui::edit_forms
                     // }
                 }
             none?
-                Text("未找到编辑器渲染使用的摄像机或无法获取摄像机的渲染结果，因此无法预览渲染结果");
+                Text("没有编辑中的场景");
             }
 
             End();

@@ -143,6 +143,7 @@ namespace editor::gui::edit_forms
     {
         if (show->get)
         {
+            je::gui::SetNextWindowSizeConstraints((200., 300.), (200., 5000.));
             do show->set(BeginAttrOpen("实体列表##jeeditor",
                 WindowsAttribute::ImGuiWindowFlags_MenuBar));
 
