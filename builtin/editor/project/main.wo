@@ -19,6 +19,7 @@ namespace editor
     public using ProjectWorld = struct{
         m_world_instance: je::world,
         m_world_path: string,
+        m_runtime_systems: mut array<je::typeinfo>,
     };
 
     public using Project = struct{
@@ -177,6 +178,14 @@ namespace editor
             jeapi::gui::form::errmsg("错误", "请求的世界不存在"); 
             return false;
         }
+        public func get_worlds_runtime_systems(self: Project, world: je::world)
+        {
+            return self->_get_project_world(world)->>\pw = pw.m_runtime_systems;;
+        }
+        public func set_worlds_runtime_systems(self: Project, world: je::world, syss: array<je::typeinfo>)
+        {
+            return self->_get_project_world(world)->>\pw = pw.m_runtime_systems = syss;->has;
+        }
         public func reset_editing_world(self: Project, world: je::world)=> result<void, string>
         {
             if (self->is_project_world(world))
@@ -246,6 +255,7 @@ namespace editor
             let world = ProjectWorld {
                 m_world_instance = self.m_env->create_world,
                 m_world_path = new_world_file_path,
+                m_runtime_systems = mut [],
             };
             
             self.m_worlds->add(world);
