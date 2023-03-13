@@ -134,6 +134,9 @@ namespace editor
 
             // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了
             proj->_run_default_world;
+
+            // TODO: 在这里临时设置一下窗口嘻嘻嘻，之后做完项目加载就删掉
+            je::input::set_window_size(1344, 768);
             return proj;
         }
         public func close(self: Project)
@@ -260,8 +263,9 @@ namespace editor
             
             self.m_worlds->add(world);
 
-            do world.m_world_instance->add_system(
-                je::typeinfo::load("Translation::TranslationUpdatingSystem")->val);
+            // 世界编辑器已经做平了这一块
+            // do world.m_world_instance->add_system(
+            //     je::typeinfo::load("Translation::TranslationUpdatingSystem")->val);
 
             // 创建默认世界之后，自动顺便创建调试使用的摄像机
             let camera_walker = world.m_world_instance->add_entity([

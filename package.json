@@ -1,24 +1,29 @@
 {
     "config" : [
         "release_x64",
-		    "debug_x64",
-		    "release_x86",
-		    "debug_x86"
+        "debug_x64",
+        "release_x86",
+        "debug_x86"
     ],
     "dependence" : {
-        "image" : {
-            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+        "filesystem" : {
             "path" : "build/pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+            "version" : "1.0.0"
+        },
+        "image" : {
+            "path" : "build/pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "version" : "1.0.0"
         },
         "math" : {
-            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "path" : "build/pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "version" : "1.0.0"
         },
         "process" : {
-            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "path" : "build/pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "version" : "1.0.0"
         }
     },

@@ -1,0 +1,1031 @@
+import pkg.image;
+import pkg.filesystem;
+
+using je::gui;
+
+namespace editor::gui
+{
+    public let mut editor_need_hiding_file = true;
+
+    func create_image(default_name: string, location: string, generator: (image)=> void)
+    {
+        let create_context = (mut 16, mut 16, mut default_name);
+        launch(
+            func(context: (mut int, mut int, mut string))
+            {
+                let mut open = true;
+                do Begin(F"在{location}创建纹理");
+                Text("文件名");
+                context[2] = InputText("##imagename", context[2])->valor(context[2]);
+
+                Text("宽");
+                SameLine();
+                context[0] = InputInt("##width", context[0])->valor(context[0]);
+
+                Text("高");
+                SameLine();
+                context[1] = InputInt("##height", context[1])->valor(context[1]);
+
+                if (Button("创建"))
+                {
+                    let img = image::create(context[0], context[1]);
+
+                    generator(img);
+
+                    let aimpath = F"{location}/{context[2]}.png";
+                    if (!img->save(aimpath))
+                        jeapi::gui::form::errmsg("创建失败", F"无法写入{aimpath}");
+                    else
+                    {
+                        open = false;
+                        force_update();
+                    }
+                }
+                SameLine();
+
+                if (Button("取消"))
+                    open = false;
+
+                End();
+
+                return open;
+            }, (create_context, )
+        );
+    }
+
+    union FileType
+    {
+        path(je::graphic::texture),
+        image(je::graphic::texture),
+        shader(je::graphic::texture),
+        others(je::graphic::texture),
+        cache(je::graphic::texture),
+        world(je::graphic::texture),
+    }
+    namespace FileType
+    {
+        func get_texture(self: FileType)
+        {
+            match (self)
+            {
+                path(t)? return t;
+                image(t)? return t;
+                shader(t)? return t;
+                others(t)? return t;
+                cache(t)? return t;
+                world(t)? return t;
+            }
+        }
+    }
+    
+    // 支持作为图片格式的拓展名
+    let IMAGE_FILE_EXTERN_NAMES = [".png", ".jpg", ".bmp", ".psd",];
+
+    // 用于储存文件拓展名和图标的对应关系
+    let FILE_TYPE_ICONS = {
+        [".png"] = FileType::image(je::graphic::texture::load(F"!/builtin/editor-old/icon/TextureFile.png")->val),
+        [".jpg"] = FileType::image(je::graphic::texture::load(F"!/builtin/editor-old/icon/TextureFile.png")->val),
+        [".bmp"] = FileType::image(je::graphic::texture::load(F"!/builtin/editor-old/icon/TextureFile.png")->val),
+        [".psd"] = FileType::image(je::graphic::texture::load(F"!/builtin/editor-old/icon/TextureFile.png")->val),
+        [".shader"] = FileType::shader(je::graphic::texture::load(F"!/builtin/editor-old/icon/ShaderFile.png")->val),
+        [".jemodule4"] = FileType::path(je::graphic::texture::load(F"!/builtin/editor-old/icon/CppProgram.png")->val),
+        [".jecache4"] = FileType::cache(je::graphic::texture::load(F"!/builtin/editor-old/icon/JoyEngineCSP-Dev.png")->val),
+        [".jeworld"] = FileType::world(je::graphic::texture::load(F"!/builtin/editor-old/icon/World.png")->val),
+    };
+
+    // 根据文件拓展名返回文件的类型
+    private func get_file_icon_by_extern_name(_path: PathInfo)=> FileType
+    {
+        static let default_path_icon 
+            = FileType::path(je::graphic::texture::load(F"!/builtin/editor-old/icon/FilePath.png")->val);
+        static let default_file_icon 
+            = FileType::others(je::graphic::texture::load(F"!/builtin/editor-old/icon/File.png")->val);
+
+        let icon = FILE_TYPE_ICONS->get(_path.externname);
+
+        match (icon)
+        {
+        none?
+        {
+            match (_path.type->get)
+            {
+            dir(_)?
+                return default_path_icon;
+            file?
+                return default_file_icon;
+            }
+        }
+        value(i)? return i;
+        }
+    }
+
+    union PathType
+    {
+        dir(option<array<PathInfo>>),
+        file,
+    }
+
+    public using PathInfo = struct {
+        path        : string,   // 当前目录/文件的目录
+        name        : string,
+        externname  : string,
+        type        : mutable<PathType>, // 类型，如果是目录，则还包含目录内的子项    
+    }
+    {
+        func should_hide(self: PathInfo)
+        {
+            static let HIDING_FILE_TYPE = [".jecache4"];
+            
+            if (editor_need_hiding_file)
+                return HIDING_FILE_TYPE->find(self.externname) != -1;
+            return false;
+        }
+        func isdir(self : PathInfo)
+        {
+            match (self.type->get)
+            {
+            dir(_)? return true;
+            file? return false;
+            }
+        }
+        func indir(self : PathInfo, functor: (option<array<PathInfo>>)=>void)
+        {
+            match (self.type->get)
+            {
+            dir(subdirs)? functor(subdirs);
+            file?;
+            }
+            return self;
+        }
+        func infile(self : PathInfo, functor: ()=>void)
+        {
+            match (self.type->get)
+            {
+            dir(subdirs)?;
+            file? functor();
+            }
+            return self;
+        }
+        func childs(self : PathInfo, force_update: bool)
+        {
+            // 如果没有要求强制更新，有现成的就用现成的
+            match (self.type->get)
+            {
+            dir(_dir)?
+                match(_dir)
+                {
+                value(subdirs)?
+                    if (!force_update)
+                        return subdirs;
+                none?;
+                }
+            file? // 文件也来获取子目录，搁这儿找茬呢？
+                std::panic("Failed to get subpath: is a file.");
+            }
+
+            // 当前目录的子项目尚未获取，在这里获取一下塞进去
+            let sublist = 
+                filesys::subpath(self.path)
+                    ->unwarp
+                    ->map(\current_subpath: string = PathInfo{
+                        path = current_subpath, 
+                        name = filesys::filename(current_subpath),
+                        externname = filesys::extension(current_subpath),
+                        type = mutable::create(filesys::isdir(current_subpath)?
+                                PathType::dir(option::none) | PathType::file),
+                    };);
+
+            self.type->set(PathType::dir(option::value(sublist)));
+            return sublist;
+        }
+    }
+
+    static let mut current_work_path = "";        
+
+    func set_current_work_path(path: string)
+    {
+        assert(filesys::isdir(path));
+        current_work_path = path;
+    }
+
+    enum Action
+    {
+        Nothing,
+        Click,
+        DoubleClick,
+        RightClick,
+    }
+
+    func context_menu(path: option<PathInfo>)
+    {
+        let mut shown_context = false;
+
+        if (path
+            ->map(\_ = BeginPopupContextItem();)
+            ->or(\ = BeginPopupContextWindow();))
+        {
+            if (BeginMenu(F"新建..."))
+            {
+                if (MenuItem(F"目录"))
+                    jeapi::gui::form::input("新建目录", F"在{current_work_path}新建目录", "NewDir",
+                        \dirname: string = filesys::mkdir(filesys::normalize(current_work_path) + "/" + dirname)
+                            ->map(\_ = force_update();)
+                            ->or(\errid = jeapi::gui::form::errmsg("失败", F"创建目录失败{errid}");););
+                if (MenuItem(F"空文件"))
+                {
+                    jeapi::gui::form::input("新建空文件", F"在{current_work_path}新建空文件", "NewFile.txt",
+                        \filename: string = filesys::exist(file_path)
+                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            | filesys::writeall(file_path, "") 
+                                ? force_update()
+                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                        where file_path = filesys::normalize(current_work_path) + "/" + filename;);
+                }
+                if (BeginMenu(F"纹理"))
+                {
+                    if (MenuItem(F"空白纹理"))
+                        create_image("White", current_work_path, func(img){
+                            let (w, h) = img->size;
+                            for (let mut x = 0 ; x < w; x += 1)
+                                for (let mut y = 0 ; y < h; y += 1)
+                                    img->setpix((x, y), (1., 1., 1., 1.));
+                        });
+                    if (MenuItem(F"透明纹理"))
+                        create_image("Empty", current_work_path, func(img){
+                            let (w, h) = img->size;
+                            for (let mut x = 0 ; x < w; x += 1)
+                                for (let mut y = 0 ; y < h; y += 1)
+                                    img->setpix((x, y), (0., 0., 0., 0.));
+                        });
+                        
+                    EndMenu();
+                }
+                Separator();
+                if (BeginMenu("着色器脚本"))
+                {
+                    static let editor_origin_shader = {
+                        ["空白着色器"] = "MonoColor",
+                        ["无光着色器"] = "Unlit",
+                        ["2D光照着色器"] = "Forward2D",
+                        ["2D光照着色器（法线）"] = "Forward2DNormal",
+                    };
+
+                    let create_shader_at = func(shader_name: string, shader_src: string)
+                    {
+                        let shader_path = filesys::normalize(F"{current_work_path}/{shader_name}.shader");
+                        if (!filesys::writeall(shader_path, shader_src))
+                            jeapi::gui::form::errmsg("创建着色器失败", F"无法写入{shader_path}");
+                        else
+                            force_update();
+                    };
+
+                    for (let shader_display_name, shader_path_name : editor_origin_shader)
+                        if (MenuItem(shader_display_name))
+                            jeapi::gui::form::input("创建着色器", F"将在{current_work_path}创建{shader_display_name}：",
+                                shader_path_name,
+                                \shader_name: string = 
+                                    filesys::readall(F"{std::exepath()}/builtin/shader/{shader_path_name}.shader")
+                                        ->> \src = create_shader_at(shader_name, src);
+                                        ->  or(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
+                                    ;
+                                ); // end of inputbox
+                  
+                    EndMenu();
+                }
+                // if (MenuItem(F"C++模块"))
+                // {
+                //     // 创建C++模块，就跟JoyEngineCSP差不多
+                //     jeapi::gui::form::input("创建C++模块", F"将在{current_work_path}创建，请为项目命名：", "CppModule", 
+                //         \module_name: string = CxxProject::start(module_name, current_work_path)
+                //             ->> \ _ = force_update();
+                //             ->or(\reason = jeapi::gui::form::errmsg("创建C++模块失败", reason);)
+                //             ;
+                //         );
+                // }
+                EndMenu();
+            }
+
+            Separator();
+
+            do path
+                ->> \p = file_item_menu(p);
+                ->> \_ = Separator();
+                ;
+                        
+            if (MenuItem("在资源管理器中显示"))
+                std::panic("TODO;");
+                // std::shell(F"explorer \"{filesys::normalize(current_work_path)->replace("/", "\\")}\"");
+
+            if (MenuItem(F"刷新"))
+                force_update();
+
+            EndPopup();
+        }
+    }
+
+    func crc_path(path)
+    {
+        // 给定一个路径，计算整个路径的全部crc
+        using filesys;
+        using je::editor;
+        let normalized_path =  path->normalize;
+        let pure_path = \p: string = p->beginwith(normalized_path) ? p->sub(normalized_path->len)| p;;
+
+        func debug(msg)
+        {
+            std::println(msg);
+            return msg;
+        }
+
+        return normalized_path
+            -> allsubpath()
+            -> okay
+            =>> \childs = childs
+                ->>\child = normalize(child);
+                ->> \child = isfile(child)? filesys::filename(pchild) + crc64file(child)->val: string | pchild
+                    where pchild = pure_path(child);
+                ->  reduce(\l, r = l + r;)
+                ->> \str = crc64str(str);
+                ;
+            ->  val;
+    }
+
+    // func try_update_recompile(mod)
+    // {
+    //     // 检查一下引擎的提供的文件，确认是否需要重新编译
+    //     let engine_path_crc64 = crc_path(CxxProject::ENGINE_HEADER_PATH);
+    //     let specify_module_path_crc64 = crc_path(F"{mod.path}/engine/include");
+
+    //     if (engine_path_crc64 == specify_module_path_crc64)
+    //     {
+    //         mod->update_compile(je::editor::platform());
+    //         return true;
+    //     }
+    //     else
+    //     {
+    //         jeapi::gui::form::ask("模块头文件版本不一致", F"模块{mod.path}\n的引擎头文件在尝试重新编译时检测到了不一致。\n是否需要更新？",
+    //             func(choice)
+    //             {
+    //                 if (choice)
+    //                 {
+    //                     let update_result = 
+    //                         CxxProject::update_engine_file(mod.path)
+    //                             =>> \r = CxxProject::generate_module_config(mod.name, mod.path, r);;
+    //                     if (!update_result->isok)
+    //                     {
+    //                         jeapi::gui::form::errmsg("重新编译失败", F"{mod.path}更新引擎文件失败：\n{update_result->error->val}");
+    //                         return 0;
+    //                     }
+    //                 }
+    //                 else; // 点NO 啥也不干~
+    //                 mod->update_compile(je::editor::platform());
+    //             });
+    //         return false;
+    //     }
+    // }
+
+    func file_item_menu(path: PathInfo)
+    {
+        let NOT_MODIFIABLE_FILES = [".jeproj4", ".jemodule4"];
+        let is_modifiable_file = NOT_MODIFIABLE_FILES->find(path.externname) == -1;
+
+        // if (path.externname == ".shader")
+        // {
+        //     if (MenuItem(F"更新此着色器"))
+        //     {
+        //         // 从universe中获取所有world，更新world中所有实体的shader
+        //         je::universe::current()
+        //             ->editor::worlds_list
+        //             ->map(\w: je::world = w
+        //                 ->editor::get_all_entities
+        //                 ->map(\e: je::entity = 
+        //                     e->editor::graphic::try_reload_shaders(path.path, path.path)
+        //                 ;)
+        //             ;);
+        //     }
+        //     Separator();
+        // }
+//         else if (path.externname == ".jemodule4")
+//         {
+//             if (MenuItem(F"重新编译此模块"))
+//             {
+//                 match(Project::GetCurrentProject().native_modules
+//                     ->get(filesys::normalize(path.path)))
+//                 {
+//                 value(mod)?
+//                     try_update_recompile(mod);
+//                 none?
+//                     jeapi::gui::form::ask("是否加载此模块？", 
+//                         F"正在要求重新编译模块{path.path}\n但此模块尚未被加载。\n是否现在加载并重新编译？",
+//                         func (sure: bool)
+//                         {
+//                             if (!sure) return;
+//                             match (CxxProject::open_for_loading(path.path))
+//                             {
+//                             ok(mod)?
+//                                 try_update_recompile(mod);
+//                             err(reason)?
+//                                 jeapi::gui::form::errmsg("加载模块失败", reason);
+//                             }
+//                         });
+//                 }
+                    
+//             }
+//             if (MenuItem(F"组件/系统..."))
+//             {
+//                 let components = filesys::subpath(F"{path.path}/components")
+//                         ->okay
+//                         ->map(\s: array<string> = s
+//                              ->forall(\f = filesys::extension(f) == ".hpp";)
+//                              ->map(\f = fname->subto(0, fname->len - 4)
+//                                 where fname = filesys::filename(f);)
+//                             ;)
+//                         ->valor([])
+//                         ->tovec;
+//                 let systems = filesys::subpath(F"{path.path}/systems")
+//                     ->okay
+//                     ->map(\s: array<string> = s
+//                          ->forall(\f = filesys::extension(f) == ".hpp";)
+//                          ->map(\f = fname->subto(0, fname->len - 4)
+//                             where fname = filesys::filename(f);)
+//                         ;)
+//                     ->valor([])
+//                     ->tovec;
+
+//                 let display_usable_component = func(s: string)
+//                 {
+//                     Selectable(s);
+//                     if (BeginPopupContextItem())
+//                     {
+//                         let file_path = F"{path.path}/components/{s}.hpp";
+
+//                         if (MenuItem("在VSCode中打开"))
+//                             std::shell(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
+//                         if (MenuItem("移除此组件"))
+//                             jeapi::gui::form::ask("确认移除组件？", F"是否从模块{filesys::filename(path.path)}中移除组件{s}?",
+//                                 func(sure: bool){
+//                                     if (!sure) return;
+//                                     components->remove(components->find(s));
+//                                     filesys::remove(file_path);
+//                                 });
+//                         EndPopup();
+//                     }
+//                 };
+
+//                 let display_usable_system = func(s: string)
+//                 {
+//                     Selectable(s);
+//                     if (BeginPopupContextItem())
+//                     {
+//                         let file_path = F"{path.path}/systems/{s}.cpp";
+
+//                         if (MenuItem("在VSCode中打开"))
+//                             std::shell(F"code {utils::WrapPath(path.path)} {utils::WrapPath(file_path)}");
+//                         if (MenuItem("移除此系统"))
+//                             jeapi::gui::form::ask("确认移除系统？", F"是否从模块{filesys::filename(path.path)}中移除系统{s}?",
+//                                 func(sure: bool){
+//                                     if (!sure) return
+//                                     systems->remove(systems->find(s));
+//                                     filesys::remove(F"{path.path}/systems/{s}.hpp");
+//                                     filesys::remove(file_path);
+//                                 });
+//                         EndPopup();
+//                     }
+//                 };
+
+//                 launch(func(mut open: bool)
+//                 {
+//                     open = BeginAttrOpen(F"模块{filesys::filename(path.path)}当前组件和系统", 
+//                         WindowsAttribute::ImGuiWindowFlags_MenuBar);
+//                     if (BeginMenuBar())
+//                     {
+//                         if (BeginMenu("创建..."))
+//                         {
+//                             if (MenuItem("新系统"))
+//                                 jeapi::gui::form::input("创建新系统", F"为模块{filesys::filename(path.path)}创建系统", "NewSystem",
+//                                     func(name: string)
+//                                     {
+//                                         if (systems->find(name) != -1)
+//                                         {
+//                                             jeapi::gui::form::errmsg("创建系统失败", F"模块{filesys::filename(path.path)}已经存在一个同名系统");
+//                                             return;
+//                                         }
+
+//                                         let system_header = 
+// @"#include "jeecs.hpp"
+
+// namespace $$MODULE_NAME$$
+// {
+//     struct $$SYSTEM_NAME$$ : public jeecs::game_system
+//     {
+//         $$SYSTEM_NAME$$(jeecs::game_world world);
+//         void PreUpdate();
+//         void Update();
+//         void LateUpdate();
+//     };
+// }
+// "@;
+//                                     let system_src = 
+// @"#include "$$SYSTEM_NAME$$.hpp"
+
+// using namespace std;
+// using namespace jeecs;
+
+// namespace $$MODULE_NAME$$
+// {
+//     $$SYSTEM_NAME$$::$$SYSTEM_NAME$$(game_world world)
+//         : game_system(world)
+//     {
+        
+//     }
+
+//     void $$SYSTEM_NAME$$::PreUpdate()
+//     {
+
+//     }
+
+//     void $$SYSTEM_NAME$$::Update()
+//     {
+
+//     }
+
+//     void $$SYSTEM_NAME$$::LateUpdate()
+//     {
+
+//     }
+// }
+// "@;
+//                                         let module_name = filesys::purename(path.path);
+//                                         let system_name = name;
+
+//                                         if (!filesys::writeall(F"{path.path}/systems/{system_name}.hpp", 
+//                                             system_header
+//                                                 ->replace("$$MODULE_NAME$$", module_name)
+//                                                 ->replace("$$SYSTEM_NAME$$", system_name))
+//                                             ||
+//                                             !filesys::writeall(F"{path.path}/systems/{system_name}.cpp", 
+//                                             system_src
+//                                                 ->replace("$$MODULE_NAME$$", module_name)
+//                                                 ->replace("$$SYSTEM_NAME$$", system_name))
+//                                             )
+//                                         {
+//                                             filesys::remove(F"{path.path}/systems/{system_name}.hpp");
+//                                             filesys::remove(F"{path.path}/systems/{system_name}.cpp");
+
+//                                             jeapi::gui::form::errmsg("创建系统失败", "无法创建和写入系统源文件");
+//                                         }
+//                                         else
+//                                         {
+//                                             jeapi::gui::form::errmsg("创建系统成功", "系统已创建到\n" 
+//                                                 + F"{path.path}/systems/{system_name}.hpp\n"
+//                                                 + F"{path.path}/systems/{system_name}.cpp");
+//                                             systems->add(system_name);
+//                                         }
+//                                     });
+//                             //End of create new system
+//                             if (MenuItem("新组件"))
+//                                 jeapi::gui::form::input("创建新组件", F"为模块{filesys::filename(path.path)}创建组件", "NewComponent",
+//                                     func(name: string)
+//                                     {
+//                                         if (components->find(name) != -1)
+//                                         {
+//                                             jeapi::gui::form::errmsg("创建组件失败", F"模块{filesys::filename(path.path)}已经存在一个同名组件");
+//                                             return;
+//                                         }
+
+//                                         let component_header = 
+// @"#include "jeecs.hpp"
+
+// namespace $$MODULE_NAME$$
+// {
+//     struct $$COMPONENT_NAME$$
+//     {
+//         static void JERefRegsiter()
+//         {
+//             using namespace jeecs;
+
+//             // Register member in this function.
+//             // e.g. typing::register_member(&$$COMPONENT_NAME$$::member, "member");
+//         }
+//     };
+// }
+// "@;
+//                                         let module_name = filesys::purename(path.path);
+//                                         let component_name = name;
+
+//                                         if (!filesys::writeall(F"{path.path}/components/{component_name}.hpp", 
+//                                             component_header
+//                                                 ->replace("$$MODULE_NAME$$", module_name)
+//                                                 ->replace("$$COMPONENT_NAME$$", component_name))
+//                                             )
+//                                         {
+//                                             filesys::remove(F"{path.path}components/{component_name}.hpp");
+//                                             jeapi::gui::form::errmsg("创建组件失败", "无法创建和写入组件源文件");
+//                                         }
+//                                         else
+//                                         {
+//                                             jeapi::gui::form::errmsg("创建组件成功", "组件已创建到\n" 
+//                                                 + F"{path.path}/components/{component_name}.hpp");
+//                                             components->add(component_name);
+//                                         }
+//                                     });
+//                             // End of create new component
+//                             EndMenu();
+//                         }
+//                         EndMenuBar();
+//                     }
+
+//                     let (available_width, _) = GetContentRegionAvail();
+
+//                     BeginGroup();
+//                     Text("系统");
+//                     let (_, avaliable_height) = GetContentRegionAvail();
+
+//                     if (BeginListBox("##1", available_width/2.-0.5, avaliable_height))
+//                     {
+//                         systems->map(\s: string = display_usable_system(s););
+//                         EndListBox();
+//                     }
+//                     EndGroup();
+
+//                     SameLine();
+
+//                     BeginGroup();
+//                     Text("组件");
+//                     let (_, avaliable_height2) = GetContentRegionAvail();
+//                     if (BeginListBox("##2", available_width/2.-0.5, avaliable_height2))
+//                     {
+//                         components->map(\s: string = display_usable_component(s););
+//                         EndListBox();
+//                     }
+//                     EndGroup();
+
+//                     End();
+
+//                     if (open)
+//                         return FormAction::Nothing;
+//                     return FormAction::Close;
+//                 }, (true,));
+//             }
+//             Separator();
+//         }
+        // else 
+        if (IMAGE_FILE_EXTERN_NAMES->find(path.externname) != -1)
+        {
+            // 是图片，在这里编辑图片的采用方法等数据
+            if (MenuItem("编辑图片"))
+            {
+                using je::editor;
+                let image_samping_method = je::editor::get_texture_sampling_method_by_path(path.path);
+
+                launch(func(method: mutable<texture_sampling>){
+                    let mut open = BeginOpen(F"编辑图片{path.path}");
+                        static let MIN_SAMPLING_METHODS = {
+                            ["线性采样"] = texture_sampling::MIN_LINEAR,
+                            ["临近采样"] = texture_sampling::MIN_NEAREST,
+                            ["MIN_NEAREST_NEAREST_MIP"] = texture_sampling::MIN_NEAREST_NEAREST_MIP,
+                            ["MIN_LINEAR_NEAREST_MIP"] = texture_sampling::MIN_LINEAR_NEAREST_MIP,
+                            ["MIN_NEAREST_LINEAR_MIP"] = texture_sampling::MIN_NEAREST_LINEAR_MIP,
+                            ["MIN_LINEAR_LINEAR_MIP"] = texture_sampling::MIN_LINEAR_LINEAR_MIP,
+                        };
+                        static let MAG_SAMPLING_METHODS = {
+                            ["线性采样"] = texture_sampling::MAG_LINEAR,
+                            ["临近采样"] = texture_sampling::MAG_NEAREST,
+                        };
+                        static let X_SAMPLING_METHODS = {
+                            ["截断"] = texture_sampling::CLAMP_EDGE_X,
+                            ["重复"] = texture_sampling::REPEAT_X,
+                        };
+                        static let Y_SAMPLING_METHODS = {
+                            ["截断"] = texture_sampling::CLAMP_EDGE_Y,
+                            ["重复"] = texture_sampling::REPEAT_Y,
+                        };
+
+                        static let MIN_SAMPLING_METHODS_NAMES = MIN_SAMPLING_METHODS->keys;
+                        static let MIN_SAMPLING_METHODS_VALUES = MIN_SAMPLING_METHODS->vals;
+                        static let MAG_SAMPLING_METHODS_NAMES = MAG_SAMPLING_METHODS->keys;
+                        static let MAG_SAMPLING_METHODS_VALUES = MAG_SAMPLING_METHODS->vals;
+
+                        static let X_SAMPLING_METHODS_NAMES = X_SAMPLING_METHODS->keys;
+                        static let X_SAMPLING_METHODS_VALUES = X_SAMPLING_METHODS->vals;
+                        static let Y_SAMPLING_METHODS_NAMES = Y_SAMPLING_METHODS->keys;
+                        static let Y_SAMPLING_METHODS_VALUES = Y_SAMPLING_METHODS->vals;
+
+                        Text("采样设置");
+                        Separator();
+                        match (Combo("缩小时", 
+                            MIN_SAMPLING_METHODS_NAMES, 
+                            MIN_SAMPLING_METHODS_VALUES
+                                ->find(std::bitand(method->get: int, texture_sampling::MIN_FILTER_MASK: int): texture_sampling)))
+                        {
+                        value(newselect)?
+                            method->set(std::bitnot(texture_sampling::MIN_FILTER_MASK: int)
+                                ->std::bitand(method->get: int)
+                                ->std::bitor(MIN_SAMPLING_METHODS_VALUES[newselect]: int): texture_sampling);
+                        none?
+                            ;
+                        }
+
+                        match (Combo("放大时", 
+                            MAG_SAMPLING_METHODS_NAMES, 
+                            MAG_SAMPLING_METHODS_VALUES
+                                ->find(std::bitand(method->get: int, texture_sampling::MAG_FILTER_MASK: int): texture_sampling)))
+                        {
+                        value(newselect)?
+                            method->set(std::bitnot(texture_sampling::MAG_FILTER_MASK: int)
+                                ->std::bitand(method->get: int)
+                                ->std::bitor(MAG_SAMPLING_METHODS_VALUES[newselect]: int): texture_sampling);
+                        none?
+                            ;
+                        }
+                        
+                        Separator();
+
+                        match (Combo("X方向", 
+                            X_SAMPLING_METHODS_NAMES, 
+                            X_SAMPLING_METHODS_VALUES
+                                ->find(std::bitand(method->get: int, texture_sampling::WRAP_X_METHOD_MASK: int): texture_sampling)))
+                        {
+                        value(newselect)?
+                            method->set(std::bitnot(texture_sampling::WRAP_X_METHOD_MASK: int)
+                                ->std::bitand(method->get: int)
+                                ->std::bitor(X_SAMPLING_METHODS_VALUES[newselect]: int): texture_sampling);
+                        none?
+                            ;
+                        }
+
+                        match (Combo("Y方向", 
+                            Y_SAMPLING_METHODS_NAMES, 
+                            Y_SAMPLING_METHODS_VALUES
+                                ->find(std::bitand(method->get: int, texture_sampling::WRAP_Y_METHOD_MASK: int): texture_sampling)))
+                        {
+                        value(newselect)?
+                            method->set(std::bitnot(texture_sampling::WRAP_Y_METHOD_MASK: int)
+                                ->std::bitand(method->get: int)
+                                ->std::bitor(Y_SAMPLING_METHODS_VALUES[newselect]: int): texture_sampling);
+                        none?
+                            ;
+                        }
+
+                        if (Button("确认"))
+                        {
+                            open = false;
+                            do je::editor::update_texture_sampling_method_by_path(path.path, method->get);
+                        }
+
+                    End();
+                    
+                    return open;
+                
+                }, (mutable::create(image_samping_method), /**/));
+            }
+            if (MenuItem("更新此图片"))
+            {
+                std::panic("TODO");
+            }
+            Separator();
+        }
+
+        // 下面是通用的选项
+
+        if (MenuItemEnabled("重命名", is_modifiable_file))
+        {
+            jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
+                \newname: string = filesys::move(path.path, filesys::parent(path.path) + newname)
+                    ->> \_ = force_update();
+                    ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
+        }
+        if (MenuItemEnabled("删除", is_modifiable_file))
+        {
+            jeapi::gui::form::ask(F"删除{path.path}", F"是否继续删除{path.path}",
+                func(sure: bool)
+                {
+                    if (!sure) return;
+                    filesys::remove(path.path)
+                        ->> \_ = force_update();
+                        ->  or(\errid = jeapi::gui::form::errmsg("失败", F"删除失败({errid})");)
+                        ;
+                });
+        }
+    }
+
+    public func sort(list, less_f)=> typeof(list)
+    {
+        func _sort2(first_elem, elems, less_f)
+        {
+            return 
+                sort(elems->forall(\e = less_f(e, first_elem);), less_f)
+                -> append(first_elem)
+                -> connect(sort(elems->forall(\e = !less_f(e, first_elem);), less_f))
+                ;
+        }
+        return list->empty ? [] | _sort2(list[0], list->sub(1), less_f);
+    }
+
+    // 带图标的文件按钮
+    func FileIcon(path: PathInfo)=> Action
+    {
+        BeginGroup();
+            PushIDStr(path.path);
+                let clicked = ImageButtonSize(get_file_icon_by_extern_name(path)->get_texture, 32., 32.);
+            PopID();
+            let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
+            context_menu(option::value(path));
+            if (BeginDragDropSource())
+            {
+                do SetDragDropPayload("JEDITOR_FILE_PATH", path.path);
+                    Text(F"File: {path.path}");
+                EndDragDropSource();
+            }
+
+            SameLine();
+            Text(path.name);
+        EndGroup();
+
+        static let mut _last_click_time = std::time();
+
+        if(clicked)
+        {
+            let _current_click_time = std::time();
+            if (_current_click_time - _last_click_time < 0.2)
+                return Action::DoubleClick;
+
+            _last_click_time = _current_click_time;
+            return Action::Click;
+        }
+        else if (right_click)
+            return Action::RightClick;
+        
+        return Action::Nothing;
+    }
+
+    static let mut force_update_file_group_flag = false;
+    static let mut force_update_dir_tree_flag = false;
+    // 刷新显示的目录信息等...
+    public func force_update()
+    {
+        force_update_dir_tree_flag = true;
+        force_update_file_group_flag = true;
+    }
+
+    // 右边的文件详情等信息
+    func files_group()
+    {
+        static let mut new_showing_path = "";
+        static let mut now_item_in_path = []: array<PathInfo>;
+        if (new_showing_path != current_work_path || force_update_file_group_flag)
+        {
+            new_showing_path = current_work_path;
+            force_update_file_group_flag = false;
+   
+            func compare_method (a: PathInfo, b: PathInfo)
+            {
+                func is_dir(p){match(p.type->get){dir(_)?return true;file?return false;}}
+                if (is_dir(a))
+                    return !is_dir(b);
+                else if (is_dir(b))
+                    return false;
+
+                if (a.externname != b.externname)
+                    return a.externname < b.externname;
+                return a.name < b.name;
+            }
+
+            now_item_in_path =
+                filesys::subpath(current_work_path)
+                    ->unwarp
+                    ->> \subpath = PathInfo{ 
+                            path = subpath,
+                            name = filesys::filename(subpath),
+                            externname = filesys::extension(subpath),
+                            type = mutable::create(filesys::isdir(subpath)
+                                ? PathType::dir(option::none) 
+                                | PathType::file),
+                        };
+                    ->sort(compare_method)
+                    ;
+        }
+
+        do BeginChild("files_list");
+            context_menu(option::none);
+            do now_item_in_path
+                -> forall(\item = !item->should_hide;)
+                ->> \item = 
+                    action == Action::Click 
+                    ? (nil: void)
+                    | action == Action::DoubleClick ? 
+                        (item
+                            ->indir(\_ = set_current_work_path(item.path);)
+                            ->infile(\= std::panic("TODO");)
+                        ): void
+                            // ->infile(\= OpenFile::open(item);)   
+                    /* | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单") */
+                    | (nil: void) // get void
+                    where action = FileIcon(item);
+                ; 
+        EndChild();
+
+        // 允许各种乱七八糟的东西拖到这里
+        // AcceptDrag(["JEEDITOR_WORLD"])
+        //     ->> \msg: (string, string) = 
+        //             type == "JEEDITOR_WORLD" 
+        //             ? Project::GetCurrentProject()
+        //                 ->  FindWorld(data: handle: je::world)
+        //                 ->> \w: Project::World = w->SaveTo(new_showing_path);
+        //                 ->  or(\=launch(jeapi::gui::form::errmsg, ("保存世界失败", "没有在项目中找到此实例对应的信息"));)
+        //             | std::panic(F"Unhandler drag type: '{type}'.")
+        //             where (type, data) = msg
+        //         ;
+        //     ;
+    }
+
+    // 左侧的目录概况
+    func path_tree(context: EditorContext)
+    {
+        let root_path = 
+            context->get_project.m_path;
+
+        if (current_work_path == "")
+            current_work_path = root_path;
+
+        static let _root = PathInfo {
+                path = root_path,
+                name = filesys::filename(root_path),
+                externname = filesys::extension(root_path),
+                type = mutable::create(PathType::dir(option::none)),
+            };
+
+        if (force_update_dir_tree_flag)
+        {
+            force_update_dir_tree_flag = false;
+
+            // 强制更新，直接把缓存的子目录全部干掉
+            _root.type->set(PathType::dir(option::none));
+        }
+
+        // 用于递归展示所有子目录等
+        func _show_paths(path: PathInfo)
+        {
+            match (path.type->get)
+            {
+            PathType::dir(subpath)?
+            {
+                let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                if (current_work_path == path.path)
+                    attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
+                        
+                let subpaths = path->childs(false);
+
+                let show_child = TreeNodeEx(F"{path.name}##p", attribute 
+                    + (subpaths->forall(\sf = sf->isdir;)->empty
+                        ? TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
+                        | TreeNodeAttribute::ImGuiTreeNodeFlags_None));
+                if (IsItemClickedLeft() && !IsItemToggledOpen())
+                    current_work_path = path.path;
+
+                if (show_child)
+                {
+                    for (let _, subpath : subpaths)
+                        _show_paths(subpath);
+
+                    TreePop();
+                }
+                else
+                    // 如果目录被折叠起来，则删除缓存，等待下次展开时重新获取
+                    path.type->set(PathType::dir(option::none));
+            }
+            PathType::file?
+                ; // path_tree只显示目录，跳过文件
+            }
+        }
+
+        do BeginChildSize("path_tree", 200., 0.);
+            _show_paths(_root);
+        EndChild();
+    }
+
+    public func show_browser(context: EditorContext, show: mutable<bool>)
+    {
+        if (show->get)
+        {
+            je::gui::SetNextWindowSizeConstraints((500., 200.), (2000., 1100.));
+            do show->set(BeginAttrOpen("资源管理器", WindowsAttribute::ImGuiWindowFlags_None));
+                path_tree(context);
+                SameLine();
+                BeginGroup();
+                    do BeginChildSize("tools_bar", 0., 40.);
+                        // TODO 此处放一些返回上一层之类的按钮
+                        if (Button("U"))
+                            current_work_path = filesys::parent(current_work_path);
+                        SameLine();
+                        Text(current_work_path);
+                    EndChild();
+                    files_group();
+                    
+                EndGroup();
+            End();
+        }
+    }
+}
