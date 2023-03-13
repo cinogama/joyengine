@@ -86,7 +86,7 @@ namespace je::gui
     public func JobID()=> handle;
 
     extern("libjoyecs", "je_gui_set_clip_board_text")
-    public func SetClipboardText(text: string)=> ImVec2;
+    public func SetClipboardText(text: string)=> void;
     extern("libjoyecs", "je_gui_get_clip_board_text")
     public func GetClipboardText()=> string;
 

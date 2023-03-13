@@ -4,9 +4,11 @@
 import je.gui;
 import builtin.api.gui.form.input;
 import builtin.api.gui.form.ask;
+import builtin.api.gui.form.msg;
 import builtin.api.dbg.main;
 
 import builtin.editor.gui.edit_forms.entity_creator;
+import builtin.api.serialize.main;
 
 using je::gui;
 
@@ -98,6 +100,35 @@ namespace editor::gui::edit_forms
         }
 
         jeapi::gui::context_menu(func(){
+            if (MenuItem("复制"))
+            {
+                match (jeapi::serialize::entity(e.e)->>\dat = dat as dict<string, dynamic>: string;)
+                {
+                value(json)?
+                    SetClipboardText(json);
+                none?
+                    jeapi::gui::form::errmsg("失败", "无法复制当前实体");
+                }
+
+            }
+            if (MenuItem("粘贴"))
+            {
+                do GetClipboardText()->todict
+                    ->> \d = jeapi::deserialize::entity(w, d->>\k,v = (k: string, v);)
+                        ->> func(e)
+                        {
+                            // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
+                            static let Anchor = je::typeinfo::load("Transform::Anchor")->val;
+                            if (e->editor::get_component(Anchor)->has)
+                            {
+                                e->editor::remove_component(Anchor);
+                                do e->editor::add_component(Anchor);
+                            }
+                        }
+                        ;
+                    ;
+            }
+            Separator();
             if (MenuItem("编辑"))
             {
                 launch(show_entity_creator, (context, EntityContext::edit(e.e)));
@@ -112,6 +143,7 @@ namespace editor::gui::edit_forms
                         e.uid->justdo(\e = e->editor::set_name(newname););
                     });
             }
+            Separator();
             if (MenuItem("销毁"))
             {
                 jeapi::gui::form::ask(
