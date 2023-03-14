@@ -1,0 +1,45 @@
+import je;
+import je.gui;
+
+using je;
+using je::gui;
+using je::graphic;
+
+namespace jeapi::gui::widget
+{
+    public func accept_file_for_current_widget()=> option<string>
+    {
+        using je::gui;
+
+        if(BeginDragDropTarget())
+        {
+            let some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH");
+            EndDragDropTarget();
+
+            match (some_data_drag)
+            {
+            value(data)?
+                return option::value(data);
+            none?
+                ;
+            }
+        }
+        return option::none;
+    }
+    public func File(name: string, path: string)
+    {
+        using je::gui;
+
+        if (Button(path))
+        {
+            // Open File dialog?
+        }
+
+        let drag_result = accept_file_for_current_widget();
+
+        SameLine();
+        Text(name);
+
+        return drag_result;
+    }
+}

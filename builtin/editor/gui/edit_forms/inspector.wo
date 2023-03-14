@@ -4,6 +4,7 @@
 import je.gui;
 import builtin.api.gui.form.input;
 import builtin.api.gui.form.ask;
+import builtin.api.gui.widget.file;
 import builtin.api.gui.type_edit_widget_mgr;
 import builtin.api.gui.context_menu;
 
@@ -11,6 +12,106 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
+    union shader_option
+    {
+        AddShader(je::graphic::shader),
+        DelShader,
+        DoNothing,
+    }
+            
+    func show_shader_menu()
+    {
+        using je::gui;
+
+        let mut menu_option = shader_option::DoNothing;
+        if (BeginPopupContextItem())
+        {
+            if (MenuItem("移除"))
+                menu_option = shader_option::DelShader;
+
+            EndPopup();
+        }
+
+        return menu_option;
+    }
+
+    func show_shader(entity: je::entity, shader: je::graphic::shader, index: int)=> shader_option
+    {
+        using je::gui;
+
+        let attribute = 
+              TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf;
+
+        let textures = entity->editor::graphic::get_textures();
+
+        SetNextItemOpen(true);
+
+        let show_uniforms = TreeNodeEx(F"{shader->path}##{index}", attribute);
+        let mut shader_operation = show_shader_menu();
+
+        match (jeapi::gui::widget::accept_file_for_current_widget())
+        {
+        value(shader_path)?
+            {
+                match (je::graphic::shader::load(shader_path))
+                {
+                value(shader)?
+                    shader_operation = shader_option::AddShader(shader);
+                none?
+                    jeapi::gui::form::errmsg("加载着色器失败", F"无法加载文件{shader_path}作为着色器");
+                }
+            }
+        none? /* 没有文件拖入，不干任何事情 */;
+        }
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
+        {
+            // TODO: 总得放点什么在这儿
+        }
+        if (show_uniforms)
+        {
+            for(let name, uniform_val : shader->get_uniforms())
+            {
+                if (name->beginwith("JOYENGINE_"))
+                    continue; // 引擎的内置shader-uniform变量，跳过显示
+
+                match (uniform_val)
+                {
+                    integer(n)?
+                        do InputInt(name, n) ->> \n = shader->set_uniform(name, n);;
+                    float(x)?
+                        do InputFloat(name, x) ->> \x = shader->set_uniform(name, x);;
+                    float2((x, y))?
+                        do InputFloat2(name, x, y) ->> \xy = shader->set_uniform(name, xy);;
+                    float3((x, y, z))?
+                        do InputFloat3(name, x, y, z) ->> \xyz = shader->set_uniform(name, xyz);;
+                    float4((x, y, z, w))?
+                        do InputFloat4(name, x, y, z, w) ->> \xyzw = shader->set_uniform(name, xyzw);;
+                    texture(id)?
+                    {
+                        let texture_path = 
+                            textures->get(id)
+                                    ->map(\tex = tex->path->valor("<内置>");)
+                                    ->valor(F"<没有绑定到通道{id}的纹理>");
+                                
+                        do jeapi::gui::widget::File(name, texture_path)
+                            ->> \path =  je::graphic::texture::load(path)
+                                ->> \tex = entity->editor::graphic::bind_texture(id, tex);
+                                ->  or(\=jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理");)
+                                ;
+                            ;
+                    }
+                    others?
+                        Text(F"<不受支持的uniform类型> {name}");
+                }
+            }
+            TreePop();
+        }
+        return shader_operation;
+    }
+
     public func show_inspector(context: EditorContext, show: mutable<bool>)
     {
         if (show->get)
@@ -19,12 +120,18 @@ namespace editor::gui::edit_forms
                 je::gui::SetNextWindowSizeConstraints((250., 400.), (250., 4000.));
                 do show->set(BeginOpen("检视面板##jeeditor"));
 
+                let (_, mut _1_3_height) = GetContentRegionAvail();
+                _1_3_height /= 3.;
+                _1_3_height -= 5.;
+
                 // 1. 获取当前编辑中的实体，
                 match (current_entity_may_none)
                 {
                 value(cur_e)?
                 { 
                     // 2. 遍历实体的非Editor组件
+                    do BeginChildSize("component_editor", 0., 2. * _1_3_height);
+
                     let grouped_components = {}mut: map<string, vec<(je::typeinfo, je::component)>>;
                     for (let ctype, component: cur_e->editor::get_components)
                     {
@@ -106,9 +213,71 @@ namespace editor::gui::edit_forms
                         }
                         EndGroup();
                     }
+
+                    EndChild();
+
+                    do BeginChildSize("material_editor", 0., _1_3_height);
+                    Text("材质编辑器");
+                    Separator();
                     // 3. 遍历实体的材质（如果有
-    
+
+                    static let Shaders = je::typeinfo::load("Renderer::Shaders")->val();
+                    match (cur_e->editor::get_component(Shaders))
+                    {
+                    value(shaders)?
+                        {
+                            let mut shaders = cur_e->editor::graphic::get_shaders();
+
+                            let mut index = 0, mut shaders_has_updated = false;
+                            for (let _, shader : shaders->dup())
+                            {
+                                match (show_shader(cur_e, shader, index))
+                                {
+                                AddShader(shad)?
+                                    {
+                                        shaders = shaders->inlay(index, shad);
+                                        shaders_has_updated = true;
+                                    }
+                                DelShader?
+                                    {
+                                        shaders = shaders->erase(index);
+                                        shaders_has_updated = true;
+                                    }
+                                DoNothing? /* 没有动作 */;
+                                }
+                                index += 1;
+                            } // end show shader.
+
+                            TextDisabled("[拖动shader文件到此处添加新的pass]");
+                            match (jeapi::gui::widget::accept_file_for_current_widget())
+                            {
+                            value(shader_path)?
+                                {
+                                    // TODO: 为啥会有两个地方加载shader，这个地方的代码写得跟鬼一样
+                                    //      检查代码实现，上面也有一个加载shader，两边代码一模一样，
+                                    //      搞什么鬼
+                                    match (je::graphic::shader::load(shader_path))
+                                    {
+                                    value(shader)?
+                                    {
+                                        shaders = shaders->append(shader);
+                                        shaders_has_updated = true;
+                                    }
+                                    none?
+                                        jeapi::gui::form::errmsg("加载着色器失败", F"无法加载文件{shader_path}作为着色器");
+                                    }
+                                }
+                            none? /* 没有文件拖入，不干任何事情 */;
+                            }
+
+                            if (shaders_has_updated)
+                            cur_e->editor::graphic::set_shaders(shaders);
+                        }
+                    none?
+                        Text("当前实体没有Renderer::Shaders组件");
+                    }
                     // 3.1 遍历材质的Uniform数据和纹理信息
+                    EndChild();
                 }
                 none?
                     TextDisabled("没有编辑中的实体");
