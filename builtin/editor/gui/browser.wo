@@ -216,7 +216,7 @@ namespace editor::gui
         RightClick,
     }
 
-    func context_menu(path: option<PathInfo>)
+    func context_menu(path: option<PathInfo>, context: EditorContext)
     {
         let mut shown_context = false;
 
@@ -241,6 +241,23 @@ namespace editor::gui
                                 | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = filesys::normalize(current_work_path) + "/" + filename;);
                 }
+                Separator();
+                if (MenuItem(F"世界"))
+                {
+                    jeapi::gui::form::input("创建世界", F"将在{current_work_path}创建新世界：",
+                        "Newworld",
+                        \new_world_name = launch(
+                            edit_forms::show_world_creator, (context, edit_forms::WorldContext::create(
+                                context->get_project(), new_world_name, F"{current_work_path}/{new_world_name}.jeworld",
+                                func (w)
+                                {
+                                    std::println(context->get_project()->serialize_world(w): string);
+                                    return false;
+                                }
+                            )));
+                        ); 
+                }
+                Separator();
                 if (BeginMenu(F"纹理"))
                 {
                     if (MenuItem(F"空白纹理"))
@@ -823,14 +840,14 @@ namespace editor::gui
     }
 
     // 带图标的文件按钮
-    func FileIcon(path: PathInfo)=> Action
+    func FileIcon(path: PathInfo, context: EditorContext)=> Action
     {
         BeginGroup();
             PushIDStr(path.path);
                 let clicked = ImageButtonSize(get_file_icon_by_extern_name(path)->get_texture, 32., 32.);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
-            context_menu(option::value(path));
+            context_menu(option::value(path), context);
             if (BeginDragDropSource())
             {
                 do SetDragDropPayload("JEDITOR_FILE_PATH", path.path);
@@ -869,7 +886,7 @@ namespace editor::gui
     }
 
     // 右边的文件详情等信息
-    func files_group()
+    func files_group(context: EditorContext)
     {
         static let mut new_showing_path = "";
         static let mut now_item_in_path = []: array<PathInfo>;
@@ -907,7 +924,7 @@ namespace editor::gui
         }
 
         do BeginChild("files_list");
-            context_menu(option::none);
+            context_menu(option::none, context);
             do now_item_in_path
                 -> forall(\item = !item->should_hide;)
                 ->> \item = 
@@ -921,7 +938,7 @@ namespace editor::gui
                             // ->infile(\= OpenFile::open(item);)   
                     /* | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单") */
                     | (nil: void) // get void
-                    where action = FileIcon(item);
+                    where action = FileIcon(item, context);
                 ; 
         EndChild();
 
@@ -1017,7 +1034,7 @@ namespace editor::gui
                         SameLine();
                         Text(current_work_path);
                     EndChild();
-                    files_group();
+                    files_group(context);
                     
                 EndGroup();
             End();

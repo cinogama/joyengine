@@ -18,18 +18,7 @@ namespace editor::gui::edit_forms
         if (show->get)
         {
             je::gui::SetNextWindowSizeConstraints((200., 300.), (200., 5000.));
-            do show->set(BeginAttrOpen("世界列表##jeeditor", 
-                WindowsAttribute::ImGuiWindowFlags_MenuBar));
-
-            if (BeginMenuBar())
-            {
-                if (MenuItem("创建新世界"))
-                    launch(show_world_creator, (context, WorldContext::create(
-                        context->get_project()
-                    )));
-    
-                EndMenuBar();
-            }
+            do show->set(BeginOpen("世界列表##jeeditor"));
 
             static let img = je::graphic::texture::load("!/builtin/editor-old/icon/File.png")->val;
 

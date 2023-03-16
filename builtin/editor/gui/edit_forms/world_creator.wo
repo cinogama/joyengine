@@ -7,23 +7,29 @@ namespace editor::gui::edit_forms
     let icon_world_image = je::graphic::texture::load(F"!/builtin/editor-old/icon/System.png")->val;
 
     using WorldContext  = struct {
-        mut name  : string,
+        name  : mut string,
         edit_world : option<je::world>,
         current_project: Project,
         has_append_types : vec<je::typeinfo>,
         has_active_types : vec<je::typeinfo>,
         not_append_types : vec<je::typeinfo>,
+
+        target_path: string,
+        callback: option<(je::world)=>bool>,
     }
     {
-        public func create(proj: Project)
+        public func create(proj: Project, name: string, path: string, callback: (je::world)=>bool)
         {
             let context = WorldContext{
-                name = mut "新世界",
+                name = mut name,
                 edit_world = option::none,
                 current_project = proj,
                 has_append_types = []mut,
                 has_active_types = []mut,
                 not_append_types = je::typeinfo::editor::get_all_systems_types()->tovec,
+
+                target_path = path,
+                callback = option::value(callback),
             };
     
             let all_systems = []mut: typeof(context.not_append_types);
@@ -50,6 +56,9 @@ namespace editor::gui::edit_forms
                 has_append_types = []mut,
                 has_active_types = []mut,
                 not_append_types = je::typeinfo::editor::get_all_systems_types()->tovec,
+
+                target_path = proj->get_world_path(world)->val,
+                callback = option::none,
             };
     
             let all_systems = []mut: typeof(context.not_append_types);
@@ -246,11 +255,11 @@ namespace editor::gui::edit_forms
 
         if (menu_bar(world_context))
         {
-            match(world_context.edit_world)
+            match (world_context.edit_world)
             {
                 none?
                 {
-                    let created_world = world_context.current_project->create_new_world("TODO");
+                    let created_world = world_context.current_project->create_new_world(world_context.target_path);
 
                     created_world->editor::set_name(world_context.name);
 
@@ -262,6 +271,21 @@ namespace editor::gui::edit_forms
                     {
                         je::logfatal("无法添加运行时激活的系统，未知的错误");
                     }
+                    launch(func(){
+                        // 为了保证世界数据写入完全之后再执行回调（一般用于序列化并保存）
+                        // 此处摇匀一下，不过仍然需要考虑不同世界位于不同线程可能导致的问题
+                        // 摇晃一次即可，摇晃三次纯属玄学
+                        std::yield();
+                        std::yield();
+                        std::yield();
+
+                        if ((world_context.callback->val)(created_world) == false)
+                        {
+                            world_context.current_project->destroy_world(created_world)->unwarp;
+                        }
+                        return false;
+                    }, ());
+
                 }
                 value(world)?
                 {
