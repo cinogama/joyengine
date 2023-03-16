@@ -975,19 +975,14 @@ namespace editor::gui
                                 + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
                 if (current_work_path == path.path)
                     attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
-                        
-                let subpaths = path->childs(false);
 
-                let show_child = TreeNodeEx(F"{path.name}##p", attribute 
-                    + (subpaths->forall(\sf = sf->isdir;)->empty
-                        ? TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
-                        | TreeNodeAttribute::ImGuiTreeNodeFlags_None));
+                let show_child = TreeNodeEx(F"{path.name}##p", attribute);
                 if (IsItemClickedLeft() && !IsItemToggledOpen())
                     current_work_path = path.path;
 
                 if (show_child)
                 {
-                    for (let _, subpath : subpaths)
+                    for (let _, subpath : path->childs(false))
                         _show_paths(subpath);
 
                     TreePop();
