@@ -70,7 +70,14 @@ namespace editor::gui::edit_forms
                                     if (context->get_project->validate_world_or_warning(world))
                                     {
                                         if (save_world)
-                                            std::panic("TODO;");
+                                        {
+                                            if (false == context->get_project->save_world(world))
+                                            {
+                                                // 保存失败，终止关闭流程：
+                                                jeapi::gui::form::errmsg("关闭世界失败", "因未知原因，保存世界失败，操作已取消");
+                                                return;
+                                            }
+                                        }
 
                                         do context->get_project->destroy_world(world)
                                             -> error

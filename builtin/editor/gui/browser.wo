@@ -1,6 +1,8 @@
 import pkg.image;
 import pkg.filesystem;
 
+import woo.shell;
+
 using je::gui;
 
 namespace editor::gui
@@ -14,6 +16,7 @@ namespace editor::gui
             func(context: (mut int, mut int, mut string))
             {
                 let mut open = true;
+                je::gui::SetNextWindowSizeConstraints((300., 200.), (300., 200.));
                 do Begin(F"在{location}创建纹理");
                 Text("文件名");
                 context[2] = InputText("##imagename", context[2])->valor(context[2]);
@@ -216,6 +219,13 @@ namespace editor::gui
         RightClick,
     }
 
+    func write_file_if_not_exist(path: string, content: string)
+    {
+        if (filesys::exist(path))
+            return false;
+        return filesys::writeall(path, content);
+    }
+
     func context_menu(path: option<PathInfo>, context: EditorContext)
     {
         let mut shown_context = false;
@@ -236,7 +246,7 @@ namespace editor::gui
                     jeapi::gui::form::input("新建空文件", F"在{current_work_path}新建空文件", "NewFile.txt",
                         \filename: string = filesys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
-                            | filesys::writeall(file_path, "") 
+                            | write_file_if_not_exist(file_path, "") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = filesys::normalize(current_work_path) + "/" + filename;);
@@ -251,8 +261,19 @@ namespace editor::gui
                                 context->get_project(), new_world_name, F"{current_work_path}/{new_world_name}.jeworld",
                                 func (w)
                                 {
-                                    std::println(context->get_project()->serialize_world(w): string);
-                                    return false;
+                                    if (context->get_project()->serialize_world(w)
+                                            ->> \wdat = write_file_if_not_exist(
+                                                F"{current_work_path}/{new_world_name}.jeworld", 
+                                                wdat as dict<string, dynamic>: string)
+                                                ;
+                                            ->  valor(false)
+                                        == false)
+                                    {
+                                        jeapi::gui::form::errmsg("创建世界失败", "无法创建文件，可能是文件名非法或磁盘已满");
+                                        return false;
+                                    }
+                                    force_update();
+                                    return true;
                                 }
                             )));
                         ); 
@@ -290,7 +311,7 @@ namespace editor::gui
                     let create_shader_at = func(shader_name: string, shader_src: string)
                     {
                         let shader_path = filesys::normalize(F"{current_work_path}/{shader_name}.shader");
-                        if (!filesys::writeall(shader_path, shader_src))
+                        if (!write_file_if_not_exist(shader_path, shader_src))
                             jeapi::gui::form::errmsg("创建着色器失败", F"无法写入{shader_path}");
                         else
                             force_update();
@@ -330,8 +351,7 @@ namespace editor::gui
                 ;
                         
             if (MenuItem("在资源管理器中显示"))
-                std::panic("TODO;");
-                // std::shell(F"explorer \"{filesys::normalize(current_work_path)->replace("/", "\\")}\"");
+                do std::shell(F"explorer \"{filesys::normalize(current_work_path)->replace("/", "\\")}\"");
 
             if (MenuItem(F"刷新"))
                 force_update();
@@ -696,6 +716,7 @@ namespace editor::gui
                 let image_samping_method = je::editor::get_texture_sampling_method_by_path(path.path);
 
                 launch(func(method: mutable<texture_sampling>){
+                    je::gui::SetNextWindowSizeConstraints((300., 200.), (300., 200.));
                     let mut open = BeginOpen(F"编辑图片{path.path}");
                         static let MIN_SAMPLING_METHODS = {
                             ["线性采样"] = texture_sampling::MIN_LINEAR,

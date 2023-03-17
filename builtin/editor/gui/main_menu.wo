@@ -24,6 +24,39 @@ namespace editor::gui
 
                 EndMenu();
             }
+            if (BeginMenu("文件"))
+            {
+                if (MenuItem("保存当前世界"))
+                {
+                    let proj = context->get_project;
+                    if (proj->get_editing_world->>\w = proj->save_world(w)->valor(false) == false)
+                    {
+                        jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
+                    }
+                }
+                if (MenuItem("保存项目"))
+                {
+                    std::panic("TODO");
+                }
+                EndMenu();
+            }
+            if (BeginMenu("编辑"))
+            {
+                if (MenuItem("项目设置"))
+                {
+                    context->launch_editor_form(func(){
+                        je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
+                        let open = BeginOpen("项目设置");
+                        for (let item_name, iconfig : context->get_project->get_configs)
+                        {
+                            do iconfig->edit();
+                        }
+                        End();
+                        return open;
+                    }, ());
+                }
+                EndMenu();
+            }
             EndMainMenuBar();
         }, ());
     }

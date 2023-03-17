@@ -226,6 +226,11 @@ namespace editor
             self.m_default_worlds = option::value(default_world);
         }
 
+        public func get_configs(self: Project)
+        {
+            return self.m_configs;
+        }
+
         public func get_config(self: Project, config_name: string)
         {
             return self.m_configs->get(config_name);
@@ -344,6 +349,12 @@ namespace editor
                     ->  apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic)
                     ;
                 ;
+        }
+        public func save_world(self: Project, w: je::world)
+        {
+            return self->serialize_world(w)
+                ->> \dat = filesys::writeall(dat["path"]: string, dat as dict<string, dynamic>: string);
+                ->  valor(false);
         }
         public func destroy_world(self: Project, world: je::world)=> result<void, string>
         {
