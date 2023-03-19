@@ -10,13 +10,13 @@ using je::graphic;
 
 namespace jeapi::gui::widget
 {
-    public func IconButton(img: texture, text: string, context_menu: option<()=>void>)
+    public func IconButton(img: texture, text: string, size: (real, real), context_menu: option<()=>void>)
     {
         let mut clicked = false;
         BeginGroup();
         {
             PushIDStr(text);
-            clicked = ImageButtonSize(img, 32., 32.);
+            clicked = ImageButtonSize(img, size...);
             PopID();
 
             do context_menu

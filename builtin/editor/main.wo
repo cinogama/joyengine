@@ -1,8 +1,11 @@
 import woo.std;
 import woo.debug;
 
+import pkg.filesystem;
+
 import je;
 import builtin.api.welcome.main;
+import builtin.api.gui.widget.icon_button;
 import builtin.editor.environment.main;
 import builtin.editor.project.main;
 import builtin.editor.gui.main;
@@ -11,26 +14,163 @@ jeapi::welcome::display_copyright_msg();
 
 using je::gui;
 
-/*
+let mut action_after_guide_form_closed = \ = do nil;;
+
+using Path = struct {
+    name: string,       // 仅用于显示
+    path: string,
+    mut childs: option<array<Path>>,
+}
+{
+    func _get_available_root_paths()
+    {
+        // TODO: 这里先只考虑Windows的情况，unix系统那套先不管
+        //       而且只考虑A-Z的盘符，什么AA AB AC，就算windows未来支持也给爷滚
+        let arr = []mut: vec<char>;
+        for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1: char)
+            arr->add(ch);
+
+        return arr
+            ->  unsafe::cast:<array<char>>
+            ->> \ch = [ch]->str + ":/";
+            ->  forall(\path = filesys::isdir(path);)
+            ->> \rootpath = Path
+                {
+                    name = rootpath,
+                    path = rootpath,
+                    childs = mut option::none
+                }
+                ;
+            ;
+    }
+    func childs(path: Path, update: bool)
+    {
+        if (update || !path.childs->has)
+        {
+            let arr = 
+                filesys::subpath(path.path)
+                    ->  unwarp
+                    ->  forall(\child_path = filesys::isdir(child_path);)
+                    ->> \child_path = Path
+                        {
+                            name = filesys::filename(child_path),
+                            path = child_path,
+                            childs = mut option::none
+                        }
+                        ;
+            ;
+            path.childs = option::value(arr);            
+        }
+
+        return path.childs->val;
+    }
+    func show(path: Path)=> option<string>
+    {
+        static let mut selected_path = option::none: option<string>;
+
+        let show_child = TreeNodeEx(path.name, 
+                TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                + selected_path
+                    ->map(\p: string = p == path.path;)
+                    ->valor(false)
+                    ->\b: bool = 
+                        b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
+                            | TreeNodeAttribute::ImGuiTreeNodeFlags_None;);
+
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
+            selected_path = option::value(path.path);
+
+        if (show_child)
+        {
+            for (let _, child_path : path->childs(false))
+                match(child_path->show())
+                {
+                value(result)?
+                    selected_path = value(result);
+                none?
+                    ;
+                }
+
+            TreePop();
+        }
+        return selected_path;
+    }
+    func show_all()
+    {
+        static let roots = _get_available_root_paths();
+
+        return roots
+            =>> \path = r->has ? [r->val] | [] where r = path->show();
+            ->  get(0)
+            =>> \p = filesys::isdir(p) ? option::value(p) | option::none;
+            ;
+    }
+}
+
+func open_path_to_do_sth(action_after_choice: (option<string>)=>void)
+{
+    let mut open = BeginAttrOpen("加载或新建项目", 
+        WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+    let (cur_width, _) = GetContentRegionAvail();
+    Text("请选择项目文件所在的目录：");
+
+    do BeginChildSize("SelectPathToCreateProject", 0., 300.);
+    let select_path_to_create = Path::show_all();
+    EndChild();
+
+    if (ButtonSize("确认", (cur_width, 0.) ))
+    {
+        open = false;
+        action_after_choice(select_path_to_create);
+    }
+    if (ButtonSize("取消", (cur_width, 0.) ))
+        open = false;
+
+    End();
+    return open;
+}
+
 let u = editor::Environment::create();
 {
     let w = u->create_world;
     do w->add_system(je::typeinfo::load("Graphic::DefaultGraphicPipelineSystem")->val);
     launch(func(){
-        do Begin("TEST");
-        let clicked = Button("点这里，创建演示项目");
+        let mut open = true;
+
+        do BeginAttr("JoyEngineECS 项目导航", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+        Text("欢迎使用JoyEngine，请选择一项以开始");
+
+        Separator();
+
+        static let create_project_icon = je::graphic::texture::load(F"!/builtin/editor-old/icon/JoyEngineCSP-Dev.png")->val;
+        static let load_project_icon = je::graphic::texture::load(F"!/builtin/editor-old/icon/JoyEngineCSP.png")->val;
+        static let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
+        
+        if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
+        {
+            launch(open_path_to_do_sth, (\_: option<string> = do nil;,));
+        }
+        if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
+        {
+            launch(open_path_to_do_sth, (\_: option<string> = do nil;,));
+        }
+        if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
+        {
+            // editor::gui::edit_project(editor::Project::create("Demo", std::exepath()));
+            u->close();
+            open = false;
+        }
+
+        Separator();
+        TextDisabled("(C)Cinogama project. 2022-2023.");
+
         End();
 
-        if (clicked)
-        {
-            u->close();
-            return FormAction::Close;
-        }            
-        return FormAction::Nothing;
+        return open;
     }, ());
     u->wait();
 }
-*/
 
-// TODO: 开启选定的项目，然后拿去编辑
-editor::gui::edit_project(editor::Project::create("Demo", std::exepath()));
+action_after_guide_form_closed();

@@ -323,7 +323,7 @@ namespace editor
                 default_world->close;
                 do self.m_default_worlds = option::none;
 
-                // 在此处重置编辑中世界，因为之前在渲染默认时间，
+                // 在此处重置编辑中世界，因为之前在渲染默认世界，
                 // 移除默认世界之后，如果没有设置渲染世界，就寄了
                 // 必须成功!
                 self->reset_editing_world(world.m_world_instance)->unwarp;
