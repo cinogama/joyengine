@@ -6,6 +6,8 @@ import pkg.filesystem;
 import je;
 import builtin.api.welcome.main;
 import builtin.api.gui.widget.icon_button;
+import builtin.api.gui.form.msg;
+import builtin.api.gui.form.input;
 import builtin.editor.environment.main;
 import builtin.editor.project.main;
 import builtin.editor.gui.main;
@@ -132,12 +134,76 @@ func open_path_to_do_sth(action_after_choice: (option<string>)=>void)
     return open;
 }
 
+func create_project_at(path: string, u: editor::Environment, f: mutable<bool>)
+{
+    // 确保目录存在
+    if (! filesys::exist(path))
+        return jeapi::gui::form::errmsg("失败", F"创建项目失败，不存在的目录{path}");
+
+    jeapi::gui::form::input("新项目命名", F"将在{path}创建新项目", "NewProject", 
+        func(projname)
+        {
+            // 再次确保文件存在
+            if (! filesys::exist(path))
+                return do jeapi::gui::form::errmsg("失败", F"创建项目失败，不存在的目录{path}");
+
+            let project_path = F"{path}/{projname}";
+            match (filesys::mkdir(project_path))
+            {
+            err(errno)?
+                return do jeapi::gui::form::errmsg("失败", F"创建项目失败，无法创建目录{project_path} ({errno})");
+            ok(regular_path)?
+                {
+                    // OK, 关闭当前universe，关闭编辑器导航窗口，创建项目并保存到
+                    u->close();
+                    do f->set(false);
+
+                    assert(filesys::setworkpath(regular_path));
+                    action_after_guide_form_closed = 
+                        func(){
+                            let p = editor::Project::create(projname, regular_path);
+                            assert(p->save_project());
+                            editor::gui::edit_project(p);
+                        }
+                    ;
+                }
+            }
+        });
+}
+
+func open_project_at(path: string, u: editor::Environment, f: mutable<bool>)
+{
+    let proj_path = F"{path}/project.je4proj";
+
+    // 确保目录存在
+    if (! filesys::exist(proj_path))
+        return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
+    
+    match (filesys::readall(proj_path)=>> \d = d->todict->> \d = d->> \k,v = (k as string, v);;;)
+    {
+    value(dat)?
+        {
+            // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
+            u->close();
+            do f->set(false);
+
+            assert(filesys::setworkpath(path));
+            action_after_guide_form_closed = 
+                \ = editor::gui::edit_project(editor::Project::load(dat));
+            ;
+        }
+    none?
+        return do jeapi::gui::form::errmsg("失败", F"打开项目失败，找不到或无效的项目文件");
+    }
+
+}
+
 let u = editor::Environment::create();
 {
     let w = u->create_world;
     do w->add_system(je::typeinfo::load("Graphic::DefaultGraphicPipelineSystem")->val);
     launch(func(){
-        let mut open = true;
+        let open = mutable::create(true);
 
         do BeginAttr("JoyEngineECS 项目导航", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
         Text("欢迎使用JoyEngine，请选择一项以开始");
@@ -150,17 +216,17 @@ let u = editor::Environment::create();
         
         if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
         {
-            launch(open_path_to_do_sth, (\_: option<string> = do nil;,));
+            launch(open_path_to_do_sth, (\p: option<string> = do p->> \path = create_project_at(path, u, open);;,));
         }
         if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
         {
-            launch(open_path_to_do_sth, (\_: option<string> = do nil;,));
+            launch(open_path_to_do_sth, (\p: option<string> = do p->> \path = open_project_at(path, u, open);;,));
         }
         if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
         {
             // editor::gui::edit_project(editor::Project::create("Demo", std::exepath()));
             u->close();
-            open = false;
+            do open->set(false);
         }
 
         Separator();
@@ -168,7 +234,7 @@ let u = editor::Environment::create();
 
         End();
 
-        return open;
+        return open->get();
     }, ());
     u->wait();
 }

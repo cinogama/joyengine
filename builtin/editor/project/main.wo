@@ -139,6 +139,53 @@ namespace editor
             je::input::set_window_size(1344, 768);
             return proj;
         }
+        public func load(dat: dict<string, dynamic>)
+        {
+            let self = create( dat["name"] as string, dat["path"] as string);
+            do dat["worlds"] as array
+                ->> \wpath = self->load_world(wpath as string);
+                ;
+            for (let name, val : dat["configs"] as dict ->> \k, v = (k as string, v as string);)
+            {
+                if (! self.m_configs->get(name)->> \config = config->parse(val);->valor(false))
+                    je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
+            }
+            return self;
+        }
+        public func save_project(self: Project)
+        {
+            let dat = {
+                ["path"] = self.m_path: dynamic,
+                ["name"] = self.m_name: dynamic,
+                ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
+                ["worlds"] = self.m_worlds->> \pw = pw.m_world_path;: dynamic
+            };
+
+            // 顺手保存所有世界
+            let failed_saving_worlds = self.m_worlds
+                ->  toarray
+                =>> \pw = saving_success ?  [] | [pw]
+                    where saving_success = self->save_world(pw.m_world_instance)
+                    ;
+                ;
+                
+            if (failed_saving_worlds->empty == false)
+            {
+                let failed_file_list = failed_saving_worlds
+                    ->> \pw = pw.m_world_path;
+                    ->  reduce(\l, r = l + "\n" + r;)
+                    ->  val;
+
+                jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
+                return false;
+            }
+            else if (!filesys::writeall(F"{self.m_path}/project.je4proj", dat as dict<string, dynamic>: string))
+            {
+                jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
+                return false;
+            }
+            return true;
+        }
         public func close(self: Project)
         {
             self.m_env->close;
@@ -164,14 +211,12 @@ namespace editor
         }
         public func get_editing_world(self: Project)
         {
-            // 项目肯定得有渲染中实体，即便可能是default-world，这里就不bind了
-            // 为空就直接panic
-            let rending_world = je::world::rend(self.m_env->get_universe)->val;
-            
-            if (!self->is_project_world(rending_world))
-                return option::none;
-
-            return option::value(rending_world);
+            return je::world::rend(self.m_env->get_universe)
+                =>> \w = self->is_project_world(w)
+                    ? option::value(w)
+                    | option::none
+                    ;
+                ;
         }
         public func validate_world_or_warning(self: Project, world: je::world)
         {
@@ -257,15 +302,8 @@ namespace editor
         {
             return self.m_worlds->>\pw = pw.m_world_instance;;
         }
-
-        public func create_new_world(self: Project, new_world_file_path: string)
+        func append_world_to_list(self: Project, world: ProjectWorld)
         {
-            let world = ProjectWorld {
-                m_world_instance = self.m_env->create_world,
-                m_world_path = new_world_file_path,
-                m_runtime_systems = mut [],
-            };
-            
             self.m_worlds->add(world);
 
             // 世界编辑器已经做平了这一块
@@ -333,6 +371,16 @@ namespace editor
             }
             return world.m_world_instance;
         }
+        public func create_new_world(self: Project, new_world_file_path: string)
+        {          
+            return self->append_world_to_list(
+                ProjectWorld 
+                {
+                    m_world_instance = self.m_env->create_world,
+                    m_world_path = new_world_file_path,
+                    m_runtime_systems = mut [],
+                });
+        }
         public func get_world_path(self: Project, w: je::world)
         {
             return self->get_project_world(w)->> \pw = pw.m_world_path;;
@@ -356,6 +404,30 @@ namespace editor
                 ->> \dat = filesys::writeall(dat["path"]: string, dat as dict<string, dynamic>: string);
                 ->  valor(false);
         }
+        public func load_world(self: Project, file_path: string)
+        {
+            return filesys::readall(file_path)
+                =>> \dat = dat->todict
+                    ->> \d = d
+                        ->> \k, v = (k as string, v);
+                        ;
+                    ;
+                ->> func(dat)
+                    {
+                        return self->append_world_to_list(
+                            ProjectWorld 
+                            {
+                                m_world_instance = self.m_env->load_world(dat),
+                                m_world_path = dat["path"] as string,
+                                m_runtime_systems = 
+                                    mut dat->getor("runtime_systems", []: dynamic) as array
+                                        =>> \elem = systype->has ? [systype->val] | []
+                                            where systype = je::typeinfo::load(elem as string);,
+                            });
+                    }
+                ;
+        }
+        
         public func destroy_world(self: Project, world: je::world)=> result<void, string>
         {
             // 使用create_new_world创建的世界，务必使用destroy_world销毁，不应该close

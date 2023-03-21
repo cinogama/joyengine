@@ -36,7 +36,9 @@ namespace editor::gui
                 }
                 if (MenuItem("保存项目"))
                 {
-                    std::panic("TODO");
+                    let proj = context->get_project;
+                    if (proj->save_project())
+                        jeapi::gui::form::msg("完成", "项目和所有编辑中的世界已经保存"); 
                 }
                 EndMenu();
             }

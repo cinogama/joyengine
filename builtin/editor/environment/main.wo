@@ -2,6 +2,8 @@
 // 用于管理和维持引擎当前的上下文（也就是Universe环境）
 import je;
 
+import builtin.api.serialize.main;
+
 namespace editor
 {
     public using Environment = struct{ 
@@ -25,6 +27,10 @@ namespace editor
         public func create_world(self: Environment)
         {
             return self.m_universe->je::world::create;
+        }
+        public func load_world(self: Environment, dat: dict<string, dynamic>)
+        {
+            return self.m_universe->jeapi::deserialize::world(dat);
         }
         public func get_universe(self: Environment)
         {
