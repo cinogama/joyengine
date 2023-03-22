@@ -2,6 +2,7 @@ import pkg.image;
 import pkg.filesystem;
 
 import woo.shell;
+import builtin.editor.cpp.main;
 
 using je::gui;
 
@@ -330,23 +331,23 @@ namespace editor::gui
                   
                     EndMenu();
                 }
-                // if (MenuItem(F"C++模块"))
-                // {
-                //     // 创建C++模块，就跟JoyEngineCSP差不多
-                //     jeapi::gui::form::input("创建C++模块", F"将在{current_work_path}创建，请为项目命名：", "CppModule", 
-                //         \module_name: string = CxxProject::start(module_name, current_work_path)
-                //             ->> \ _ = force_update();
-                //             ->or(\reason = jeapi::gui::form::errmsg("创建C++模块失败", reason);)
-                //             ;
-                //         );
-                // }
+                if (MenuItem(F"C++模块"))
+                {
+                    // 创建C++模块，就跟JoyEngineCSP差不多
+                    jeapi::gui::form::input("创建C++模块", F"将在{current_work_path}创建，请为项目命名：", "CppModule", 
+                        \module_name: string = CxxProject::start(module_name, current_work_path, context->get_project)
+                            ->> \ _ = force_update();
+                            ->or(\reason = jeapi::gui::form::errmsg("创建C++模块失败", reason);)
+                            ;
+                        );
+                }
                 EndMenu();
             }
 
             Separator();
 
             do path
-                ->> \p = file_item_menu(p);
+                ->> \p = file_item_menu(p, context);
                 ->> \_ = Separator();
                 ;
                         
@@ -421,27 +422,28 @@ namespace editor::gui
     //     }
     // }
 
-    func file_item_menu(path: PathInfo)
+    func file_item_menu(path: PathInfo, context: EditorContext)
     {
         let NOT_MODIFIABLE_FILES = [".jeproj4", ".jemodule4"];
         let is_modifiable_file = NOT_MODIFIABLE_FILES->find(path.externname) == -1;
 
-        // if (path.externname == ".shader")
-        // {
-        //     if (MenuItem(F"更新此着色器"))
-        //     {
-        //         // 从universe中获取所有world，更新world中所有实体的shader
-        //         je::universe::current()
-        //             ->editor::worlds_list
-        //             ->map(\w: je::world = w
-        //                 ->editor::get_all_entities
-        //                 ->map(\e: je::entity = 
-        //                     e->editor::graphic::try_reload_shaders(path.path, path.path)
-        //                 ;)
-        //             ;);
-        //     }
-        //     Separator();
-        // }
+        if (path.externname == ".shader")
+        {
+            if (MenuItem(F"更新此着色器"))
+            {
+                // 从universe中获取所有world，更新world中所有实体的shader
+                do context->get_project->get_env->get_universe
+                    ->  editor::get_all_worlds
+                    ->> \w: je::world = w
+                        ->  editor::get_all_entities
+                        ->> \e: je::entity = 
+                            e->editor::graphic::try_reload_shaders(path.path, path.path)
+                            ;
+                        ;
+                    ;
+            }
+            Separator();
+        }
 //         else if (path.externname == ".jemodule4")
 //         {
 //             if (MenuItem(F"重新编译此模块"))
@@ -706,8 +708,8 @@ namespace editor::gui
 //             }
 //             Separator();
 //         }
-        // else 
-        if (IMAGE_FILE_EXTERN_NAMES->find(path.externname) != -1)
+        //  
+        else if (IMAGE_FILE_EXTERN_NAMES->find(path.externname) != -1)
         {
             // 是图片，在这里编辑图片的采用方法等数据
             if (MenuItem("编辑图片"))

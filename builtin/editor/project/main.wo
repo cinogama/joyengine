@@ -9,6 +9,7 @@ import config;
 import builtin.editor.environment.main;
 import builtin.api.rend.main;
 import builtin.api.gui.form.msg;
+import builtin.editor.cpp.main;
 
 namespace editor
 {
@@ -29,6 +30,7 @@ namespace editor
         m_configs: map<string, Project::IConfig>, // 配置信息，是的，这是个map，意味着开发者可以自己加点配置项目
         m_worlds: vec<ProjectWorld>,
         m_default_worlds: mut option<je::world>, // 如果项目没有世界，那么创建一个默认的临时世界挂在这里，保证gui能跑
+        m_modules: map<string, CxxProject>, 
     }
     {
         func _create_default_configs(env: Environment)
@@ -130,6 +132,7 @@ namespace editor
                 m_configs = _create_default_configs(env),
                 m_worlds = []mut,
                 m_default_worlds = mut option::none,
+                m_modules = {}mut,
             };
 
             // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了
@@ -138,6 +141,10 @@ namespace editor
             // TODO: 在这里临时设置一下窗口嘻嘻嘻，之后做完项目加载就删掉
             je::input::set_window_size(1344, 768);
             return proj;
+        }
+        public func active_module(self: Project, module: CxxProject)
+        {
+            assert (std::issame(self.m_modules->getorset(module.path, module), module));
         }
         public func load(dat: dict<string, dynamic>)
         {
