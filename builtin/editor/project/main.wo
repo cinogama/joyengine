@@ -33,6 +33,26 @@ namespace editor
         m_modules: map<string, CxxProject>, 
     }
     {
+        public func get_modules(self: Project, name: string)
+        {
+            return self.m_modules->get(name);
+        }
+        public func dump_and_close_all_world(self: Project)
+        {
+            let dump_dats = self.m_worlds->toarray
+                =>> \pw = dat->has ? [dat->val] | [] where dat = self->serialize_world(pw.m_world_instance);;
+            
+            if (dump_dats->len != self.m_worlds->len)
+                return result::err("有世界序列化失败");
+
+            // OK 关闭全部现存世界
+            do self.m_worlds->toarray->> \pw = self->destroy_world(pw.m_world_instance)->unwarp();;
+            return result::ok(dump_dats);
+        }
+        public func restore_all_world(self: Project, dats: array<dict<string, dynamic>>)
+        {
+            do dats->>\dat = self->deserialize_world(dat);;
+        }
         func _create_default_configs(env: Environment)
         {
             using je;
@@ -405,6 +425,19 @@ namespace editor
                     ;
                 ;
         }
+        public func deserialize_world(self: Project, dat: dict<string, dynamic>)
+        {
+            return self->append_world_to_list(
+                ProjectWorld 
+                {
+                    m_world_instance = self.m_env->load_world(dat),
+                    m_world_path = dat["path"] as string,
+                    m_runtime_systems = 
+                        mut dat->getor("runtime_systems", []: dynamic) as array
+                            =>> \elem = systype->has ? [systype->val] | []
+                                where systype = je::typeinfo::load(elem as string);,
+                });
+        }
         public func save_world(self: Project, w: je::world)
         {
             return self->serialize_world(w)
@@ -419,19 +452,7 @@ namespace editor
                         ->> \k, v = (k as string, v);
                         ;
                     ;
-                ->> func(dat)
-                    {
-                        return self->append_world_to_list(
-                            ProjectWorld 
-                            {
-                                m_world_instance = self.m_env->load_world(dat),
-                                m_world_path = dat["path"] as string,
-                                m_runtime_systems = 
-                                    mut dat->getor("runtime_systems", []: dynamic) as array
-                                        =>> \elem = systype->has ? [systype->val] | []
-                                            where systype = je::typeinfo::load(elem as string);,
-                            });
-                    }
+                ->> \dat = self->deserialize_world(dat);
                 ;
         }
         

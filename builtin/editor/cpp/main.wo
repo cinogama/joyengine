@@ -582,46 +582,41 @@ namespace editor
                     {
                     ok(_)?
                     {
-                        std::panic("TODO;");
                         // 起个协程同步去更新一下
-                        // je::gui::launch(
-                        //     func(){
-                        //         let proj = editor::Project::GetCurrentProject();
-                        //         let dump_worlds = proj->DumpAllWorlds();
+                        je::gui::launch(
+                            func(){
+                                
+                                match (self.project->dump_and_close_all_world)
+                                {
+                                ok(dump_worlds)?
+                                    {
+                                        // 这里的操作非常重要，需要确保全部世界已经被完全正确地关闭，
+                                        // 否则如果有世界在卸载模块之后才执行清理操作，就有可能发生调用到已经不再有效的析构
+                                        // 函数。这玩意儿非常恐怖，这里yield一下，保证一切按部就班
 
-                        //         proj->CloseAllWorlds();
+                                        std::yield();
+                                        std::yield();
+                                        std::yield(); // 玄学，来三下
 
-                        //         // 这里的操作非常重要，需要确保全部世界已经被完全正确地关闭，
-                        //         // 否则如果有世界在卸载模块之后才执行清理操作，就有可能发生调用到已经不再有效的析构
-                        //         // 函数。这玩意儿非常恐怖，因此在这里暂时创建一个临时世界，让gui协程能继续运作，然后
-                        //         // 这里yield一下，保证一切按部就班
+                                        self.module_instance = 
+                                            self.module_instance
+                                                ->> \m = je::editor::unload_module(m);
+                                                =>> \_ = option::none;
+                                                ;
 
-                        //         let fakeworld = je::universe::current()->create_world();
-                        //         fakeworld->add_system(proj.graphic_system);
+                                        // 编译成功，更新文件到runtime
+                                        self->update_library_of_platform(config);
 
-                        //         std::yield();
-                        //         std::yield();
-                        //         std::yield(); // 玄学，来三下
+                                        // 加载模块！
+                                        assert(self->load_library_of_platform(config)->has);
 
-                        //         self.module_instance = 
-                        //             self.module_instance
-                        //                 ->> \m = je::editor::unload_module(m);
-                        //                 =>> \_ = option::none;
-                        //                 ;
-
-                        //         // 编译成功，更新文件到runtime
-                        //         self->update_library_of_platform(config);
-
-                        //         // 加载模块！
-                        //         assert(self->load_library_of_platform(config)->has);
-
-                        //         // 关掉这个临时的世界
-                        //         fakeworld->close();
-
-                        //         proj->RestoreAllWorlds(dump_worlds);
-
-                        //         return FormAction::Close;
-                        //     },() );
+                                        self.project->restore_all_world(dump_worlds);
+                                    }
+                                err(reason)?
+                                    jeapi::gui::form::errmsg("失败", F"加载模块失败：{reason}");
+                                }
+                                return false;
+                            },() );
                     }
                     err(_)?;
                     }
