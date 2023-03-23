@@ -169,6 +169,13 @@ namespace editor
         public func load(dat: dict<string, dynamic>)
         {
             let self = create( dat["name"] as string, dat["path"] as string);
+
+            // 加载失败和二进制文件怎么git还需考虑一下
+            do dat->get("modules")
+                ->> \d = d as array<dynamic> 
+                    ->> \p = CxxProject::load(p as string, self)->unwarp;
+                    ;
+                ;
             do dat["worlds"] as array
                 ->> \wpath = self->load_world(wpath as string);
                 ;
@@ -185,7 +192,8 @@ namespace editor
                 ["path"] = self.m_path: dynamic,
                 ["name"] = self.m_name: dynamic,
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
-                ["worlds"] = self.m_worlds->> \pw = pw.m_world_path;: dynamic
+                ["worlds"] = self.m_worlds->> \pw = pw.m_world_path;: dynamic,
+                ["modules"] = self.m_modules->unmapping->>\kv = kv[0];: dynamic,
             };
 
             // 顺手保存所有世界
