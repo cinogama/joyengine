@@ -34,8 +34,18 @@ namespace editor::gui::edit_forms
 
             if (BeginMenuBar())
             {
-                if (MenuItem("调试运行"))
-                    std::panic("TODO;");
+                let proj = context->get_project;
+                if (! proj->is_debugging)
+                {
+                    if (MenuItem("调试运行"))
+                        do proj->start_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"开始调试失败{e}");;
+                }
+                else
+                {
+                    if (MenuItem("终止调试"))
+                        do proj->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
+                }
+                
                 if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
                 {
                     let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPass")->val;

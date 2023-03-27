@@ -265,14 +265,7 @@ namespace jeapi
         {
             let w = u->je::world::create;
             do dat->get("name")->>\name = w->editor::set_name(name as string);;
-            // world.runtime_systems->copy(
-            //     dat->get("runtime_systems")
-            //         ->map(\d: dynamic = d as array<dynamic>;)
-            //         ->map(\rtsyss: array<dynamic> = rtsyss
-            //             ->map(\tname: dynamic = _typeinfo_or_warning(tname as string);)
-            //             ->forall(\t: option<je::typeinfo> = t->has;)  // TODO: 类型没找到弹个框
-            //             ->map(\t: option<je::typeinfo> = t->val;);)
-            //         ->valor([]));
+
             do dat->get("systems")
                 ->> \d = d as array<dynamic>
                     =>> \tname = t->has 
