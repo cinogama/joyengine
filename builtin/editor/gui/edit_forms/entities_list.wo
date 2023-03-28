@@ -187,7 +187,7 @@ namespace editor::gui::edit_forms
                 EndMenuBar();
             }
             
-            match (context->get_project->get_editing_world)
+            match (je::world::rend(context->get_project->get_env->get_universe))
             {
             value(current_editing_world)?
             {

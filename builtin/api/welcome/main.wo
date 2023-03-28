@@ -2,9 +2,75 @@
 // 嗯，大憨批程序，就是一个用来显示欢迎信息的小实例
 
 import je;
+import je.gui;
+
+using je::gui;
 
 namespace jeapi::welcome
 {
+    public func show_about()
+    {
+        launch(func()
+        {
+            static let cinogama_logo = je::graphic::texture::load(F"!/builtin/icon/cinoicon_light.png")->val;
+
+            let mut open = BeginAttrOpen(F"关于##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+            Text("JoyEngine ECS 4.0");
+            Separator();
+
+            Text("第三方组件及开源许可");
+            Text("OpenAL https://www.openal.org");
+            TextDisabled("Copyright (C) Creative Labs, Inc.");
+
+            Text("GLEW https://github.com/nigels-com/glew");
+            TextDisabled("The OpenGL Extension Wrangler Library");
+            TextDisabled("Copyright (C) 2002-2007, Milan Ikits <milan ikits@ieee.org>");
+            TextDisabled("Copyright (C) 2002-2007, Marcelo E. Magallon <mmagallo@debian.org>");
+            TextDisabled("Copyright (C) 2002, Lev Povalahev");
+            TextDisabled("All rights reserved.");
+            TextDisabled(
+@"GLEW is originally derived from the EXTGL project by Lev Povalahev. 
+The source code is licensed under the Modified BSD License, the Mesa 
+3-D License (MIT) and the Khronos License (MIT)."@);
+            
+            Text("GLFW https://www.glfw.org");
+            TextDisabled("Copyright (c) 2002-2006 Marcus Geelnard.");
+            TextDisabled("Copyright (c) 2006-2019 Camilla Löwy.");
+            TextDisabled("GLFW is licensed under the zlib/libpng license.");
+            
+            Text("STB https://github.com/nothings/stb");
+            TextDisabled("Copyright (c) 2017 Sean Barrett.");
+            TextDisabled("STB is licensed under the MIT License");
+
+            Text("Dear ImGui https://github.com/ocornut/imgui");
+            TextDisabled("Copyright (c) 2014-2023 Omar Cornut.");
+            TextDisabled("Dear ImGui is licensed under the MIT License");
+
+            Text("Box2D https://box2d.org/");
+            TextDisabled("Copyright (c) 2019 Erin Catto.");
+            TextDisabled("Box2D is licensed under the MIT License");
+
+            Text("Woolang https://github.com/cinogama/woolang");
+            TextDisabled("Copyright (c) 2021-2023 Cinogama project.");
+            TextDisabled("Woolang is licensed under the Apache License v2.0");
+            
+            Separator();
+
+            Text("让一切纯粹且快乐");
+            Text("Keep things pure and joyful.");
+            Text("(C)Cinogama project. 2022-2023.");
+            SameLine();
+
+            ImageScale(cinogama_logo, 0.15);
+
+            End();
+
+            return open;
+        }, ());
+    }
+
     public func display_copyright_msg()
     {    
         using je::graphic;

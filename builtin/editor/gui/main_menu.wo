@@ -59,6 +59,13 @@ namespace editor::gui
                 }
                 EndMenu();
             }
+            if (BeginMenu("帮助"))
+            {
+                if (MenuItem("关于"))
+                    jeapi::welcome::show_about();
+
+                EndMenu();
+            }
             EndMainMenuBar();
         }, ());
     }

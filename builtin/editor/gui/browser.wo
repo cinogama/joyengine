@@ -202,6 +202,28 @@ namespace editor::gui
             self.type->set(PathType::dir(option::value(sublist)));
             return sublist;
         }
+        func get_open_method(self: PathInfo)
+        {
+            static let registed_open_method = {
+                [".JEWORLD"] = 
+                    \p: PathInfo, proj: Project = 
+                        ow->has
+                        ? ow =>> \w = proj->reset_editing_world(w)->error;
+                        | option::value("无法加载世界")                      
+                        where ow = proj->load_world(p.path)
+                    ;,
+            };
+
+            return registed_open_method
+                ->  get(self.externname->upper)
+                ->  valor(
+                        \proj, _ = result == 0 
+                            ? option::none
+                            | option::value(F"文件 '{proj.path}' 打开失败({result})")
+                            where result = std::shell(proj.path)
+                        ;
+                    );
+        }
     }
 
     static let mut current_work_path = "";        
@@ -958,10 +980,10 @@ namespace $$MODULE_NAME$$
                     | action == Action::DoubleClick ? 
                         (item
                             ->indir(\_ = set_current_work_path(item.path);)
-                            ->infile(\= std::panic("TODO");)
+                            ->infile(\ = do item->get_open_method()(item, context->get_project)
+                                        ->> \err = jeapi::gui::form::errmsg("失败", F"打开文件失败:\n{err}");
+                                    ;)
                         ): void
-                            // ->infile(\= OpenFile::open(item);)   
-                    /* | action == Action::RightClick ? je::logfatal("TODO; 打开右键菜单") */
                     | (nil: void) // get void
                     where action = FileIcon(item, context);
                 ; 
