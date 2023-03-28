@@ -23,6 +23,12 @@ namespace editor
         m_runtime_systems: mut array<je::typeinfo>,
     };
 
+    using DebugContext = struct {
+        // 想了半天，还是把调试状态摆在这里维护
+        m_project: Project,
+        m_dumped_editing_worlds: array<dict<string, dynamic>>,
+    };
+
     public using Project = struct{
         m_name: string,    // 项目的名称，不能更改
         m_path: string,    // 项目所在的目录
@@ -31,8 +37,74 @@ namespace editor
         m_worlds: vec<ProjectWorld>,
         m_default_worlds: mut option<je::world>, // 如果项目没有世界，那么创建一个默认的临时世界挂在这里，保证gui能跑
         m_modules: map<string, CxxProject>, 
+        
+        m_debug_context: mut option<DebugContext>,
     }
     {
+        public func is_debugging(self: Project)
+        {
+            return self.m_debug_context->has;
+        }
+
+        public func stop_debug(self: Project)
+        {
+            if (! self->is_debugging)
+                return result::err("未在调试中");
+
+            assert (self.m_worlds->empty);
+
+            // 关闭所有世界~~
+            do self->get_env->get_universe->editor::get_all_worlds
+                ->> func(w){
+                    if (self.m_default_worlds->val != w)
+                        w->close();
+                }
+                ;
+            
+            // 恢复所有世界！
+            self->restore_all_world(self.m_debug_context->val.m_dumped_editing_worlds);
+
+            self.m_debug_context = option::none;
+            return result::ok(do nil);
+        }
+
+        public func start_debug(self: Project)
+        {
+            if (self->is_debugging)
+                return result::err("已经在调试中，不可重复调试");
+
+            let dumpped = self->dump_and_close_all_world();
+            if (dumpped->iserr)
+                return dumpped->fail;
+
+            let context = DebugContext {
+                    m_project = self,
+                    m_dumped_editing_worlds = dumpped->unwarp,
+                };
+
+            // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
+            for (let _, wdat : context.m_dumped_editing_worlds)
+            {
+                let syss = wdat->getor("runtime_systems", []: dynamic) as array<dynamic>
+                    ->connect(
+                        wdat->getor("systems", []: dynamic) as array<dynamic>
+                    );
+
+                let new_wdat = wdat->tomap;
+                new_wdat->set("systems", syss as array<dynamic>: dynamic);
+
+                let w = jeapi::deserialize::world(self->get_env->get_universe, new_wdat->unsafe::cast:<typeof(wdat)>);
+                if (wdat->getor("is_editing", false: dynamic) as bool)
+                    je::gui::launch(func(){
+                        std::yield();
+                        jeapi::rend::reset_rend_world(w, self->get_config_graphic_pipeline);                    
+                        return false;
+                    }, ());
+            }
+            self.m_debug_context = option::value(context);
+            return result::ok(context);
+        }
+
         public func get_modules(self: Project, name: string)
         {
             return self.m_modules->get(name);
@@ -40,7 +112,14 @@ namespace editor
         public func dump_and_close_all_world(self: Project)
         {
             let dump_dats = self.m_worlds->toarray
-                =>> \pw = dat->has ? [dat->val] | [] where dat = self->serialize_world(pw.m_world_instance);;
+                =>> \pw = dat->has 
+                    ? [dat->val->apply("is_editing", self->get_editing_world
+                        ->> \ew = ew == pw.m_world_instance;
+                        ->  valor(false) as bool: dynamic)] 
+                    | [] 
+                    where dat = self->serialize_world(pw.m_world_instance)
+                    ;
+                ;
             
             if (dump_dats->len != self.m_worlds->len)
                 return result::err("有世界序列化失败");
@@ -153,6 +232,7 @@ namespace editor
                 m_worlds = []mut,
                 m_default_worlds = mut option::none,
                 m_modules = {}mut,
+                m_debug_context = mut option::none,
             };
 
             // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了
@@ -170,7 +250,7 @@ namespace editor
         {
             let self = create( dat["name"] as string, dat["path"] as string);
 
-            // 加载失败和二进制文件怎么git还需考虑一下
+            // TODO: 加载失败和二进制文件怎么git还需考虑一下
             do dat->get("modules")
                 ->> \d = d as array<dynamic> 
                     ->> \p = CxxProject::load(p as string, self)->unwarp;
@@ -449,6 +529,7 @@ namespace editor
         public func save_world(self: Project, w: je::world)
         {
             return self->serialize_world(w)
+                ->> \dat = dat->apply("is_editing", self->get_editing_world->>\ew = ew == w;->valor(false) as bool: dynamic);
                 ->> \dat = filesys::writeall(dat["path"]: string, dat as dict<string, dynamic>: string);
                 ->  valor(false);
         }
@@ -460,7 +541,14 @@ namespace editor
                         ->> \k, v = (k as string, v);
                         ;
                     ;
-                ->> \dat = self->deserialize_world(dat);
+                ->> \dat = self->deserialize_world(dat)
+                    ->  func (w)
+                        {
+                            if (dat->getor("is_editing", false: dynamic) as bool)
+                                do self->reset_editing_world(w);
+                            return w;
+                        }
+                    ;
                 ;
         }
         

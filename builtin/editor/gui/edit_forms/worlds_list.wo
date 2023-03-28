@@ -27,27 +27,28 @@ namespace editor::gui::edit_forms
             let (avail_width, avail_height) = GetContentRegionAvail();
             if (BeginListBox("##", avail_width, avail_height))
             {
-                let editing_world = context->get_project->get_editing_world;
-
-                for (let _, world : context->get_project->get_all_worlds)
+                let editing_world = je::world::rend(context->get_project->get_env->get_universe);
+                let is_debugging = context->get_project->is_debugging;
+                for (let _, world : context->get_project->get_env->get_universe->editor::get_all_worlds)
                 {
                     let current_world_is_editing = editing_world->>\w = w == world;->valor(false);
                     if (SelectableSelected(F"{world->editor::name}##{world as je::world: handle}", 
                         current_world_is_editing))
                     {
                         // 更换渲染中的世界
-                        do context->get_project->reset_editing_world(world)->unwarp;
+                        if (!is_debugging)
+                            do context->get_project->reset_editing_world(world)->unwarp;
                     }
                     if (BeginPopupContextItem())
                     {
-                        if (MenuItem("编辑"))
+                        if (MenuItemEnabled("编辑", !is_debugging))
                             if (! WorldContext::edit(context->get_project(), world)
                                 ->> \wcontext = launch(show_world_creator, (context, wcontext));
                                 ->  has)
                             {
                                 std::panic("TODO, 选中的世界居然不存在嗝");
                             }
-                        if (MenuItem("重命名世界"))
+                        if (MenuItemEnabled("重命名世界", !is_debugging))
                         {
                             jeapi::gui::form::input(
                                 "重命名", 
@@ -60,7 +61,7 @@ namespace editor::gui::edit_forms
                                     }
                                 });
                         }
-                        if (MenuItem("关闭"))
+                        if (MenuItemEnabled("关闭", !is_debugging))
                         {
                             jeapi::gui::form::ask(
                                 "确认？", 
