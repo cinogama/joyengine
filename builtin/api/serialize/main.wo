@@ -66,14 +66,12 @@ namespace jeapi
                     =>> \t = component->has ? [(t, component->val)] | []
                         where
                             component = saving_entity->editor::get_component(t);
-                    ->> \tc = (t->name, collect_members())
+                    ->> \tc = (t->name, collect_members)
                         where 
-                            collect_members = func(){
-                                let result = {}mut: map<string, mut string>; 
-                                for (let name, (type, addr) : c->editor::members())
-                                    result[name] = addr->to_string(type);
-                                return result->todict;
-                            },
+                            collect_members = c->editor::members()
+                                ->> \name, type_addr_pair = (name, addr->to_string(type))
+                                    where (type, addr) = type_addr_pair
+                                    ;,
                             (t, c) = tc;
                     ->  mapping
                     // 如果一个实体没有任何组件，那么就等于不存在，实际上编辑器应该避免只有编辑器
