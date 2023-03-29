@@ -97,7 +97,7 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
     ch.m_delta_y = y0;
 
     jeecs::graphic::texture* tex =
-        new jeecs::graphic::texture(pixel_w, pixel_h, jegl_texture::texture_format::RGBA);
+        jeecs::graphic::texture::create(pixel_w, pixel_h, jegl_texture::texture_format::RGBA);
 
     for (int j = 0; j < pixel_h; j++)
     {

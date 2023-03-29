@@ -237,6 +237,9 @@ namespace jeapi
                     =>> func(sd)
                         {
                             let (s, spath, sdat) = sd;
+                            if (!s->has)
+                                entity->editor::store_name_for_bad_shader_update(spath);
+
                             for (let uname, uval : sdat)
                                 restore_shader_of_entity(entity, s, spath, uname as string, uval as array);
                             return s->has ? [s->val] | [];

@@ -163,13 +163,13 @@ namespace jeecs
                     },
                     { 3, 2, 3 });
 
-            default_texture = new graphic::texture(2, 2, jegl_texture::texture_format::RGBA);
+            default_texture = graphic::texture::create(2, 2, jegl_texture::texture_format::RGBA);
             default_texture->pix(0, 0).set({ 1.f, 0.f, 1.f, 1.f });
             default_texture->pix(1, 1).set({ 1.f, 0.f, 1.f, 1.f });
             default_texture->pix(0, 1).set({ 0.f, 0.f, 0.f, 1.f });
             default_texture->pix(1, 0).set({ 0.f, 0.f, 0.f, 1.f });
 
-            default_shader = new graphic::shader("!/builtin/builtin_default.shader", R"(
+            default_shader = graphic::shader::load_source("!/builtin/builtin_default.shader", R"(
 // Default shader
 import je.shader;
 
@@ -509,8 +509,7 @@ public let frag =
                     jegl_resource* rend_aim_buffer = nullptr;
                     if (current_camera.rendToFramebuffer)
                     {
-                        if (current_camera.rendToFramebuffer->framebuffer == nullptr
-                            || !current_camera.rendToFramebuffer->framebuffer->enabled())
+                        if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                             continue;
                         else
                             rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->resouce();
@@ -573,17 +572,13 @@ public let frag =
 
                             for (auto& texture : rendentity.textures->textures)
                             {
-                                if (texture.m_texture->enabled())
-                                    jegl_using_texture(*texture.m_texture, texture.m_pass_id);
-                                else
-                                    // Current texture is missing, using default texture instead.
-                                    jegl_using_texture(*host()->default_texture, texture.m_pass_id);
+                                jegl_using_texture(texture.m_texture->resouce(), texture.m_pass_id);
                             }
                         }
                         for (auto& shader_pass : drawing_shaders)
                         {
                             auto* using_shader = &shader_pass;
-                            if (!shader_pass->enabled() || !shader_pass->m_builtin)
+                            if (!shader_pass->m_builtin)
                                 using_shader = &host()->default_shader;
 
                             jegl_using_resource((*using_shader)->resouce());
@@ -591,7 +586,7 @@ public let frag =
                             auto* builtin_uniform = (*using_shader)->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
     if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
-     jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
+     jegl_uniform_##TYPE(shader_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__)
 
                             NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
                             NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
@@ -605,7 +600,7 @@ public let frag =
                             NEED_AND_SET_UNIFORM(offset, float2, _using_offset->x, _using_offset->y);
 
 #undef NEED_AND_SET_UNIFORM
-                            jegl_draw_vertex(*drawing_shape);
+                            jegl_draw_vertex(drawing_shape->resouce());
                         }
 
                     }
@@ -639,7 +634,7 @@ public let frag =
                 : _m_belong_context(_ctx)
             {
                 using namespace jeecs::graphic;
-                _no_shadow = new texture(1, 1, jegl_texture::texture_format::RGBA);
+                _no_shadow = texture::create(1, 1, jegl_texture::texture_format::RGBA);
                 _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
 
                 _screen_vertex = new vertex(jegl_vertex::vertex_type::QUADS,
@@ -653,7 +648,7 @@ public let frag =
 
                 // 用于消除阴影对象本身的阴影
                 _defer_light2d_shadow_sub_pass
-                    = { new shader("!/builtin/defer_light2d_shadow_sub.shader", R"(
+                    = { shader::load_source("!/builtin/defer_light2d_shadow_sub.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -695,7 +690,7 @@ public func frag(vf: v2f)
 
                 // 用于产生点光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_point_pass
-                    = { new shader("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
+                    = { shader::load_source("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -743,7 +738,7 @@ public func frag(vf: v2f)
 
                 // 用于产生点光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_point_pass
-                    = { new shader("!/builtin/defer_light2d_shadow_point.shader", R"(
+                    = { shader::load_source("!/builtin/defer_light2d_shadow_point.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -783,7 +778,7 @@ public func frag(vf: v2f)
 
                 // 用于产生平行光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_parallel_pass
-                    = { new shader("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
+                    = { shader::load_source("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -831,7 +826,7 @@ public func frag(vf: v2f)
 
                 // 用于产生平行光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_parallel_pass
-                    = { new shader("!/builtin/defer_light2d_shadow_parallel.shader", R"(
+                    = { shader::load_source("!/builtin/defer_light2d_shadow_parallel.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -871,7 +866,7 @@ public func frag(vf: v2f)
 
                 // 平行光照处理
                 _defer_light2d_parallel_light_pass
-                    = { new shader("!/builtin/defer_light2d_parallel_light.shader",
+                    = { shader::load_source("!/builtin/defer_light2d_parallel_light.shader",
                         R"(
 import je.shader;
 
@@ -946,7 +941,7 @@ public func frag(vf: v2f)
 
                 // 点光照处理
                 _defer_light2d_point_light_pass
-                    = { new shader("!/builtin/defer_light2d_point_light.shader",
+                    = { shader::load_source("!/builtin/defer_light2d_point_light.shader",
                         R"(
 import je.shader;
 
@@ -1032,7 +1027,7 @@ public func frag(vf: v2f)
                 };
 
                 _defer_light2d_mix_light_effect_pass
-                    = { new shader("!/builtin/defer_light2d_mix_light.shader",
+                    = { shader::load_source("!/builtin/defer_light2d_mix_light.shader",
                         R"(
 import je.shader;
 
@@ -1278,7 +1273,7 @@ public func frag(vf: v2f)
 
                         if (light2dpass != nullptr)
                         {
-                            auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr && rendbuf->framebuffer->enabled())
+                            auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr )
                                 ? rendbuf->framebuffer->resouce()
                                 : nullptr;
 
@@ -1338,7 +1333,6 @@ public func frag(vf: v2f)
                                 {
                                     bool generate_new_framebuffer =
                                         shadow->shadow_buffer == nullptr
-                                        || !shadow->shadow_buffer->enabled()
                                         || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
                                         || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
 
@@ -1350,7 +1344,6 @@ public func frag(vf: v2f)
                                                 jegl_texture::texture_format::RGBA, // Only store shadow value.
                                             }
                                         );
-                                        assert(shadow->shadow_buffer->enabled());
                                         shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
                                             = (jegl_texture::texture_sampling)(
                                                 jegl_texture::texture_sampling::LINEAR
@@ -1489,8 +1482,7 @@ public func frag(vf: v2f)
                     jegl_resource* rend_aim_buffer = nullptr;
                     if (current_camera.rendToFramebuffer)
                     {
-                        if (current_camera.rendToFramebuffer->framebuffer == nullptr
-                            || !current_camera.rendToFramebuffer->framebuffer->enabled())
+                        if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                             continue;
                         else
                             rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->resouce();
@@ -1637,8 +1629,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             }
 
                                             jeecs::graphic::vertex* using_shape = (blockarch.shape == nullptr
-                                                || blockarch.shape->vertex == nullptr
-                                                || !blockarch.shape->vertex->enabled())
+                                                || blockarch.shape->vertex == nullptr)
                                                 ? host()->default_shape_quad
                                                 : blockarch.shape->vertex;
 
@@ -1700,8 +1691,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                                     NEED_AND_SET_UNIFORM(offset, float2, block_in_layer->textures->offset.x, block_in_layer->textures->offset.y);
                                                 }
                                                 jeecs::graphic::vertex* using_shape = (block_in_layer->shape == nullptr
-                                                    || block_in_layer->shape->vertex == nullptr
-                                                    || !block_in_layer->shape->vertex->enabled())
+                                                    || block_in_layer->shape->vertex == nullptr)
                                                     ? host()->default_shape_quad
                                                     : block_in_layer->shape->vertex;
 
@@ -1807,8 +1797,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                                 NEED_AND_SET_UNIFORM(offset, float2, block_in_layer->textures->offset.x, block_in_layer->textures->offset.y);
                                             }
                                             jeecs::graphic::vertex* using_shape = (block_in_layer->shape == nullptr
-                                                || block_in_layer->shape->vertex == nullptr
-                                                || !block_in_layer->shape->vertex->enabled())
+                                                || block_in_layer->shape->vertex == nullptr)
                                                 ? host()->default_shape_quad
                                                 : block_in_layer->shape->vertex;
 
@@ -1877,17 +1866,13 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                             for (auto& texture : rendentity.textures->textures)
                             {
-                                if (texture.m_texture->enabled())
-                                    jegl_using_texture(*texture.m_texture, texture.m_pass_id);
-                                else
-                                    // Current texture is missing, using default texture instead.
-                                    jegl_using_texture(*host()->default_texture, texture.m_pass_id);
+                                jegl_using_texture(texture.m_texture->resouce(), texture.m_pass_id);
                             }
                         }
                         for (auto& shader_pass : drawing_shaders)
                         {
                             auto* using_shader = &shader_pass;
-                            if (!shader_pass->enabled() || !shader_pass->m_builtin)
+                            if (!shader_pass->m_builtin)
                                 using_shader = &host()->default_shader;
 
                             jegl_using_resource((*using_shader)->resouce());
@@ -1895,7 +1880,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             auto* builtin_uniform = (*using_shader)->m_builtin;
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
 do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(*shader_pass, builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
+ jegl_uniform_##TYPE(shader_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
 
                             NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
                             NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
@@ -1913,7 +1898,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             NEED_AND_SET_UNIFORM(tiling, float2, _using_tiling->x, _using_tiling->y);
                             NEED_AND_SET_UNIFORM(offset, float2, _using_offset->x, _using_offset->y);
 #undef NEED_AND_SET_UNIFORM
-                            jegl_draw_vertex(*drawing_shape);
+                            jegl_draw_vertex(drawing_shape->resouce());
                         }
 
                     }

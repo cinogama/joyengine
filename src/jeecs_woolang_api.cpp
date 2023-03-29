@@ -47,8 +47,8 @@ WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc
     std::function<void(int, const char*)>* callbacks =
         new std::function<void(int, const char*)>([&](int level, const char* msg) {
         while (log_buffer_mx.test_and_set());
-    log_buffer.push_back({ level, msg });
-    log_buffer_mx.clear();
+        log_buffer.push_back({ level, msg });
+        log_buffer_mx.clear();
             });
 
     return wo_ret_handle(vm,
@@ -390,7 +390,7 @@ WO_API wo_api wojeapi_get_editing_entity(wo_vm vm, wo_value args, size_t argc)
 
     if (uid != jeecs::typing::uid_t{})
         return wo_ret_ok_string(vm, uid.to_string().c_str());
-    
+
     return wo_ret_option_none(vm);
 }
 
@@ -955,21 +955,20 @@ WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc
 ///////////////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_texture = new jeecs::graphic::texture(wo_string(args + 0));
+    auto* loaded_texture = jeecs::graphic::texture::load_file(wo_string(args + 0));
 
-    if (loaded_texture->enabled())
+    if (loaded_texture != nullptr)
         return wo_ret_option_gchandle(vm,
             new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
             [](void* ptr) {
                 delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
             });
 
-    delete loaded_texture;
     return wo_ret_option_none(vm);
 }
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_texture = new jeecs::graphic::texture(
+    auto* loaded_texture = jeecs::graphic::texture::create(
         wo_int(args + 0), wo_int(args + 1), jegl_texture::texture_format::RGBA);
 
     memset(loaded_texture->resouce()->m_raw_texture_data->m_pixels, 255,
@@ -1107,9 +1106,9 @@ WO_API wo_api wojeapi_character_get_texture(wo_vm vm, wo_value args, size_t argc
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_shader = new jeecs::graphic::shader(wo_string(args + 0));
+    auto* loaded_shader = jeecs::graphic::shader::load_file(wo_string(args + 0));
 
-    if (loaded_shader->enabled())
+    if (loaded_shader != nullptr)
     {
         return wo_ret_option_gchandle(vm,
             new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
@@ -1117,14 +1116,13 @@ WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
                 delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
             });
     }
-    delete loaded_shader;
     return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_shader = jeecs::basic::create_new<jeecs::graphic::shader>(wo_string(args + 0), wo_string(args + 1));
-    if (loaded_shader->enabled())
+    auto* loaded_shader = jeecs::graphic::shader::load_source(wo_string(args + 0), wo_string(args + 1));
+    if (loaded_shader != nullptr)
     {
         return wo_ret_gchandle(vm,
             new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
@@ -1132,7 +1130,6 @@ WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
                 delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
             });
     }
-    delete loaded_shader;
     return wo_ret_option_none(vm);
 }
 
@@ -1232,52 +1229,50 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
     wo_value out_map = wo_push_map(vm);
 
-    if ((*shader)->enabled())
+    auto* uniforms = (*shader)->resouce()->m_raw_shader_data->m_custom_uniforms;
+    wo_value key = wo_push_empty(vm);
+    while (uniforms)
     {
-        auto* uniforms = (*shader)->resouce()->m_raw_shader_data->m_custom_uniforms;
-        wo_value key = wo_push_empty(vm);
-        while (uniforms)
+        const jeecs::typing::type_info* type;
+        switch (uniforms->m_uniform_type)
         {
-            const jeecs::typing::type_info* type;
-            switch (uniforms->m_uniform_type)
-            {
-            case jegl_shader::uniform_type::FLOAT:
-                type = jeecs::typing::type_info::of<float>(nullptr); break;
-            case jegl_shader::uniform_type::FLOAT2:
-                type = jeecs::typing::type_info::of<jeecs::math::vec2>(nullptr); break;
-            case jegl_shader::uniform_type::FLOAT3:
-                type = jeecs::typing::type_info::of<jeecs::math::vec3>(nullptr); break;
-            case jegl_shader::uniform_type::FLOAT4:
-                type = jeecs::typing::type_info::of<jeecs::math::vec4>(nullptr); break;
-            case jegl_shader::uniform_type::INT:
-                type = jeecs::typing::type_info::of<int>(nullptr); break;
-            case jegl_shader::uniform_type::TEXTURE:
-                type = jeecs::typing::type_info::of<jeecs::graphic::texture*>(nullptr); break;
-            default:
-                // Unknown / Unsupport type, just give this things.
-                type = jeecs::typing::type_info::of<jeecs::typing::type_info*>(nullptr); break;
-                break;
-            }
-
-            wo_set_string(key, uniforms->m_name);
-
-            wo_value val_in_map = wo_map_set(out_map, key, nullptr);
-            wo_set_struct(val_in_map, 2);
-            wo_set_pointer(wo_struct_get(val_in_map, 0), (void*)type);
-
-            wo_value uniform_value_data = wo_struct_get(val_in_map, 1);
-            wo_set_struct(uniform_value_data, 5);
-
-            wo_set_int(wo_struct_get(uniform_value_data, 0), uniforms->n);
-            wo_set_float(wo_struct_get(uniform_value_data, 1), uniforms->x);
-            wo_set_float(wo_struct_get(uniform_value_data, 2), uniforms->y);
-            wo_set_float(wo_struct_get(uniform_value_data, 3), uniforms->z);
-            wo_set_float(wo_struct_get(uniform_value_data, 4), uniforms->w);
-
-            uniforms = uniforms->m_next;
+        case jegl_shader::uniform_type::FLOAT:
+            type = jeecs::typing::type_info::of<float>(nullptr); break;
+        case jegl_shader::uniform_type::FLOAT2:
+            type = jeecs::typing::type_info::of<jeecs::math::vec2>(nullptr); break;
+        case jegl_shader::uniform_type::FLOAT3:
+            type = jeecs::typing::type_info::of<jeecs::math::vec3>(nullptr); break;
+        case jegl_shader::uniform_type::FLOAT4:
+            type = jeecs::typing::type_info::of<jeecs::math::vec4>(nullptr); break;
+        case jegl_shader::uniform_type::INT:
+            type = jeecs::typing::type_info::of<int>(nullptr); break;
+        case jegl_shader::uniform_type::TEXTURE:
+            type = jeecs::typing::type_info::of<jeecs::graphic::texture*>(nullptr); break;
+        default:
+            // Unknown / Unsupport type, just give this things.
+            type = jeecs::typing::type_info::of<jeecs::typing::type_info*>(nullptr); break;
+            break;
         }
-        wo_pop_stack(vm);
+
+        wo_set_string(key, uniforms->m_name);
+
+        wo_value val_in_map = wo_map_set(out_map, key, nullptr);
+        wo_set_struct(val_in_map, 2);
+        wo_set_pointer(wo_struct_get(val_in_map, 0), (void*)type);
+
+        wo_value uniform_value_data = wo_struct_get(val_in_map, 1);
+        wo_set_struct(uniform_value_data, 5);
+
+        wo_set_int(wo_struct_get(uniform_value_data, 0), uniforms->n);
+        wo_set_float(wo_struct_get(uniform_value_data, 1), uniforms->x);
+        wo_set_float(wo_struct_get(uniform_value_data, 2), uniforms->y);
+        wo_set_float(wo_struct_get(uniform_value_data, 3), uniforms->z);
+        wo_set_float(wo_struct_get(uniform_value_data, 4), uniforms->w);
+
+        uniforms = uniforms->m_next;
     }
+    wo_pop_stack(vm);
+
     return wo_ret_val(vm, out_map);
 
     if (auto str = (*shader)->resouce()->m_path)
@@ -1325,6 +1320,7 @@ WO_API wo_api wojeapi_set_uniforms_float4(wo_vm vm, wo_value args, size_t argc)
 }
 
 // defined in 'jeecs_core_editor_system.hpp'
+WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args, size_t argc);
@@ -1848,6 +1844,9 @@ R"(
 
         namespace editor
         {
+            extern("libjoyecs", "wojeapi_store_bad_shader_name")
+                public func store_name_for_bad_shader_update(e: entity, shad_path: string)=> void;
+
             public func store_uniform_dat_for_bad_shader_update<T>(self: entity, shad_path: string, name: string, val: T)
                 where std::declval:<T>() is int
                        || std::declval:<T>() is real

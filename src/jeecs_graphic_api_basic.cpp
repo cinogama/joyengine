@@ -872,7 +872,7 @@ jegl_resource* jegl_create_framebuf(size_t width, size_t height, const jegl_text
         attachments = new jeecs::basic::resource<jeecs::graphic::texture>[attachment_count];
 
         for (size_t i = 0; i < attachment_count; ++i)
-            attachments[i] = new jeecs::graphic::texture(width, height,
+            attachments[i] = jeecs::graphic::texture::create(width, height,
                 jegl_texture::texture_format(attachment_formats[i] | jegl_texture::texture_format::FRAMEBUF));
     }
 

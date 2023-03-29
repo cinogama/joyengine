@@ -1609,7 +1609,7 @@ namespace jeecs
                 using _true_type = std::true_type;
 
                 template<typename V>
-                static auto _tester(int) -> _true_type<decltype(new V())>;
+                static auto _tester(int)->_true_type<decltype(new V())>;
                 template<typename V>
                 static std::false_type _tester(...);
 
@@ -2346,17 +2346,17 @@ namespace jeecs
 
     /*
     * 早上好，这一站我们来到了选择器，JoyEngine中第二混乱的东西
-    * 
+    *
     * 实际上只要和ArchSystem扯上关系，就永远不可能干净。很不幸，选择器正是一根搅屎棍，它负责从
     * ArchSystem管理的区域内按照我们的需求，分离出满足我们需求的ArchType，再从上面把合法的组件
     * 一个个摘出来递到我们面前。
-    * 
+    *
     * 在这里——jeecs.hpp中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
     * ArchSystem中，有一个名为je_ecs_world_update_dependences_archinfo的函数。这个函数在黑暗处
     * 负责在适当的实际更新选择器的筛选结果。
-    * 
+    *
     * 为了优雅，背后就得承担代价；为了性能我们就得做出牺牲。伟大的圣窝窝头，这么做真的值得吗？
-    * 
+    *
     *                                                                   ——虔诚的窝窝头信徒
     *                                                                       mr_cino
     */
@@ -3890,47 +3890,51 @@ namespace jeecs
             resource_basic(jegl_resource* res) noexcept
                 :_m_resouce(res)
             {
-
+                assert(_m_resouce != nullptr);
             }
         public:
-            inline operator bool() const noexcept
-            {
-                return enabled();
-            }
-            inline bool enabled() const noexcept
-            {
-                return nullptr != _m_resouce
-                    && nullptr != _m_resouce->m_custom_resource;
-            }
-            inline operator jegl_resource* () const noexcept
-            {
-                return _m_resouce;
-            }
             inline jegl_resource* resouce() const noexcept
             {
                 return _m_resouce;
             }
             ~resource_basic()
             {
-                if (_m_resouce)
-                    jegl_close_resource(_m_resouce);
+                assert(_m_resouce != nullptr);
+                jegl_close_resource(_m_resouce);
             }
         };
 
         class texture : public resource_basic
         {
+            explicit texture(jegl_resource* res)
+                : resource_basic(res)
+            {
+            }
         public:
-            explicit texture(const std::string& str)
-                : resource_basic(jegl_load_texture(str.c_str()))
+            static texture* load_file(const std::string& str)
             {
+                jegl_resource* res = jegl_load_texture(str.c_str());
+                if (res != nullptr)
+                    return new texture(res);
+                return nullptr;
             }
-            explicit texture(const texture& res)
-                : resource_basic(jegl_copy_resource(res.resouce()))
+            static texture* copy(const texture& tex)
             {
+                jegl_resource* res = jegl_copy_resource(tex.resouce());
+                if (res != nullptr)
+                    return new texture(res);
+                return nullptr;
             }
-            explicit texture(size_t width, size_t height, jegl_texture::texture_format format)
-                : resource_basic(jegl_create_texture(width, height, format))
+            static texture* create(size_t width, size_t height, jegl_texture::texture_format format)
             {
+                jegl_resource* res = jegl_create_texture(width, height, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+
+                if (res != nullptr)
+                    return new texture(res);
+                return nullptr;
             }
 
             class pixel
@@ -4001,205 +4005,169 @@ namespace jeecs
             // pixel's x/y is from LEFT-BUTTOM to RIGHT/TOP
             pixel pix(size_t x, size_t y) const noexcept
             {
-                assert(enabled());
-                return pixel(*this, x, y);
+                return pixel(resouce(), x, y);
             }
             inline size_t height() const noexcept
             {
-                if (enabled())
-                {
-                    assert(resouce()->m_raw_texture_data != nullptr);
-                    return resouce()->m_raw_texture_data->m_height;
-                }
-                return 0;
+                assert(resouce()->m_raw_texture_data != nullptr);
+                return resouce()->m_raw_texture_data->m_height;
             }
             inline size_t width() const noexcept
             {
-                if (enabled())
-                {
-                    assert(resouce()->m_raw_texture_data != nullptr);
-                    return resouce()->m_raw_texture_data->m_width;
-                }
-                return 0;
+                assert(resouce()->m_raw_texture_data != nullptr);
+                return resouce()->m_raw_texture_data->m_width;
             }
             inline math::vec2 size() const noexcept
             {
-                if (enabled())
-                {
-                    assert(resouce()->m_raw_texture_data != nullptr);
-                    return math::vec2(resouce()->m_raw_texture_data->m_width, resouce()->m_raw_texture_data->m_height);
-                }
-                return math::vec2(0.f, 0.f);
+                assert(resouce()->m_raw_texture_data != nullptr);
+                return math::vec2(resouce()->m_raw_texture_data->m_width, resouce()->m_raw_texture_data->m_height);
             }
         };
 
         class shader : public resource_basic
         {
+        private:
+            explicit shader(jegl_resource* res)
+                : resource_basic(res)
+                , m_builtin(nullptr)
+            {
+                m_builtin = &this->resouce()->m_raw_shader_data->m_builtin_uniforms;
+            }
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
-            explicit shader(const std::string& name_path, const std::string& src)
-                : resource_basic(jegl_load_shader_source(name_path.c_str(), src.c_str(), true))
-                , m_builtin(nullptr)
+            static shader* load_source(const std::string& name_path, const std::string& src)
             {
-                if (enabled())
-                    m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
+                jegl_resource* res = jegl_load_shader_source(name_path.c_str(), src.c_str(), true);
+                if (res != nullptr)
+                    return new shader(res);
+                return nullptr;
             }
-            explicit shader(const shader& res)
-                : resource_basic(jegl_copy_resource(res.resouce()))
-                , m_builtin(nullptr)
+            static shader* load_file(const std::string& src_path)
             {
-                if (enabled())
-                    m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
+                jegl_resource* res = jegl_load_shader(src_path.c_str());
+                if (res != nullptr)
+                    return new shader(res);
+                return nullptr;
             }
-            explicit shader(const std::string& src_path)
-                : resource_basic(jegl_load_shader(src_path.c_str()))
-                , m_builtin(nullptr)
+            static shader* copy(const shader& shad)
             {
-                if (enabled())
-                    m_builtin = &((jegl_resource*)(*this))->m_raw_shader_data->m_builtin_uniforms;
+                jegl_resource* res = jegl_copy_resource(shad.resouce());
+                if (res != nullptr)
+                    return new shader(res);
+                return nullptr;
             }
 
             void set_uniform(const std::string& name, int val)noexcept
             {
-                if (enabled())
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
-                    while (jegl_shad_uniforms)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (jegl_shad_uniforms->m_name == name)
+                        if (jegl_shad_uniforms->m_uniform_type !=
+                            jegl_shader::uniform_type::INT)
+                            debug::logerr("Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'."
+                                , name.c_str(), val, this);
+                        else
                         {
-                            if (jegl_shad_uniforms->m_uniform_type !=
-                                jegl_shader::uniform_type::INT)
-                                debug::logerr("Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'."
-                                    , name.c_str(), val, this);
-                            else
-                            {
-                                jegl_shad_uniforms->n = val;
-                                jegl_shad_uniforms->m_updated = true;
-                            }
-                            return;
+                            jegl_shad_uniforms->n = val;
+                            jegl_shad_uniforms->m_updated = true;
                         }
-                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                        return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
-                else
-                    debug::logerr("Trying set uniform('%s' = %d) to invalid shader(%p), please check."
-                        , name.c_str(), val, this);
             }
             void set_uniform(const std::string& name, float val)noexcept
             {
-                if (enabled())
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
-                    while (jegl_shad_uniforms)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (jegl_shad_uniforms->m_name == name)
+                        if (jegl_shad_uniforms->m_uniform_type !=
+                            jegl_shader::uniform_type::FLOAT)
+                            debug::logerr("Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'."
+                                , name.c_str(), val, this);
+                        else
                         {
-                            if (jegl_shad_uniforms->m_uniform_type !=
-                                jegl_shader::uniform_type::FLOAT)
-                                debug::logerr("Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'."
-                                    , name.c_str(), val, this);
-                            else
-                            {
-                                jegl_shad_uniforms->x = val;
-                                jegl_shad_uniforms->m_updated = true;
-                            }
-                            return;
+                            jegl_shad_uniforms->x = val;
+                            jegl_shad_uniforms->m_updated = true;
                         }
-                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                        return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
-                else
-                    debug::logerr("Trying set uniform('%s' = %f) to invalid shader(%p), please check."
-                        , name.c_str(), val, this);
             }
             void set_uniform(const std::string& name, const math::vec2& val)noexcept
             {
-                if (enabled())
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
-                    while (jegl_shad_uniforms)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (jegl_shad_uniforms->m_name == name)
+                        if (jegl_shad_uniforms->m_uniform_type !=
+                            jegl_shader::uniform_type::FLOAT2)
+                            debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT2'."
+                                , name.c_str(), val.to_string().c_str(), this);
+                        else
                         {
-                            if (jegl_shad_uniforms->m_uniform_type !=
-                                jegl_shader::uniform_type::FLOAT2)
-                                debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT2'."
-                                    , name.c_str(), val.to_string().c_str(), this);
-                            else
-                            {
-                                jegl_shad_uniforms->x = val.x;
-                                jegl_shad_uniforms->y = val.y;
-                                jegl_shad_uniforms->m_updated = true;
-                            }
-                            return;
+                            jegl_shad_uniforms->x = val.x;
+                            jegl_shad_uniforms->y = val.y;
+                            jegl_shad_uniforms->m_updated = true;
                         }
-                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                        return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
-                else
-                    debug::logerr("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
-                        , name.c_str(), val.to_string().c_str(), this);
             }
             void set_uniform(const std::string& name, const math::vec3& val)noexcept
             {
-                if (enabled())
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
-                    while (jegl_shad_uniforms)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (jegl_shad_uniforms->m_name == name)
+                        if (jegl_shad_uniforms->m_uniform_type !=
+                            jegl_shader::uniform_type::FLOAT3)
+                            debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT3'."
+                                , name.c_str(), val.to_string().c_str(), this);
+                        else
                         {
-                            if (jegl_shad_uniforms->m_uniform_type !=
-                                jegl_shader::uniform_type::FLOAT3)
-                                debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT3'."
-                                    , name.c_str(), val.to_string().c_str(), this);
-                            else
-                            {
-                                jegl_shad_uniforms->x = val.x;
-                                jegl_shad_uniforms->y = val.y;
-                                jegl_shad_uniforms->z = val.z;
-                                jegl_shad_uniforms->m_updated = true;
-                            }
-                            return;
+                            jegl_shad_uniforms->x = val.x;
+                            jegl_shad_uniforms->y = val.y;
+                            jegl_shad_uniforms->z = val.z;
+                            jegl_shad_uniforms->m_updated = true;
                         }
-                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                        return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
-                else
-                    debug::logerr("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
-                        , name.c_str(), val.to_string().c_str(), this);
             }
             void set_uniform(const std::string& name, const math::vec4& val)noexcept
             {
-                if (enabled())
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
-                    while (jegl_shad_uniforms)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (jegl_shad_uniforms->m_name == name)
+                        if (jegl_shad_uniforms->m_uniform_type !=
+                            jegl_shader::uniform_type::FLOAT4)
+                            debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT4'."
+                                , name.c_str(), val.to_string().c_str(), this);
+                        else
                         {
-                            if (jegl_shad_uniforms->m_uniform_type !=
-                                jegl_shader::uniform_type::FLOAT4)
-                                debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT4'."
-                                    , name.c_str(), val.to_string().c_str(), this);
-                            else
-                            {
-                                jegl_shad_uniforms->x = val.x;
-                                jegl_shad_uniforms->y = val.y;
-                                jegl_shad_uniforms->z = val.z;
-                                jegl_shad_uniforms->w = val.w;
-                                jegl_shad_uniforms->m_updated = true;
-                            }
-                            return;
+                            jegl_shad_uniforms->x = val.x;
+                            jegl_shad_uniforms->y = val.y;
+                            jegl_shad_uniforms->z = val.z;
+                            jegl_shad_uniforms->w = val.w;
+                            jegl_shad_uniforms->m_updated = true;
                         }
-                        jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                        return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
-                else
-                    debug::logerr("Trying set uniform('%s' = %s) to invalid shader(%p), please check."
-                        , name.c_str(), val.to_string().c_str(), this);
             }
         };
 
@@ -4228,18 +4196,15 @@ namespace jeecs
             explicit framebuffer(size_t reso_w, size_t reso_h, const std::vector<jegl_texture::texture_format>& attachment)
                 :resource_basic(jegl_create_framebuf(reso_w, reso_h, attachment.data(), attachment.size()))
             {
+                assert(resouce() != nullptr);
             }
 
             basic::resource<texture> get_attachment(size_t index) const
             {
-                if (enabled())
+                if (index < resouce()->m_raw_framebuf_data->m_attachment_count)
                 {
-                    if (index < resouce()->m_raw_framebuf_data->m_attachment_count)
-                    {
-                        auto* attachments = (basic::resource<graphic::texture>*)resouce()->m_raw_framebuf_data->m_output_attachments;
-                        return attachments[index];
-                    }
-                    return nullptr;
+                    auto* attachments = (basic::resource<graphic::texture>*)resouce()->m_raw_framebuf_data->m_output_attachments;
+                    return attachments[index];
                 }
                 return nullptr;
             }
@@ -4251,12 +4216,12 @@ namespace jeecs
             explicit uniformbuffer(size_t binding_place, size_t buffersize)
                 :resource_basic(jegl_create_uniformbuf(binding_place, buffersize))
             {
+                assert(resouce() != nullptr);
             }
 
             void update_buffer(size_t offset, size_t size, const void* datafrom) const noexcept
             {
-                if (enabled())
-                    jegl_update_uniformbuf(resouce(), datafrom, offset, size);
+                jegl_update_uniformbuf(resouce(), datafrom, offset, size);
             }
         };
 
@@ -4570,7 +4535,8 @@ namespace jeecs
                 TEXT_OFFSET = { 0,0 };
                 used_font = &font_base;
 
-                auto new_texture = new texture(size_x + 1, size_y + 1, jegl_texture::texture_format::RGBA);
+                auto* new_texture = texture::create(size_x + 1, size_y + 1, jegl_texture::texture_format::RGBA);
+                assert(new_texture != nullptr);
                 std::memset(new_texture->resouce()->m_raw_texture_data->m_pixels, 0, new_texture->width() * new_texture->size().y * 4);
 
                 for (size_t ti = 0; ti < text.size(); ti++)
@@ -4697,20 +4663,20 @@ namespace jeecs
                                                 correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size)
                                             );
 
-                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
+                                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
 
-                            float src_alpha = psrc.w * TEXT_COLOR.w;
+                                            float src_alpha = psrc.w * TEXT_COLOR.w;
 
-                            pdst.set(
-                                math::vec4(
-                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
-                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
-                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
-                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
-                                )
-                            );
+                                            pdst.set(
+                                                math::vec4(
+                                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
+                                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
+                                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
+                                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
+                                                )
+                                            );
                                         }
-                            ); // end of  for each
+                                    ); // end of  for each
                                 }
                             );
                             next_ch_x += gcs->m_adv_x;
@@ -5428,7 +5394,7 @@ namespace jeecs
             intersect_result intersect_entity(const Transform::Translation& translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
             {
                 vec3 entity_box_sz;
-                if (entity_shape && entity_shape->vertex && entity_shape->vertex->enabled())
+                if (entity_shape && entity_shape->vertex != nullptr)
                 {
                     auto* vertex_dat = entity_shape->vertex->resouce()->m_raw_vertex_data;
                     entity_box_sz = { vertex_dat->m_size_x, vertex_dat->m_size_y ,vertex_dat->m_size_z };

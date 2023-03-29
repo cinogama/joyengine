@@ -174,7 +174,7 @@ namespace jeecs
                     graphic::vertex::type::LINES,
                     { 0,0,0,
                       0,0,1000 }, { 3 });
-                static basic::resource<graphic::shader> shad = new graphic::shader("!/builtin/drawline.shader", R"(
+                static basic::resource<graphic::shader> shad = graphic::shader::load_source("!/builtin/drawline.shader", R"(
         import je.shader;
         
         VAO_STRUCT! vin {
@@ -280,7 +280,7 @@ namespace jeecs
                     = 0.1f;
 
                 static basic::resource<graphic::shader>
-                    axis_shader = new graphic::shader("!/builtin/mover_axis.shader",
+                    axis_shader = graphic::shader::load_source("!/builtin/mover_axis.shader",
                         R"(
 import je.shader;
         
@@ -342,9 +342,9 @@ public let frag =
                     Editor::EntityMover
                 >();
 
-                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(new graphic::shader(axis_shader));
-                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(new graphic::shader(axis_shader));
-                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(new graphic::shader(axis_shader));
+                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
+                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
+                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
 
                 axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1, 0, 0);
                 axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1, 0);
@@ -393,7 +393,7 @@ public let frag =
             Renderer::Shape* shape,
             Renderer::Shaders& shaders)
         {
-            const auto* editing_entity = _inputs.selected_entity ? &_inputs.selected_entity.value(): nullptr;
+            const auto* editing_entity = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
             Transform::LocalPosition* editing_pos = editing_entity
                 ? editing_entity->get_component<Transform::LocalPosition>()
                 : nullptr;
@@ -475,63 +475,75 @@ public let frag =
 
             select_from(get_world())
                 // 获取被选中的实体
-                .exec([this](game_entity e, Editor::Anchor& anchor) 
+                .exec([this](game_entity e, Editor::Anchor& anchor)
                     {
                         if (anchor.uid == jedbg_get_editing_entity_uid())
                             _inputs.selected_entity = std::optional(e);
                     })
                 // Move walker(root)
-                .exec(&DefaultEditorSystem::MoveWalker).contain<Editor::EditorWalker>().except<Camera::Projection>()
-                // Move walker(camera)
-                .exec(&DefaultEditorSystem::CameraWalker).contain<Editor::EditorWalker>()
-                // Let life entity die.
-                .exec(&DefaultEditorSystem::DebugLifeEntity)
-                // Select entity
-                .exec(&DefaultEditorSystem::SelectEntity).except<Editor::Invisable>()
-                // Create & create mover!
-                .exec(&DefaultEditorSystem::UpdateAndCreateMover)
-                // Mover mgr
-                .exec(&DefaultEditorSystem::MoveEntity);
+                        .exec(&DefaultEditorSystem::MoveWalker).contain<Editor::EditorWalker>().except<Camera::Projection>()
+                        // Move walker(camera)
+                        .exec(&DefaultEditorSystem::CameraWalker).contain<Editor::EditorWalker>()
+                        // Let life entity die.
+                        .exec(&DefaultEditorSystem::DebugLifeEntity)
+                        // Select entity
+                        .exec(&DefaultEditorSystem::SelectEntity).except<Editor::Invisable>()
+                        // Create & create mover!
+                        .exec(&DefaultEditorSystem::UpdateAndCreateMover)
+                        // Mover mgr
+                        .exec(&DefaultEditorSystem::MoveEntity);
 
-            if (nullptr == _grab_axis_translation)
-            {
-                auto _set_editing_entity = [](const jeecs::game_entity& e)
-                {
-                    jeecs::Editor::Anchor* anchor = e.get_component<jeecs::Editor::Anchor>();
-                    if (anchor == nullptr)
-                        anchor = e.add_component<jeecs::Editor::Anchor>();
-
-                    assert(anchor != nullptr);
-
-                    jedbg_set_editing_entity_uid(anchor->uid);
-                };
-
-                if (!selected_list.empty())
-                {
-                    const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
-                    if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
-                        [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
-                        fnd != selected_list.end())
+                    if (nullptr == _grab_axis_translation)
                     {
-                        if (++fnd == selected_list.end())
-                            _set_editing_entity(selected_list.begin()->entity);
-                        else
-                            _set_editing_entity(fnd->entity);
+                        auto _set_editing_entity = [](const jeecs::game_entity& e)
+                        {
+                            jeecs::Editor::Anchor* anchor = e.get_component<jeecs::Editor::Anchor>();
+                            if (anchor == nullptr)
+                                anchor = e.add_component<jeecs::Editor::Anchor>();
+
+                            assert(anchor != nullptr);
+
+                            jedbg_set_editing_entity_uid(anchor->uid);
+                        };
+
+                        if (!selected_list.empty())
+                        {
+                            const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
+                            if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
+                                [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
+                                fnd != selected_list.end())
+                            {
+                                if (++fnd == selected_list.end())
+                                    _set_editing_entity(selected_list.begin()->entity);
+                                else
+                                    _set_editing_entity(fnd->entity);
+                            }
+                            else
+                                _set_editing_entity(selected_list.begin()->entity);
+                        }
+                        else if (_inputs.l_buttom_pushed)
+                            jedbg_set_editing_entity_uid(jeecs::typing::uid_t{/* 000... */ });
                     }
-                    else
-                        _set_editing_entity(selected_list.begin()->entity);
-                }
-                else if (_inputs.l_buttom_pushed)
-                    jedbg_set_editing_entity_uid(jeecs::typing::uid_t{/* 000... */});
-            }
 
-            je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
+                    je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
 
-            selected_list.clear();
+                    selected_list.clear();
         }
     };
 }
+WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    wo_string_t shader_path = wo_string(args + 1);
 
+    jeecs::Editor::BadShadersUniform* badShadersUniform = entity->get_component<jeecs::Editor::BadShadersUniform>();
+    if (nullptr == badShadersUniform)
+        return wo_ret_panic(vm, "Failed to store uniforms for bad shader, entity has not 'Editor::BadShadersUniform'.");
+
+    badShadersUniform->uniforms[shader_path];
+
+    return wo_ret_void(vm);
+}
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -663,11 +675,12 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
         {
             auto* shad_res = shad->resouce();
             assert(shad_res); // NOTE: Some failed built in shader may cause this abort.
+            assert(shad != nullptr);
             if (shad_res->m_path && shad_res->m_path == old_shad)
             {
                 // 1. load new shader, if failed, store uniforms
-                jeecs::basic::resource<jeecs::graphic::shader> new_shader = new jeecs::graphic::shader(new_shad);
-                if (!new_shader->enabled())
+                jeecs::basic::resource<jeecs::graphic::shader> new_shader = jeecs::graphic::shader::load_file(new_shad);
+                if (new_shader != nullptr)
                 {
                     if (nullptr == bad_uniforms)
                         bad_uniforms = entity->add_component<jeecs::Editor::BadShadersUniform>();
@@ -678,46 +691,27 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
 
                     // 1.1 If bad uniforms already has old_shader's data, update them..
                     auto fnd = bad_uniforms->uniforms.find(old_shad);
-                    if (fnd != bad_uniforms->uniforms.end())
-                    {
-                        assert(shad->enabled() == false);
-                        auto res = fnd->second;
-                        bad_uniforms->uniforms.erase(fnd->first);
 
-                        new_bad_shad_uniform_buf = res;
-                    }
-                    else if (shad->enabled())
+                    // Store old-enabled-shader data.
+                    auto uni_var = shad_res->m_raw_shader_data->m_custom_uniforms;
+                    while (uni_var)
                     {
-                        // Store old-enabled-shader data.
-                        auto uni_var = shad_res->m_raw_shader_data->m_custom_uniforms;
-                        while (uni_var)
-                        {
-                            new_bad_shad_uniform_buf[uni_var->m_name] = *uni_var;
-                            uni_var = uni_var->m_next;
-                        }
+                        new_bad_shad_uniform_buf[uni_var->m_name] = *uni_var;
+                        uni_var = uni_var->m_next;
                     }
                     ok = false;
                 }
                 else
                 {
-                    if (shad->enabled())
+                    auto uni_var = shad_res->m_raw_shader_data->m_custom_uniforms;
+                    while (uni_var)
                     {
-                        auto uni_var = shad_res->m_raw_shader_data->m_custom_uniforms;
-                        while (uni_var)
-                        {
-                            update_shader(uni_var, uni_var->m_name, new_shader);
-                            uni_var = uni_var->m_next;
-                        }
+                        update_shader(uni_var, uni_var->m_name, new_shader);
+                        uni_var = uni_var->m_next;
                     }
-                    else if (bad_uniforms)
-                    {
-                        auto& old_bad_shad_uniform_buf = bad_uniforms->uniforms[old_shad];
-                        for (auto& [name, dat] : old_bad_shad_uniform_buf)
-                            update_shader(&dat, name, new_shader);
-                        bad_uniforms->uniforms.erase(old_shad);
-                    }
+                    shad = new_shader;
                 }
-                shad = new_shader;
+
             }
         }
     }
