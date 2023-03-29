@@ -17,8 +17,6 @@ namespace editor::gui
 
             if (!context->get_project->is_debugging)
             {
-                context->end_debug_and_restore_all_editor_form();
-
                 do BeginMainMenuBar();
                 if (BeginMenu("JoyEngine"))
                 {
@@ -72,9 +70,6 @@ namespace editor::gui
                 }
                 EndMainMenuBar();
             }
-            else
-                context->begin_debug_and_hide_all_editor_form();
-                
         }, ());
     }
 }

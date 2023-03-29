@@ -39,17 +39,24 @@ namespace editor::gui::edit_forms
                 {
                     if (MenuItem("调试运行"))
                     {
-                        context->begin_debug_and_hide_all_editor_form();
-                        do proj->start_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"开始调试失败{e}");;
+                        do context->start_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"开始调试失败, {e}");;
+                        launch(func(){
+                            if (proj->is_debugging)
+                            {
+                                do BeginAttr("调试工具", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+                                    if (Button("终止当前调试"))
+                                        do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
+                                End();
+                                return true;
+                            }
+                            return false;
+                        }, ());
                     }
                 }
                 else
                 {
                     if (MenuItem("终止调试"))
-                    {
-                        context->end_debug_and_restore_all_editor_form();
-                        do proj->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
-                    }
+                        do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
                 }
                 
                 if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
