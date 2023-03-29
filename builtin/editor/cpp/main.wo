@@ -229,6 +229,16 @@ namespace editor
                         ->replace("$$JEMODULE_PROJECT_NAME$$", name->replace(" ", "_"))))
                 return result::err(F"无法写入'{cxx_proj_path}/CMakeLists.txt'");
 
+            let git_ignore_file = 
+@"# Ignore cpp module's useless files.
+
+/runtime/
+/build/
+/msvcbuild_*/
+"@;
+            if (!writeall(F"{cxx_proj_path}/.gitignore", git_ignore_file))
+                return result::err(F"无法写入'{cxx_proj_path}/.gitignore'");
+
             return result::ok(generating_results);
         }
 
@@ -316,7 +326,7 @@ namespace editor
 
             return 
                 subpath(runtime_dll_path)
-                    ->okay
+                    ->  okay
                     =>> \child_path = child_path
                         ->  forall(\path = isdir(path);)
                         ->> \path = filename(path): int;
@@ -335,9 +345,9 @@ namespace editor
             using filesys;
             let newest_path = 
                 get_current_runtime_id(runtime_dll_path)
-                    ->map(\id: int = id + 1;)
-                    ->valor(0)
-                    ->\id: int = F"{normalize(runtime_dll_path)}/{id}";
+                    -> map(\id: int = id + 1;)
+                    -> valor(0)
+                    -> \id: int = F"{normalize(runtime_dll_path)}/{id}";
                     ;
             assert(!exist(newest_path));
             do mkdir(newest_path)->unwarp;
@@ -443,8 +453,27 @@ namespace editor
                             ? result::ok("无需清理旧的模块")
                             | move(dllpath, F"{created_module->get_runtime_path(config)}/0");
                         ->  or(\ = result::err(0: filesys::errno_t););
-                if (founding_newest_result->iserr)
-                    return result::err(F"清理模块失败({founding_newest_result->error->val})");
+                     
+                match (founding_newest_result)
+                {
+                err(no)?
+                    if (no == 0: filesys::errno_t)
+                    {
+                        // 根本没找到对应的运行库，就近开始现场编一个
+                        je::logwarn("动态库未找到，正在重新编译");
+                        match (created_module->_compile(je::editor::platform(), option::none))
+                        {
+                        err(reason)?
+                            return err(reason);
+                        ok(_)?
+                            created_module->update_library_of_platform(config);
+                        }
+                    }
+                    else
+                        return result::err(F"清理模块失败({founding_newest_result->error->val})");
+                _?
+                    ;
+                }
 
                 if (!created_module->load_library_of_platform(config)->has)
                     return result::err(F"无法为当前运行时{config}加载模块，请检查");
@@ -542,6 +571,7 @@ namespace editor
             mut compile_thread  : option<thread>,
             mut compile_result  : option<result<result<string, string>, string>>,
         };
+
         public func update_compile(self: CxxProject, config: string)
         {
             // 起个线程跑编译，然后弄个窗口显示一下进度
@@ -578,14 +608,13 @@ namespace editor
             context.compile_thread = 
                 option::value(thread::create(func ()
                 {
-                    match (self->_compile(config, context))
+                    match (self->_compile(config, option::value(context)))
                     {
                     ok(_)?
                     {
                         // 起个协程同步去更新一下
                         je::gui::launch(
-                            func(){
-                                
+                            func(){ 
                                 match (self.project->dump_and_close_all_world)
                                 {
                                 ok(dump_worlds)?
@@ -622,35 +651,35 @@ namespace editor
                     }
                 },()) );
         }
-        func _compile(self: CxxProject, config: string, context: compile_context)
+        func _compile(self: CxxProject, config: string, context: option<compile_context>)
         {
             // 输入所需的配置，如果项目支持这个配置，则编译模块
             let conf = self.configs->get(config);
             if (!conf->has)
             {
-                context.show = false;
+                do context->>\context = context.show = false;;
                 return result::err("不支持的配置");
             }
 
             using filesys;
             using filesys;
 
-            context.display_msg = "正在检查工具链";
-            context.progress = 0;
+            do context->>\context = context.display_msg = "正在检查工具链";;
+            do context->>\context = context.progress = 0;;
 
             if (!exist(CMAKE_PATH))
             {
-                context.display_msg = F"无法找到{CMAKE_PATH}，请检查CMake配置和环境变量";
-                return result::err(context.display_msg);
+                do context->>\context = context.display_msg = F"无法找到{CMAKE_PATH}，请检查CMake配置和环境变量";;
+                return result::err(F"无法找到{CMAKE_PATH}，请检查CMake配置和环境变量");
             }
             if (!exist(MSVC_PATH))
             {
-                context.display_msg = F"无法找到{MSVC_PATH}，请检查工具链环境变量";
-                return result::err(context.display_msg);
+                do context->>\context = context.display_msg = F"无法找到{MSVC_PATH}，请检查工具链环境变量";;
+                return result::err(F"无法找到{MSVC_PATH}，请检查工具链环境变量");
             }
 
-            context.display_msg = "正在扫描并生成loader.hpp";
-            context.progress = 5;
+            do context->>\context = context.display_msg = "正在扫描并生成loader.hpp";;
+            do context->>\context = context.progress = 5;;
 
             let components = subpath(F"{self.path}/components")
                 ->okay
@@ -725,19 +754,19 @@ namespace editor
 
             if (!writeall(F"{self.path}/loader.hpp", loader_src))
             {
-                context.display_msg = F"无法写入'{self.path}/loader.hpp'";
-                return result::err(context.display_msg);
+                do context->>\context = context.display_msg = F"无法写入'{self.path}/loader.hpp'";;
+                return result::err(F"无法写入'{self.path}/loader.hpp'");
             }
 
-            context.display_msg = F"正在使用CMake生成编译配置\n{config}";
-            context.progress = 15;
+            do context->>\context = context.display_msg = F"正在使用CMake生成编译配置\n{config}";;
+            do context->>\context = context.progress = 15;;
 
             if (start_process(CMAKE_PATH, 
                 [CMAKE_PATH, self.path, "-B", self.path + "/msvcbuild_" + config, F"-DJEMODULE_BUILT_AIM=\"{config}\""]
                     ->connect(conf->val.cmake_option)) != true)
             {
-                context.display_msg = "CMake生成失败";
-                return result::err(context.display_msg);
+                do context->>\context = context.display_msg = "CMake生成失败";;
+                return result::err("CMake生成失败");
             }
 
             let msvc_proj_path = F"{self.path}/msvcbuild_{config}/builder/{config}/{self.name->replace(" ", "_")}.vcxproj";
@@ -745,8 +774,8 @@ namespace editor
 
             do remove(msvc_compile_result_path)->unwarp;
 
-            context.display_msg = F"正在构建二进制文件\n{config}";
-            context.progress = 45;
+            do context->>\context = context.display_msg = F"正在构建二进制文件\n{config}";;
+            do context->>\context = context.progress = 45;;
 
             let compile_result_statu_code = start_process(MSVC_PATH, [
                 MSVC_PATH, msvc_proj_path, "-v:quiet", "-fl",
@@ -754,20 +783,20 @@ namespace editor
             ]->connect(conf->val.built_command));
             let compile_result = readall(msvc_compile_result_path);
 
-            context.massive_msg = option::value(compile_result->valor("没有找到编译日志，查看控制台获取更多信息"));
+            do context->>\context = context.massive_msg = option::value(compile_result->valor("没有找到编译日志，查看控制台获取更多信息"));;
 
             if (compile_result_statu_code != true)
             {
-                context.display_msg = "C++编译失败";
-                return result::err(context.display_msg);
+                do context->>\context = context.display_msg = "C++编译失败";;
+                return result::err("C++编译失败");
             }
             
-            context.display_msg = F"编译完成";
-            context.progress = 100;
+            do context->>\context = context.display_msg = "编译完成";;
+            do context->>\context = context.progress = 100;;
 
             self.project->active_module(self);
 
-            return result::ok(context.display_msg);
+            return result::ok("编译完成");
         }
 
     }

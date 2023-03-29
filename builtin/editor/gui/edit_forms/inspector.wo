@@ -114,9 +114,9 @@ namespace editor::gui::edit_forms
 
     public func show_inspector(context: EditorContext, show: mutable<bool>)
     {
-        if (show->get)
-        {
-            context->dosth_at_editing_entity(func(current_entity_may_none){
+        context->dosth_at_editing_entity(func(current_entity_may_none){
+            if (show->get)
+            {
                 je::gui::SetNextWindowSizeConstraints((250., 400.), (250., 4000.));
                 do show->set(BeginOpen("检视面板##jeeditor"));
 
@@ -163,7 +163,7 @@ namespace editor::gui::edit_forms
                                     {
                                         let eeid = jeapi::debug::get_entity_editor_id(cur_e);
                                         let ename = cur_e->editor::name;
-    
+
                                         jeapi::gui::form::ask(
                                             "确认？", 
                                             F"即将从实体{ename}中移除组件{ctype->name}，是否确认？", 
@@ -176,7 +176,7 @@ namespace editor::gui::edit_forms
                                     {
                                         let eeid = jeapi::debug::get_entity_editor_id(cur_e);
                                         let ename = cur_e->editor::name;
-    
+
                                         jeapi::gui::form::ask(
                                             "确认？", 
                                             F"即将重置组件{ctype->name}，是否确认？", 
@@ -195,18 +195,18 @@ namespace editor::gui::edit_forms
                                             });
                                     }
                                 });
-    
+
                                 for (let mname, (mtype, mvalue): component->editor::members)
                                 {
                                     do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
                                     SameLine();
                                     BeginGroup();
-    
+
                                     TextDisabled(mname);
                                     
                                     // TODO: 检查字段更新然后干点啥事儿？
                                     do jeapi::gui::edit_cur_native_value(mname, mtype, mvalue);
-    
+
                                     EndGroup();
                                 }
                                 TreePop();
@@ -285,9 +285,7 @@ namespace editor::gui::edit_forms
                 }
 
                 End();
-
-            });
-
-        }
+            }
+        });
     }
 }

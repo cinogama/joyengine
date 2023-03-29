@@ -26,15 +26,13 @@ using Path = struct {
 {
     func _get_available_root_paths()
     {
-        // TODO: 这里先只考虑Windows的情况，unix系统那套先不管
-        //       而且只考虑A-Z的盘符，什么AA AB AC，就算windows未来支持也给爷滚
-        let arr = []mut: vec<char>;
+        // TODO: 这里只考虑Windows的A-Z盘符，什么AA AB AC，就算windows未来支持也给爷滚
+        let arr = ["/"]mut;
         for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1: char)
-            arr->add(ch);
+            arr->add([ch]->str + ":/");
 
         return arr
-            ->  unsafe::cast:<array<char>>
-            ->> \ch = [ch]->str + ":/";
+            ->  unsafe::cast:<array<string>>
             ->  forall(\path = filesys::isdir(path);)
             ->> \rootpath = Path
                 {

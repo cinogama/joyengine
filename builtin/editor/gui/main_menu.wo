@@ -15,58 +15,66 @@ namespace editor::gui
         context->launch_editor_form(func(){
             context->update_api();
 
-            do BeginMainMenuBar();
-            if (BeginMenu("JoyEngine"))
+            if (!context->get_project->is_debugging)
             {
-                if (MenuItem("退出编辑器"))
-                    // 关闭环境正在编辑的项目，退出
-                    context->get_project->close();
+                context->end_debug_and_restore_all_editor_form();
 
-                EndMenu();
-            }
-            if (BeginMenu("文件"))
-            {
-                if (MenuItem("保存当前世界"))
+                do BeginMainMenuBar();
+                if (BeginMenu("JoyEngine"))
                 {
-                    let proj = context->get_project;
-                    if (proj->get_editing_world->>\w = proj->save_world(w);->valor(false) == false)
+                    if (MenuItem("退出编辑器"))
+                        // 关闭环境正在编辑的项目，退出
+                        context->get_project->close();
+
+                    EndMenu();
+                }
+                if (BeginMenu("文件"))
+                {
+                    if (MenuItem("保存当前世界"))
                     {
-                        jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
-                    }
-                }
-                if (MenuItem("保存项目"))
-                {
-                    let proj = context->get_project;
-                    if (proj->save_project())
-                        jeapi::gui::form::msg("完成", "项目和所有编辑中的世界已经保存"); 
-                }
-                EndMenu();
-            }
-            if (BeginMenu("编辑"))
-            {
-                if (MenuItem("项目设置"))
-                {
-                    context->launch_editor_form(func(){
-                        je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
-                        let open = BeginOpen("项目设置");
-                        for (let item_name, iconfig : context->get_project->get_configs)
+                        let proj = context->get_project;
+                        if (proj->get_editing_world->>\w = proj->save_world(w);->valor(false) == false)
                         {
-                            do iconfig->edit();
+                            jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
                         }
-                        End();
-                        return open;
-                    }, ());
+                    }
+                    if (MenuItem("保存项目"))
+                    {
+                        let proj = context->get_project;
+                        if (proj->save_project())
+                            jeapi::gui::form::msg("完成", "项目和所有编辑中的世界已经保存"); 
+                    }
+                    EndMenu();
                 }
-                EndMenu();
-            }
-            if (BeginMenu("帮助"))
-            {
-                if (MenuItem("关于"))
-                    jeapi::welcome::show_about();
+                if (BeginMenu("编辑"))
+                {
+                    if (MenuItem("项目设置"))
+                    {
+                        context->launch_editor_form(func(){
+                            je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
+                            let open = BeginOpen("项目设置");
+                            for (let item_name, iconfig : context->get_project->get_configs)
+                            {
+                                do iconfig->edit();
+                            }
+                            End();
+                            return open;
+                        }, ());
+                    }
+                    EndMenu();
+                }
+                if (BeginMenu("帮助"))
+                {
+                    if (MenuItem("关于"))
+                        jeapi::welcome::show_about();
 
-                EndMenu();
+                    EndMenu();
+                }
+                EndMainMenuBar();
             }
-            EndMainMenuBar();
+            else
+                context->begin_debug_and_hide_all_editor_form();
+                
         }, ());
     }
 }

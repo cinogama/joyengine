@@ -253,9 +253,16 @@ namespace editor
             // TODO: 加载失败和二进制文件怎么git还需考虑一下
             do dat->get("modules")
                 ->> \d = d as array<dynamic> 
-                    ->> \p = CxxProject::load(p as string, self)->unwarp;
+                    =>> \p = err->has ? [(p, err->val)] | []
+                        where err = CxxProject::load(module_name, self)->error
+                            , module_name = p as string
+                        ;
                     ;
+                ->  valor([])
+                ->> \mr = jeapi::gui::form::errmsg("加载失败", F"无法加载 '{mr[0]}'：{mr[1]}"); 
                 ;
+            
+
             do dat["worlds"] as array
                 ->> \wpath = self->load_world(wpath as string);
                 ;
