@@ -174,7 +174,7 @@ namespace jeecs
                     graphic::vertex::type::LINES,
                     { 0,0,0,
                       0,0,1000 }, { 3 });
-                static basic::resource<graphic::shader> shad = graphic::shader::load_source("!/builtin/drawline.shader", R"(
+                static basic::resource<graphic::shader> shad = graphic::shader::create("!/builtin/drawline.shader", R"(
         import je.shader;
         
         VAO_STRUCT! vin {
@@ -280,7 +280,7 @@ namespace jeecs
                     = 0.1f;
 
                 static basic::resource<graphic::shader>
-                    axis_shader = graphic::shader::load_source("!/builtin/mover_axis.shader",
+                    axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
                         R"(
 import je.shader;
         
@@ -556,7 +556,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, siz
     auto& bad_uniform_var = badShadersUniform->uniforms[shader_path][wo_string(args + 2)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT;
-    bad_uniform_var.n = wo_int(args + 3);
+    bad_uniform_var.n = (int)wo_int(args + 3);
 
     return wo_ret_void(vm);
 }
@@ -679,7 +679,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
             if (shad_res->m_path && shad_res->m_path == old_shad)
             {
                 // 1. load new shader, if failed, store uniforms
-                jeecs::basic::resource<jeecs::graphic::shader> new_shader = jeecs::graphic::shader::load_file(new_shad);
+                jeecs::basic::resource<jeecs::graphic::shader> new_shader = jeecs::graphic::shader::load(new_shad);
                 if (new_shader != nullptr)
                 {
                     if (nullptr == bad_uniforms)

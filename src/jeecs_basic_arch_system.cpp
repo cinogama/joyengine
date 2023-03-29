@@ -888,7 +888,7 @@ namespace jeecs_impl
                     = m_next_update_time
                     = m_next_late_update_time
                     = 0.;
-                m_execute_interval = sys->delta_time();
+                m_execute_interval = sys->delta_dtime();
                 return *this;
             }
         };
@@ -1442,7 +1442,7 @@ namespace jeecs_impl
         }
         inline double next_execute_time_allign(double exec_intv)const noexcept
         {
-            return ((double)(((int)(current_time() / exec_intv + 0.5)) + 1)) * exec_intv;
+            return current_time() + exec_intv;
         }
         void update_universe_action_and_worlds()noexcept
         {
@@ -1631,6 +1631,7 @@ namespace jeecs_impl
             je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
             if (je_clock_time() - _m_current_time >= 2.0)
                 _m_current_time = je_clock_time();
+
             _m_next_execute_interval = 1.0;
 
             // Sleep end, new frame begin here!!!!

@@ -81,7 +81,7 @@ namespace editor::gui::edit_forms
                     let (wx, wy) = GetWindowPos();
                     let (lupx, lupy) = GetCursorPos();
 
-                    ImageSize(frametex, available_width: int, available_height: int);
+                    ImageSize(frametex, available_width, available_height);
 
                     let (itemw, itemh) = GetItemRectSize();
                     let (mx, my) = GetMousePos();

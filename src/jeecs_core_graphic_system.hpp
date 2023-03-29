@@ -169,7 +169,7 @@ namespace jeecs
             default_texture->pix(0, 1).set({ 0.f, 0.f, 0.f, 1.f });
             default_texture->pix(1, 0).set({ 0.f, 0.f, 0.f, 1.f });
 
-            default_shader = graphic::shader::load_source("!/builtin/builtin_default.shader", R"(
+            default_shader = graphic::shader::create("!/builtin/builtin_default.shader", R"(
 // Default shader
 import je.shader;
 
@@ -527,10 +527,10 @@ public let frag =
 
                     if (current_camera.viewport)
                         jegl_rend_to_framebuffer(rend_aim_buffer,
-                            current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
-                            current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT,
-                            current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH,
-                            current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT);
+                            (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
+                            (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
+                            (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
+                            (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                     else
                         jegl_rend_to_framebuffer(rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
@@ -648,7 +648,7 @@ public let frag =
 
                 // 用于消除阴影对象本身的阴影
                 _defer_light2d_shadow_sub_pass
-                    = { shader::load_source("!/builtin/defer_light2d_shadow_sub.shader", R"(
+                    = { shader::create("!/builtin/defer_light2d_shadow_sub.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -690,7 +690,7 @@ public func frag(vf: v2f)
 
                 // 用于产生点光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_point_pass
-                    = { shader::load_source("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
+                    = { shader::create("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -738,7 +738,7 @@ public func frag(vf: v2f)
 
                 // 用于产生点光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_point_pass
-                    = { shader::load_source("!/builtin/defer_light2d_shadow_point.shader", R"(
+                    = { shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -778,7 +778,7 @@ public func frag(vf: v2f)
 
                 // 用于产生平行光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_parallel_pass
-                    = { shader::load_source("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
+                    = { shader::create("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -826,7 +826,7 @@ public func frag(vf: v2f)
 
                 // 用于产生平行光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_parallel_pass
-                    = { shader::load_source("!/builtin/defer_light2d_shadow_parallel.shader", R"(
+                    = { shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
 import je.shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -866,7 +866,7 @@ public func frag(vf: v2f)
 
                 // 平行光照处理
                 _defer_light2d_parallel_light_pass
-                    = { shader::load_source("!/builtin/defer_light2d_parallel_light.shader",
+                    = { shader::create("!/builtin/defer_light2d_parallel_light.shader",
                         R"(
 import je.shader;
 
@@ -941,7 +941,7 @@ public func frag(vf: v2f)
 
                 // 点光照处理
                 _defer_light2d_point_light_pass
-                    = { shader::load_source("!/builtin/defer_light2d_point_light.shader",
+                    = { shader::create("!/builtin/defer_light2d_point_light.shader",
                         R"(
 import je.shader;
 
@@ -1027,7 +1027,7 @@ public func frag(vf: v2f)
                 };
 
                 _defer_light2d_mix_light_effect_pass
-                    = { shader::load_source("!/builtin/defer_light2d_mix_light.shader",
+                    = { shader::create("!/builtin/defer_light2d_mix_light.shader",
                         R"(
 import je.shader;
 
@@ -1273,7 +1273,7 @@ public func frag(vf: v2f)
 
                         if (light2dpass != nullptr)
                         {
-                            auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr )
+                            auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
                                 ? rendbuf->framebuffer->resouce()
                                 : nullptr;
 
@@ -1822,10 +1822,10 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     {
                         if (current_camera.viewport)
                             jegl_rend_to_framebuffer(rend_aim_buffer,
-                                current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
-                                current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT,
-                                current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH,
-                                current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT);
+                                (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
+                                (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
+                                (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
+                                (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                         else
                             jegl_rend_to_framebuffer(rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
@@ -1959,8 +1959,8 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 jegl_uniform_float2(
                                     using_light_shader_pass->resouce(),
                                     using_light_shader_pass->m_builtin->m_builtin_uniform_tiling,
-                                    light2d.shadow->resolution_width,
-                                    light2d.shadow->resolution_height
+                                    (float)light2d.shadow->resolution_width,
+                                    (float)light2d.shadow->resolution_height
                                 );
                             }
 
@@ -1998,10 +1998,10 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         // Set target buffer.
                         if (current_camera.viewport)
                             jegl_rend_to_framebuffer(rend_aim_buffer,
-                                current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH,
-                                current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT,
-                                current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH,
-                                current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT);
+                                (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
+                                (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
+                                (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
+                                (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                         else
                             jegl_rend_to_framebuffer(rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 

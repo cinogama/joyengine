@@ -40,7 +40,7 @@ namespace jeapi::gui::form
                 WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
 
             static let WARNICON = texture::load("!/builtin/icon/warning.png")->val;
-            ImageSize(WARNICON, 32, 32);
+            ImageSize(WARNICON, 32., 32.);
 
             SameLine();
 

@@ -383,7 +383,7 @@ R"(
     extern("libjoyecs", "je_gui_image")
     public func ImageScale(tex: je::graphic::texture, scale: real)=> void;
     extern("libjoyecs", "je_gui_image")
-    public func ImageSize(tex: je::graphic::texture, width: int, height: int)=> void;
+    public func ImageSize(tex: je::graphic::texture, width: real, height: real)=> void;
 
 )"
 R"(
@@ -660,7 +660,7 @@ WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args, size_t argc)
 }
 WO_API wo_api je_gui_push_id(wo_vm vm, wo_value args, size_t argc)
 {
-    ImGui::PushID(wo_int(args + 0));
+    ImGui::PushID((int)wo_int(args + 0));
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_pop_id(wo_vm vm, wo_value args, size_t argc)
@@ -777,7 +777,7 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 3);
     jegl_using_resource((*texture)->resouce());
 
-    list->AddImage((ImTextureID)(*texture)->resouce()->m_uint1, val2vec2(args + 1), val2vec2(args + 2), ImVec2(0, 1), ImVec2(1, 0));
+    list->AddImage((ImTextureID)(intptr_t)(*texture)->resouce()->m_uint1, val2vec2(args + 1), val2vec2(args + 2), ImVec2(0, 1), ImVec2(1, 0));
     return wo_ret_void(vm);
 }
 
@@ -808,10 +808,10 @@ WO_API wo_api je_gui_openpopup_on_item_click(wo_vm vm, wo_value args, size_t arg
         if (wo_valuetype(args + 0) == WO_STRING_TYPE)
             ImGui::OpenPopupOnItemClick(wo_string(args + 0));
         else
-            ImGui::OpenPopupOnItemClick(nullptr, wo_int(args + 0));
+            ImGui::OpenPopupOnItemClick(nullptr, (ImGuiPopupFlags)wo_int(args + 0));
     }
     else
-        ImGui::OpenPopupOnItemClick(wo_string(args + 0), wo_int(args + 1));
+        ImGui::OpenPopupOnItemClick(wo_string(args + 0), (ImGuiPopupFlags)wo_int(args + 1));
     return wo_ret_void(vm);
 }
 
@@ -915,7 +915,7 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
     for (size_t i = 0; i < items.size(); i++)
         items[i] = wo_string(wo_arr_get(args + 1, i));
 
-    bool val_changed = ImGui::ListBox(wo_string(args + 0), &selected_item, items.data(), items.size(), max_height_item);
+    bool val_changed = ImGui::ListBox(wo_string(args + 0), &selected_item, items.data(), (int)items.size(), max_height_item);
 
     if (val_changed)
         return wo_ret_option_int(vm, selected_item);
@@ -925,7 +925,7 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args, size_t argc)
 {
     //func ListBox(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
-    int origin_selected_index = wo_int(args + 2);
+    int origin_selected_index = (int)wo_int(args + 2);
     int selected_index = -1;
     bool value_updated = false;
     if (ImGui::BeginListBox(wo_string(args + 0), ImVec2(wo_float(args + 3), wo_float(args + 4))))
@@ -937,7 +937,7 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args, size_t argc)
             if (ImGui::Selectable(item, i == origin_selected_index))
             {
                 value_updated = true;
-                selected_index = i;
+                selected_index = (int)i;
             }
 
         }
@@ -962,11 +962,11 @@ WO_API wo_api je_gui_begin(wo_vm vm, wo_value args, size_t argc)
     if (argc == 3)
     {
         bool showing = true;
-        ImGui::Begin(wo_string(args), &showing, wo_int(args + 1));
+        ImGui::Begin(wo_string(args), &showing, (ImGuiWindowFlags)wo_int(args + 1));
         windows_flag = showing;
     }
     else if (argc == 2)
-        windows_flag = ImGui::Begin(wo_string(args), 0, wo_int(args + 1));
+        windows_flag = ImGui::Begin(wo_string(args), 0, (ImGuiWindowFlags)wo_int(args + 1));
     else
         windows_flag = ImGui::Begin(wo_string(args));
 
@@ -980,7 +980,7 @@ WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args, size_t argc)
     bool windows_flag = false;
 
     bool showing = true;
-    ImGui::Begin(wo_string(args), &showing, wo_int(args + 1));
+    ImGui::Begin(wo_string(args), &showing, (ImGuiWindowFlags)wo_int(args + 1));
     windows_flag = showing;
 
     if (ImGui::IsWindowFocused())
@@ -1119,22 +1119,22 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
     jegl_using_resource((*texture)->resouce());
 
     if (argc == 1)
-        ImGui::Image((ImTextureID)((*texture)->resouce())->m_uint1,
+        ImGui::Image((ImTextureID)(intptr_t)((*texture)->resouce())->m_uint1,
             ImVec2(
-                ((*texture)->resouce())->m_raw_texture_data->m_width,
-                ((*texture)->resouce())->m_raw_texture_data->m_height
+                (float)((*texture)->resouce())->m_raw_texture_data->m_width,
+                (float)((*texture)->resouce())->m_raw_texture_data->m_height
             ), ImVec2(0, 1), ImVec2(1, 0));
     else if (argc == 2)
-        ImGui::Image((ImTextureID)((*texture)->resouce())->m_uint1,
+        ImGui::Image((ImTextureID)(intptr_t)((*texture)->resouce())->m_uint1,
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
             ), ImVec2(0, 1), ImVec2(1, 0));
     else if (argc == 3)
-        ImGui::Image((ImTextureID)((*texture)->resouce())->m_uint1,
+        ImGui::Image((ImTextureID)(intptr_t)((*texture)->resouce())->m_uint1,
             ImVec2(
-                wo_int(args + 1),
-                wo_int(args + 2)
+                wo_float(args + 1),
+                wo_float(args + 2)
             ), ImVec2(0, 1), ImVec2(1, 0));
 
     return wo_ret_void(vm);
@@ -1147,19 +1147,19 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
     jegl_using_resource((*texture)->resouce());
     bool result = false;
     if (argc == 1)
-        result = ImGui::ImageButton((ImTextureID)((*texture)->resouce())->m_uint1,
+        result = ImGui::ImageButton((ImTextureID)(intptr_t)((*texture)->resouce())->m_uint1,
             ImVec2(
-                ((*texture)->resouce())->m_raw_texture_data->m_width,
-                ((*texture)->resouce())->m_raw_texture_data->m_height
+                (float)((*texture)->resouce())->m_raw_texture_data->m_width,
+                (float)((*texture)->resouce())->m_raw_texture_data->m_height
             ), ImVec2(0, 1), ImVec2(1, 0));
     else if (argc == 2)
-        result = ImGui::ImageButton((ImTextureID)((*texture)->resouce())->m_uint1,
+        result = ImGui::ImageButton((ImTextureID)(intptr_t)((*texture)->resouce())->m_uint1,
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
             ), ImVec2(0, 1), ImVec2(1, 0));
     else if (argc == 3)
-        result = ImGui::ImageButton((ImTextureID)((*texture)->resouce())->m_uint1,
+        result = ImGui::ImageButton((ImTextureID)(intptr_t)((*texture)->resouce())->m_uint1,
             ImVec2(
                 wo_float(args + 1),
                 wo_float(args + 2)
@@ -1460,7 +1460,7 @@ void jegui_init(void* window_handle, bool reboot)
         auto* file_buf = je_mem_alloc(ttf_file->m_file_length);
         jeecs_file_read(file_buf, sizeof(char), ttf_file->m_file_length, ttf_file);
 
-        io.Fonts->AddFontFromMemoryTTF(file_buf, ttf_file->m_file_length, 16, nullptr,
+        io.Fonts->AddFontFromMemoryTTF(file_buf, (int)ttf_file->m_file_length, 16, nullptr,
             io.Fonts->GetGlyphRangesChineseFull());
 
         // je_mem_free(file_buf); // No need to free.

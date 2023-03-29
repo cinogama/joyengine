@@ -635,7 +635,7 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t argc)
 {
-    je_io_update_windowsize(wo_int(args + 0), wo_int(args + 1));
+    je_io_update_windowsize((int)wo_int(args + 0), (int)wo_int(args + 1));
     auto winsz = jeecs::input::windowsize();
     wo_set_int(args + 0, (wo_int_t)winsz.x);
     wo_set_int(args + 1, (wo_int_t)winsz.y);
@@ -866,7 +866,7 @@ WO_API wo_api wojeapi_native_value_set_int(wo_vm vm, wo_value args, size_t argc)
 {
     int* value = (int*)wo_pointer(args + 0);
 
-    *value = wo_int(args + 1);
+    *value = (int)wo_int(args + 1);
     return wo_ret_void(vm);
 }
 
@@ -955,7 +955,7 @@ WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc
 ///////////////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_texture = jeecs::graphic::texture::load_file(wo_string(args + 0));
+    auto* loaded_texture = jeecs::graphic::texture::load(wo_string(args + 0));
 
     if (loaded_texture != nullptr)
         return wo_ret_option_gchandle(vm,
@@ -1106,7 +1106,7 @@ WO_API wo_api wojeapi_character_get_texture(wo_vm vm, wo_value args, size_t argc
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_shader = jeecs::graphic::shader::load_file(wo_string(args + 0));
+    auto* loaded_shader = jeecs::graphic::shader::load(wo_string(args + 0));
 
     if (loaded_shader != nullptr)
     {
@@ -1121,7 +1121,7 @@ WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_shader = jeecs::graphic::shader::load_source(wo_string(args + 0), wo_string(args + 1));
+    auto* loaded_shader = jeecs::graphic::shader::create(wo_string(args + 0), wo_string(args + 1));
     if (loaded_shader != nullptr)
     {
         return wo_ret_gchandle(vm,

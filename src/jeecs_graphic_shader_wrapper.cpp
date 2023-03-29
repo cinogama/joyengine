@@ -539,14 +539,14 @@ struct vertex_in_data_storage
     }
     jegl_shader_value* get_val_at(size_t pos, jegl_shader_value::type type)
     {
-        auto fnd = m_in_from_vao_guard.find(pos);
+        auto fnd = m_in_from_vao_guard.find((int)pos);
         if (fnd != m_in_from_vao_guard.end())
         {
             if (fnd->second->get_type() != type)
                 return nullptr;
             return fnd->second;
         }
-        auto& shval = m_in_from_vao_guard[pos];
+        auto& shval = m_in_from_vao_guard[(int)pos];
         shval = new jegl_shader_value(type);
         shval->m_shader_in_index = pos;
         return shval;
@@ -657,7 +657,7 @@ WO_API wo_api jeecs_shader_create_struct_define(wo_vm vm, wo_value args, size_t 
 WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args, size_t argc)
 {
     shader_struct_define* block = (shader_struct_define*)wo_pointer(args + 0);
-    block->binding_place = wo_int(args + 1);
+    block->binding_place = (uint32_t)wo_int(args + 1);
     return wo_ret_void(vm);
 }
 
@@ -686,7 +686,7 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size
 
     // is vertex out, check it
     if (wo_valuetype(voutstruct) != WO_STRUCT_TYPE
-        || (structsz = wo_lengthof(voutstruct)) == 0
+        || (structsz = (uint16_t)wo_lengthof(voutstruct)) == 0
         || (wo_bool(args + 0)
             ? jegl_shader_value::type::FLOAT4 != ((jegl_shader_value*)wo_pointer(wo_struct_get(voutstruct, 0)))->get_type()
             : false))

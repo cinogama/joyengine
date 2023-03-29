@@ -1,5 +1,7 @@
 #pragma once
 
+#define _CRT_SECURE_NO_WARNINGS
+
 #ifndef __cplusplus
 #error jeecs.h only support for c++
 #else
@@ -2132,6 +2134,8 @@ namespace jeecs
 
                     member_info_ptr = member_info_ptr->m_next_member;
                 }
+                jeecs::debug::logerr("Failed to find member named: '%s' in '%s'.", name, this->m_typename);
+                return nullptr;
             }
         };
 
@@ -2790,6 +2794,11 @@ namespace jeecs
             return (float)_m_delta_time;
         }
 
+        inline double delta_dtime() const noexcept
+        {
+            return _m_delta_time;
+        }
+
 #define PreUpdate PreUpdate
 #define Update Update
 #define LateUpdate LateUpdate
@@ -3163,22 +3172,22 @@ namespace jeecs
         {
             int x;
             int y;
-            constexpr ivec2(int _x = 0.f, int _y = 0.f) noexcept
+            constexpr ivec2(int _x = 0, int _y = 0) noexcept
                 : x(_x)
                 , y(_y)
             {
 
             }
             constexpr ivec2(const vec2& _v2)noexcept
-                : x(_v2.x)
-                , y(_v2.y)
+                : x((int)_v2.x)
+                , y((int)_v2.y)
             {
 
             }
 
             constexpr ivec2(vec2&& _v2)noexcept
-                : x(_v2.x)
-                , y(_v2.y)
+                : x((int)_v2.x)
+                , y((int)_v2.y)
             {
 
             }
@@ -3215,7 +3224,7 @@ namespace jeecs
             }
             inline constexpr ivec2 operator / (int _f) const noexcept
             {
-                return vec2(x / _f, y / _f);
+                return ivec2(x / _f, y / _f);
             }
 
             inline constexpr ivec2& operator = (const ivec2& _v2) noexcept = default;
@@ -3239,8 +3248,8 @@ namespace jeecs
             }
             inline constexpr ivec2& operator *= (float _f) noexcept
             {
-                x *= _f;
-                y *= _f;
+                x = (int)((float)x * _f);
+                y = (int)((float)y * _f);
                 return *this;
             }
             inline constexpr ivec2& operator /= (const ivec2& _v2) noexcept
@@ -3911,7 +3920,7 @@ namespace jeecs
             {
             }
         public:
-            static texture* load_file(const std::string& str)
+            static texture* load(const std::string& str)
             {
                 jegl_resource* res = jegl_load_texture(str.c_str());
                 if (res != nullptr)
@@ -4017,10 +4026,12 @@ namespace jeecs
                 assert(resouce()->m_raw_texture_data != nullptr);
                 return resouce()->m_raw_texture_data->m_width;
             }
-            inline math::vec2 size() const noexcept
+            inline math::ivec2 size() const noexcept
             {
                 assert(resouce()->m_raw_texture_data != nullptr);
-                return math::vec2(resouce()->m_raw_texture_data->m_width, resouce()->m_raw_texture_data->m_height);
+                return math::ivec2(
+                    (int)resouce()->m_raw_texture_data->m_width, 
+                    (int)resouce()->m_raw_texture_data->m_height);
             }
         };
 
@@ -4036,14 +4047,14 @@ namespace jeecs
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
-            static shader* load_source(const std::string& name_path, const std::string& src)
+            static shader* create(const std::string& name_path, const std::string& src)
             {
                 jegl_resource* res = jegl_load_shader_source(name_path.c_str(), src.c_str(), true);
                 if (res != nullptr)
                     return new shader(res);
                 return nullptr;
             }
-            static shader* load_file(const std::string& src_path)
+            static shader* load(const std::string& src_path)
             {
                 jegl_resource* res = jegl_load_shader(src_path.c_str());
                 if (res != nullptr)
@@ -4498,10 +4509,10 @@ namespace jeecs
                         else if (ch != L'\n')
                         {
                             int px_min = next_ch_x + 0 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
-                            int py_min = -next_ch_y + 0 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
+                            int py_min = -next_ch_y + 0 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * (float)font_base.m_size);
 
-                            int px_max = next_ch_x + gcs->m_texture->width() - 1 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
-                            int py_max = -next_ch_y + gcs->m_texture->height() - 1 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
+                            int px_max = next_ch_x + (int)gcs->m_texture->width() - 1 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
+                            int py_max = -next_ch_y + (int)gcs->m_texture->height() - 1 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
 
                             min_px = min_px > px_min ? px_min : min_px;
                             min_py = min_py > py_min ? py_min : min_py;

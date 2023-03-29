@@ -58,7 +58,7 @@ void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod
 
 void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
 {
-    je_io_set_wheel(0, je_io_wheel(0) + yoffset);
+    je_io_set_wheel(0, je_io_wheel(0) + (float)yoffset);
 }
 
 void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)
@@ -99,7 +99,7 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     WINDOWS_SIZE_WIDTH = config->m_windows_width ? config->m_windows_width : config->m_resolution_x;
     WINDOWS_SIZE_HEIGHT = config->m_windows_height ? config->m_windows_height : config->m_resolution_y;
 
-    je_io_set_windowsize(WINDOWS_SIZE_WIDTH, WINDOWS_SIZE_HEIGHT);
+    je_io_set_windowsize((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT);
 
     WINDOWS_TITLE = config->m_title ? config->m_title : WINDOWS_TITLE;
 
@@ -370,13 +370,13 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
                 glTexImage2DMultisample(gl_texture_type,
                     msaa_level,
                     GL_DEPTH_COMPONENT,
-                    resource->m_raw_texture_data->m_width,
-                    resource->m_raw_texture_data->m_height,
+                    (GLsizei)resource->m_raw_texture_data->m_width,
+                    (GLsizei)resource->m_raw_texture_data->m_height,
                     GL_FALSE);
             else
                 glTexImage2D(gl_texture_type, 0, GL_DEPTH_COMPONENT,
-                    resource->m_raw_texture_data->m_width,
-                    resource->m_raw_texture_data->m_height,
+                    (GLsizei)resource->m_raw_texture_data->m_width,
+                    (GLsizei)resource->m_raw_texture_data->m_height,
                     0,
                     GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,
                     NULL
@@ -406,14 +406,14 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
                 glTexImage2DMultisample(gl_texture_type,
                     msaa_level,
                     texture_aim_format,
-                    resource->m_raw_texture_data->m_width,
-                    resource->m_raw_texture_data->m_height,
+                    (GLsizei)resource->m_raw_texture_data->m_width,
+                    (GLsizei)resource->m_raw_texture_data->m_height,
                     GL_FALSE);
             else
                 glTexImage2D(gl_texture_type,
                     0, texture_aim_format,
-                    resource->m_raw_texture_data->m_width,
-                    resource->m_raw_texture_data->m_height,
+                    (GLsizei)resource->m_raw_texture_data->m_width,
+                    (GLsizei)resource->m_raw_texture_data->m_height,
                     0, texture_src_format,
                     is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
                     resource->m_raw_texture_data->m_pixels);
@@ -491,7 +491,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         for (GLenum attachment_index = GL_COLOR_ATTACHMENT0; attachment_index < attachment; ++attachment_index)
             attachments.push_back(attachment_index);
 
-        glDrawBuffers(attachments.size(), attachments.data());
+        glDrawBuffers((GLsizei)attachments.size(), attachments.data());
 
         resource->m_uint1 = fbo;
     }
@@ -502,9 +502,9 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer_object);
         glBufferData(GL_UNIFORM_BUFFER,
             resource->m_raw_uniformbuf_data->m_buffer_size,
-            NULL, GL_DYNAMIC_COPY); // Ô¤·ÖÅä¿Õ¼ä
+            NULL, GL_DYNAMIC_COPY); // é¢„åˆ†é…ç©ºé—´
 
-        glBindBufferRange(GL_UNIFORM_BUFFER, resource->m_raw_uniformbuf_data->m_buffer_binding_place,
+        glBindBufferRange(GL_UNIFORM_BUFFER, (GLuint)resource->m_raw_uniformbuf_data->m_buffer_binding_place,
             uniform_buffer_object, 0, resource->m_raw_uniformbuf_data->m_buffer_size);
 
         resource->m_uint1 = uniform_buffer_object;
@@ -749,7 +749,7 @@ void gl_draw_vertex_with_shader(jegl_resource* vert)
         GL_QUADS };
 
     jegl_using_resource(vert);
-    glDrawArrays(DRAW_METHODS[vert->m_raw_vertex_data->m_type], 0, vert->m_raw_vertex_data->m_point_count);
+    glDrawArrays(DRAW_METHODS[vert->m_raw_vertex_data->m_type], 0, (GLsizei)vert->m_raw_vertex_data->m_point_count);
 }
 
 void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
