@@ -54,6 +54,7 @@ namespace editor::gui
                             for (let item_name, iconfig : context->get_project->get_configs)
                             {
                                 do iconfig->edit();
+                                Separator();
                             }
                             End();
                             return open;

@@ -17,6 +17,17 @@ WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, je_build_version());
 }
 
+WO_API wo_api wojeapi_get_sleep_suppression(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, je_clock_get_sleep_suppression());
+}
+
+WO_API wo_api wojeapi_set_sleep_suppression(wo_vm vm, wo_value args, size_t argc)
+{
+    je_clock_set_sleep_suppression(wo_real(args + 0));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_woolang_version(wo_vm vm, wo_value args, size_t argc)
 {
     std::string woolang_version_info = "Woolang ";
@@ -47,8 +58,8 @@ WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc
     std::function<void(int, const char*)>* callbacks =
         new std::function<void(int, const char*)>([&](int level, const char* msg) {
         while (log_buffer_mx.test_and_set());
-        log_buffer.push_back({ level, msg });
-        log_buffer_mx.clear();
+    log_buffer.push_back({ level, msg });
+    log_buffer_mx.clear();
             });
 
     return wo_ret_handle(vm,
@@ -1367,6 +1378,12 @@ namespace je
 
     namespace editor
     {
+        extern("libjoyecs", "wojeapi_get_sleep_suppression")
+        public func get_sleep_suppression()=> real;
+
+        extern("libjoyecs", "wojeapi_set_sleep_suppression")
+        public func set_sleep_suppression(tm: real)=> void;
+
         extern("libjoyecs", "wojeapi_build_version")
         public func build_version()=> string;
     

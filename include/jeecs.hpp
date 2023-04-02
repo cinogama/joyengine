@@ -536,6 +536,8 @@ JE_API const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity);
 JE_API const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
 
+JE_API double je_clock_get_sleep_suppression();
+JE_API void je_clock_set_sleep_suppression(double v);
 JE_API double je_clock_time();
 JE_API jeecs::typing::ms_stamp_t je_clock_time_stamp();
 JE_API void je_clock_sleep_until(double time);

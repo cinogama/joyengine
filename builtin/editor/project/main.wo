@@ -212,11 +212,28 @@ namespace editor
                     func(origin_text)
                     {
                         Text("项目描述");
-                        return InputTextMultilineSize("##", origin_text, 400., 200.);
+                        return InputTextMultilineSize("##项目描述", origin_text, 400., 200.);
                     },
                     \o,n = true;,
                     \val = val;,
                     \str = option::value(str);,
+                )),
+                ["JE_ENGINE_TIME_SLEEP_SUPPRESSION"] = IConfig::create(Config::create(
+                    do nil,
+                    func(_create_default_configs)
+                    {
+                        Text("引擎提前唤醒间隔");
+                        let result = InputFloat("##引擎提前唤醒间隔", je::editor::get_sleep_suppression());
+                        do result->>\suppression=je::editor::set_sleep_suppression(suppression);;
+                        TextDisabled("适当提高此值可以增加执行间隔和帧数的稳定性");
+                        return result->>\_=do nil;;
+                    },
+                    \o,n = true;,
+                    \_ = je::editor::get_sleep_suppression(): string;,
+                    func (str){
+                        je::editor::set_sleep_suppression(str: real);
+                        return option::value(do nil);
+                    },
                 )),
             }mut;
         }
