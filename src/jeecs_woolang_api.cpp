@@ -1333,6 +1333,7 @@ WO_API wo_api wojeapi_set_uniforms_float4(wo_vm vm, wo_value args, size_t argc)
 // defined in 'jeecs_core_editor_system.hpp'
 WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args, size_t argc);
+WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args, size_t argc);
@@ -1869,6 +1870,9 @@ R"(
 
             extern("libjoyecs", "wojeapi_store_bad_shader_name")
                 public func store_name_for_bad_shader_update(e: entity, shad_path: string)=> bad_shader_handle_t;
+
+            extern("libjoyecs", "wojeapi_remove_bad_shader_name")
+                public func remove_name_for_bad_shader_update(e: entity, shad_path: string)=> void;
 
             namespace bad_shader_handle_t
             {

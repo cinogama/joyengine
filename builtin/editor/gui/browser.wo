@@ -441,7 +441,19 @@ namespace editor::gui
                 });
         }
     }
-
+    public func update_shader(context: EditorContext, path: string)
+    {
+        // 从universe中获取所有world，更新world中所有实体的shader
+        do context->get_project->get_env->get_universe
+            ->  editor::get_all_worlds
+            ->> \w: je::world = w
+                ->  editor::get_all_entities
+                ->> \e: je::entity = 
+                    e->editor::graphic::try_reload_shaders(path, path)
+                    ;
+                ;
+            ;
+    }
     func file_item_menu(path: PathInfo, context: EditorContext)
     {
         let NOT_MODIFIABLE_FILES = [".jeproj4", ".jemodule4"];
@@ -451,16 +463,7 @@ namespace editor::gui
         {
             if (MenuItem(F"更新此着色器"))
             {
-                // 从universe中获取所有world，更新world中所有实体的shader
-                do context->get_project->get_env->get_universe
-                    ->  editor::get_all_worlds
-                    ->> \w: je::world = w
-                        ->  editor::get_all_entities
-                        ->> \e: je::entity = 
-                            e->editor::graphic::try_reload_shaders(path.path, path.path)
-                            ;
-                        ;
-                    ;
+                update_shader(context, path.path);
             }
             Separator();
         }

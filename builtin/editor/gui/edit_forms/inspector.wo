@@ -235,10 +235,24 @@ namespace editor::gui::edit_forms
 
                                 for (let _, path: bad_shader_paths)
                                 {
-                                    if (Button(path))
-                                    {
-                                        std::panic("TODO");
-                                    }
+                                    do Button(path);
+                                    jeapi::gui::context_menu(func(){
+                                        do MenuItemEnabled(path, false);
+                                        do MenuItemEnabled("请选择其中一项来尝试解决问题", false);
+                                        Separator();
+                                        if (MenuItem("重新编译着色器"))
+                                        {
+                                            update_shader(context, path);
+                                        }
+                                        if (MenuItem("移除这个着色器"))
+                                        {
+                                            let eid = cur_e->jeapi::debug::get_entity_editor_id();
+                                            jeapi::gui::form::ask("确认？", F"即将移除着色器: {path}", func(opt){
+                                                if (opt)
+                                                    eid->justdo(\e = e->editor::remove_name_for_bad_shader_update(path););
+                                            });
+                                        } 
+                                    });
                                 }
                             }
                             else
