@@ -3,6 +3,7 @@
 
 import je;
 import builtin.api.gui.form.msg;
+import builtin.api.tool.varify;
 
 using je;
 
@@ -87,8 +88,12 @@ namespace jeapi
                             ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
                         };;
         }
-        public func world(w: je::world)=> dict<string, dynamic>
+        public func world(w: je::world)=> result<dict<string, dynamic>, array<je::entity>>
         {
+            let bad_shader_entity = varify::varify_all_shader_is_valid_in_world(w);
+            if (!bad_shader_entity->empty)
+                return result::err(bad_shader_entity);
+
             static let INVISABLE = je::typeinfo::load("Editor::Invisable")->val;
 
             alias entity_info_t = dict<string, dynamic>;
@@ -109,12 +114,12 @@ namespace jeapi
             //         ->map(\st: typeinfo = st->name;)
             //         ->forall(\n: string = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
     
-            return {
+            return result::ok({
                 ["name"] = w->editor::name: dynamic,
                 ["entities"] = entities_json_list: dynamic,
                 ["systems"] = editing_systems_type_list: dynamic,
                 // ["runtime_systems"] = runtime_systems_type_list: dynamic,
-            };
+            });
         }
     }
 

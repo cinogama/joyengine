@@ -531,9 +531,9 @@ namespace editor
         public func serialize_world(self: Project, w: je::world)
         {
             return self->get_project_world(w)
-                ->> \pw = jeapi::serialize::world(w)
-                    ->  apply("path", pw.m_world_path as string: dynamic)
-                    ->  apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic)
+                =>> \pw = jeapi::serialize::world(w)->okay
+                    ->> \dat = dat->apply("path", pw.m_world_path as string: dynamic);
+                    ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
                     ;
                 ;
         }

@@ -7,16 +7,12 @@ namespace jeapi::varify
         static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
         return e->editor::get_component(BadShadersUniform)->has;
     }
-    public func varify_all_shader_is_valid_in_all_world(u: je::universe)
+    public func varify_all_shader_is_valid_in_world(w: je::world)
     {
         // 检查所有世界中所有实体是否有非法的shader？
         // 返回所有shader非法的实体
-
-        let bad_shader_entitys = u->editor::get_all_worlds
-            =>> \w = w->editor::get_all_entities;
-            ->  forall(\e = has_bad_shader(e);)
+        return w->editor::get_all_entities
+            -> forall(\e = has_bad_shader(e);)
             ;
-
-        return bad_shader_entitys;
     }
 }
