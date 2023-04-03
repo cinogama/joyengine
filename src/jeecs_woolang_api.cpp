@@ -1331,6 +1331,7 @@ WO_API wo_api wojeapi_set_uniforms_float4(wo_vm vm, wo_value args, size_t argc)
 }
 
 // defined in 'jeecs_core_editor_system.hpp'
+WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, size_t argc);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args, size_t argc);
@@ -1861,53 +1862,61 @@ R"(
 
         namespace editor
         {
+            using bad_shader_handle_t = handle;
+
+            extern("libjoyecs", "wojeapi_get_bad_shader_list_of_entity")
+                public func get_bad_shader_paths(e: entity)=> array<string>;
+
             extern("libjoyecs", "wojeapi_store_bad_shader_name")
-                public func store_name_for_bad_shader_update(e: entity, shad_path: string)=> void;
+                public func store_name_for_bad_shader_update(e: entity, shad_path: string)=> bad_shader_handle_t;
 
-            public func store_uniform_dat_for_bad_shader_update<T>(self: entity, shad_path: string, name: string, val: T)
-                where std::declval:<T>() is int
-                       || std::declval:<T>() is real
-                       || std::declval:<T>() is (real, real)
-                       || std::declval:<T>() is (real, real, real)
-                       || std::declval:<T>() is (real, real, real, real);
+            namespace bad_shader_handle_t
             {
-                if (std::declval:<T>() is int)
+                public func store_uniform_dat_for_bad_shader_update<T>(shadhandle: bad_shader_handle_t, name: string, val: T)
+                    where std::declval:<T>() is int
+                           || std::declval:<T>() is real
+                           || std::declval:<T>() is (real, real)
+                           || std::declval:<T>() is (real, real, real)
+                           || std::declval:<T>() is (real, real, real, real);
                 {
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
-                    func _set_uniform_int(e: entity, shad_path: string, name: string, val: int)=> void;
+                    if (std::declval:<T>() is int)
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
+                        func _set_uniform_int(shadhandle: bad_shader_handle_t, name: string, val: int)=> void;
 
-                    _set_uniform_int(self, shad_path, name, val);
-                }
-                else if (std::declval:<T>() is real)
-                {
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
-                    func _set_uniform_float(e: entity, shad_path: string, name: string, val: real)=> void;
+                        _set_uniform_int(shadhandle, name, val);
+                    }
+                    else if (std::declval:<T>() is real)
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
+                        func _set_uniform_float(shadhandle: bad_shader_handle_t, name: string, val: real)=> void;
 
-                    _set_uniform_float(self, shad_path, name, val);
+                        _set_uniform_float(shadhandle, name, val);
+                    }
+                    else if (std::declval:<T>() is (real, real))
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
+                        func _set_uniform_float2(shadhandle: bad_shader_handle_t, name: string, x: real, y: real)=> void;
+                        let (x, y) = val;
+                        _set_uniform_float2(shadhandle, name, x, y);
+                    }
+                    else if (std::declval:<T>() is (real, real, real))
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
+                        func _set_uniform_float3(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real)=> void;
+                        let (x, y, z) = val;
+                        _set_uniform_float3(shadhandle, name, x, y, z);
+                    }
+                    else if (std::declval:<T>() is (real, real, real, real))
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
+                        func _set_uniform_float4(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real, w: real)=> void;
+                        let (x, y, z, w) = val;
+                        _set_uniform_float4(shadhandle, name, x, y, z, w);
+                    }
+                    else
+                        std::panic("Here should not been exec.");
                 }
-                else if (std::declval:<T>() is (real, real))
-                {
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
-                    func _set_uniform_float2(e: entity, shad_path: string, name: string, x: real, y: real)=> void;
-                    let (x, y) = val;
-                    _set_uniform_float2(self, shad_path, name, x, y);
-                }
-                else if (std::declval:<T>() is (real, real, real))
-                {
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
-                    func _set_uniform_float3(e: entity, shad_path: string, name: string, x: real, y: real, z: real)=> void;
-                    let (x, y, z) = val;
-                    _set_uniform_float3(self, shad_path, name, x, y, z);
-                }
-                else if (std::declval:<T>() is (real, real, real, real))
-                {
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
-                    func _set_uniform_float4(e: entity, shad_path: string, name: string, x: real, y: real, z: real, w: real)=> void;
-                    let (x, y, z, w) = val;
-                    _set_uniform_float4(self, shad_path, name, x, y, z, w);
-                }
-                else
-                    std::panic("Here should not been exec.");
             }
 
             public using euid_t = string;

@@ -1,0 +1,10 @@
+namespace editor::varify
+{
+    public func varify_all_shader_is_valid_in_all_world()
+    {
+        // 检查所有世界中所有实体是否有非法的shader？
+        // 如果ok，返回ok，否则返回err
+
+        return result::ok(do nil);
+    }
+}

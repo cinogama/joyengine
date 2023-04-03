@@ -120,41 +120,39 @@ namespace jeapi
 
     namespace deserialize
     {
-        // 用于设置实体中shader的uniform参数，如果shader是挂掉的，那么设置uniform到BadShadersUniform里等待更新
-        func restore_shader_of_entity(e: je::entity, shad: option<je::graphic::shader>, spath: string, uname: string, val: array)
+        func restore_shader_of_entity<ResourceT>(shad: ResourceT, uname: string, val: array<dynamic>)
         {
             assert(val->len > 0);
             if (val[0] is int)
             {
                 assert(val->len == 1);
-                shad->has
-                    ? shad->val->set_uniform(uname, val[0] as int)
-                    | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname, val[0] as int);
+                _restore_shader_of_entity(shad, uname, val[0] as int);
             }
             else if (val[0] is real)
             {
                 if (val->len == 1)
-                    shad->has
-                        ? shad->val->set_uniform(uname, val[0] as real)
-                        | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname,  val[0] as real);
+                    _restore_shader_of_entity(shad, uname, val[0] as real);
                 else if (val->len == 2)
-                    shad->has
-                        ? shad->val->set_uniform(uname, (val[0] as real, val[1] as real))
-                        | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname, (val[0] as real, val[1] as real));
+                    _restore_shader_of_entity(shad, uname, (val[0] as real, val[1] as real));
                 else if (val->len == 3)
-                    shad->has
-                        ? shad->val->set_uniform(uname, (val[0] as real, val[1] as real, val[2] as real))
-                        | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname, (val[0] as real, val[1] as real, val[2] as real));
+                    _restore_shader_of_entity(shad, uname, (val[0] as real, val[1] as real, val[2] as real));
                 else if (val->len == 4)
-                    shad->has
-                        ? shad->val->set_uniform(uname, (val[0] as real, val[1] as real, val[2] as real, val[3] as real))
-                        | e->editor::store_uniform_dat_for_bad_shader_update(spath, uname, (val[0] as real, val[1] as real, val[2] as real, val[3] as real));
+                    _restore_shader_of_entity(shad, uname, (val[0] as real, val[1] as real, val[2] as real, val[3] as real));
                 else
                     std::panic("invalid uniform value length when restore.");
             }
             else
                 std::panic("invalid uniform type when restore.");
         }
+        // 用于设置实体中shader的uniform参数，如果shader是挂掉的，那么设置uniform到BadShadersUniform里等待更新
+        func _restore_shader_of_entity<RType, VType>(shad: RType, uname: string, val: VType)
+        {
+            if (shad is je::graphic::shader)
+                shad->set_uniform(uname, val);
+            else
+                shad->store_uniform_dat_for_bad_shader_update(uname, val);
+        }
+
         func _typeinfo_or_warning(typename: string)
         {
             let tinfo = je::typeinfo::load(typename);
@@ -197,15 +195,18 @@ namespace jeapi
                             shads->add((s, spath, shader_path_dat_pair: array[1] as dict));
                         }
                         return shads->toarray;
-                    };
+                    }
+                ->> func(arr)
+                    {
+                        if (! arr->forall(\d = d[0]->has == false;)->empty)
+                            return result::err(arr->>\d = (d[1], d[2]););
+                        else
+                            return result::ok(arr->>\d = (d[0]->val, d[2]););
+                    }
+                ;
 
             // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
-            let entity_has_bad_shader = shaders_and_dat
-                =>> \sds = sds
-                    ->> \sd = !sd[0]->has;
-                    ->  reduce(\l: bool, r: bool = l?l|r;)
-                    ;
-                ->  valor(false);
+            let entity_has_bad_shader = shaders_and_dat->>\r=r->iserr;->valor(false);
 
             let entity = w->add_entity(
                 component_types_dat
@@ -231,20 +232,26 @@ namespace jeapi
                 ;
             // 考虑一下异步加载？
             // 开始加载shader
-            entity->editor::graphic::set_shaders(
-                shaders_and_dat
-                    ->valor([])
-                    =>> func(sd)
-                        {
-                            let (s, spath, sdat) = sd;
-                            if (!s->has)
-                                entity->editor::store_name_for_bad_shader_update(spath);
+            match (shaders_and_dat->valor(result::ok([])))
+            {
+            ok(dats)?
+                {
+                    for (let _, (shad, uniform_vars) : dats)
+                    {
+                        for (let uname, uval: uniform_vars)
+                            restore_shader_of_entity(shad, uname as string, uval as array<dynamic>);
+                    }
+                    entity->editor::graphic::set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
+                }
+            err(dats)?
+                for (let _, (path, uniform_vars) : dats)
+                {
+                    let badshad = entity->editor::store_name_for_bad_shader_update(path);
 
-                            for (let uname, uval : sdat)
-                                restore_shader_of_entity(entity, s, spath, uname as string, uval as array);
-                            return s->has ? [s->val] | [];
-                        }
-                );
+                    for (let uname, uval: uniform_vars)
+                        restore_shader_of_entity(badshad, uname as string, uval as array<dynamic>);
+                }
+            }
 
             // 开始加载texture
             do entity_dat->get("textures")

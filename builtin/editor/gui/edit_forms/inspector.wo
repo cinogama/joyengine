@@ -223,56 +223,73 @@ namespace editor::gui::edit_forms
                     // 3. 遍历实体的材质（如果有
 
                     static let Shaders = je::typeinfo::load("Renderer::Shaders")->val();
+                    static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
                     match (cur_e->editor::get_component(Shaders))
                     {
                     value(shaders)?
                         {
-                            let mut shaders = cur_e->editor::graphic::get_shaders();
-
-                            let mut index = 0, mut shaders_has_updated = false;
-                            for (let _, shader : shaders->dup())
+                            if (cur_e->editor::get_component(BadShadersUniform)->has)
                             {
-                                match (show_shader(cur_e, shader, index))
-                                {
-                                AddShader(shad)?
-                                    {
-                                        shaders = shaders->inlay(index, shad);
-                                        shaders_has_updated = true;
-                                    }
-                                DelShader?
-                                    {
-                                        shaders = shaders->erase(index);
-                                        shaders_has_updated = true;
-                                    }
-                                DoNothing? /* 没有动作 */;
-                                }
-                                index += 1;
-                            } // end show shader.
+                                let bad_shader_paths = cur_e->editor::get_bad_shader_paths();
+                                TextDisabled(F"有{bad_shader_paths->len}个着色器存在问题:");
 
-                            TextDisabled("[拖动shader文件到此处添加新的pass]");
-                            match (jeapi::gui::widget::accept_file_for_current_widget())
-                            {
-                            value(shader_path)?
+                                for (let _, path: bad_shader_paths)
                                 {
-                                    // TODO: 为啥会有两个地方加载shader，这个地方的代码写得跟鬼一样
-                                    //      检查代码实现，上面也有一个加载shader，两边代码一模一样，
-                                    //      搞什么鬼
-                                    match (je::graphic::shader::load(shader_path))
+                                    if (Button(path))
                                     {
-                                    value(shader)?
-                                    {
-                                        shaders = shaders->append(shader);
-                                        shaders_has_updated = true;
-                                    }
-                                    none?
-                                        jeapi::gui::form::errmsg("加载着色器失败", F"无法加载文件{shader_path}作为着色器");
+                                        std::panic("TODO");
                                     }
                                 }
-                            none? /* 没有文件拖入，不干任何事情 */;
                             }
+                            else
+                            {
+                                let mut shaders = cur_e->editor::graphic::get_shaders();
 
-                            if (shaders_has_updated)
-                            cur_e->editor::graphic::set_shaders(shaders);
+                                let mut index = 0, mut shaders_has_updated = false;
+                                for (let _, shader : shaders->dup())
+                                {
+                                    match (show_shader(cur_e, shader, index))
+                                    {
+                                    AddShader(shad)?
+                                        {
+                                            shaders = shaders->inlay(index, shad);
+                                            shaders_has_updated = true;
+                                        }
+                                    DelShader?
+                                        {
+                                            shaders = shaders->erase(index);
+                                            shaders_has_updated = true;
+                                        }
+                                    DoNothing? /* 没有动作 */;
+                                    }
+                                    index += 1;
+                                } // end show shader.
+
+                                TextDisabled("[拖动shader文件到此处添加新的pass]");
+                                match (jeapi::gui::widget::accept_file_for_current_widget())
+                                {
+                                value(shader_path)?
+                                    {
+                                        // TODO: 为啥会有两个地方加载shader，这个地方的代码写得跟鬼一样
+                                        //      检查代码实现，上面也有一个加载shader，两边代码一模一样，
+                                        //      搞什么鬼
+                                        match (je::graphic::shader::load(shader_path))
+                                        {
+                                        value(shader)?
+                                        {
+                                            shaders = shaders->append(shader);
+                                            shaders_has_updated = true;
+                                        }
+                                        none?
+                                            jeapi::gui::form::errmsg("加载着色器失败", F"无法加载文件{shader_path}作为着色器");
+                                        }
+                                    }
+                                none? /* 没有文件拖入，不干任何事情 */;
+                                }
+
+                                if (shaders_has_updated)
+                                cur_e->editor::graphic::set_shaders(shaders);
+                            }
                         }
                     none?
                         Text("当前实体没有Renderer::Shaders组件");
