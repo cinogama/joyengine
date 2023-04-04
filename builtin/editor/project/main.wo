@@ -320,7 +320,7 @@ namespace editor
                 jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
                 return false;
             }
-            else if (!filesys::writeall(F"{self.m_path}/project.je4proj", dat as dict<string, dynamic>: string))
+            else if (!filesys::writeall(F"{self.m_path}/project.jeproj4", dat as dict<string, dynamic>: string))
             {
                 jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
                 return false;

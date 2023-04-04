@@ -2,6 +2,8 @@
 // 用于显示和编辑当前编辑世界中的实体
 
 import je.gui;
+
+import pkg.math;
 import builtin.api.gui.form.input;
 import builtin.api.gui.form.ask;
 import builtin.api.gui.form.msg;
@@ -53,12 +55,161 @@ namespace editor::gui::edit_forms
         }
         do child->editor::set_parent(parent.e, true);
     }
+    func fast_create_entity(context: EditorContext, w: je::world, name: string, cs: array<string>)
+    {
+        if (!context->get_project->validate_world_or_warning(w))
+        {
+            jeapi::gui::form::errmsg("失败", "无法创建实体，世界不存在。");
+            return;
+        }
+        w->add_entity(cs->>\tname = je::typeinfo::load(tname)->val;)
+            ->editor::set_name(name);
+    }
     public func entity_edit_context_menu(context: EditorContext, w: je::world, euid: option<jeapi::debug::Eeid>)
     {
         let has_editing_entity = euid->has;
         if (MenuItem("创建实体"))
             launch(show_entity_creator, (context, EntityContext::create()));
+        if (BeginMenu("快速创建实体"))
+        {
+            if (MenuItem("基本渲染实体"))
+            {
+                fast_create_entity(context, w, "默认物体", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                ]);
+            }
+            if (MenuItem("带2D阴影的基本渲染实体"))
+            {
+                fast_create_entity(context, w, "默认2D阴影物体", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                    "Light2D::Block",
+                ]);
+            }
+            Separator();
+            if (MenuItem("手动绘制的实体"))
+            {
+                using _EntityConfig = struct{
+                    name: mut string,
+                    width: mut real,
+                    height: mut real,
+                    x_pixel_count: mut int,
+                    y_pixel_count: mut int,            
+                };
+                let ctx = _EntityConfig{
+                    name = mut "建绘制实体",
+                    width = mut 1.0,
+                    height = mut 1.0,
+                    x_pixel_count = mut 16,
+                    y_pixel_count = mut 16,
+                };
+                launch(func(){
+                    let mut open = BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+                    Text("名称：");
+                    SameLine();
+                    do InputText("##name", ctx.name)->>\name = ctx.name = name;;
+                    Text("尺寸：");
+                    Text("x:");
+                    SameLine();
+                    do InputFloat("##x", ctx.width)->>func(vf){
+                        ctx.width = vf;
+                        ctx.x_pixel_count = math::round(vf * 16.0);
+                    };
+                    SameLine();
+                    Text("y:");
+                    SameLine();
+                    do InputFloat("##y", ctx.width)->>func(vf){
+                        ctx.height = vf;
+                        ctx.y_pixel_count = math::round(vf * 16.0);
+                    };
 
+                    Text("px:");
+                    SameLine();
+                    do InputInt("##px", ctx.x_pixel_count)->>func(vi){
+                        ctx.x_pixel_count = vi;
+                        ctx.y_pixel_count = math::round(vi: real / ctx.width  * ctx.height);
+                    };
+                    SameLine();
+                    Text("py:");
+                    SameLine();
+                    do InputInt("##py", ctx.y_pixel_count)->>\vi = ctx.y_pixel_count = vi;;
+                    End();
+
+                    return open;
+                }, ());
+            }
+            Separator();
+            if (MenuItem("2D光源（点）"))
+            {
+                fast_create_entity(context, w, "2D点光源", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Light2D::Color",
+                    "Light2D::Point",
+                    "Light2D::Shadow",
+                ]);
+            }
+            if (MenuItem("2D光源（平行）"))
+            {
+                fast_create_entity(context, w, "2D平行光源", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Light2D::Color",
+                    "Light2D::Parallel",
+                    "Light2D::Shadow",
+                ]);
+            }
+            Separator();
+            if (MenuItem("摄像机（透视）"))
+            {
+                fast_create_entity(context, w, "摄像机", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Camera::Clip",
+                    "Camera::Projection",
+                    "Camera::PerspectiveProjection",
+                    "Camera::Viewport",
+                ]);
+            }
+            if (MenuItem("摄像机（平行）"))
+            {
+                fast_create_entity(context, w, "摄像机", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Camera::Clip",
+                    "Camera::Projection",
+                    "Camera::OrthoProjection",
+                    "Camera::Viewport",
+                ]);
+            }
+            
+            EndMenu();
+        }
         Separator();
         if (MenuItemEnabled("复制", has_editing_entity))
         {
@@ -145,7 +296,6 @@ namespace editor::gui::edit_forms
                     ;
                 ;
         }
-        Separator();
     }
     func display_entity_and_child_tree(context: EditorContext, w: je::world, e: jeapi::debug::EntityChilds)
     {

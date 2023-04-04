@@ -160,6 +160,17 @@ func create_project_at(path: string, u: editor::Environment, f: mutable<bool>)
                         func(){
                             let p = editor::Project::create(projname, regular_path);
                             assert(p->save_project());
+
+                            // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
+                            do filesys::mkdir(F"{p.m_path}/resource");
+                            do filesys::mkdir(F"{p.m_path}/resource/texture");
+                            do filesys::writeall(F"{p.m_path}/resource/texture/readme.md", 
+@"# Texture 目录
+---
+此目录用于保存引擎自动生成的图像资源
+"@);
+                            do filesys::copy(F"{std::exepath()}/builtin/shader", F"{p.m_path}/resource/shader");
+
                             editor::gui::edit_project(p);
                         }
                     ;
@@ -170,7 +181,7 @@ func create_project_at(path: string, u: editor::Environment, f: mutable<bool>)
 
 func open_project_at(path: string, u: editor::Environment, f: mutable<bool>)
 {
-    let proj_path = F"{path}/project.je4proj";
+    let proj_path = F"{path}/project.jeproj4";
 
     // 确保目录存在
     if (! filesys::exist(proj_path))

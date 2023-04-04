@@ -991,19 +991,6 @@ namespace $$MODULE_NAME$$
                     where action = FileIcon(item, context);
                 ; 
         EndChild();
-
-        // 允许各种乱七八糟的东西拖到这里
-        // AcceptDrag(["JEEDITOR_WORLD"])
-        //     ->> \msg: (string, string) = 
-        //             type == "JEEDITOR_WORLD" 
-        //             ? Project::GetCurrentProject()
-        //                 ->  FindWorld(data: handle: je::world)
-        //                 ->> \w: Project::World = w->SaveTo(new_showing_path);
-        //                 ->  or(\=launch(jeapi::gui::form::errmsg, ("保存世界失败", "没有在项目中找到此实例对应的信息"));)
-        //             | std::panic(F"Unhandler drag type: '{type}'.")
-        //             where (type, data) = msg
-        //         ;
-        //     ;
     }
 
     // 左侧的目录概况
