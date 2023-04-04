@@ -132,30 +132,11 @@ namespace editor::gui::edit_forms
                             ->je::editor::apply_camera_framebuf_setting(available_width: int, available_height: int);
                     }
 
-                    // if (BeginPopup("RightClickContextMenu"))
-                    // {
-                    //     // if (MenuItem("新建实体"))
-                    //     //     launch(EntityCreator::show, (EntityCreator::create_context(),));
-                    //     // if (MenuItem("粘贴实体"))
-                    //     // {
-                    //     //     let c = je::gui::GetClipboardText();
-                    //     //     match (je::world::rend()
-                    //     //         =>> \w = c->todict 
-                    //     //             =>> \dic = editor::Serialize::restore_entity(w, dic);
-                    //     //         ;)
-                    //     //     {
-                    //     //     value(e)?
-                    //     //         generic::msgbox("创建了新实体", F"已创建 {e->editor::name} {e->editor::chunkinfo}");
-                    //     //     none?
-                    //     //         generic::msgbox("复制实体失败", "无法创建实体，剪贴板内没有有效的数据");
-                    //     //     }
-                    //     // }
-                    //     // Separator();
-                    //     // 此处放一些和实体编辑器相关的功能
-                    //     std::panic("TODO");
-
-                    //     EndPopup();
-                    // }
+                    if (BeginPopup("RightClickContextMenu"))
+                    {
+                        entity_edit_context_menu(context, context->get_project->get_editing_world->val, context->get_editing_entity);
+                        EndPopup();
+                    }
                 }
             none?
                 Text("没有编辑中的场景");

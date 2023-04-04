@@ -31,29 +31,32 @@ namespace editor::gui::edit_forms
     
             return context;
         }
-        public func edit(entity: je::entity)
+        public func edit(entity: jeapi::debug::Eeid)
         {
             let context = EntityContext{
-                name = mut entity->editor::name,
-                edit_entity = option::value(entity->jeapi::debug::get_entity_editor_id),
+                name = mut "PENDING",
+                edit_entity = option::value(entity),
                 has_append_types = []mut,
                 not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
             };
-    
-            let comps = []mut: typeof(context.not_append_types);
-            context.not_append_types->swap(comps);
-    
-            // 不显示所有编辑器组件
-            for (let _, comp : comps)
-                if (!comp->name()->beginwith("Editor::"))
-                    context.not_append_types->add(comp);
-    
-            // 把当前已有的组件处理一下
-            let all_comps = context.not_append_types->dup();
-            for (let _, comp : all_comps)
-                if (entity->editor::get_component(comp)->has)
-                    context->add_components(comp->name);
-    
+
+            entity->justdo(func(e){
+                context.name = e->editor::name;
+                let comps = []mut: typeof(context.not_append_types);
+                context.not_append_types->swap(comps);
+        
+                // 不显示所有编辑器组件
+                for (let _, comp : comps)
+                    if (!comp->name()->beginwith("Editor::"))
+                        context.not_append_types->add(comp);
+        
+                // 把当前已有的组件处理一下
+                let all_comps = context.not_append_types->dup();
+                for (let _, comp : all_comps)
+                    if (e->editor::get_component(comp)->has)
+                        context->add_components(comp->name);
+            });
+
             return context;
         }
 

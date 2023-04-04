@@ -53,6 +53,100 @@ namespace editor::gui::edit_forms
         }
         do child->editor::set_parent(parent.e, true);
     }
+    public func entity_edit_context_menu(context: EditorContext, w: je::world, euid: option<jeapi::debug::Eeid>)
+    {
+        let has_editing_entity = euid->has;
+        if (MenuItem("创建实体"))
+            launch(show_entity_creator, (context, EntityContext::create()));
+
+        Separator();
+        if (MenuItemEnabled("复制", has_editing_entity))
+        {
+            do euid
+                ->> \uid = uid->justdo(func(e){
+                        match (jeapi::serialize::entity(e)->>\dat = dat as dict<string, dynamic>: string;)
+                        {
+                        value(json)?
+                            SetClipboardText(json);
+                        none?
+                            jeapi::gui::form::errmsg("失败", "无法复制当前实体");
+                        }
+                    })
+                    ;
+                ;
+            
+        }
+        if (MenuItem("粘贴"))
+        {
+            do GetClipboardText()->todict
+                ->> \d = jeapi::deserialize::entity(w, d->>\k,v = (k: string, v);)
+                    ->> func(e)
+                    {
+                        // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
+                        static let Anchor = je::typeinfo::load("Transform::Anchor")->val;
+                        if (e->editor::get_component(Anchor)->has)
+                        {
+                            e->editor::remove_component(Anchor);
+                            do e->editor::add_component(Anchor);
+                        }
+                    }
+                    ;
+                ;
+        }
+        Separator();
+        if (MenuItemEnabled("编辑", has_editing_entity))
+        {
+            do euid
+                ->> \uid = launch(show_entity_creator, (context, EntityContext::edit(uid)));
+                ;
+        }
+        if (MenuItemEnabled("重命名", has_editing_entity))
+        {
+            do euid
+                ->> \uid = uid->justdo(func(e){
+                    jeapi::gui::form::input(
+                        "重命名", 
+                        "请输入实体的新名称", 
+                        e->editor::name, 
+                        func(newname){
+                            uid->justdo(\e = e->editor::set_name(newname););
+                        });
+                    })
+                    ;
+                ;
+        }
+        Separator();
+        if (MenuItemEnabled("销毁", has_editing_entity))
+        {
+            do euid
+                ->> \uid = uid->justdo(func(e){
+                    jeapi::gui::form::ask(
+                        "确认？", 
+                        F"即将销毁实体{e->editor::name}\n是否同时销毁其全部子实体？", 
+                        func(close_child_entity){
+                            let entities = jeapi::debug::get_all_entities_layer_from_world(w);
+                            let edata = entities->> \edat = (edat.uid, edat);->mapping->get(uid);
+                            func close_entity_impl(e, close_all)
+                            {
+                                e.uid->justdo(\e = e->close(););
+                                if (close_all)
+                                    for (let _, ce : e.childs)
+                                        close_entity_impl(ce, close_all);
+                            }
+                            match (edata)
+                            {
+                            value(edat)?
+                                close_entity_impl(edat, close_child_entity);
+                            none?
+                                jeapi::gui::form::errmsg("删除失败", "找不到实体信息");
+                            } 
+                        });
+                    })
+                    ;
+                ;
+        }
+        Separator();
+    }
     func display_entity_and_child_tree(context: EditorContext, w: je::world, e: jeapi::debug::EntityChilds)
     {
         let treenode_attribute = 
@@ -99,68 +193,7 @@ namespace editor::gui::edit_forms
             EndDragDropTarget();
         }
 
-        jeapi::gui::context_menu(func(){
-            if (MenuItem("复制"))
-            {
-                match (jeapi::serialize::entity(e.e)->>\dat = dat as dict<string, dynamic>: string;)
-                {
-                value(json)?
-                    SetClipboardText(json);
-                none?
-                    jeapi::gui::form::errmsg("失败", "无法复制当前实体");
-                }
-
-            }
-            if (MenuItem("粘贴"))
-            {
-                do GetClipboardText()->todict
-                    ->> \d = jeapi::deserialize::entity(w, d->>\k,v = (k: string, v);)
-                        ->> func(e)
-                        {
-                            // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
-                            static let Anchor = je::typeinfo::load("Transform::Anchor")->val;
-                            if (e->editor::get_component(Anchor)->has)
-                            {
-                                e->editor::remove_component(Anchor);
-                                do e->editor::add_component(Anchor);
-                            }
-                        }
-                        ;
-                    ;
-            }
-            Separator();
-            if (MenuItem("编辑"))
-            {
-                launch(show_entity_creator, (context, EntityContext::edit(e.e)));
-            }
-            if (MenuItem("重命名"))
-            {
-                jeapi::gui::form::input(
-                    "重命名", 
-                    "请输入实体的新名称", 
-                    e.e->editor::name, 
-                    func(newname){
-                        e.uid->justdo(\e = e->editor::set_name(newname););
-                    });
-            }
-            Separator();
-            if (MenuItem("销毁"))
-            {
-                jeapi::gui::form::ask(
-                    "确认？", 
-                    F"即将销毁实体{e.e->editor::name}\n是否同时销毁其全部子实体？", 
-                    func(close_child_entity){
-                        func close_entity_impl(e, close_all)
-                        {
-                            e.uid->justdo(\e = e->close(););
-                            if (close_all)
-                                for (let _, ce : e.childs)
-                                    close_entity_impl(ce, close_all);
-                        }
-                        close_entity_impl(e, close_child_entity);
-                    });
-            }
-        });
+        jeapi::gui::context_menu(\=entity_edit_context_menu(context, w, option::value(e.uid)););
 
         if (IsItemClickedLeft() && !IsItemToggledOpen())
             context->set_editing_entity(option::value(e.e));
@@ -191,6 +224,12 @@ namespace editor::gui::edit_forms
             {
             value(current_editing_world)?
             {
+                if (BeginPopupContextWindowLabel("EntityMenu"))
+                {
+                    entity_edit_context_menu(context, current_editing_world, option::none);
+                    EndPopup();
+                }    
+
                 do jeapi::debug::get_all_entities_layer_from_world(current_editing_world)
                     ->> \ec = display_entity_and_child_tree(context, current_editing_world, ec);
                     ;
