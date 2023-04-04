@@ -74,6 +74,7 @@ namespace editor
                 return result::err("已经在调试中，不可重复调试");
 
             let dumpped = self->dump_and_close_all_world();
+
             if (dumpped->iserr)
                 return dumpped->fail;
 
@@ -102,6 +103,7 @@ namespace editor
                     }, ());
             }
             self.m_debug_context = option::value(context);
+
             return result::ok(context);
         }
 
@@ -590,11 +592,13 @@ namespace editor
                 // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
                 self.m_worlds->remove(self.m_worlds->find(w));
 
-                if (need_update_new_editing_world)
-                    // 如果还有世界，那么选择第一个作为编辑中世界顶替，否则起用默认世界
-                    self.m_worlds->get(0)
-                        ->> \w = self->reset_editing_world(w.m_world_instance)->unwarp; // 必须成功
-                        ->  or(\= self->_run_default_world;);
+                // 如果还有世界，那么选择第一个作为编辑中世界顶替，否则起用默认世界
+                self.m_worlds->get(0)
+                    ->> \w = need_update_new_editing_world 
+                        ? self->reset_editing_world(w.m_world_instance)->unwarp
+                        | nil: void
+                        ; // 必须成功
+                    ->  or(\= self->_run_default_world;);
 
                 world->close;
                 
