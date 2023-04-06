@@ -10,6 +10,7 @@ import builtin.api.gui.form.msg;
 import builtin.api.dbg.main;
 
 import builtin.editor.gui.edit_forms.entity_creator;
+import builtin.editor.gui.drawpannel;
 import builtin.api.serialize.main;
 
 using je::gui;
@@ -60,10 +61,12 @@ namespace editor::gui::edit_forms
         if (!context->get_project->validate_world_or_warning(w))
         {
             jeapi::gui::form::errmsg("失败", "无法创建实体，世界不存在。");
-            return;
+            return option::none;
         }
-        w->add_entity(cs->>\tname = je::typeinfo::load(tname)->val;)
-            ->editor::set_name(name);
+        let e = w->add_entity(cs->>\tname = je::typeinfo::load(tname)->val;);
+        e->editor::set_name(name);
+
+        return option::value(e);
     }
     public func entity_edit_context_menu(context: EditorContext, w: je::world, euid: option<jeapi::debug::Eeid>)
     {
@@ -74,7 +77,7 @@ namespace editor::gui::edit_forms
         {
             if (MenuItem("基本渲染实体"))
             {
-                fast_create_entity(context, w, "默认物体", [
+                do fast_create_entity(context, w, "默认物体", [
                     "Transform::LocalPosition",
                     "Transform::LocalRotation",
                     "Transform::LocalScale",
@@ -87,7 +90,7 @@ namespace editor::gui::edit_forms
             }
             if (MenuItem("带2D阴影的基本渲染实体"))
             {
-                fast_create_entity(context, w, "默认2D阴影物体", [
+                do fast_create_entity(context, w, "默认2D阴影物体", [
                     "Transform::LocalPosition",
                     "Transform::LocalRotation",
                     "Transform::LocalScale",
@@ -110,7 +113,7 @@ namespace editor::gui::edit_forms
                     y_pixel_count: mut int,            
                 };
                 let ctx = _EntityConfig{
-                    name = mut "建绘制实体",
+                    name = mut "绘制实体",
                     width = mut 1.0,
                     height = mut 1.0,
                     x_pixel_count = mut 16,
@@ -125,6 +128,7 @@ namespace editor::gui::edit_forms
                     Text("x:");
                     SameLine();
                     do InputFloat("##x", ctx.width)->>func(vf){
+                        if (vf <= 0.) return;
                         ctx.width = vf;
                         ctx.x_pixel_count = math::round(vf * 16.0);
                     };
@@ -132,6 +136,7 @@ namespace editor::gui::edit_forms
                     Text("y:");
                     SameLine();
                     do InputFloat("##y", ctx.width)->>func(vf){
+                        if (vf <= 0.) return;
                         ctx.height = vf;
                         ctx.y_pixel_count = math::round(vf * 16.0);
                     };
@@ -139,13 +144,56 @@ namespace editor::gui::edit_forms
                     Text("px:");
                     SameLine();
                     do InputInt("##px", ctx.x_pixel_count)->>func(vi){
+                        if (vi <= 0) return;
                         ctx.x_pixel_count = vi;
                         ctx.y_pixel_count = math::round(vi: real / ctx.width  * ctx.height);
                     };
                     SameLine();
                     Text("py:");
                     SameLine();
-                    do InputInt("##py", ctx.y_pixel_count)->>\vi = ctx.y_pixel_count = vi;;
+                    do InputInt("##py", ctx.y_pixel_count)->>\vi = vi <= 0 ? (ctx.y_pixel_count = vi) | nil: void;;
+
+                    if (Button("创建"))
+                    {
+                        open = false;
+                        let e = fast_create_entity(context, w, ctx.name, [
+                            "Transform::LocalPosition",
+                            "Transform::LocalRotation",
+                            "Transform::LocalScale",
+                            "Transform::LocalToWorld",
+                            "Transform::Translation",
+                            "Renderer::Shape",
+                            "Renderer::Shaders",
+                            "Renderer::Textures",
+                        ]);
+                        match (e)
+                        {
+                        none?;
+                        value(einst)?
+                            {
+                                do einst->editor::get_component(je::typeinfo::load("Transform::LocalScale")->val)
+                                    =>> \m = m->editor::get_member("scale");
+                                    ->> \tv = tv...
+                                        ->\_, v = v->set_float3(ctx.width, ctx.height, 1.);
+                                        ;
+                                    ;
+                                einst->editor::graphic::bind_texture(0, 
+                                    je::graphic::texture::create(ctx.x_pixel_count, ctx.y_pixel_count));
+
+                                let default_shader_path = F"{context->get_project.m_path}/resource/shader/Unlit.shader";
+                                do je::graphic::shader::load(default_shader_path)
+                                    ->> \s = einst->editor::graphic::set_shaders([s]);
+                                    ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                                    ;
+                                
+                                drawpannel::drawedit(context, einst);
+                            }
+                        }
+                    }
+                    SameLine();
+                    if (Button("取消"))
+                        open = false;
+
                     End();
 
                     return open;
@@ -154,7 +202,7 @@ namespace editor::gui::edit_forms
             Separator();
             if (MenuItem("2D光源（点）"))
             {
-                fast_create_entity(context, w, "2D点光源", [
+                do fast_create_entity(context, w, "2D点光源", [
                     "Transform::LocalPosition",
                     "Transform::LocalRotation",
                     "Transform::LocalScale",
@@ -167,7 +215,7 @@ namespace editor::gui::edit_forms
             }
             if (MenuItem("2D光源（平行）"))
             {
-                fast_create_entity(context, w, "2D平行光源", [
+                do fast_create_entity(context, w, "2D平行光源", [
                     "Transform::LocalPosition",
                     "Transform::LocalRotation",
                     "Transform::LocalScale",
@@ -181,7 +229,7 @@ namespace editor::gui::edit_forms
             Separator();
             if (MenuItem("摄像机（透视）"))
             {
-                fast_create_entity(context, w, "摄像机", [
+                do fast_create_entity(context, w, "摄像机", [
                     "Transform::LocalPosition",
                     "Transform::LocalRotation",
                     "Transform::LocalScale",
@@ -195,7 +243,7 @@ namespace editor::gui::edit_forms
             }
             if (MenuItem("摄像机（平行）"))
             {
-                fast_create_entity(context, w, "摄像机", [
+                do fast_create_entity(context, w, "摄像机", [
                     "Transform::LocalPosition",
                     "Transform::LocalRotation",
                     "Transform::LocalScale",

@@ -1,0 +1,457 @@
+import je;
+import je.gui;
+
+import pkg.image;
+import pkg.filesystem;
+
+using je;
+using je::gui;
+
+namespace editor::gui::drawpannel
+{
+    alias color4_t = (real, real, real, real);
+
+    func save_texture_to_path(tex: graphic::texture, path: string)
+    {
+        let (w, h) = tex->size();
+        let saving_img = image::create(w, h);
+
+        for (let mut x = 0; x < w; x += 1)
+            for (let mut y = 0; y < h; y += 1)
+                saving_img->setpix((x, y), tex->pix((x, y))->get_color);
+
+        let result = saving_img->save(path);
+        if (!result)
+            jeapi::gui::form::errmsg("图像保存失败", F"无法保存图像到{path}");
+        return result;
+    }
+
+    using DrawContextT = struct{
+        scale:      mut real,
+        offset_x:   mut real,
+        offset_y:   mut real,
+        drawtool:   mut DrawToolT,
+
+        mousedown:  mut bool,
+
+        usecolor:   mut color4_t,
+        maincolor:  mut color4_t,
+        subcolor:   mut color4_t,
+
+        edited_textures: map<graphic::texture, void>, // TODO: 图片的历史记录也放在这里
+        // 傻逼键盘迟早得换！
+    };
+
+    func _delta_wheel()
+    {
+        static let mut _w = input::wheel();
+        let _nw = input::wheel();
+        let delta = _nw - _w;
+        _w = _nw;
+        return delta;
+    }
+
+    using Nothing = ()
+    {
+        func OnMouseDown(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+        func OnMouseHold(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+        func OnMouseUp(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+    }
+    using Pen = ()
+    {
+        func OnMouseDown(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+        func OnMouseHold(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            let (px, py) = pos;
+            let (w, h) = target->size;
+
+            if (px >= 0 && px < w && py >= 0 && py < h)
+                target->pix(pos)->set_color(color);
+        }
+        func OnMouseUp(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+    }
+
+    using DrawToolT = struct{
+        name: string,
+        on_mouse_down: (graphic::texture, color4_t, (int, int))=>void,
+        on_mouse_hold: (graphic::texture, color4_t, (int, int))=>void,
+        on_mouse_up: (graphic::texture, color4_t, (int, int))=>void,
+    }
+    {
+        func create<T>(name: string, instance: T)
+        {
+            return DrawToolT{
+                name = name,
+                on_mouse_down = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseDown(t, c, p);,
+                on_mouse_hold = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseHold(t, c, p);,
+                on_mouse_up = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseUp(t, c, p);,
+            };
+        }
+        func OnMouseDown(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            return self.on_mouse_down(target, color, pos);
+        }
+        func OnMouseHold(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            return self.on_mouse_hold(target, color, pos);
+        }
+        func OnMouseUp(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            return self.on_mouse_up(target, color, pos);
+        }
+    }
+
+    let all_draw_tools = {
+        ["无"] = \=DrawToolT::create("无", (): Nothing);,
+        ["钢笔"] = \=DrawToolT::create("钢笔", (): Pen);,
+    };
+
+    func edittexture(context: EditorContext, images: array<(int, mut graphic::texture)>, draw_context: DrawContextT)
+    {
+        let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
+
+        if (BeginTabBar("##draw_textures"))
+        {
+            for (let index, (passid, texture) : images)
+            {
+                let texture_path = texture->path->valor("<内置>");
+                if (BeginTabItem(F"通道{passid}: {texture_path}"))
+                {
+                    if (BeginMenuBar())
+                    {
+                        if (BeginMenu("文件"))
+                        {
+                            if (MenuItem("画布尺寸"))
+                                // 更新画布尺寸之后，创建新的纹理对象覆盖到数组里
+                                std::panic("TODO;");
+                                
+
+                            EndMenu();
+                        }
+                        EndMenuBar();
+                    }
+
+                    // OK 在这里显示一下绘图工具箱
+                    BeginGroup();
+                    
+                    if (ColorButton("##main_color", draw_context.maincolor) )
+                        OpenPopup("MainColorPicker");
+                    SameLine();
+                    if (ColorButton("##sub_color", draw_context.subcolor) )
+                        OpenPopup("SubColorPicker");
+
+                    let mut enable_draw = !input::keydown(keycode::L_CTRL);
+                    if (BeginPopup("MainColorPicker"))
+                    {
+                        enable_draw = false;
+                        do ColorPicker4("##main_color_picker", draw_context.maincolor)
+                            ->> \c = draw_context.maincolor = c;;
+                        EndPopup();
+                    }
+                    if (BeginPopup("SubColorPicker"))
+                    {
+                        enable_draw = false;
+                        do ColorPicker4("##sub_color_picker", draw_context.subcolor)
+                            ->> \c = draw_context.subcolor = c;;
+                        EndPopup();
+                    }
+
+                    Text(F"当前工具: \n {draw_context.drawtool.name}");
+                    for (let name, tool_create_method : all_draw_tools)
+                    {
+                        if (ButtonSize(name, (100., 0.)))
+                            draw_context.drawtool = tool_create_method();
+                    }
+                    EndGroup();
+
+                    SameLine();
+
+                    let (tex_width, tex_height) = texture->size;
+                    let drawlist = GetWindowDrawList();
+
+                    let (avaliw, avalih) = GetContentRegionAvail();
+
+                    do InvisibleButton("##draw_space", (avaliw->\x=x<=100.?100.|x;, avalih->\x=x<=100.?100.|x;));
+                    if (IsItemActive() || IsItemHovered())
+                    {
+                        if (input::keydown(keycode::L_CTRL) 
+                            && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
+                        {
+                            let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
+                            draw_context.offset_x += mousedelta_x;
+                            draw_context.offset_y += mousedelta_y;
+                        }
+                        draw_context.scale += _delta_wheel();
+
+                        if (draw_context.scale < 1.)
+                            draw_context.scale = 1.;
+                    }
+                    else if (!draw_context.mousedown)
+                        enable_draw = false;
+
+                    let (p0, p1) = GetItemRect();
+                    let (lux, luy) = p0;
+                    let (rbx, rby) = p1;
+
+                    PushClipRect(p0, p1);
+                    drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+                    drawlist->AddImage(
+                        (lux + draw_context.offset_x, luy + draw_context.offset_y), 
+                        (lux + draw_context.scale * tex_width:real + draw_context.offset_x, 
+                        luy + draw_context.scale * tex_height:real + draw_context.offset_y), 
+                        texture);
+                        
+                    // OK 如果缩放大于5，就顺手画一下网格
+                    if (draw_context.scale >= 5.)
+                    {
+                        for (let mut yoffset = 0.; yoffset <= tex_height:real * draw_context.scale; yoffset += draw_context.scale)
+                            drawlist->AddLine(
+                                (lux + draw_context.offset_x, luy + draw_context.offset_y + yoffset), 
+                                (lux + draw_context.offset_x + tex_width:real * draw_context.scale, luy + draw_context.offset_y + yoffset), 
+                                (0, 0, 0, 20));
+                        for (let mut xoffset = 0.; xoffset <= tex_width:real * draw_context.scale; xoffset += draw_context.scale)
+                            drawlist->AddLine(
+                                (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y), 
+                                (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y + tex_height:real * draw_context.scale), 
+                                (0, 0, 0, 20));
+                    }
+
+                    // 获取鼠标所在的像素位置，高亮这一块儿
+                    let (mposx, mposy) = GetMousePos();
+                    let mpixx = ((mposx - lux - draw_context.offset_x) / draw_context.scale): int: real;
+                    let mpixy = ((mposy - luy - draw_context.offset_y) / draw_context.scale): int: real;
+
+                    if (mpixx >= 0. && mpixx < tex_width:real && mpixy >= 0. && mpixy < tex_height:real)
+                    {
+                        // Ok 鼠标指向的像素位置是合法的，高亮！
+                        let highlight_p0 = (mpixx * draw_context.scale + draw_context.offset_x + lux, mpixy * draw_context.scale + draw_context.offset_y + luy);
+                        let highlight_p1 = ((mpixx + 1.) * draw_context.scale + draw_context.offset_x + lux, (mpixy + 1.) * draw_context.scale + draw_context.offset_y + luy);
+                        drawlist->AddRectFilled(highlight_p0, highlight_p1, (255, 255, 255, 100));
+                    }
+
+                    // 不过需要注意的是，引擎使用的像素坐标原点不是左上角，而是左下角，所以这里需要做一次简单变换
+                    let mepixx = mpixx: int;
+                    let mepixy = tex_height - 1 - mpixy: int;
+
+                    if (input::keydown(keycode::MOUSE_M_BUTTION)
+                        && mepixx >= 0 && mepixx < tex_width
+                        && mepixy >= 0 && mepixy < tex_height)
+                        draw_context.maincolor = texture->pix((mepixx, mepixy))->get_color;
+
+                    // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
+                    if (enable_draw)
+                    {
+                        let mut first_click = false;
+                        if (draw_context.mousedown == false)
+                        {
+                            first_click = true;
+                            if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                draw_context.usecolor = draw_context.maincolor;
+                            else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                                draw_context.usecolor = draw_context.subcolor;
+                            else
+                                first_click = false;
+                        }
+                        if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
+                        {
+                            // 图片被编辑过了，储存起来，窗口关闭时询问保存！
+                            if (!draw_context.edited_textures->contain(texture))
+                                draw_context.edited_textures->set(texture, do nil);
+
+                            draw_context.mousedown = true;
+                            if (first_click)
+                                draw_context.drawtool->OnMouseDown(texture, draw_context.usecolor, (mepixx, mepixy));
+                            else
+                                draw_context.drawtool->OnMouseHold(texture, draw_context.usecolor, (mepixx, mepixy));
+                        }
+                        else
+                        {
+                            if (draw_context.mousedown)
+                                draw_context.drawtool->OnMouseUp(texture, draw_context.usecolor, (mepixx, mepixy));
+                            draw_context.mousedown = false;
+                        }
+                    }
+
+                    PopClipRect();
+                    EndTabItem();
+                }
+            }
+            EndTabBar();
+        }
+        End();
+
+        if (open)
+            return true;
+        else
+        {
+            // 遍历所有被编辑过的图片，询问是否需要保存
+            for (let edited_texture, _ : draw_context.edited_textures)
+            {
+                alias float = real;
+                
+                launch(func(){
+                    let mut open = true;
+                    do BeginAttr(F"是否需要保存##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+                    Text(F"纹理:\n{edited_texture->path->valor("<内置>")}\n已经被编辑了，是否需要保存？");
+                    let (avali_width, _) = GetContentRegionAvail();
+                    if (ButtonSize("是，覆盖原图片", (avali_width: float, 0.)) )
+                    {
+                        if (filesys::extension(edited_texture->path->valor("<内置>"))->lower != ".png")
+                            jeapi::gui::form::errmsg("无法保存文件", 
+                                F"仅支持保存png文件，原文件为{filesys::extension(edited_texture->path->valor("<内置>"))}");
+                        else if (save_texture_to_path(edited_texture, edited_texture->path->valor("<内置>")))
+                            open = false;
+                    }
+                    if (ButtonSize(F"另存为/resource/texture/{filesys::purename(edited_texture->path->valor("<内置>"))}.png", (avali_width: float, 0.)) )
+                    {
+                        let projpath = context->get_project().m_path;
+                        
+                        do filesys::mkdir(F"{projpath}/resource/texture");
+                        if (save_texture_to_path(edited_texture, F"{projpath}/resource/texture/{filesys::purename(edited_texture->path->valor("<内置>"))}.png"))
+                            open = false;
+                    }
+                    if (ButtonSize("不保存此文件", (avali_width: float, 0.)) )
+                        open = false;
+
+                    End();
+
+                    return open;            
+                }, ());
+            }
+        }
+        return false;
+    }
+
+    public func drawedit(context: EditorContext, e: entity)
+    {
+        // 检查实体有没有纹理组件，然后遍历检查所有纹理是否都存在，有没有没有路径的问题
+        // 如果发现不正常的纹理就给个提示
+
+        if (!e->editor::get_component(typeinfo::load("Renderer::Textures")->val)->has)
+        {
+            jeapi::gui::form::errmsg("无法绘制当前实体", "当前实体不包含 Renderer::Textures 组件，无法绘制");
+            return;
+        }
+
+        let textures = e->editor::graphic::get_textures();
+
+        // 这个大大的傻逼代码作用是获取当前实体使用的所有纹理通道
+        let used_texture_id_pass = e->editor::graphic::get_shaders()
+            =>> \shader = shader->get_uniforms()
+                    ->  unmapping
+                    ->> \nv = nv[1];
+                    =>> func(uniformval)
+                        {
+                            match (uniformval)
+                            {
+                            texture(id)?
+                                return [id];
+                            integer(_)?;
+                            float(_)?;
+                            float2(_)?;
+                            float3(_)?;
+                            float4(_)?;
+                            others?;
+                            }
+                            return [];
+                        }
+            ;
+            ->> \id = (id, nil);
+            ->  mapping
+            ->  unmapping // remove all repeated elems.
+            ->> \idn = idn[0];
+        ;
+
+        if (used_texture_id_pass->empty)
+        {
+            jeapi::gui::form::errmsg("无法绘制当前实体", "当前实体不使用任何纹理，因此无法编辑");
+            return;
+        }
+
+        // OK
+        let has_no_exist_texture = ! used_texture_id_pass
+            ->> \id = textures->get(id)->has;
+            ->  reduce(\l, r = l ? r | l;)
+            ->  valor(true);
+            ;
+
+        // if (has_no_exist_texture)
+        // {
+        //     generic::askbox("是否自动创建纹理？", F"尝试绘制实体{e->editor::name} {e->editor::chunkinfo}\n"
+        //         + "但是此实体的一部分通道纹理并未创建，是否需要自动创建？", 
+        //         func (need_auto_gen)
+        //         {
+        //             if (need_auto_gen)
+        //             {
+        //                 launch(edittexture, (
+        //                     used_texture_id_pass 
+        //                         ->> \id = (id, mut textures->get(id)->or(func(){
+        //                             let img = image::create(16, 16);
+        //                             for (let mut x = 0; x < 16; x += 1)
+        //                                 for (let mut y = 0; y < 16; y += 1)
+        //                                     img->setpix((x,y), (1.,1.,1.,1.));
+
+        //                             let projpath = editor::Project::GetCurrentProject().path->val;
+        //                             filesys::mkdir(F"{projpath}/Draw");
+
+        //                             let mut imgfile = je::uid();
+        //                             while (filesys::exist(F"{projpath}/Draw/{imgfile}.png"))
+        //                                 imgfile = je::uid();
+
+        //                             img->save(F"{projpath}/Draw/{imgfile}.png");
+        //                             let tex = graphic::texture::load(F"{projpath}/Draw/{imgfile}.png")->val;
+        //                             e->editor::graphic::bind_texture(id, tex);
+        //                             return tex;
+        //                         }));,
+        //                     DrawContextT{
+        //                         scale = mut 10.,
+        //                         offset_x = mut 0.,
+        //                         offset_y = mut 0.,
+        //                         drawtool = mut all_draw_tools["无"](),
+
+        //                         mousedown = mut false,
+
+        //                         usecolor = mut (1., 1., 1., 1.),
+        //                         maincolor = mut (1., 1., 1., 1.),
+        //                         subcolor = mut (0., 0., 0., 0.),
+
+        //                         edited_textures = {}mut,
+        //                     }
+        //                 ));
+        //             }
+        //         });
+        // }
+        // else 
+        launch(edittexture, (
+            context,
+            used_texture_id_pass 
+                ->> \id = (id, mut textures->get(id)->val)
+                    ;,
+            DrawContextT{
+                scale = mut 10.,
+                offset_x = mut 0.,
+                offset_y = mut 0.,
+                drawtool = mut all_draw_tools["无"](),
+
+                mousedown = mut false,
+
+                usecolor = mut (1., 1., 1., 1.),
+                maincolor = mut (1., 1., 1., 1.),
+                subcolor = mut (0., 0., 0., 0.),
+
+                edited_textures = {}mut,
+            }
+        ));
+    }
+}

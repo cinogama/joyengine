@@ -465,8 +465,10 @@ public let frag =
                     math::vec2 cur_mouse_pos = _inputs.uniform_mouse_pos;
                     math::vec2 diff = cur_mouse_pos - _grab_last_pos;
 
+                    float distance = (_camera_ray.orgin - trans.world_position).length();
+
                     editing_pos->set_world_position(
-                        editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * mover.axis),
+                        editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * (mover.axis * distance)),
                         *editing_trans,
                         editing_rot_may_null
                     );
