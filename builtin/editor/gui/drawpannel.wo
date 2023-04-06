@@ -38,7 +38,7 @@ namespace editor::gui::drawpannel
         maincolor:  mut color4_t,
         subcolor:   mut color4_t,
 
-        edited_textures: map<graphic::texture, void>, // TODO: 图片的历史记录也放在这里
+        edited_textures: map<graphic::texture, int/*texture pass id*/>, // TODO: 图片的历史记录也放在这里
         // 傻逼键盘迟早得换！
     };
 
@@ -116,7 +116,7 @@ namespace editor::gui::drawpannel
         ["钢笔"] = \=DrawToolT::create("钢笔", (): Pen);,
     };
 
-    func edittexture(context: EditorContext, images: array<(int, mut graphic::texture)>, draw_context: DrawContextT)
+    func edittexture(context: EditorContext, entity: option<jeapi::debug::Eeid>, images: array<(int, graphic::texture)>, draw_context: DrawContextT)
     {
         let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
 
@@ -266,7 +266,7 @@ namespace editor::gui::drawpannel
                         {
                             // 图片被编辑过了，储存起来，窗口关闭时询问保存！
                             if (!draw_context.edited_textures->contain(texture))
-                                draw_context.edited_textures->set(texture, do nil);
+                                draw_context.edited_textures->set(texture, passid);
 
                             draw_context.mousedown = true;
                             if (first_click)
@@ -295,39 +295,30 @@ namespace editor::gui::drawpannel
         else
         {
             // 遍历所有被编辑过的图片，询问是否需要保存
-            for (let edited_texture, _ : draw_context.edited_textures)
+            for (let edited_texture, passid : draw_context.edited_textures)
             {
-                alias float = real;
+                // 直接保存！
+
+                // 生成文件名，如果已经有了就有，没有就死！
+                let projpath = context->get_project().m_path;
+                let saving_path = edited_texture->path->or(func(){
+                    let genuidpath = \ = F"{projpath}/resource/texture/{je::uid()}.png";;
+                    let mut name = "";
+                    for (; name == "" || filesys::exist(name); name = genuidpath())
+                        ;
+                    return name;
+                })->\path = filesys::extension(path)->lower == ".png" ? path | F"{filesys::parent(path)}/{filesys::purename(path)}.png";
+                ;
                 
-                launch(func(){
-                    let mut open = true;
-                    do BeginAttr(F"是否需要保存##{JobID()}", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-
-                    Text(F"纹理:\n{edited_texture->path->valor("<内置>")}\n已经被编辑了，是否需要保存？");
-                    let (avali_width, _) = GetContentRegionAvail();
-                    if (ButtonSize("是，覆盖原图片", (avali_width: float, 0.)) )
-                    {
-                        if (filesys::extension(edited_texture->path->valor("<内置>"))->lower != ".png")
-                            jeapi::gui::form::errmsg("无法保存文件", 
-                                F"仅支持保存png文件，原文件为{filesys::extension(edited_texture->path->valor("<内置>"))}");
-                        else if (save_texture_to_path(edited_texture, edited_texture->path->valor("<内置>")))
-                            open = false;
-                    }
-                    if (ButtonSize(F"另存为/resource/texture/{filesys::purename(edited_texture->path->valor("<内置>"))}.png", (avali_width: float, 0.)) )
-                    {
-                        let projpath = context->get_project().m_path;
-                        
-                        do filesys::mkdir(F"{projpath}/resource/texture");
-                        if (save_texture_to_path(edited_texture, F"{projpath}/resource/texture/{filesys::purename(edited_texture->path->valor("<内置>"))}.png"))
-                            open = false;
-                    }
-                    if (ButtonSize("不保存此文件", (avali_width: float, 0.)) )
-                        open = false;
-
-                    End();
-
-                    return open;            
-                }, ());
+                if (save_texture_to_path(edited_texture, saving_path))
+                {
+                    do entity
+                        ->> \eid = eid->justdo(
+                                \e = e->editor::graphic::bind_texture(passid, je::graphic::texture::load(saving_path)->val);
+                            )
+                            ;
+                        ;
+                }
             }
         }
         return false;
@@ -386,57 +377,11 @@ namespace editor::gui::drawpannel
             ->  valor(true);
             ;
 
-        // if (has_no_exist_texture)
-        // {
-        //     generic::askbox("是否自动创建纹理？", F"尝试绘制实体{e->editor::name} {e->editor::chunkinfo}\n"
-        //         + "但是此实体的一部分通道纹理并未创建，是否需要自动创建？", 
-        //         func (need_auto_gen)
-        //         {
-        //             if (need_auto_gen)
-        //             {
-        //                 launch(edittexture, (
-        //                     used_texture_id_pass 
-        //                         ->> \id = (id, mut textures->get(id)->or(func(){
-        //                             let img = image::create(16, 16);
-        //                             for (let mut x = 0; x < 16; x += 1)
-        //                                 for (let mut y = 0; y < 16; y += 1)
-        //                                     img->setpix((x,y), (1.,1.,1.,1.));
-
-        //                             let projpath = editor::Project::GetCurrentProject().path->val;
-        //                             filesys::mkdir(F"{projpath}/Draw");
-
-        //                             let mut imgfile = je::uid();
-        //                             while (filesys::exist(F"{projpath}/Draw/{imgfile}.png"))
-        //                                 imgfile = je::uid();
-
-        //                             img->save(F"{projpath}/Draw/{imgfile}.png");
-        //                             let tex = graphic::texture::load(F"{projpath}/Draw/{imgfile}.png")->val;
-        //                             e->editor::graphic::bind_texture(id, tex);
-        //                             return tex;
-        //                         }));,
-        //                     DrawContextT{
-        //                         scale = mut 10.,
-        //                         offset_x = mut 0.,
-        //                         offset_y = mut 0.,
-        //                         drawtool = mut all_draw_tools["无"](),
-
-        //                         mousedown = mut false,
-
-        //                         usecolor = mut (1., 1., 1., 1.),
-        //                         maincolor = mut (1., 1., 1., 1.),
-        //                         subcolor = mut (0., 0., 0., 0.),
-
-        //                         edited_textures = {}mut,
-        //                     }
-        //                 ));
-        //             }
-        //         });
-        // }
-        // else 
         launch(edittexture, (
             context,
+            option::value(jeapi::debug::get_entity_editor_id(e)),
             used_texture_id_pass 
-                ->> \id = (id, mut textures->get(id)->val)
+                ->> \id = (id, textures->get(id)->val)
                     ;,
             DrawContextT{
                 scale = mut 10.,
