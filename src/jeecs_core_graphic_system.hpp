@@ -164,10 +164,11 @@ namespace jeecs
                     { 3, 2, 3 });
 
             default_texture = graphic::texture::create(2, 2, jegl_texture::texture_format::RGBA);
-            default_texture->pix(0, 0).set({ 1.f, 0.f, 1.f, 1.f });
-            default_texture->pix(1, 1).set({ 1.f, 0.f, 1.f, 1.f });
-            default_texture->pix(0, 1).set({ 0.f, 0.f, 0.f, 1.f });
-            default_texture->pix(1, 0).set({ 0.f, 0.f, 0.f, 1.f });
+            default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
+            default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
+            default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
+            default_texture->pix(1, 0).set({ 0.25f, 0.25f, 0.25f, 1.f });
+            default_texture->resouce()->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::NEAREST;
 
             default_shader = graphic::shader::create("!/builtin/builtin_default.shader", R"(
 // Default shader
@@ -564,16 +565,14 @@ public let frag =
                         const jeecs::math::vec2
                             * _using_tiling = &default_tiling,
                             * _using_offset = &default_offset;
-
+                        jegl_using_texture(host()->default_texture->resouce(), 0);
                         if (rendentity.textures)
                         {
                             _using_tiling = &rendentity.textures->tiling;
                             _using_offset = &rendentity.textures->offset;
 
                             for (auto& texture : rendentity.textures->textures)
-                            {
                                 jegl_using_texture(texture.m_texture->resouce(), texture.m_pass_id);
-                            }
                         }
                         for (auto& shader_pass : drawing_shaders)
                         {
@@ -1858,7 +1857,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         const jeecs::math::vec2
                             * _using_tiling = &default_tiling,
                             * _using_offset = &default_offset;
-
+                        jegl_using_texture(host()->default_texture->resouce(), 0);
                         if (rendentity.textures)
                         {
                             _using_tiling = &rendentity.textures->tiling;

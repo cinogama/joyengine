@@ -58,8 +58,8 @@ WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc
     std::function<void(int, const char*)>* callbacks =
         new std::function<void(int, const char*)>([&](int level, const char* msg) {
         while (log_buffer_mx.test_and_set());
-    log_buffer.push_back({ level, msg });
-    log_buffer_mx.clear();
+        log_buffer.push_back({ level, msg });
+        log_buffer_mx.clear();
             });
 
     return wo_ret_handle(vm,
@@ -992,6 +992,16 @@ WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
         });
 }
 
+WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    auto& path = (*loaded_texture)->resouce()->m_path;
+    if (path != nullptr)
+        je_mem_free((void*)path);
+    path = jeecs::basic::make_new_string(wo_string(args + 1));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
@@ -1003,6 +1013,20 @@ WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
         {
             delete (jeecs::graphic::texture::pixel*)ptr;
         });
+}
+
+WO_API wo_api wojeapi_texture_get_sampling_method(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    return wo_ret_int(vm, (*loaded_texture)->resouce()->m_raw_texture_data->m_sampling);
+}
+
+WO_API wo_api wojeapi_texture_set_sampling_method(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    (*loaded_texture)->resouce()->m_raw_texture_data->m_sampling = (jegl_texture::texture_sampling)wo_int(args+1);
+    (*loaded_texture)->resouce()->m_raw_texture_data->m_modified = true;
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args, size_t argc)
@@ -1446,44 +1470,11 @@ namespace je
         extern("libjoyecs", "wojeapi_get_framebuf_texture")
         public func get_framebuf_texture(camera: entity, index: int)=> option<graphic::texture>;
 
-        public enum texture_sampling
-        {
-            MIN_LINEAR = 0x0000,
-            MIN_NEAREST = 0x0001,
-            MIN_NEAREST_NEAREST_MIP = 0x0002,
-            MIN_LINEAR_NEAREST_MIP = 0x0003,
-            MIN_NEAREST_LINEAR_MIP = 0x0004,
-            MIN_LINEAR_LINEAR_MIP = 0x0005,
-
-            MAG_LINEAR = 0x0000,
-            MAG_NEAREST = 0x0010,
-
-            CLAMP_EDGE_X = 0x0000,
-            REPEAT_X = 0x0100,
-            CLAMP_EDGE_Y = 0x0000,
-            REPEAT_Y = 0x1000,
-
-            FILTER_METHOD_MASK = 0x00FF,
-            MIN_FILTER_MASK = 0x000F,
-            MAG_FILTER_MASK = 0x00F0,
-
-            WRAP_METHOD_MASK = 0xFF00,
-            WRAP_X_METHOD_MASK = 0x0F00,
-            WRAP_Y_METHOD_MASK = 0xF000,
-
-            // LINEAR = MIN_LINEAR | MAG_LINEAR,
-            // NEAREST = MIN_NEAREST | MAG_NEAREST,
-            // CLAMP_EDGE = CLAMP_EDGE_X | CLAMP_EDGE_Y,
-            // REPEAT = REPEAT_X | REPEAT_Y,
-
-            // DEFAULT = LINEAR | CLAMP_EDGE,
-        };
-
         extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
-        public func get_texture_sampling_method_by_path(path: string)=> texture_sampling;
+        public func get_texture_sampling_method_by_path(path: string)=> graphic::texture::sampling;
 
         extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
-        public func update_texture_sampling_method_by_path(path: string, method: texture_sampling)=> result<void, string>;
+        public func update_texture_sampling_method_by_path(path: string, method: graphic::texture::sampling)=> result<void, string>;
     }
 
     extern("libjoyecs", "wojeapi_log")
@@ -1602,11 +1593,47 @@ namespace je
     {
         public using texture = gchandle
         {
+            public enum sampling
+            {
+                MIN_LINEAR = 0x0000,
+                MIN_NEAREST = 0x0001,
+                MIN_NEAREST_NEAREST_MIP = 0x0002,
+                MIN_LINEAR_NEAREST_MIP = 0x0003,
+                MIN_NEAREST_LINEAR_MIP = 0x0004,
+                MIN_LINEAR_LINEAR_MIP = 0x0005,
+
+                MAG_LINEAR = 0x0000,
+                MAG_NEAREST = 0x0010,
+
+                CLAMP_EDGE_X = 0x0000,
+                REPEAT_X = 0x0100,
+                CLAMP_EDGE_Y = 0x0000,
+                REPEAT_Y = 0x1000,
+
+                FILTER_METHOD_MASK = 0x00FF,
+                MIN_FILTER_MASK = 0x000F,
+                MAG_FILTER_MASK = 0x00F0,
+
+                WRAP_METHOD_MASK = 0xFF00,
+                WRAP_X_METHOD_MASK = 0x0F00,
+                WRAP_Y_METHOD_MASK = 0xF000,
+
+                // LINEAR = MIN_LINEAR | MAG_LINEAR,
+                // NEAREST = MIN_NEAREST | MAG_NEAREST,
+                // CLAMP_EDGE = CLAMP_EDGE_X | CLAMP_EDGE_Y,
+                // REPEAT = REPEAT_X | REPEAT_Y,
+
+                // DEFAULT = LINEAR | CLAMP_EDGE,
+            };
+
             extern("libjoyecs", "wojeapi_texture_open")
             public func load(path: string)=> option<texture>;
 
             extern("libjoyecs", "wojeapi_texture_create")
             public func create(width: int, height: int)=> texture;
+
+            extern("libjoyecs", "wojeapi_texture_bind_path")
+            public func bind_path(self: texture, new_path: string)=> void;
 
             extern("libjoyecs", "wojeapi_texture_path")
             public func path(self: texture)=> option<string>;
@@ -1616,6 +1643,12 @@ namespace je
 
             extern("libjoyecs", "wojeapi_texture_get_pixel")
             public func pix(self: texture, pos: (int, int))=> pixel;
+
+            extern("libjoyecs", "wojeapi_texture_get_sampling_method")
+            public func get_sampling_method(self: texture)=> sampling;
+
+            extern("libjoyecs", "wojeapi_texture_set_sampling_method")
+            public func set_sampling_method(self: texture, method: sampling)=> void;
 
             public using pixel = gchandle;
             namespace pixel

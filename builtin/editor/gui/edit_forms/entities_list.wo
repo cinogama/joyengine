@@ -299,6 +299,12 @@ namespace editor::gui::edit_forms
                 ->> \uid = launch(show_entity_creator, (context, EntityContext::edit(uid)));
                 ;
         }
+        if (MenuItemEnabled("绘制", has_editing_entity))
+        {
+            do euid
+                ->> \uid = uid->justdo(\e = drawpannel::drawedit(context, e););
+                ;
+        }
         if (MenuItemEnabled("重命名", has_editing_entity))
         {
             do euid
