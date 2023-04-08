@@ -1443,7 +1443,7 @@ namespace jeecs_impl
         inline double next_execute_time_allign(double exec_intv)const noexcept
         {
             const double align_base = 1.0 / 600.0;
-            return align_base * round((current_time() + exec_intv) / align_base);
+            return align_base * ceil((current_time() + exec_intv) / align_base);
         }
         void update_universe_action_and_worlds()noexcept
         {
