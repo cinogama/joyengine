@@ -41,6 +41,9 @@ namespace jeecs
             // and DefaultEditorSystem should handle this entity hand create 3 mover for x,y,z axis
             math::vec3 axis = {};
         };
+        struct EntitySelectBox
+        {
+        };
         struct EntityMoverRoot
         {
             bool init = false;
@@ -296,19 +299,27 @@ namespace jeecs
                 static basic::resource<graphic::vertex>
                     axis_x =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { -0.5f,0,0,        0.25f,0,0,
-                          0.5f,0,0,      1,0,0 },
+                        { -1.f,0,0,        0.25f,0,0,
+                          1.f,0,0,      1,0,0 },
                         { 3, 3 }),
                     axis_y =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { 0,-0.5f,0,        0,0.25f,0,
-                          0,0.5f,0,      0,1,0 },
+                        { 0,-1.f,0,        0,0.25f,0,
+                          0,1.f,0,      0,1,0 },
                         { 3, 3 }),
                     axis_z =
                     new graphic::vertex(graphic::vertex::type::LINES,
-                        { 0,0,-0.5f,        0,0,0.25f,
-                          0,0,0.5f,      0,0,1 },
-                        { 3, 3 });
+                        { 0,0,-1.f,        0,0,0.25f,
+                          0,0,1.f,          0,0,1 },
+                        { 3, 3 }),
+                    select_box_vert =
+                    new graphic::vertex(graphic::vertex::type::LINESTRIP,
+                        {
+                               -0.5f,-0.5f,-0.5f,    0.5f,-0.5f,-0.5f,    0.5f,0.5f,-0.5f,      -0.5f,0.5f,-0.5f,     -0.5f,-0.5f,-0.5f,
+                               -0.5f,-0.5f,0.5f,    0.5f,-0.5f,0.5f,    0.5f,0.5f,0.5f,      -0.5f,0.5f,0.5f,     -0.5f,-0.5f,0.5f,
+                               -0.5f,0.5f,0.5f,       -0.5f,0.5f,-0.5f,    0.5f,0.5f,-0.5f,  0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f
+                        },
+                        { 3 });
 
                 axis_x->resouce()->m_raw_vertex_data->m_size_y
                     = axis_x->resouce()->m_raw_vertex_data->m_size_z
@@ -316,7 +327,7 @@ namespace jeecs
                     = axis_y->resouce()->m_raw_vertex_data->m_size_z
                     = axis_z->resouce()->m_raw_vertex_data->m_size_x
                     = axis_z->resouce()->m_raw_vertex_data->m_size_y
-                    = 0.1f;
+                    = 0.2f;
 
                 static basic::resource<graphic::shader>
                     axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
@@ -349,6 +360,28 @@ public let frag =
             high_light = uniform("high_light", float::new(0.));;
         
         )");
+                static basic::resource<graphic::shader>
+                    select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
+                        R"(
+import je.shader;
+        
+ZTEST (LESS);
+        
+VAO_STRUCT! vin {
+    vertex : float3,
+};
+using v2f = struct {
+    pos : float4,
+};
+using fout = struct {
+    color : float4
+};
+        
+public let vert = \v: vin = v2f{ pos = je_mvp * float4::create(v.vertex, 1.) };;
+public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
+        
+        )");
+
                 game_world current_world = mover_entity.game_world();
                 game_entity axis_x_e = current_world.add_entity<
                     Transform::LocalPosition,
@@ -381,9 +414,22 @@ public let frag =
                     Editor::EntityMover
                 >();
 
+                game_entity select_box = current_world.add_entity<
+                    Transform::LocalPosition,
+                    Transform::LocalScale,
+                    Transform::LocalToParent,
+                    Transform::Translation,
+                    Renderer::Shaders,
+                    Renderer::Shape,
+                    Renderer::Rendqueue,
+                    Editor::Invisable,
+                    Editor::EntitySelectBox
+                >();
+
                 axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
                 axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
                 axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
+                select_box.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(select_box_shader));
 
                 axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1, 0, 0);
                 axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1, 0);
@@ -392,16 +438,19 @@ public let frag =
                 axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
                 axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
                 axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
+                select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
 
+                select_box.get_component<Renderer::Rendqueue>()->rend_queue = 0;
                 axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
                     axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
                     axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
 
-                axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0.5f, 0, 0);
-                axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0.5f, 0);
-                axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 0.5f);
+                axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(1.f, 0, 0);
+                axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 1.f, 0);
+                axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 1.f);
 
-                axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
+                select_box.get_component<Transform::LocalToParent>()->parent_uid =
+                    axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
                     axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
                     axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
                     anchor.uid;
@@ -531,6 +580,29 @@ public let frag =
                         .exec(&DefaultEditorSystem::SelectEntity).except<Editor::Invisable>()
                         // Create & create mover!
                         .exec(&DefaultEditorSystem::UpdateAndCreateMover)
+                        .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale)
+                            {
+                                float distance = 0.25f * (_camera_ray.orgin - trans.world_position).length();
+                                localScale.scale = math::vec3(1.0f / distance, 1.0f / distance, 1.0f / distance);
+
+                                if (_inputs.selected_entity)
+                                {
+                                    if (auto* escale = _inputs.selected_entity.value().get_component<Transform::LocalScale>())
+                                        localScale.scale = localScale.scale * escale->scale;
+
+                                    if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
+                                        localScale.scale = localScale.scale *(
+                                            eshape->vertex==nullptr
+                                            ? jeecs::math::vec3(1.0f,1.0f, 0.0f)
+                                            : jeecs::math::vec3(
+                                                eshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
+                                                eshape->vertex->resouce()->m_raw_vertex_data->m_size_y,
+                                                eshape->vertex->resouce()->m_raw_vertex_data->m_size_z
+                                            ));
+
+                                    localScale.scale = 1.05f * localScale.scale;
+                                }
+                            })
                         // Mover mgr
                         .exec(&DefaultEditorSystem::MoveEntity);
 

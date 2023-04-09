@@ -17,6 +17,16 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
+    let mut display_debug_entity = false;
+    public func get_is_albe_to_display_debug_entity()
+    {
+        return display_debug_entity;
+    }
+    public func set_is_albe_to_display_debug_entity(opt: bool)
+    {
+        display_debug_entity = opt;
+    }
+
     func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: je::entity)
     {
         for (let _, child: cur.childs)
@@ -366,7 +376,7 @@ namespace editor::gui::edit_forms
                 | TreeNodeAttribute::ImGuiTreeNodeFlags_None);
             ;
 
-        if (e.e->editor::get_component(je::typeinfo::load("Editor::Invisable")->val)->has)
+        if (!display_debug_entity && e.e->editor::get_component(je::typeinfo::load("Editor::Invisable")->val)->has)
             // 不可见实体，不准看！
             return;
 

@@ -161,6 +161,10 @@ namespace je::gui
     {
         return MenuItemShortcutSelectedEnabled(text, "", selected, enable);
     }
+    public func MenuItemSelected(text:string, selected:bool)=> option<bool /*selected*/>
+    {
+        return MenuItemShortcutSelectedEnabled(text, "", selected, true);
+    }
 )"
 R"(
     extern("libjoyecs", "je_gui_end_main_menu_bar")
