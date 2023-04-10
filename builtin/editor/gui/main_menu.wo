@@ -1,7 +1,5 @@
 // gui.main_menu
 // 用于显示编辑器的主菜单栏
-import woo.vm;
-
 import je.gui;
 
 import builtin.editor.gui.main;

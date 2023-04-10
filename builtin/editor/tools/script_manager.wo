@@ -1,3 +1,5 @@
+import pkg.vm;
+
 namespace editor::tools
 {
     let mut _available_tool_scripts = {}: dict<string, string>;
@@ -13,12 +15,17 @@ namespace editor::tools
             return result::err("没有找到此脚本");
         value(path)?
             {
-                let vmm = std::vm::create();
-                if (! vmm->loadfile(path))
-                    return result::err(F"运行脚本失败：{vmm->errmsg()}");
-                let r = vmm->run();
-                do vmm->close();
-                return result::ok(r);
+                match (vm::load(path))
+                {
+                err(msg)?
+                    return result::err(F"运行脚本失败：{msg}");
+                ok(vmm)?
+                    {
+                         let r = vmm->run();
+                        do vmm->close();
+                        return result::ok(r);
+                    }
+                }             
             }
         }
     }

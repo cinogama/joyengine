@@ -30,6 +30,11 @@
             "path" : "build/pkg",
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "version" : "1.0.0"
+        },
+        "vm" : {
+            "path" : "build/pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+            "version" : "1.0.0"
         }
     },
     "name" : "joyengineecs",
