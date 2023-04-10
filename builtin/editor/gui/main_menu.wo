@@ -1,5 +1,6 @@
 // gui.main_menu
 // 用于显示编辑器的主菜单栏
+import woo.vm;
 
 import je.gui;
 
@@ -60,6 +61,28 @@ namespace editor::gui
                             return open;
                         }, ());
                     }
+                    EndMenu();
+                }
+                if (BeginMenu("工具"))
+                {
+                    let scripts = tools::get_available_tool_scripts();
+                    if (scripts->empty())
+                        do MenuItemEnabled("- 空 -", false);
+                    else
+                        for (let _, script_name : scripts)
+                            if (MenuItem(script_name))
+                            {
+                                match (tools::run_tool_script(script_name))
+                                {
+                                err(msg)?
+                                    jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg}");
+                                ok(_)?;
+                                }
+                            }
+                    Separator();
+                    if (MenuItem("重新获取脚本"))
+                        tools::update_tool_scripts(context->get_project);
+                        
                     EndMenu();
                 }
                 if (BeginMenu("帮助"))

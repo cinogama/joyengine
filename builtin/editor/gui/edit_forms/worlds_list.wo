@@ -20,7 +20,7 @@ namespace editor::gui::edit_forms
             je::gui::SetNextWindowSizeConstraints((200., 300.), (200., 5000.));
             do show->set(BeginOpen("世界列表##jeeditor"));
 
-            static let img = je::graphic::texture::load("!/builtin/editor-old/icon/File.png")->val;
+            static let img = je::graphic::texture::load("!/builtin/icon/File.png")->val;
 
             // do widget::IconButton(img, "图形按钮", option::none);
             

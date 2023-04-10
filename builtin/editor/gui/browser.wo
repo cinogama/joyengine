@@ -65,6 +65,7 @@ namespace editor::gui
         others(je::graphic::texture),
         cache(je::graphic::texture),
         world(je::graphic::texture),
+        toolscript(je::graphic::texture),
     }
     namespace FileType
     {
@@ -78,6 +79,7 @@ namespace editor::gui
                 others(t)? return t;
                 cache(t)? return t;
                 world(t)? return t;
+                toolscript(t)? return t;
             }
         }
     }
@@ -87,23 +89,24 @@ namespace editor::gui
 
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
-        [".png"] = FileType::image(je::graphic::texture::load(F"!/builtin/editor-old/icon/TextureFile.png")->val),
-        [".jpg"] = FileType::image(je::graphic::texture::load(F"!/builtin/editor-old/icon/TextureFile.png")->val),
-        [".bmp"] = FileType::image(je::graphic::texture::load(F"!/builtin/editor-old/icon/TextureFile.png")->val),
-        [".psd"] = FileType::image(je::graphic::texture::load(F"!/builtin/editor-old/icon/TextureFile.png")->val),
-        [".shader"] = FileType::shader(je::graphic::texture::load(F"!/builtin/editor-old/icon/ShaderFile.png")->val),
-        [".jemodule4"] = FileType::path(je::graphic::texture::load(F"!/builtin/editor-old/icon/CppProgram.png")->val),
-        [".jecache4"] = FileType::cache(je::graphic::texture::load(F"!/builtin/editor-old/icon/JoyEngineCSP-Dev.png")->val),
-        [".jeworld"] = FileType::world(je::graphic::texture::load(F"!/builtin/editor-old/icon/World.png")->val),
+        [".png"] = FileType::image(je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val),
+        [".jpg"] = FileType::image(je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val),
+        [".bmp"] = FileType::image(je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val),
+        [".psd"] = FileType::image(je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val),
+        [".shader"] = FileType::shader(je::graphic::texture::load(F"!/builtin/icon/ShaderFile.png")->val),
+        [".jemodule4"] = FileType::path(je::graphic::texture::load(F"!/builtin/icon/CppProgram.png")->val),
+        [".jecache4"] = FileType::cache(je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val),
+        [".jeworld"] = FileType::world(je::graphic::texture::load(F"!/builtin/icon/World.png")->val),
+        [".jewo"] = FileType::world(je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val),
     };
 
     // 根据文件拓展名返回文件的类型
     private func get_file_icon_by_extern_name(_path: PathInfo)=> FileType
     {
         static let default_path_icon 
-            = FileType::path(je::graphic::texture::load(F"!/builtin/editor-old/icon/FilePath.png")->val);
+            = FileType::path(je::graphic::texture::load(F"!/builtin/icon/FilePath.png")->val);
         static let default_file_icon 
-            = FileType::others(je::graphic::texture::load(F"!/builtin/editor-old/icon/File.png")->val);
+            = FileType::others(je::graphic::texture::load(F"!/builtin/icon/File.png")->val);
 
         let icon = FILE_TYPE_ICONS->get(_path.externname);
 

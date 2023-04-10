@@ -10,6 +10,7 @@ import builtin.editor.environment.main;
 import builtin.api.rend.main;
 import builtin.api.gui.form.msg;
 import builtin.editor.cpp.main;
+import builtin.editor.tools.script_manager;
 
 namespace editor
 {
@@ -256,6 +257,8 @@ namespace editor
 
             // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了
             proj->_run_default_world;
+
+            tools::update_tool_scripts(proj);
 
             // TODO: 在这里临时设置一下窗口嘻嘻嘻，之后做完项目加载就删掉
             je::input::set_window_size(1344, 768);

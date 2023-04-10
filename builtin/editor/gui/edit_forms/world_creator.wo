@@ -4,7 +4,7 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
-    let icon_world_image = je::graphic::texture::load(F"!/builtin/editor-old/icon/System.png")->val;
+    let icon_world_image = je::graphic::texture::load(F"!/builtin/icon/System.png")->val;
 
     using WorldContext  = struct {
         name  : mut string,

@@ -217,8 +217,8 @@ let u = editor::Environment::create();
 
         Separator();
 
-        static let create_project_icon = je::graphic::texture::load(F"!/builtin/editor-old/icon/JoyEngineCSP-Dev.png")->val;
-        static let load_project_icon = je::graphic::texture::load(F"!/builtin/editor-old/icon/JoyEngineCSP.png")->val;
+        static let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val;
+        static let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP.png")->val;
         static let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
         
         if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
