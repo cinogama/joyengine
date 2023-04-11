@@ -40,7 +40,7 @@ namespace editor
         name: string, // 模块的名称
         path: string, // 模块所在路径，仅此而已
         configs: dict<string, CxxProjectBuildConfig>, // 可用的生成配置
-        mut module_instance: option<handle>,
+        module_instance: mut option<handle>,
         project: Project,
     }
     {
@@ -564,12 +564,12 @@ namespace editor
         }
 
         using compile_context = struct {
-            mut display_msg : string,
-            mut massive_msg : option<string>,
-            mut progress    : int,
-            mut show        : bool,
-            mut compile_thread  : option<thread>,
-            mut compile_result  : option<result<result<string, string>, string>>,
+            display_msg : mut string,
+            massive_msg : mut option<string>,
+            progress    : mut int,
+            show        : mut bool,
+            compile_thread  : mut option<thread>,
+            compile_result  : mut option<result<result<string, string>, string>>,
         };
 
         public func update_compile(self: CxxProject, config: string)

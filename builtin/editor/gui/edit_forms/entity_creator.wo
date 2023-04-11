@@ -6,7 +6,7 @@ namespace editor::gui::edit_forms
 {
     let icon_entity_image = je::graphic::texture::load(F"!/builtin/icon/Component.png")->val;
     using EntityContext = struct {
-        mut name  : string,
+        name  : mut string,
         edit_entity      : option<jeapi::debug::Eeid>,
         has_append_types : vec<je::typeinfo>,
         not_append_types : vec<je::typeinfo>,

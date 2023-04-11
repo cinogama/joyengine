@@ -2047,7 +2047,7 @@ R"(
             public using entity_iter = struct {
                 m_cur_iter          : array::iterator<entity>,
                 m_judge_func        : (entity)=>bool,
-                mut m_current_entity: option<entity>,
+                m_current_entity    : mut option<entity>,
 
                 m_all_entity_list   : array<entity>,
                 m_not_top_entities  : vec<entity>,

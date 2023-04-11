@@ -1197,11 +1197,11 @@ namespace shader
     public using shader_wrapper = gchandle;
 
     using ShaderConfig = struct {
-        mut ztest     : ZConfig,
-        mut zwrite    : GConfig,
-        mut blend_src : BlendConfig,
-        mut blend_dst : BlendConfig,
-        mut cull      : CullConfig
+        ztest     : mut ZConfig,
+        zwrite    : mut GConfig,
+        blend_src : mut BlendConfig,
+        blend_dst : mut BlendConfig,
+        cull      : mut CullConfig
     };
     let configs = ShaderConfig
     {

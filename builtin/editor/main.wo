@@ -21,7 +21,7 @@ let mut action_after_guide_form_closed = \ = do nil;;
 using Path = struct {
     name: string,       // 仅用于显示
     path: string,
-    mut childs: option<array<Path>>,
+    childs: mut option<array<Path>>,
 }
 {
     func _get_available_root_paths()
