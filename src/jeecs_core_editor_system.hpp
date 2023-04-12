@@ -118,6 +118,7 @@ namespace jeecs
             bool d = false;
 
             bool l_ctrl = false;
+            bool l_shift = false;
 
             bool l_buttom = false;
             bool r_buttom = false;
@@ -208,56 +209,6 @@ namespace jeecs
 
             _camera_ray = math::ray(trans, proj, mouse_position, false);
             _camera_porjection = &proj;
-
-            if (_inputs.l_ctrl && _inputs.l_buttom_click)
-            {
-                // һ
-                static basic::resource<graphic::vertex> line = new graphic::vertex(
-                    graphic::vertex::type::LINES,
-                    { 0,0,0,
-                      0,0,1000 }, { 3 });
-                static basic::resource<graphic::shader> shad = graphic::shader::create("!/builtin/drawline.shader", R"(
-        import je.shader;
-        
-        VAO_STRUCT! vin {
-            vertex : float3,
-        };
-        using v2f = struct {
-            pos : float4,
-        };
-        using fout = struct {
-            color : float4
-        };
-        
-        public let vert = 
-        \v: vin = v2f{ pos = je_mvp * vertex_pos }
-            where vertex_pos = float4(v.vertex, 1.);;
-
-        public let frag = 
-        \f: v2f = fout{ color = float4(1., 1., 1., 1.) };;
-        
-        )");
-
-                if (jeecs::game_world gworld = get_world())
-                {
-                    auto e = gworld.add_entity<
-                        jeecs::Transform::LocalPosition,
-                        jeecs::Transform::LocalRotation,
-                        jeecs::Transform::LocalToWorld,
-                        jeecs::Transform::Translation,
-                        jeecs::Renderer::Shaders,
-                        jeecs::Renderer::Shape,
-                        Editor::EditorLife,
-                        Editor::Invisable
-                    >();
-
-                    e.get_component<jeecs::Transform::LocalPosition>()->pos = _camera_ray.orgin;
-                    e.get_component<jeecs::Transform::LocalRotation>()->rot = math::quat::rotation(_camera_ray.direction, vec3(0, 0, 1));
-                    e.get_component<jeecs::Renderer::Shaders>()->shaders.push_back(shad);
-                    e.get_component<jeecs::Renderer::Shape>()->vertex = line;
-                    e.get_component<Editor::EditorLife>()->life = 240;
-                }
-            }
 
             if (_drag_viewing && _inputs.r_buttom)
             {
@@ -516,6 +467,11 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
 
                     float distance = (_camera_ray.orgin - trans.world_position).length();
 
+                    if (_inputs.l_ctrl)
+                        distance = distance * 0.5f;
+                    if (_inputs.l_shift)
+                        distance = distance * 2.0f;
+
                     editing_pos->set_world_position(
                         editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * (mover.axis * distance)),
                         *editing_trans,
@@ -555,6 +511,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             _inputs.a = input::keydown(input::keycode::A);
             _inputs.d = input::keydown(input::keycode::D);
             _inputs.l_ctrl = input::keydown(input::keycode::L_CTRL);
+            _inputs.l_shift = input::keydown(input::keycode::L_SHIFT);
             _inputs.l_buttom = input::keydown(input::keycode::MOUSE_L_BUTTION);
             _inputs.r_buttom = input::keydown(input::keycode::MOUSE_R_BUTTION);
             _inputs.l_buttom_click = input::is_up(_inputs.l_buttom);

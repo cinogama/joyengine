@@ -272,6 +272,13 @@ namespace editor
         {
             let self = create( dat["name"] as string, dat["path"] as string);
 
+            // 先加载配置！这非常重要！
+            for (let name, val : dat["configs"] as dict ->> \k, v = (k as string, v as string);)
+            {
+                if (! self.m_configs->get(name)->> \config = config->parse(val);->valor(false))
+                    je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
+            }
+
             // TODO: 加载失败和二进制文件怎么git还需考虑一下
             do dat->get("modules")
                 ->> \d = d as array<dynamic> 
@@ -288,11 +295,7 @@ namespace editor
             do dat["worlds"] as array
                 ->> \wpath = self->load_world(wpath as string);
                 ;
-            for (let name, val : dat["configs"] as dict ->> \k, v = (k as string, v as string);)
-            {
-                if (! self.m_configs->get(name)->> \config = config->parse(val);->valor(false))
-                    je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
-            }
+
             return self;
         }
         public func save_project(self: Project)

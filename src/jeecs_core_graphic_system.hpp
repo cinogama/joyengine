@@ -444,7 +444,7 @@ public let frag =
                             camera_arch{
                                 rendqueue, &projection, cameraviewport, rendbuf
                             }
-                        );
+            );
                     })
                 .exec(
                     [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
@@ -1268,44 +1268,44 @@ public func frag(vf: v2f)
                             camera_arch{
                                 rendqueue,&tarns,&projection, cameraviewport, rendbuf, light2dpass
                             }
-                        );
+            );
 
-                        if (light2dpass != nullptr)
-                        {
-                            auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
-                                ? rendbuf->framebuffer->resouce()
-                                : nullptr;
+            if (light2dpass != nullptr)
+            {
+                auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
+                    ? rendbuf->framebuffer->resouce()
+                    : nullptr;
 
-                            size_t
-                                RENDAIMBUFFER_WIDTH =
-                                (size_t)llround(
-                                    (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
-                                RENDAIMBUFFER_HEIGHT =
-                                (size_t)llround(
-                                    (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
+                size_t
+                    RENDAIMBUFFER_WIDTH =
+                    (size_t)llround(
+                        (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
+                        (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
+                    RENDAIMBUFFER_HEIGHT =
+                    (size_t)llround(
+                        (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
+                        (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
 
-                            bool need_update = light2dpass->defer_rend_aim == nullptr
-                                || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
-                                || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
-                            if (need_update)
+                bool need_update = light2dpass->defer_rend_aim == nullptr
+                    || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
+                    || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
+                if (need_update)
+                {
+                    light2dpass->defer_rend_aim
+                        = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                             {
-                                light2dpass->defer_rend_aim
-                                    = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
-                                        {
-                                            jegl_texture::texture_format::RGBA, // 漫反射颜色
-                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
-                                            jegl_texture::texture_format::DEPTH, // 深度缓冲区
-                                        });
-                                light2dpass->defer_light_effect
-                                    = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
-                                        {
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 光渲染结果
-                                        });
-                            }
-                        }
+                                jegl_texture::texture_format::RGBA, // 漫反射颜色
+                                jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
+                                jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
+                                jegl_texture::texture_format::DEPTH, // 深度缓冲区
+                            });
+                    light2dpass->defer_light_effect
+                        = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
+                            {
+                                (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 光渲染结果
+                            });
+                }
+            }
                     })
                 .exec(
                     [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
@@ -1327,28 +1327,28 @@ public func frag(vf: v2f)
                                     light2d_arch{
                                         &trans, &color, point, parallel, shadow
                                     }
-                                );
-                                if (shadow != nullptr)
-                                {
-                                    bool generate_new_framebuffer =
-                                        shadow->shadow_buffer == nullptr
-                                        || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
-                                        || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
+                    );
+                    if (shadow != nullptr)
+                    {
+                        bool generate_new_framebuffer =
+                            shadow->shadow_buffer == nullptr
+                            || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
+                            || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
 
-                                    if (generate_new_framebuffer)
-                                    {
-                                        shadow->shadow_buffer = new graphic::framebuffer(
-                                            shadow->resolution_width, shadow->resolution_height,
-                                            {
-                                                jegl_texture::texture_format::RGBA, // Only store shadow value.
-                                            }
-                                        );
-                                        shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
-                                            = (jegl_texture::texture_sampling)(
-                                                jegl_texture::texture_sampling::LINEAR
-                                                | jegl_texture::texture_sampling::CLAMP_EDGE);
-                                    }
+                        if (generate_new_framebuffer)
+                        {
+                            shadow->shadow_buffer = new graphic::framebuffer(
+                                shadow->resolution_width, shadow->resolution_height,
+                                {
+                                    jegl_texture::texture_format::RGBA, // Only store shadow value.
                                 }
+                            );
+                            shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
+                                = (jegl_texture::texture_sampling)(
+                                    jegl_texture::texture_sampling::LINEAR
+                                    | jegl_texture::texture_sampling::CLAMP_EDGE);
+                        }
+                    }
                             }
                         ).anyof<Light2D::Point, Light2D::Parallel>()
                                 .exec(
@@ -1377,16 +1377,16 @@ public func frag(vf: v2f)
                                                     _vertex_buffer, { 3,1 });
                                             }
                                         }
-                                        // Cannot create vertex with 0 point.
+                            // Cannot create vertex with 0 point.
 
-                                        if (block.mesh.m_block_mesh != nullptr)
-                                        {
-                                            m_2dblock_list.push_back(
-                                                block2d_arch{
-                                                     &trans, &block, texture, shape
-                                                }
-                                            );
-                                        }
+                            if (block.mesh.m_block_mesh != nullptr)
+                            {
+                                m_2dblock_list.push_back(
+                                    block2d_arch{
+                                         &trans, &block, texture, shape
+                                    }
+                                );
+                            }
                                     }
                             );
         }
@@ -1516,7 +1516,7 @@ public func frag(vf: v2f)
 
                                 jegl_clear_framebuffer(light2d_shadow_aim_buffer);
 
-                                const auto& point_shadow_pass =
+                                const auto& normal_shadow_pass =
                                     lightarch.point == nullptr ?
                                     light2d_host->_defer_light2d_shadow_parallel_pass :
                                     light2d_host->_defer_light2d_shadow_point_pass;
@@ -1528,52 +1528,49 @@ public func frag(vf: v2f)
                                 const auto& sub_shadow_pass = light2d_host->_defer_light2d_shadow_sub_pass;
 
                                 // Let shader know where is the light (through je_color: float4)
-                                jegl_using_resource(point_shadow_pass->resouce());
+                                jegl_using_resource(normal_shadow_pass->resouce());
 
                                 if (lightarch.point == nullptr)
                                 {
                                     jeecs::math::vec3 rotated_light_dir =
                                         lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 1.f).unit();
-                                    jegl_uniform_float4(point_shadow_pass->resouce(),
-                                        point_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                    jegl_uniform_float4(normal_shadow_pass->resouce(),
+                                        normal_shadow_pass->m_builtin->m_builtin_uniform_color,
                                         rotated_light_dir.x,
                                         rotated_light_dir.y,
                                         rotated_light_dir.z,
                                         1.f);
                                 }
                                 else
-                                    jegl_uniform_float4(point_shadow_pass->resouce(),
-                                        point_shadow_pass->m_builtin->m_builtin_uniform_color,
+                                    jegl_uniform_float4(normal_shadow_pass->resouce(),
+                                        normal_shadow_pass->m_builtin->m_builtin_uniform_color,
                                         lightarch.translation->world_position.x,
                                         lightarch.translation->world_position.y,
                                         lightarch.translation->world_position.z,
                                         1.f);
 
-                                int64_t this_depth_layer = INT64_MAX;
                                 const size_t block_entity_count = m_2dblock_list.size();
-                                size_t current_entity_id = 0;
 
                                 std::list<block2d_arch*> block_in_current_layer;
 
                                 auto block2d_iter = m_2dblock_list.begin();
                                 auto block2d_end = m_2dblock_list.end();
 
-                                if (lightarch.shadow->shape_shadow_scale > 0.f)
+                                // 看了一圈又一圈，之前这里的代码实在是太晦气了，重写！
+                                for (; block2d_iter != block2d_end; ++block2d_iter)
                                 {
-                                    for (; block2d_iter != block2d_end; ++block2d_iter)
+                                    auto& blockarch = *block2d_iter;
+                                    int64_t current_layer = (int64_t)(blockarch.translation->world_position.z * 100.f);
+
+                                    block_in_current_layer.push_back(&blockarch);
+
+                                    if (blockarch.block->shadow)
                                     {
-                                        auto& blockarch = *block2d_iter;
-
-                                        int64_t current_layer = (int64_t)(blockarch.translation->world_position.z * 100.f);
-
-                                        if (current_layer <= lightarch.translation->world_position.z * 100.f)
-                                            break;
-
-                                        ++current_entity_id;
-                                        block_in_current_layer.push_back(&blockarch);
-
-                                        if (blockarch.block->shadow)
+                                        if (lightarch.shadow->shape_shadow_scale > 0.f
+                                            && current_layer > lightarch.translation->world_position.z * 100.f)
                                         {
+                                            // 物体比光源更靠近摄像机，且形状阴影工作被允许
+
                                             jegl_using_resource(shape_shadow_pass->resouce());
                                             auto* builtin_uniform = shape_shadow_pass->m_builtin;
 
@@ -1635,126 +1632,39 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             jegl_draw_vertex(using_shape->resouce());
 #undef NEED_AND_SET_UNIFORM
                                         }
-
-                                        // 2. Cancel/Cover shadow.
-                                        auto next_block2d_arch = block2d_iter + 1;
-
-                                        current_layer =
-                                            next_block2d_arch == block2d_end ?
-                                            INT64_MAX :
-                                            current_layer;
-
-                                        if (this_depth_layer == INT64_MAX)
-                                            this_depth_layer = current_layer;
-
-                                        if (current_entity_id >= block_entity_count
-                                            || current_layer != this_depth_layer)
+                                        else
                                         {
-                                            this_depth_layer = current_layer;
+                                            // 物体比光源更远离摄像机，或者形状阴影被禁用
 
-                                            for (auto* block_in_layer : block_in_current_layer)
-                                            {
-                                                if (block_in_layer->textures != nullptr)
-                                                {
-                                                    jeecs::graphic::texture* main_texture = block_in_layer->textures->get_texture(0);
-                                                    if (main_texture != nullptr)
-                                                        jegl_using_texture(main_texture->resouce(), 0);
-                                                    else
-                                                        jegl_using_texture(host()->default_texture->resouce(), 0);
-                                                }
-
-                                                jegl_using_resource(sub_shadow_pass->resouce());
-                                                auto* builtin_uniform = sub_shadow_pass->m_builtin;
+                                            jegl_using_resource(normal_shadow_pass->resouce());
+                                            auto* builtin_uniform = normal_shadow_pass->m_builtin;
 
 #define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
 do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(sub_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
-                                                const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
+ jegl_uniform_##TYPE(normal_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
+                                            const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
-                                                math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                                                math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+                                            math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                            math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
-                                                NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
-                                                NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
-                                                NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
+                                            NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
+                                            NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
+                                            NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
 
-                                                NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
-                                                NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
-                                                NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+                                            NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
+                                            NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
+                                            NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
-                                                NEED_AND_SET_UNIFORM(color, float4, 0.f, 0.f, 0.f, 0.f);
-
-                                                if (block_in_layer->textures != nullptr)
-                                                {
-                                                    NEED_AND_SET_UNIFORM(tiling, float2, block_in_layer->textures->tiling.x, block_in_layer->textures->tiling.y);
-                                                    NEED_AND_SET_UNIFORM(offset, float2, block_in_layer->textures->offset.x, block_in_layer->textures->offset.y);
-                                                }
-                                                jeecs::graphic::vertex* using_shape = (block_in_layer->shape == nullptr
-                                                    || block_in_layer->shape->vertex == nullptr)
-                                                    ? host()->default_shape_quad
-                                                    : block_in_layer->shape->vertex;
-
-                                                jegl_draw_vertex(using_shape->resouce());
+                                            jegl_draw_vertex(blockarch.block->mesh.m_block_mesh->resouce());
 #undef NEED_AND_SET_UNIFORM
-                                            }
-                                            block_in_current_layer.clear();
-                                            // End
                                         }
-
                                     }
-                                }
 
-                                for (; block2d_iter != block2d_end; ++block2d_iter)
-                                {
-                                    auto& blockarch = *block2d_iter;
-                                    ++current_entity_id;
-
-                                    // TODO. Ignore the block not in range.
-
-                                    // 1. Prepare m_light_pos/je_mvp
-                                    block_in_current_layer.push_back(&blockarch);
-
-                                    if (blockarch.block->shadow)
+                                    // 如果下一个阴影将会在不同层级，或者当前阴影是最后一个阴影，则更新阴影覆盖
+                                    auto next_block2d_iter = block2d_iter + 1;
+                                    if (next_block2d_iter == block2d_end
+                                        || current_layer != (int64_t)(next_block2d_iter->translation->world_position.z * 100.f))
                                     {
-                                        jegl_using_resource(point_shadow_pass->resouce());
-                                        auto* builtin_uniform = point_shadow_pass->m_builtin;
-
-#define NEED_AND_SET_UNIFORM(ITEM, TYPE, ...) \
-do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
- jegl_uniform_##TYPE(point_shadow_pass->resouce(), builtin_uniform->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
-                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
-
-                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
-
-                                        NEED_AND_SET_UNIFORM(m, float4x4, MAT4_MODEL);
-                                        NEED_AND_SET_UNIFORM(v, float4x4, MAT4_VIEW);
-                                        NEED_AND_SET_UNIFORM(p, float4x4, MAT4_PROJECTION);
-
-                                        NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
-                                        NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
-                                        NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
-
-                                        jegl_draw_vertex(blockarch.block->mesh.m_block_mesh->resouce());
-#undef NEED_AND_SET_UNIFORM
-                                    }
-                                    // 
-                                    // 2. Cancel/Cover shadow.
-                                    auto next_block2d_arch = block2d_iter + 1;
-
-                                    int64_t current_layer =
-                                        next_block2d_arch == block2d_end ?
-                                        INT64_MAX :
-                                        (int64_t)(next_block2d_arch->translation->world_position.z * 100.f);
-
-                                    if (this_depth_layer == INT64_MAX)
-                                        this_depth_layer = current_layer;
-
-                                    if (current_entity_id >= block_entity_count
-                                        || current_layer != this_depth_layer)
-                                    {
-                                        this_depth_layer = current_layer;
-
                                         for (auto* block_in_layer : block_in_current_layer)
                                         {
                                             if (block_in_layer->textures != nullptr)
@@ -1804,10 +1714,9 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 #undef NEED_AND_SET_UNIFORM
                                         }
                                         block_in_current_layer.clear();
-                                        // End
                                     }
-                                }
 
+                                }
                             }
                         }
 
