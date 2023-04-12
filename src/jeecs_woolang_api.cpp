@@ -1838,7 +1838,8 @@ namespace je
             }
         }
     }
-
+)"
+R"(
     public using universe = gchandle;
     namespace universe
     {
@@ -1874,8 +1875,7 @@ namespace je
 
         extern("libjoyecs", "wojeapi_add_system_to_world")
         public func add_system(self: world, systype: typeinfo)=> bool;
-)"
-R"(
+
         extern("libjoyecs", "wojeapi_get_rendering_world")
         public func rend(u: universe)=> option<world>;
 

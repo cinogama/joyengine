@@ -1,0 +1,49 @@
+namespace editor::gui::edit_forms
+{
+    enum Action
+    {
+        SKIP,
+        ORIGIN,
+        PACK,
+    }
+    func _default_rule(path: string)=> Action;
+    {
+        return Action::PACK;
+    }
+    func _export_logic(proj: string, rule: (string)=> Action)
+    {
+        let normalized_path = filesys::normalize(proj.m_path);
+        assert(!normalized_path->endwith("\\") && !normalized_path->endwith("/"));   
+        // 0. 立即开始重新编译所有C++项目
+        // TODO: 嘻嘻嘻，暂时不编嘻嘻嘻
+
+        // 1. 删掉 .export 目录下的内容
+        do filesys::remove(F"{normalized_path}/.export");
+
+        // 2. 遍历所有目录，记录下所有文件的原始路径和最终路径
+        let all_need_pack_files = filesys::allsubpath(normalized_path)
+            =>> func(subpath)
+            {
+                assert(subpath->beginwith(normalized_path));
+                let packpath = subpath->sub(normalized_path->len)
+                    ->  \s = s->beginwith("/") 
+                        ? F"@/{s}"
+                        | s
+                        ;
+                    ;
+                let action = rule(packpath);
+                if (action == )
+                    return [(subpath, packpath)];
+                else
+                    return [];
+            }
+            ->  mapping;
+
+        do filesys::mkdir(F"{normalized_path}/.export");
+
+    }
+    public func show_export_project(context: EditorContext)
+    {
+        
+    }
+}
