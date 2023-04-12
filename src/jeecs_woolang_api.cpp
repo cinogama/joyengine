@@ -22,6 +22,35 @@ WO_API wo_api wojeapi_get_sleep_suppression(wo_vm vm, wo_value args, size_t argc
     return wo_ret_real(vm, je_clock_get_sleep_suppression());
 }
 
+WO_API wo_api wojeapi_set_runtime_path(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs_file_set_runtime_path(wo_string(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_create_fimg_packer(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_pointer(vm, jeecs_file_image_begin(
+        wo_string(args + 0),
+        wo_string(args + 1),
+        (size_t)wo_int(args + 2)
+    ));
+}
+
+WO_API wo_api wojeapi_pack_file_to_fimg_packer(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* ctx = (fimg_creating_context*)wo_pointer(args + 0);
+    jeecs_file_image_finish(ctx);
+    return wo_ret_bool(vm, jeecs_file_image_pack_file(ctx, wo_string(args + 1), wo_string(args + 2)));
+}
+
+WO_API wo_api wojeapi_finish_fimg_packer(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* ctx = (fimg_creating_context*)wo_pointer(args +0);
+    jeecs_file_image_finish(ctx);
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_set_sleep_suppression(wo_vm vm, wo_value args, size_t argc)
 {
     je_clock_set_sleep_suppression(wo_real(args + 0));
@@ -1024,7 +1053,7 @@ WO_API wo_api wojeapi_texture_get_sampling_method(wo_vm vm, wo_value args, size_
 WO_API wo_api wojeapi_texture_set_sampling_method(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    (*loaded_texture)->resouce()->m_raw_texture_data->m_sampling = (jegl_texture::texture_sampling)wo_int(args+1);
+    (*loaded_texture)->resouce()->m_raw_texture_data->m_sampling = (jegl_texture::texture_sampling)wo_int(args + 1);
     (*loaded_texture)->resouce()->m_raw_texture_data->m_modified = true;
     return wo_ret_void(vm);
 }
@@ -1404,6 +1433,23 @@ namespace je
 
     namespace editor
     {
+        extern("libjoyecs", "wojeapi_set_runtime_path")
+        public func set_runtime_path(path: string)=> void;
+
+        public using fimage_packer = handle
+        {
+            extern("libjoyecs", "wojeapi_create_fimg_packer")
+            public func create(path: string, saving_path: string, max_img_size: int)=> fimage_packer;
+
+            extern("libjoyecs", "wojeapi_pack_file_to_fimg_packer")
+            public func pack(self: fimage_packer, file_path: string, pack_path: string)=> bool;
+
+            extern("libjoyecs", "wojeapi_finish_fimg_packer")
+            public func finish(self: fimage_packer)=> void;
+        }
+        
+       
+
         extern("libjoyecs", "wojeapi_get_sleep_suppression")
         public func get_sleep_suppression()=> real;
 

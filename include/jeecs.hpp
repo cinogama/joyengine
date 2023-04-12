@@ -532,6 +532,8 @@ JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
+
+// ATTENTION: These 2 functions have no thread-safe-promise.
 JE_API const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity);
 JE_API const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
@@ -553,13 +555,16 @@ JE_API jeecs::typing::uid_t je_uid_generate(void);
 JE_API void jeecs_entry_register_core_systems(void);
 
 /////////////////////////// FILE /////////////////////////////////
+struct jeecs_fimg_file;
+struct fimg_creating_context;
 
 struct jeecs_file
 {
+    jeecs_fimg_file* m_image_file_handle;
     FILE* m_native_file_handle;
     size_t m_file_length;
 };
-
+JE_API void        jeecs_file_set_runtime_path(const char* path);
 JE_API jeecs_file* jeecs_file_open(const char* path);
 JE_API void        jeecs_file_close(jeecs_file* file);
 JE_API size_t      jeecs_file_read(
@@ -567,6 +572,10 @@ JE_API size_t      jeecs_file_read(
     size_t elem_size,
     size_t count,
     jeecs_file* file);
+
+JE_API fimg_creating_context* jeecs_file_image_begin(const char* path, const char* storing_path, size_t max_image_size);
+JE_API bool jeecs_file_image_pack_file(fimg_creating_context* context, const char* filepath, const char* packingpath);
+JE_API void jeecs_file_image_finish(fimg_creating_context* context);
 
 // If ignore_crc64 == true, cache will always work even if origin file changed.
 JE_API jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, wo_integer_t virtual_crc64);
@@ -5178,7 +5187,6 @@ namespace jeecs
     {
         return je_ecs_get_name_of_entity(this);
     }
-
     inline std::string game_entity::name(const std::string& _name)
     {
         return je_ecs_set_name_of_entity(this, _name.c_str());

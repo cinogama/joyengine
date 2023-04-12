@@ -156,6 +156,8 @@ func create_project_at(path: string, u: editor::Environment, f: mutable<bool>)
                     u->close();
                     do f->set(false);
                     
+                    je::editor::set_runtime_path(path);
+
                     action_after_guide_form_closed = 
                         func(){
                             let p = editor::Project::create(projname, regular_path);
@@ -194,6 +196,8 @@ func open_project_at(path: string, u: editor::Environment, f: mutable<bool>)
             // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
             u->close();
             do f->set(false);
+
+            je::editor::set_runtime_path(path);
 
             action_after_guide_form_closed = 
                 \ = editor::gui::edit_project(editor::Project::load(dat));
