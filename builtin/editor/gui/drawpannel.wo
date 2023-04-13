@@ -464,7 +464,8 @@ namespace editor::gui::drawpannel
                     do je::editor::update_texture_sampling_method_by_path(saving_path, edited_texture->get_sampling_method());
                     do entity
                         ->> \eid = eid->justdo(
-                                \e = e->editor::graphic::bind_texture(passid, je::graphic::texture::load(saving_path)->val);
+                                \e = e->editor::graphic::bind_texture(passid, je::graphic::texture::load(
+                                    context->get_project->make_path_normalize(saving_path))->val);
                             )
                             ;
                         ;

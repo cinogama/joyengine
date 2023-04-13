@@ -35,7 +35,7 @@ namespace editor::gui::edit_forms
         return menu_option;
     }
 
-    func show_shader(entity: je::entity, shader: je::graphic::shader, index: int)=> shader_option
+    func show_shader(context: EditorContext, entity: je::entity, shader: je::graphic::shader, index: int)=> shader_option
     {
         using je::gui;
 
@@ -52,7 +52,8 @@ namespace editor::gui::edit_forms
         let show_uniforms = TreeNodeEx(F"{shader->path}##{index}", attribute);
         let mut shader_operation = show_shader_menu();
 
-        match (jeapi::gui::widget::accept_file_for_current_widget())
+        match (jeapi::gui::widget::accept_file_for_current_widget()
+            ->> \path = context->get_project->make_path_normalize(path);)
         {
         value(shader_path)?
             {
@@ -97,6 +98,7 @@ namespace editor::gui::edit_forms
                                     ->valor(F"<没有绑定到通道{id}的纹理>");
                                 
                         do jeapi::gui::widget::File(name, texture_path)
+                            ->> \path = context->get_project->make_path_normalize(path);
                             ->> \path =  je::graphic::texture::load(path)
                                 ->> \tex = entity->editor::graphic::bind_texture(id, tex);
                                 ->  or(\=jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理");)
@@ -262,7 +264,7 @@ namespace editor::gui::edit_forms
                                 let mut index = 0, mut shaders_has_updated = false;
                                 for (let _, shader : shaders->dup())
                                 {
-                                    match (show_shader(cur_e, shader, index))
+                                    match (show_shader(context, cur_e, shader, index))
                                     {
                                     AddShader(shad)?
                                         {
@@ -280,7 +282,8 @@ namespace editor::gui::edit_forms
                                 } // end show shader.
 
                                 TextDisabled("[拖动shader文件到此处添加新的pass]");
-                                match (jeapi::gui::widget::accept_file_for_current_widget())
+                                match (jeapi::gui::widget::accept_file_for_current_widget()
+                                    ->> \path = context->get_project->make_path_normalize(path);)
                                 {
                                 value(shader_path)?
                                     {
