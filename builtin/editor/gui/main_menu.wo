@@ -4,6 +4,7 @@ import je.gui;
 
 import builtin.editor.gui.main;
 import builtin.api.dbg.main;
+import builtin.editor.gui.edit_forms.export_project;
 
 using je::gui;
 
@@ -35,16 +36,16 @@ namespace editor::gui
                             jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
                         }
                     }
+                    EndMenu();
+                }
+                if (BeginMenu("项目"))
+                {
                     if (MenuItem("保存项目"))
                     {
                         let proj = context->get_project;
                         if (proj->save_project())
                             jeapi::gui::form::msg("完成", "项目和所有编辑中的世界已经保存"); 
                     }
-                    EndMenu();
-                }
-                if (BeginMenu("编辑"))
-                {
                     if (MenuItem("项目设置"))
                     {
                         context->launch_editor_form(func(){
@@ -62,7 +63,7 @@ namespace editor::gui
                     Separator();
                     if (MenuItem("导出"))
                     {
-                        std::panic("TODO;");
+                        edit_forms::show_export_project(context);
                     }
                     EndMenu();
                 }

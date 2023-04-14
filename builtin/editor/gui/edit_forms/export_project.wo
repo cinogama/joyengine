@@ -1,49 +1,76 @@
+using je::gui;
+
 namespace editor::gui::edit_forms
 {
     enum Action
     {
-        SKIP,
-        ORIGIN,
-        PACK,
+        SKIP,       // 跳过此文件
+        ORIGIN,     // 原样复制到打包路径
+        PACK,       // 打包
     }
-    func _default_rule(path: string)=> Action;
+    func _default_rule(originpath: string, packpath: string)=> Action
     {
-        return Action::PACK;
+        // 如果是文件，才考虑打包
+        if (filesys::isfile(originpath))
+        {
+            if (filesys::extension(originpath)->lower == ".jeproj4")
+                return Action::SKIP;  // 跳过项目文件
+
+            return Action::PACK;
+        }
+
+        return Action::SKIP;
     }
-    func _export_logic(proj: string, rule: (string)=> Action)
+    func _export_logic(proj: Project, rule: (string, string)=> Action)
     {
         let normalized_path = filesys::normalize(proj.m_path);
         assert(!normalized_path->endwith("\\") && !normalized_path->endwith("/"));   
-        // 0. 立即开始重新编译所有C++项目
+        // 0. 立即开始重新编译所有C++项目，只编译到输出目录中
         // TODO: 嘻嘻嘻，暂时不编嘻嘻嘻
 
         // 1. 删掉 .export 目录下的内容
         do filesys::remove(F"{normalized_path}/.export");
 
         // 2. 遍历所有目录，记录下所有文件的原始路径和最终路径
-        let all_need_pack_files = filesys::allsubpath(normalized_path)
-            =>> func(subpath)
+        match (filesys::allsubpath(normalized_path))
+        {
+        ok(subpaths)?
             {
-                assert(subpath->beginwith(normalized_path));
-                let packpath = subpath->sub(normalized_path->len)
-                    ->  \s = s->beginwith("/") 
-                        ? F"@/{s}"
-                        | s
-                        ;
-                    ;
-                let action = rule(packpath);
-                if (action == )
-                    return [(subpath, packpath)];
-                else
-                    return [];
+                let all_need_pack_files = subpaths
+                    =>> func(subpath)
+                    {
+                        assert(subpath->beginwith(normalized_path));
+                        let packpath = subpath->sub(normalized_path->len)
+                            ->  \s = s->beginwith("/") 
+                                ? F"@{s}"
+                                | s
+                                ;
+                            ;
+                        let action = rule(subpath, packpath);
+                        if (action != Action::SKIP)
+                            return [(subpath, (packpath, action))];
+                        else
+                            return [];
+                    }
+                    ->  mapping;
+
+                std::println(all_need_pack_files);
+
+                do filesys::mkdir(F"{normalized_path}/.export");
+                return ok(do nil);
             }
-            ->  mapping;
-
-        do filesys::mkdir(F"{normalized_path}/.export");
-
+        err(errdat)?
+            return err(errdat);
+        }
     }
     public func show_export_project(context: EditorContext)
     {
-        
+        context->launch_editor_form(func(){
+            do Begin("导出项目-TESTING");
+                if (Button("测试"))
+                    do _export_logic(context->get_project, _default_rule);
+            End();
+            return true;
+        }, ());
     }
 }
