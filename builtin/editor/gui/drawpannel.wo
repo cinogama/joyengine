@@ -492,23 +492,22 @@ namespace editor::gui::drawpannel
         let used_texture_id_pass = e->editor::graphic::get_shaders()
             =>> \shader = shader->get_uniforms()
                     ->  unmapping
-                    ->> \nv = nv[1];
-                    =>> func(uniformval)
-                        {
-                            match (uniformval)
+                    =>> \nv = nv...
+                        ->  func(name, uniformval)
                             {
-                            texture(id)?
-                                return [id];
-                            integer(_)?;
-                            float(_)?;
-                            float2(_)?;
-                            float3(_)?;
-                            float4(_)?;
-                            others?;
+                                if (!name->beginwith("JOYENGINE_"))
+                                {
+                                    match (uniformval)
+                                    {
+                                    texture(id)?
+                                        return [id];
+                                    _?;
+                                    }
+                                }
+                                return [];
                             }
-                            return [];
-                        }
-            ;
+                        ;
+                ;
             ->> \id = (id, nil);
             ->  mapping
             ->  unmapping // remove all repeated elems.

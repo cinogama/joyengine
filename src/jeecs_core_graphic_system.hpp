@@ -595,6 +595,11 @@ public let frag =
                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
+                            NEED_AND_SET_UNIFORM(local_scale, float3,
+                                rendentity.translation->local_scale.x,
+                                rendentity.translation->local_scale.y,
+                                rendentity.translation->local_scale.z);
+
                             NEED_AND_SET_UNIFORM(tiling, float2, _using_tiling->x, _using_tiling->y);
                             NEED_AND_SET_UNIFORM(offset, float2, _using_offset->x, _using_offset->y);
 
@@ -727,7 +732,10 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
-    let final_shadow = alphatest(float4::create(float3_one, texture(main_texture, vf.uv)->w));
+    let final_shadow = alphatest(
+        float4::create(
+            je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
+            texture(main_texture, vf.uv)->w));
 
     return fout{
         shadow_factor = final_shadow->x
@@ -771,7 +779,8 @@ public func vert(v: vin)
 
 public func frag(vf: v2f)
 {
-    return fout{shadow_factor = float::new(1.)};
+    // NOTE: je_local_scale->x is shadow factor here.
+    return fout{shadow_factor = je_local_scale->x};
 }
 )") };
 
@@ -815,7 +824,10 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
-    let final_shadow = alphatest(float4::create(float3_one, texture(main_texture, vf.uv)->w));
+    let final_shadow = alphatest(
+        float4::create(
+            je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
+            texture(main_texture, vf.uv)->w));
 
     return fout{
         shadow_factor = final_shadow->x
@@ -859,7 +871,8 @@ public func vert(v: vin)
 
 public func frag(vf: v2f)
 {
-    return fout{shadow_factor = float::new(1.)};
+    // NOTE: je_local_scale->x is shadow factor here.
+    return fout{shadow_factor = je_local_scale->x};
 }
 )") };
 
@@ -1340,7 +1353,7 @@ public func frag(vf: v2f)
                             shadow->shadow_buffer = new graphic::framebuffer(
                                 shadow->resolution_width, shadow->resolution_height,
                                 {
-                                    jegl_texture::texture_format::RGBA, // Only store shadow value.
+                                    jegl_texture::texture_format::MONO, // Only store shadow value.
                                 }
                             );
                             shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
@@ -1564,7 +1577,7 @@ public func frag(vf: v2f)
 
                                     block_in_current_layer.push_back(&blockarch);
 
-                                    if (blockarch.block->shadow)
+                                    if (blockarch.block->shadow > 0.f)
                                     {
                                         if (lightarch.shadow->shape_shadow_scale > 0.f
                                             && current_layer > lightarch.translation->world_position.z * 100.f)
@@ -1589,6 +1602,12 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                            // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
+                                            NEED_AND_SET_UNIFORM(local_scale, float3,
+                                                blockarch.block->shadow,
+                                                0.f,
+                                                0.f);
 
                                             if (blockarch.textures != nullptr)
                                             {
@@ -1655,6 +1674,12 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
 
+                                            // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
+                                            NEED_AND_SET_UNIFORM(local_scale, float3,
+                                                blockarch.block->shadow,
+                                                0.f,
+                                                0.f);
+
                                             jegl_draw_vertex(blockarch.block->mesh.m_block_mesh->resouce());
 #undef NEED_AND_SET_UNIFORM
                                         }
@@ -1694,6 +1719,12 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             NEED_AND_SET_UNIFORM(mv, float4x4, MAT4_MV);
                                             NEED_AND_SET_UNIFORM(vp, float4x4, MAT4_VP);
                                             NEED_AND_SET_UNIFORM(mvp, float4x4, MAT4_MVP);
+
+                                            // local_scale.x .y .z 通道预留
+                                            /*NEED_AND_SET_UNIFORM(local_scale, float3,
+                                                0.f,
+                                                0.f,
+                                                0.f);*/
 
                                             if (block_in_layer->translation->world_position.z < lightarch.translation->world_position.z)
                                                 NEED_AND_SET_UNIFORM(color, float4, 1.f, 1.f, 1.f, 1.f);

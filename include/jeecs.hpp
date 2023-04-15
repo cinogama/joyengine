@@ -565,6 +565,7 @@ struct jeecs_file
     size_t m_file_length;
 };
 JE_API void        jeecs_file_set_runtime_path(const char* path);
+JE_API const char* jeecs_file_get_runtime_path();
 JE_API jeecs_file* jeecs_file_open(const char* path);
 JE_API void        jeecs_file_close(jeecs_file* file);
 JE_API size_t      jeecs_file_read(
@@ -5173,7 +5174,7 @@ namespace jeecs
             };
 
             block_mesh mesh;
-            bool shadow = true;
+            float shadow = 1.0f;
 
             static void JERefRegsiter()
             {

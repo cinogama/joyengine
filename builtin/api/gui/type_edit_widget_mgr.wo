@@ -54,4 +54,7 @@ namespace jeapi::gui
     register_editor_for_native_value(je::typeinfo::float4, func(tag, nvalue){
         return InputFloat4(F"##{tag}", nvalue->float4...)->>\fv4 = nvalue->set_float4(fv4...);->has;
     });
+    register_editor_for_native_value(je::typeinfo::quat, func(tag, nvalue){
+        return InputFloat3(F"##{tag}", nvalue->euler3...)->>\fv3 = nvalue->set_euler3(fv3...);->has;
+    });
 }

@@ -184,14 +184,21 @@ namespace jeecs
 
                     rotation.rot = rotation.rot * quat(0, 30.f * _inputs.uniform_mouse_pos.x, 0);
                 }
+
+                float move_speed = 5.0f;
+                if (_inputs.l_ctrl)
+                    move_speed = move_speed / 2.0f;
+                if (_inputs.l_shift)
+                    move_speed = move_speed * 2.0f;
+
                 if (_inputs.w)
-                    position.pos += _camera_rot * vec3(0, 0, 5.f / 60.f);
+                    position.pos += _camera_rot * vec3(0, 0, move_speed / 60.f);
                 if (_inputs.s)
-                    position.pos += _camera_rot * vec3(0, 0, -5.f / 60.f);
+                    position.pos += _camera_rot * vec3(0, 0, -move_speed / 60.f);
                 if (_inputs.a)
-                    position.pos += _camera_rot * vec3(-5.f / 60.f, 0, 0);
+                    position.pos += _camera_rot * vec3(-move_speed / 60.f, 0, 0);
                 if (_inputs.d)
-                    position.pos += _camera_rot * vec3(5.f / 60.f, 0, 0);
+                    position.pos += _camera_rot * vec3(move_speed / 60.f, 0, 0);
             }
             else
                 advise_lock_mouse = false;

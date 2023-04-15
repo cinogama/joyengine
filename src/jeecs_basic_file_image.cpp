@@ -339,6 +339,13 @@ void jeecs_file_set_runtime_path(const char* path)
     _je_runtime_file_image = fimg_open_img(path);
 }
 
+const char* jeecs_file_get_runtime_path()
+{
+    std::shared_lock g1(_je_runtime_path_and_image_mx);
+
+    return _je_runtime_path.c_str();
+}
+
 jeecs_file* jeecs_file_open(const char* path)
 {
     // TODO: Open file in work path.

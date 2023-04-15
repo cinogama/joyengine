@@ -16,6 +16,9 @@ namespace editor::gui::edit_forms
             if (filesys::extension(originpath)->lower == ".jeproj4")
                 return Action::SKIP;  // 跳过项目文件
 
+            if (packpath->lower->find(".jemodule4") != -1)
+                return Action::SKIP;  // 跳过C++工程文件
+
             return Action::PACK;
         }
 

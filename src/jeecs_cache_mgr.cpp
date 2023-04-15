@@ -99,6 +99,8 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
     }
 
     string file_cache_path = filepath + ".jecache4"s;
+    if (filepath[0] == '@')
+        file_cache_path = jeecs_file_get_runtime_path() + file_cache_path.substr(1);
     if (filepath[0] == '!')
         file_cache_path = wo_exe_path() + file_cache_path.substr(1);
 
