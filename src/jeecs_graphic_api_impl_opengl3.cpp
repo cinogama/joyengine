@@ -273,6 +273,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MV");
             builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_VP");
 
+            // ATTENTION: 注意，以下参数只保证在普通shader中如其名字一般的功能，其他特殊shader可能挪作他用
             builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(resource, "JOYENGINE_LOCAL_SCALE");
 
             builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(resource, "JOYENGINE_TEXTURE_TILING");

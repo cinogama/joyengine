@@ -691,7 +691,7 @@ namespace $$MODULE_NAME$$
                                                 ->replace("$$COMPONENT_NAME$$", component_name))
                                             )
                                         {
-                                            do filesys::remove(F"{path.path}components/{component_name}.hpp")->unwarp;
+                                            do filesys::remove(F"{path.path}/components/{component_name}.hpp")->unwarp;
                                             jeapi::gui::form::errmsg("创建组件失败", "无法创建和写入组件源文件");
                                         }
                                         else
@@ -762,7 +762,7 @@ namespace $$MODULE_NAME$$
         if (MenuItemEnabled("重命名", is_modifiable_file))
         {
             jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
-                \newname: string = filesys::move(path.path, filesys::parent(path.path) + newname)
+                \newname: string = filesys::move(path.path, F"{filesys::parent(path.path)}/{newname}")
                     ->> \_ = force_update();
                     ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }

@@ -11,7 +11,7 @@ namespace editor::gui::drawpannel
 {
     alias color4_t = (real, real, real, real);
 
-    func save_texture_to_path(tex: graphic::texture, path: string)
+    func save_texture_to_path(context: EditorContext, tex: graphic::texture, path: string)
     {
         let (w, h) = tex->size();
         let saving_img = image::create(w, h);
@@ -20,7 +20,7 @@ namespace editor::gui::drawpannel
             for (let mut y = 0; y < h; y += 1)
                 saving_img->setpix((x, y), tex->pix((x, y))->get_color);
 
-        let result = saving_img->save(path);
+        let result = saving_img->save(path->replace("@", context->get_project.m_path));
         if (!result)
             jeapi::gui::form::errmsg("图像保存失败", F"无法保存图像到{path}");
         return result;
@@ -459,7 +459,7 @@ namespace editor::gui::drawpannel
                 })->\path = filesys::extension(path)->lower == ".png" ? path | F"{filesys::parent(path)}/{filesys::purename(path)}.png";
                 ;
                 
-                if (save_texture_to_path(edited_texture, saving_path))
+                if (save_texture_to_path(context, edited_texture, saving_path))
                 {
                     do je::editor::update_texture_sampling_method_by_path(saving_path, edited_texture->get_sampling_method());
                     do entity

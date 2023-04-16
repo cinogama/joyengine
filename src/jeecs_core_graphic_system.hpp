@@ -1615,6 +1615,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                                 NEED_AND_SET_UNIFORM(offset, float2, blockarch.textures->offset.x, blockarch.textures->offset.y);
                                             }
 
+                                            // 通过 je_color 变量传递着色器的位置或方向
                                             if (lightarch.point == nullptr)
                                             {
                                                 jeecs::math::vec3 rotated_light_dir =
