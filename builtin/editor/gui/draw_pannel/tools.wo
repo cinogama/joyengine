@@ -1,0 +1,210 @@
+import pkg.worst;
+
+using je;
+
+namespace editor::gui::drawpannel::tools
+{
+    public using Nothing = ()
+    {
+        public func OnMouseDown(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+        public func OnMouseHold(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+        public func OnMouseUp(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+    }
+    func draw_line(target: graphic::texture, color: color4_t, p1: (int, int), p2: (int, int))
+    {
+        // 以下代码主体来自 神奇的JoyEngineCSP，有大量屎山代码！
+        let ((mut x1, mut y1), (mut x2, mut y2)) = (p1, p2);
+
+        if (
+            (x1 > x2 && y2 > y1 && (y2 - y1) <= (x1 - x2)) 
+            || (x1 < x2 && y1 > y2 && (x2 - x1) < (y1 - y2)) 
+            || (x2 <= x1 && y1 >= y2)
+        )
+        {
+            let t1 = x1;
+            x1 = x2;
+            x2 = t1;
+            let t2 = y1;
+            y1 = y2;
+            y2 = t2;
+        }
+
+        target->pix((x1, y1))->set_color(color);
+        target->pix((x2, y2))->set_color(color);
+            
+        let mut dx = math::abs(x2 - x1), mut dy = math::abs(y2 - y1);
+        if (dx == 0 && dy == 0)
+            return;
+
+        let mut flag = false;
+        if (dx < dy)
+        {
+            flag = true;
+
+            let t1 = x1;
+            x1 = y1;
+            y1 = t1;
+
+            let t2 = x2;
+            x2 = y2;
+            y2 = t2;
+
+            let t3 = dx;
+            dx = dy;
+            dy = t3;
+        }
+
+        let tx = (x2 - x1 > 0) ? 1 | -1;
+        let ty = (y2 - y1 > 0) ? 1 | -1;
+
+        let mut curx = x1 + 1;
+        let mut cury = y1;
+
+        let dS = 2 * dy;
+        let dT = 2 * (dy - dx);
+        let mut d = dS - dx;
+
+        while (curx != x2)
+        {
+            if (d < 0)
+                d += dS;
+            else
+            {
+                cury += ty; 
+                d += dT;
+            }
+
+            if (flag)
+                target->pix((cury, curx))->set_color(color);
+            else
+                target->pix((curx, cury))->set_color(color);
+
+            curx += tx;
+        }
+
+    }
+    public using Pen = struct{
+        m_last_draw_pos: mut (int, int),
+    }
+    {
+        public func create()
+        {
+            return Pen{m_last_draw_pos = mut (-1, -1)};
+        }
+        public func OnMouseDown(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            self.m_last_draw_pos = pos;
+            target->pix(self.m_last_draw_pos)->set_color(color);
+        }
+        public func OnMouseHold(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            // 如果新点不等于旧点，那么画条线过去！
+            // 窝窝头偷大懒
+            if (self.m_last_draw_pos[0] != pos[0] || self.m_last_draw_pos[1] != pos[1])
+            {
+                draw_line(target, color, self.m_last_draw_pos, pos);
+                self.m_last_draw_pos = pos;
+            }
+        }
+        public func OnMouseUp(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+    }
+    public using Line = struct{
+        m_snapshot: mut option<TextureSnapshot>,
+        m_first_pos: mut (int, int),
+        m_last_pos: mut (int, int),
+    }
+    {
+        public func create()
+        {
+            return Line{
+                m_snapshot = mut option::none,
+                m_first_pos = mut (-1, -1),
+                m_last_pos = mut (-1, -1),
+            };
+        }
+        public func OnMouseDown(self: Line, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            self.m_snapshot = option::value(TextureSnapshot::create(target));
+            self.m_first_pos = pos;
+            self.m_last_pos = pos;
+            target->pix(pos)->set_color(color);
+        }
+        public func OnMouseHold(self: Line, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            // 如果新点不等于旧点，那么画条线过去！
+            // 窝窝头偷大懒
+            if (self.m_last_pos[0] != pos[0] || self.m_last_pos[1] != pos[1])
+            {
+                self.m_snapshot->val->restore();
+                draw_line(target, color, self.m_first_pos, pos);
+                self.m_last_pos = pos;
+            }
+        }
+        public func OnMouseUp(self: Line, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            self.m_snapshot = option::none;
+        }
+    }
+    public using Rect = struct{
+        m_snapshot: mut option<TextureSnapshot>,
+        m_first_pos: mut (int, int),
+        m_last_pos: mut (int, int),
+    }
+    {
+        public func create()
+        {
+            return Rect{
+                m_snapshot = mut option::none,
+                m_first_pos = mut (-1, -1),
+                m_last_pos = mut (-1, -1),
+            };
+        }
+        public func OnMouseDown(self: Rect, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            self.m_snapshot = option::value(TextureSnapshot::create(target));
+            self.m_first_pos = pos;
+            self.m_last_pos = pos;
+            target->pix(pos)->set_color(color);
+        }
+        public func OnMouseHold(self: Rect, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            // 如果新点不等于旧点，那么画条线过去！
+            // 窝窝头偷大懒
+            if (self.m_last_pos[0] != pos[0] || self.m_last_pos[1] != pos[1])
+            {
+                self.m_snapshot->val->restore();
+                let (x1, y1) = self.m_first_pos, (x2, y2) = pos;
+                draw_line(target, color, (x1, y1), (x2, y1));
+                draw_line(target, color, (x2, y1), (x2, y2));
+                draw_line(target, color, (x2, y2), (x1, y2));
+                draw_line(target, color, (x1, y2), (x1, y1));
+                self.m_last_pos = pos;
+            }
+        }
+        public func OnMouseUp(self: Rect, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            self.m_snapshot = option::none;
+        }
+    }
+    public using Fill = ()
+    {
+        public func OnMouseDown(self: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+        public func OnMouseHold(self: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+            // TODO
+        }
+        public func OnMouseUp(self: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
+        {
+        }
+    }
+}

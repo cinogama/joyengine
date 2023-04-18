@@ -4,12 +4,14 @@ import je.gui;
 import pkg.image;
 import pkg.filesystem;
 
+import tools;
+
 using je;
 using je::gui;
 
 namespace editor::gui::drawpannel
 {
-    alias color4_t = (real, real, real, real);
+    public alias color4_t = (real, real, real, real);
 
     func save_texture_to_path(context: EditorContext, tex: graphic::texture, path: string)
     {
@@ -130,7 +132,90 @@ namespace editor::gui::drawpannel
         
         }, (mutable::create(method), /**/));
     }
+    public using TextureSnapshot = struct
+    {   
+        m_width: int,
+        m_height: int,
+        m_pixels: array<color4_t>,
+        m_texture: graphic::texture,
+    }
+    {
+        public func create(tex: graphic::texture)
+        {
+            let (w, h) = tex->size;
+            let pxs = array::create(w * h, mut (0., 0., 0., 0.));
 
+            for (let mut x = 0; x < w; x += 1)
+                for (let mut y = 0; y < h; y += 1)
+                    pxs[y * w + x] = tex->pix((x, y))->get_color;
+
+            return TextureSnapshot{
+                m_width = w,
+                m_height = h,
+                m_pixels = pxs->unsafe::cast:< array<color4_t> >,
+                m_texture = tex,
+            };
+        }
+        public func restore(self: TextureSnapshot)
+        {
+            for (let mut x = 0; x < self.m_width; x += 1)
+                for (let mut y = 0; y < self.m_height; y += 1)
+                    self.m_texture->pix((x, y))->set_color(self.m_pixels[y * self.m_width + x]);
+        }
+    }
+
+    using HistoryManager = struct {
+        m_texture: graphic::texture,
+        m_current: mut int,
+        m_history: vec<TextureSnapshot>,
+        m_edited_mark: mut bool,
+    }
+    {
+        func create(tex: graphic::texture)
+        {
+            return HistoryManager{
+                m_texture = tex,
+                m_current = mut 0,
+                m_history = [TextureSnapshot::create(tex)]mut,
+                m_edited_mark = mut false,
+            };  
+        }
+        func mark_as_edited(self: HistoryManager)
+        {
+            self.m_edited_mark = true;
+        }
+        func edited(self: HistoryManager)
+        {
+            return self.m_current != 0 || self.m_edited_mark;
+        }
+        func save_step(self: HistoryManager)
+        {
+            let snapshot = TextureSnapshot::create(self.m_texture);
+            self.m_current += 1;
+            if (self.m_current < self.m_history->len)
+                // 新添加快照将覆盖后续所有
+                assert(self.m_history->decrease(self.m_current)); // 必须成功
+            self.m_history->add(snapshot);            
+        }
+        func undo(self: HistoryManager)
+        {
+            if (self.m_current > 0)
+            {
+                self.m_history[self.m_current -:= 1]->restore;
+                return true;
+            }
+            return false;
+        }
+        func redo(self: HistoryManager)
+        {
+            if (self.m_current < self.m_history->len - 1)
+            {
+                self.m_history[self.m_current +:= 1]->restore;
+                return true;
+            }
+            return false;
+        }
+    }
     using DrawContextT = struct{
         scale:      mut real,
         offset_x:   mut real,
@@ -143,7 +228,7 @@ namespace editor::gui::drawpannel
         maincolor:  mut color4_t,
         subcolor:   mut color4_t,
 
-        edited_textures: map<graphic::texture, int/*texture pass id*/>, // TODO: 图片的历史记录也放在这里
+        edited_textures: dict<graphic::texture, (int/*texture pass id*/, HistoryManager)>,
         // 傻逼键盘迟早得换！
     };
 
@@ -154,36 +239,6 @@ namespace editor::gui::drawpannel
         let delta = _nw - _w;
         _w = _nw;
         return delta;
-    }
-
-    using Nothing = ()
-    {
-        func OnMouseDown(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-        }
-        func OnMouseHold(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-        }
-        func OnMouseUp(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-        }
-    }
-    using Pen = ()
-    {
-        func OnMouseDown(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-        }
-        func OnMouseHold(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-            let (px, py) = pos;
-            let (w, h) = target->size;
-
-            if (px >= 0 && px < w && py >= 0 && py < h)
-                target->pix(pos)->set_color(color);
-        }
-        func OnMouseUp(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-        }
     }
 
     using DrawToolT = struct{
@@ -217,8 +272,11 @@ namespace editor::gui::drawpannel
     }
 
     let all_draw_tools = {
-        ["无"] = \=DrawToolT::create("无", (): Nothing);,
-        ["钢笔"] = \=DrawToolT::create("钢笔", (): Pen);,
+        ["无"] = \=DrawToolT::create("无", (): tools::Nothing);,
+        ["钢笔"] = \=DrawToolT::create("钢笔", tools::Pen::create());,
+        ["直线"] = \=DrawToolT::create("直线", tools::Line::create());,
+        ["矩形"] = \=DrawToolT::create("矩形", tools::Rect::create());,
+        ["填充"] = \=DrawToolT::create("填充", (): tools::Fill);,
     };
 
     func edittexture(context: EditorContext, entity: option<jeapi::debug::Eeid>, images: array<(int, mut graphic::texture)>, draw_context: DrawContextT)
@@ -229,6 +287,8 @@ namespace editor::gui::drawpannel
         {
             for (let index, (passid, texture) : images)
             {
+                let history_mgr = draw_context.edited_textures[texture][1];
+
                 let texture_path = texture->path->valor("<内置>");
                 if (BeginTabItem(F"通道{passid}: {texture_path}"))
                 {
@@ -268,8 +328,7 @@ namespace editor::gui::drawpannel
                                         images[index][1] = new_texture;
                                         do texture->path->>\path = new_texture->bind_path(path);;
 
-                                        if (!draw_context.edited_textures->contain(texture))
-                                            draw_context.edited_textures->set(texture, passid);
+                                        history_mgr->mark_as_edited();
                                     }
                                     End();
                                     return open;
@@ -280,8 +339,7 @@ namespace editor::gui::drawpannel
                                 drawpannel::modify_sampling_method(texture_path, texture->get_sampling_method, 
                                     func(method){
                                         texture->set_sampling_method(method);
-                                        if (!draw_context.edited_textures->contain(texture))
-                                            draw_context.edited_textures->set(texture, passid);
+                                        history_mgr->mark_as_edited();
                                     });
                             }
                             EndMenu();
@@ -412,10 +470,6 @@ namespace editor::gui::drawpannel
                         }
                         if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
                         {
-                            // 图片被编辑过了，储存起来，窗口关闭时询问保存！
-                            if (!draw_context.edited_textures->contain(texture))
-                                draw_context.edited_textures->set(texture, passid);
-
                             draw_context.mousedown = true;
                             if (first_click)
                                 draw_context.drawtool->OnMouseDown(texture, draw_context.usecolor, (mepixx, mepixy));
@@ -425,7 +479,10 @@ namespace editor::gui::drawpannel
                         else
                         {
                             if (draw_context.mousedown)
+                            {
                                 draw_context.drawtool->OnMouseUp(texture, draw_context.usecolor, (mepixx, mepixy));
+                                history_mgr->save_step();
+                            }
                             draw_context.mousedown = false;
                         }
                     }
@@ -445,7 +502,7 @@ namespace editor::gui::drawpannel
             // 遍历所有被编辑过的图片，直接保存！
             for (let _, (passid, edited_texture) : images)
             {
-                if (!draw_context.edited_textures->contain(edited_texture))
+                if (!draw_context.edited_textures[edited_texture][1]->edited)
                     continue;
                 
                 // 生成文件名，如果已经有了就有，没有就死！
@@ -527,12 +584,13 @@ namespace editor::gui::drawpannel
             ->  valor(true);
             ;
 
+        let id_tex_list = used_texture_id_pass 
+            ->> \id = (id, mut textures->get(id)->valor(je::graphic::texture::create(16, 16)));
+            ;
         launch(edittexture, (
             context,
             option::value(jeapi::debug::get_entity_editor_id(e)),
-            used_texture_id_pass 
-                ->> \id = (id, mut textures->get(id)->valor(je::graphic::texture::create(16, 16)))
-                    ;,
+            id_tex_list,
             DrawContextT{
                 scale = mut 10.,
                 offset_x = mut 0.,
@@ -545,7 +603,10 @@ namespace editor::gui::drawpannel
                 maincolor = mut (1., 1., 1., 1.),
                 subcolor = mut (0., 0., 0., 0.),
 
-                edited_textures = {}mut,
+                edited_textures = id_tex_list
+                    ->> \id_text = (id_text[1], (id_text[0], HistoryManager::create(id_text[1])));
+                    ->  mapping
+                    ,
             }
         ));
     }

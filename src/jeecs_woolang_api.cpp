@@ -1034,6 +1034,7 @@ WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
     auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(),
         wo_int(wo_struct_get(args + 1, 0)),
         wo_int(wo_struct_get(args + 1, 1)));

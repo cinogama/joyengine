@@ -3969,13 +3969,18 @@ namespace jeecs
                     assert(_texture->m_type == jegl_resource::type::TEXTURE);
                     assert(sizeof(jegl_texture::pixel_data_t) == 1);
 
-                    _m_pixel =
+                    if (x < _m_texture->m_width && y < _m_texture->m_height)
+                        _m_pixel =
                         _m_texture->m_pixels
                         + y * _m_texture->m_width * _m_texture->m_format
                         + x * _m_texture->m_format;
+                    else
+                        _m_pixel = nullptr;
                 }
                 inline math::vec4 get() const noexcept
                 {
+                    if (_m_pixel == nullptr)
+                        return {};
                     switch (_m_texture->m_format)
                     {
                     case jegl_texture::texture_format::MONO:
@@ -3990,6 +3995,8 @@ namespace jeecs
                 }
                 inline void set(const math::vec4& value) const noexcept
                 {
+                    if (_m_pixel == nullptr)
+                        return;
                     _m_texture->m_modified = true;
                     switch (_m_texture->m_format)
                     {

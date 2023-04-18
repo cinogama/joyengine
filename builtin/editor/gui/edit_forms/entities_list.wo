@@ -10,7 +10,7 @@ import builtin.api.gui.form.msg;
 import builtin.api.dbg.main;
 
 import builtin.editor.gui.edit_forms.entity_creator;
-import builtin.editor.gui.drawpannel;
+import builtin.editor.gui.draw_pannel.main;
 import builtin.api.serialize.main;
 
 using je::gui;
