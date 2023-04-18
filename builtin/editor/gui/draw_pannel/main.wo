@@ -199,21 +199,22 @@ namespace editor::gui::drawpannel
         }
         func undo(self: HistoryManager)
         {
-            if (self.m_current > 0)
-            {
+            if (self->undoable())
                 self.m_history[self.m_current -:= 1]->restore;
-                return true;
-            }
-            return false;
         }
         func redo(self: HistoryManager)
         {
-            if (self.m_current < self.m_history->len - 1)
-            {
+            if (self->redoable())
                 self.m_history[self.m_current +:= 1]->restore;
-                return true;
-            }
-            return false;
+        }
+
+        func undoable(self: HistoryManager)
+        {
+            return self.m_current > 0;
+        }
+        func redoable(self: HistoryManager)
+        {
+            return self.m_current < self.m_history->len - 1;
         }
     }
     using DrawContextT = struct{
@@ -342,6 +343,18 @@ namespace editor::gui::drawpannel
                                         history_mgr->mark_as_edited();
                                     });
                             }
+                            EndMenu();
+                        }
+                        if (BeginMenu("编辑"))
+                        {
+                            if (MenuItemShortcutEnabled("撤销", "Ctrl + Z", history_mgr->undoable()))
+                            {
+                                history_mgr->undo();
+                            } 
+                            if (MenuItemShortcutEnabled("重做", "Ctrl + Shift + Z", history_mgr->redoable()))
+                            {
+                                history_mgr->redo();
+                            } 
                             EndMenu();
                         }
                         EndMenuBar();

@@ -201,7 +201,36 @@ namespace editor::gui::drawpannel::tools
         }
         public func OnMouseHold(self: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
         {
-            // TODO
+            let (w, h) = target->size(), (x, y) = pos;
+            if (x >= 0 && x < w && y >= 0 && y < h)
+            {
+                let filling_place_color = target->pix((x, y))->get_color();
+                let is_same_color = 
+                    \c1: color4_t, c2: color4_t = c1[0] == c2[0] && c1[1] == c2[1] && c1[2] == c2[2] && c1[3] == c2[3];
+                ;
+                if (! is_same_color(filling_place_color, color))
+                {
+                    let filling_stack = [(x, y)]mut;
+                    while (!filling_stack->empty)
+                    {
+                        let (px, py) = filling_stack->pop();
+                        if (px >= 0 && px < w && py >= 0 && py < h)
+                        {
+                            let pixel = target->pix((px, py));
+                            if (is_same_color(pixel->get_color(), filling_place_color))
+                            {
+                                pixel->set_color(color);
+                                filling_stack->add((px + 1, py));
+                                filling_stack->add((px, py + 1));
+                                filling_stack->add((px - 1, py));
+                                filling_stack->add((px, py - 1));
+                            }
+                        }
+                    }
+
+                }
+            }
+            
         }
         public func OnMouseUp(self: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
         {
