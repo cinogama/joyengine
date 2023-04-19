@@ -72,38 +72,48 @@ namespace editor
 
         // 引擎的库目录
         let ENGINE_CORE_LIBRARYS_LOCATE_PATH = std::exepath();
-        using LibraryFiles = struct{
+        public using LibraryFiles = struct{
             runtime_dynamic_libs: array<string>,
             link_static_libs: array<string>,
-        };
+        }
+        {
+            public func get_dynamic_libs(self: LibraryFiles)
+            {
+                return self.runtime_dynamic_libs;
+            }
+            public func get_static_libs(self: LibraryFiles)
+            {
+                return self.link_static_libs;
+            }
+            public func get_all_files(self: LibraryFiles)
+            {
+                return self->get_dynamic_libs->connect(self->get_static_libs);
+            }
+        }
         let ENGINE_CORE_LIBRARYS_PATHS =
             {
                 ["win32_debug_x86"] = LibraryFiles{
                     runtime_dynamic_libs = [F"libwoo32_debug.dll", F"libjoyecs32_debug.dll",],
-                    link_static_libs = [F"libwoo32_debug.lib",
-                    
-                    F"libjoyecs32_debug.lib",
-                ]
+                    link_static_libs = [F"libwoo32_debug.lib", F"libjoyecs32_debug.lib",]
                 },
-                ["win32_release_x86"] = [
-                    F"libwoo32.dll",
-                    F"libwoo32.lib",
-                    F"libjoyecs32.dll",
-                    F"libjoyecs32.lib",
-                ],
-                ["win32_debug_x64"] = [
-                    F"libwoo_debug.dll",
-                    F"libwoo_debug.lib",
-                    F"libjoyecs_debug.dll",
-                    F"libjoyecs_debug.lib",
-                ],
-                ["win32_release_x64"] = [
-                    F"libwoo.dll",
-                    F"libwoo.lib",
-                    F"libjoyecs.dll",
-                    F"libjoyecs.lib",
-                ],
-            }: dict<string, array<string>>;
+                ["win32_release_x86"] = LibraryFiles{
+                    runtime_dynamic_libs = [F"libwoo32.dll", F"libjoyecs32.dll",],
+                    link_static_libs = [F"libwoo32.lib", F"libjoyecs32.lib",]
+                },
+                ["win32_debug_x64"] = LibraryFiles{
+                    runtime_dynamic_libs = [F"libwoo_debug.dll", F"libjoyecs_debug.dll",],
+                    link_static_libs = [F"libwoo_debug.lib", F"libjoyecs_debug.lib",]
+                },
+                ["win32_release_x64"] = LibraryFiles{
+                    runtime_dynamic_libs = [F"libwoo.dll", F"libjoyecs.dll",],
+                    link_static_libs = [F"libwoo.lib", F"libjoyecs.lib",]
+                },
+            }: dict<string, LibraryFiles>;
+
+        public func get_lib_files_by_config(config: string)
+        {
+            return ENGINE_CORE_LIBRARYS_PATHS->get(config);
+        }
 
         alias platform_t = string;
 
@@ -130,7 +140,7 @@ namespace editor
             let platform_support = {}mut : map<platform_t, bool>;
             for (let platform, files : ENGINE_CORE_LIBRARYS_PATHS)
             {
-                do files
+                do files->get_all_files
                     ->> \name = copy(F"{ENGINE_CORE_LIBRARYS_LOCATE_PATH}/{name}", F"{cxx_proj_path}/engine/library/{name}");
                     ->> \r = r->isok;
                     ->reduce(\l, r = l ? r | l;)
