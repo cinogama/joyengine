@@ -72,14 +72,19 @@ namespace editor
 
         // 引擎的库目录
         let ENGINE_CORE_LIBRARYS_LOCATE_PATH = std::exepath();
+        using LibraryFiles = struct{
+            runtime_dynamic_libs: array<string>,
+            link_static_libs: array<string>,
+        };
         let ENGINE_CORE_LIBRARYS_PATHS =
             {
-                ["win32_debug_x86"] = [
-                    F"libwoo32_debug.dll",
-                    F"libwoo32_debug.lib",
-                    F"libjoyecs32_debug.dll",
+                ["win32_debug_x86"] = LibraryFiles{
+                    runtime_dynamic_libs = [F"libwoo32_debug.dll", F"libjoyecs32_debug.dll",],
+                    link_static_libs = [F"libwoo32_debug.lib",
+                    
                     F"libjoyecs32_debug.lib",
-                ],
+                ]
+                },
                 ["win32_release_x86"] = [
                     F"libwoo32.dll",
                     F"libwoo32.lib",
