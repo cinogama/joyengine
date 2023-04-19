@@ -474,7 +474,7 @@ namespace editor::gui
         {
             if (MenuItem(F"重新编译此模块"))
             {
-                match (context->get_project->get_modules(filesys::normalize(path.path)))
+                match (context->get_project->get_module(filesys::normalize(path.path)))
                 {
                 value(module)?
                     try_update_recompile(module);

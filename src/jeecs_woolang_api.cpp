@@ -40,7 +40,6 @@ WO_API wo_api wojeapi_create_fimg_packer(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_pack_file_to_fimg_packer(wo_vm vm, wo_value args, size_t argc)
 {
     auto* ctx = (fimg_creating_context*)wo_pointer(args + 0);
-    jeecs_file_image_finish(ctx);
     return wo_ret_bool(vm, jeecs_file_image_pack_file(ctx, wo_string(args + 1), wo_string(args + 2)));
 }
 

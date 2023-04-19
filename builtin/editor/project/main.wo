@@ -113,9 +113,13 @@ namespace editor
             return result::ok(context);
         }
 
-        public func get_modules(self: Project, name: string)
+        public func get_module(self: Project, name: string)
         {
             return self.m_modules->get(name);
+        }
+        public func get_all_modules(self: Project)
+        {
+            return self.m_modules;
         }
         public func dump_and_close_all_world(self: Project)
         {

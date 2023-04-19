@@ -27,6 +27,8 @@ void je_init(int argc, char** argv)
     wo_init(argc, argv);
     wo_enable_jit(false);
 
+    jeecs_file_set_runtime_path(wo_exe_path());
+
     wo_virtual_source(jeecs_woolang_api_path, jeecs_woolang_api_src, false);
     wo_virtual_source(shader_wrapper_path, shader_wrapper_src, false);
     wo_virtual_source(shader_light2d_path, shader_light2d_src, false);
@@ -43,15 +45,41 @@ wo_integer_t crc64_of_source_and_api()
     return src_crc64 * api_crc64;
 }
 
+wo_vm _jewo_open_file_to_compile_vm(const char* vpath)
+{
+    auto* src_file_handle = jeecs_file_open(vpath);
+    if (src_file_handle == nullptr)
+        return nullptr;
+
+    // NOTE: 注意，此处由于Woolang通过wo_load_binary加载源码文本的时候，需要在末尾追加一个 0
+    //       否则无法正常进行（宽字节转换失败），未来版本的woolang会修复这一问题
+    std::vector<char> src_buffer(src_file_handle->m_file_length + 1);
+    jeecs_file_read(src_buffer.data(), sizeof(char), src_file_handle->m_file_length, src_file_handle);
+    jeecs_file_close(src_file_handle);
+
+    src_buffer.back() = 0;
+
+    wo_vm vmm = wo_create_vm();
+    if (wo_load_binary(vmm, vpath, src_buffer.data(), src_buffer.size()))
+        return vmm;
+
+    jeecs::debug::logwarn("Failed to load & create woolang source '%s':\n%s",
+        vpath,
+        wo_get_compile_error(vmm, WO_NEED_COLOR));
+
+    wo_close_vm(vmm);
+    return nullptr;
+}
+
 wo_vm try_open_cached_binary()
 {
     wo_integer_t expect_crc = 0;
-    FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.jecache4").c_str(), "rb");
+    auto* srccrc = jeecs_file_open("@/builtin/editor.crc.jecache4");
     if (srccrc == nullptr)
         return nullptr;
 
-    size_t readcount = fread(&expect_crc, sizeof(expect_crc), 1, srccrc);
-    fclose(srccrc);
+    size_t readcount = jeecs_file_read(&expect_crc, sizeof(expect_crc), 1, srccrc);
+    jeecs_file_close(srccrc);
 
     if (readcount < 1)
         return nullptr;
@@ -59,30 +87,21 @@ wo_vm try_open_cached_binary()
     if (crc64_of_source_and_api() != expect_crc)
         return nullptr;
 
-    wo_vm vmm = wo_create_vm();
-    if (wo_load_file(vmm, (std::string(wo_exe_path()) + "/builtin/editor.woo.jecache4").c_str()))
-        return vmm;
-
-    jeecs::debug::logwarn("Failed to load editor compile cache:\n%s",
-        wo_get_compile_error(vmm, WO_NEED_COLOR));
-
-    wo_close_vm(vmm);
-    return nullptr;
+    return _jewo_open_file_to_compile_vm("@/builtin/editor.woo.jecache4");
 }
 
-bool jedbg_editor(void)
+bool jedbg_main_script_entry(void)
 {
-    bool failed_in_start_editor = false;
+    bool failed_in_start_script = false;
 
     wo_vm vmm = try_open_cached_binary();
 
     if (vmm == nullptr)
     {
-        vmm = wo_create_vm();
-        if (wo_load_file(vmm, (std::string(wo_exe_path()) + "/builtin/editor/main.wo").c_str()))
+        if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/editor/main.wo")) != nullptr)
         {
             size_t binary_length;
-            void* buffer = wo_dump_binary(vmm, &binary_length);;
+            void* buffer = wo_dump_binary(vmm, &binary_length);
 
             FILE* objdump = fopen((std::string(wo_exe_path()) + "/builtin/editor.woo.jecache4").c_str(), "wb");
             if (objdump != nullptr)
@@ -101,19 +120,23 @@ bool jedbg_editor(void)
             }
             wo_free_binary(buffer);
         }
+        else if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
+        {
+            // Load normal entry.
+        }
         else
         {
-            jeecs::debug::logerr(wo_get_compile_error(vmm, WO_NEED_COLOR));
-            failed_in_start_editor = true;
+            failed_in_start_script = true;
         }
     }
 
-    if (failed_in_start_editor == false)
+    if (failed_in_start_script == false)
+    {
         wo_run(vmm);
+        wo_close_vm(vmm);
+    }
 
-    wo_close_vm(vmm);
-
-    return !failed_in_start_editor;
+    return !failed_in_start_script;
 }
 
 void je_finish()

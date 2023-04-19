@@ -359,6 +359,10 @@ namespace editor
         {
             return F"{self.path}/runtime/{config}";
         }
+        public func get_build_dll_path(self: CxxProject, config: string)
+        {
+            return search_file_in(F"{self.path}/build/{config}", ".dll");
+        }
         func update_library_of_platform(self: CxxProject, config: string)
         {
             using filesys;
@@ -371,7 +375,7 @@ namespace editor
 
             let newest_runtime_path = get_newest_runtime_path(self->get_runtime_path(config));
 
-            match (search_file_in(F"{self.path}/build/{config}", ".dll"))
+            match (self->get_build_dll_path(config))
             {
             value(p)? 
                 assert(copy(p, F"{newest_runtime_path}/{filename(p)}")->isok);
@@ -461,7 +465,7 @@ namespace editor
                     {
                         // 根本没找到对应的运行库，就近开始现场编一个
                         je::logwarn("动态库未找到，正在重新编译");
-                        match (created_module->_compile(je::editor::platform(), option::none))
+                        match (created_module->compile(je::editor::platform(), option::none))
                         {
                         err(reason)?
                             return err(reason);
@@ -608,7 +612,7 @@ namespace editor
             context.compile_thread = 
                 option::value(thread::create(func ()
                 {
-                    match (self->_compile(config, option::value(context)))
+                    match (self->compile(config, option::value(context)))
                     {
                     ok(_)?
                     {
@@ -651,7 +655,7 @@ namespace editor
                     }
                 },()) );
         }
-        func _compile(self: CxxProject, config: string, context: option<compile_context>)
+        public func compile(self: CxxProject, config: string, context: option<compile_context>)
         {
             // 输入所需的配置，如果项目支持这个配置，则编译模块
             let conf = self.configs->get(config);

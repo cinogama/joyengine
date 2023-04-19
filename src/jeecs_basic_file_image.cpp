@@ -143,14 +143,13 @@ size_t fimg_save_img_impl(const char* file_path, const char* fimgs_location, siz
             size_t buffer_free_size = MAX_FILE_SINGLE_IMG_SIZE - *diff_count;
             real_read_sz = fread(temp_img_buffer + *diff_count, 1, buffer_free_size, fp);
 
-            real_read_sz += real_read_sz;
+            total_read_sz += real_read_sz;
             (*diff_count) += real_read_sz;
             if ((*diff_count) >= MAX_FILE_SINGLE_IMG_SIZE)
             {
                 FILE* imgwrite = fopen((fimgs_location + ("/disk-" + std::to_string(*img_index) + FIMAGE_FILE_EXTENSION_NAME)).c_str(), "wb");
 
                 fwrite(temp_img_buffer, 1, MAX_FILE_SINGLE_IMG_SIZE, imgwrite);
-
                 fclose(imgwrite);
 
                 (*diff_count) = 0;
@@ -284,6 +283,14 @@ size_t fimg_read(void* buffer, size_t elemsize, size_t count, jeecs_fimg_file* f
     return readed / elemsize;
 }
 
+void fimg_close_file(jeecs_fimg_file* file)
+{
+    for (auto fp : file->fds)
+        if (fp)
+            fclose(fp);
+    delete file;
+}
+
 // used for read file from img
 jeecs_fimg_file* fimg_open_file(fimg_img* img, const char* fpath)
 {
@@ -297,7 +304,16 @@ jeecs_fimg_file* fimg_open_file(fimg_img* img, const char* fpath)
         size_t start_diff = (size_t)f.img_offset;
         for (size_t img_byte = 0; img_byte < f.file_size;)
         {
-            fptr->fds.push_back(fopen((img->path + "disk-" + std::to_string(img_index) + FIMAGE_FILE_EXTENSION_NAME).c_str(), "rb"));
+            auto disk_path = img->path + "/disk-" + std::to_string(img_index) + FIMAGE_FILE_EXTENSION_NAME;
+            auto* disk_file_handle = fopen(disk_path.c_str(), "rb");
+            if (disk_file_handle == nullptr)
+            {
+                jeecs::debug::logerr("Unable to open disk-%zu: '%s' when trying to read '%s'.", img_index, disk_path.c_str(), fpath);
+                fimg_close_file(fptr);
+                return nullptr;
+            }
+
+            fptr->fds.push_back(disk_file_handle);
             img_index++;
 
             img_byte += (size_t)(img->fimg_head.MAX_FILE_SINGLE_IMG_SIZE - start_diff);
@@ -312,14 +328,6 @@ jeecs_fimg_file* fimg_open_file(fimg_img* img, const char* fpath)
         return fptr;
     }
     return nullptr;
-}
-
-void fimg_close_file(jeecs_fimg_file* file)
-{
-    for (auto fp : file->fds)
-        if (fp)
-            fclose(fp);
-    delete file;
 }
 
 ///
@@ -353,7 +361,7 @@ jeecs_file* jeecs_file_open(const char* path)
 
     assert(path_str.empty() == false);
 
-    if (path[0] == '@')
+    if (path_str[0] == '@')
     {
         std::shared_lock sg1(_je_runtime_path_and_image_mx);
         // 1. Local file, trying to find file from file-image.
@@ -366,13 +374,15 @@ jeecs_file* jeecs_file_open(const char* path)
                 jefhandle->m_native_file_handle = nullptr;
                 jefhandle->m_image_file_handle = img_file;
                 jefhandle->m_file_length = img_file->f_size;
+
+                return jefhandle;
             }
         }
 
         // 2. Not found, try find from local runtime path.
         path_str = _je_runtime_path + path_str.substr(1);
     }
-    if (path[0] == '!')
+    if (path_str[0] == '!')
         path_str = wo_exe_path() + path_str.substr(1);
 
     FILE* fhandle = fopen(path_str.c_str(), "rb");

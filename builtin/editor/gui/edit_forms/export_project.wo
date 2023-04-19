@@ -8,6 +8,9 @@ namespace editor::gui::edit_forms
         ORIGIN,     // 原样复制到打包路径
         PACK,       // 打包
     }
+    using pack_config = struct {
+        m_pack_dll_into_image: bool,        // 将C++模块打包进镜像文件中？如果为true，则在运行时释放出动态库，否则原样复制
+    };
     func _default_rule(originpath: string, packpath: string)=> Action
     {
         // 如果是文件，才考虑打包
@@ -28,9 +31,6 @@ namespace editor::gui::edit_forms
     {
         let normalized_path = filesys::normalize(proj.m_path);
         assert(!normalized_path->endwith("\\") && !normalized_path->endwith("/"));   
-        // 0. 立即开始重新编译所有C++项目，只编译到输出目录中
-        // TODO: 嘻嘻嘻，暂时不编嘻嘻嘻
-
         // 1. 删掉 .export 目录下的内容
         do filesys::remove(F"{normalized_path}/.export");
 
@@ -39,16 +39,20 @@ namespace editor::gui::edit_forms
         {
         ok(subpaths)?
             {
-                let all_need_pack_files = subpaths
-                    =>> func(subpath)
-                    {
-                        assert(subpath->beginwith(normalized_path));
-                        let packpath = subpath->sub(normalized_path->len)
+                let bind_wrap_path = func(subpath: string){
+                    assert(subpath->beginwith(normalized_path));
+                    return (subpath, subpath->sub(normalized_path->len)
                             ->  \s = s->beginwith("/") 
                                 ? F"@{s}"
                                 | s
                                 ;
-                            ;
+                            );
+                };
+                let all_need_pack_files = subpaths
+                    ->> bind_wrap_path
+                    =>> func(paths)
+                    {
+                        let (subpath, packpath) = paths;
                         let action = rule(subpath, packpath);
                         if (action != Action::SKIP)
                             return [(subpath, (packpath, action))];
@@ -57,9 +61,65 @@ namespace editor::gui::edit_forms
                     }
                     ->  mapping;
 
-                std::println(all_need_pack_files);
+                
+                // 0. 重新编译所有C++项目，只编译到输出目录中
+                // P.S. 这个序号真牛逼，人家都是1 2 3，这里是1 2 0 哈哈哈
+                do thread::create(func()
+                    {
+                        let compile_results = proj->get_all_modules->>\k, v = (k, (v, v->compile(je::editor::platform(), option::none)));;
+                        let error_compiling = compile_results->forall(\_, r = r[1]->iserr;);
+                        if (error_compiling->empty == false)
+                        {
+                            // 有编译失败，跳过！
+                            return;
+                        }
+                        else
+                        {
+                            // 1. 开始正式打包！
+                            // 1.1 将生成的C++模块打入包内，并记录文件列表
+                            let dll_module_path = compile_results
+                                ->  unmapping
+                                ->> \kv = bind_wrap_path(kv[1][0]->get_build_dll_path(je::editor::platform())->val); // 必须有
+                                ;
 
-                do filesys::mkdir(F"{normalized_path}/.export");
+                            // 1.2 创建路径，准备打包
+                            let export_path = F"{normalized_path}/.export";
+                            do filesys::mkdir(export_path);
+                            let fimg = je::editor::fimage_packer::create(proj.m_path, export_path, 6660);
+     
+                            let copy_origin = func(opath: string, ppath: string)
+                            {
+                                assert(ppath[0] == '@');
+                                let target_ppath = export_path + ppath->sub(1);
+                                let parent_target_ppath = filesys::parent(target_ppath);
+                                do filesys::mkdir(parent_target_ppath);
+                                return filesys::copy(opath, target_ppath);
+                            };
+
+                            // 1.3 开始打包
+                            for (let _, (opath, ppath) : dll_module_path)
+                            {
+                                assert(fimg->pack(opath, ppath));
+                                // do copy_origin(opath, ppath)->unwarp;
+                            }
+
+                            for (let opath, (ppath, method) : all_need_pack_files)
+                            {
+                                if (method == Action::PACK)
+                                    assert(fimg->pack(opath, ppath));
+                                else
+                                {
+                                    assert(method == Action::ORIGIN);
+                                    do copy_origin(opath, ppath)->unwarp;
+                                }
+                            }
+
+                            fimg->finish();
+                            
+                        }
+                    }, ());
+
+                
                 return ok(do nil);
             }
         err(errdat)?
