@@ -43,6 +43,12 @@ WO_API wo_api wojeapi_pack_file_to_fimg_packer(wo_vm vm, wo_value args, size_t a
     return wo_ret_bool(vm, jeecs_file_image_pack_file(ctx, wo_string(args + 1), wo_string(args + 2)));
 }
 
+WO_API wo_api wojeapi_pack_buffer_to_fimg_packer(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* ctx = (fimg_creating_context*)wo_pointer(args + 0);
+    return wo_ret_bool(vm, jeecs_file_image_pack_buffer(ctx, wo_pointer(args + 1), wo_int(args + 2), wo_string(args + 3)));
+}
+
 WO_API wo_api wojeapi_finish_fimg_packer(wo_vm vm, wo_value args, size_t argc)
 {
     auto* ctx = (fimg_creating_context*)wo_pointer(args +0);
@@ -1444,11 +1450,12 @@ namespace je
             extern("libjoyecs", "wojeapi_pack_file_to_fimg_packer")
             public func pack(self: fimage_packer, file_path: string, pack_path: string)=> bool;
 
+            extern("libjoyecs", "wojeapi_pack_buffer_to_fimg_packer")
+            public func pack_buffer(self: fimage_packer, buffer: handle, len: int, pack_path: string)=> bool;
+
             extern("libjoyecs", "wojeapi_finish_fimg_packer")
             public func finish(self: fimage_packer)=> void;
         }
-        
-       
 
         extern("libjoyecs", "wojeapi_get_sleep_suppression")
         public func get_sleep_suppression()=> real;

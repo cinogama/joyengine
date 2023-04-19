@@ -99,8 +99,8 @@ namespace editor::gui::edit_forms
                             // 1.3 开始打包
                             for (let _, (opath, ppath) : dll_module_path)
                             {
-                                assert(fimg->pack(opath, ppath));
-                                // do copy_origin(opath, ppath)->unwarp;
+                                // assert(fimg->pack(opath, ppath));
+                                do copy_origin(opath, ppath)->unwarp;
                             }
 
                             for (let opath, (ppath, method) : all_need_pack_files)
@@ -114,6 +114,13 @@ namespace editor::gui::edit_forms
                                 }
                             }
 
+                            // 1.4 将引擎本体移动至打包目录
+                            filesys::copy(std::args[0], F"{export_path}/{proj.m_name}.exe");
+                            filesys::copy()
+
+                            // 1.5 将启动脚本编译后打入镜像
+
+                            // 2. 结束，保存镜像
                             fimg->finish();
                             
                         }

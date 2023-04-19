@@ -130,8 +130,36 @@ void fimg_close_img(fimg_img* img)
 {
     delete img;
 }
+size_t fimg_save_buffer_to_img_impl(fimg_creating_context* ctx, const void* buffer, size_t buffer_len)
+{
+    size_t real_read_sz = 0;
+    size_t remain_buf_len = buffer_len;
+    do
+    {
+        size_t buffer_free_size = ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE - ctx->writing_offset;
+        real_read_sz = std::min(buffer_free_size, remain_buf_len);
 
-size_t fimg_save_img_impl(const char* file_path, const char* fimgs_location, size_t MAX_FILE_SINGLE_IMG_SIZE, size_t* img_index, size_t* diff_count, unsigned char* temp_img_buffer)
+        memcpy(ctx->writing_buffer + ctx->writing_offset, buffer, real_read_sz);
+
+        remain_buf_len -= real_read_sz;
+        ctx->writing_offset += real_read_sz;
+
+        if (ctx->writing_offset >= ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE)
+        {
+            FILE* imgwrite = fopen((ctx->writing_path + "/disk-" + std::to_string(ctx->image->fimg_head.disk_count) + FIMAGE_FILE_EXTENSION_NAME).c_str(), "wb");
+
+            fwrite(ctx->writing_buffer, 1, ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE, imgwrite);
+            fclose(imgwrite);
+
+            ctx->writing_offset = 0;
+            ctx->image->fimg_head.disk_count++;
+        }
+
+    } while (real_read_sz != 0);
+
+    return buffer_len;
+}
+size_t fimg_save_file_to_img_impl(fimg_creating_context* ctx, const char* file_path)
 {
     FILE* fp = fopen(file_path, "rb");
     if (fp)
@@ -140,23 +168,23 @@ size_t fimg_save_img_impl(const char* file_path, const char* fimgs_location, siz
         size_t real_read_sz;
         do
         {
-            size_t buffer_free_size = MAX_FILE_SINGLE_IMG_SIZE - *diff_count;
-            real_read_sz = fread(temp_img_buffer + *diff_count, 1, buffer_free_size, fp);
+            size_t buffer_free_size = ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE - ctx->writing_offset;
+            real_read_sz = fread(ctx->writing_buffer + ctx->writing_offset, 1, buffer_free_size, fp);
 
             total_read_sz += real_read_sz;
-            (*diff_count) += real_read_sz;
-            if ((*diff_count) >= MAX_FILE_SINGLE_IMG_SIZE)
+            ctx->writing_offset += real_read_sz;
+            if (ctx->writing_offset >= ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE)
             {
-                FILE* imgwrite = fopen((fimgs_location + ("/disk-" + std::to_string(*img_index) + FIMAGE_FILE_EXTENSION_NAME)).c_str(), "wb");
+                FILE* imgwrite = fopen((ctx->writing_path + "/disk-" + std::to_string(ctx->image->fimg_head.disk_count) + FIMAGE_FILE_EXTENSION_NAME).c_str(), "wb");
 
-                fwrite(temp_img_buffer, 1, MAX_FILE_SINGLE_IMG_SIZE, imgwrite);
+                fwrite(ctx->writing_buffer, 1, ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE, imgwrite);
                 fclose(imgwrite);
 
-                (*diff_count) = 0;
-                (*img_index)++;
+                ctx->writing_offset = 0;
+                ctx->image->fimg_head.disk_count++;
             }
 
-        } while (real_read_sz);
+        } while (real_read_sz != 0);
 
         fclose(fp);
         return total_read_sz;
@@ -184,6 +212,29 @@ fimg_creating_context* fimg_create_new_img_for_storing(const char* path, const c
     return ctx;
 }
 
+bool fimg_storing_buffer_to_img(fimg_creating_context* ctx, const void* buffer, size_t len, const char* aimpath)
+{
+    using namespace std;
+
+    size_t this_file_img_index = ctx->image->fimg_head.disk_count;
+    size_t this_file_diff_count = ctx->writing_offset;
+
+    size_t filesz = fimg_save_buffer_to_img_impl(ctx, buffer, len);
+
+    if (filesz != (size_t)-1)
+    {
+        ++ctx->image->fimg_head.file_count;
+
+        ctx->image->file_map[aimpath] =
+        {
+            this_file_img_index,
+            this_file_diff_count,
+            filesz
+        };
+        return true;
+    }
+    return false;
+}
 bool fimg_storing_file_to_img(fimg_creating_context* ctx, const char* filepath, const char* aimpath)
 {
     using namespace std;
@@ -191,13 +242,7 @@ bool fimg_storing_file_to_img(fimg_creating_context* ctx, const char* filepath, 
     size_t this_file_img_index = ctx->image->fimg_head.disk_count;
     size_t this_file_diff_count = ctx->writing_offset;
 
-    size_t filesz = fimg_save_img_impl(
-        filepath,
-        ctx->writing_path.c_str(),
-        ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE,
-        &ctx->image->fimg_head.disk_count,
-        &ctx->writing_offset,
-        ctx->writing_buffer);
+    size_t filesz = fimg_save_file_to_img_impl(ctx, filepath);
 
     if (filesz != (size_t)-1)
     {
@@ -439,6 +484,10 @@ fimg_creating_context* jeecs_file_image_begin(const char* path, const char* stor
 bool jeecs_file_image_pack_file(fimg_creating_context* context, const char* filepath, const char* packingpath)
 {
     return fimg_storing_file_to_img(context, filepath, packingpath);
+}
+bool jeecs_file_image_pack_buffer(fimg_creating_context* context, const void* buffer, size_t len, const char* packingpath)
+{
+    return fimg_storing_buffer_to_img(context, buffer, len, packingpath);
 }
 void jeecs_file_image_finish(fimg_creating_context* context)
 {

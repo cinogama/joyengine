@@ -576,6 +576,7 @@ JE_API size_t      jeecs_file_read(
 
 JE_API fimg_creating_context* jeecs_file_image_begin(const char* path, const char* storing_path, size_t max_image_size);
 JE_API bool jeecs_file_image_pack_file(fimg_creating_context* context, const char* filepath, const char* packingpath);
+JE_API bool jeecs_file_image_pack_buffer(fimg_creating_context* context, const void* buffer, size_t len, const char* packingpath);
 JE_API void jeecs_file_image_finish(fimg_creating_context* context);
 
 // If ignore_crc64 == true, cache will always work even if origin file changed.
