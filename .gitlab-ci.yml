@@ -28,7 +28,7 @@ build_win64_release:
     - cd cmakebuild
     - del CMakeCache.txt
     - cmake ..
-    - MSBuild cmakebuild/jedriver.vcxproj -p:Configuration=Release -m
+    - MSBuild jedriver.vcxproj -p:Configuration=Release -m
     - cd ..
     - baozi install
   artifacts:
