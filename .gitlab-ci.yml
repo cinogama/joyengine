@@ -23,7 +23,6 @@ build:
 build_win64_release:
   stage: build
   script:
-    - baozi install
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
@@ -31,6 +30,7 @@ build_win64_release:
     - cmake ..
     - MSBuild cmakebuild/jedriver.vcxproj -p:Configuration=Release -m
     - cd ..
+    - baozi install
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
