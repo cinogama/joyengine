@@ -283,6 +283,10 @@ namespace editor
         {
             assert (std::issame(self.m_modules->getorset(module.path, module), module));
         }
+        public func deactive_module(self: Project, module: CxxProject)
+        {
+            self.m_modules->remove(module.path);
+        }
         public func load(dat: dict<string, dynamic>)
         {
             let self = create( dat["name"] as string, dat["path"] as string);

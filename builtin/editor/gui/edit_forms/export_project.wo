@@ -122,6 +122,9 @@ namespace editor::gui::edit_forms
                             };
 
                             // 1.3 开始打包
+                            do filesys::mkdir(F"{export_path}/builtin");
+                            do filesys::writeall(F"{export_path}/builtin/.keepme", "");
+
                             for (let _, (minstance, (opath, ppath)) : dll_module_path)
                             {
                                 config.m_pack_output_log->add(F"复制 {ppath}");
@@ -449,7 +452,6 @@ namespace editor::gui::edit_forms
                 
                 if (ButtonSize("开始打包", (cur_width, 0.)))
                 {
-                    std::debug::breakdown();
                     let conf = pack_config{
                         m_pack_dll_into_image = false,
                         m_image_size = pack_image_file_size->get,

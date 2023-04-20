@@ -449,7 +449,7 @@ namespace editor
             {
             err(errmsg)?
                 return result::err(errmsg);
-            ok(created_module)?
+            ok(mut created_module)?
             {
                 let config = je::editor::platform();
 
@@ -480,12 +480,35 @@ namespace editor
                     {
                         // 根本没找到对应的运行库，就近开始现场编一个
                         je::logwarn("动态库未找到，正在重新编译");
-                        match (created_module->compile(je::editor::platform(), option::none))
+
+                        let recompiling_result = update_engine_file(created_module.path)
+                            =>> \platform_support = generate_module_config(created_module.name, created_module.path, platform_support);
+                            =>> func(_)
+                                {
+                                    proj->deactive_module(created_module);
+                                    return open_for_loading(path, proj);
+                                }
+                            =>> func(reloaded_created_module)
+                                {
+                                    match (reloaded_created_module->compile(je::editor::platform(), option::none))
+                                    {
+                                    err(reason)? return err(reason);
+                                    ok(_)? return ok(reloaded_created_module);
+                                    }
+                                }
+                            ;
+
+                        // TODO: 在此重新生成构建文档
+                        match (recompiling_result)
                         {
                         err(reason)?
                             return err(reason);
-                        ok(_)?
-                            created_module->update_library_of_platform(config);
+                        ok(reloaded_created_module)?
+                            {
+                                created_module = reloaded_created_module;
+                                created_module->update_library_of_platform(config);
+                            }
+                            
                         }
                     }
                     else
@@ -670,6 +693,7 @@ namespace editor
                     }
                 },()) );
         }
+
         public func compile(self: CxxProject, config: string, context: option<compile_context>)
         {
             // 输入所需的配置，如果项目支持这个配置，则编译模块
@@ -677,6 +701,7 @@ namespace editor
             if (!conf->has)
             {
                 do context->>\context = context.show = false;;
+                do context->>\context = context.display_msg = "不支持的配置";;
                 return result::err("不支持的配置");
             }
 
