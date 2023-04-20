@@ -20,6 +20,28 @@ build:
   tags:
     - ubuntu20
 
+build_win64_release:
+  stage: build
+  script:
+    - baozi install
+    - git submodule update --init --recursive --force
+    - if not exist cmakebuild ( mkdir cmakebuild )
+    - cd cmakebuild
+    - del CMakeCache.txt
+    - cmake ..
+    - MSBuild cmakebuild/jedriver.vcxproj -p:Configuration=Release -m
+    - cd ..
+  artifacts:
+    name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - build/Release/*.dll
+      - build/Release/*.exe
+      - build/Release/*.pdb
+      - build/Release/pkg/*
+      - build/Release/builtin/*
+  tags:
+    - winserver22
+
 # run tests using the binary built before
 # test:
 #   stage: test
