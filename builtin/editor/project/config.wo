@@ -11,6 +11,7 @@ namespace editor::Project
         m_update_callback: (T, T)=>bool,
         m_tostring: (T)=>string,
         m_parse: (string)=>option<T>,
+        m_apply: (T)=>string,
     }
     {
         public func create<T>(
@@ -18,14 +19,16 @@ namespace editor::Project
             widget: (T)=>option<T>, 
             callback: (T, T)=>bool,
             tostring: (T)=>string,
-            parse: (string)=>option<T>)
+            parse: (string)=>option<T>,
+            apply: (T)=>string)
         {
             return Config{
                 m_value = mut val,
                 m_widget = widget,
                 m_update_callback = callback,
                 m_tostring = tostring,
-                m_parse = parse
+                m_parse = parse,
+                m_apply = apply,
             };
         }
         public func modify<T>(self: Config<T>, newval: T)
@@ -52,6 +55,10 @@ namespace editor::Project
                 ->> \val = self->modify(val);
                 ->  valor(false);
         }
+        public func apply<T>(self: Config<T>)
+        {
+            return self.m_apply(self.m_value);
+        }
     }
 
     // 这是一个类接口对象，用于包装Project::Config<T>
@@ -59,6 +66,7 @@ namespace editor::Project
         m_tostring: ()=>string,
         m_parse: (string)=>bool,
         m_edit: ()=>bool,
+        m_apply: ()=>string,
     }
     {
         public func create<T>(config: T)
@@ -67,6 +75,7 @@ namespace editor::Project
                 m_tostring = \=config->tostring;,
                 m_parse = \str=config->parse(str);,
                 m_edit = \=config->edit;,
+                m_apply = \=config->apply;,
             };
         }
         public func tostring(self: IConfig)
@@ -80,6 +89,10 @@ namespace editor::Project
         public func edit(self: IConfig)
         {
             return self.m_edit();
+        }
+        public func apply(self: IConfig)
+        {
+            return self.m_apply();
         }
     }
 

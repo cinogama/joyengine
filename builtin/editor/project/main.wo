@@ -183,6 +183,7 @@ namespace editor
                     },
                     \val = val->name;,
                     \str = typeinfo::load(str);,
+                    \type = F"ENGINE_GRAPHIC_PIPELINE = {type->name->enstring()};";,
                 )),
                 /* 引擎的默认编辑器系统 */
                 ["JE_PROJECT_EDITOR_SYSTEM"] = IConfig::create(Config::create(
@@ -217,6 +218,7 @@ namespace editor
                     },
                     \val = val->name;,
                     \str = typeinfo::load(str);,
+                    \_ = "// Editor-system is not needed when export.";,
                 )),
                 /* 项目的描述信息 */
                 ["JE_PROJECT_DESCRIBE"] = IConfig::create(Config::create(
@@ -229,6 +231,7 @@ namespace editor
                     \o,n = true;,
                     \val = val;,
                     \str = option::value(str);,
+                    \describe = "// Describe is not needed when export.";,
                 )),
                 ["JE_ENGINE_TIME_SLEEP_SUPPRESSION"] = IConfig::create(Config::create(
                     do nil,
@@ -246,6 +249,9 @@ namespace editor
                         je::editor::set_sleep_suppression(str: real);
                         return option::value(do nil);
                     },
+                    \_ = F"je::editor::set_sleep_suppression({supp});"
+                        where supp = je::editor::get_sleep_suppression()
+                    ;,
                 )),
             }mut;
         }

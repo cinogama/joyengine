@@ -22,6 +22,19 @@ WO_API wo_api wojeapi_get_sleep_suppression(wo_vm vm, wo_value args, size_t argc
     return wo_ret_real(vm, je_clock_get_sleep_suppression());
 }
 
+WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args, size_t argc)
+{
+    if (auto* file = jeecs_file_open(wo_string(args + 0)))
+    {
+        std::vector<char> readed_buf(file->m_file_length);
+        auto readed_len = jeecs_file_read(readed_buf.data(), sizeof(char), file->m_file_length, file);
+        readed_buf.resize(readed_len);
+
+        return wo_ret_option_buffer(vm, readed_buf.data(), readed_buf.size());
+    }
+    return wo_ret_option_none(vm);
+}
+
 WO_API wo_api wojeapi_set_runtime_path(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs_file_set_runtime_path(wo_string(args + 0));
@@ -1436,6 +1449,12 @@ namespace je
 {
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;
+
+    namespace file
+    {
+        extern("libjoyecs", "wojeapi_read_file_all")
+        public func readall(path: string)=> option<string>;
+    }
 
     namespace editor
     {
