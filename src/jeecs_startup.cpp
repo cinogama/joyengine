@@ -51,13 +51,9 @@ wo_vm _jewo_open_file_to_compile_vm(const char* vpath)
     if (src_file_handle == nullptr)
         return nullptr;
 
-    // NOTE: 注意，此处由于Woolang通过wo_load_binary加载源码文本的时候，需要在末尾追加一个 0
-    //       否则无法正常进行（宽字节转换失败），未来版本的woolang会修复这一问题
-    std::vector<char> src_buffer(src_file_handle->m_file_length + 1);
+    std::vector<char> src_buffer(src_file_handle->m_file_length);
     jeecs_file_read(src_buffer.data(), sizeof(char), src_file_handle->m_file_length, src_file_handle);
     jeecs_file_close(src_file_handle);
-
-    src_buffer.back() = 0;
 
     wo_vm vmm = wo_create_vm();
     if (wo_load_binary(vmm, vpath, src_buffer.data(), src_buffer.size()))

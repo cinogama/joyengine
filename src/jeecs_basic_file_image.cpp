@@ -442,7 +442,7 @@ jeecs_file* jeecs_file_open(const char* path)
 
         return jefhandle;
     }
-    jeecs::debug::logerr("Fail to open file: '%s'(%d).", path, (int)errno);
+    jeecs::debug::logwarn("Fail to open file: '%s'(%d).", path, (int)errno);
     return nullptr;
 }
 void jeecs_file_close(jeecs_file* file)

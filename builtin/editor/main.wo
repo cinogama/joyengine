@@ -172,7 +172,7 @@ func create_project_at(path: string, u: editor::Environment, f: mutable<bool>)
 此目录用于保存引擎自动生成的图像资源
 "@);
                             do filesys::copy(F"{std::exepath()}/builtin/shader", F"{p.m_path}/resource/shader");
-
+                            do filesys::copy(F"{std::exepath()}/builtin/font", F"{p.m_path}/resource/font");
                             editor::gui::edit_project(p);
                         }
                     ;
