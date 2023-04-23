@@ -1,6 +1,6 @@
 import je.editor.graphic;
 
-NAME = "反色";
+NAME = "灰度化";
 
 public func entry(t: je::graphic::texture)
 {
@@ -11,5 +11,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     => (real, real, real, real)
 {
     let (r, g, b, a) = tex(t, x, y);
-    return (1.0 - r, 1.0 - g, 1.0 - b, a);
+    let lum = 0.3 * r + 0.59 * g + 0.11 * b;
+
+    return (lum, lum, lum, a);
 }

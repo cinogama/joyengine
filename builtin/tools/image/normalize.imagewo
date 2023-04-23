@@ -1,10 +1,53 @@
 import je.editor.graphic;
+import pkg.math;
 
 NAME = "法线化";
+
+public func entry(t: je::graphic::texture)
+{
+    return true;
+}
+
+func height(color: (real, real, real, real))
+{
+    let (r, g, b ,a) = color;
+    return a + (0.22 * r + 0.707 * g + 0.071 * b);
+}
 
 public func pixel(t: je::graphic::texture, x: int, y: int)
     => (real, real, real, real)
 {
-    let (r, g, b, a) = tex(t, x, y);
-    return (1.0 - r, 1.0 - g, 1.0 - b, a);
+    let (w, h) = t->size();
+
+    // X 方向, 
+    let dx = height(tex(t, x + 1, y)) - height(tex(t, x - 1, y));
+    // Y 方向
+    let dy = height(tex(t, x, y + 1)) - height(tex(t, x, y - 1));
+
+    // 开始求导！
+    let adx = 1.0 / w: real;
+    let ady = 0.;
+    let adz = dx;
+
+    let bdx = 0.;
+    let bdy = 1.0 / h: real;
+    let bdz = dy;
+
+    let nx = ady * bdz - adz * bdy;
+    let ny = adz * bdx - adx * bdz;
+    let nz = adx * bdy - ady * bdx;
+
+    let len = math::sqrt(nx * nx + ny * ny + nz * nz);
+    if (len != 0.)
+    {
+        return (
+            nx / len * 0.5 + 0.5,
+            ny / len * 0.5 + 0.5,
+            nz / len * 0.5 + 0.5,
+            1.0,
+        );
+    }
+    else
+        return (0., 0., 0., 1.0);
+
 }

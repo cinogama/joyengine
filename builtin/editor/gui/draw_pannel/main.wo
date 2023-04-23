@@ -373,6 +373,13 @@ namespace editor::gui::drawpannel
                                             history_mgr->save_step();
                                     }
                                 }
+
+                                Separator();
+                                if (MenuItem("重新获取脚本"))
+                                {
+                                    update_and_get_scripts(context->get_project);
+                                }
+
                                 EndMenu();
                             }
                             EndMenu();
@@ -569,9 +576,6 @@ namespace editor::gui::drawpannel
     {
         // 检查实体有没有纹理组件，然后遍历检查所有纹理是否都存在，有没有没有路径的问题
         // 如果发现不正常的纹理就给个提示
-
-        update_and_get_scripts(context->get_project);
-
         if (!e->editor::get_component(typeinfo::load("Renderer::Textures")->val)->has)
         {
             jeapi::gui::form::errmsg("无法绘制当前实体", "当前实体不包含 Renderer::Textures 组件，无法绘制");
@@ -619,8 +623,33 @@ namespace editor::gui::drawpannel
             ->  valor(true);
             ;
 
+        let create_and_copy_0pass_texture = func()
+        {
+            match (textures->get(0))
+            {
+            value(t)?
+                {
+                    let (w, h) = t->size();
+                    let nt = je::graphic::texture::create(w, h);
+                    for (let mut x = 0; x < w; x += 1)
+                    {
+                        for (let mut y = 0; y < h; y += 1)
+                        {
+                            nt->pix((x, y))->set_color(
+                                t->pix((x, y))->get_color()
+                            );
+                        }
+                    }
+
+                    return nt;
+                }
+            none?
+                return je::graphic::texture::create(16, 16);
+            }
+        };
+
         let id_tex_list = used_texture_id_pass 
-            ->> \id = (id, mut textures->get(id)->valor(je::graphic::texture::create(16, 16)));
+            ->> \id = (id, mut textures->get(id)->or(\ = create_and_copy_0pass_texture();));
             ;
         launch(edittexture, (
             context,

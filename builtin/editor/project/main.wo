@@ -274,8 +274,8 @@ namespace editor
             proj->_run_default_world;
 
             tools::update_tool_scripts(proj);
+            gui::drawpannel::update_and_get_scripts(proj);
 
-            // TODO: 在这里临时设置一下窗口嘻嘻嘻，之后做完项目加载就删掉
             je::input::set_window_size(1344, 768);
             return proj;
         }

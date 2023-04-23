@@ -16,10 +16,15 @@ public func tex(t: je::graphic::texture, x: int, y: int)
     return t->pix((x, y))->get_color();
 }
 
-// 需要声明一个函数，名为pixel: (tex, int, int)=> (real, real, real, real)
+// 需要两个函数:
+// pixel: (tex, int, int)=> (real, real, real, real)
+// entry: (tex)=> bool
 
 extern func main(target_texture: je::graphic::texture)
 {
+    if (!entry(target_texture))
+        return;
+
     let (w, h) = target_texture->size();
     let result_pixels = []mut: vec<(real, real, real, real)>;
 
