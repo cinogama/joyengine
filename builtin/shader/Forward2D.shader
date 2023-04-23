@@ -45,7 +45,7 @@ public func frag(vf: v2f)
 {
     let Albedo = uniform_texture:<texture2d>("Albedo", 0);
     return fout{
-        albedo = texture(Albedo, vf.uv),
+        albedo = alphatest(texture(Albedo, vf.uv)),
         self_luminescence = float4_zero,
         visual_coordinates = float4::create(vf.vpos, 1.),
     };

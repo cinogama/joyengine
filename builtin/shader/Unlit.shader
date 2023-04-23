@@ -33,8 +33,7 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let tex = uniform_texture:<texture2d>("MainTexture", 0);
-
     return fout{
-        color = texture(tex, vf.uv),
+        color = alphatest(texture(tex, vf.uv)),
     };
 }

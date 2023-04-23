@@ -145,7 +145,7 @@ namespace editor::gui::edit_forms
                     SameLine();
                     Text("y:");
                     SameLine();
-                    do InputFloat("##y", ctx.width)->>func(vf){
+                    do InputFloat("##y", ctx.height)->>func(vf){
                         if (vf <= 0.) return;
                         ctx.height = vf;
                         ctx.y_pixel_count = math::round(vf * 16.0);

@@ -28,7 +28,7 @@ extern func main(target_texture: je::graphic::texture)
     let (w, h) = target_texture->size();
     let result_pixels = []mut: vec<(real, real, real, real)>;
 
-    for (let mut y = 0; y < w; y += 1)
+    for (let mut y = 0; y < h; y += 1)
     {
         for (let mut x = 0; x < w; x += 1)
         {

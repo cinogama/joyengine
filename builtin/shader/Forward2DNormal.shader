@@ -103,7 +103,7 @@ public func frag(vf: v2f)
     }
 
     return fout{
-        albedo = texture(Albedo, vf.uv),
+        albedo = alphatest(texture(Albedo, vf.uv)),
         self_luminescence = normal_effect_self_luminescence,
         visual_coordinates = float4::create(vf.vpos, 1.),
     };

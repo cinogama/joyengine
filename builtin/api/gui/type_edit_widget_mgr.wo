@@ -12,7 +12,82 @@ namespace jeapi::gui
     public alias TypedEditorMethod = (string/*token*/, je::native_value)=>bool;
 
     let _registed_editor_methods = {}mut: map<je::typeinfo, TypedEditorMethod>;
+    let _custom_component_member_editor = {}mut: map<string, (string)=>option<string>>;
+
+    public func register_custom_editor(typeflag: string, method: (string)=>option<string>)
+    {
+        if (_custom_component_member_editor->contain(typeflag))
+            je::logwarn(F"重复注册的标签：{typeflag}");
+
+        _custom_component_member_editor->set(typeflag, method);
+    }
     
+    func _str2vec2(str: string)
+    {
+        let x = mutable::create(0.), y = mutable::create(0.);
+        do str->take_token("(")
+            =>> \s = s->take_real();
+            =>> \snr = s->take_token(",")
+                where s = snr[0], r = x->set(snr[1]);
+            =>> \s = s->take_real();
+            =>> \snr = s->take_token(")")
+                where s = snr[0], r = y->set(snr[1]);
+            ;
+        return (x->get, y->get);
+    }
+
+    // 直接在这里注册一下得了
+
+    // 1. 注册2D阴影形状
+    register_custom_editor("je_light2d_block_shape", func(dat: string)
+    {
+        using je::gui;
+
+        let mut need_update = false;
+        let datas = dat->split(";")
+            =>> \dat = arr->len == 2 ? [(arr[0], arr[1])] | []
+                where arr = dat->split(":");
+            ;
+
+        let length = datas
+            ->  forall(\data = data[0] == "size";)
+            ->  reduce(\l, r = l;)
+            ->> \data = data[1]: int;
+            ->  valor(datas->len)
+            ;
+
+        let mut update_str = "size:";
+
+        match (InputInt("size", length))
+        {
+        value(mut newsize)?
+        {
+            if (newsize < 0) newsize = 0;
+            need_update = true;
+            update_str += newsize: string;
+        }
+        none?
+            update_str += length: string;
+        }
+
+        for (let index, (layer, factor) : datas->forall(\d = d[0]!="size";))
+        {
+            Text(F"{layer}:");      
+            SameLine();
+            let (posx, posy) = _str2vec2(factor);
+            let (new_posx, new_posy) = InputFloat2(F"##factor{index}", posx, posy)->valor((posx, posy));
+
+            if (new_posx != posx || new_posy != posy)
+                need_update = true;
+
+            update_str += F";{layer}:({new_posx},{new_posy})";
+        }
+            
+        if (need_update)
+            return option::value(update_str);
+        return option::none;
+    });
+
     public func register_editor_for_native_value(type: je::typeinfo, method: TypedEditorMethod)
     {
         if (_registed_editor_methods->contain(type))
@@ -31,8 +106,29 @@ namespace jeapi::gui
         value(method)?
             result = method(tag, native_value);
         none?
-            // TODO: 支持一下自定义字段
-            TextDisabled(F"<无可用控件>");
+            {
+                // 没有注册的特殊控件，使用底层自带的to_string方法处理
+                let member_data = native_value->to_string(type);
+                if (member_data->beginwith("#"))
+                {
+                    // 这个member需要特殊处理
+                    Text(tag);
+
+                    let spec_method = member_data->subto(1, member_data->findfrom("#", 1) - 1);
+                    match (_custom_component_member_editor->get(spec_method))
+                    {
+                    none?
+                        TextDisabled(F"未找到编辑{spec_method}的自定义编辑器");
+                    value(method)?
+                        do method(member_data->sub(spec_method->len + 2))
+                            ->> \update_str = native_value->parse(type, F"#{spec_method}#" + update_str);
+                            ;
+                    }
+                }
+                else
+                    do InputText(tag, member_data) 
+                        ->> \data_str = native_value->parse(type, data_str);;
+            }
         }
         EndGroup();
 
