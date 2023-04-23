@@ -672,7 +672,7 @@ struct jegl_texture
         CLAMP_EDGE = CLAMP_EDGE_X | CLAMP_EDGE_Y,
         REPEAT = REPEAT_X | REPEAT_Y,
 
-        DEFAULT = LINEAR | CLAMP_EDGE,
+        DEFAULT = NEAREST | CLAMP_EDGE,
     };
 
     // NOTE:

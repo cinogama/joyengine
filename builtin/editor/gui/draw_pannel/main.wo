@@ -230,9 +230,18 @@ namespace editor::gui::drawpannel
         maincolor:  mut color4_t,
         subcolor:   mut color4_t,
 
-        edited_textures: dict<graphic::texture, (int/*texture pass id*/, HistoryManager)>,
+        edited_textures: map<graphic::texture, (int/*texture pass id*/, HistoryManager)>,
         // 傻逼键盘迟早得换！
-    };
+    }
+    {
+        func update_edit_textures_history(self: DrawContextT, passid: int, oldtex: graphic::texture, newtex: graphic::texture)
+        {
+            self.edited_textures->remove(oldtex);
+            let history = HistoryManager::create(newtex);
+            self.edited_textures->set(newtex, (passid, HistoryManager::create(newtex)));
+            history->mark_as_edited();
+        }
+    }
 
     func _delta_wheel()
     {
@@ -330,7 +339,7 @@ namespace editor::gui::drawpannel
                                         images[index][1] = new_texture;
                                         do texture->path->>\path = new_texture->bind_path(path);;
 
-                                        history_mgr->mark_as_edited();
+                                        draw_context->update_edit_textures_history(passid, texture, new_texture);
                                     }
                                     End();
                                     return open;
@@ -356,6 +365,20 @@ namespace editor::gui::drawpannel
                             {
                                 history_mgr->redo();
                             } 
+                            Separator();
+                            if (BeginMenu("从……复制"))
+                            {
+                                for (let _, (opassid, otexture) : images)
+                                {
+                                    if (MenuItemEnabled(F"通道{opassid}：{otexture->path->valor("<内置>")}", passid != opassid))
+                                    {
+                                        let new_tex = create_and_copy_texture(otexture);
+                                        images[index][1] = new_tex;
+                                        draw_context->update_edit_textures_history(passid, texture, new_tex);
+                                    }
+                                }
+                                EndMenu();
+                            }
                             Separator();
                             if (BeginMenu("自定义效果"))
                             {
@@ -572,6 +595,22 @@ namespace editor::gui::drawpannel
         return false;
     }
 
+    func create_and_copy_texture(t: je::graphic::texture)
+    {
+        let (w, h) = t->size();
+        let nt = je::graphic::texture::create(w, h);
+        for (let mut x = 0; x < w; x += 1)
+        {
+            for (let mut y = 0; y < h; y += 1)
+            {
+                nt->pix((x, y))->set_color(
+                    t->pix((x, y))->get_color()
+                );
+            }
+        }
+        return nt;
+    }
+
     public func drawedit(context: EditorContext, e: entity)
     {
         // 检查实体有没有纹理组件，然后遍历检查所有纹理是否都存在，有没有没有路径的问题
@@ -628,21 +667,7 @@ namespace editor::gui::drawpannel
             match (textures->get(0))
             {
             value(t)?
-                {
-                    let (w, h) = t->size();
-                    let nt = je::graphic::texture::create(w, h);
-                    for (let mut x = 0; x < w; x += 1)
-                    {
-                        for (let mut y = 0; y < h; y += 1)
-                        {
-                            nt->pix((x, y))->set_color(
-                                t->pix((x, y))->get_color()
-                            );
-                        }
-                    }
-
-                    return nt;
-                }
+                return create_and_copy_texture(t);
             none?
                 return je::graphic::texture::create(16, 16);
             }
@@ -670,6 +695,7 @@ namespace editor::gui::drawpannel
                 edited_textures = id_tex_list
                     ->> \id_text = (id_text[1], (id_text[0], HistoryManager::create(id_text[1])));
                     ->  mapping
+                    ->  tomap
                     ,
             }
         ));

@@ -206,7 +206,16 @@ namespace editor::gui::drawpannel::tools
             {
                 let filling_place_color = target->pix((x, y))->get_color();
                 let is_same_color = 
-                    \c1: color4_t, c2: color4_t = c1[0] == c2[0] && c1[1] == c2[1] && c1[2] == c2[2] && c1[3] == c2[3];
+                    \c1: color4_t, c2: color4_t = isequ(c1[0], c2[0]) && isequ(c1[1], c2[1]) && isequ(c1[2], c2[2]) && isequ(c1[3], c2[3])
+                        where isequ = \a: real, b: real = clamp0255(math::round(a * 255.)) == clamp0255(math::round(b * 255.));
+                            , clamp0255 = 
+                                \n: int = n < 0 
+                                    ? 0 
+                                    | (n > 255
+                                        ? 255
+                                        | n)
+                                ;
+                    ;
                 ;
                 if (! is_same_color(filling_place_color, color))
                 {

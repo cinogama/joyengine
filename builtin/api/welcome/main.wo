@@ -6,6 +6,20 @@ import je.gui;
 
 using je::gui;
 
+/*
+a vhi c ti e ch kn
+h i chi k eh m n
+o p kiv r s t 
+iv v vv ksi vi tsi 
+
+--
+Vvo men shi cinoknama chiihiva.
+Vvo men tsihiehi viiv rankn viikive chivncivi kive kivaiehe.
+
+Vve are cinoknama prochiect.
+Vve keep thinkns pivre anti chiovichiveh.
+*/
+
 namespace jeapi::welcome
 {
     public func show_about()
