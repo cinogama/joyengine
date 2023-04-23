@@ -1,0 +1,10 @@
+import je.editor.graphic;
+
+NAME = "法线化";
+
+public func pixel(t: je::graphic::texture, x: int, y: int)
+    => (real, real, real, real)
+{
+    let (r, g, b, a) = tex(t, x, y);
+    return (1.0 - r, 1.0 - g, 1.0 - b, a);
+}

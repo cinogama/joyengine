@@ -75,7 +75,7 @@ The source code is licensed under the Modified BSD License, the Mesa
     {    
         using je::graphic;
 
-        match (font::load(@"!/builtin/font/cino_ipix_12px.ttf"@, 12))
+        match (font::load(@"!/builtin/font/default.ttf"@, 12))
         {
         value(f)?
         {

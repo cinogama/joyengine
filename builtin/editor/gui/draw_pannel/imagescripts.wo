@@ -1,0 +1,92 @@
+// 这里用于管理图像效果处理脚本
+import pkg.vm;
+
+namespace editor::gui::drawpannel
+{
+    // 此处注册一个虚拟文件，作为图像处理函数的工具库
+    assert(vm::create_virtual_script("je/editor/graphic.wo", @"
+// (C)Cinogama project.
+
+import je;
+
+public let mut NAME = "";
+
+public func tex(t: je::graphic::texture, x: int, y: int)
+{
+    return t->pix((x, y))->get_color();
+}
+
+// 需要声明一个函数，名为pixel: (tex, int, int)=> (real, real, real, real)
+
+extern func main(target_texture: je::graphic::texture)
+{
+    let (w, h) = target_texture->size();
+    let result_pixels = []mut: vec<(real, real, real, real)>;
+
+    for (let mut y = 0; y < w; y += 1)
+    {
+        for (let mut x = 0; x < w; x += 1)
+        {
+            result_pixels->add(pixel(target_texture, x, y));
+        }
+    }
+
+    for (let mut i = 0; i < result_pixels->len; i += 1)
+    {
+        let x = i % w, y = i / w;
+        target_texture->pix((x, y))->set_color(result_pixels[i]);
+    }
+}
+
+extern func name()
+{
+    return NAME;
+}
+"@, false));
+
+    let mut image_effect_scripts = {}: dict<string, vm>;
+
+    public func get_all_scripts_name()
+    {
+        return image_effect_scripts->unmapping->>\name_vm = name_vm[0];;
+    }
+    public func apply_script(name: string, t: je::graphic::texture)
+    {
+        return image_effect_scripts->get(name)
+            =>> \v = v->invoke("main", [t: dynamic]);
+            ->  has;
+    }
+    public func update_and_get_scripts(proj: Project)
+    {
+        for (let _, vminstance : image_effect_scripts)
+        {
+            do vminstance->close();
+        }
+
+        let r = {}mut: map<string, vm>;
+
+        for (let _, path : filesys::allsubpath(std::exepath())
+                -> or(\_=[];)
+                -> connect(filesys::allsubpath(proj.m_path)
+                    -> or(\_=[];))
+            )
+        {
+            if (filesys::extension(path)->lower != ".imagewo")
+                continue;
+
+            match (vm::load(path))
+            {
+            ok(vmm)?
+                {
+                    assert(vmm->run->has);
+                    let name = vmm->invoke("name", [])->val as string;
+                    r->set(name == ""? filesys::purename(path) | name, vmm);
+                }
+            err(msg)?
+                je::logerr(F"加载脚本 {path} 失败：{msg}");
+            }
+        }
+
+        image_effect_scripts = r->unsafe::cast:< dict<string, vm> >;
+    }
+}

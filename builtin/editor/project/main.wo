@@ -289,7 +289,11 @@ namespace editor
         }
         public func load(dat: dict<string, dynamic>)
         {
-            let self = create( dat["name"] as string, dat["path"] as string);
+            let self = create(dat["name"] as string, dat["path"] as string);
+
+            do dat->get("windowsize")
+                ->> \sz = je::input::set_window_size(sz as array[0] as int, sz as array[1] as int);
+                ;
 
             // 先加载配置！这非常重要！
             for (let name, val : dat["configs"] as dict ->> \k, v = (k as string, v as string);)
@@ -319,12 +323,14 @@ namespace editor
         }
         public func save_project(self: Project)
         {
+            let (w, h) = je::input::window_size();
             let dat = {
                 ["path"] = self.m_path: dynamic,
                 ["name"] = self.m_name: dynamic,
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
                 ["worlds"] = self.m_worlds->> \pw = pw.m_world_path;: dynamic,
                 ["modules"] = self.m_modules->unmapping->>\kv = kv[0];: dynamic,
+                ["windowsize"] = [w, h]: dynamic,
             };
 
             // 顺手保存所有世界

@@ -5,6 +5,7 @@ import pkg.image;
 import pkg.filesystem;
 
 import tools;
+import imagescripts;
 
 using je;
 using je::gui;
@@ -355,6 +356,25 @@ namespace editor::gui::drawpannel
                             {
                                 history_mgr->redo();
                             } 
+                            Separator();
+                            if (BeginMenu("自定义效果"))
+                            {
+                                let scripts = get_all_scripts_name();
+                                if (scripts->empty)
+                                    do MenuItemEnabled("<无>", false);
+
+                                for (let _, name: scripts)
+                                {
+                                    if (MenuItem(name))
+                                    {
+                                        if (false == apply_script(name, texture))
+                                            jeapi::gui::form::errmsg("失败", "图像处理过程报告了一个错误");
+                                        else
+                                            history_mgr->save_step();
+                                    }
+                                }
+                                EndMenu();
+                            }
                             EndMenu();
                         }
                         EndMenuBar();
@@ -549,6 +569,8 @@ namespace editor::gui::drawpannel
     {
         // 检查实体有没有纹理组件，然后遍历检查所有纹理是否都存在，有没有没有路径的问题
         // 如果发现不正常的纹理就给个提示
+
+        update_and_get_scripts(context->get_project);
 
         if (!e->editor::get_component(typeinfo::load("Renderer::Textures")->val)->has)
         {
