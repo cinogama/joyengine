@@ -7,15 +7,19 @@
 #endif
 
 #include <box2d/box2d.h>
+#include <unordered_map>
 
 namespace jeecs
 {
     struct Physics2DUpdatingSystem :public game_system
     {
         b2World m_physics_world;
+        size_t m_simulate_round_count;
+        std::unordered_map<b2Body*, size_t> m_all_alive_bodys;
 
         Physics2DUpdatingSystem(game_world world) :game_system(world)
             , m_physics_world(b2Vec2(0.f, -9.8f))
+            , m_simulate_round_count(0)
         {
             m_physics_world.SetAllowSleeping(true);
             m_physics_world.SetContinuousPhysics(true);
@@ -57,18 +61,24 @@ namespace jeecs
             Physics2D::CircleCollider* circlecollider,
             Renderer::Shape* rendshape)
         {
-            if (rigidbody.native_rigidbody == nullptr)
+            auto existing_alive_body_finding_result = m_all_alive_bodys.find((b2Body*)rigidbody.native_rigidbody);
+            assert(existing_alive_body_finding_result == m_all_alive_bodys.end() ||
+                existing_alive_body_finding_result->second + 1 == m_simulate_round_count);
+
+            if (existing_alive_body_finding_result == m_all_alive_bodys.end())
             {
                 b2BodyDef default_rigidbody_config;
-
                 default_rigidbody_config.position = { translation.world_position.x, translation.world_position.y };
                 default_rigidbody_config.angle = localrotation.rot.euler_angle().z / math::RAD2DEG;
                 rigidbody.native_rigidbody = m_physics_world.CreateBody(&default_rigidbody_config);
             }
 
             b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
+            assert(rigidbody_instance != nullptr);
 
-            // TODO: 检查刚体内的动力学和变换属性，从组件同步到物理引擎
+            m_all_alive_bodys[rigidbody_instance] = m_simulate_round_count;
+
+            // 检查刚体内的动力学和变换属性，从组件同步到物理引擎
             if (kinematics != nullptr)
             {
                 if (check_if_need_update_vec2(rigidbody_instance->GetLinearVelocity(), kinematics->linear_velocity))
@@ -82,6 +92,14 @@ namespace jeecs
                     rigidbody_instance->SetAngularDamping(kinematics->angular_damping);
                 if (check_if_need_update_float(rigidbody_instance->GetGravityScale(), kinematics->gravity_scale))
                     rigidbody_instance->SetAngularDamping(kinematics->gravity_scale);
+            }
+
+            if (check_if_need_update_vec2(rigidbody_instance->GetPosition(), math::vec2(translation.world_position.x, translation.world_position.y))
+                || check_if_need_update_float(rigidbody_instance->GetAngle() * math::RAD2DEG, translation.world_rotation.euler_angle().z))
+            {
+                rigidbody_instance->SetTransform(b2Vec2(translation.world_position.x, translation.world_position.y),
+                    translation.world_rotation.euler_angle().z / math::RAD2DEG);
+                rigidbody_instance->SetAwake(true);
             }
 
             // 如果实体有 Physics2D::Bullet 组件，那么就适用高精度碰撞
@@ -111,6 +129,7 @@ namespace jeecs
                     // 引擎暂时不支持一个实体有多个fixture，这里标记一下，移除旧的。
                     need_remove_old_fixture = true;
 
+                    // TODO: 此处保存此大小到组件中，如果发现大小发生变化，则重设Fixture，下同
                     auto collider_size = entity_scaled_size * boxcollider->scale;
 
                     b2PolygonShape box_shape;
@@ -166,6 +185,8 @@ namespace jeecs
         {
             b2BodyDef default_rigidbody_config;
 
+            ++m_simulate_round_count;
+
             select_from(this->get_world())
                 .exec(&Physics2DUpdatingSystem::UpdateBeforeSimulate)
                 .anyof<Physics2D::BoxCollider, Physics2D::CircleCollider>();
@@ -207,6 +228,20 @@ namespace jeecs
                         }
                 }
             );
+
+            std::vector<b2Body*> _dead_bodys;
+            // 这个变量名真恐怖...
+            
+            for (auto [body, round]: m_all_alive_bodys)
+            {
+                if (round != m_simulate_round_count)
+                    _dead_bodys.push_back(body);
+            }
+            for (auto dead_body : _dead_bodys)
+            {
+                m_all_alive_bodys.erase(dead_body);
+                m_physics_world.DestroyBody(dead_body);
+            }
         }
     };
 }

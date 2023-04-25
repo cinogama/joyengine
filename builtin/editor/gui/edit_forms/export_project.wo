@@ -2,11 +2,12 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
-    enum Action
+    union Action
     {
         SKIP,       // 跳过此文件
         ORIGIN,     // 原样复制到打包路径
         PACK,       // 打包
+        ACTION((pack_config)=>array<(string, string)>),
     }
     using pack_config = struct {
         m_pack_dll_into_image: bool,        // 将C++模块打包进镜像文件中？如果为true，则在运行时释放出动态库，否则原样复制
@@ -38,6 +39,21 @@ namespace editor::gui::edit_forms
 
             if (filesys::extension(originpath)->lower == ".jewo")
                 return Action::SKIP;  // 跳过工具脚本
+
+            if (filesys::extension(originpath)->lower == ".shader")
+                return Action::ACTION(func(pconfig){
+                    pconfig.m_pack_output_log->add(F"正在编译着色器：{packpath}");
+                    match (je::graphic::shader::load(originpath))
+                    {
+                    value(_)?
+                        return [(originpath + ".jecache4", packpath + ".jecache4")];
+                    none?
+                        {
+                            pconfig.m_pack_output_log->add(F"无法编译着色器，跳过：{packpath}");
+                            return [];
+                        }
+                    }
+                });
 
             if (packpath->lower->find(".jemodule4") != -1)
                 return Action::SKIP;  // 跳过C++工程文件
@@ -72,13 +88,8 @@ namespace editor::gui::edit_forms
                     {
                         let (subpath, packpath) = paths;
                         let action = config.m_rule(subpath, packpath);
-                        if (action != Action::SKIP)
-                            return [(subpath, (packpath, action))];
-                        else
-                        {
-                            config.m_pack_output_log->add(F"跳过 {packpath}");
-                            return [];
-                        }
+
+                        return [(subpath, (packpath, action))];
                     }
                     ->  mapping;
 
@@ -138,16 +149,28 @@ namespace editor::gui::edit_forms
 
                             for (let opath, (ppath, method) : all_need_pack_files)
                             {
-                                if (method == Action::PACK)
+                                match (method)
                                 {
-                                    config.m_pack_output_log->add(F"打包 {ppath}");
-                                    assert(fimg->pack(opath, ppath));
-                                }
-                                else
-                                {
-                                    config.m_pack_output_log->add(F"复制 {ppath}");
-                                    assert(method == Action::ORIGIN);
-                                    do copy_origin(opath, ppath)->unwarp;
+                                PACK?
+                                    {
+                                        config.m_pack_output_log->add(F"打包 {ppath}");
+                                        assert(fimg->pack(opath, ppath));
+                                    }
+                                ORIGIN?
+                                    {
+                                        config.m_pack_output_log->add(F"复制 {ppath}");
+                                        do copy_origin(opath, ppath)->unwarp;
+                                    }
+                                ACTION(action)?
+                                    {
+                                        for (let _, (aopath, appath): action(config))
+                                        {
+                                            config.m_pack_output_log->add(F"打包 {appath}");
+                                            assert(fimg->pack(aopath, appath));
+                                        }
+                                    }
+                                SKIP?
+                                    config.m_pack_output_log->add(F"跳过 {ppath}");
                                 }
                             }
 

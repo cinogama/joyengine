@@ -58,7 +58,24 @@ namespace editor::gui::edit_forms
                     if (MenuItem("终止调试"))
                         do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
                 }
-                
+                if (MenuItemEnabled("3D/2D编辑模式", debug_camera_entity->has))
+                {
+                    let o2d_type = je::typeinfo::load("Camera::OrthoProjection")->val;
+                    let p3d_type = je::typeinfo::load("Camera::PerspectiveProjection")->val;
+
+                    let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPass")->val;
+                    if (debug_camera_entity->val->editor::get_component(o2d_type)->has)
+                    {
+                        debug_camera_entity->val->editor::remove_component(o2d_type);
+                        do debug_camera_entity->val->editor::add_component(p3d_type);
+                    }
+                    else
+                    {
+                        assert(debug_camera_entity->val->editor::get_component(p3d_type)->has);
+                        debug_camera_entity->val->editor::remove_component(p3d_type);
+                        do debug_camera_entity->val->editor::add_component(o2d_type);
+                    }
+                }
                 if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
                 {
                     let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPass")->val;

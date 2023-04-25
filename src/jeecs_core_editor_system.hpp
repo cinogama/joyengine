@@ -105,10 +105,12 @@ namespace jeecs
         math::vec3 _begin_drag;
         bool _drag_viewing = false;
 
+        math::vec3 _camera_pos;
         math::quat _camera_rot;
         math::ray _camera_ray;
 
-        const Camera::Projection* _camera_porjection;
+        const Camera::Projection* _camera_porjection = nullptr;
+        bool _camera_is_in_o2d_mode = false;
 
         struct input_msg
         {
@@ -177,19 +179,29 @@ namespace jeecs
 
             if (_inputs.r_buttom)
             {
-                if (_drag_viewing || (_inputs.uniform_mouse_pos - _begin_drag).length() >= 0.01f)
-                {
-                    _drag_viewing = true;
-                    advise_lock_mouse = true;
-
-                    rotation.rot = rotation.rot * quat(0, 30.f * _inputs.uniform_mouse_pos.x, 0);
-                }
-
                 float move_speed = 5.0f;
                 if (_inputs.l_ctrl)
                     move_speed = move_speed / 2.0f;
                 if (_inputs.l_shift)
                     move_speed = move_speed * 2.0f;
+
+                auto delta_drag = _inputs.uniform_mouse_pos - _begin_drag;
+                if (_drag_viewing || delta_drag.length() >= 0.01f)
+                {
+                    _drag_viewing = true;
+
+                    if (_camera_is_in_o2d_mode)
+                    {
+                        _begin_drag = _inputs.uniform_mouse_pos;
+                        position.pos -= move_speed * vec3(delta_drag.x, delta_drag.y, 0.0);
+                        rotation.rot = quat();
+                    }
+                    else
+                    {
+                        advise_lock_mouse = true;
+                        rotation.rot = rotation.rot * quat(0, 30.f * _inputs.uniform_mouse_pos.x, 0);
+                    }
+                }
 
                 if (_inputs.w)
                     position.pos += _camera_rot * vec3(0, 0, move_speed / 60.f);
@@ -207,20 +219,28 @@ namespace jeecs
         void CameraWalker(
             Transform::LocalRotation& rotation,
             Camera::Projection& proj,
-            Transform::Translation& trans)
+            Transform::Translation& trans,
+            Camera::PerspectiveProjection* p3d,
+            Camera::OrthoProjection* o2d)
         {
             using namespace input;
             using namespace math;
 
             auto mouse_position = _inputs.uniform_mouse_pos;
 
-            _camera_ray = math::ray(trans, proj, mouse_position, false);
+            _camera_is_in_o2d_mode = o2d != nullptr;
+
+            _camera_ray = math::ray(trans, proj, mouse_position, _camera_is_in_o2d_mode);
             _camera_porjection = &proj;
 
             if (_drag_viewing && _inputs.r_buttom)
             {
-                rotation.rot = rotation.rot * quat(30.f * -mouse_position.y, 0, 0);
+                if (_camera_is_in_o2d_mode)
+                    rotation.rot = quat();
+                else
+                    rotation.rot = rotation.rot * quat(30.f * -mouse_position.y, 0, 0);
                 _camera_rot = trans.world_rotation;
+                _camera_pos = trans.world_position;
             }
         }
 
@@ -420,7 +440,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     position.pos = trans->world_position;
                     rotation.rot = trans->world_rotation;
 
-                    float distance = 0.25f * (_camera_ray.orgin - trans->world_position).length();
+                    float distance = 0.25f * (_camera_pos - trans->world_position).length();
 
                     scale.scale = math::vec3(distance, distance, distance);
                 }
@@ -472,7 +492,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     math::vec2 cur_mouse_pos = _inputs.uniform_mouse_pos;
                     math::vec2 diff = cur_mouse_pos - _grab_last_pos;
 
-                    float distance = (_camera_ray.orgin - trans.world_position).length();
+                    float distance = (_camera_pos - trans.world_position).length();
 
                     if (_inputs.l_ctrl)
                         distance = distance * 0.5f;
@@ -546,7 +566,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                         .exec(&DefaultEditorSystem::UpdateAndCreateMover)
                         .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale)
                             {
-                                float distance = 0.25f * (_camera_ray.orgin - trans.world_position).length();
+                                float distance = 0.25f * (_camera_pos - trans.world_position).length();
                                 localScale.scale = math::vec3(1.0f / distance, 1.0f / distance, 1.0f / distance);
 
                                 if (_inputs.selected_entity)
