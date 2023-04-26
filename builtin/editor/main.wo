@@ -200,7 +200,7 @@ func open_project_at(path: string, u: editor::Environment, f: mutable<bool>)
             je::editor::set_runtime_path(path);
 
             action_after_guide_form_closed = 
-                \ = editor::gui::edit_project(editor::Project::load(dat));
+                \ = editor::gui::edit_project(editor::Project::load(path, dat));
             ;
         }
     none?

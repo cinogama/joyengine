@@ -287,9 +287,9 @@ namespace editor
         {
             self.m_modules->remove(module.path);
         }
-        public func load(dat: dict<string, dynamic>)
+        public func load(path: string, dat: dict<string, dynamic>)
         {
-            let self = create(dat["name"] as string, dat["path"] as string);
+            let self = create(dat["name"] as string, path);
 
             do dat->get("windowsize")
                 ->> \sz = je::input::set_window_size(sz as array[0] as int, sz as array[1] as int);
@@ -307,16 +307,15 @@ namespace editor
                 ->> \d = d as array<dynamic> 
                     =>> \p = err->has ? [(p, err->val)] | []
                         where err = CxxProject::load(module_name, self)->error
-                            , module_name = p as string
+                            , module_name = path + p as string
                         ;
                     ;
                 ->  valor([])
                 ->> \mr = jeapi::gui::form::errmsg("加载失败", F"无法加载 '{mr[0]}'：{mr[1]}"); 
                 ;
-            
 
             do dat["worlds"] as array
-                ->> \wpath = self->load_world(wpath as string);
+                ->> \wpath = self->load_world(path + wpath as string);
                 ;
 
             return self;
@@ -328,8 +327,8 @@ namespace editor
                 ["path"] = self.m_path: dynamic,
                 ["name"] = self.m_name: dynamic,
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
-                ["worlds"] = self.m_worlds->> \pw = pw.m_world_path;: dynamic,
-                ["modules"] = self.m_modules->unmapping->>\kv = kv[0];: dynamic,
+                ["worlds"] = self.m_worlds->> \pw = pw.m_world_path->sub(self.m_path->len);: dynamic,
+                ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->sub(self.m_path->len);: dynamic,
                 ["windowsize"] = [w, h]: dynamic,
             };
 
@@ -565,7 +564,7 @@ namespace editor
         {
             return self->get_project_world(w)
                 =>> \pw = jeapi::serialize::world(w)->okay
-                    ->> \dat = dat->apply("path", pw.m_world_path as string: dynamic);
+                    ->> \dat = dat->apply("path", pw.m_world_path as string->sub(self.m_path->len): dynamic);
                     ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
                     ;
                 ;
@@ -576,7 +575,7 @@ namespace editor
                 ProjectWorld 
                 {
                     m_world_instance = self.m_env->load_world(dat),
-                    m_world_path = dat["path"] as string,
+                    m_world_path = self.m_path + dat["path"] as string,
                     m_runtime_systems = 
                         mut dat->getor("runtime_systems", []: dynamic) as array
                             =>> \elem = systype->has ? [systype->val] | []
