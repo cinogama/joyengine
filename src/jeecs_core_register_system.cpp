@@ -6,7 +6,7 @@
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_editor_system.hpp"
 #include "jeecs_core_physics_system.hpp"
-#include "jeecs_core_timeline_system.hpp"
+#include "jeecs_core_tickline_system.hpp"
 
 const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
 {
@@ -45,4 +45,7 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::Editor::BadShadersUniform>("Editor::BadShadersUniform");
     jeecs::typing::type_info::of<jeecs::Editor::EntitySelectBox>("Editor::EntitySelectBox");
     jeecs::typing::type_info::of<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
+
+    jeecs::typing::type_info::of<jeecs::Tickline::Anchor>("Tickline::Anchor");
+    jeecs::typing::type_info::of<jeecs::TicklineSystem>("Tickline::TicklineSystem");
 }

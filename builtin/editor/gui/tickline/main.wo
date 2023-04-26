@@ -1,0 +1,35 @@
+using je::gui;
+
+namespace editor::gui::tickline
+{
+    // Tickline
+    // 游戏全局控制系统
+    // 
+    // Tickline Global Gaming Controlor System
+    // 作为游戏逻辑和流程控制的补充机制，使用极大简化后的
+    // API 对游戏中的对象/动作/事件和资源进行全局化的控制.
+    // P.S. 目标用起来应该和RPGMaker一般简易
+
+    let mut _tickline_mgr_form_shown = false;
+
+    public func show_tickline_editor(context: EditorContext)
+    {
+        let WARNICON = je::graphic::texture::load("!/builtin/icon/joyengine.png")->val;
+
+        if (!_tickline_mgr_form_shown)
+        {
+            _tickline_mgr_form_shown = true;
+            launch(func(){
+                _tickline_mgr_form_shown = BeginAttrOpen("Tickline 编辑器", 
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+                ImageSize(WARNICON, 64., 64.);
+                SameLine();
+                Text("TODO: 还没做呢，等一会儿！");
+
+                End();
+                return _tickline_mgr_form_shown;
+            }, ());
+        }
+    }
+}

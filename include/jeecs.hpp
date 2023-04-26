@@ -4794,6 +4794,7 @@ namespace jeecs
         struct LocalPosition
         {
             math::vec3 pos;
+
             inline math::vec3 get_parent_world_position(const Translation& translation, const LocalRotation* rotation) const noexcept
             {
                 if (rotation)
