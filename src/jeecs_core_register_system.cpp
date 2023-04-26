@@ -6,6 +6,7 @@
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_editor_system.hpp"
 #include "jeecs_core_physics_system.hpp"
+#include "jeecs_core_timeline_system.hpp"
 
 const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
 {
