@@ -21,7 +21,7 @@ namespace editor::tools
                     return result::err(F"运行脚本失败：{msg}");
                 ok(vmm)?
                     {
-                         let r = vmm->run();
+                        let r = vmm->run();
                         do vmm->close();
                         return result::ok(r);
                     }

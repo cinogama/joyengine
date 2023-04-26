@@ -235,7 +235,6 @@ let u = editor::Environment::create();
         }
         if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
         {
-            // editor::gui::edit_project(editor::Project::create("Demo", std::exepath()));
             u->close();
             do open->set(false);
         }
