@@ -7,17 +7,92 @@ import je.gui;
 using je::tickline;
 
 // Tickline Global Gaming Controlor.
-je::tickline::engine::init();
+
+namespace je::tickline
+{
+    public using Event = struct {
+        m_func: ()=> void
+    }
+    {
+        public func create(f: ()=> void)
+        {
+            return Event{
+                m_func = f
+            };
+        }
+        public func launch(self: Event)
+        {
+            return je::tickline::launch(self.m_func, ());
+        }
+    }
+    public using Layer = struct {
+        m_events: array<Event>
+    }
+    {
+        public func create(es: array<Event>)
+        {
+            return Layer{
+                m_events = es,
+            };
+        }
+    }
+}
 
 namespace Tickline
 {
-    extern func Execute(self: TickLineSystem)
+    namespace Runtime
+    {
+        public using EventJobState = struct{
+            m_event: Event,
+            m_vm: mut je::tickline::VM,
+        }
+        {
+            public func create(e: Event)
+            {
+                return EventJobState{
+                    m_event = e,
+                    m_vm = mut e->launch(),
+                };
+            }
+            public func dispatch(self: EventJobState)
+            {
+                match (self.m_vm->dispatch())
+                {
+                ok(is_end)?
+                    if (is_end == false)
+                        return false;
+                err(reason)?
+                    je::logerr(F"Tickline report an error: {reason}");
+                }
+                return true;
+            }
+        }
+        public using LayerJobState = struct{
+            m_event_jobs: vec<EventJobState>
+        }
+        {
+            public func create()
+            {
+                return LayerJobState{
+                    m_event_jobs = []mut,
+                };
+            }
+        }
+        public using LayersAndEventsManager = struct {
+            m_layers: array<LayerJobState>,
+        }
+        {
+            public func create(layers : array<Layer>)
+            {
+                // 创建事件及触发器
+            }
+        }
+    }
+    extern func Execute()
     {
         // Tickline::Execute 
         // 将被引擎自底层的TicklineSystem调用
-        // 需要注意，如果有多个世界同时挂载有TicklineSystem
-        // 那么将有多个虚拟机访问此入口，可能有争用问题，需要
-        // 注意！
+        // 需要注意，Tickline只会在渲染中世界所属的
 
         je::log("Hello");
     }

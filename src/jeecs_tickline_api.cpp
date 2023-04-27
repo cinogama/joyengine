@@ -6,19 +6,15 @@
 
 WO_API wo_api jeecs_tickline_register_global_vm(wo_vm vm, wo_value args, size_t argc)
 {
+    return wo_ret_panic(vm, "");
+
     jeecs::TicklineSystem::ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = vm;
     return wo_ret_void(vm);
 }
 
-WO_API wo_api jeecs_tickline_world_of_ticklinesys(wo_vm vm, wo_value args, size_t argc)
-{
-    return wo_ret_pointer(vm, ((jeecs::TicklineSystem*)wo_pointer(args + 0))->get_world().handle());
-}
-
 WO_API wo_api jeecs_tickline_launch_vm_form_ticklinesys(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* sys_instance = (jeecs::TicklineSystem*)wo_pointer(args + 0);
-    auto covm = wo_borrow_vm(sys_instance->m_current_woolang_virtual_machine);
+    auto covm = wo_borrow_vm(jeecs::TicklineSystem::ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE);
 
     wo_value f = args + 1;
     wo_value cargs = args + 2;
@@ -69,21 +65,16 @@ import je;
 
 namespace je::tickline
 {
-    public using TickLineSystem = handle
+    public using VM = gchandle
     {
-        public using VM = gchandle
-        {
-            extern("libjoyecs", "jeecs_tickline_dispatch_vm");
-            public func dispatch(self: VM)=> result<bool, string>;
-        }
-
-        extern("libjoyecs", "jeecs_tickline_world_of_ticklinesys")
-        public func get_world(self: TickLineSystem)=> je::world;
-
-        extern("libjoyecs", "jeecs_tickline_launch_vm_form_ticklinesys")
-        public func launch<FT, ArgTs>(self: TickLineSystem, f: FT, args: ArgTs)=> VM
-            where f(args...) is void;
+        extern("libjoyecs", "jeecs_tickline_dispatch_vm")
+        public func dispatch(self: VM)=> result<bool, string>;
     }
+
+    extern("libjoyecs", "jeecs_tickline_launch_vm_form_ticklinesys")
+    public func launch<FT, ArgTs>(f: FT, args: ArgTs)=> VM
+        where f(args...) is void;
+
     namespace engine
     {
         extern("libjoyecs", "jeecs_tickline_register_global_vm")
