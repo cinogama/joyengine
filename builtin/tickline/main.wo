@@ -1,0 +1,24 @@
+// NOTE: tickline 运行时在打包版本也需要运行，因此
+//       不要让tickline依赖package？
+import je;
+import je.tickline;
+import je.gui;
+
+using je::tickline;
+
+// Tickline Global Gaming Controlor.
+je::tickline::engine::init();
+
+namespace Tickline
+{
+    extern func Execute(self: TickLineSystem)
+    {
+        // Tickline::Execute 
+        // 将被引擎自底层的TicklineSystem调用
+        // 需要注意，如果有多个世界同时挂载有TicklineSystem
+        // 那么将有多个虚拟机访问此入口，可能有争用问题，需要
+        // 注意！
+
+        je::log("Hello");
+    }
+}

@@ -11,6 +11,7 @@ import builtin.api.gui.form.input;
 import builtin.editor.environment.main;
 import builtin.editor.project.main;
 import builtin.editor.gui.main;
+import builtin.tickline.main;
 
 jeapi::welcome::display_copyright_msg();
 

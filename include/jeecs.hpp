@@ -2210,7 +2210,7 @@ namespace jeecs
         template<typename SystemT>
         inline SystemT* add_system()
         {
-            return (SystemT*)add_system(typing::type_info::of<SystemT>());
+            return (SystemT*)add_system(typing::type_info::of<SystemT>(typeid(SystemT).name()));
         }
 
         // ATTENTION: 
@@ -2226,7 +2226,7 @@ namespace jeecs
         template<typename SystemT>
         inline SystemT* get_system()
         {
-            return (SystemT*)has_system(typing::type_info::of<SystemT>());
+            return (SystemT*)has_system(typing::type_info::of<SystemT>(typeid(SystemT).name()));
         }
 
         inline void remove_system(const jeecs::typing::type_info* type)
@@ -2238,7 +2238,7 @@ namespace jeecs
         template<typename SystemT>
         inline void remove_system()
         {
-            remove_system(typing::type_info::of<SystemT>());
+            remove_system(typing::type_info::of<SystemT>(typeid(SystemT).name()));
         }
 
 

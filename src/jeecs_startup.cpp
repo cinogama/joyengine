@@ -17,6 +17,9 @@ extern const char* gui_api_src;
 extern const char* jeecs_woolang_api_path;
 extern const char* jeecs_woolang_api_src;
 
+extern const char* jeecs_tickline_api_path;
+extern const char* jeecs_tickline_api_src;
+
 void jeal_init();
 void jeal_finish();
 
@@ -34,7 +37,7 @@ void je_init(int argc, char** argv)
     wo_virtual_source(shader_light2d_path, shader_light2d_src, false);
     wo_virtual_source(shader_pbr_path, shader_pbr_src, false);
     wo_virtual_source(gui_api_path, gui_api_src, false);
-
+    wo_virtual_source(jeecs_tickline_api_path, jeecs_tickline_api_src, false);
     jeal_init();
 }
 
