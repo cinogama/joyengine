@@ -11,14 +11,20 @@ using je::tickline;
 namespace je::tickline
 {
     public using Event = struct {
-        m_func: ()=> void
+        m_func: ()=> void,
+        m_trigger: ()=> bool,
     }
     {
-        public func create(f: ()=> void)
+        public func create(f: ()=> void, t: ()=> bool)
         {
             return Event{
-                m_func = f
+                m_func = f,
+                m_trigger = t,
             };
+        }
+        public func is_triggered(self: Event)
+        {
+            return self.m_trigger();
         }
         public func launch(self: Event)
         {
@@ -44,38 +50,61 @@ namespace Tickline
     {
         public using EventJobState = struct{
             m_event: Event,
-            m_vm: mut je::tickline::VM,
+            m_vm: je::tickline::VM,
+            m_continue: mut bool,   // 当前事件是否执行到一半未执行完成？，
+                                    // 如果是，则忽略事件本身的触发器
         }
         {
             public func create(e: Event)
             {
                 return EventJobState{
                     m_event = e,
-                    m_vm = mut e->launch(),
+                    m_vm = e->launch(),
+                    m_continue = mut false,
                 };
             }
             public func dispatch(self: EventJobState)
             {
-                match (self.m_vm->dispatch())
+                if (self.m_continue == false || self.m_event->is_triggered())
                 {
-                ok(is_end)?
-                    if (is_end == false)
-                        return false;
-                err(reason)?
-                    je::logerr(F"Tickline report an error: {reason}");
+                    self.m_continue = false;
+
+                    match (self.m_vm->dispatch())
+                    {
+                    ok(is_end)?
+                        if (is_end == false)
+                        {
+                            self.m_continue = true;
+                            return false;
+                        }
+                    err(reason)?
+                        je::logerr(F"Tickline report an error: {reason}");
+                    }
                 }
                 return true;
             }
         }
         public using LayerJobState = struct{
-            m_event_jobs: vec<EventJobState>
+            m_event_jobs: array<EventJobState>
         }
         {
-            public func create()
+            public func create(layer : Layer)
             {
                 return LayerJobState{
-                    m_event_jobs = []mut,
+                    m_event_jobs = layer.m_events->>\e = EventJobState::create(e);,
                 };
+            }
+            public func execute(self: LayerJobState)
+            {
+                let mut continue_next_layer = true;
+
+                for (let _, job : self.m_event_jobs)
+                {
+                    if (job->dispatch() == false)
+                        continue_next_layer = false;
+                }
+
+                return continue_next_layer;
             }
         }
         public using LayersAndEventsManager = struct {
@@ -85,15 +114,27 @@ namespace Tickline
             public func create(layers : array<Layer>)
             {
                 // 创建事件及触发器
+                // NOTE: 感觉写得还是太复杂了，这破流程应该是可以简化的
+                return LayersAndEventsManager{
+                    m_layers = layers->>\layer = LayerJobState::create(layer);,
+                }
+            }
+            public func execute(self: LayersAndEventsManager)
+            {
+                for (let _, layer : self.m_layers)
+                {
+                    if (layer->execute() == false)
+                        // 如果某一层级报告当前层级事件未执行完毕，则停止执行剩余流程
+                        break;
+                }
             }
         }
     }
-    extern func Execute()
-    {
-        // Tickline::Execute 
-        // 将被引擎自底层的TicklineSystem调用
-        // 需要注意，Tickline只会在渲染中世界所属的
 
-        je::log("Hello");
-    }
+    // extern func Execute()
+    // {
+    //     // Tickline::Execute 
+    //     // 将被引擎自底层的TicklineSystem调用
+    //     // 需要注意，Tickline只会在渲染中世界所属的
+    // }
 }
