@@ -153,4 +153,7 @@ namespace jeapi::gui
     register_editor_for_native_value(je::typeinfo::quat, func(tag, nvalue){
         return InputFloat3(F"##{tag}", nvalue->euler3...)->>\fv3 = nvalue->set_euler3(fv3...);->has;
     });
+    register_editor_for_native_value(je::typeinfo::bool, func(tag, nvalue){
+        return CheckBox(F"##{tag}", nvalue->bool)->>\bv = nvalue->set_bool(bv);->has;
+    });
 }
