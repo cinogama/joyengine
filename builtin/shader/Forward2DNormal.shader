@@ -83,7 +83,7 @@ public func frag(vf: v2f)
         let f2l = vf.vpos - lvpos->xyz / lvpos->w;
         let ldistance = length(f2l);
         let ldir = normalize(f2l);
-        let point_light_factor = vnormal->dot(ldir->negative) * light->factors->x / (ldistance + 1.);
+        let point_light_factor = vnormal->dot(ldir->negative) / (ldistance + 1.) * light->factors->x;
 
         // 平行光源照射部分
         let parallel_light_factor = vnormal->dot(light->direction->xyz->negative) * light->factors->y;

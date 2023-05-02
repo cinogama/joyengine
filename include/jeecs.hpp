@@ -735,6 +735,9 @@ struct jegl_shader
         uint32_t m_builtin_uniform_offset = jeecs::typing::INVALID_UINT32;
 
         uint32_t m_builtin_uniform_color = jeecs::typing::INVALID_UINT32;
+
+        uint32_t m_builtin_uniform_shadow2d_resolution = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_light2d_decay = jeecs::typing::INVALID_UINT32;
     };
 
     struct unifrom_variables
@@ -1624,7 +1627,7 @@ namespace jeecs
                 using _true_type = std::true_type;
 
                 template<typename V>
-                static auto _tester(int)->_true_type<decltype(new V())>;
+                static auto _tester(int) -> _true_type<decltype(new V())>;
                 template<typename V>
                 static std::false_type _tester(...);
 
@@ -4050,7 +4053,7 @@ namespace jeecs
             {
                 assert(resouce()->m_raw_texture_data != nullptr);
                 return math::ivec2(
-                    (int)resouce()->m_raw_texture_data->m_width, 
+                    (int)resouce()->m_raw_texture_data->m_width,
                     (int)resouce()->m_raw_texture_data->m_height);
             }
         };
@@ -4694,20 +4697,20 @@ namespace jeecs
                                                 correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size)
                                             );
 
-                                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
+                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
 
-                                            float src_alpha = psrc.w * TEXT_COLOR.w;
+                            float src_alpha = psrc.w * TEXT_COLOR.w;
 
-                                            pdst.set(
-                                                math::vec4(
-                                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
-                                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
-                                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
-                                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
-                                                )
-                                            );
+                            pdst.set(
+                                math::vec4(
+                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
+                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
+                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
+                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
+                                )
+                            );
                                         }
-                                    ); // end of  for each
+                            ); // end of  for each
                                 }
                             );
                             next_ch_x += gcs->m_adv_x;
@@ -5091,10 +5094,14 @@ namespace jeecs
         struct Color
         {
             math::vec4 color = math::vec4(1, 1, 1, 1);
+            float decay = 2.0f;
+            bool parallel = false;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&Color::color, "color");
+                typing::register_member(&Color::decay, "decay");
+                typing::register_member(&Color::parallel, "parallel");
             }
         };
 
@@ -5102,29 +5109,16 @@ namespace jeecs
         {
             size_t resolution_width = 1024;
             size_t resolution_height = 768;
+
+            float shape_offset = 2.f;
+
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
-            float shape_shadow_scale = 2.f;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&Shadow::resolution_width, "resolution_width");
                 typing::register_member(&Shadow::resolution_height, "resolution_height");
-                typing::register_member(&Shadow::shape_shadow_scale, "shape_shadow_scale");
-            }
-        };
-
-        struct Parallel
-        {
-
-        };
-
-        struct Point
-        {
-            float decay = 10.f;
-
-            static void JERefRegsiter()
-            {
-                typing::register_member(&Point::decay, "decay");
+                typing::register_member(&Shadow::shape_offset, "shape_offset");
             }
         };
 
@@ -5522,8 +5516,6 @@ namespace jeecs
 
             type_info::of<Light2D::Color>("Light2D::Color");
             type_info::of<Light2D::Shadow>("Light2D::Shadow");
-            type_info::of<Light2D::Parallel>("Light2D::Parallel");
-            type_info::of<Light2D::Point>("Light2D::Point");
             type_info::of<Light2D::CameraPass>("Light2D::CameraPass");
             type_info::of<Light2D::Block>("Light2D::Block");
 

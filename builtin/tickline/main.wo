@@ -117,7 +117,7 @@ namespace Tickline
                 // NOTE: 感觉写得还是太复杂了，这破流程应该是可以简化的
                 return LayersAndEventsManager{
                     m_layers = layers->>\layer = LayerJobState::create(layer);,
-                }
+                };
             }
             public func execute(self: LayersAndEventsManager)
             {
