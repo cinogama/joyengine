@@ -45,8 +45,10 @@ namespace editor
         public func make_path_normalize(self: Project, path: string)
         {
             let npath = filesys::normalize(path);
-            if (npath->beginwith(self.m_path))
+            if (npath->beginwith(self.m_path + "/"))
+            {
                 return "@" + npath->sub(self.m_path->len);
+            }
             return npath;
         }
         public func is_debugging(self: Project)
@@ -269,6 +271,8 @@ namespace editor
                 m_modules = {}mut,
                 m_debug_context = mut option::none,
             };
+
+            assert(!proj.m_path->endwith("/") && !proj.m_path->endwith("\\"));
 
             // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了
             proj->_run_default_world;

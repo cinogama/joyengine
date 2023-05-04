@@ -190,7 +190,7 @@ namespace editor::gui::edit_forms
                                 einst->editor::graphic::bind_texture(0, 
                                     je::graphic::texture::create(ctx.x_pixel_count, ctx.y_pixel_count));
 
-                                let default_shader_path = F"{context->get_project.m_path}/resource/shader/Unlit.shader";
+                                let default_shader_path = "@/resource/shader/Unlit.shader";
                                 do je::graphic::shader::load(default_shader_path)
                                     ->> \s = einst->editor::graphic::set_shaders([s]);
                                     ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
@@ -218,10 +218,25 @@ namespace editor::gui::edit_forms
                     "Transform::LocalScale",
                     "Transform::LocalToWorld",
                     "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
                     "Light2D::Color",
-                    "Light2D::Point",
                     "Light2D::Shadow",
-                ]);
+                ])->>func(e)
+                    {
+                        // 设置e的Light2D::Color.parallel,
+                        // 设置默认的光照着色器
+                        do e->editor::get_component(je::typeinfo::load("Light2D::Color")->val)->val
+                            ->  editor::get_member("parallel")
+                            ->> \tv = tv[1]->set_bool(false);
+                            ;
+                        let default_shader_path = "@/resource/shader/Light2DPoint.shader";
+                        do je::graphic::shader::load(default_shader_path)
+                            ->> \s = e->editor::graphic::set_shaders([s]);
+                            ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ;
+                    };
             }
             if (MenuItem("2D光源（平行）"))
             {
@@ -231,10 +246,25 @@ namespace editor::gui::edit_forms
                     "Transform::LocalScale",
                     "Transform::LocalToWorld",
                     "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
                     "Light2D::Color",
-                    "Light2D::Parallel",
                     "Light2D::Shadow",
-                ]);
+                ])->>func(e)
+                    {
+                        // 设置e的Light2D::Color.parallel,
+                        // 设置默认的光照着色器
+                        do e->editor::get_component(je::typeinfo::load("Light2D::Color")->val)->val
+                            ->  editor::get_member("parallel")
+                            ->> \tv = tv[1]->set_bool(true);
+                            ;
+                        let default_shader_path = "@/resource/shader/Light2DParallel.shader";
+                        do je::graphic::shader::load(default_shader_path)
+                            ->> \s = e->editor::graphic::set_shaders([s]);
+                            ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ;
+                    };
             }
             Separator();
             if (MenuItem("摄像机（透视）"))

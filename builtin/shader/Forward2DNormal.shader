@@ -4,30 +4,30 @@
 import je.shader;
 import je.shader.light2d;
 
-ZTEST   (LESS);
-ZWRITE  (ENABLE);
-BLEND   (ONE, ZERO);
-CULL    (NONE);
+ZTEST(LESS);
+ZWRITE(ENABLE);
+BLEND(ONE, ZERO);
+CULL(NONE);
 
-VAO_STRUCT! vin{
-    vertex  : float3,
-    uv      : float2,
+VAO_STRUCT!vin{
+    vertex: float3,
+    uv : float2,
 };
 
 using v2f = struct {
-    pos     : float4,
-    vpos    : float3,
-    uv      : float2,
-    vtangent_x : float3, 
-    vtangent_y : float3,
-    vtangent_z : float3,
+pos: float4,
+vpos : float3,
+uv : float2,
+vtangent_x : float3,
+vtangent_y : float3,
+vtangent_z : float3,
 };
 
 using fout = struct {
-    albedo              : float4, // 漫反射颜色，在光照处理中用于计算颜色
-    self_luminescence   : float4, // 自发光颜色，最终混合颜色公式中将叠加此颜色
-    visual_coordinates  : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，决定后处理光照的影响系数
-                                  // w 系数暂时留空，应当设置为1
+albedo: float4, // 漫反射颜色，在光照处理中用于计算颜色
+self_luminescence : float4, // 自发光颜色，最终混合颜色公式中将叠加此颜色
+visual_coordinates : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，决定后处理光照的影响系数
+// w 系数暂时留空，应当设置为1
 };
 
 func invscale_f3_2_f4(v: float3)
@@ -41,9 +41,9 @@ public func vert(v: vin)
     let m_movement = movement(je_m);
     let v_movement = movement(je_v);
     return v2f{
-        pos  = je_p * vspace_position,
+        pos = je_p * vspace_position,
         vpos = vspace_position->xyz / vspace_position->w,
-        uv   = uvtrans(v.uv, je_tiling, je_offset),
+        uv = uvtrans(v.uv, je_tiling, je_offset),
         vtangent_x = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(1., 0., 0.)))->xyz - m_movement, 1.))
             ->xyz - v_movement,
         vtangent_y = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(0., 1., 0.)))->xyz - m_movement, 1.))
@@ -83,7 +83,10 @@ public func frag(vf: v2f)
         let f2l = vf.vpos - lvpos->xyz / lvpos->w;
         let ldistance = length(f2l);
         let ldir = normalize(f2l);
-        let point_light_factor = vnormal->dot(ldir->negative) / (ldistance + 1.) * light->factors->x;
+
+        let distance_factor = max(float_one - ldistance / light->position->w, float_zero);
+        let fade_factor = pow(distance_factor, light->factors->z);
+        let point_light_factor = vnormal->dot(ldir->negative) / (ldistance + 1.) * fade_factor * light->factors->x;
 
         // 平行光源照射部分
         let parallel_light_factor = vnormal->dot(light->direction->xyz->negative) * light->factors->y;
@@ -92,13 +95,13 @@ public func frag(vf: v2f)
         let light_effect_factor = max(float_zero, point_light_factor + parallel_light_factor);
 
         // 获取阴影, 如果当前像素被此灯光的阴影遮盖，则得到系数 0. 否则得到 1.
-        let shadow_factor = float_one - texture(je_shadow2ds[index], (vf.pos->xy / vf.pos->w + float2_one)/ 2.)->x;
+        let shadow_factor = float_one - texture(je_shadow2ds[index], (vf.pos->xy / vf.pos->w + float2_one) / 2.)->x;
 
         normal_effect_self_luminescence =
             shadow_factor
-            * light->color->w 
-            * light_effect_factor 
-            * float4::create(light->color->xyz, 0.) 
+            * light->color->w
+            * light_effect_factor
+            * float4::create(light->color->xyz, 0.)
             + normal_effect_self_luminescence;
     }
 

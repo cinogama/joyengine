@@ -157,7 +157,7 @@ func create_project_at(path: string, u: editor::Environment, f: mutable<bool>)
                     u->close();
                     do f->set(false);
                     
-                    je::editor::set_runtime_path(path);
+                    je::editor::set_runtime_path(project_path);
 
                     action_after_guide_form_closed = 
                         func(){

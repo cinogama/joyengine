@@ -452,7 +452,8 @@ namespace editor::gui
             ->> \w: je::world = w
                 ->  editor::get_all_entities
                 ->> \e: je::entity = 
-                    e->editor::graphic::try_reload_shaders(path, path)
+                    e->editor::graphic::try_reload_shaders(shader_path, shader_path)
+                        where shader_path = context->get_project->make_path_normalize(path)
                     ;
                 ;
             ;

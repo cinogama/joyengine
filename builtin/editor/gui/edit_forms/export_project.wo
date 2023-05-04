@@ -20,15 +20,6 @@ namespace editor::gui::edit_forms
         m_pack_output_log: vec<string>,
         m_finished: mut bool,
     };
-    func get_warpped_path(path: string, project_path: string)
-    {
-        if (path->beginwith(project_path))
-        {
-            let o = path->sub(project_path->len);
-            return o->beginwith("/") ? F"@{o}" | F"@/{o}";
-        }
-        return path;
-    }
     func _default_rule(originpath: string, packpath: string)=> Action
     {
         // 如果是文件，才考虑打包
@@ -67,8 +58,8 @@ namespace editor::gui::edit_forms
     {
         config.m_pack_output_log->add("开始打包……");
 
-        let normalized_path = filesys::normalize(proj.m_path);
-        assert(!normalized_path->endwith("\\") && !normalized_path->endwith("/"));   
+        let normalized_path = proj.m_path;
+ 
         // 1. 删掉 .export 目录下的内容
         config.m_pack_output_log->add("正在删除 .export 目录");
         do filesys::remove(F"{normalized_path}/.export")->unwarp;
@@ -80,7 +71,7 @@ namespace editor::gui::edit_forms
             {
                 config.m_pack_output_log->add("开始整理打包文件……");
                 let bind_wrap_path = func(subpath: string){
-                    return (subpath, get_warpped_path(subpath, normalized_path));
+                    return (subpath, proj->make_path_normalize(subpath));
                 };
                 let all_need_pack_files = subpaths
                     ->> bind_wrap_path
@@ -303,7 +294,7 @@ namespace editor::gui::edit_forms
         let all_project_files = filesys::allsubpath(context->get_project.m_path)->unwarp;
         let selecting_all_worlds_file = all_project_files
             ->  forall(\p = filesys::extension(p)->lower == ".jeworld";)
-            ->> \p = (get_warpped_path(p, context->get_project.m_path), mut false);
+            ->> \p = (context->get_project->make_path_normalize(p), mut false);
             ;
         let bootup_world = mutable::create(option::none: option<string>);
         let pack_image_file_size = mutable::create(128);

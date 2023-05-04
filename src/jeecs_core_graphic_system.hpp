@@ -33,9 +33,12 @@ GRAPHIC_STRUCT! Light2D
 {
     color:      float4,  // color->xyz is color, color->w is intensity.
     position:   float4,  // position->xyz used for point-light
+                         // position->w is range that calced by local-scale & shape size.
     direction:  float4,  // direction->xyz used for parallel-light
-    factors:    float4,  // factors->x & y used for effect position or parallel.
-                         // factors->z is decay, normally, parallel light's decay should be 0.
+                         // direction->w is reserved.
+    factors:    float4,  // factors->x & y used for effect position or parallel
+                         // factors->z is decay, normally, parallel light's decay should be 0
+                         // factors->w is reserved.
 };
 
 UNIFORM_BUFFER! JOYENGINE_LIGHT2D = 1
@@ -1188,33 +1191,33 @@ public func frag(vf: v2f)
                             {
                                 m_2dlight_list.emplace_back(
                                     light2d_arch{
-                                        &trans, &color, shadow, 
+                                        &trans, &color, shadow,
                                         shape,
                                         shads,
                                         texs,
+                                    }
+                    );
+                    if (shadow != nullptr)
+                    {
+                        bool generate_new_framebuffer =
+                            shadow->shadow_buffer == nullptr
+                            || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
+                            || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
+
+                        if (generate_new_framebuffer)
+                        {
+                            shadow->shadow_buffer = new graphic::framebuffer(
+                                shadow->resolution_width, shadow->resolution_height,
+                                {
+                                    jegl_texture::texture_format::MONO, // Only store shadow value.
                                 }
                             );
-                            if (shadow != nullptr)
-                            {
-                                bool generate_new_framebuffer =
-                                    shadow->shadow_buffer == nullptr
-                                    || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
-                                    || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
-
-                                if (generate_new_framebuffer)
-                                {
-                                    shadow->shadow_buffer = new graphic::framebuffer(
-                                        shadow->resolution_width, shadow->resolution_height,
-                                        {
-                                            jegl_texture::texture_format::MONO, // Only store shadow value.
-                                        }
-                                    );
-                                    shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
-                                        = (jegl_texture::texture_sampling)(
-                                            jegl_texture::texture_sampling::LINEAR
-                                            | jegl_texture::texture_sampling::CLAMP_EDGE);
-                                }
-                            }
+                            shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
+                                = (jegl_texture::texture_sampling)(
+                                    jegl_texture::texture_sampling::LINEAR
+                                    | jegl_texture::texture_sampling::CLAMP_EDGE);
+                        }
+                    }
                             }
                         ).anyof<Shaders, Textures, Shape>()
                                 .exec(
@@ -1310,8 +1313,23 @@ public func frag(vf: v2f)
 
                 l2dbuf.l2ds[light_count].color = lightarch.color->color;
                 l2dbuf.l2ds[light_count].position = lightarch.translation->world_position;
-                l2dbuf.l2ds[light_count].direction = lightarch.translation->world_rotation
-                    * math::vec3(0.f, -1.f, 1.f).unit();
+                l2dbuf.l2ds[light_count].direction =
+                    lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 1.f).unit();
+
+                l2dbuf.l2ds[light_count].position.w =
+                    ((lightarch.shape == nullptr || lightarch.shape->vertex == nullptr
+                        ? math::vec3(
+                            host()->default_shape_quad->resouce()->m_raw_vertex_data->m_size_x,
+                            host()->default_shape_quad->resouce()->m_raw_vertex_data->m_size_y,
+                            host()->default_shape_quad->resouce()->m_raw_vertex_data->m_size_z)
+                        : math::vec3(
+                            lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_x,
+                            lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_y,
+                            lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_z)
+                        )
+                    * lightarch.translation->local_scale).length()
+                    / 2.0f;
+
                 l2dbuf.l2ds[light_count].factors = math::vec4(
                     lightarch.color->parallel ? 0.f : 1.f,
                     lightarch.color->parallel ? 1.f : 0.f,
@@ -1788,7 +1806,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 NEED_AND_SET_UNIFORM(offset, float2, _using_offset->x, _using_offset->y);
 
                                 // 传入Light2D所需的颜色、衰减信息
-                                NEED_AND_SET_UNIFORM(color, float4, 
+                                NEED_AND_SET_UNIFORM(color, float4,
                                     light2d.color->color.x,
                                     light2d.color->color.y,
                                     light2d.color->color.z,
