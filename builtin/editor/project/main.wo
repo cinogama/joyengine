@@ -51,6 +51,12 @@ namespace editor
             }
             return npath;
         }
+        public func parse_path_normalize(self: Project, path: string)
+        {
+            if (path->beginwith("@"))
+                return filesys::normalize(self.m_path + path->sub(1));
+            return filesys::normalize(path);
+        }
         public func is_debugging(self: Project)
         {
             return self.m_debug_context->has;

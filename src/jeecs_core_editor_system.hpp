@@ -110,6 +110,7 @@ namespace jeecs
         math::ray _camera_ray;
 
         const Camera::Projection* _camera_porjection = nullptr;
+        const Camera::OrthoProjection* _camera_ortho_porjection = nullptr;
         bool _camera_is_in_o2d_mode = false;
 
         struct input_msg
@@ -132,6 +133,9 @@ namespace jeecs
 
             jeecs::math::vec2 uniform_mouse_pos = {};
             jeecs::math::ivec2 advise_lock_mouse_pos = {};
+
+            int _wheel_count_record = INT_MAX;
+            int wheel_delta_count = 0;
 
             // Why write an empty constructor function here?
             // It's a bug of clang/gcc, fuck!
@@ -192,6 +196,10 @@ namespace jeecs
 
                     if (_camera_is_in_o2d_mode)
                     {
+                        assert(_camera_ortho_porjection != nullptr);
+
+                        move_speed /= _camera_ortho_porjection->scale * 0.5f;
+
                         _begin_drag = _inputs.uniform_mouse_pos;
                         position.pos -= move_speed * vec3(delta_drag.x, delta_drag.y, 0.0);
                         rotation.rot = quat();
@@ -220,7 +228,6 @@ namespace jeecs
             Transform::LocalRotation& rotation,
             Camera::Projection& proj,
             Transform::Translation& trans,
-            Camera::PerspectiveProjection* p3d,
             Camera::OrthoProjection* o2d)
         {
             using namespace input;
@@ -228,17 +235,21 @@ namespace jeecs
 
             auto mouse_position = _inputs.uniform_mouse_pos;
 
-            _camera_is_in_o2d_mode = o2d != nullptr;
+            if ((_camera_is_in_o2d_mode = o2d != nullptr))
+            {
+                o2d->scale = o2d->scale * pow(2.0f, (float)_inputs.wheel_delta_count);
+                rotation.rot = quat();
+            }
 
             _camera_ray = math::ray(trans, proj, mouse_position, _camera_is_in_o2d_mode);
             _camera_porjection = &proj;
+            _camera_ortho_porjection = o2d;
 
             if (_drag_viewing && _inputs.r_buttom)
             {
-                if (_camera_is_in_o2d_mode)
-                    rotation.rot = quat();
-                else
+                if (!_camera_is_in_o2d_mode)
                     rotation.rot = rotation.rot * quat(30.f * -mouse_position.y, 0, 0);
+
                 _camera_rot = trans.world_rotation;
                 _camera_pos = trans.world_position;
             }
@@ -440,7 +451,10 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     position.pos = trans->world_position;
                     rotation.rot = trans->world_rotation;
 
-                    float distance = 0.25f * (_camera_pos - trans->world_position).length();
+                    float distance = 
+                        _camera_ortho_porjection == nullptr
+                        ? 0.25f * (_camera_pos - trans->world_position).length()
+                        : 1.0f / _camera_ortho_porjection->scale;
 
                     scale.scale = math::vec3(distance, distance, distance);
                 }
@@ -492,7 +506,10 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     math::vec2 cur_mouse_pos = _inputs.uniform_mouse_pos;
                     math::vec2 diff = cur_mouse_pos - _grab_last_pos;
 
-                    float distance = (_camera_pos - trans.world_position).length();
+                    float distance =
+                        _camera_ortho_porjection == nullptr
+                        ? (_camera_pos - trans.world_position).length()
+                        : 5.0f / _camera_ortho_porjection->scale;
 
                     if (_inputs.l_ctrl)
                         distance = distance * 0.5f;
@@ -530,9 +547,6 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
 
         void Update()
         {
-            if (!_editor_enabled)
-                return;
-
             _inputs.w = input::keydown(input::keycode::W);
             _inputs.s = input::keydown(input::keycode::S);
             _inputs.a = input::keydown(input::keycode::A);
@@ -546,6 +560,15 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             _inputs.r_buttom_click = input::is_up(_inputs.r_buttom);
             _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
             _inputs.selected_entity = std::nullopt;
+
+            if (_inputs._wheel_count_record != INT_MAX)
+            {
+                _inputs.wheel_delta_count = input::wheel(0) - _inputs._wheel_count_record;
+            }
+            _inputs._wheel_count_record = input::wheel(0);
+
+            if (!_editor_enabled)
+                return;
 
             select_from(get_world())
                 // 获取被选中的实体
@@ -566,7 +589,11 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                         .exec(&DefaultEditorSystem::UpdateAndCreateMover)
                         .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale)
                             {
-                                float distance = 0.25f * (_camera_pos - trans.world_position).length();
+                                float distance =
+                                    _camera_ortho_porjection == nullptr
+                                    ? 0.25f * (_camera_pos - trans.world_position).length()
+                                    : 1.0f / _camera_ortho_porjection->scale;
+
                                 localScale.scale = math::vec3(1.0f / distance, 1.0f / distance, 1.0f / distance);
 
                                 if (_inputs.selected_entity)
@@ -575,9 +602,9 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                                         localScale.scale = localScale.scale * escale->scale;
 
                                     if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
-                                        localScale.scale = localScale.scale *(
-                                            eshape->vertex==nullptr
-                                            ? jeecs::math::vec3(1.0f,1.0f, 0.0f)
+                                        localScale.scale = localScale.scale * (
+                                            eshape->vertex == nullptr
+                                            ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
                                             : jeecs::math::vec3(
                                                 eshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
                                                 eshape->vertex->resouce()->m_raw_vertex_data->m_size_y,
@@ -588,43 +615,43 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                                 }
                             })
                         // Mover mgr
-                        .exec(&DefaultEditorSystem::MoveEntity);
+                                .exec(&DefaultEditorSystem::MoveEntity);
 
-                    if (nullptr == _grab_axis_translation)
-                    {
-                        auto _set_editing_entity = [](const jeecs::game_entity& e)
-                        {
-                            jeecs::Editor::Anchor* anchor = e.get_component<jeecs::Editor::Anchor>();
-                            if (anchor == nullptr)
-                                anchor = e.add_component<jeecs::Editor::Anchor>();
-
-                            assert(anchor != nullptr);
-
-                            jedbg_set_editing_entity_uid(anchor->uid);
-                        };
-
-                        if (!selected_list.empty())
-                        {
-                            const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
-                            if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
-                                [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
-                                fnd != selected_list.end())
+                            if (nullptr == _grab_axis_translation)
                             {
-                                if (++fnd == selected_list.end())
-                                    _set_editing_entity(selected_list.begin()->entity);
-                                else
-                                    _set_editing_entity(fnd->entity);
+                                auto _set_editing_entity = [](const jeecs::game_entity& e)
+                                {
+                                    jeecs::Editor::Anchor* anchor = e.get_component<jeecs::Editor::Anchor>();
+                                    if (anchor == nullptr)
+                                        anchor = e.add_component<jeecs::Editor::Anchor>();
+
+                                    assert(anchor != nullptr);
+
+                                    jedbg_set_editing_entity_uid(anchor->uid);
+                                };
+
+                                if (!selected_list.empty())
+                                {
+                                    const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
+                                    if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
+                                        [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
+                                        fnd != selected_list.end())
+                                    {
+                                        if (++fnd == selected_list.end())
+                                            _set_editing_entity(selected_list.begin()->entity);
+                                        else
+                                            _set_editing_entity(fnd->entity);
+                                    }
+                                    else
+                                        _set_editing_entity(selected_list.begin()->entity);
+                                }
+                                else if (_inputs.l_buttom_pushed)
+                                    jedbg_set_editing_entity_uid(jeecs::typing::uid_t{/* 000... */ });
                             }
-                            else
-                                _set_editing_entity(selected_list.begin()->entity);
-                        }
-                        else if (_inputs.l_buttom_pushed)
-                            jedbg_set_editing_entity_uid(jeecs::typing::uid_t{/* 000... */ });
-                    }
 
-                    je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
+                            je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
 
-                    selected_list.clear();
+                            selected_list.clear();
         }
     };
 }

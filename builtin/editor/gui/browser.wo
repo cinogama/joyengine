@@ -432,7 +432,7 @@ namespace editor::gui
                     {
                         let update_result = 
                             CxxProject::update_engine_file(module.path)
-                                =>> \r = CxxProject::generate_module_config(module.name, module.path, r);;
+                                =>> \r = CxxProject::generate_module_config(module.project, module.name, module.path, r);;
                         if (!update_result->isok)
                         {
                             jeapi::gui::form::errmsg("重新编译失败", F"{module.path}更新引擎文件失败：\n{update_result->error->val}");

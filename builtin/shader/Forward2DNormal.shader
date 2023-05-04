@@ -9,18 +9,18 @@ ZWRITE(ENABLE);
 BLEND(ONE, ZERO);
 CULL(NONE);
 
-VAO_STRUCT!vin{
+VAO_STRUCT! vin{
     vertex: float3,
     uv : float2,
 };
 
 using v2f = struct {
-pos: float4,
-vpos : float3,
-uv : float2,
-vtangent_x : float3,
-vtangent_y : float3,
-vtangent_z : float3,
+    pos: float4,
+    vpos : float3,
+    uv : float2,
+    vtangent_x : float3,
+    vtangent_y : float3,
+    vtangent_z : float3,
 };
 
 using fout = struct {

@@ -13,7 +13,7 @@
 #include <list>
 
 #define JE_MAX_LIGHT2D_COUNT 16
-#define JE_SHADOW2D_0 16
+#define JE_SHADOW2D_0 24
 
 #define JE_LIGHT2D_DEFER_0 16
 
@@ -25,7 +25,7 @@ const char* shader_light2d_src = R"(
 import je.shader;
 
 public let MAX_SHADOW_LIGHT_COUNT = 16;
-let SHADOW2D_TEX_0 = 16;
+let SHADOW2D_TEX_0 = 24;
 let DEFER_TEX_0 = 16;
 
 // define struct for Light

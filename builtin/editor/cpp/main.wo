@@ -151,7 +151,7 @@ namespace editor
             return result::ok(platform_support);
         }
 
-        public func generate_module_config(name: string, cxx_proj_path: string, platform_support: map<platform_t, bool>)
+        public func generate_module_config(project: Project, name: string, cxx_proj_path: string, platform_support: map<platform_t, bool>)
         {      
             using filesys;
             
@@ -184,7 +184,7 @@ namespace editor
             // 3. 给支持的平台生成CMake文件，并且把配置信息存档
             assert(writeall(F"{cxx_proj_path}/config.inf", {
                 ["name"] = name: dynamic,
-                ["path"] = normalize(cxx_proj_path): dynamic,
+                ["path"] = project->make_path_normalize(cxx_proj_path): dynamic,
                 ["conf"] = enabled_generating: dynamic,
             }: string));
             
@@ -279,7 +279,7 @@ namespace editor
             }
             let platform_support = r->okay->val;
 
-            match (generate_module_config(name, cxx_proj_path, platform_support))
+            match (generate_module_config(proj, name, cxx_proj_path, platform_support))
             {
             err(reason)?
             {
@@ -425,7 +425,7 @@ namespace editor
 
             let created_module = CxxProject{ 
                     name = readdat->val["name": dynamic] as string, 
-                    path = normalize(readdat->val["path": dynamic] as string), 
+                    path = normalize(proj->parse_path_normalize(readdat->val["path": dynamic] as string)), 
                     configs = readdat
                         ->val["conf": dynamic] as array
                         ->map(\d: dynamic = d as string;)
@@ -482,7 +482,7 @@ namespace editor
                         je::logwarn("动态库未找到，正在重新编译");
 
                         let recompiling_result = update_engine_file(created_module.path)
-                            =>> \platform_support = generate_module_config(created_module.name, created_module.path, platform_support);
+                            =>> \platform_support = generate_module_config(proj, created_module.name, created_module.path, platform_support);
                             =>> func(_)
                                 {
                                     proj->deactive_module(created_module);
