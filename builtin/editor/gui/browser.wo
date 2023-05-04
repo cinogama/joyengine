@@ -10,6 +10,81 @@ namespace editor::gui
 {
     public let mut editor_need_hiding_file = true;
 
+    func create_font_image(proj: Project, default_name: string, location: string)
+    {
+        let fonts = filesys::allsubpath(proj.m_path + "/resource/font")
+            -> or(\_=[];)
+            -> forall(\path = filesys::isfile(path) && filesys::extension(path)->lower == ".ttf";)
+            ->> \path = proj->make_path_normalize(path);
+            ;
+
+        if (fonts->empty)
+        {
+            jeapi::gui::form::errmsg("失败", "没有在 @/resource/font 找到有效的字体");
+            return;
+        }
+
+        let create_context = (mut default_name, mut "Helloworld", mut 0, mut 16);
+        launch(func(){
+            let mut open = true;
+            je::gui::SetNextWindowSizeConstraints((350., 200.), (350., 200.));
+            do Begin(F"在{location}创建纹理");
+
+            Text("文件名");
+            create_context[0] = InputText("##imagename", create_context[0])->valor(create_context[0]);
+
+            Separator();
+
+            Text("字体");
+            SameLine();
+            do Combo("##fontname", fonts, create_context[2])->>\id = create_context[2] = id;;
+            SameLine();
+            do InputInt("##fontsize", create_context[3])->>func(new_size){
+                if (new_size > 0)
+                    create_context[3] = new_size;
+            };
+
+            let (w, h) = GetContentRegionAvail();
+            create_context[1] = InputTextMultilineSize("##imagetext", create_context[1], w, h - 30.)
+                ->valor(create_context[1]);
+
+            if (Button("创建"))
+            {
+                match (je::graphic::font::load(fonts[create_context[2]], create_context[3]))
+                {
+                value(font_instance)?
+                    {
+                        let tex = font_instance->load_string(create_context[1]);
+                        // 创建image，然后保存！
+                        let (tw, th) = tex->size();
+                        let img = image::create(tw, th);
+                        for (let mut ix = 0; ix < tw; ix += 1)
+                            for (let mut iy = 0; iy < th; iy += 1)
+                                img->setpix((ix, iy), tex->pix((ix, iy))->get_color());
+                        
+                        let aimpath = F"{location}/{create_context[0]}.png";
+                        if (!img->save(aimpath))
+                            jeapi::gui::form::errmsg("创建失败", F"无法写入{aimpath}");
+                        else
+                        {
+                            open = false;
+                            force_update();
+                        }
+                    }
+                none?
+                    jeapi::gui::form::errmsg("失败", F"无法打开纹理：{fonts[create_context[2]]}");
+                } 
+            }
+            SameLine();
+            if (Button("取消"))
+                open = false;
+
+            End();
+
+            return open;
+        }, ());
+    }
+
     func create_image(default_name: string, location: string, generator: (image)=> void)
     {
         let create_context = (mut 16, mut 16, mut default_name);
@@ -21,6 +96,8 @@ namespace editor::gui
                 do Begin(F"在{location}创建纹理");
                 Text("文件名");
                 context[2] = InputText("##imagename", context[2])->valor(context[2]);
+
+                Separator();
 
                 Text("宽");
                 SameLine();
@@ -321,6 +398,8 @@ namespace editor::gui
                                 for (let mut y = 0 ; y < h; y += 1)
                                     img->setpix((x, y), (0., 0., 0., 0.));
                         });
+                    if (MenuItem(F"文本纹理"))
+                        create_font_image(context->get_project(), "Text", current_work_path);
                         
                     EndMenu();
                 }
