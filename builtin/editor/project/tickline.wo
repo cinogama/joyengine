@@ -1,0 +1,55 @@
+import je.tickline;
+
+namespace editor::Tickline
+{
+    public using EntityLogic = struct{
+        m_source : string,
+    }
+    {
+        public func generate_code(self: EntityLogic)
+        {
+            return F"func(e: je::entity)\{{self.m_source}\}";
+        }
+    }
+    public using Context = struct {
+        m_entity_logics: map<je::tickline::euid_t, EntityLogic>,
+    }
+    {
+        public func create()
+        {
+            return Context{
+                m_entity_logics = {}mut,
+            };
+        }
+
+        public func generate_code(self: Context)
+        {
+            // 用于生成代码
+            let mut src = @"
+import je;
+import je.tickline;
+import builtin.tickline.main;
+
+let _entity_logics = {}mut : map<je::tickline::euid_t, mut (je::entity)=>void>;
+            "@;
+
+            for (let uid, logic : self.m_entity_logics)
+            {
+                src += F"_entity_logics[{uid: string->enstring}: je::tickline::euid_t] = {logic->generate_code};\n";
+            }
+
+            src += @"
+namespace Tickline
+{
+    extern func Execute()
+    {
+        je::log("Fuck my self!");
+    }
+}
+je::tickline::engine::init();
+            "@;
+
+            return src;
+        }
+    }
+}

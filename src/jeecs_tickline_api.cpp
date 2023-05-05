@@ -6,9 +6,13 @@
 
 WO_API wo_api jeecs_tickline_register_global_vm(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_panic(vm, "");
-
     jeecs::TicklineSystem::ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = vm;
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api jeecs_tickline_unregister_global_vm(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::TicklineSystem::ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = nullptr;
     return wo_ret_void(vm);
 }
 
@@ -89,12 +93,18 @@ WO_API wo_api jeecs_tickline_get_current_systems_by_uid(wo_vm vm, wo_value args,
 {
     wo_value result = wo_push_map(vm);
     wo_value key = wo_push_empty(vm);
-    wo_value val = wo_push_empty(vm);
 
     for (auto& [uid, es] : jeecs::TicklineSystem::CURRENT_TICKLINE_SYSTEM_INSTANCE->m_anchored_entities)
     {
-        wo_set_string(key, uid);
+        wo_set_string(key, uid.to_string().c_str());
+        wo_value arr = wo_map_set(result, key, nullptr);
+        wo_set_arr(arr, es.size());
+
+        for (size_t i = 0; i < es.size(); ++i)
+            wo_set_pointer(wo_arr_get(arr, i), &es[i]);
     }
+
+    return wo_ret_val(vm, result);
 }
 
 const char* jeecs_tickline_api_path = "je/tickline.wo";
@@ -117,6 +127,13 @@ namespace je::tickline
     {
         extern("libjoyecs", "jeecs_tickline_register_global_vm")
         public func init()=> void;
+
+        extern("libjoyecs", "jeecs_tickline_unregister_global_vm")
+        public func clean()=> void;
     }
+
+    public using euid_t = string;
+    extern("libjoyecs", "jeecs_tickline_get_current_systems_by_uid")
+    public func get_current_entities()=> dict<euid_t, array<je::entity>>;
 }
 )";

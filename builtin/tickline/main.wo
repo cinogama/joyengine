@@ -125,8 +125,9 @@ namespace Tickline
                 {
                     if (layer->execute() == false)
                         // 如果某一层级报告当前层级事件未执行完毕，则停止执行剩余流程
-                        break;
+                        return false;
                 }
+                return true;
             }
         }
     }
