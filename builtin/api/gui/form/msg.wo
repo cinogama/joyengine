@@ -39,7 +39,7 @@ namespace jeapi::gui::form
             let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
                 WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
 
-            static let WARNICON = texture::load("!/builtin/icon/warning.png")->val;
+            let WARNICON = je::graphic::texture::load("!/builtin/icon/joyengine.png")->val;
             ImageSize(WARNICON, 32., 32.);
 
             SameLine();

@@ -38,6 +38,7 @@ namespace jeecs
         // ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE 
         // 由虚拟机自主注册，若此虚拟机为空，则不支持TicklineSystem.
         inline static wo_vm ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = nullptr;
+        inline static TicklineSystem* CURRENT_TICKLINE_SYSTEM_INSTANCE = nullptr;
 
         wo_integer_t m_externed_execute_func = 0;
         wo_vm m_current_woolang_virtual_machine = nullptr;
@@ -104,6 +105,8 @@ namespace jeecs
         {
             if (m_current_woolang_virtual_machine == nullptr && m_self_is_actived == false)
                 return;
+
+            CURRENT_TICKLINE_SYSTEM_INSTANCE = this;
 
             // 此处调用Tickline的Execute函数！
             if (wo_invoke_rsfunc(m_current_woolang_virtual_machine, m_externed_execute_func, 0) == nullptr)

@@ -63,12 +63,12 @@ WO_API wo_api jeecs_tickline_dispatch_vm(wo_vm vm, wo_value args, size_t argc)
     auto result = wo_dispatch(rvmm->m_vm);
     if (result == WO_CONTINUE)
         return wo_ret_ok_bool(vm, false);
-    else {    
+    else {
         if (result == nullptr)
         {
-             wo_api r = wo_ret_err_string(vm, wo_get_runtime_error(rvmm->m_vm));
-             wo_gchandle_close(args + 0);
-             return r;
+            wo_api r = wo_ret_err_string(vm, wo_get_runtime_error(rvmm->m_vm));
+            wo_gchandle_close(args + 0);
+            return r;
         }
         else
         {
@@ -82,6 +82,18 @@ WO_API wo_api jeecs_tickline_dispatch_vm(wo_vm vm, wo_value args, size_t argc)
             }
             return wo_ret_ok_bool(vm, true);
         }
+    }
+}
+
+WO_API wo_api jeecs_tickline_get_current_systems_by_uid(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value result = wo_push_map(vm);
+    wo_value key = wo_push_empty(vm);
+    wo_value val = wo_push_empty(vm);
+
+    for (auto& [uid, es] : jeecs::TicklineSystem::CURRENT_TICKLINE_SYSTEM_INSTANCE->m_anchored_entities)
+    {
+        wo_set_string(key, uid);
     }
 }
 
