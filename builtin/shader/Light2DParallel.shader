@@ -9,17 +9,16 @@ ZWRITE  (DISABLE);
 BLEND   (ONE, ONE);
 CULL    (BACK);
 
-VAO_STRUCT! vin
-{
-    vertex: float3,
+VAO_STRUCT! vin {
+    vertex  : float3,
 };
 
-using v2f = struct{
-    pos: float4,
+using v2f = struct {
+    pos     : float4,
 };
 
-using fout = struct{
-    color: float4
+using fout = struct {
+    color   : float4
 };
 
 public func vert(v: vin)

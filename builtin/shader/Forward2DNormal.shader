@@ -9,25 +9,25 @@ ZWRITE(ENABLE);
 BLEND(ONE, ZERO);
 CULL(NONE);
 
-VAO_STRUCT! vin{
-    vertex: float3,
-    uv : float2,
+VAO_STRUCT! vin {
+    vertex  : float3,
+    uv      : float2,
 };
 
 using v2f = struct {
-    pos: float4,
-    vpos : float3,
-    uv : float2,
+    pos     : float4,
+    vpos    : float3,
+    uv      : float2,
     vtangent_x : float3,
     vtangent_y : float3,
     vtangent_z : float3,
 };
 
 using fout = struct {
-albedo: float4, // 漫反射颜色，在光照处理中用于计算颜色
-self_luminescence : float4, // 自发光颜色，最终混合颜色公式中将叠加此颜色
-visual_coordinates : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，决定后处理光照的影响系数
-// w 系数暂时留空，应当设置为1
+    albedo              : float4, // 漫反射颜色，在光照处理中用于计算颜色
+    self_luminescence   : float4, // 自发光颜色，最终混合颜色公式中将叠加此颜色
+    visual_coordinates  : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，决定后处理光照的影响系数
+                                  // w 系数暂时留空，应当设置为1
 };
 
 func invscale_f3_2_f4(v: float3)
@@ -101,7 +101,7 @@ public func frag(vf: v2f)
             shadow_factor
             * light->color->w
             * light_effect_factor
-            * float4::create(light->color->xyz, 0.)
+            * float4::create(light->color->xyz, 1.)
             + normal_effect_self_luminescence;
     }
 

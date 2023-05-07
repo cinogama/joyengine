@@ -9,20 +9,19 @@ ZWRITE  (DISABLE);
 BLEND   (ONE, ONE);
 CULL    (BACK);
 
-VAO_STRUCT! vin
-{
-    vertex: float3,
-    uv: float2, // We will use uv to decided light fade.
+VAO_STRUCT! vin {
+    vertex  : float3,
+    uv      : float2, // We will use uv to decided light fade.
 };
 
-using v2f = struct{
-    pos: float4,
-    vpos: float4,
-    uv: float2
+using v2f = struct {
+    pos     : float4,
+    vpos    : float4,
+    uv      : float2
 };
 
-using fout = struct{
-    color: float4
+using fout = struct {
+    color   : float4
 };
 
 public func vert(v: vin)

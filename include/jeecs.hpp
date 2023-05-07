@@ -4556,8 +4556,8 @@ namespace jeecs
                             break;
                     }
                 }
-                int size_x = max_px - min_px;
-                int size_y = max_py - min_py;
+                int size_x = max_px - min_px + 1;
+                int size_y = max_py - min_py + 1;
 
                 int correct_x = -min_px;
                 int correct_y = -min_py;
@@ -4569,9 +4569,9 @@ namespace jeecs
                 TEXT_OFFSET = { 0,0 };
                 used_font = &font_base;
 
-                auto* new_texture = texture::create(size_x + 1, size_y + 1, jegl_texture::texture_format::RGBA);
+                auto* new_texture = texture::create(size_x, size_y, jegl_texture::texture_format::RGBA);
                 assert(new_texture != nullptr);
-                std::memset(new_texture->resouce()->m_raw_texture_data->m_pixels, 0, new_texture->width() * new_texture->size().y * 4);
+                std::memset(new_texture->resouce()->m_raw_texture_data->m_pixels, 0, size_x * size_y * 4);
 
                 for (size_t ti = 0; ti < text.size(); ti++)
                 {
@@ -4691,10 +4691,9 @@ namespace jeecs
 #endif
                                         p_index{ 0 }, p_index{ size_t(gcs->m_texture->width()) },
                                         [&](size_t fx) {
-
                                             auto pdst = new_texture->pix(
                                                 correct_x + next_ch_x + int(fx) + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size),
-                                                correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size)
+                                                size_y - 1 - (correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size))
                                             );
 
                             auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
