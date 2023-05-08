@@ -1,0 +1,26 @@
+import je.editor.graphic;
+import pkg.math;
+
+NAME = "（横向）圆柱高度图";
+
+let mut texture_width = 0;
+let mut texture_height = 0;
+
+public func entry(t: je::graphic::texture)
+{
+    let (w, h) = t->size();
+    
+    texture_width = w;
+    texture_height = h;
+    
+    return true;
+}
+
+public func pixel(t: je::graphic::texture, x: int, y: int)
+    => (real, real, real, real)
+{
+    let yf = (y: real + 0.5) / texture_height: real;
+    let xgray = math::sqrt(0.25 - math::pow(yf - 0.5, 2.0));
+
+    return (xgray, xgray, xgray, 1.0);
+}
