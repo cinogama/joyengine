@@ -48,6 +48,9 @@ namespace editor::gui::edit_forms
 
             if (packpath->lower->find(".jemodule4") != -1)
                 return Action::SKIP;  // 跳过C++工程文件
+            
+            if (packpath->lower->find(".git") != -1)
+                return Action::SKIP;  // 跳过git文件
 
             return Action::PACK;
         }

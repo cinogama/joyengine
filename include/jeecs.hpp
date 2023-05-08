@@ -2650,7 +2650,7 @@ namespace jeecs
         {
             if (!m_current_world)
             {
-                jeecs::debug::logwarn("Failed to execute current jobs(%p). Game world not specify!");
+                jeecs::debug::logfatal("Failed to execute current jobs(%p). Game world not specify!");
                 return false;
             }
 

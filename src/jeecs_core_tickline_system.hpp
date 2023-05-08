@@ -40,6 +40,23 @@ namespace jeecs
         inline static wo_vm ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = nullptr;
         inline static TicklineSystem* CURRENT_TICKLINE_SYSTEM_INSTANCE = nullptr;
 
+        static void unregister_virtual_machine()
+        {
+            if (ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE != nullptr)
+            {
+                wo_release_vm(ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE);
+                ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = nullptr;
+            }
+
+        }
+        static void register_virtual_machine(wo_vm vm)
+        {
+            unregister_virtual_machine();
+
+            assert(ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE == nullptr);
+            ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = wo_borrow_vm(vm);
+        }
+
         wo_integer_t m_externed_execute_func = 0;
         wo_vm m_current_woolang_virtual_machine = nullptr;
         std::unordered_map<typing::uid_t, std::vector<game_entity>> m_anchored_entities;

@@ -6,13 +6,13 @@
 
 WO_API wo_api jeecs_tickline_register_global_vm(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::TicklineSystem::ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = vm;
+    jeecs::TicklineSystem::register_virtual_machine(vm);
     return wo_ret_void(vm);
 }
 
 WO_API wo_api jeecs_tickline_unregister_global_vm(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::TicklineSystem::ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = nullptr;
+    jeecs::TicklineSystem::unregister_virtual_machine();
     return wo_ret_void(vm);
 }
 

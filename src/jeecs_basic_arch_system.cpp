@@ -16,7 +16,7 @@
 #   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::logwarn( __VA_ARGS__ );
 #endif
 
-#if defined(__cpp_lib_execution)
+#if defined(__cpp_lib_execution) && defined(NDEBUG)
 #   define ParallelForeach(...) std::for_each( std::execution::par_unseq, __VA_ARGS__ )
 #else
 #   define ParallelForeach std::for_each
@@ -1040,9 +1040,6 @@ namespace jeecs_impl
         {
             if (!is_destroying())
             {
-                if (_m_arch_manager._arch_modified())
-                    ++_m_archmgr_updated_version;
-
                 if (!m_delay_appending_systems.empty())
                 {
                     // append delay systems?
@@ -1060,7 +1057,6 @@ namespace jeecs_impl
                     }
                     m_delay_appending_systems.clear();
                 }
-
                 if (!m_delay_removing_systems.empty())
                 {
                     for (auto& delay_removing_system : m_delay_removing_systems)
@@ -1098,6 +1094,8 @@ namespace jeecs_impl
 
             // Complete command buffer:
             _m_command_buffer.update();
+            if (_m_arch_manager._arch_modified())
+                ++_m_archmgr_updated_version;
 
             return true;
         }
@@ -1135,6 +1133,8 @@ namespace jeecs_impl
 
     void command_buffer::update()
     {
+        // 太可怕了，这个函数实在是太可怕了……
+        // 丑陋而混乱的实现！简直是灾难的起点！
         std::lock_guard g1(_m_command_executer_guard_mx);
 
         // Update all operate in this buffer
