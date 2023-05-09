@@ -4,6 +4,7 @@
 import je;
 import je.gui;
 
+import pkg.try;
 import config;
 
 import builtin.editor.environment.main;
@@ -107,14 +108,11 @@ namespace editor
             let tickline_vm = tickline_vm_result->unwarp();
             do tickline_vm->run();
 
-            let dumpped = self->dump_and_close_all_world();
-            
-            if (dumpped->iserr)
-                return dumpped->fail;
+            try! dumpped = self->dump_and_close_all_world();
 
             let context = DebugContext {
                     m_project = self,
-                    m_dumped_editing_worlds = dumpped->unwarp,
+                    m_dumped_editing_worlds = dumpped,
                     m_tickline_vm = tickline_vm,
                 };
 
