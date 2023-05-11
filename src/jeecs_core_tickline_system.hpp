@@ -39,27 +39,38 @@ namespace jeecs
         // 由虚拟机自主注册，若此虚拟机为空，则不支持TicklineSystem.
         inline static wo_vm ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = nullptr;
         inline static TicklineSystem* CURRENT_TICKLINE_SYSTEM_INSTANCE = nullptr;
+        inline static std::unordered_map<jeecs::typing::uid_t, wo_value> ENTITY_ACTIONS;
 
         static void unregister_virtual_machine()
         {
+            ENTITY_ACTIONS.clear();
             if (ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE != nullptr)
             {
                 wo_release_vm(ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE);
                 ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = nullptr;
             }
-
         }
-        static void register_virtual_machine(wo_vm vm)
+        static wo_vm register_virtual_machine(wo_vm vm)
         {
             unregister_virtual_machine();
 
             assert(ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE == nullptr);
+            assert(ENTITY_ACTIONS.empty());
             ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE = wo_borrow_vm(vm);
+
+            return ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE;
         }
 
         wo_integer_t m_externed_execute_func = 0;
         wo_vm m_current_woolang_virtual_machine = nullptr;
-        std::unordered_map<typing::uid_t, std::vector<game_entity>> m_anchored_entities;
+
+        struct anchroed_entity_data
+        {
+            game_entity entity;
+            Tickline::Anchor* anchor;
+        };
+
+        std::unordered_map<typing::uid_t, std::vector<anchroed_entity_data>> m_anchored_entities;
         bool m_self_is_actived = false;
 
         TicklineSystem(game_world world) :game_system(world)
@@ -113,7 +124,8 @@ namespace jeecs
             select_from(get_world()).exec(
                 [this](game_entity e, Tickline::Anchor& anchor)
                 {
-                    m_anchored_entities[anchor.uid].push_back(e);
+                    m_anchored_entities[anchor.uid].push_back(
+                        anchroed_entity_data{ e, &anchor });
                 }
             );
         }
@@ -126,12 +138,73 @@ namespace jeecs
             CURRENT_TICKLINE_SYSTEM_INSTANCE = this;
 
             // 此处调用Tickline的Execute函数！
-            if (wo_invoke_rsfunc(m_current_woolang_virtual_machine, m_externed_execute_func, 0) == nullptr)
+            wo_value event_finished_flag = wo_invoke_rsfunc(m_current_woolang_virtual_machine, m_externed_execute_func, 0);
+            if (event_finished_flag == nullptr)
             {
                 // 有异常发生！将此系统从世界中移除
                 jeecs::debug::logfatal("TicklineSystem: '%p' failed with reason: '%s'.",
                     this, wo_get_runtime_error(m_current_woolang_virtual_machine));
                 get_world().remove_system<TicklineSystem>();
+            }
+            else
+            {
+                if (wo_bool(event_finished_flag) == true)
+                {
+                    for (auto& [uid, entity_datas] : m_anchored_entities)
+                    {
+                        auto fnd = ENTITY_ACTIONS.find(uid);
+                        if (fnd != ENTITY_ACTIONS.end())
+                        {
+                            for (auto& [e, anchor] : entity_datas)
+                            {
+                                assert(anchor != nullptr);
+
+                                wo_value dispatch_result = WO_CONTINUE;
+                                bool need_redispatch = false;
+
+                                if (anchor->executor_vm != nullptr)
+                                {
+                                    dispatch_result = wo_dispatch(anchor->executor_vm);
+                                }
+                                else
+                                {
+                                    anchor->executor_vm = wo_borrow_vm(ENTRY_TICKLINE_WOOLANG_VIRTUAL_MACHINE);
+                                    wo_push_pointer(anchor->executor_vm, &e);     
+                                    need_redispatch = true;
+                                }
+                                
+                                assert(anchor->executor_vm!=nullptr);
+
+                                if (dispatch_result == WO_CONTINUE)
+                                    ;
+                                else if (dispatch_result == nullptr)
+                                {
+                                    jeecs::debug::logwarn("An error happend at entity: '%s-%p:%zu': %s.",
+                                        uid.to_string().c_str(),
+                                        e._m_in_chunk, (size_t)e._m_id,
+                                        wo_get_runtime_error(anchor->executor_vm));
+
+                                    wo_release_vm(anchor->executor_vm);
+                                    anchor->executor_vm = nullptr;
+                                }
+                                else
+                                    need_redispatch = true;
+
+                                if (need_redispatch)
+                                {
+                                    if (wo_valuetype(fnd->second) == WO_CLOSURE_TYPE)
+                                        wo_dispatch_closure(anchor->executor_vm, fnd->second, 1);
+                                    else if (wo_valuetype(fnd->second) == WO_INTEGER_TYPE)
+                                        wo_dispatch_rsfunc(anchor->executor_vm, wo_int(fnd->second), 1);
+                                    else
+                                        jeecs::debug::logwarn("Not support function type registered for euid: '%s' in tickline system.",
+                                            uid.to_string().c_str());
+                                }
+                                
+                            }
+                        }
+                    }
+                }
             }
         }
 

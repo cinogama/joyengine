@@ -41,6 +41,9 @@ namespace editor::gui::edit_forms
                     if (sys->name()->beginwith("Translation::"))
                         // 默认添加Translation相关系统
                         context.has_active_types->add(sys);
+                    else if (sys->name()->beginwith("Tickline::"))
+                        // 默认添加Tickline相关系统
+                        context.has_append_types->add(sys);
                     else
                         context.not_append_types->add(sys);
     

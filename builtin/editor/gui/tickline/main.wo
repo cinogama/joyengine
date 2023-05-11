@@ -11,25 +11,83 @@ namespace editor::gui::tickline
     // P.S. 目标用起来应该和RPGMaker一般简易
 
     let mut _tickline_mgr_form_shown = false;
+    let edit_context_container = []mut: vec<dynamic>;
 
+    func _clear_context_in_container()
+    {
+        for (let _, ctx : edit_context_container)
+        {
+            ctx->unsafe::cast:< mutable<option<void>>>->set(option::none);
+        }
+    }
+    func _ask_context_for_type<T>()
+    {
+        let result = mutable::create(option::none: option<T>);
+        edit_context_container->add(result: dynamic);
+        return result;
+    }
+
+    using ObjectEditorContext = struct{ 
+        m_selecting_ob_id : mut int,
+    }
+    {
+        func create(proj: Project)
+        {
+            return ObjectEditorContext{
+                m_selecting_ob_id = mut -1,
+            };
+        }
+    }
+    func tk_object_editor(proj: Project, obctx: ObjectEditorContext)
+    {
+        let tickline_context = proj->get_tickline_context();
+        let object_names = tickline_context.m_objects->>\ob = ob.m_name + "##" + ob.m_euid: string;;
+
+        let (_, height) = GetContentRegionAvail();
+        do ListBoxSelectSize("##oblist", object_names->unsafe::cast:< array<string>>, obctx.m_selecting_ob_id, 200., height)
+            ->> \id = obctx.m_selecting_ob_id = id;
+            ;
+    }
+
+    func tab_item_show<ContextT>(proj: Project, name: string, action: (Project, ContextT)=> void)
+    {
+        static let context = _ask_context_for_type:< ContextT>();
+        
+        if (context->get->has == false)
+            do context->set(option::value(ContextT::create(proj)));
+
+        if (BeginTabItem(name))
+        {
+            do BeginChild("##tickline_main_body");
+            action(proj, context->get->val);
+            EndChild();
+            EndTabItem();
+        }
+    }
+    func tickline_editor_form(context: EditorContext)
+    {
+        je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
+        _tickline_mgr_form_shown = BeginAttrOpen("Tickline 编辑器",
+            WindowsAttribute::ImGuiWindowFlags_MenuBar);
+
+        let proj = context->get_project();
+
+        if (BeginTabBar("##tickline_main"))
+        {
+            tab_item_show(proj, "对象", tk_object_editor);
+            EndTabBar();
+        }
+
+        End();
+        return _tickline_mgr_form_shown;
+    }
     public func show_tickline_editor(context: EditorContext)
     {
-        let WARNICON = je::graphic::texture::load("!/builtin/icon/joyengine.png")->val;
-
         if (!_tickline_mgr_form_shown)
         {
             _tickline_mgr_form_shown = true;
-            launch(func(){
-                _tickline_mgr_form_shown = BeginAttrOpen("Tickline 编辑器", 
-                    WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-
-                ImageSize(WARNICON, 64., 64.);
-                SameLine();
-                Text("TODO: 还没做呢，等一会儿！");
-
-                End();
-                return _tickline_mgr_form_shown;
-            }, ());
+            _clear_context_in_container();
+            launch(tickline_editor_form, (context,));
         }
     }
 }

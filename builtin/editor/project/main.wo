@@ -30,7 +30,6 @@ namespace editor
         // 想了半天，还是把调试状态摆在这里维护
         m_project: Project,
         m_dumped_editing_worlds: array<dict<string, dynamic>>,
-        m_tickline_vm: vm,
     };
 
     public using Project = struct{
@@ -84,7 +83,6 @@ namespace editor
             je::tickline::engine::clean();
 
             self->restore_all_world(self.m_debug_context->val.m_dumped_editing_worlds);
-            do self.m_debug_context->val.m_tickline_vm->close();
             self.m_debug_context = option::none;
 
             return result::ok(do nil);
@@ -107,13 +105,13 @@ namespace editor
 
             let tickline_vm = tickline_vm_result->unwarp();
             do tickline_vm->run();
+            do tickline_vm->close();
 
             try! dumpped = self->dump_and_close_all_world();
 
             let context = DebugContext {
                     m_project = self,
                     m_dumped_editing_worlds = dumpped,
-                    m_tickline_vm = tickline_vm,
                 };
 
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
@@ -281,6 +279,10 @@ namespace editor
                     ;,
                 )),
             }mut;
+        }
+        public func get_tickline_context(self: Project)
+        {
+            return self.m_tickline;
         }
         public func create(name: string, path: string)
         {

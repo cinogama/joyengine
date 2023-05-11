@@ -2,23 +2,26 @@ import je.tickline;
 
 namespace editor::Tickline
 {
-    public using EntityLogic = struct{
-        m_source : string,
+    public using Object = struct{
+        m_name: mut string,
+        m_euid: je::tickline::euid_t,
+        m_data: mut string,     // json
+        m_source : mut string,
     }
     {
-        public func generate_code(self: EntityLogic)
+        public func generate_code(self: Object)
         {
             return F"func(e: je::entity)\{{self.m_source}\}";
         }
     }
     public using Context = struct {
-        m_entity_logics: map<je::tickline::euid_t, EntityLogic>,
+        m_objects: vec<Object>,
     }
     {
         public func create()
         {
             return Context{
-                m_entity_logics = {}mut,
+                m_objects = []mut,
             };
         }
 
@@ -30,23 +33,27 @@ import je;
 import je.tickline;
 import builtin.tickline.main;
 
-let _entity_logics = {}mut : map<je::tickline::euid_t, mut (je::entity)=>void>;
+let _entity_logics = {
             "@;
-
-            for (let uid, logic : self.m_entity_logics)
+            for (let _, ob : self.m_objects)
             {
-                src += F"_entity_logics[{uid: string->enstring}: je::tickline::euid_t] = {logic->generate_code};\n";
+                src += F"_entity_logics[{ob.m_euid: string->enstring}: je::tickline::euid_t] = {ob->generate_code},\n";
             }
 
             src += @"
+            };
+let _events_mgr_instance = Tickline::Runtime::LayersAndEventsManager::create([]);
+            "@;
+           
+            src += @"
 namespace Tickline
 {
-    extern func Execute()
+    extern func Execute()=> bool
     {
-        je::log("Fuck my self!");
+        return _events_mgr_instance->execute();
     }
 }
-je::tickline::engine::init();
+je::tickline::engine::init(_entity_logics->unmapping);
             "@;
 
             return src;

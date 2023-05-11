@@ -132,7 +132,7 @@ namespace Tickline
         }
     }
 
-    // extern func Execute()
+    // extern func Execute()=> bool
     // {
     //     // Tickline::Execute 
     //     // 将被引擎自底层的TicklineSystem调用

@@ -34,12 +34,12 @@ namespace jeapi::gui::form
         title: string, 
         text: string)
     {
+        static let WARNICON = je::graphic::texture::load("!/builtin/icon/joyengine.png")->val;
         launch(func()
         {
             let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
                 WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
 
-            let WARNICON = je::graphic::texture::load("!/builtin/icon/joyengine.png")->val;
             ImageSize(WARNICON, 32., 32.);
 
             SameLine();

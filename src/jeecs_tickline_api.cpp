@@ -6,7 +6,18 @@
 
 WO_API wo_api jeecs_tickline_register_global_vm(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::TicklineSystem::register_virtual_machine(vm);
+    wo_vm vmm = jeecs::TicklineSystem::register_virtual_machine(vm);
+    wo_push_val(vmm, args + 0);
+    
+    auto len = wo_lengthof(args + 0);
+
+    jeecs::typing::uid_t _uid;
+    for (size_t i = 0; i< len;++i)
+    {
+        _uid.parse(wo_string(wo_struct_get(wo_arr_get(args + 0, i), 0)));
+        jeecs::TicklineSystem::ENTITY_ACTIONS[_uid] = wo_struct_get(wo_arr_get(args+0, i), 1);
+    }
+
     return wo_ret_void(vm);
 }
 
@@ -113,6 +124,8 @@ import je;
 
 namespace je::tickline
 {
+    public using euid_t = string;
+
     public using VM = gchandle
     {
         extern("libjoyecs", "jeecs_tickline_dispatch_vm")
@@ -126,14 +139,10 @@ namespace je::tickline
     namespace engine
     {
         extern("libjoyecs", "jeecs_tickline_register_global_vm")
-        public func init()=> void;
+        public func init(logics : array<(je::tickline::euid_t, (je::entity)=>void)>)=> void;
 
         extern("libjoyecs", "jeecs_tickline_unregister_global_vm")
         public func clean()=> void;
     }
-
-    public using euid_t = string;
-    extern("libjoyecs", "jeecs_tickline_get_current_systems_by_uid")
-    public func get_current_entities()=> dict<euid_t, array<je::entity>>;
 }
 )";

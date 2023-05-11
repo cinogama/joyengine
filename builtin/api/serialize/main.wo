@@ -10,7 +10,7 @@ using je;
 namespace jeapi
 {
     namespace serialize
-    {
+    {        
         alias texture_inform = string;
         func get_entity_texture_passes(saving_entity: entity)=> dict<int, option<texture_inform>>
         {
