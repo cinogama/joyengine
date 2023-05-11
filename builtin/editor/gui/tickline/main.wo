@@ -27,39 +27,128 @@ namespace editor::gui::tickline
         return result;
     }
 
+    using BehaviorActionContext = typeof(nil)
+    {
+        func create(context: EditorContext)
+        {
+            return nil: BehaviorActionContext;
+        }
+        func edit(self: BehaviorActionContext, editor_context: EditorContext)
+        {
+
+        }
+    }
+
+    using EventActionContext = typeof(nil)
+    {
+        func create(context: EditorContext)
+        {
+            return nil: EventActionContext;
+        }
+        func edit(self: EventActionContext, editor_context: EditorContext)
+        {
+
+        }
+    }
+
     using ObjectEditorContext = struct{ 
         m_selecting_ob_id : mut int,
     }
     {
-        func create(proj: Project)
+        func create(context: EditorContext)
         {
             return ObjectEditorContext{
                 m_selecting_ob_id = mut -1,
             };
         }
-    }
-    func tk_object_editor(proj: Project, obctx: ObjectEditorContext)
-    {
-        let tickline_context = proj->get_tickline_context();
-        let object_names = tickline_context.m_objects->>\ob = ob.m_name + "##" + ob.m_euid: string;;
 
-        let (_, height) = GetContentRegionAvail();
-        do ListBoxSelectSize("##oblist", object_names->unsafe::cast:< array<string>>, obctx.m_selecting_ob_id, 200., height)
-            ->> \id = obctx.m_selecting_ob_id = id;
-            ;
+        func edit(self: ObjectEditorContext, editor_context: EditorContext)
+        {
+            let proj = editor_context->get_project();
+
+            let tickline_context = proj->get_tickline_context();
+            let object_names = tickline_context.m_objects->>\ob = ob.m_name + "##" + ob.m_euid: string;;
+
+            BeginGroup();
+            Text("对象");
+            let (_, height) = GetContentRegionAvail();
+            do ListBoxSelectSize("##oblist", object_names->unsafe::cast:< array<string>>, self.m_selecting_ob_id, 200., height)
+                ->> \id = self.m_selecting_ob_id = id;
+                ;
+            EndGroup();
+
+            SameLine();
+            
+            BeginGroup();
+            
+            if (Button("从选中的实体创建"))
+            {
+                match (editor_context->get_editing_entity())
+                {
+                value(eeid)?
+                    eeid->justdo(func(e)
+                        {
+                            if (tickline_context->create_object(e) == false)
+                                jeapi::gui::form::errmsg("失败", "无法从此实体创建"); 
+                        });
+                none?
+                    jeapi::gui::form::errmsg("失败", "没有选中的实体");
+                }
+            }
+
+            Separator();
+
+            if (self.m_selecting_ob_id == -1)
+                TextDisabled("没有选中要编辑的Object");
+            else
+            {
+                let object = tickline_context->get_object_by_index(self.m_selecting_ob_id)->val;
+                if (Button("实例化选中的对象"))
+                {
+                    
+                }
+
+                Text("名称"); SameLine(); do InputText("##obname", object.m_name)
+                    ->> \new_name = object.m_name = new_name;
+                    ;
+
+                Text("EUID"); SameLine(); do InputText("##obeuid", object.m_euid: string);
+
+                Text("行为");
+                let (width, height) = GetContentRegionAvail();
+                do InputTextMultilineSize("##obbehavior", object.m_source, width, height)
+                    ->> \new_source = object.m_source = new_source;
+                    ;
+
+            }
+
+            EndGroup();
+        }
     }
 
-    func tab_item_show<ContextT>(proj: Project, name: string, action: (Project, ContextT)=> void)
+    using ResourceContext = typeof(nil)
     {
-        static let context = _ask_context_for_type:< ContextT>();
+        func create(context: EditorContext)
+        {
+            return nil: ResourceContext;
+        }
+        func edit(self: ResourceContext, editor_context: EditorContext)
+        {
+
+        }
+    }
+
+    func tab_item_show<ContextT>(editor_context: EditorContext, name: string)
+    {
+        static let context_dat = _ask_context_for_type:< ContextT>();
         
-        if (context->get->has == false)
-            do context->set(option::value(ContextT::create(proj)));
+        if (context_dat->get->has == false)
+            do context_dat->set(option::value(ContextT::create(editor_context)));
 
         if (BeginTabItem(name))
         {
             do BeginChild("##tickline_main_body");
-            action(proj, context->get->val);
+            context_dat->get->val->edit(editor_context);
             EndChild();
             EndTabItem();
         }
@@ -70,11 +159,25 @@ namespace editor::gui::tickline
         _tickline_mgr_form_shown = BeginAttrOpen("Tickline 编辑器",
             WindowsAttribute::ImGuiWindowFlags_MenuBar);
 
-        let proj = context->get_project();
+        if (BeginMenuBar())
+        {
+            if (BeginMenu("帮助"))
+            {
+                if (MenuItem("关于"))
+                    jeapi::gui::form::msg("关于Tickline", 
+                        "Tickline是JoyEngine的快速游戏行为和资源管理编辑器\n(C)Cinogama project.");
+                
+                EndMenu();
+            }
+            EndMenuBar();
+        }
 
         if (BeginTabBar("##tickline_main"))
         {
-            tab_item_show(proj, "对象", tk_object_editor);
+            tab_item_show:< BehaviorActionContext>(context, "行为");
+            tab_item_show:< ObjectEditorContext>(context, "对象");
+            tab_item_show:< EventActionContext>(context, "事件");
+            tab_item_show:< ResourceContext>(context, "资源");
             EndTabBar();
         }
 

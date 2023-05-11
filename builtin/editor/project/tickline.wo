@@ -13,6 +13,18 @@ namespace editor::Tickline
         {
             return F"func(e: je::entity)\{{self.m_source}\}";
         }
+        public func create(e: je::entity)
+        {
+            return jeapi::serialize::entity(e)
+                ->> \dat = Object{
+                        m_name = mut e->editor::name,
+                        m_euid = je::uid(): je::tickline::euid_t,
+                        m_data = mut datjson,
+                        m_source = mut "",
+                    }
+                    where datjson = dat: string;
+                ;
+        }
     }
     public using Context = struct {
         m_objects: vec<Object>,
@@ -23,6 +35,22 @@ namespace editor::Tickline
             return Context{
                 m_objects = []mut,
             };
+        }
+
+        public func create_object(self: Context, e: je::entity)
+        {
+            return Object::create(e)
+                ->> \ob = self.m_objects->add(ob);
+                ->  has;
+        }
+
+        public func get_object_by_index(self: Context, idx: int)
+        {
+            return self.m_objects->get(idx);
+        }
+        public func remove_object_by_index(self: Context, idx: int)
+        {
+            return self.m_objects->get(idx);
         }
 
         public func generate_code(self: Context)
@@ -37,7 +65,7 @@ let _entity_logics = {
             "@;
             for (let _, ob : self.m_objects)
             {
-                src += F"_entity_logics[{ob.m_euid: string->enstring}: je::tickline::euid_t] = {ob->generate_code},\n";
+                src += F"[{ob.m_euid: string->enstring}: je::tickline::euid_t] = {ob->generate_code},\n";
             }
 
             src += @"
