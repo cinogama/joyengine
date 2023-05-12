@@ -23,6 +23,8 @@ extern const char* jeecs_tickline_api_src;
 void jeal_init();
 void jeal_finish();
 
+void jegl_finish();
+
 void je_init(int argc, char** argv)
 {
     je_log_strat();
@@ -141,6 +143,7 @@ bool jedbg_main_script_entry(void)
 void je_finish()
 {
     jeal_finish();
+    jegl_finish();
 
     je_log_shutdown();
     wo_finish();

@@ -906,8 +906,10 @@ struct jegl_graphic_api
 {
     using custom_interface_info_t = void*;
 
+    using prepare_interface_func_t = void(*)(void);
     using startup_interface_func_t = custom_interface_info_t(*)(jegl_thread*, const jegl_interface_config*, bool);
     using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t, bool);
+    using finish_interface_func_t = void(*)(void);
     using update_interface_func_t = bool(*)(jegl_thread*, custom_interface_info_t);
 
     using get_windows_size_func_t = void(*)(jegl_thread*, size_t*, size_t*);
@@ -927,8 +929,10 @@ struct jegl_graphic_api
     using get_uniform_location_func_t = int(*)(jegl_resource*, const char*);
     using set_uniform_func_t = void(*)(jegl_resource*, int, jegl_shader::uniform_type, const void*);
 
+    prepare_interface_func_t    prepare_interface;
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
+    finish_interface_func_t     finish_interface;
     update_interface_func_t     pre_update_interface;
     update_interface_func_t     update_interface;
     update_interface_func_t     late_update_interface;

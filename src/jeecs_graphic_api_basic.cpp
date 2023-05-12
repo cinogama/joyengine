@@ -110,6 +110,9 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
 
 //////////////////////////////////// API /////////////////////////////////////////
 
+std::vector<jegl_graphic_api::finish_interface_func_t> _jegl_finish_list;
+std::mutex _jegl_finish_list_mx;
+
 jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
     jeecs_api_register_func_t register_func,
@@ -136,6 +139,7 @@ jegl_thread* jegl_start_graphic_thread(
             jeecs::debug::logfatal("GraphicAPI function: %zu is invalid.", (size_t)(reador - (void**)thread_handle->m_apis));
         }
     }
+
     if (err_api_no)
     {
         jeecs::basic::destroy_free(thread_handle->_m_thread_notifier);
@@ -145,6 +149,19 @@ jegl_thread* jegl_start_graphic_thread(
         jeecs::debug::logfatal("Fail to start up graphic thread, abort and return nullptr.");
         return nullptr;
     }
+
+    // Register finish functions
+    do
+    {
+        std::lock_guard g1(_jegl_finish_list_mx);
+
+        if (_jegl_finish_list.end() == std::find(_jegl_finish_list.begin(), _jegl_finish_list.end(), thread_handle->m_apis->finish_interface))
+        {
+            _jegl_finish_list.push_back(thread_handle->m_apis->finish_interface);
+            thread_handle->m_apis->prepare_interface();
+        }
+    } while (0);
+
 
     // Take place.
     thread_handle->_m_thread_notifier->m_interface_config = config;
@@ -160,6 +177,15 @@ jegl_thread* jegl_start_graphic_thread(
             arg);
 
     return thread_handle;
+}
+
+void jegl_finish()
+{
+    std::lock_guard g1(_jegl_finish_list_mx);
+    for (auto finish_action : _jegl_finish_list)
+    {
+        finish_action();
+    }
 }
 
 void jegl_terminate_graphic_thread(jegl_thread* thread)

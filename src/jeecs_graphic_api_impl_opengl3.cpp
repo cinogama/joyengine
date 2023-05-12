@@ -87,14 +87,22 @@ void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int st
 
 }
 
+void gl_prepare()
+{
+    if (!glfwInit())
+        jeecs::debug::logfatal("Failed to init glfw.");
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+}
+
 jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
 {
     jeecs::debug::log("Graphic thread start!");
 
     GRAPHIC_THREAD_ID = std::this_thread::get_id();
-
-    if (!glfwInit())
-        jeecs::debug::logfatal("Failed to init glfw.");
 
     WINDOWS_SIZE_WIDTH = config->m_windows_width ? config->m_windows_width : config->m_resolution_x;
     WINDOWS_SIZE_HEIGHT = config->m_windows_height ? config->m_windows_height : config->m_resolution_y;
@@ -174,7 +182,11 @@ void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t, bool r
 
     jegui_shutdown(reboot);
     glfwDestroyWindow(WINDOWS_HANDLE);
+}
 
+void gl_finish()
+{
+    glfwTerminate();
 }
 
 int gl_get_uniform_location(jegl_resource* shader, const char* name)
@@ -804,6 +816,9 @@ void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
 
 JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
 {
+    write_to_apis->prepare_interface = gl_prepare;
+    write_to_apis->finish_interface = gl_finish;
+
     write_to_apis->init_interface = gl_startup;
     write_to_apis->pre_update_interface = gl_pre_update;
     write_to_apis->update_interface = gl_update;

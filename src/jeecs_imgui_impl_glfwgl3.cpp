@@ -569,17 +569,15 @@ WO_API wo_api je_gui_set_next_item_open(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-std::string _jegui_clipboard_text;
-
 WO_API wo_api je_gui_set_clip_board_text(wo_vm vm, wo_value args, size_t argc)
 {
-    _jegui_clipboard_text = wo_string(args + 0);
+    ImGui::SetClipboardText(wo_string(args));
     return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_string(vm, _jegui_clipboard_text.c_str());
+    return wo_ret_string(vm, ImGui::GetClipboardText());
 }
 
 //
