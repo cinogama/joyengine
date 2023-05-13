@@ -697,7 +697,6 @@ struct jegl_vertex
         LINESTRIP,
         TRIANGLES,
         TRIANGLESTRIP,
-        QUADS,
     };
     float m_size_x, m_size_y, m_size_z;
     float* m_vertex_datas;

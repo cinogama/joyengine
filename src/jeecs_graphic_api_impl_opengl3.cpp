@@ -510,6 +510,10 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         glDrawBuffers((GLsizei)attachments.size(), attachments.data());
 
         resource->m_uint1 = fbo;
+
+        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE)
+            jeecs::debug::logerr("Framebuffer(%p) not complete, status: %d.", resource, (int)status);
     }
     else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
     {
@@ -762,7 +766,7 @@ void gl_draw_vertex_with_shader(jegl_resource* vert)
         GL_LINE_STRIP,
         GL_TRIANGLES,
         GL_TRIANGLE_STRIP,
-        GL_QUADS };
+    };
 
     jegl_using_resource(vert);
     glDrawArrays(DRAW_METHODS[vert->m_raw_vertex_data->m_type], 0, (GLsizei)vert->m_raw_vertex_data->m_point_count);
@@ -771,7 +775,7 @@ void gl_draw_vertex_with_shader(jegl_resource* vert)
 void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
     if (nullptr == framebuffer)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     else
         jegl_using_resource(framebuffer);
 
@@ -780,7 +784,7 @@ void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource* framebuffer, size_t
 void gl_clear_framebuffer_color(jegl_thread*, jegl_resource* framebuffer)
 {
     if (nullptr == framebuffer)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     else
         jegl_using_resource(framebuffer);
 
@@ -789,7 +793,7 @@ void gl_clear_framebuffer_color(jegl_thread*, jegl_resource* framebuffer)
 void gl_clear_framebuffer(jegl_thread*, jegl_resource* framebuffer)
 {
     if (nullptr == framebuffer)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     else
         jegl_using_resource(framebuffer);
 
@@ -799,7 +803,7 @@ void gl_clear_framebuffer(jegl_thread*, jegl_resource* framebuffer)
 void gl_clear_framebuffer_depth(jegl_thread*, jegl_resource* framebuffer)
 {
     if (nullptr == framebuffer)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     else
         jegl_using_resource(framebuffer);
 

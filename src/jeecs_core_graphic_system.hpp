@@ -169,12 +169,12 @@ namespace jeecs
         GraphicThreadHost()
         {
             default_shape_quad =
-                new graphic::vertex(jegl_vertex::QUADS,
+                new graphic::vertex(jegl_vertex::TRIANGLESTRIP,
                     {
-                        -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
-                        0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f, 0.0f, -1.0f,
-                        0.5f, 0.5f, 0.0f,       1.0f, 1.0f,  0.0f, 0.0f, -1.0f,
                         -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f,
+                        -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
+                        0.5f, 0.5f, 0.0f,       1.0f, 1.0f,  0.0f, 0.0f, -1.0f,
+                        0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f, 0.0f, -1.0f,
                     },
                     { 3, 2, 3 });
 
@@ -651,12 +651,12 @@ public let frag =
                 _no_shadow = texture::create(1, 1, jegl_texture::texture_format::RGBA);
                 _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
 
-                _screen_vertex = new vertex(jegl_vertex::vertex_type::QUADS,
+                _screen_vertex = new vertex(jegl_vertex::vertex_type::TRIANGLESTRIP,
                     {
-                        -1.f, -1.f, 0.f,    0.f, 0.f,
-                        1.f, -1.f, 0.f,     1.f, 0.f,
-                        1.f, 1.f, 0.f,      1.f, 1.f,
                         -1.f, 1.f, 0.f,     0.f, 1.f,
+                        -1.f, -1.f, 0.f,    0.f, 0.f,
+                        1.f, 1.f, 0.f,      1.f, 1.f,
+                        1.f, -1.f, 0.f,     1.f, 0.f,
                     },
                     { 3, 2 });
 
@@ -1209,7 +1209,8 @@ public func frag(vf: v2f)
                             shadow->shadow_buffer = new graphic::framebuffer(
                                 shadow->resolution_width, shadow->resolution_height,
                                 {
-                                    jegl_texture::texture_format::MONO, // Only store shadow value.
+                                    jegl_texture::texture_format::RGBA, 
+                                    // Only store shadow value to R, FBO in opengl not support rend to MONO
                                 }
                             );
                             shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
