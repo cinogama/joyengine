@@ -265,7 +265,7 @@ std::string _generate_uniform_block_for_glsl(shader_wrapper* wrap)
             std::string uniform_block_decl =
                 block->binding_place == jeecs::typing::INVALID_UINT32
                 ? "struct " + block->name + "\n{\n"
-                : "layout (std140, binding = " + std::to_string(block->binding_place) + ") uniform " + block->name + "\n{\n";
+                : "layout (std140) uniform " + block->name + "\n{\n";
 
             for (auto& variable_inform : block->variables)
                 if (variable_inform.type == jegl_shader_value::type::STRUCT)
@@ -285,7 +285,6 @@ std::string _glsl_pragma()
 {
     return R"(
 #version 330
-#extension GL_ARB_shading_language_420pack : enable
 )";
 }
 

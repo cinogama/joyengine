@@ -738,7 +738,6 @@ struct jegl_shader
         uint32_t m_builtin_uniform_shadow2d_resolution = jeecs::typing::INVALID_UINT32;
         uint32_t m_builtin_uniform_light2d_decay = jeecs::typing::INVALID_UINT32;
     };
-
     struct unifrom_variables
     {
         const char* m_name;
@@ -757,6 +756,13 @@ struct jegl_shader
 
         unifrom_variables* m_next;
     };
+    struct uniform_blocks
+    {
+        const char* m_name;
+        size_t      m_specify_binding_place;
+
+        uniform_blocks* m_next;
+    };
 
     enum class depth_test_method : int8_t
     {
@@ -772,7 +778,6 @@ struct jegl_shader
         GREATER_EQUAL,
         ALWAYS,
     };
-
     enum class depth_mask_method : int8_t
     {
         INVALID = -1,
@@ -780,7 +785,6 @@ struct jegl_shader
         DISABLE,
         ENABLE,     /* DEFAULT */
     };
-
     enum class alpha_test_method : int8_t
     {
         INVALID = -1,
@@ -788,7 +792,6 @@ struct jegl_shader
         DISABLE,    /* DEFAULT */
         ENABLE,
     };
-
     enum class blend_method : int8_t
     {
         INVALID = -1,
@@ -814,7 +817,6 @@ struct jegl_shader
         CONST_ALPHA,
         ONE_MINUS_CONST_ALPHA,
     };
-
     enum class cull_mode : int8_t
     {
         INVALID = -1,
@@ -825,9 +827,10 @@ struct jegl_shader
         ALL,
     };
 
-    const char* m_vertex_glsl_src;
-    const char* m_fragment_glsl_src;
-    unifrom_variables* m_custom_uniforms;
+    const char*         m_vertex_glsl_src;
+    const char*         m_fragment_glsl_src;
+    unifrom_variables*  m_custom_uniforms;
+    uniform_blocks*     m_custom_uniform_blocks;
     builtin_uniform_location m_builtin_uniforms;
 
     depth_test_method   m_depth_test;
@@ -850,7 +853,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t* m_buffer;
+    uint8_t*    m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
@@ -1006,8 +1009,8 @@ JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src,
 JE_API jegl_resource* jegl_load_shader(const char* path);
 
 JE_API jegl_resource* jegl_create_uniformbuf(
-    size_t length,
-    size_t binding_place);
+    size_t binding_place,
+    size_t length);
 JE_API void jegl_update_uniformbuf(
     jegl_resource* uniformbuf,
     const void* buf,

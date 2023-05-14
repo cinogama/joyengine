@@ -343,7 +343,7 @@ namespace jeecs_impl
             {
                 const_cast<size_t&>(_m_entity_size) += typeinfo->m_chunk_size;
             }
-
+            assert(_m_entity_size != 0);
             const_cast<size_t&>(_m_entity_count_per_chunk) = CHUNK_SIZE / _m_entity_size;
 
             size_t mem_offset = 0;

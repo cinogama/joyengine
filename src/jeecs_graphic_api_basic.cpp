@@ -651,8 +651,9 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
     jeecs_file_read(&_shader->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
     jeecs_file_read(&_shader->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
 
-    // 3. read and generate custom variable informs
-
+    // 3. read and generate custom variable & uniform block informs
+    
+    // 3.1 read and generate custom variable
     uint64_t custom_uniform_count;
     jeecs_file_read(&custom_uniform_count, sizeof(uint64_t), 1, cache_file);
 
@@ -668,17 +669,17 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
         if (last_create_variable != nullptr)
             last_create_variable->m_next = current_variable;
 
-        // 3.1 read name
+        // 3.1.1 read name
         uint64_t uniform_name_len;
         jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
         current_variable->m_name = (const char*)je_mem_alloc(uniform_name_len + 1);
         jeecs_file_read(const_cast<char*>(current_variable->m_name), sizeof(char), uniform_name_len, cache_file);
         const_cast<char*>(current_variable->m_name)[uniform_name_len] = 0;
 
-        // 3.2 read type
+        // 3.1.2 read type
         jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
 
-        // 3.3 read data
+        // 3.1.3 read data
         static_assert(sizeof(current_variable->mat4x4) == sizeof(float[4][4]));
         jeecs_file_read(&current_variable->mat4x4, sizeof(float[4][4]), 1, cache_file);
 
@@ -687,6 +688,37 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
 
         last_create_variable = current_variable;
         current_variable->m_next = nullptr;
+    }
+
+    // 3.2 read uniform block informs
+    uint64_t custom_uniform_block_count;
+    jeecs_file_read(&custom_uniform_block_count, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_custom_uniform_blocks = nullptr;
+
+    jegl_shader::uniform_blocks* last_create_block = nullptr;
+    for (uint64_t i = 0; i < custom_uniform_block_count; ++i)
+    {
+        jegl_shader::uniform_blocks* current_block = jeecs::basic::create_new<jegl_shader::uniform_blocks>();
+        if (_shader->m_custom_uniform_blocks == nullptr)
+            _shader->m_custom_uniform_blocks = current_block;
+
+        if (last_create_block != nullptr)
+            last_create_block->m_next = current_block;
+
+        // 3.2.1 read name
+        uint64_t uniform_name_len;
+        jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
+        current_block->m_name = (const char*)je_mem_alloc(uniform_name_len + 1);
+        jeecs_file_read(const_cast<char*>(current_block->m_name), sizeof(char), uniform_name_len, cache_file);
+        const_cast<char*>(current_block->m_name)[uniform_name_len] = 0;
+
+        // 3.2.2 read binding place
+        static_assert(sizeof(current_block->m_specify_binding_place) == sizeof(size_t));
+        jeecs_file_read(&current_block->m_specify_binding_place, sizeof(size_t), 1, cache_file);
+
+        last_create_block = current_block;
+        current_block->m_next = nullptr;
     }
 
     jeecs_file_close(cache_file);
@@ -730,33 +762,58 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         jeecs_write_cache_file(&raw_shader_data->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cachefile);
 
-        // 3. write shader custom variable informs
-        uint64_t custom_uniform = 0;
-        auto* count_for_uniform = raw_shader_data->m_custom_uniforms;
-        while (count_for_uniform)
+        // 3. write shader custom variable & uniform block informs.
+        uint64_t count_for_uniform = 0;
+        uint64_t count_for_uniform_block = 0;
+
+        auto* custom_uniform = raw_shader_data->m_custom_uniforms;
+        while (custom_uniform)
         {
-            ++custom_uniform;
-            count_for_uniform = count_for_uniform->m_next;
+            ++count_for_uniform;
+            custom_uniform = custom_uniform->m_next;
+        }
+        auto* custom_uniform_block = raw_shader_data->m_custom_uniform_blocks;
+        while (custom_uniform_block)
+        {
+            ++count_for_uniform_block;
+            custom_uniform_block = custom_uniform_block->m_next;
         }
 
-        jeecs_write_cache_file(&custom_uniform, sizeof(uint64_t), 1, cachefile);
-
-        count_for_uniform = raw_shader_data->m_custom_uniforms;
-        while (count_for_uniform)
+        // 3.1 write shader custom variable
+        jeecs_write_cache_file(&count_for_uniform, sizeof(uint64_t), 1, cachefile);
+        custom_uniform = raw_shader_data->m_custom_uniforms;
+        while (custom_uniform)
         {
-            // 3.1 write name
-            uint64_t uniform_name_len = (uint64_t)strlen(count_for_uniform->m_name);
+            // 3.1.1 write name
+            uint64_t uniform_name_len = (uint64_t)strlen(custom_uniform->m_name);
             jeecs_write_cache_file(&uniform_name_len, sizeof(uint64_t), 1, cachefile);
-            jeecs_write_cache_file(count_for_uniform->m_name, sizeof(char), uniform_name_len, cachefile);
+            jeecs_write_cache_file(custom_uniform->m_name, sizeof(char), uniform_name_len, cachefile);
 
-            // 3.2 write type
-            jeecs_write_cache_file(&count_for_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
+            // 3.1.2 write type
+            jeecs_write_cache_file(&custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
 
-            // 3.3 write data
-            static_assert(sizeof(count_for_uniform->mat4x4) == sizeof(float[4][4]));
-            jeecs_write_cache_file(&count_for_uniform->mat4x4, sizeof(float[4][4]), 1, cachefile);
+            // 3.1.3 write data
+            static_assert(sizeof(custom_uniform->mat4x4) == sizeof(float[4][4]));
+            jeecs_write_cache_file(&custom_uniform->mat4x4, sizeof(float[4][4]), 1, cachefile);
 
-            count_for_uniform = count_for_uniform->m_next;
+            custom_uniform = custom_uniform->m_next;
+        }
+
+        // 3.2 write shader custom uniform block informs
+        jeecs_write_cache_file(&count_for_uniform_block, sizeof(uint64_t), 1, cachefile);
+        custom_uniform_block = raw_shader_data->m_custom_uniform_blocks;
+        while (custom_uniform_block)
+        {
+            // 3.2.1 write name
+            uint64_t uniform_block_name_len = (uint64_t)strlen(custom_uniform_block->m_name);
+            jeecs_write_cache_file(&uniform_block_name_len, sizeof(uint64_t), 1, cachefile);
+            jeecs_write_cache_file(custom_uniform_block->m_name, sizeof(char), uniform_block_name_len, cachefile);
+
+            // 3.2.2 write place
+            static_assert(sizeof(custom_uniform_block->m_specify_binding_place) == sizeof(size_t));
+            jeecs_write_cache_file(&custom_uniform_block->m_specify_binding_place, sizeof(size_t), 1, cachefile);
+
+            custom_uniform_block = custom_uniform_block->m_next;
         }
 
         jeecs_close_cache_file(cachefile);

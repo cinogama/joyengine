@@ -95,7 +95,6 @@ void gl_prepare()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
 }
 
 jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
@@ -294,7 +293,14 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
             builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(resource, "JOYENGINE_LOCAL_SCALE");
             builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(resource, "JOYENGINE_MAIN_COLOR");
-            
+         
+            auto* uniform_block = resource->m_raw_shader_data->m_custom_uniform_blocks;
+            while (uniform_block)
+            {
+                GLuint uniform_block_loc = glGetUniformBlockIndex(shader_program, uniform_block->m_name);
+                glUniformBlockBinding(shader_program, uniform_block_loc, uniform_block->m_specify_binding_place);
+                uniform_block = uniform_block->m_next;
+            }
         }
 
         glDeleteShader(vertex_shader);
