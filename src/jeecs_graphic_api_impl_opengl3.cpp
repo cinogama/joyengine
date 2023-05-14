@@ -26,7 +26,6 @@ thread_local float MOUSE_SCROLL_X_COUNT = 0.f;
 thread_local float MOUSE_SCROLL_Y_COUNT = 0.f;
 thread_local int KEYBOARD_STATE[MAX_KEYBOARD_BUTTON_COUNT];
 
-
 void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
 {
     WINDOWS_SIZE_WIDTH = (size_t)x;
@@ -95,6 +94,54 @@ void gl_prepare()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+#ifndef NDEBUG
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+#endif
+}
+void APIENTRY glDebugOutput(GLenum source,
+    GLenum type,
+    unsigned int id,
+    GLenum severity,
+    GLsizei length,
+    const char* message,
+    const void* userParam)
+{
+    const char* source_type = "UNKNOWN";
+    switch (source)
+    {
+    case GL_DEBUG_SOURCE_API:             source_type = "API"; break;
+    case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   source_type = "Window System"; break;
+    case GL_DEBUG_SOURCE_SHADER_COMPILER: source_type = "Shader Compiler"; break;
+    case GL_DEBUG_SOURCE_THIRD_PARTY:     source_type = "Third Party"; break;
+    case GL_DEBUG_SOURCE_APPLICATION:     source_type = "Application"; break;
+    case GL_DEBUG_SOURCE_OTHER:           source_type = "Other"; break;
+    }
+
+    const char* msg_type = "UNKNOWN";
+    int jelog_level = JE_LOG_INFO;
+    switch (type)
+    {
+    case GL_DEBUG_TYPE_ERROR:               jelog_level = JE_LOG_ERROR; msg_type = "Error"; break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: jelog_level = JE_LOG_WARNING; msg_type = "Deprecated Behaviour"; break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  jelog_level = JE_LOG_ERROR; msg_type = "Undefined Behaviour"; break;
+    case GL_DEBUG_TYPE_PORTABILITY:         jelog_level = JE_LOG_WARNING; msg_type = "Portability"; break;
+    case GL_DEBUG_TYPE_PERFORMANCE:         jelog_level = JE_LOG_WARNING; msg_type = "Performance"; break;
+    case GL_DEBUG_TYPE_MARKER:              jelog_level = JE_LOG_INFO; msg_type = "Marker"; break;
+    case GL_DEBUG_TYPE_PUSH_GROUP:          jelog_level = JE_LOG_INFO; msg_type = "Push Group"; break;
+    case GL_DEBUG_TYPE_POP_GROUP:           jelog_level = JE_LOG_INFO; msg_type = "Pop Group"; break;
+    case GL_DEBUG_TYPE_OTHER:               jelog_level = JE_LOG_INFO; msg_type = "Other"; break;
+    }
+
+    switch (severity)
+    {
+    case GL_DEBUG_SEVERITY_HIGH:         jelog_level = JE_LOG_FATAL; break;
+    case GL_DEBUG_SEVERITY_MEDIUM:       ; break;
+    case GL_DEBUG_SEVERITY_LOW:          ; break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION: ; break;
+    }
+
+    je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
 }
 
 jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
@@ -124,8 +171,14 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
         jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
 
+#ifndef NDEBUG
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(glDebugOutput, nullptr);
+    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+#endif
+
     glEnable(GL_MULTISAMPLE);
-    glEnable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
 
     jegui_init(WINDOWS_HANDLE, reboot);
@@ -440,8 +493,9 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
                     is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
                     resource->m_raw_texture_data->m_pixels);
 
-            glGenerateMipmap(gl_texture_type);
+            // glGenerateMipmap(GL_TEXTURE_2D);
         }
+
         resource->m_uint1 = texture;
     }
     else if (resource->m_type == jegl_resource::type::VERTEX)

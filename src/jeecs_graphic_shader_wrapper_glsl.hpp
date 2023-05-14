@@ -284,7 +284,7 @@ std::string _generate_uniform_block_for_glsl(shader_wrapper* wrap)
 std::string _glsl_pragma()
 {
     return R"(
-#version 330
+#version 330 core
 )";
 }
 
