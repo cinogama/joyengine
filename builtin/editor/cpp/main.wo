@@ -485,7 +485,7 @@ namespace editor
                             =>> \platform_support = generate_module_config(proj, created_module.name, created_module.path, platform_support);
                             =>> func(_)
                                 {
-                                    proj->deactive_module(created_module);
+                                    do proj->deactive_module(created_module);
                                     return open_for_loading(path, proj);
                                 }
                             =>> func(reloaded_created_module)

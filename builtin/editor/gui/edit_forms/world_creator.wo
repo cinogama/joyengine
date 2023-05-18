@@ -97,8 +97,8 @@ namespace editor::gui::edit_forms
                 if (self.has_active_types->find(type) == -1)
                 {
                     self.has_active_types->add(type);
-                    self.not_append_types->remove(self.not_append_types->find(type));
-                    self.has_append_types->remove(self.has_append_types->find(type));
+                    do self.not_append_types->remove(self.not_append_types->find(type));
+                    do self.has_append_types->remove(self.has_append_types->find(type));
                 }
             none?
                 je::logfatal("没有找到系统: ", type_name);
@@ -113,8 +113,8 @@ namespace editor::gui::edit_forms
                 if (self.not_append_types->find(type) == -1)
                 {
                     self.not_append_types->add(type);
-                    self.has_append_types->remove(self.has_append_types->find(type));
-                    self.has_active_types->remove(self.has_active_types->find(type));
+                    do self.has_append_types->remove(self.has_append_types->find(type));
+                    do self.has_active_types->remove(self.has_active_types->find(type));
                 }
             none?
                 je::logfatal("没有找到系统: ", type_name);
@@ -129,8 +129,8 @@ namespace editor::gui::edit_forms
                 if (self.has_append_types->find(type) == -1)
                 {
                     self.has_append_types->add(type);
-                    self.not_append_types->remove(self.not_append_types->find(type));
-                    self.has_active_types->remove(self.has_active_types->find(type));
+                    do self.not_append_types->remove(self.not_append_types->find(type));
+                    do self.has_active_types->remove(self.has_active_types->find(type));
                 }
             none?
                 je::logfatal("没有找到系统: ", type_name);

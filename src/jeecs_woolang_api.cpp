@@ -2182,7 +2182,7 @@ R"(
                     while (!self.m_not_top_entities->empty())
                     {
                         let top = self.m_not_top_entities[0];
-                        self.m_not_top_entities->remove(0);
+                        do self.m_not_top_entities->remove(0);
 
                         if (self.m_outed_entities->find(top) == -1)
                         {

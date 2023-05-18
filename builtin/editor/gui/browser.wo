@@ -617,7 +617,7 @@ namespace editor::gui
                             jeapi::gui::form::ask("确认移除组件？", F"是否从模块{filesys::filename(path.path)}中移除组件{s}?",
                                 func(sure: bool){
                                     if (!sure) return;
-                                    components->remove(components->find(s));
+                                    do components->remove(components->find(s));
                                     do filesys::remove(file_path)->unwarp;
                                 });
                         EndPopup();
@@ -636,8 +636,9 @@ namespace editor::gui
                         if (MenuItem("移除此系统"))
                             jeapi::gui::form::ask("确认移除系统？", F"是否从模块{filesys::filename(path.path)}中移除系统{s}?",
                                 func(sure: bool){
-                                    if (!sure) return
-                                    systems->remove(systems->find(s));
+                                    if (!sure) return;
+
+                                    do systems->remove(systems->find(s));
                                     do filesys::remove(F"{path.path}/systems/{s}.hpp")->unwarp;
                                     do filesys::remove(file_path)->unwarp;
                                 });

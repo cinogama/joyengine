@@ -317,7 +317,7 @@ namespace editor
         }
         public func deactive_module(self: Project, module: CxxProject)
         {
-            self.m_modules->remove(module.path);
+            return self.m_modules->remove(module.path);
         }
         public func load(path: string, dat: dict<string, dynamic>)
         {
@@ -652,7 +652,7 @@ namespace editor
                     self->get_editing_world->>\rw = rw == world;->valor(false);
                
                 // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
-                self.m_worlds->remove(self.m_worlds->find(w));
+                do self.m_worlds->remove(self.m_worlds->find(w));
 
                 // 如果还有世界，那么选择第一个作为编辑中世界顶替，否则起用默认世界
                 self.m_worlds->get(0)

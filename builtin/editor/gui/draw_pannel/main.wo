@@ -236,7 +236,7 @@ namespace editor::gui::drawpannel
     {
         func update_edit_textures_history(self: DrawContextT, passid: int, oldtex: graphic::texture, newtex: graphic::texture)
         {
-            self.edited_textures->remove(oldtex);
+            do self.edited_textures->remove(oldtex);
             let history = HistoryManager::create(newtex);
             self.edited_textures->set(newtex, (passid, HistoryManager::create(newtex)));
             history->mark_as_edited();

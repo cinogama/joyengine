@@ -17,7 +17,7 @@ jeapi::welcome::display_copyright_msg();
 
 using je::gui;
 
-let mut action_after_guide_form_closed = \ = do nil;;
+let mut action_after_guide_form_closed = \ = do nil; as ()=> impure void;
 
 using Path = struct {
     name: string,       // 仅用于显示

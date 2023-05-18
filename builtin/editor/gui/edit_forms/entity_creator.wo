@@ -68,7 +68,7 @@ namespace editor::gui::edit_forms
                     if (context.not_append_types->find(type) == -1)
                     {
                         context.not_append_types->add(type);
-                        context.has_append_types->remove(context.has_append_types->find(type));
+                        do context.has_append_types->remove(context.has_append_types->find(type));
                     }
                 none?
                     je::logfatal("Cannot find component type named: ", type_name);
@@ -83,7 +83,7 @@ namespace editor::gui::edit_forms
                     if (context.has_append_types->find(type) == -1)
                     {
                         context.has_append_types->add(type);
-                        context.not_append_types->remove(context.not_append_types->find(type));
+                        do context.not_append_types->remove(context.not_append_types->find(type));
                     }
                 none?
                     je::logfatal("Cannot find component type named: ", type_name);
