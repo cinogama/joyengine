@@ -432,6 +432,7 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::update_func_t    _pre_update,
     jeecs::typing::update_func_t    _update,
     jeecs::typing::update_func_t    _late_update,
+    jeecs::typing::update_func_t    _commit_update,
     je_typing_class                 _typecls);
 
 JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
@@ -1739,11 +1740,19 @@ namespace jeecs
             struct has_late_update_function<U, std::void_t<decltype(&U::LateUpdate)>> : std::true_type
             {};
 
+            template<typename U, typename VoidT = void>
+            struct has_commit_update_function : std::false_type
+            {
+                static_assert(std::is_void<VoidT>::value);
+            };
+            template<typename U>
+            struct has_commit_update_function<U, std::void_t<decltype(&U::CommitUpdate)>> : std::true_type
+            {};
+
             static void pre_update(void* _ptr)
             {
                 if constexpr (has_pre_update_function<T>::value)
                     reinterpret_cast<T*>(_ptr)->PreUpdate();
-
             }
             static void update(void* _ptr)
             {
@@ -1754,6 +1763,11 @@ namespace jeecs
             {
                 if constexpr (has_late_update_function<T>::value)
                     reinterpret_cast<T*>(_ptr)->LateUpdate();
+            }
+            static void commit_update(void* _ptr)
+            {
+                if constexpr (has_commit_update_function<T>::value)
+                    reinterpret_cast<T*>(_ptr)->CommitUpdate();
             }
         };
 
@@ -1987,6 +2001,7 @@ namespace jeecs
             update_func_t       m_pre_update;
             update_func_t       m_update;
             update_func_t       m_late_update;
+            update_func_t       m_commit_update;
 
             je_typing_class     m_type_class;
 
@@ -2045,6 +2060,7 @@ namespace jeecs
                         basic::default_functions<T>::pre_update,
                         basic::default_functions<T>::update,
                         basic::default_functions<T>::late_update,
+                        basic::default_functions<T>::commit_update,
                         current_type))
                     {
                         *first_init = true;
@@ -2145,6 +2161,11 @@ namespace jeecs
             {
                 assert(is_system());
                 m_late_update(addr);
+            }
+            inline void commit_update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_commit_update(addr);
             }
             inline const member_info* find_member_by_name(const char* name) const noexcept
             {
@@ -2824,10 +2845,12 @@ namespace jeecs
 #define PreUpdate PreUpdate
 #define Update Update
 #define LateUpdate LateUpdate
+#define CommitUpdate CommitUpdate
 
-        // void PreUpdate()
-        // void Update()
-        // void LateUpdate()
+        // void PreUpdate()         // 用于时效性要求高的任务，例如画面更新 
+        // void Update()            // 用于变更数据的任务
+        // void LateUpdate()        // 用于变更数据的任务，在Update之后执行
+        // void CommitUpdate()      // 用于数据最终提交的任务
         /*
         struct TranslationUpdater : game_system
         {
@@ -5616,6 +5639,23 @@ namespace jeecs
             return false;
         }
 
+        template<typing::typehash_t hash_v1, int v2>
+        static double _realDeltaTime()
+        {
+            static double last_time = je_clock_time();
+            
+            double last = last_time;
+            last_time = je_clock_time();
+            
+            return last_time - last;
+        }
+
+        template<typing::typehash_t hash_v1, int v2>
+        static float _realDeltaTimeF()
+        {
+            return (float)_realDeltaTime<hash_v1, v2>();
+        }
+
         static void is_up(...);
         static void first_down(...);
         static void double_click(...);// just for fool ide
@@ -5623,6 +5663,8 @@ namespace jeecs
 #define is_up _isUp<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
+#define real_delta_time _realDeltaTime<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
+#define real_delta_timef _realDeltaTimeF<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
     }
 }
 

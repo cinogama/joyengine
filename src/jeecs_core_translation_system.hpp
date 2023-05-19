@@ -110,7 +110,7 @@ namespace jeecs
             }
         }
 
-        void PreUpdate()
+        void CommitUpdate()
         {
             m_anchor_list.clear();
 
@@ -120,15 +120,6 @@ namespace jeecs
                 .exec(&TranslationUpdatingSystem::LocalToParentUpdate)
                 .exec(&TranslationUpdatingSystem::LocalToWorldTrans)
                 .exec(&TranslationUpdatingSystem::LocalToParentTrans);
-        }
-        void Update()
-        {
-            // Do nothing here.
-        }
-
-        void LateUpdate()
-        {
-            // Do nothing here.
         }
     };
 }

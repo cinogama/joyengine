@@ -131,6 +131,8 @@ namespace jeecs
             bool r_buttom_click = false;
             bool r_buttom_pushed = false;
 
+            float delta_time = 0.0f;
+
             jeecs::math::vec2 uniform_mouse_pos = {};
             jeecs::math::ivec2 advise_lock_mouse_pos = {};
 
@@ -212,13 +214,13 @@ namespace jeecs
                 }
 
                 if (_inputs.w)
-                    position.pos += _camera_rot * vec3(0, 0, move_speed / 60.f);
+                    position.pos += _camera_rot * vec3(0, 0, move_speed * _inputs.delta_time);
                 if (_inputs.s)
-                    position.pos += _camera_rot * vec3(0, 0, -move_speed / 60.f);
+                    position.pos += _camera_rot * vec3(0, 0, -move_speed * _inputs.delta_time);
                 if (_inputs.a)
-                    position.pos += _camera_rot * vec3(-move_speed / 60.f, 0, 0);
+                    position.pos += _camera_rot * vec3(-move_speed * _inputs.delta_time, 0, 0);
                 if (_inputs.d)
-                    position.pos += _camera_rot * vec3(move_speed / 60.f, 0, 0);
+                    position.pos += _camera_rot * vec3(move_speed * _inputs.delta_time, 0, 0);
             }
             else
                 advise_lock_mouse = false;
@@ -560,6 +562,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             _inputs.r_buttom_click = input::is_up(_inputs.r_buttom);
             _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
             _inputs.selected_entity = std::nullopt;
+            _inputs.delta_time = input::real_delta_timef();
 
             if (_inputs._wheel_count_record != INT_MAX)
             {

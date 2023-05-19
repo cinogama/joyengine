@@ -265,7 +265,7 @@ public let frag =
         }
 
         template<typename PipelineSystemT>
-        inline void UpdateFrame(game_world world, PipelineSystemT* sys)noexcept
+        inline bool UpdateFrame(game_world world, PipelineSystemT* sys)noexcept
         {
             void* _null = nullptr;
             if (_m_rending_world.compare_exchange_weak(_null, world.handle()))
@@ -275,6 +275,7 @@ public let frag =
             }
 
             if (glthread && IsActive(world))
+            {
                 if (!jegl_update(glthread))
                 {
                     // update is not work now, means graphic thread want to exit..
@@ -283,6 +284,9 @@ public let frag =
                     if (game_universe universe = world.get_universe())
                         universe.stop();
                 }
+                return true;
+            }
+            return false;
         }
     };
 
@@ -307,9 +311,9 @@ public let frag =
         }
 
         template<typename SysT>
-        inline void UpdateFrame(SysT* _this) noexcept
+        inline bool UpdateFrame(SysT* _this) noexcept
         {
-            _m_pipeline->UpdateFrame(get_world(), _this);
+            return _m_pipeline->UpdateFrame(get_world(), _this);
         }
 
         void Frame(jegl_thread* glthread)
@@ -446,7 +450,7 @@ public let frag =
 
         void PreUpdate()
         {
-            if (!_m_pipeline->IsActive(get_world()))
+            if (!UpdateFrame(this))
                 return;
 
             select_from(get_world())
@@ -474,10 +478,6 @@ public let frag =
                         .anyof<Shaders, Textures, Shape>()
                         .except<Light2D::Color>()
                         ;
-        }
-        void LateUpdate()
-        {
-            UpdateFrame(this);
         }
 
         void Frame(jegl_thread* glthread)
@@ -1117,7 +1117,7 @@ public func frag(vf: v2f)
 
         void PreUpdate()
         {
-            if (!_m_pipeline->IsActive(get_world()))
+            if (!UpdateFrame(this))
                 return;
 
             m_2dlight_list.clear();
@@ -1266,10 +1266,6 @@ public func frag(vf: v2f)
                 [](const block2d_arch& a, const block2d_arch& b) {
                     return a.translation->world_position.z > b.translation->world_position.z;
                 });
-        }
-        void LateUpdate()
-        {
-            UpdateFrame(this);
         }
 
         void Frame(jegl_thread* glthread)

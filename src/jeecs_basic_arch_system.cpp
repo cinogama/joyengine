@@ -878,7 +878,8 @@ namespace jeecs_impl
             jeecs::game_system* m_system_instance;
             double m_next_pre_update_time;  // USED FOR DEBUG
             double m_next_update_time;      // USED FOR DEBUG
-            double m_next_late_update_time; 
+            double m_next_late_update_time; // USED FOR DEBUG
+            double m_next_commit_update_time;
             double m_execute_interval;
 
             storage_system& set_system_instance(jeecs::game_system* sys)noexcept
@@ -887,6 +888,7 @@ namespace jeecs_impl
                 m_next_pre_update_time
                     = m_next_update_time
                     = m_next_late_update_time
+                    = m_next_commit_update_time
                     = 0.;
                 m_execute_interval = sys->delta_dtime();
                 return *this;
@@ -1656,7 +1658,6 @@ namespace jeecs_impl
                     }
                     set_next_execute_interval(shared_job->m_next_execute_time - current_time());
                 });
-
             // 2. Do normal jobs.
             ParallelForeach(
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
@@ -1700,7 +1701,7 @@ namespace jeecs_impl
             DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
             // Append default jobs for updating systems.
-            je_ecs_universe_register_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds);
+            je_ecs_universe_register_pre_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds);
 
             _m_universe_update_thread_stop_flag.test_and_set();
             _m_universe_update_thread = std::move(std::thread(
@@ -1917,7 +1918,7 @@ namespace jeecs_impl
                 const double current_time = cur_world->get_universe()->current_time();
 
                 // Make sure pre-update can happend as same frame as update & late-update
-                if (CHECK(current_time, system_info.m_next_late_update_time))
+                if (CHECK(current_time, system_info.m_next_commit_update_time))
                 {
                     val.first->pre_update(system_info.m_system_instance);
                     system_info.m_next_pre_update_time = current_time + system_info.m_execute_interval;
@@ -1932,7 +1933,7 @@ namespace jeecs_impl
                 const double current_time = cur_world->get_universe()->current_time();
 
                 // Make sure pre-update can happend as same frame as update & late-update
-                if (CHECK(current_time, system_info.m_next_late_update_time))
+                if (CHECK(current_time, system_info.m_next_commit_update_time))
                 {
                     val.first->update(system_info.m_system_instance);
                     system_info.m_next_update_time = current_time + system_info.m_execute_interval;
@@ -1947,13 +1948,30 @@ namespace jeecs_impl
             {
                 auto& system_info = val.second;
                 const double current_time = cur_world->get_universe()->current_time();
-                if (CHECK(current_time, system_info.m_next_late_update_time))
+                if (CHECK(current_time, system_info.m_next_commit_update_time))
                 {
                     val.first->late_update(system_info.m_system_instance);
                     system_info.m_next_late_update_time = current_time + system_info.m_execute_interval;
 
                     assert(system_info.m_next_pre_update_time == system_info.m_next_update_time
                         && system_info.m_next_update_time == system_info.m_next_late_update_time);
+                }
+            }
+        );
+        ParallelForeach(
+            active_systems.begin(), active_systems.end(),
+            [cur_world](ecs_world::system_container_t::value_type& val)
+            {
+                auto& system_info = val.second;
+                const double current_time = cur_world->get_universe()->current_time();
+                if (CHECK(current_time, system_info.m_next_commit_update_time))
+                {
+                    val.first->commit_update(system_info.m_system_instance);
+                    system_info.m_next_commit_update_time = current_time + system_info.m_execute_interval;
+
+                    assert(system_info.m_next_pre_update_time == system_info.m_next_update_time
+                        && system_info.m_next_update_time == system_info.m_next_late_update_time
+                        && system_info.m_next_late_update_time == system_info.m_next_commit_update_time);
                 }
             }
         );

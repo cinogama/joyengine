@@ -49,6 +49,7 @@ namespace jeecs_impl
             jeecs::typing::update_func_t    _pre_update,
             jeecs::typing::update_func_t    _update,
             jeecs::typing::update_func_t    _late_update,
+            jeecs::typing::update_func_t    _commit_update,
             je_typing_class                 _typecls) noexcept
         {
             std::lock_guard g1(_m_type_holder_mx);
@@ -92,6 +93,7 @@ namespace jeecs_impl
             tinfo->m_pre_update = _pre_update;
             tinfo->m_update = _update;
             tinfo->m_late_update = _late_update;
+            tinfo->m_commit_update = _commit_update;
             tinfo->m_member_types = nullptr;
 
             // Ok Find a place to store~
@@ -219,6 +221,7 @@ bool je_typing_find_or_register(
     jeecs::typing::update_func_t    _pre_update,
     jeecs::typing::update_func_t    _update,
     jeecs::typing::update_func_t    _late_update,
+    jeecs::typing::update_func_t    _commit_update,
     je_typing_class                 _typecls)
 {
     return
@@ -236,6 +239,7 @@ bool je_typing_find_or_register(
             _pre_update,
             _update,
             _late_update,
+            _commit_update,
             _typecls);
 }
 
