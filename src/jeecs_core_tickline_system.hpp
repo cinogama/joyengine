@@ -21,7 +21,16 @@ namespace jeecs
         {
             typing::uid_t uid = je_uid_generate();
             wo_vm executor_vm = nullptr;
+            Anchor()
+            {
 
+            }
+            Anchor(Anchor&& anchor)
+            {
+                uid = anchor.uid;
+                executor_vm = anchor.executor_vm;
+                anchor.executor_vm = nullptr;
+            }
             ~Anchor()
             {
                 if (executor_vm != nullptr)
