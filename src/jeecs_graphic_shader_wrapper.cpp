@@ -1342,6 +1342,28 @@ public func tan<T>(a: T)=> T
     return apply_operation:<T>("tan", a);
 }
 
+public func asin<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("asin", a);
+}
+public func acos<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("acos", a);
+}
+public func atan<T>(a: T)=> T
+    where is_glvalue:<T>;
+{
+    return apply_operation:<T>("atan", a);
+}
+public func atan2<AT, BT>(a: AT, b: BT)=> float
+    where a is float || a is real
+        , b is float || b is real;
+{
+    return apply_operation:<float>("atan2", a, b);
+}
+
 public func abs<T>(a: T)=> T
     where is_glvalue:<T>;
 {

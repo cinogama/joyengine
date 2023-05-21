@@ -2847,10 +2847,10 @@ namespace jeecs
 #define LateUpdate LateUpdate
 #define CommitUpdate CommitUpdate
 
-        // void PreUpdate()         // 用于时效性要求高的任务，例如画面更新 
-        // void Update()            // 用于变更数据的任务
-        // void LateUpdate()        // 用于变更数据的任务，在Update之后执行
-        // void CommitUpdate()      // 用于数据最终提交的任务
+        // void PreUpdate()         // 用于变更数据的任务，在Update之前执行，Graphic 和 Physics在此执行
+        // void Update()            // 用于变更数据的任务，Tickline在此执行
+        // void LateUpdate()        // 用于变更数据的任务，在Update之后执行, 
+        // void CommitUpdate()      // 用于数据最终提交的任务，Translation在此执行
         /*
         struct TranslationUpdater : game_system
         {

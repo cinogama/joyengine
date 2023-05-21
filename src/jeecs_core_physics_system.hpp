@@ -25,15 +25,6 @@ namespace jeecs
             m_physics_world.SetContinuousPhysics(true);
         }
 
-        void PreUpdate()
-        {
-
-        }
-
-        void Update()
-        {
-        }
-
         inline static bool check_if_need_update_vec2(const b2Vec2& a, const math::vec2& b) noexcept
         {
             if (a.x == b.x && a.y == b.y)
@@ -181,7 +172,7 @@ namespace jeecs
             }
         }
 
-        void LateUpdate()
+        void PreUpdate()
         {
             b2BodyDef default_rigidbody_config;
 
