@@ -970,6 +970,7 @@ JE_API jegl_thread* jegl_start_graphic_thread(
 
 JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);
 
+JE_API bool jegl_pre_update(jegl_thread* thread);
 JE_API bool jegl_update(jegl_thread* thread_handle);
 
 JE_API void jegl_reboot_graphic_thread(

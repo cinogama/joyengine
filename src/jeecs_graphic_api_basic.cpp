@@ -13,6 +13,7 @@ struct jegl_thread_notifier
     std::atomic_flag m_graphic_terminate_flag;
 
     std::mutex       m_update_mx;
+    std::atomic_bool m_pre_update_flag;
     std::atomic_bool m_update_flag;
     std::condition_variable m_update_waiter;
 
@@ -39,13 +40,24 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             {
                 std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
                 thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
-                    return thread->_m_thread_notifier->m_update_flag;
+                    return thread->_m_thread_notifier->m_pre_update_flag;
                     });
             } while (0);
 
             if (!thread->m_apis->pre_update_interface(thread, custom_interface))
                 // graphic thread want to exit. mark stop update
                 thread->m_stop_update = true;
+
+            do
+            {
+                std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
+                thread->_m_thread_notifier->m_pre_update_flag = false;
+                thread->_m_thread_notifier->m_update_waiter.notify_all();
+
+                thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
+                    return thread->_m_thread_notifier->m_update_flag;
+                    });
+            } while (0);
 
             auto* del_res = _destroing_graphic_resources.pick_all();
             while (del_res)
@@ -92,6 +104,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
 
             do {
                 std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
+                thread->_m_thread_notifier->m_pre_update_flag = false;
                 thread->_m_thread_notifier->m_update_flag = false;
                 thread->_m_thread_notifier->m_update_waiter.notify_all();
             } while (0);
@@ -167,6 +180,7 @@ jegl_thread* jegl_start_graphic_thread(
     thread_handle->_m_thread_notifier->m_interface_config = config;
     thread_handle->_m_thread_notifier->m_graphic_terminate_flag.test_and_set();
     thread_handle->_m_thread_notifier->m_update_flag = false;
+    thread_handle->_m_thread_notifier->m_pre_update_flag = false;
     thread_handle->_m_thread_notifier->m_reboot_flag = false;
 
     thread_handle->_m_thread =
@@ -196,6 +210,7 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
     do
     {
         std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
+        thread->_m_thread_notifier->m_pre_update_flag = true;
         thread->_m_thread_notifier->m_update_flag = true;
         thread->_m_thread_notifier->m_update_waiter.notify_all();
     } while (0);
@@ -206,6 +221,26 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
     jeecs::basic::destroy_free(thread);
 }
 
+bool jegl_pre_update(jegl_thread* thread)
+{
+    if (thread->m_stop_update)
+        return false;
+
+    do
+    {
+        std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
+        thread->_m_thread_notifier->m_pre_update_flag = true;
+        thread->_m_thread_notifier->m_update_waiter.notify_all();
+
+        // Start Frame, then wait frame end...~
+        thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
+            return !thread->_m_thread_notifier->m_pre_update_flag;
+            });
+    } while (0);
+
+    return true;
+}
+
 bool jegl_update(jegl_thread* thread)
 {
     if (thread->m_stop_update)
@@ -213,16 +248,11 @@ bool jegl_update(jegl_thread* thread)
 
     do
     {
-        std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
+        std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
         thread->_m_thread_notifier->m_update_flag = true;
         thread->_m_thread_notifier->m_update_waiter.notify_all();
-    } while (0);
 
-    // Start Frame, then wait frame end...~
-
-    do
-    {
-        std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
+        // Start Frame, then wait frame end...~
         thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
             return !thread->_m_thread_notifier->m_update_flag;
             });

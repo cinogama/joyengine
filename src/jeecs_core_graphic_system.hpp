@@ -265,7 +265,7 @@ public let frag =
         }
 
         template<typename PipelineSystemT>
-        inline bool UpdateFrame(game_world world, PipelineSystemT* sys)noexcept
+        inline bool PreUpdateFrame(game_world world, PipelineSystemT* sys)noexcept
         {
             void* _null = nullptr;
             if (_m_rending_world.compare_exchange_weak(_null, world.handle()))
@@ -274,6 +274,23 @@ public let frag =
                 _m_rend_update_func = [sys](jegl_thread* gt) {sys->Frame(gt); };
             }
 
+            if (glthread && IsActive(world))
+            {
+                if (!jegl_pre_update(glthread))
+                {
+                    // update is not work now, means graphic thread want to exit..
+                    // ready to shutdown current universe
+
+                    if (game_universe universe = world.get_universe())
+                        universe.stop();
+                }
+                return true;
+            }
+            return false;
+        }
+        template<typename PipelineSystemT>
+        inline bool UpdateFrame(game_world world, PipelineSystemT* sys)noexcept
+        {
             if (glthread && IsActive(world))
             {
                 if (!jegl_update(glthread))
@@ -314,6 +331,12 @@ public let frag =
         inline bool UpdateFrame(SysT* _this) noexcept
         {
             return _m_pipeline->UpdateFrame(get_world(), _this);
+        }
+
+        template<typename SysT>
+        inline bool PreUpdateFrame(SysT* _this) noexcept
+        {
+            return _m_pipeline->PreUpdateFrame(get_world(), _this);
         }
 
         void Frame(jegl_thread* glthread)
@@ -450,7 +473,7 @@ public let frag =
 
         void PreUpdate()
         {
-            if (_m_pipeline->IsActive(get_world()))
+            if (PreUpdateFrame(this))
             {
                 select_from(get_world())
                     .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
@@ -477,9 +500,8 @@ public let frag =
                             .anyof<Shaders, Textures, Shape>()
                             .except<Light2D::Color>()
                             ;
+                UpdateFrame(this);
             }
-            if (!UpdateFrame(this))
-                return;
         }
         void Frame(jegl_thread* glthread)
         {
@@ -1118,7 +1140,7 @@ public func frag(vf: v2f)
 
         void PreUpdate()
         {
-            if (_m_pipeline->IsActive(get_world()))
+            if (PreUpdateFrame(this))
             {
                 m_2dlight_list.clear();
                 m_2dblock_list.clear();
@@ -1263,9 +1285,8 @@ public func frag(vf: v2f)
                     [](const block2d_arch& a, const block2d_arch& b) {
                         return a.translation->world_position.z > b.translation->world_position.z;
                     });
+                UpdateFrame(this);
             }
-            if (!UpdateFrame(this))
-                return;
         }
         void Frame(jegl_thread* glthread)
         {
