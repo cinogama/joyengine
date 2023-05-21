@@ -5,7 +5,7 @@
 #include <thread>
 
 auto _start_time = std::chrono::steady_clock::now();
-double _sleep_suppression = 0.000;
+double _sleep_suppression = 0.010;
 
 double je_clock_get_sleep_suppression()
 {
@@ -43,6 +43,6 @@ void je_clock_sleep_for(double time)
     using namespace std;
     auto current_time_point = je_clock_time();
 
-    std::this_thread::sleep_for((time - 0.010) * 1s);
-    while (je_clock_time() < current_time_point + time - _sleep_suppression);
+    std::this_thread::sleep_for((time - _sleep_suppression) * 1s);
+    while (je_clock_time() < current_time_point + time);
 }
