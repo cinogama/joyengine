@@ -116,9 +116,11 @@ namespace editor::gui::tickline
 
                 Text("行为");
                 let (width, height) = GetContentRegionAvail();
-                do InputTextMultilineSize("##obbehavior", object.m_source, width, height)
-                    ->> \new_source = object.m_source = new_source;
-                    ;
+
+                // TODO;
+                // do InputTextMultilineSize("##obbehavior", object.m_source, width, height)
+                //     ->> \new_source = object.m_source = new_source;
+                //     ;
 
             }
 

@@ -1,17 +1,93 @@
 import je.tickline;
 
+using je::gui;
+
 namespace editor::Tickline
 {
+    public using IAction = struct{
+        m_abstract_function: ()=> string,
+        m_edit_function: ()=> void,
+        m_gen_function: ()=> string,
+        m_serialize_function: ()=> string,
+    }
+    {
+        public func create<ActionT>(act: ActionT)
+        {
+            return IAction{
+                m_abstract_function = \= act->abstract();,
+                m_edit_function = \= act->edit();,
+                m_gen_function = \= act->gen();,
+                m_serialize_function = \= act->serialize();,
+            };
+        }
+        public func abstract(self: IAction)
+        {
+            return self.m_abstract_function();
+        }
+        public func edit(self: IAction)
+        {
+            self.m_edit_function();
+        }
+        public func gen(self: IAction)
+        {
+            return self.m_gen_function();
+        }
+        public func serialize(self: IAction)
+        {
+            return self.m_serialize_function();
+        }
+    }
+
+    public using ActionBlock = struct{
+        m_actions: vec<IAction>,
+        m_uid: string, // 注意这个uid不用于其他地方，仅用于区分同名gui控件
+    }
+    {
+        public func create()
+        {
+            return ActionBlock{m_actions = []mut, m_uid = je::uid(),};
+        }
+        public func edit(self: ActionBlock, depth: int)
+        {
+            let takeplace = string::create(depth * 3, ' ');
+            let mut after_edit_do = \=do nil; as ()=>void;
+
+            for (let idx, act : self.m_actions)
+            {
+                do Selectable(takeplace + act->abstract());
+                if (BeginPopupContextItem())
+                {
+                    if (MenuItem("删除"))
+                        after_edit_do = \ = do self.m_actions->remove(idx);;
+
+                    EndPopup();
+                }
+
+                act->edit();
+            }
+            do Selectable(F"{takeplace}@##{self.m_uid}");
+            after_edit_do();
+        }
+        public func gen(self: ActionBlock)
+        {
+            return self.m_actions
+                ->> \iact = iact->gen;
+                ->  reduce(\l, r = l + r;)
+                ->  valor("")
+                ;
+        }
+    }
+    
     public using Object = struct{
         m_name: mut string,
         m_euid: je::tickline::euid_t,
         m_data: mut string,     // json
-        m_source : mut string,
+        m_actions : ActionBlock,
     }
     {
         public func generate_code(self: Object)
         {
-            return F"func(e: je::entity)\{{self.m_source}\}";
+            return F"func(e: je::entity)\{{self.m_actions->gen}\}";
         }
         public func create(e: je::entity)
         {
@@ -20,7 +96,7 @@ namespace editor::Tickline
                         m_name = mut e->editor::name,
                         m_euid = je::uid(): je::tickline::euid_t,
                         m_data = mut datjson,
-                        m_source = mut "",
+                        m_actions = ActionBlock::create(),
                     }
                     where datjson = dat: string;
                 ;
