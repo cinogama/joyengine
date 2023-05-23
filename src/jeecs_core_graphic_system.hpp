@@ -218,7 +218,7 @@ public let frag =
 
             glthread = jegl_start_graphic_thread(
                 config,
-                jegl_using_opengl_apis,
+                jegl_using_opengl3_apis,
                 [](void* ptr, jegl_thread* glthread)
                 {
                     ((GraphicThreadHost*)ptr)->_m_rend_update_func(glthread);

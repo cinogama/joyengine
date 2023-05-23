@@ -5,15 +5,36 @@ using je::gui;
 namespace editor::Tickline
 {
     public using IAction = struct{
+        m_unique_tag: string,
         m_abstract_function: ()=> string,
         m_edit_function: ()=> void,
         m_gen_function: ()=> string,
         m_serialize_function: ()=> string,
     }
     {
+        let unique_token_type_map = {}mut: map<int, string>;
+        let deserialize_functions = {}mut: map<string, (string)=> IAction>;
+
+        public func register_action<ActionT>(unique_token: string)
+        {
+            assert(! deserialize_functions->contain(unique_token));
+            assert(! unique_token_type_map->contain(typeid:< ActionT>));
+
+            deserialize_functions->set(
+                unique_token, 
+                \seridata = IAction::create(ActionT::deserialize(seridata));
+            );
+            unique_token_type_map->set(typeid:< ActionT>, unique_token);
+        }
+        public func deserialize(unique_token: string, data: string)
+        {
+            return deserialize_functions[unique_token](data);
+        }
+
         public func create<ActionT>(act: ActionT)
         {
             return IAction{
+                m_unique_tag = unique_token_type_map[typeid:< ActionT>],
                 m_abstract_function = \= act->abstract();,
                 m_edit_function = \= act->edit();,
                 m_gen_function = \= act->gen();,
@@ -50,7 +71,7 @@ namespace editor::Tickline
         public func edit(self: ActionBlock, depth: int)
         {
             let takeplace = string::create(depth * 3, ' ');
-            let mut after_edit_do = \=do nil; as ()=>void;
+            let mut after_edit_do = \= impure do nil;;
 
             for (let idx, act : self.m_actions)
             {
@@ -75,6 +96,16 @@ namespace editor::Tickline
                 ->  reduce(\l, r = l + r;)
                 ->  valor("")
                 ;
+        }
+        public func serialize(self: ActionBlock)
+        {
+            return self.m_actions
+                ->> \iact = [iact.m_unique_tag, iact->serialize];
+                as vec<array<string>>: string;
+        }
+        public func deserialize(dat: string)
+        {
+            std::panic("TODO!");
         }
     }
     

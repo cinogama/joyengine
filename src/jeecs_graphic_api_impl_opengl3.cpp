@@ -877,8 +877,7 @@ void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
     *h = WINDOWS_SIZE_HEIGHT;
 }
 
-
-JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis)
+void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
     write_to_apis->prepare_interface = gl_prepare;
     write_to_apis->finish_interface = gl_finish;

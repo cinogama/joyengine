@@ -1019,7 +1019,8 @@ JE_API void jegl_update_uniformbuf(
     size_t update_offset,
     size_t update_length);
 
-JE_API void jegl_using_opengl_apis(jegl_graphic_api* write_to_apis);
+JE_API void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis);
+JE_API void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis);
 
 JE_API void jegl_using_resource(jegl_resource* resource);
 JE_API void jegl_close_resource(jegl_resource* resource);
