@@ -23,7 +23,7 @@ namespace editor::gui::drawpannel
             for (let mut y = 0; y < h; y += 1)
                 saving_img->setpix((x, y), tex->pix((x, y))->get_color);
 
-        let result = saving_img->save(path->replace("@", context->get_project.m_path));
+        let result = saving_img->save(path->replace("@", context->get_project.m_path->tostring));
         if (!result)
             jeapi::gui::form::errmsg("图像保存失败", F"无法保存图像到{path}");
         return result;
@@ -570,13 +570,21 @@ namespace editor::gui::drawpannel
                 
                 // 生成文件名，如果已经有了就有，没有就死！
                 let projpath = context->get_project().m_path;
-                let saving_path = edited_texture->path->or(func(){
-                    let genuidpath = \ = F"{projpath}/resource/texture/{je::uid()}.png";;
-                    let mut name = "";
-                    for (; name == "" || filesys::exist(name); name = genuidpath())
+                let saving_path = edited_texture->path
+                    ->> \p = filesys::normalize(p);
+                    ->  or(func()
+                        {
+                            let genuidpath = \ = projpath/"resource"/"texture"/F"{je::uid()}.png";;
+                            let mut name = genuidpath();
+                            for (; filesys::exist(name); name = genuidpath())
+                                ;
+                            return name;
+                        }
+                        )
+                    ->  \path = (filesys::extension(path)->lower == ".png" 
+                        ? path 
+                        | filesys::parent(path)/F"{filesys::purename(path)}.png")->tostring
                         ;
-                    return name;
-                })->\path = filesys::extension(path)->lower == ".png" ? path | F"{filesys::parent(path)}/{filesys::purename(path)}.png";
                 ;
                 
                 if (save_texture_to_path(context, edited_texture, saving_path))
@@ -585,7 +593,9 @@ namespace editor::gui::drawpannel
                     do entity
                         ->> \eid = eid->justdo(
                                 \e = e->editor::graphic::bind_texture(passid, je::graphic::texture::load(
-                                    context->get_project->make_path_normalize(saving_path))->val);
+                                    // NOTE: saving_path是一个可能为规范路径 也有可能是项目路径的东西，这里直接简单处理了
+                                    //       照理来说应该区分出类型再分别处理
+                                    context->get_project->make_path_normalize(filesys::normalize(saving_path)))->val);
                             )
                             ;
                         ;

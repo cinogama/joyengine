@@ -70,7 +70,7 @@ extern func name()
 
         let r = {}mut: map<string, vm>;
 
-        for (let _, path : filesys::allsubpath(std::exepath())
+        for (let _, path : filesys::allsubpath(filesys::normalize(std::exepath()))
                 -> or(\_=[];)
                 -> connect(filesys::allsubpath(proj.m_path)
                     -> or(\_=[];))
@@ -79,7 +79,7 @@ extern func name()
             if (filesys::extension(path)->lower != ".imagewo")
                 continue;
 
-            match (vm::load(path))
+            match (vm::load(path->tostring))
             {
             ok(vmm)?
                 {

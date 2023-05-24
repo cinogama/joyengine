@@ -12,7 +12,7 @@ namespace editor::gui
 
     func create_font_image(proj: Project, default_name: string, location: string)
     {
-        let fonts = filesys::allsubpath(proj.m_path + "/resource/font")
+        let fonts = filesys::allsubpath(proj.m_path/"resource"/"font")
             -> or(\_=[];)
             -> forall(\path = filesys::isfile(path) && filesys::extension(path)->lower == ".ttf";)
             ->> \path = proj->make_path_normalize(path);
@@ -210,7 +210,7 @@ namespace editor::gui
     }
 
     public using PathInfo = struct {
-        path        : string,   // 当前目录/文件的目录
+        path        : filesys::path_t,   // 当前目录/文件的目录
         name        : string,
         externname  : string,
         type        : mutable<PathType>, // 类型，如果是目录，则还包含目录内的子项    
@@ -271,7 +271,7 @@ namespace editor::gui
             let sublist = 
                 filesys::subpath(self.path)
                     ->unwarp
-                    ->map(\current_subpath: string = PathInfo{
+                    ->map(\current_subpath = PathInfo{
                         path = current_subpath, 
                         name = filesys::filename(current_subpath),
                         externname = filesys::extension(current_subpath),
@@ -300,7 +300,7 @@ namespace editor::gui
                         \proj, _ = result == 0 
                             ? option::none
                             | option::value(F"文件 '{proj.path}' 打开失败({result})")
-                            where result = std::shell(proj.path)
+                            where result = std::shell(proj.path->tostring())
                         ;
                     );
         }
@@ -308,10 +308,10 @@ namespace editor::gui
 
     static let mut current_work_path = "";        
 
-    func set_current_work_path(path: string)
+    func set_current_work_path(path: filesys::path_t)
     {
         assert(filesys::isdir(path));
-        current_work_path = path;
+        current_work_path = path->tostring();
     }
 
     enum Action
@@ -322,7 +322,7 @@ namespace editor::gui
         RightClick,
     }
 
-    func write_file_if_not_exist(path: string, content: string)
+    func write_file_if_not_exist(path: filesys::path_t, content: string)
     {
         if (filesys::exist(path))
             return false;
@@ -341,7 +341,7 @@ namespace editor::gui
             {
                 if (MenuItem(F"目录"))
                     jeapi::gui::form::input("新建目录", F"在{current_work_path}新建目录", "NewDir",
-                        \dirname: string = filesys::mkdir(filesys::normalize(current_work_path) + "/" + dirname)
+                        \dirname: string = filesys::mkdir(filesys::normalize(current_work_path) / dirname)
                             ->map(\_ = force_update();)
                             ->or(\errid = jeapi::gui::form::errmsg("失败", F"创建目录失败{errid}");););
                 if (MenuItem(F"空文件"))
@@ -352,7 +352,7 @@ namespace editor::gui
                             | write_file_if_not_exist(file_path, "") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = filesys::normalize(current_work_path) + "/" + filename;);
+                        where file_path = filesys::normalize(current_work_path) / filename;);
                 }
                 Separator();
                 if (MenuItem(F"世界"))
@@ -361,12 +361,12 @@ namespace editor::gui
                         "Newworld",
                         \new_world_name = launch(
                             edit_forms::show_world_creator, (context, edit_forms::WorldContext::create(
-                                context->get_project(), new_world_name, F"{current_work_path}/{new_world_name}.jeworld",
+                                context->get_project(), new_world_name, filesys::normalize(F"{current_work_path}/{new_world_name}.jeworld"),
                                 func (w)
                                 {
                                     if (context->get_project()->serialize_world(w)
                                             ->> \wdat = write_file_if_not_exist(
-                                                F"{current_work_path}/{new_world_name}.jeworld", 
+                                                filesys::normalize(F"{current_work_path}/{new_world_name}.jeworld"), 
                                                 wdat as dict<string, dynamic>: string)
                                                 ;
                                             ->  valor(false)
@@ -427,7 +427,7 @@ namespace editor::gui
                             jeapi::gui::form::input("创建着色器", F"将在{current_work_path}创建{shader_display_name}：",
                                 shader_path_name,
                                 \shader_name: string = 
-                                    filesys::readall(F"{std::exepath()}/builtin/shader/{shader_path_name}.shader")
+                                    filesys::readall(filesys::normalize(F"{std::exepath()}/builtin/shader/{shader_path_name}.shader"))
                                         ->> \src = create_shader_at(shader_name, src);
                                         ->  or(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
                                     ;
@@ -456,7 +456,7 @@ namespace editor::gui
                 ;
                         
             if (MenuItem("在资源管理器中显示"))
-                do std::shell(F"explorer \"{filesys::normalize(current_work_path)->replace("/", "\\")}\"");
+                do std::shell(F"explorer \"{filesys::normalize(current_work_path)->tostring->replace("/", "\\")}\"");
 
             if (MenuItem(F"刷新"))
                 force_update();
@@ -465,13 +465,18 @@ namespace editor::gui
         }
     }
 
-    func crc_path(path)
+    func crc_path(path: filesys::path_t)
     {
         // 给定一个路径，计算整个路径的全部crc
         using filesys;
         using je::editor;
-        let normalized_path =  path->normalize;
-        let pure_path = \p: string = p->beginwith(normalized_path) ? p->sub(normalized_path->len)| p;;
+        let normalized_path = path;
+        let pure_path = 
+            \p: string = p->beginwith(normalized_path->tostring()) 
+                ? p->sub(normalized_path->tostring()->len)
+                | p
+            ;
+        ;
 
         func debug(msg)
         {
@@ -483,9 +488,10 @@ namespace editor::gui
             -> allsubpath()
             -> okay
             =>> \childs = childs
-                ->>\child = normalize(child);
-                ->> \child = isfile(child)? filesys::filename(pchild) + crc64file(child)->val: string | pchild
-                    where pchild = pure_path(child);
+                ->> \child = isfile(child)
+                    ? filesys::filename(filesys::normalize(pchild)) + crc64file(child->tostring)->val: string 
+                    | pchild
+                    where pchild = pure_path(child->tostring);
                 ->  reduce(\l, r = l + r;)
                 ->> \str = crc64str(str);
                 ;
@@ -496,7 +502,7 @@ namespace editor::gui
     {
         // 检查一下引擎的提供的文件，确认是否需要重新编译
         let engine_path_crc64 = crc_path(CxxProject::ENGINE_HEADER_PATH);
-        let specify_module_path_crc64 = crc_path(F"{module.path}/engine/include");
+        let specify_module_path_crc64 = crc_path(module.path/"engine"/"include");
 
         if (engine_path_crc64 == specify_module_path_crc64)
         {
@@ -532,7 +538,7 @@ namespace editor::gui
                 ->  editor::get_all_entities
                 ->> \e: je::entity = 
                     e->editor::graphic::try_reload_shaders(shader_path, shader_path)
-                        where shader_path = context->get_project->make_path_normalize(path)
+                        where shader_path = context->get_project->make_path_normalize(filesys::normalize(path))
                     ;
                 ;
             ;
@@ -546,7 +552,7 @@ namespace editor::gui
         {
             if (MenuItem(F"更新此着色器"))
             {
-                update_shader(context, path.path);
+                update_shader(context, path.path->tostring());
             }
             Separator();
         }
@@ -554,7 +560,7 @@ namespace editor::gui
         {
             if (MenuItem(F"重新编译此模块"))
             {
-                match (context->get_project->get_module(filesys::normalize(path.path)))
+                match (context->get_project->get_module(path.path))
                 {
                 value(module)?
                     try_update_recompile(module);
@@ -577,18 +583,17 @@ namespace editor::gui
             }
             if (MenuItem(F"组件/系统..."))
             {
-                let components = filesys::subpath(F"{path.path}/components")
-                        ->okay
-                        ->map(\s: array<string> = s
+                let components = filesys::subpath(path.path/"components")
+                        ->map(\s = s
                              ->forall(\f = filesys::extension(f) == ".hpp";)
                              ->map(\f = fname->subto(0, fname->len - 4)
                                 where fname = filesys::filename(f);)
                             ;)
-                        ->valor([])
+                        ->or(\_=[];)
                         ->tovec;
-                let systems = filesys::subpath(F"{path.path}/systems")
+                let systems = filesys::subpath(path.path/"systems")
                     ->okay
-                    ->map(\s: array<string> = s
+                    ->map(\s = s
                          ->forall(\f = filesys::extension(f) == ".hpp";)
                          ->map(\f = fname->subto(0, fname->len - 4)
                             where fname = filesys::filename(f);)
@@ -609,10 +614,10 @@ namespace editor::gui
                     do Selectable(s);
                     if (BeginPopupContextItem())
                     {
-                        let file_path = F"{path.path}/components/{s}.hpp";
+                        let file_path = path.path/"components"/F"{s}.hpp";
 
                         if (MenuItem("在VSCode中打开"))
-                            do std::shell(F"code {_wrap_path(path.path)} {_wrap_path(file_path)}");
+                            do std::shell(F"code {_wrap_path(path.path->tostring())} {_wrap_path(file_path->tostring)}");
                         if (MenuItem("移除此组件"))
                             jeapi::gui::form::ask("确认移除组件？", F"是否从模块{filesys::filename(path.path)}中移除组件{s}?",
                                 func(sure: bool){
@@ -629,17 +634,17 @@ namespace editor::gui
                     do Selectable(s);
                     if (BeginPopupContextItem())
                     {
-                        let file_path = F"{path.path}/systems/{s}.cpp";
+                        let file_path = path.path/"systems"/F"{s}.cpp";
 
                         if (MenuItem("在VSCode中打开"))
-                            do std::shell(F"code {_wrap_path(path.path)} {_wrap_path(file_path)}");
+                            do std::shell(F"code {_wrap_path(path.path->tostring)} {_wrap_path(file_path->tostring)}");
                         if (MenuItem("移除此系统"))
                             jeapi::gui::form::ask("确认移除系统？", F"是否从模块{filesys::filename(path.path)}中移除系统{s}?",
                                 func(sure: bool){
                                     if (!sure) return;
 
                                     do systems->remove(systems->find(s));
-                                    do filesys::remove(F"{path.path}/systems/{s}.hpp")->unwarp;
+                                    do filesys::remove(path.path/"systems"/F"{s}.hpp")->unwarp;
                                     do filesys::remove(file_path)->unwarp;
                                 });
                         EndPopup();
@@ -711,19 +716,19 @@ namespace $$MODULE_NAME$$
                                         let module_name = filesys::purename(path.path);
                                         let system_name = name;
 
-                                        if (!filesys::writeall(F"{path.path}/systems/{system_name}.hpp", 
+                                        if (!filesys::writeall(path.path/"systems"/F"{system_name}.hpp", 
                                             system_header
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$SYSTEM_NAME$$", system_name))
                                             ||
-                                            !filesys::writeall(F"{path.path}/systems/{system_name}.cpp", 
+                                            !filesys::writeall(path.path/"systems"/F"{system_name}.cpp", 
                                             system_src
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$SYSTEM_NAME$$", system_name))
                                             )
                                         {
-                                            do filesys::remove(F"{path.path}/systems/{system_name}.hpp")->unwarp;
-                                            do filesys::remove(F"{path.path}/systems/{system_name}.cpp")->unwarp;
+                                            do filesys::remove(path.path/"systems"/F"{system_name}.hpp")->unwarp;
+                                            do filesys::remove(path.path/"systems"/F"{system_name}.cpp")->unwarp;
 
                                             jeapi::gui::form::errmsg("创建系统失败", "无法创建和写入系统源文件");
                                         }
@@ -766,13 +771,13 @@ namespace $$MODULE_NAME$$
                                         let module_name = filesys::purename(path.path);
                                         let component_name = name;
 
-                                        if (!filesys::writeall(F"{path.path}/components/{component_name}.hpp", 
+                                        if (!filesys::writeall(path.path/"components"/F"{component_name}.hpp", 
                                             component_header
                                                 ->replace("$$MODULE_NAME$$", module_name)
                                                 ->replace("$$COMPONENT_NAME$$", component_name))
                                             )
                                         {
-                                            do filesys::remove(F"{path.path}/components/{component_name}.hpp")->unwarp;
+                                            do filesys::remove(path.path/"components"/F"{component_name}.hpp")->unwarp;
                                             jeapi::gui::form::errmsg("创建组件失败", "无法创建和写入组件源文件");
                                         }
                                         else
@@ -826,10 +831,10 @@ namespace $$MODULE_NAME$$
             if (MenuItem("编辑图片"))
             {
                 using je::editor;
-                let image_samping_method = je::editor::get_texture_sampling_method_by_path(path.path);
+                let image_samping_method = je::editor::get_texture_sampling_method_by_path(path.path->tostring);
 
-                drawpannel::modify_sampling_method(path.path, image_samping_method, 
-                    \method = do je::editor::update_texture_sampling_method_by_path(path.path, method););
+                drawpannel::modify_sampling_method(path.path->tostring, image_samping_method, 
+                    \method = do je::editor::update_texture_sampling_method_by_path(path.path->tostring, method););
             }
             if (MenuItem("更新此图片"))
             {
@@ -843,7 +848,7 @@ namespace $$MODULE_NAME$$
         if (MenuItemEnabled("重命名", is_modifiable_file))
         {
             jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
-                \newname: string = filesys::move(path.path, F"{filesys::parent(path.path)}/{newname}")
+                \newname: string = filesys::move(path.path, filesys::parent(path.path)/newname)
                     ->> \_ = force_update();
                     ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }
@@ -865,14 +870,14 @@ namespace $$MODULE_NAME$$
     func FileIcon(path: PathInfo, context: EditorContext)=> Action
     {
         BeginGroup();
-            PushIDStr(path.path);
+            PushIDStr(path.path->tostring);
                 let clicked = ImageButtonSize(get_file_icon_by_extern_name(path)->get_texture, 32., 32.);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             context_menu(option::value(path), context);
             if (BeginDragDropSource())
             {
-                do SetDragDropPayload("JEDITOR_FILE_PATH", path.path);
+                do SetDragDropPayload("JEDITOR_FILE_PATH", path.path->tostring);
                     Text(F"File: {path.path}");
                 EndDragDropSource();
             }
@@ -931,8 +936,8 @@ namespace $$MODULE_NAME$$
             }
 
             now_item_in_path =
-                filesys::subpath(current_work_path)
-                    ->unwarp
+                filesys::subpath(filesys::normalize(current_work_path))
+                    ->  unwarp
                     ->> \subpath = PathInfo{ 
                             path = subpath,
                             name = filesys::filename(subpath),
@@ -972,7 +977,7 @@ namespace $$MODULE_NAME$$
             context->get_project.m_path;
 
         if (current_work_path == "")
-            current_work_path = root_path;
+            current_work_path = root_path->tostring();
 
         static let _root = PathInfo {
                 path = root_path,
@@ -999,12 +1004,12 @@ namespace $$MODULE_NAME$$
                 let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
                                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
                                 + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
-                if (current_work_path == path.path)
+                if (current_work_path == path.path->tostring)
                     attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
 
                 let show_child = TreeNodeEx(F"{path.name}##p", attribute);
                 if (IsItemClickedLeft() && !IsItemToggledOpen())
-                    current_work_path = path.path;
+                    current_work_path = path.path->tostring;
 
                 if (show_child)
                 {
@@ -1039,7 +1044,7 @@ namespace $$MODULE_NAME$$
                     do BeginChildSize("tools_bar", 0., 40.);
                         // TODO 此处放一些返回上一层之类的按钮
                         if (Button("U"))
-                            current_work_path = filesys::parent(current_work_path);
+                            current_work_path = filesys::parent(filesys::normalize(current_work_path))->tostring;
                         SameLine();
                         Text(current_work_path);
                     EndChild();

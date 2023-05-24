@@ -38,21 +38,21 @@ namespace editor
 
     public using CxxProject = struct {
         name: string, // 模块的名称
-        path: string, // 模块所在路径，仅此而已
+        path: filesys::path_t, // 模块所在路径，仅此而已
         configs: dict<string, CxxProjectBuildConfig>, // 可用的生成配置
         module_instance: mut option<handle>,
         project: Project,
     }
     {
         // Cmake所在路径，项目会使用此路径指示的cmake
-        let CMAKE_PATH = F"{std::exepath()}/builtin/cmake/bin/cmake.exe"; 
-        let MSVC_PATH = F"{std::env("MSBUILD")->val}/MSBuild.exe";
+        let CMAKE_PATH = filesys::normalize(F"{std::exepath()}/builtin/cmake/bin/cmake.exe"); 
+        let MSVC_PATH = filesys::normalize(F"{std::env("MSBUILD")->val}/MSBuild.exe");
 
         // C++模块样例，创建项目文件时会复制这个目录
-        let CXX_PROJECT_EXAMPLE_PATH = F"{std::exepath()}/builtin/cxxproject/";
+        let CXX_PROJECT_EXAMPLE_PATH = filesys::normalize(F"{std::exepath()}/builtin/cxxproject");
 
         // 引擎的头文件路径
-        public let ENGINE_HEADER_PATH = F"{std::exepath()}/builtin/include/";
+        public let ENGINE_HEADER_PATH = filesys::normalize(F"{std::exepath()}/builtin/include");
 
         let MSVC_TARGET_KEYWORDS = {
             [2017] = "Visual Studio 15 2017",
@@ -117,7 +117,7 @@ namespace editor
 
         alias platform_t = string;
 
-        public func update_engine_file(cxx_proj_path: string)
+        public func update_engine_file(cxx_proj_path: filesys::path_t)
         {
             using filesys;
         
@@ -126,12 +126,12 @@ namespace editor
                 return result::err(F"无法找到C++模块项目，{cxx_proj_path}目录不存在");
 
             // 1. 删除engine目录
-            do remove(F"{cxx_proj_path}/engine")->unwarp;
-            do mkdir(F"{cxx_proj_path}/engine")->unwarp;
-            do mkdir(F"{cxx_proj_path}/engine/library")->unwarp;
+            do remove(cxx_proj_path/"engine")->unwarp;
+            do mkdir(cxx_proj_path/"engine")->unwarp;
+            do mkdir(cxx_proj_path/"engine"/"library")->unwarp;
 
             // 2. 把新的engine移过来，把引擎的头文件复制过来
-            let r = copy(ENGINE_HEADER_PATH, F"{cxx_proj_path}/engine/include");
+            let r = copy(ENGINE_HEADER_PATH, cxx_proj_path/"engine"/"include");
 
             if (r->iserr)
                 return result::err(F"复制引擎相关文件失败({r->error->val})");
@@ -141,7 +141,11 @@ namespace editor
             for (let platform, files : ENGINE_CORE_LIBRARYS_PATHS)
             {
                 do files->get_all_files
-                    ->> \name = copy(F"{ENGINE_CORE_LIBRARYS_LOCATE_PATH}/{name}", F"{cxx_proj_path}/engine/library/{name}");
+                    ->> \name = copy(
+                            normalize("{ENGINE_CORE_LIBRARYS_LOCATE_PATH}/{name}"), 
+                            cxx_proj_path/"engine"/"library"/name
+                            )
+                        ;
                     ->> \r = r->isok;
                     ->reduce(\l, r = l ? r | l;)
                     ->> \r: bool = platform_support->set(platform, r);
@@ -151,7 +155,7 @@ namespace editor
             return result::ok(platform_support);
         }
 
-        public func generate_module_config(project: Project, name: string, cxx_proj_path: string, platform_support: map<platform_t, bool>)
+        public func generate_module_config(project: Project, name: string, cxx_proj_path: filesys::path_t, platform_support: map<platform_t, bool>)
         {      
             using filesys;
             
@@ -182,7 +186,7 @@ namespace editor
             }
 
             // 3. 给支持的平台生成CMake文件，并且把配置信息存档
-            assert(writeall(F"{cxx_proj_path}/config.inf", {
+            assert(writeall(cxx_proj_path/"config.inf", {
                 ["name"] = name: dynamic,
                 ["path"] = project->make_path_normalize(cxx_proj_path): dynamic,
                 ["conf"] = enabled_generating: dynamic,
@@ -191,7 +195,7 @@ namespace editor
             for (let _, config : generating_results ->> \c = c[1]->okay->val;)
             {
                 // 3.1 把生成出来的CMake保存起来
-                let aim_cmake_dir = F"{cxx_proj_path}/builder/{config.config}";
+                let aim_cmake_dir = cxx_proj_path/"builder"/config.config;
                 if (!exist(aim_cmake_dir))
                 {
                     // 对应目录不存在，在这里创建一下，失败就寄掉
@@ -199,7 +203,7 @@ namespace editor
                     if (mkdir_result->iserr)
                         return result::err(F"创建目录失败({mkdir_result->error->val})");
                 }
-                if (!writeall(F"{aim_cmake_dir}/CMakeLists.txt", 
+                if (!writeall(aim_cmake_dir/"CMakeLists.txt", 
                     config.cmake
                         ->replace("$$JEMODULE_PROJECT_NAME$$", name->replace(" ", "_"))
                         ->replace("$$JEMODULE_BUILD_CONFIG$$", config.config)))
@@ -239,7 +243,7 @@ namespace editor
                 return result::err("没有可用的配置，请检查引擎目录相关文件是否丢失");
             }
 
-            if (!writeall(F"{cxx_proj_path}/CMakeLists.txt", 
+            if (!writeall(cxx_proj_path/"CMakeLists.txt", 
                     F"{cmake_head}\n{cmake_subdirs->val}\n"
                         ->replace("$$JEMODULE_PROJECT_NAME$$", name->replace(" ", "_"))))
                 return result::err(F"无法写入'{cxx_proj_path}/CMakeLists.txt'");
@@ -251,7 +255,7 @@ namespace editor
 /build/
 /msvcbuild_*/
 "@;
-            if (!writeall(F"{cxx_proj_path}/.gitignore", git_ignore_file))
+            if (!writeall(cxx_proj_path/".gitignore", git_ignore_file))
                 return result::err(F"无法写入'{cxx_proj_path}/.gitignore'");
 
             return result::ok(generating_results);
@@ -263,7 +267,7 @@ namespace editor
             using filesys;
 
             // 在指定目录下创建Cxx项目目录
-            let cxx_proj_path = F"{normalize(locpath)}/{name}.jemodule4";
+            let cxx_proj_path = normalize(locpath)/F"{name}.jemodule4";
             if (exist(cxx_proj_path))
                 return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
 
@@ -290,7 +294,7 @@ namespace editor
             {       
                 let created_module = CxxProject{ 
                     name = name, 
-                    path = normalize(cxx_proj_path), 
+                    path = cxx_proj_path, 
                     configs = generating_results
                         ->mapping
                         ->map(\k: string, v: result<CxxProjectBuildConfig, string> 
@@ -307,7 +311,7 @@ namespace editor
             }
         }
 
-        func search_file_in(dir: string, exname: string)=> option<string>
+        func search_file_in(dir: filesys::path_t, exname: string)=> option<filesys::path_t>
         {
             using filesys;
 
@@ -330,12 +334,12 @@ namespace editor
             match (search_file_in(get_current_runtime_path(self->get_runtime_path(config))->val, ".dll"))
             {
             value(p)? 
-                return self.module_instance := je::editor::load_module(self.name, p);
+                return self.module_instance := je::editor::load_module(self.name, p->tostring);
             none? 
                 return self.module_instance := option::none;
             }
         }
-        func get_current_runtime_id(runtime_dll_path: string)
+        func get_current_runtime_id(runtime_dll_path: filesys::path_t)
         {
             using filesys;
 
@@ -348,35 +352,36 @@ namespace editor
                         ->  reduce(\l, r = l > r ? l | r;);
                     ;
         }
-        func get_current_runtime_path(runtime_dll_path: string)
+        func get_current_runtime_path(runtime_dll_path: filesys::path_t)
         {
             using filesys;
             return 
                 get_current_runtime_id(runtime_dll_path)
-                    ->map(\id: int = normalize(F"{normalize(runtime_dll_path)}/{id}"););
+                    ->map(\id = runtime_dll_path / id as int: string;)
+                    ;
         }
-        func get_newest_runtime_path(runtime_dll_path: string)
+        func get_newest_runtime_path(runtime_dll_path: filesys::path_t)
         {
             using filesys;
             let newest_path = 
                 get_current_runtime_id(runtime_dll_path)
                     -> map(\id: int = id + 1;)
                     -> valor(0)
-                    -> \id: int = F"{normalize(runtime_dll_path)}/{id}";
+                    -> \id: int = runtime_dll_path / id: string;
                     ;
             assert(!exist(newest_path));
             do mkdir(newest_path)->unwarp;
             assert(exist(newest_path));
 
-            return normalize(newest_path);
+            return newest_path;
         }
         func get_runtime_path(self: CxxProject, config: string)
         {
-            return F"{self.path}/runtime/{config}";
+            return self.path/"runtime"/config;
         }
         public func get_build_dll_path(self: CxxProject, config: string)
         {
-            return search_file_in(F"{self.path}/build/{config}", ".dll");
+            return search_file_in(self.path/"build"/config, ".dll");
         }
         func update_library_of_platform(self: CxxProject, config: string)
         {
@@ -393,39 +398,39 @@ namespace editor
             match (self->get_build_dll_path(config))
             {
             value(p)? 
-                assert(copy(p, F"{newest_runtime_path}/{filename(p)}")->isok);
+                assert(copy(p, newest_runtime_path/filename(p))->isok);
             none? std::panic("Output binary file not found;");
             }
 
             // 调试时，vs调试器可能会自动附加pdb，导致重新编译失败
             // 为了避免蠢蛋vs干蠢事，这里直接把pdb文件移到runtime目录下
-            match (search_file_in(F"{self.path}/build/{config}", ".pdb"))
+            match (search_file_in(self.path/"build"/config, ".pdb"))
             {
             value(p)?
-                assert(move(p, F"{newest_runtime_path}/{filename(p)}")->isok);
+                assert(move(p, newest_runtime_path/filename(p))->isok);
             none?
                 ; // 没有pdb就算了，可能是release
             }
         }
 
-        public func open_for_loading(path: string, proj: Project)
+        public func open_for_loading(path: filesys::path_t, proj: Project)
         {
             using filesys;
 
             // 加载指定路径的 CXX 项目信息
             if (!exist(path))
                 return result::err(F"找不到模块{path}，请检查文件是否丢失");
-            if (!exist(F"{normalize(path)}/config.inf"))
-                return result::err(F"找不到配置文件{normalize(path)}/config.inf，请检查文件是否丢失");
+            if (!exist(path/"config.inf"))
+                return result::err(F"找不到配置文件{path}/config.inf，请检查文件是否丢失");
 
-            let readdat = readall(F"{normalize(path)}/config.inf")
+            let readdat = readall(path/"config.inf")
                 =>> \d = d->todict;;
             if (!readdat->has)
                 return result::err(F"模块{path}的配置文件无法读取或格式不正确");
 
             let created_module = CxxProject{ 
                     name = readdat->val["name": dynamic] as string, 
-                    path = normalize(proj->parse_path_normalize(readdat->val["path": dynamic] as string)), 
+                    path = proj->parse_path_normalize(readdat->val["path": dynamic] as string), 
                     configs = readdat
                         ->val["conf": dynamic] as array
                         ->map(\d: dynamic = d as string;)
@@ -441,7 +446,7 @@ namespace editor
             return result::ok(created_module);
         }
 
-        public func load(path: string, proj: Project)
+        public func load(path: filesys::path_t, proj: Project)
         {
             using filesys;
 
@@ -457,20 +462,19 @@ namespace editor
                 do get_current_runtime_id(created_module->get_runtime_path(config))
                     ->map(\newest_id: int = 
                         subpath(created_module->get_runtime_path(config))
-                            ->map(\child_paths: array<string> =
-                                child_paths
-                                    ->forall(\path: string = !isdir(path) || newest_id != filename(path): int;)
-                                    ->map(\path: string = remove(path)->unwarp;)
+                            ->map(\child_paths = child_paths
+                                ->forall(\path = !isdir(path) || newest_id != filename(path): int;)
+                                ->map(\path = remove(path)->unwarp;)
                             ;)
                     ;)
                 ;
 
                 let founding_newest_result = 
                     get_current_runtime_path(created_module->get_runtime_path(config))
-                        ->> \dllpath: string = 
+                        ->> \dllpath = 
                             filename(dllpath) == "0" 
-                            ? result::ok("无需清理旧的模块")
-                            | move(dllpath, F"{created_module->get_runtime_path(config)}/0");
+                            ? result::ok(dllpath)
+                            | move(dllpath, created_module->get_runtime_path(config)/"0");
                         ->  or(\ = result::err(0: filesys::errno_t););
                      
                 match (founding_newest_result)
@@ -725,23 +729,23 @@ namespace editor
             do context->>\context = context.display_msg = "正在扫描并生成loader.hpp";;
             do context->>\context = context.progress = 5;;
 
-            let components = subpath(F"{self.path}/components")
-                ->okay
-                ->map(\childs: array<string> = childs
-                    ->forall(\f: string = extension(f)->lower == ".hpp";)
-                    ->map(\f: string = filename(f);)
-                    ->map(\f: string = f->subto(0, f->len - 4);)
-                    ;)
-                ->valor([]);
+            let components = subpath(self.path/"components")
+                ->> \childs = childs
+                    ->  forall(\f = extension(f)->lower == ".hpp";)
+                    ->> \f = fname->subto(0, fname->len - 4)
+                        where fname = filename(f)
+                        ;
+                    ;
+                ->or(\_=[];);
             
-            let systems = subpath(F"{self.path}/systems")
-                ->okay
-                ->map(\childs: array<string> = childs
-                    ->forall(\f: string = extension(f)->lower == ".hpp";)
-                    ->map(\f: string = filename(f);)
-                    ->map(\f: string = f->subto(0, f->len - 4);)
-                    ;)
-                ->valor([]);
+            let systems = subpath(self.path/"systems")
+                ->> \childs = childs
+                    ->  forall(\f = extension(f)->lower == ".hpp";)
+                    ->> \f = fname->subto(0, fname->len - 4)
+                        where fname = filename(f)
+                        ;
+                    ;
+                ->or(\_=[];);
 
             let loader_header = 
     @"#pragma once
@@ -796,7 +800,7 @@ namespace editor
                     ->replace("$$REGISTER_COMPONENT_TYPES$$", register_component_types)
                     ->replace("$$REGISTER_SYSTEM_TYPES$$", register_system_types);
 
-            if (!writeall(F"{self.path}/loader.hpp", loader_src))
+            if (!writeall(self.path/"loader.hpp", loader_src))
             {
                 do context->>\context = context.display_msg = F"无法写入'{self.path}/loader.hpp'";;
                 return result::err(F"无法写入'{self.path}/loader.hpp'");
@@ -805,25 +809,25 @@ namespace editor
             do context->>\context = context.display_msg = F"正在使用CMake生成编译配置\n{config}";;
             do context->>\context = context.progress = 15;;
 
-            if (start_process(CMAKE_PATH, 
-                [CMAKE_PATH, self.path, "-B", self.path + "/msvcbuild_" + config, F"-DJEMODULE_BUILT_AIM=\"{config}\""]
+            if (start_process(CMAKE_PATH->tostring, 
+                [CMAKE_PATH->tostring, self.path->tostring, "-B", self.path->tostring + "/msvcbuild_" + config, F"-DJEMODULE_BUILT_AIM=\"{config}\""]
                     ->connect(conf->val.cmake_option)) != true)
             {
                 do context->>\context = context.display_msg = "CMake生成失败";;
                 return result::err("CMake生成失败");
             }
 
-            let msvc_proj_path = F"{self.path}/msvcbuild_{config}/builder/{config}/{self.name->replace(" ", "_")}.vcxproj";
-            let msvc_compile_result_path = F"{self.path}/msvcbuild_{config}/compile.log";
+            let msvc_proj_path = self.path/F"msvcbuild_{config}"/"builder"/config/F"{self.name->replace(" ", "_")}.vcxproj";
+            let msvc_compile_result_path = self.path/F"msvcbuild_{config}"/"compile.log";
 
             do remove(msvc_compile_result_path)->unwarp;
 
             do context->>\context = context.display_msg = F"正在构建二进制文件\n{config}";;
             do context->>\context = context.progress = 45;;
 
-            let compile_result_statu_code = start_process(MSVC_PATH, [
-                MSVC_PATH, msvc_proj_path, "-v:quiet", "-fl",
-                F"-flp:logfile={msvc_compile_result_path}" 
+            let compile_result_statu_code = start_process(MSVC_PATH->tostring(), [
+                MSVC_PATH->tostring(), msvc_proj_path->tostring, "-v:quiet", "-fl",
+                F"-flp:logfile={msvc_compile_result_path->tostring}" 
             ]->connect(conf->val.built_command));
             let compile_result = readall(msvc_compile_result_path);
 

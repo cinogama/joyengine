@@ -22,7 +22,7 @@ namespace editor
 
     public using ProjectWorld = struct{
         m_world_instance: je::world,
-        m_world_path: string,
+        m_world_path: filesys::path_t,
         m_runtime_systems: mut array<je::typeinfo>,
     };
 
@@ -33,31 +33,31 @@ namespace editor
     };
 
     public using Project = struct{
-        m_name: string,    // 项目的名称，不能更改
-        m_path: string,    // 项目所在的目录
-        m_env: Environment, // 项目环境
+        m_name: string,             // 项目的名称，不能更改
+        m_path: filesys::path_t,    // 项目所在的目录
+        m_env: Environment,         // 项目环境
         m_configs: map<string, Project::IConfig>, // 配置信息，是的，这是个map，意味着开发者可以自己加点配置项目
         m_worlds: vec<ProjectWorld>,
         m_default_worlds: mut option<je::world>, // 如果项目没有世界，那么创建一个默认的临时世界挂在这里，保证gui能跑
-        m_modules: map<string, CxxProject>, 
+        m_modules: map<filesys::path_t, CxxProject>, 
         
         m_debug_context: mut option<DebugContext>,
         m_tickline: Tickline::Context,
     }
     {
-        public func make_path_normalize(self: Project, path: string)
+        public func make_path_normalize(self: Project, path: filesys::path_t)
         {
-            let npath = filesys::normalize(path);
-            if (npath->beginwith(self.m_path + "/"))
+            let npath = path->tostring;
+            if (npath->beginwith(self.m_path->tostring + "/"))
             {
-                return "@" + npath->sub(self.m_path->len);
+                return "@" + npath->sub(self.m_path->tostring->len);
             }
             return npath;
         }
         public func parse_path_normalize(self: Project, path: string)
         {
             if (path->beginwith("@"))
-                return filesys::normalize(self.m_path + path->sub(1));
+                return filesys::normalize(self.m_path->tostring + path->sub(1));
             return filesys::normalize(path);
         }
         public func is_debugging(self: Project)
@@ -138,7 +138,7 @@ namespace editor
             return result::ok(context);
         }
 
-        public func get_module(self: Project, name: string)
+        public func get_module(self: Project, name: filesys::path_t)
         {
             return self.m_modules->get(name);
         }
@@ -284,13 +284,13 @@ namespace editor
         {
             return self.m_tickline;
         }
-        public func create(name: string, path: string)
+        public func create(name: string, path: filesys::path_t)
         {
             let env = Environment::create();
 
             let proj = Project{
                 m_name = name,
-                m_path = filesys::normalize(path),
+                m_path = path,
                 m_env = env,
                 m_configs = _create_default_configs(env),
                 m_worlds = []mut,
@@ -299,8 +299,6 @@ namespace editor
                 m_debug_context = mut option::none,
                 m_tickline = Tickline::Context::create(),
             };
-
-            assert(!proj.m_path->endwith("/") && !proj.m_path->endwith("\\"));
 
             // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了
             proj->_run_default_world;
@@ -319,7 +317,7 @@ namespace editor
         {
             return self.m_modules->remove(module.path);
         }
-        public func load(path: string, dat: dict<string, dynamic>)
+        public func load(path: filesys::path_t, dat: dict<string, dynamic>)
         {
             let self = create(dat["name"] as string, path);
 
@@ -339,7 +337,7 @@ namespace editor
                 ->> \d = d as array<dynamic> 
                     =>> \p = err->has ? [(p, err->val)] | []
                         where err = CxxProject::load(module_name, self)->error
-                            , module_name = path + p as string
+                            , module_name = path / p as string
                         ;
                     ;
                 ->  valor([])
@@ -347,7 +345,7 @@ namespace editor
                 ;
 
             do dat["worlds"] as array
-                ->> \wpath = self->load_world(path + wpath as string);
+                ->> \wpath = self->load_world(path / wpath as string);
                 ;
 
             return self;
@@ -359,8 +357,8 @@ namespace editor
                 ["path"] = self.m_path: dynamic,
                 ["name"] = self.m_name: dynamic,
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
-                ["worlds"] = self.m_worlds->> \pw = pw.m_world_path->sub(self.m_path->len);: dynamic,
-                ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->sub(self.m_path->len);: dynamic,
+                ["worlds"] = self.m_worlds->> \pw = pw.m_world_path->tostring->sub(self.m_path->tostring->len);: dynamic,
+                ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->tostring->sub(self.m_path->tostring->len);: dynamic,
                 ["windowsize"] = [w, h]: dynamic,
             };
 
@@ -375,14 +373,14 @@ namespace editor
             if (failed_saving_worlds->empty == false)
             {
                 let failed_file_list = failed_saving_worlds
-                    ->> \pw = pw.m_world_path;
+                    ->> \pw = pw.m_world_path->tostring;
                     ->  reduce(\l, r = l + "\n" + r;)
                     ->  val;
 
                 jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
                 return false;
             }
-            else if (!filesys::writeall(F"{self.m_path}/project.jeproj4", dat as dict<string, dynamic>: string))
+            else if (!filesys::writeall(self.m_path/"project.jeproj4", dat as dict<string, dynamic>: string))
             {
                 jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
                 return false;
@@ -574,7 +572,7 @@ namespace editor
             }
             return world.m_world_instance;
         }
-        public func create_new_world(self: Project, new_world_file_path: string)
+        public func create_new_world(self: Project, new_world_file_path: filesys::path_t)
         {          
             return self->append_world_to_list(
                 ProjectWorld 
@@ -596,7 +594,7 @@ namespace editor
         {
             return self->get_project_world(w)
                 =>> \pw = jeapi::serialize::world(w)->okay
-                    ->> \dat = dat->apply("path", pw.m_world_path as string->sub(self.m_path->len): dynamic);
+                    ->> \dat = dat->apply("path", pw.m_world_path->tostring->sub(self.m_path->tostring->len): dynamic);
                     ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
                     ;
                 ;
@@ -607,7 +605,7 @@ namespace editor
                 ProjectWorld 
                 {
                     m_world_instance = self.m_env->load_world(dat),
-                    m_world_path = self.m_path + dat["path"] as string,
+                    m_world_path = self.m_path / dat["path"] as string,
                     m_runtime_systems = 
                         mut dat->getor("runtime_systems", []: dynamic) as array
                             =>> \elem = systype->has ? [systype->val] | []
@@ -618,10 +616,10 @@ namespace editor
         {
             return self->serialize_world(w)
                 ->> \dat = dat->apply("is_editing", self->get_editing_world->>\ew = ew == w;->valor(false) as bool: dynamic);
-                ->> \dat = filesys::writeall(self.m_path + dat["path"]: string, dat as dict<string, dynamic>: string);
+                ->> \dat = filesys::writeall(self.m_path / dat["path"]: string, dat as dict<string, dynamic>: string);
                 ->  valor(false);
         }
-        public func load_world(self: Project, file_path: string)
+        public func load_world(self: Project, file_path: filesys::path_t)
         {
             return filesys::readall(file_path)
                 =>> \dat = dat->todict
