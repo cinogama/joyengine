@@ -12,7 +12,6 @@ import builtin.api.rend.main;
 import builtin.api.gui.form.msg;
 import builtin.editor.cpp.main;
 import builtin.editor.tools.script_manager;
-import builtin.editor.project.tickline;
 
 namespace editor
 {
@@ -42,7 +41,6 @@ namespace editor
         m_modules: map<filesys::path_t, CxxProject>, 
         
         m_debug_context: mut option<DebugContext>,
-        m_tickline: Tickline::Context,
     }
     {
         public func make_path_normalize(self: Project, path: filesys::path_t)
@@ -80,8 +78,6 @@ namespace editor
                 ;
             // 恢复所有世界！
 
-            je::tickline::engine::clean();
-
             self->restore_all_world(self.m_debug_context->val.m_dumped_editing_worlds);
             self.m_debug_context = option::none;
 
@@ -92,20 +88,6 @@ namespace editor
         {
             if (self->is_debugging)
                 return result::err("已经在调试中，不可重复调试");
-
-            let tickline_source = self.m_tickline->generate_code();
-            let tickline_vm_result = vm::create("je/runtime/tickline_debug.wo", tickline_source);
-
-            match (tickline_vm_result)
-            {
-            err(msg)?
-                return result::err(F"Tickline 系统编译失败：\n{msg}");
-            ok(_)?;
-            }
-
-            let tickline_vm = tickline_vm_result->unwarp();
-            do tickline_vm->run();
-            do tickline_vm->close();
 
             try! dumpped = self->dump_and_close_all_world();
 
@@ -280,10 +262,6 @@ namespace editor
                 )),
             }mut;
         }
-        public func get_tickline_context(self: Project)
-        {
-            return self.m_tickline;
-        }
         public func create(name: string, path: filesys::path_t)
         {
             let env = Environment::create();
@@ -297,7 +275,6 @@ namespace editor
                 m_default_worlds = mut option::none,
                 m_modules = {}mut,
                 m_debug_context = mut option::none,
-                m_tickline = Tickline::Context::create(),
             };
 
             // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了

@@ -370,7 +370,25 @@ namespace editor::gui::edit_forms
                         F"即将销毁实体{e->editor::name}\n是否同时销毁其全部子实体？", 
                         func(close_child_entity){
                             let entities = jeapi::debug::get_all_entities_layer_from_world(w);
-                            let edata = entities->> \edat = (edat.uid, edat);->mapping->get(uid);
+
+                            func find_entity_data_by_uid(elist: array<jeapi::debug::EntityChilds>, uid: jeapi::debug::Eeid)
+                            {
+                                for (let _, ec: elist)
+                                {
+                                    if (ec.uid == uid)
+                                        return option::value(ec);
+                                    
+                                    match (find_entity_data_by_uid(ec.childs, uid))
+                                    {
+                                    value(ecc)?
+                                        return value(ecc);
+                                    none?;
+                                    }
+                                }
+                                return option::none;
+                            }
+
+                            let edata = find_entity_data_by_uid(entities, uid);
                             func close_entity_impl(e, close_all)
                             {
                                 e.uid->justdo(\e = e->close(););

@@ -5,7 +5,6 @@ import je.gui;
 import builtin.editor.gui.main;
 import builtin.api.dbg.main;
 import builtin.editor.gui.edit_forms.export_project;
-import builtin.editor.gui.tickline.main;
 
 using je::gui;
 
@@ -99,10 +98,6 @@ namespace editor::gui
                         ->> \select = edit_forms::set_is_albe_to_display_debug_entity(select);
                         ;
                     EndMenu();
-                }
-                if (MenuItem("Tickline"))
-                {
-                    tickline::show_tickline_editor(context);
                 }
                 EndMainMenuBar();
             }
