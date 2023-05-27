@@ -133,6 +133,32 @@ func open_path_to_do_sth(action_after_choice: (option<filesys::path_t>)=>void)
     return open;
 }
 
+func apply_editor_data_when_start_up_project()
+{
+    let dat = filesys::readall(filesys::normalize(std::exepath())/"editor.dat")
+        =>> \dat = dat->todict;
+        ->  valor({})
+        ;
+
+    let form_size = dat
+        ->  getor("form_size": dynamic, [1344, 768]: dynamic) as array
+        ->> \d = d as int;
+        ;
+    je::input::set_window_size(form_size[0], form_size[1]);
+}
+func save_editor_data_after_exit()
+{
+    let (win_w, win_h) = je::input::window_size();
+
+    assert(
+        filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", {
+            ["form_size"] = [win_w, win_h]
+        }: string)
+    );
+
+    assert(filesys::setworkpath(filesys::normalize(std::exepath())));
+}
+
 func create_project_at(path: filesys::path_t, u: editor::Environment, f: mutable<bool>)
 {
     // 确保目录存在
@@ -161,6 +187,8 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, f: mutable
 
                     action_after_guide_form_closed = 
                         func(){
+                            apply_editor_data_when_start_up_project();
+
                             let p = editor::Project::create(projname, regular_path);
                             assert(p->save_project());
 
@@ -175,6 +203,8 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, f: mutable
                             do filesys::copy(filesys::normalize(F"{std::exepath()}/builtin/shader"), filesys::normalize(F"{p.m_path}/resource/shader"));
                             do filesys::copy(filesys::normalize(F"{std::exepath()}/builtin/font"), filesys::normalize(F"{p.m_path}/resource/font"));
                             editor::gui::edit_project(p);
+
+                            save_editor_data_after_exit();
                         }
                     ;
                 }
@@ -201,7 +231,13 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, f: mutable<b
             je::editor::set_runtime_path(path->tostring());
 
             action_after_guide_form_closed = 
-                \ = editor::gui::edit_project(editor::Project::load(path, dat));
+                func()
+                {
+                    apply_editor_data_when_start_up_project();
+                    editor::gui::edit_project(editor::Project::load(path, dat));
+
+                    save_editor_data_after_exit();
+                }
             ;
         }
     none?

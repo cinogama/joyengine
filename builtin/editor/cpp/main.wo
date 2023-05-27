@@ -71,7 +71,7 @@ namespace editor
 
 
         // 引擎的库目录
-        let ENGINE_CORE_LIBRARYS_LOCATE_PATH = std::exepath();
+        let ENGINE_CORE_LIBRARYS_LOCATE_PATH = filesys::normalize(std::exepath());
         public using LibraryFiles = struct{
             runtime_dynamic_libs: array<string>,
             link_static_libs: array<string>,
@@ -138,11 +138,12 @@ namespace editor
 
             // 2. 开始复制库文件, 顺便确认支持的平台
             let platform_support = {}mut : map<platform_t, bool>;
+
             for (let platform, files : ENGINE_CORE_LIBRARYS_PATHS)
             {
                 do files->get_all_files
                     ->> \name = copy(
-                            normalize("{ENGINE_CORE_LIBRARYS_LOCATE_PATH}/{name}"), 
+                            ENGINE_CORE_LIBRARYS_LOCATE_PATH/name, 
                             cxx_proj_path/"engine"/"library"/name
                             )
                         ;

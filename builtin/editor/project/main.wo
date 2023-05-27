@@ -265,6 +265,8 @@ namespace editor
         public func create(name: string, path: filesys::path_t)
         {
             let env = Environment::create();
+            
+            assert(filesys::setworkpath(path));
 
             let proj = Project{
                 m_name = name,
@@ -283,7 +285,6 @@ namespace editor
             tools::update_tool_scripts(proj);
             gui::drawpannel::update_and_get_scripts(proj);
 
-            je::input::set_window_size(1344, 768);
             return proj;
         }
         public func active_module(self: Project, module: CxxProject)
@@ -297,10 +298,6 @@ namespace editor
         public func load(path: filesys::path_t, dat: dict<string, dynamic>)
         {
             let self = create(dat["name"] as string, path);
-
-            do dat->get("windowsize")
-                ->> \sz = je::input::set_window_size(sz as array[0] as int, sz as array[1] as int);
-                ;
 
             // 先加载配置！这非常重要！
             for (let name, val : dat["configs"] as dict ->> \k, v = (k as string, v as string);)
@@ -336,7 +333,6 @@ namespace editor
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
                 ["worlds"] = self.m_worlds->> \pw = pw.m_world_path->tostring->sub(self.m_path->tostring->len);: dynamic,
                 ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->tostring->sub(self.m_path->tostring->len);: dynamic,
-                ["windowsize"] = [w, h]: dynamic,
             };
 
             // 顺手保存所有世界
