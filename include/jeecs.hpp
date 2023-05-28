@@ -1341,6 +1341,12 @@ namespace jeecs
             _move(_elems_ptr_begin + index, _elems_ptr_begin + index + 1, _elems_ptr_end--);
         }
 
+        inline void erase(ElemT* index)
+        {
+            index->~ElemT();
+            _move(index, index + 1, _elems_ptr_end--);
+        }
+
         inline void erase_data(const ElemT& data)
         {
             auto fnd_place = std::find(begin(), end(), data);
@@ -1356,6 +1362,59 @@ namespace jeecs
         ElemT& operator[](size_t index)const noexcept
         {
             return _elems_ptr_begin[index];
+        }
+    };
+
+    template<typename KeyT, typename ValT>
+    class map
+    {
+        struct pair {
+            KeyT k;
+            ValT v;
+        };
+        jeecs::vector<pair> dats;
+
+    public:
+        ValT& operator[](const KeyT& k)noexcept
+        {
+            auto* fnd = find(k);
+            if (fnd == dats.end())
+            {
+                dats.push_back({ k, {} });
+                return dats.back().v;
+            }
+            return fnd->v;
+        }
+
+        void clear()noexcept
+        {
+            dats.clear();
+        }
+
+        pair* find(const KeyT & k) const noexcept
+        {
+            return std::find_if(dats.begin(), dats.end(), [&k](pair& p) {return p.k == k; });
+        }
+
+        bool erase(const KeyT& k)
+        {
+            auto* fnd = find(k);
+            if (fnd != end())
+            {
+                dats.erase(fnd);
+                return true;
+            }
+            return false;
+        }
+
+        inline auto begin() const noexcept->pair*
+        {
+            return dats.begin();
+        }
+
+        inline auto end() const noexcept->pair*
+        {
+            return dats.end();
         }
     };
 
@@ -1413,11 +1472,18 @@ namespace jeecs
             memcpy(_c_str, str, _str_len);
         }
 
+        inline bool operator==(const string& str) noexcept
+        {
+            return 0 == strcmp(c_str(), str.c_str());
+        }
+        inline bool operator!=(const string& str) noexcept
+        {
+            return 0 != strcmp(c_str(), str.c_str());
+        }
         inline string& operator=(const string& str) noexcept
         {
             return *this = str.c_str();
         }
-
         inline string& operator=(string&& str) noexcept
         {
             je_mem_free(_c_str);
@@ -1432,24 +1498,20 @@ namespace jeecs
 
             return *this;
         }
-
         inline string& operator=(const std::string& str)
         {
             return *this = str.c_str();
         }
-
         inline string& operator=(const char* str)
         {
             _reserve((_str_len = strlen(str)) + 1);
             memcpy(_c_str, str, _str_len);
             return *this;
         }
-
         operator std::string()const
         {
             return c_str();
         }
-
         /*string substr(size_t from, size_t count = (size_t)(-1))const
         {
             return  std::string(c_str()).substr(from, count);
@@ -5118,7 +5180,6 @@ namespace jeecs
             }
         };
     }
-
     namespace Light2D
     {
         struct Color
@@ -5214,6 +5275,81 @@ namespace jeecs
                 typing::register_member(&Block::mesh, "mesh");
                 typing::register_member(&Block::shadow, "shadow");
             }
+        };
+    }
+    namespace Animation2D
+    {
+        struct AnimationFrames
+        {
+            struct FrameDataSet
+            {
+                struct FrameData
+                {
+                    math::vec2  m_tiling;
+                    math::vec2  m_offset;
+                    math::vec3  m_scale;
+                    float       m_frame_time;
+                };
+                static_assert(sizeof(FrameData) == 8 * sizeof(float));
+
+                jeecs::map<jeecs::string, jeecs::vector<FrameData>> m_animations;
+                jeecs::string m_path;
+
+                inline std::string to_string()const
+                {
+                    return m_path;
+                }
+                inline void parse(const std::string& str)
+                {
+                    m_path = str;
+
+                    if (str == "")
+                        m_animations.clear();
+                    else
+                    {
+                        auto* file_handle = jeecs_file_open(m_path.c_str());
+                        if (file_handle == nullptr)
+                            jeecs::debug::logerr("Cannot open animation file '%s'.", m_path.c_str());
+                        else
+                        {
+                            uint64_t sz = 0;
+                            jeecs_file_read(&sz, sizeof(uint64_t), 1, file_handle);
+                            while (sz--)
+                            {
+                                uint64_t action_name_length = 0;
+                                jeecs_file_read(&action_name_length, sizeof(uint64_t), 1, file_handle);
+
+                                std::vector<char> name_buffer(action_name_length + 1, 0);
+                                jeecs_file_read(name_buffer.data(), sizeof(char), action_name_length, file_handle);
+
+                                uint64_t action_frame_count = 0;
+                                jeecs_file_read(&action_frame_count, sizeof(uint64_t), 1, file_handle);
+
+                                auto& frame_dats = m_animations[name_buffer.data()];
+                                while (action_frame_count--)
+                                {
+                                    FrameData frame_data;
+                                    jeecs_file_read(&frame_data, sizeof(FrameData), 1, file_handle);
+
+                                    frame_dats.push_back(frame_data);
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            FrameDataSet animations;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&AnimationFrames::animations, "animations");
+            }
+        };
+
+        struct AnimationControlor
+        {
+
         };
     }
 
