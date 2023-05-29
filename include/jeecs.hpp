@@ -5329,7 +5329,7 @@ namespace jeecs
 
                 struct animation_data
                 {
-                    jeecs::vector<frame_data> frame_data;
+                    jeecs::vector<frame_data> frames;
                 };
 
                 jeecs::map<jeecs::string, animation_data>  m_animations;
