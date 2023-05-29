@@ -1921,6 +1921,8 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 }
                             }
                         }
+                        // 如果没有找到对应的动画，那么不做任何事。
+                        // 这个注释写在这里单纯是因为花括号写得太难看，稍微避免出现一个大于号
                     }
                 );
         }
