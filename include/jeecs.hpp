@@ -1437,7 +1437,8 @@ namespace jeecs
 
         ~string()
         {
-            je_mem_free(_c_str);
+            if (_c_str != nullptr)
+                je_mem_free(_c_str);
         }
 
         string()noexcept
@@ -5279,27 +5280,66 @@ namespace jeecs
     }
     namespace Animation2D
     {
-        struct AnimationFrames
+        struct FrameAnimation
         {
-            struct FrameDataSet
+            struct animation_data_set
             {
-                struct FrameData
+                struct frame_data
                 {
-                    math::vec2  m_tiling;
-                    math::vec2  m_offset;
-                    math::vec3  m_scale;
-                    float       m_frame_time;
+                    struct data_value
+                    {
+                        union value {
+                            int i32;
+                            float f32;
+                            math::vec2 v2;
+                            math::vec3 v3;
+                            math::vec4 v4;
+                            math::quat q4;
+                        };
+
+                        jegl_shader::uniform_type m_type = jegl_shader::uniform_type::INT;
+                        value                     m_value = { 0 };
+
+                        data_value() = default;
+                        data_value(const data_value& val)
+                        {
+                            memcpy(&m_value, &val.m_value, sizeof(value));
+                        }
+                        data_value(data_value&& val)
+                        {
+                            memcpy(&m_value, &val.m_value, sizeof(value));
+                        }
+                    };
+                    struct component_data
+                    {
+                        const jeecs::typing::type_info* m_component_type;
+                        jeecs::string                   m_member_name;
+                        data_value                      m_member_value;
+                    };
+                    struct uniform_data
+                    {
+                        jeecs::string                   m_uniform_name;
+                        data_value                      m_uniform_value;
+                    };
+
+                    jeecs::vector<component_data> m_component_data;
+                    jeecs::vector<uniform_data>   m_uniform_data;
+                    float                         m_frame_time;
                 };
-                static_assert(sizeof(FrameData) == 8 * sizeof(float));
 
-                jeecs::map<jeecs::string, jeecs::vector<FrameData>> m_animations;
-                jeecs::string m_path;
+                struct animation_data
+                {
+                    jeecs::vector<frame_data> frame_data;
+                };
 
-                inline std::string to_string()const
+                jeecs::map<jeecs::string, animation_data>  m_animations;
+                jeecs::string                              m_path;
+
+                std::string to_string()const
                 {
                     return m_path;
                 }
-                inline void parse(const std::string& str)
+                void parse(const std::string& str)
                 {
                     m_path = str;
 
@@ -5312,44 +5352,40 @@ namespace jeecs
                             jeecs::debug::logerr("Cannot open animation file '%s'.", m_path.c_str());
                         else
                         {
-                            uint64_t sz = 0;
-                            jeecs_file_read(&sz, sizeof(uint64_t), 1, file_handle);
-                            while (sz--)
-                            {
-                                uint64_t action_name_length = 0;
-                                jeecs_file_read(&action_name_length, sizeof(uint64_t), 1, file_handle);
-
-                                std::vector<char> name_buffer(action_name_length + 1, 0);
-                                jeecs_file_read(name_buffer.data(), sizeof(char), action_name_length, file_handle);
-
-                                uint64_t action_frame_count = 0;
-                                jeecs_file_read(&action_frame_count, sizeof(uint64_t), 1, file_handle);
-
-                                auto& frame_dats = m_animations[name_buffer.data()];
-                                while (action_frame_count--)
-                                {
-                                    FrameData frame_data;
-                                    jeecs_file_read(&frame_data, sizeof(FrameData), 1, file_handle);
-
-                                    frame_dats.push_back(frame_data);
-                                }
-                            }
+                            // TODO; 
+                            // 注意，此处数据读取有大小端问题，不过现在大多数平台应该都是小端序，所以可以暂时不处理大端问题
+                            // 实际上woolang的二进制文件以及buffer库也没有考虑和处理大端，可以一起不处理，到时候再说。
                         }
                     }
                 }
             };
 
-            FrameDataSet animations;
+            animation_data_set  animations;
+
+            struct animation_state
+            {
+                jeecs::string       current_animation = "";
+                size_t              current_frame_index = SIZE_MAX;
+                double              next_update_time = 0.0f;
+
+                std::string to_string()const
+                {
+                    return current_animation.c_str();
+                }
+                void parse(const std::string& str)
+                {
+                    current_animation = str;
+                    current_frame_index = SIZE_MAX;
+                    next_update_time = 0.0f;
+                }
+            };
+            animation_state     currnet_state;
 
             static void JERefRegsiter()
             {
-                typing::register_member(&AnimationFrames::animations, "animations");
+                typing::register_member(&FrameAnimation::animations, "animations");
+                typing::register_member(&FrameAnimation::currnet_state, "currnet_state");
             }
-        };
-
-        struct AnimationControlor
-        {
-
         };
     }
 
@@ -5672,6 +5708,8 @@ namespace jeecs
             type_info::of<Renderer::Shape>("Renderer::Shape");
             type_info::of<Renderer::Shaders>("Renderer::Shaders");
             type_info::of<Renderer::Textures>("Renderer::Textures");
+
+            type_info::of<Animation2D::FrameAnimation>("Animation2D::FrameAnimation");
 
             type_info::of<Camera::Clip>("Camera::Clip");
             type_info::of<Camera::Projection>("Camera::Projection");

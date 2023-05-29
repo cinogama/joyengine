@@ -1870,6 +1870,61 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         }
 
     };
+
+    struct FrameAnimation2DSystem : public game_system
+    {
+        double _fixed_time = 0.;
+
+        FrameAnimation2DSystem(game_world w)
+            : game_system(w)
+        {
+
+        }
+
+        void LateUpdate()
+        {
+            _fixed_time += delta_dtime();
+            select_from(get_world())
+                .exec([this](game_entity e, Animation2D::FrameAnimation& frame_animation, Renderer::Shaders* shaders)
+                    {
+                        auto* active_animation_frames = 
+                            frame_animation.animations.m_animations.find(frame_animation.currnet_state.current_animation);
+                        if (active_animation_frames != frame_animation.animations.m_animations.end()
+                            && active_animation_frames->v.frame_data.empty() == false)
+                        {
+                            // 当前动画数据找到，如果当前帧是 SIZEMAX，或者已经到了要更新帧的时候，
+                            if (frame_animation.currnet_state.current_frame_index == SIZE_MAX
+                                || frame_animation.currnet_state.next_update_time >= _fixed_time)
+                            {
+                                if (frame_animation.currnet_state.current_frame_index == SIZE_MAX)
+                                {
+                                    frame_animation.currnet_state.current_frame_index = 0;
+                                    frame_animation.currnet_state.next_update_time =
+                                        _fixed_time + active_animation_frames->v.frame_data[frame_animation.currnet_state.current_frame_index].m_frame_time;
+                                }
+                                else
+                                {
+                                    // 到达下一次更新时间！检查间隔时间，并跳转到对应的帧
+                                    auto current_animation_frame_count = active_animation_frames->v.frame_data.size();
+
+                                    auto delta_time_between_frams = _fixed_time - frame_animation.currnet_state.next_update_time;
+                                    auto next_frame_index = (frame_animation.currnet_state.current_frame_index + 1) % current_animation_frame_count;
+
+                                    while (delta_time_between_frams > active_animation_frames->v.frame_data[next_frame_index].m_frame_time)
+                                    {
+                                        delta_time_between_frams -= active_animation_frames->v.frame_data[next_frame_index].m_frame_time;
+                                        next_frame_index = (next_frame_index + 1) % current_animation_frame_count;
+                                    }
+                                    frame_animation.currnet_state.current_frame_index = next_frame_index;
+                                    frame_animation.currnet_state.next_update_time =
+                                        _fixed_time + active_animation_frames->v.frame_data[frame_animation.currnet_state.current_frame_index].m_frame_time - delta_time_between_frams;
+                                }
+                            }
+                        }
+                    }
+                );
+        }
+    };
 }
 
 jegl_thread* jedbg_get_editing_graphic_thread(void* universe)
