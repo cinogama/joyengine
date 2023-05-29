@@ -6,6 +6,11 @@
         "debug_x86"
     ],
     "dependence" : {
+        "buffer" : {
+            "path" : "build/pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+            "version" : "1.0.0"
+        },
         "filesystem" : {
             "path" : "build/pkg",
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",

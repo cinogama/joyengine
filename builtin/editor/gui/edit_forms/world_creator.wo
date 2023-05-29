@@ -253,7 +253,7 @@ namespace editor::gui::edit_forms
     public func show_world_creator(context: EditorContext, world_context: WorldContext)
     {
         je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
-        let mut open = BeginAttrOpen(world_context.edit_world->has() ? "编辑世界##{JobID()}" | "创建新世界##{JobID()}", 
+        let mut open = BeginAttrOpen(world_context.edit_world->has() ? F"编辑世界##{JobID()}" | F"创建新世界##{JobID()}", 
         WindowsAttribute::ImGuiWindowFlags_MenuBar);
 
         if (menu_bar(world_context))

@@ -828,10 +828,10 @@ struct jegl_shader
         ALL,
     };
 
-    const char*         m_vertex_glsl_src;
-    const char*         m_fragment_glsl_src;
-    unifrom_variables*  m_custom_uniforms;
-    uniform_blocks*     m_custom_uniform_blocks;
+    const char* m_vertex_glsl_src;
+    const char* m_fragment_glsl_src;
+    unifrom_variables* m_custom_uniforms;
+    uniform_blocks* m_custom_uniform_blocks;
     builtin_uniform_location m_builtin_uniforms;
 
     depth_test_method   m_depth_test;
@@ -854,7 +854,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t*    m_buffer;
+    uint8_t* m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
@@ -1391,7 +1391,7 @@ namespace jeecs
             dats.clear();
         }
 
-        pair* find(const KeyT & k) const noexcept
+        pair* find(const KeyT& k) const noexcept
         {
             return std::find_if(dats.begin(), dats.end(), [&k](pair& p) {return p.k == k; });
         }
@@ -4790,20 +4790,20 @@ namespace jeecs
                                                 size_y - 1 - (correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size))
                                             );
 
-                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
+                                            auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
 
-                            float src_alpha = psrc.w * TEXT_COLOR.w;
+                                            float src_alpha = psrc.w * TEXT_COLOR.w;
 
-                            pdst.set(
-                                math::vec4(
-                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
-                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
-                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
-                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
-                                )
-                            );
+                                            pdst.set(
+                                                math::vec4(
+                                                    src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
+                                                    src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
+                                                    src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
+                                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
+                                                )
+                                            );
                                         }
-                            ); // end of  for each
+                                    ); // end of  for each
                                 }
                             );
                             next_ch_x += gcs->m_adv_x;
@@ -5288,6 +5288,15 @@ namespace jeecs
                 {
                     struct data_value
                     {
+                        enum type: uint8_t
+                        {
+                            INT,
+                            FLOAT,
+                            VEC2,
+                            VEC3,
+                            VEC4,
+                            QUAT4,
+                        };
                         union value {
                             int i32;
                             float f32;
@@ -5297,8 +5306,8 @@ namespace jeecs
                             math::quat q4;
                         };
 
-                        jegl_shader::uniform_type m_type = jegl_shader::uniform_type::INT;
-                        value                     m_value = { 0 };
+                        type    m_type = type::INT;
+                        value   m_value = { 0 };
 
                         data_value() = default;
                         data_value(const data_value& val)
@@ -5308,6 +5317,16 @@ namespace jeecs
                         data_value(data_value&& val)
                         {
                             memcpy(&m_value, &val.m_value, sizeof(value));
+                        }
+                        data_value& operator = (const data_value& val)
+                        {
+                            memcpy(&m_value, &val.m_value, sizeof(value));
+                            return *this;
+                        }
+                        data_value& operator = (data_value&& val)
+                        {
+                            memcpy(&m_value, &val.m_value, sizeof(value));
+                            return *this;
                         }
                     };
                     struct component_data
@@ -5322,9 +5341,9 @@ namespace jeecs
                         data_value                      m_uniform_value;
                     };
 
+                    float                         m_frame_time;
                     jeecs::vector<component_data> m_component_data;
                     jeecs::vector<uniform_data>   m_uniform_data;
-                    float                         m_frame_time;
                 };
 
                 struct animation_data
@@ -5341,44 +5360,170 @@ namespace jeecs
                 }
                 void parse(const std::string& str)
                 {
+                    m_animations.clear();
                     m_path = str;
 
-                    if (str == "")
-                        m_animations.clear();
-                    else
+                    if (str != "")
                     {
                         auto* file_handle = jeecs_file_open(m_path.c_str());
                         if (file_handle == nullptr)
+                        {
+                            m_path = "";
                             jeecs::debug::logerr("Cannot open animation file '%s'.", m_path.c_str());
+                        }
                         else
                         {
-                            // TODO; 
-                            // 注意，此处数据读取有大小端问题，不过现在大多数平台应该都是小端序，所以可以暂时不处理大端问题
-                            // 实际上woolang的二进制文件以及buffer库也没有考虑和处理大端，可以一起不处理，到时候再说。
+                            // 1. 读取动画组数量
+                            uint64_t animation_count = 0;
+                            jeecs_file_read(&animation_count, sizeof(uint64_t), 1, file_handle);
+
+                            for (uint64_t i = 0; i < animation_count; ++i)
+                            {
+                                // 2. 读取当前动画的帧数量、名称
+                                uint64_t frame_count = 0;
+                                uint64_t frames_name_len = 0;
+
+                                jeecs_file_read(&frame_count, sizeof(uint64_t), 1, file_handle);
+                                jeecs_file_read(&frames_name_len, sizeof(uint64_t), 1, file_handle);
+
+                                std::string frame_name(frames_name_len, '\0');
+                                jeecs_file_read(frame_name.data(), sizeof(char), frames_name_len, file_handle);
+
+                                auto& animation_frame_datas = m_animations[frame_name.c_str()];
+
+                                for (uint64_t j = 0; j < frame_count; ++j)
+                                {
+                                    // 3. 读取每一帧的持续时间和数据数量
+                                    frame_data frame_dat;
+                                    jeecs_file_read(&frame_dat.m_frame_time, sizeof(frame_dat.m_frame_time), 1, file_handle);
+
+                                    uint64_t component_data_count = 0;
+                                    jeecs_file_read(&component_data_count, sizeof(component_data_count), 1, file_handle);
+                                    for (uint64_t k = 0; k < component_data_count; ++k)
+                                    {
+                                        // 4. 读取帧组件数据
+                                        uint64_t component_name_len = 0;
+                                        jeecs_file_read(&component_name_len, sizeof(uint64_t), 1, file_handle);
+
+                                        std::string component_name(component_name_len, '\0');
+                                        jeecs_file_read(component_name.data(), sizeof(char), component_name_len, file_handle);
+
+                                        uint64_t member_name_len = 0;
+                                        jeecs_file_read(&member_name_len, sizeof(uint64_t), 1, file_handle);
+
+                                        std::string member_name(member_name_len, '\0');
+                                        jeecs_file_read(member_name.data(), sizeof(char), member_name_len, file_handle);
+
+
+                                        frame_data::data_value value;
+                                        jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
+                                        switch (value.m_type)
+                                        {
+                                        case frame_data::data_value::type::INT:
+                                            jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle); break;
+                                        case frame_data::data_value::type::FLOAT:
+                                            jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle); break;
+                                        case frame_data::data_value::type::VEC2:
+                                            jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle); break;
+                                        case frame_data::data_value::type::VEC3:
+                                            jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle); break;
+                                        case frame_data::data_value::type::VEC4:
+                                            jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
+                                        case frame_data::data_value::type::QUAT4:
+                                            jeecs_file_read(&value.m_value.q4, sizeof(value.m_value.q4), 1, file_handle); break;
+                                        default:
+                                            jeecs::debug::logerr("Unknown value type(%d) for component frame data.", (int)value.m_type);
+                                            break;
+                                        }
+
+                                        auto * component_type = jeecs::typing::type_info::of(component_name.c_str());
+                                        if (component_type == nullptr)
+                                            jeecs::debug::logerr("Failed to found component type named '%s'.", component_name.c_str());
+                                        else
+                                        {
+                                            frame_data::component_data cdata;
+                                            cdata.m_component_type = component_type;
+                                            cdata.m_member_name = member_name;
+                                            cdata.m_member_value = value;
+
+                                            frame_dat.m_component_data.push_back(cdata);
+                                        }
+                                    }
+
+                                    uint64_t uniform_data_count = 0;
+                                    jeecs_file_read(&uniform_data_count, sizeof(uniform_data_count), 1, file_handle);
+                                    for (uint64_t k = 0; k < uniform_data_count; ++k)
+                                    {
+                                        // 5. 读取帧一致变量数据
+                                        uint64_t uniform_name_len = 0;
+                                        jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, file_handle);
+
+                                        std::string uniform_name(uniform_name_len, '\0');
+                                        jeecs_file_read(uniform_name.data(), sizeof(char), uniform_name_len, file_handle);
+
+                                        frame_data::data_value value;
+                                        jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
+                                        switch (value.m_type)
+                                        {
+                                        case frame_data::data_value::type::INT:
+                                            jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle); break;
+                                        case frame_data::data_value::type::FLOAT:
+                                            jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle); break;
+                                        case frame_data::data_value::type::VEC2:
+                                            jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle); break;
+                                        case frame_data::data_value::type::VEC3:
+                                            jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle); break;
+                                        case frame_data::data_value::type::VEC4:
+                                            jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
+                                        default:
+                                            jeecs::debug::logerr("Unknown value type(%d) for uniform frame data.", (int)value.m_type);
+                                            break;
+                                        }
+
+                                        frame_data::uniform_data udata;
+                                        udata.m_uniform_name = uniform_name;
+                                        udata.m_uniform_value = value;
+
+                                        frame_dat.m_uniform_data.push_back(udata);
+                                    }
+
+                                    animation_frame_datas.frames.push_back(frame_dat);
+                                }
+                            }
+
+                            // OK，读取完毕！
                         }
                     }
                 }
             };
-
-            animation_data_set  animations;
-
             struct animation_state
             {
                 jeecs::string       current_animation = "";
                 size_t              current_frame_index = SIZE_MAX;
                 double              next_update_time = 0.0f;
 
-                std::string to_string()const
+                void set_animation(const std::string& animation_name)
                 {
-                    return current_animation.c_str();
-                }
-                void parse(const std::string& str)
-                {
-                    current_animation = str;
+                    current_animation = animation_name;
                     current_frame_index = SIZE_MAX;
                     next_update_time = 0.0f;
                 }
+                std::string get_animation()const
+                {
+                    return current_animation.c_str();
+                }
+
+                std::string to_string()const
+                {
+                    return get_animation();
+                }
+                void parse(const std::string& str)
+                {
+                    set_animation(str);
+                }
             };
+
+            animation_data_set  animations;
             animation_state     currnet_state;
 
             static void JERefRegsiter()
@@ -5819,10 +5964,10 @@ namespace jeecs
         static double _realDeltaTime()
         {
             static double last_time = je_clock_time();
-            
+
             double last = last_time;
             last_time = je_clock_time();
-            
+
             return last_time - last;
         }
 
