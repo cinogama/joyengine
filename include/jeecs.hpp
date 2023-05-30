@@ -5334,6 +5334,8 @@ namespace jeecs
                         const jeecs::typing::type_info* m_component_type;
                         jeecs::string                   m_member_name;
                         data_value                      m_member_value;
+
+                        void*                           m_member_addr_cache;
                     };
                     struct uniform_data
                     {
@@ -5353,6 +5355,7 @@ namespace jeecs
 
                 jeecs::map<jeecs::string, animation_data>  m_animations;
                 jeecs::string                              m_path;
+                jeecs::game_entity                         m_entity_cache = {};
 
                 std::string to_string()const
                 {

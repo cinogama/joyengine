@@ -1302,7 +1302,7 @@ public func frag(vf: v2f)
             jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
 
             // Clear frame buffer, (TODO: Only clear depth)
-            jegl_clear_framebuffer(nullptr);
+            jegl_clear_framebuffer_depth(nullptr);
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();
@@ -1918,6 +1918,163 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                     frame_animation.currnet_state.current_frame_index = next_frame_index;
                                     frame_animation.currnet_state.next_update_time =
                                         _fixed_time + active_animation_frames->v.frames[frame_animation.currnet_state.current_frame_index].m_frame_time - delta_time_between_frams;
+                                }
+
+                                auto& updating_frame = active_animation_frames->v.frames[frame_animation.currnet_state.current_frame_index];
+
+                                if (frame_animation.animations.m_entity_cache != e)
+                                {
+                                    // 更新组件缓存等数据
+                                    frame_animation.animations.m_entity_cache = e;
+
+                                    for (auto& cdata : updating_frame.m_component_data)
+                                    {
+                                        auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type);
+                                        if (component_addr == nullptr)
+                                            // 没有这个组件，忽略之
+                                            continue;
+
+                                        auto* member_info = cdata.m_component_type->find_member_by_name(cdata.m_member_name.c_str());
+                                        auto* member_addr = (void*)(member_info->m_member_offset + (intptr_t)component_addr);
+
+                                        // 在这里做好缓存和检查，不要每次都重新获取组件地址和检查类型
+                                        cdata.m_member_addr_cache = member_addr;
+
+                                        switch (cdata.m_member_value.m_type)
+                                        {
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::INT:
+                                            if (member_info->m_member_type != jeecs::typing::type_info::of<int>(nullptr))
+                                            {
+                                                jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
+                                                    cdata.m_component_type->m_typename,
+                                                    cdata.m_member_name.c_str(),
+                                                    member_info->m_member_type->m_typename);
+                                                cdata.m_member_addr_cache = nullptr;
+                                            }
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::FLOAT:
+                                            if (member_info->m_member_type != jeecs::typing::type_info::of<float>(nullptr))
+                                            {
+                                                jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
+                                                    cdata.m_component_type->m_typename,
+                                                    cdata.m_member_name.c_str(),
+                                                    member_info->m_member_type->m_typename);
+                                                cdata.m_member_addr_cache = nullptr;
+                                            }
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC2:
+                                            if (member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>(nullptr))
+                                            {
+                                                jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
+                                                    cdata.m_component_type->m_typename,
+                                                    cdata.m_member_name.c_str(),
+                                                    member_info->m_member_type->m_typename);
+                                                cdata.m_member_addr_cache = nullptr;
+                                            }
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC3:
+                                            if (member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>(nullptr))
+                                            {
+                                                jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
+                                                    cdata.m_component_type->m_typename,
+                                                    cdata.m_member_name.c_str(),
+                                                    member_info->m_member_type->m_typename);
+                                                cdata.m_member_addr_cache = nullptr;
+                                            }
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC4:
+                                            if (member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>(nullptr))
+                                            {
+                                                jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
+                                                    cdata.m_component_type->m_typename,
+                                                    cdata.m_member_name.c_str(),
+                                                    member_info->m_member_type->m_typename);
+                                                cdata.m_member_addr_cache = nullptr;
+                                            }
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::QUAT4:
+                                            if (member_info->m_member_type != jeecs::typing::type_info::of<math::quat>(nullptr))
+                                            {
+                                                jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
+                                                    cdata.m_component_type->m_typename,
+                                                    cdata.m_member_name.c_str(),
+                                                    member_info->m_member_type->m_typename);
+                                                cdata.m_member_addr_cache = nullptr;
+                                            }
+                                            break;
+                                        default:
+                                            jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
+                                                (int)cdata.m_member_value.m_type,
+                                                cdata.m_component_type->m_typename,
+                                                cdata.m_member_name.c_str());
+                                            cdata.m_member_addr_cache = nullptr;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                for (auto& cdata: updating_frame.m_component_data)
+                                {
+                                    if (cdata.m_member_addr_cache == nullptr)
+                                        continue; // Invalid! skip this component.
+
+                                    switch (cdata.m_member_value.m_type)
+                                    {
+                                    case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::INT:
+                                        *(int*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.i32;
+                                        break;
+                                    case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::FLOAT:
+                                        *(float*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.f32;
+                                        break;
+                                    case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC2:
+                                        *(math::vec2*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v2;
+                                        break;
+                                    case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC3:
+                                        *(math::vec3*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v3;
+                                        break;
+                                    case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC4:
+                                        *(math::vec4*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v4;
+                                        break;
+                                    case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::QUAT4:
+                                        *(math::quat*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.q4;
+                                        break;
+                                    default:
+                                        jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.", 
+                                            (int)cdata.m_member_value.m_type,
+                                            cdata.m_component_type->m_typename,
+                                            cdata.m_member_name.c_str());
+                                        break;
+                                    }
+                                }
+
+                                if (shaders != nullptr)
+                                {
+                                    for (auto& udata : updating_frame.m_uniform_data)
+                                    {
+                                        switch (udata.m_uniform_value.m_type)
+                                        {
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::INT:
+                                            shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.i32);
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::FLOAT:
+                                            shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.f32);
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC2:
+                                            shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.v2);
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC3:
+                                            shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.v3);
+                                            break;
+                                        case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC4:
+                                            shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.v4);
+                                            break;
+                                        default:
+                                            jeecs::debug::logerr("Bad animation data type(%d) when trying set data of uniform variable '%s', please check.",
+                                                (int)udata.m_uniform_value.m_type,
+                                                udata.m_uniform_name.c_str());
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }
