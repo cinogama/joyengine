@@ -260,22 +260,36 @@ namespace editor::gui
         func get_open_method(self: PathInfo)
         {
             static let registed_open_method = {
-                [".JEWORLD"] = 
-                    \p: PathInfo, proj: Project = 
+                [".jeworld"] = 
+                    \p: PathInfo, context: EditorContext = 
                         ow->has
-                        ? ow =>> \w = proj->reset_editing_world(w)->error;
+                        ? ow =>> \w = context->get_project->reset_editing_world(w)->error;
                         | option::value("无法加载世界")                      
-                        where ow = proj->load_world(p.path)
+                        where ow = context->get_project->load_world(p.path)
                     ;,
+                [".jeanim4"] = 
+                    func(p: PathInfo, context: EditorContext)
+                    {
+                        match (animation2d::AnimationContext::open(p.path))
+                        {
+                        ok(ctx)?
+                            {
+                                animation2d::show(context, ctx);
+                                return option::none;
+                            }
+                        err(_)?
+                            return option::value(F"无法打开和编辑帧动画文件：{p.path}");
+                        }
+                    },
             };
 
             return registed_open_method
-                ->  get(self.externname->upper)
+                ->  get(self.externname->lower)
                 ->  valor(
-                        \proj, _ = result == 0 
+                        \p, _ = result == 0 
                             ? option::none
-                            | option::value(F"文件 '{proj.path}' 打开失败({result})")
-                            where result = std::shell(proj.path->tostring())
+                            | option::value(F"文件 '{p.path}' 打开失败({result})")
+                            where result = std::shell(p.path->tostring())
                         ;
                     );
         }
@@ -944,7 +958,7 @@ namespace $$MODULE_NAME$$
                     | action == Action::DoubleClick ? 
                         (item
                             ->indir(\_ = set_current_work_path(item.path);)
-                            ->infile(\ = do item->get_open_method()(item, context->get_project)
+                            ->infile(\ = do item->get_open_method()(item, context)
                                         ->> \err = jeapi::gui::form::errmsg("失败", F"打开文件失败:\n{err}");
                                     ;)
                         ): void

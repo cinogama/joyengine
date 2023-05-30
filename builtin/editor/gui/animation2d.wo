@@ -21,15 +21,43 @@ namespace editor::gui::animation2d
         VEC4((real, real, real, real)),
         QUAT4((real, real, real, real)),
     }
+    namespace DataValue
+    {
+        func tostring(self: DataValue)
+        {
+            match (self)
+            {
+            INT(i)? return i: string;
+            FLOAT(r)? return r: string;
+            VEC2((x, y))? return F"({x}, {y})";
+            VEC3((x, y, z))? return F"({x}, {y}, {z})";
+            VEC4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
+            QUAT4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
+            }
+        }
+    }
+
     using FrameComponentData = struct{
         m_component_name: mut string,
         m_member_name: mut string,
         m_value: mut DataValue,
-    };
+    }
+    {
+        func tostring(self: FrameComponentData)
+        {
+            return F"{self.m_component_name}::{self.m_member_name}={self.m_value->tostring}";
+        }
+    }
     using FrameUniformData = struct{
         m_uniform_name: mut string,
         m_value: mut DataValue,
-    };
+    }
+    {
+        func tostring(self: FrameUniformData)
+        {
+            return F"{self.m_uniform_name}={self.m_value->tostring}";
+        }
+    }
     using Animation2dFrameData = struct{
         m_component_dats: vec<FrameComponentData>,
         m_uniform_dats: vec<FrameUniformData>,
@@ -38,9 +66,40 @@ namespace editor::gui::animation2d
     using AnimationActionData = struct{
         m_frames: vec<Animation2dFrameData>,
     };
+    union SelectedComponentOrUniformData
+    {
+        ComponentIndex(int),
+        UniformIndex(int),
+        None,
+    }
+    namespace SelectedComponentOrUniformData
+    {
+        func is_selected_component_idx(self: SelectedComponentOrUniformData, id: int)
+        {
+            match (self)
+            {
+            ComponentIndex(idx)? return idx == id;
+            _? return false;
+            }
+        }
+        func is_selected_uniform_idx(self: SelectedComponentOrUniformData, id: int)
+        {
+            match (self)
+            {
+            UniformIndex(idx)? return idx == id;
+            _? return false;
+            }
+        }
+    }
+
     using AnimationContext = struct{
         m_animations: map<string, AnimationActionData>,
         m_path: filesys::path_t,
+
+        // 下面这些是编辑中状态信息
+        m_selected_action_name: mut string,
+        m_selected_frame: mut int,
+        m_selected_c_or_u_data: mut SelectedComponentOrUniformData,
     }
     {
         public func init(path: filesys::path_t)
@@ -48,7 +107,13 @@ namespace editor::gui::animation2d
             if (filesys::exist(path))
                 return false;
 
-            return AnimationContext{m_animations = {}mut, m_path = path}->save();
+            return AnimationContext{
+                    m_animations = {}mut, 
+                    m_path = path, 
+                    m_selected_action_name = mut "",
+                    m_selected_frame = mut -1,
+                    m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
+                }->save();
         }
         public func open(path: filesys::path_t)
         {
@@ -57,6 +122,9 @@ namespace editor::gui::animation2d
             let self = AnimationContext{
                 m_animations = {}mut,
                 m_path = path,
+                m_selected_action_name = mut "",
+                m_selected_frame = mut -1,
+                m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
             };
 
             func read_typed_value(bufdata: buffer::builder)
@@ -297,5 +365,230 @@ namespace editor::gui::animation2d
             // save 函数结束
             return filesys::writeall(self.m_path, result as buffer: string);
         }
+    }
+    func _animation_edit_form(context: EditorContext, animation_context: AnimationContext)
+    {
+        using je::gui;
+
+        let mut open = BeginAttrOpen(F"2D帧动画编辑器 {animation_context.m_path}", 
+            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+            + WindowsAttribute::ImGuiWindowFlags_MenuBar);
+
+        if (BeginMenuBar())
+        {
+            if (BeginMenu("编辑"))
+            {
+                if (MenuItem("新建动画"))
+                {
+                    jeapi::gui::form::input("新建动画", "请输入动画名称", "NewAction", 
+                        func(name)
+                        {
+                            if (animation_context.m_animations->contain(name))
+                                jeapi::gui::form::errmsg("无法创建动画", F"名为{name}的动画已经存在");
+                            if (name == "")
+                                jeapi::gui::form::errmsg("无法创建动画", "动画名不能为空");
+
+                            animation_context.m_animations->set(name, AnimationActionData{m_frames = []mut});
+                        });
+                }
+                Separator();
+                if (MenuItem("保存"))
+                {
+                    if (animation_context->save())
+                        jeapi::gui::form::msg("保存动画成功", F"动画已经保存到{animation_context.m_path}");
+                    else
+                        jeapi::gui::form::msg("保存动画失败", F"发生了一些错误，动画未能成功保存");
+                }
+                EndMenu();
+            }
+            EndMenuBar();
+        }
+
+        BeginGroup();
+        Text("动画");
+        if (BeginListBox("##action_list", 200., 600.))
+        {
+            for (let action_name, action_data : animation_context.m_animations)
+            {
+                if (SelectableSelected(action_name, 
+                    animation_context.m_selected_action_name == action_name))
+                    animation_context.m_selected_action_name = action_name;
+
+                if (BeginPopupContextItem())
+                {
+                    if (MenuItem("新建帧"))
+                    {
+                        animation_context.m_selected_action_name = action_name;
+                        action_data.m_frames->add(Animation2dFrameData{
+                            m_time = mut 0.1,
+                            m_component_dats = []mut,
+                            m_uniform_dats = []mut,
+                        });
+                    }
+                    if (MenuItem("重命名"))
+                    {
+                        jeapi::gui::form::input("重命名动画", "请输入动画的新名称", action_name, 
+                            func(newname)
+                            {
+                                if (newname != action_name)
+                                {
+                                    if (animation_context.m_animations->contain(newname))
+                                        jeapi::gui::form::errmsg("无法创建动画", F"名为{newname}的动画已经存在");
+                                    if (newname == "")
+                                        jeapi::gui::form::errmsg("无法创建动画", "动画名不能为空");
+
+                                    assert(animation_context.m_animations->remove(action_name));
+                                    animation_context.m_animations->set(newname, action_data);
+                                }
+                            });
+                    }
+                    if (MenuItem("删除"))
+                    {
+                        jeapi::gui::form::ask("是否删除动画", F"确认要删除动画{action_name}吗？", 
+                            func(ok)
+                            {
+                                if (ok)
+                                    do animation_context.m_animations->remove(action_name);
+                            });
+                    }
+                    EndPopup();
+                }
+            }
+            EndListBox();
+        }
+        EndGroup();
+        SameLine();
+
+        BeginGroup();
+        Text("帧");
+
+        let selected_animation = animation_context.m_animations->get(animation_context.m_selected_action_name);
+
+        if (BeginListBox("##frame_list", 50., 600.))
+        {
+            match (selected_animation)
+            {
+            value(animation)?
+                {
+                    for (let mut i = 0; i < animation.m_frames->len; i += 1)
+                    {
+                        if (SelectableSelected(i: string, animation_context.m_selected_frame == i))
+                            animation_context.m_selected_frame = i;
+
+                        if (BeginPopupContextItem())
+                        {
+                            if (MenuItem("新建组件数据"))
+                            {
+                                
+                            }
+                            if (MenuItem("新建着色器变量数据"))
+                            {
+                                
+                            }
+                            Separator();
+                            if (MenuItem("删除帧"))
+                            {
+                                jeapi::gui::form::ask("是否删除帧", F"确认要删除帧{i}吗？", 
+                                    func(ok)
+                                    {
+                                        if (ok)
+                                            do animation.m_frames->remove(i);
+                                    });
+                            }
+                            EndPopup();
+                        }
+                    }
+                }
+            none?;
+            }
+            EndListBox();
+        }
+        EndGroup();
+        SameLine();
+
+        let selected_frame = selected_animation=>>\a = a.m_frames->get(animation_context.m_selected_frame);;
+        BeginGroup();
+            Text("帧时间");
+            SameLine();
+            do InputFloat("##frame_time", selected_frame->>\f = f.m_time;->valor(0.))
+                ->> \nv = selected_frame
+                    ->> \f = f.m_time = nv;
+                    ;
+                ;
+
+            BeginGroup();
+                Text("组件数据");
+                if (BeginListBox("##component_data", 400., 400.))
+                {
+                    match (selected_frame)
+                    {
+                    value(f)?
+                        for (let cindex, cdata: f.m_component_dats)
+                        {
+                            if (SelectableSelected(cdata->tostring(), 
+                                animation_context.m_selected_c_or_u_data->is_selected_component_idx(cindex)))
+                                animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::ComponentIndex(cindex);
+                            if (BeginPopupContextItem())
+                            {
+                                if (MenuItem("删除"))
+                                {
+                                    jeapi::gui::form::ask("是否删除组件数据", F"确认要删除{cdata->tostring}吗？", 
+                                    func(ok)
+                                    {
+                                        if (ok)
+                                            do f.m_component_dats->remove(cindex);
+                                    });
+                                }
+                                EndPopup();
+                            }
+                        }
+                    none?;
+                    }
+                    EndListBox();
+                }
+
+            EndGroup();
+            SameLine();
+            BeginGroup();
+                Text("着色器变量");
+                if (BeginListBox("##uniform_data", 400., 400.))
+                {
+                    match (selected_frame)
+                    {
+                    value(f)?
+                        for (let uindex, udata: f.m_uniform_dats)
+                        {
+                            if (SelectableSelected(udata->tostring(), 
+                                animation_context.m_selected_c_or_u_data->is_selected_component_idx(uindex)))
+                                animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::ComponentIndex(uindex);
+                            if (BeginPopupContextItem())
+                            {
+                                if (MenuItem("删除"))
+                                {
+                                    jeapi::gui::form::ask("是否删除着色器变量数据", F"确认要删除{udata->tostring}吗？", 
+                                    func(ok)
+                                    {
+                                        if (ok)
+                                            do f.m_uniform_dats->remove(uindex);
+                                    });
+                                }
+                                EndPopup();
+                            }
+                        }
+                    none?;
+                    }
+                    EndListBox();
+                }
+            EndGroup();
+
+        EndGroup();
+
+        End();
+
+        return open;
+    }
+    public func show(context: EditorContext, animation_context: AnimationContext)
+    {
+        je::gui::launch(_animation_edit_form, (context, animation_context));
     }
 }
