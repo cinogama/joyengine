@@ -52,8 +52,7 @@ namespace editor::gui::edit_forms
         let show_uniforms = TreeNodeEx(F"{shader->path}##{index}", attribute);
         let mut shader_operation = show_shader_menu();
 
-        match (jeapi::gui::widget::accept_file_for_current_widget()
-            ->> \path = context->get_project->make_path_normalize(filesys::normalize(path));)
+        match (jeapi::gui::widget::accept_file_for_current_widget())
         {
         value(shader_path)?
             {
@@ -282,8 +281,7 @@ namespace editor::gui::edit_forms
                                 } // end show shader.
 
                                 TextDisabled("[拖动shader文件到此处添加新的pass]");
-                                match (jeapi::gui::widget::accept_file_for_current_widget()
-                                    ->> \path = context->get_project->make_path_normalize(filesys::normalize(path));)
+                                match (jeapi::gui::widget::accept_file_for_current_widget())
                                 {
                                 value(shader_path)?
                                     {

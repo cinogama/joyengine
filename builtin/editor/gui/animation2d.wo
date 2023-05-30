@@ -102,6 +102,10 @@ namespace editor::gui::animation2d
                 std::panic(F"Unknown type: {value_type}");
             }
 
+            // 0. 读取魔数
+            if (bufdata->readui32 != 0xA213A710)
+                return result::err(0: buffer::builder::errno_t);
+
             // 1. 读取动作数量
             let animation_count = bufdata->readi64;
             for (let mut i = 0; i < animation_count; i += 1)
@@ -163,11 +167,16 @@ namespace editor::gui::animation2d
                 }
             }
             // OK
+
+            return result::ok(self);
         }
         public func save(self: AnimationContext)
         {
             // 1. 保存动作数量
-            let mut result = buffer::createi64(self.m_animations->len);
+            let mut result = buffer::createui32(0xA213A710);
+
+            result = result->appendi64(self.m_animations->len);
+
             for (let action_name, action_data : self.m_animations)
             {
                 // 2. 保存当前动作的帧数量和名称

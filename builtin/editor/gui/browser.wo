@@ -860,8 +860,9 @@ namespace $$MODULE_NAME$$
             context_menu(option::value(path), context);
             if (BeginDragDropSource())
             {
-                do SetDragDropPayload("JEDITOR_FILE_PATH", path.path->tostring);
-                    Text(F"File: {path.path}");
+                let ppath = context->get_project()->make_path_normalize(path.path);
+                do SetDragDropPayload("JEDITOR_FILE_PATH", ppath);
+                    Text(F"File: {ppath}");
                 EndDragDropSource();
             }
 

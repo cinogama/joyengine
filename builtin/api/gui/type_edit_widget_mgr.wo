@@ -88,6 +88,15 @@ namespace jeapi::gui
         return option::none;
     });
 
+    register_custom_editor("file", func(dat: string)
+    {
+        using je::gui;
+
+        let display_file_path = dat == "" ? "<无>" | dat;
+        do Button(F"文件：{display_file_path}");
+        return jeapi::gui::widget::accept_file_for_current_widget();
+    });
+
     public func register_editor_for_native_value(type: je::typeinfo, method: TypedEditorMethod)
     {
         if (_registed_editor_methods->contain(type))

@@ -5359,12 +5359,12 @@ namespace jeecs
 
                 std::string to_string()const
                 {
-                    return m_path;
+                    return std::string("#file#") + m_path.c_str();
                 }
                 void parse(const std::string& str)
                 {
                     m_animations.clear();
-                    m_path = str;
+                    m_path = str.substr(6);
 
                     if (str != "")
                     {
@@ -5372,10 +5372,23 @@ namespace jeecs
                         if (file_handle == nullptr)
                         {
                             m_path = "";
-                            jeecs::debug::logerr("Cannot open animation file '%s'.", m_path.c_str());
+                            jeecs::debug::logerr("Cannot open animation file '%s'.", str.c_str());
+
+                            return;
                         }
                         else
                         {
+                            // 0. 读取魔数，验证文件是否是合法的动画文件
+                            uint32_t mg_number = 0;
+                            jeecs_file_read(&mg_number, sizeof(uint32_t), 1, file_handle);
+                            if (mg_number != 0xA213A710u)
+                            {
+                                m_path = "";
+                                jeecs::debug::logerr("Invalid animation file '%s'.", str.c_str());
+
+                                return;
+                            }
+                            
                             // 1. 读取动画组数量
                             uint64_t animation_count = 0;
                             jeecs_file_read(&animation_count, sizeof(uint64_t), 1, file_handle);
