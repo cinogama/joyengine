@@ -1928,14 +1928,15 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                     frame_animation.animations.m_entity_cache = e;
 
                                     for (auto& cdata : updating_frame.m_component_data)
-                                    {
+                                    {                                        
+                                        assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
+
                                         auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type);
                                         if (component_addr == nullptr)
                                             // 没有这个组件，忽略之
                                             continue;
 
-                                        auto* member_info = cdata.m_component_type->find_member_by_name(cdata.m_member_name.c_str());
-                                        auto* member_addr = (void*)(member_info->m_member_offset + (intptr_t)component_addr);
+                                        auto* member_addr = (void*)(cdata.m_member_info->m_member_offset + (intptr_t)component_addr);
 
                                         // 在这里做好缓存和检查，不要每次都重新获取组件地址和检查类型
                                         cdata.m_member_addr_cache = member_addr;
@@ -1943,62 +1944,62 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                         switch (cdata.m_member_value.m_type)
                                         {
                                         case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::INT:
-                                            if (member_info->m_member_type != jeecs::typing::type_info::of<int>(nullptr))
+                                            if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>(nullptr))
                                             {
                                                 jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
                                                     cdata.m_component_type->m_typename,
-                                                    cdata.m_member_name.c_str(),
-                                                    member_info->m_member_type->m_typename);
+                                                    cdata.m_member_info->m_member_name,
+                                                    cdata.m_member_info->m_member_type->m_typename);
                                                 cdata.m_member_addr_cache = nullptr;
                                             }
                                             break;
                                         case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::FLOAT:
-                                            if (member_info->m_member_type != jeecs::typing::type_info::of<float>(nullptr))
+                                            if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>(nullptr))
                                             {
                                                 jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
                                                     cdata.m_component_type->m_typename,
-                                                    cdata.m_member_name.c_str(),
-                                                    member_info->m_member_type->m_typename);
+                                                    cdata.m_member_info->m_member_name,
+                                                    cdata.m_member_info->m_member_type->m_typename);
                                                 cdata.m_member_addr_cache = nullptr;
                                             }
                                             break;
                                         case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC2:
-                                            if (member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>(nullptr))
+                                            if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>(nullptr))
                                             {
                                                 jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
                                                     cdata.m_component_type->m_typename,
-                                                    cdata.m_member_name.c_str(),
-                                                    member_info->m_member_type->m_typename);
+                                                    cdata.m_member_info->m_member_name,
+                                                    cdata.m_member_info->m_member_type->m_typename);
                                                 cdata.m_member_addr_cache = nullptr;
                                             }
                                             break;
                                         case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC3:
-                                            if (member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>(nullptr))
+                                            if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>(nullptr))
                                             {
                                                 jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
                                                     cdata.m_component_type->m_typename,
-                                                    cdata.m_member_name.c_str(),
-                                                    member_info->m_member_type->m_typename);
+                                                    cdata.m_member_info->m_member_name,
+                                                    cdata.m_member_info->m_member_type->m_typename);
                                                 cdata.m_member_addr_cache = nullptr;
                                             }
                                             break;
                                         case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::VEC4:
-                                            if (member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>(nullptr))
+                                            if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>(nullptr))
                                             {
                                                 jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
                                                     cdata.m_component_type->m_typename,
-                                                    cdata.m_member_name.c_str(),
-                                                    member_info->m_member_type->m_typename);
+                                                    cdata.m_member_info->m_member_name,
+                                                    cdata.m_member_info->m_member_type->m_typename);
                                                 cdata.m_member_addr_cache = nullptr;
                                             }
                                             break;
                                         case Animation2D::FrameAnimation::animation_data_set::frame_data::data_value::type::QUAT4:
-                                            if (member_info->m_member_type != jeecs::typing::type_info::of<math::quat>(nullptr))
+                                            if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>(nullptr))
                                             {
                                                 jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
                                                     cdata.m_component_type->m_typename,
-                                                    cdata.m_member_name.c_str(),
-                                                    member_info->m_member_type->m_typename);
+                                                    cdata.m_member_info->m_member_name,
+                                                    cdata.m_member_info->m_member_type->m_typename);
                                                 cdata.m_member_addr_cache = nullptr;
                                             }
                                             break;
@@ -2006,7 +2007,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                             jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
                                                 (int)cdata.m_member_value.m_type,
                                                 cdata.m_component_type->m_typename,
-                                                cdata.m_member_name.c_str());
+                                                cdata.m_member_info->m_member_name);
                                             cdata.m_member_addr_cache = nullptr;
                                             break;
                                         }
@@ -2042,7 +2043,7 @@ do{if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                         jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.", 
                                             (int)cdata.m_member_value.m_type,
                                             cdata.m_component_type->m_typename,
-                                            cdata.m_member_name.c_str());
+                                            cdata.m_member_info->m_member_name);
                                         break;
                                     }
                                 }

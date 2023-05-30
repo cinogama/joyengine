@@ -5331,9 +5331,9 @@ namespace jeecs
                     };
                     struct component_data
                     {
-                        const jeecs::typing::type_info* m_component_type;
-                        jeecs::string                   m_member_name;
-                        data_value                      m_member_value;
+                        const jeecs::typing::type_info*     m_component_type;
+                        const jeecs::typing::member_info*   m_member_info;
+                        data_value                          m_member_value;
 
                         void*                           m_member_addr_cache;
                     };
@@ -5446,10 +5446,13 @@ namespace jeecs
                                         {
                                             frame_data::component_data cdata;
                                             cdata.m_component_type = component_type;
-                                            cdata.m_member_name = member_name;
+                                            cdata.m_member_info = component_type->find_member_by_name(member_name.c_str());
                                             cdata.m_member_value = value;
 
-                                            frame_dat.m_component_data.push_back(cdata);
+                                            if (cdata.m_member_info == nullptr)
+                                                jeecs::debug::logerr("Component '%s' donot have member named '%s'.", component_name.c_str(), member_name.c_str());
+                                            else
+                                                frame_dat.m_component_data.push_back(cdata);
                                         }
                                     }
 

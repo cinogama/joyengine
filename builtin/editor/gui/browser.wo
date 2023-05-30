@@ -3,6 +3,7 @@ import pkg.filesystem;
 
 import woo.shell;
 import builtin.editor.cpp.main;
+import builtin.editor.gui.animation2d;
 
 using je::gui;
 
@@ -133,57 +134,31 @@ namespace editor::gui
             }, (create_context, )
         );
     }
-
-    union FileType
-    {
-        path(je::graphic::texture),
-        image(je::graphic::texture),
-        shader(je::graphic::texture),
-        others(je::graphic::texture),
-        cache(je::graphic::texture),
-        world(je::graphic::texture),
-        toolscript(je::graphic::texture),
-    }
-    namespace FileType
-    {
-        func get_texture(self: FileType)
-        {
-            match (self)
-            {
-                path(t)? return t;
-                image(t)? return t;
-                shader(t)? return t;
-                others(t)? return t;
-                cache(t)? return t;
-                world(t)? return t;
-                toolscript(t)? return t;
-            }
-        }
-    }
     
     // 支持作为图片格式的拓展名
     let IMAGE_FILE_EXTERN_NAMES = [".png", ".jpg", ".bmp", ".psd",];
 
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
-        [".png"] = FileType::image(je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val),
-        [".jpg"] = FileType::image(je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val),
-        [".bmp"] = FileType::image(je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val),
-        [".psd"] = FileType::image(je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val),
-        [".shader"] = FileType::shader(je::graphic::texture::load(F"!/builtin/icon/ShaderFile.png")->val),
-        [".jemodule4"] = FileType::path(je::graphic::texture::load(F"!/builtin/icon/CppProgram.png")->val),
-        [".jecache4"] = FileType::cache(je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val),
-        [".jeworld"] = FileType::world(je::graphic::texture::load(F"!/builtin/icon/World.png")->val),
-        [".jewo"] = FileType::world(je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val),
+        [".png"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
+        [".jpg"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
+        [".bmp"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
+        [".psd"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
+        [".shader"] = je::graphic::texture::load(F"!/builtin/icon/ShaderFile.png")->val,
+        [".jemodule4"] = je::graphic::texture::load(F"!/builtin/icon/CppProgram.png")->val,
+        [".jecache4"] = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val,
+        [".jeworld"] = je::graphic::texture::load(F"!/builtin/icon/World.png")->val,
+        [".jewo"] = je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val,
+        [".jeanim4"] = je::graphic::texture::load(F"!/builtin/icon/AnimationFile.png")->val,
     };
 
     // 根据文件拓展名返回文件的类型
-    private func get_file_icon_by_extern_name(_path: PathInfo)=> FileType
+    private func get_file_icon_by_extern_name(_path: PathInfo)
     {
         static let default_path_icon 
-            = FileType::path(je::graphic::texture::load(F"!/builtin/icon/FilePath.png")->val);
+            = je::graphic::texture::load(F"!/builtin/icon/FilePath.png")->val;
         static let default_file_icon 
-            = FileType::others(je::graphic::texture::load(F"!/builtin/icon/File.png")->val);
+            = je::graphic::texture::load(F"!/builtin/icon/File.png")->val;
 
         let icon = FILE_TYPE_ICONS->get(_path.externname);
 
@@ -434,6 +409,14 @@ namespace editor::gui
                                 ); // end of inputbox
                   
                     EndMenu();
+                }
+                if (MenuItem("2D帧动画"))
+                {
+                    jeapi::gui::form::input("新建2D帧动画", F"在{current_work_path}新建空文件", "NewAnimation",
+                        \filename: string = animation2d::AnimationContext::init(file_path)
+                            ? force_update()
+                            | jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法")
+                        where file_path = filesys::normalize(current_work_path) / F"{filename}.jeanim4";);
                 }
                 if (MenuItem(F"C++模块"))
                 {
@@ -871,7 +854,7 @@ namespace $$MODULE_NAME$$
     {
         BeginGroup();
             PushIDStr(path.path->tostring);
-                let clicked = ImageButtonSize(get_file_icon_by_extern_name(path)->get_texture, 32., 32.);
+                let clicked = ImageButtonSize(get_file_icon_by_extern_name(path), 32., 32.);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             context_menu(option::value(path), context);

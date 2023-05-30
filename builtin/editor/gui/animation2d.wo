@@ -1,0 +1,292 @@
+import pkg.buffer;
+import pkg.try;
+
+namespace editor::gui::animation2d
+{
+    enum DataValueType
+    {
+        INT,
+        FLOAT,
+        VEC2,
+        VEC3,
+        VEC4,
+        QUAT4,
+    }
+    union DataValue
+    {
+        INT(int),
+        FLOAT(real),
+        VEC2((real, real)),
+        VEC3((real, real, real)),
+        VEC4((real, real, real, real)),
+        QUAT4((real, real, real, real)),
+    }
+    using FrameComponentData = struct{
+        m_component_name: mut string,
+        m_member_name: mut string,
+        m_value: mut DataValue,
+    };
+    using FrameUniformData = struct{
+        m_uniform_name: mut string,
+        m_value: mut DataValue,
+    };
+    using Animation2dFrameData = struct{
+        m_component_dats: vec<FrameComponentData>,
+        m_uniform_dats: vec<FrameUniformData>,
+        m_time: mut real,
+    };
+    using AnimationActionData = struct{
+        m_frames: vec<Animation2dFrameData>,
+    };
+    using AnimationContext = struct{
+        m_animations: map<string, AnimationActionData>,
+        m_path: filesys::path_t,
+    }
+    {
+        public func init(path: filesys::path_t)
+        {
+            if (filesys::exist(path))
+                return false;
+
+            return AnimationContext{m_animations = {}mut, m_path = path}->save();
+        }
+        public func open(path: filesys::path_t)
+        {
+            try! bufdata = buffer::builder::fromfile(path->tostring, 0, -1);
+
+            let self = AnimationContext{
+                m_animations = {}mut,
+                m_path = path,
+            };
+
+            func read_typed_value(bufdata: buffer::builder)
+            {
+                let value_type = bufdata->readui8(): DataValueType;
+                if (value_type == DataValueType::INT)
+                    return DataValue::INT(bufdata->readi32());
+                else if (value_type == DataValueType::FLOAT)
+                    return DataValue::FLOAT(bufdata->readf32());
+                else if (value_type == DataValueType::VEC2)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    
+                    return DataValue::VEC2((x, y));
+                }
+                else if (value_type == DataValueType::VEC3)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+
+                    return DataValue::VEC3((x, y, z));
+                }
+                else if (value_type == DataValueType::VEC4)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+                    let w = bufdata->readf32();
+                    
+                    return DataValue::VEC4((x, y, z, w));
+                }
+                else if (value_type == DataValueType::QUAT4)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+                    let w = bufdata->readf32();
+                    
+                    return DataValue::QUAT4((x, y, z, w));
+                }
+                std::panic(F"Unknown type: {value_type}");
+            }
+
+            // 1. 读取动作数量
+            let animation_count = bufdata->readi64;
+            for (let mut i = 0; i < animation_count; i += 1)
+            {
+                // 2. 读取当前动作的帧数量和名称
+                let frame_count = bufdata->readi64;
+                let frame_name_len = bufdata->readi64;
+                let frame_name = bufdata->readbuffer(frame_name_len) as buffer: string;
+
+                let frames = AnimationActionData{m_frames = []mut};
+                self.m_animations->set(frame_name, frames);
+
+                for (let mut j = 0; j < frame_count; j += 1)
+                {
+                    // 3. 读取一帧的持续时间，以及组件数据和一致变量数据
+                    let time = bufdata->readf32();
+                    
+                    let frame_data = Animation2dFrameData{
+                        m_time = mut time,
+                        m_component_dats = []mut,
+                        m_uniform_dats = []mut,
+                    };
+
+                    let component_data_count = bufdata->readi64();
+                    for (let mut k = 0; k < component_data_count; k += 1)
+                    {
+                        // 4. 读取帧组件数据
+                        let component_name_len = bufdata->readi64();
+                        let component_name = bufdata->readbuffer(component_name_len) as buffer: string;
+
+                        let member_name_len = bufdata->readi64();
+                        let member_name = bufdata->readbuffer(component_name_len) as buffer: string;
+
+                        let value = read_typed_value(bufdata);
+                        
+                        frame_data.m_component_dats->add(FrameComponentData{
+                            m_component_name = mut component_name,
+                            m_member_name = mut member_name,
+                            m_value = mut value,
+                        });
+                    }
+
+                    let uniform_data_count = bufdata->readi64();
+                    for (let mut k = 0; k < component_data_count; k += 1)
+                    {
+                        // 5. 读取一致变量数据
+                        let uniform_name_len = bufdata->readi64();
+                        let uniform_name = bufdata->readbuffer(uniform_name_len) as buffer: string;
+
+                        let value = read_typed_value(bufdata);
+
+                        frame_data.m_uniform_dats->add(FrameUniformData{
+                            m_uniform_name = mut uniform_name,
+                            m_value = mut value,
+                        });
+                    }
+
+                    frames.m_frames->add(frame_data);
+                }
+            }
+            // OK
+        }
+        public func save(self: AnimationContext)
+        {
+            // 1. 保存动作数量
+            let mut result = buffer::createi64(self.m_animations->len);
+            for (let action_name, action_data : self.m_animations)
+            {
+                // 2. 保存当前动作的帧数量和名称
+                result = result
+                    ->appendi64(action_data.m_frames->len)
+                    ->appendi64(action_name->bytelen)
+                    + action_name as string : buffer;
+
+                for (let _, frame: action_data.m_frames)
+                {
+                    // 3. 保存一帧的持续时间，以及组件数据和一致变量数据
+                    result = result->appendf32(frame.m_time);
+
+                    result = result->appendi64(frame.m_component_dats->len);
+                    for (let _, cdata : frame.m_component_dats)
+                    {
+                        result = result->appendi64(cdata.m_component_name->bytelen)
+                            + cdata.m_component_name as string: buffer;
+                        result = result->appendi64(cdata.m_member_name->bytelen)
+                            + cdata.m_member_name as string: buffer;
+                        
+                        match (cdata.m_value)
+                        {
+                        INT(n)?
+                            {
+                                result = result->appendui8(DataValueType::INT : int);
+                                result = result->appendi32(n);
+                            }
+                        FLOAT(x)?
+                            {
+                                result = result->appendui8(DataValueType::FLOAT : int);
+                                result = result->appendf32(x);
+                            }
+                        VEC2((x, y))?
+                            {
+                                result = result->appendui8(DataValueType::VEC2 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                            }
+                        VEC3((x, y, z))?
+                            {
+                                result = result->appendui8(DataValueType::VEC3 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                            }
+                        VEC4((x, y, z, w))?
+                            {
+                                result = result->appendui8(DataValueType::VEC4 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                                result = result->appendf32(w);
+                            }
+                        QUAT4((x, y, z, w))?
+                            {
+                                result = result->appendui8(DataValueType::QUAT4 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                                result = result->appendf32(w);
+                            }
+                        }
+                    }
+
+                    result = result->appendi64(frame.m_uniform_dats->len);
+                    for (let _, udata : frame.m_uniform_dats)
+                    {
+                        result = result->appendi64(udata.m_uniform_name->bytelen)
+                            + udata.m_uniform_name as string: buffer;
+
+                        match (udata.m_value)
+                        {
+                        INT(n)?
+                            {
+                                result = result->appendui8(DataValueType::INT : int);
+                                result = result->appendi32(n);
+                            }
+                        FLOAT(x)?
+                            {
+                                result = result->appendui8(DataValueType::FLOAT : int);
+                                result = result->appendf32(x);
+                            }
+                        VEC2((x, y))?
+                            {
+                                result = result->appendui8(DataValueType::VEC2 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                            }
+                        VEC3((x, y, z))?
+                            {
+                                result = result->appendui8(DataValueType::VEC3 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                            }
+                        VEC4((x, y, z, w))?
+                            {
+                                result = result->appendui8(DataValueType::VEC4 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                                result = result->appendf32(w);
+                            }
+                        QUAT4((x, y, z, w))?
+                            {
+                                result = result->appendui8(DataValueType::QUAT4 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                                result = result->appendf32(w);
+                            }
+                        }
+                    }
+                }
+
+            }
+            // save 函数结束
+            return filesys::writeall(self.m_path, result as buffer: string);
+        }
+    }
+}
