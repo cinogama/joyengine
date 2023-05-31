@@ -40,7 +40,6 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::Editor::Anchor>("Editor::Anchor");
     jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
     jeecs::typing::type_info::of<jeecs::Editor::Invisable>("Editor::Invisable");
-    jeecs::typing::type_info::of<jeecs::Editor::EditorLife>("Editor::EditorLife");
     jeecs::typing::type_info::of<jeecs::Editor::EntityMover>("Editor::EntityMover");
     jeecs::typing::type_info::of<jeecs::Editor::EntityMoverRoot>("Editor::EntityMoverRoot");
     jeecs::typing::type_info::of<jeecs::Editor::BadShadersUniform>("Editor::BadShadersUniform");

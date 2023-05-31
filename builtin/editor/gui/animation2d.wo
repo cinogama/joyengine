@@ -470,7 +470,7 @@ namespace editor::gui::animation2d
             {
             value(animation)?
                 {
-                    for (let mut i = 0; i < animation.m_frames->len; i += 1)
+                    for (let i, frame_data : animation.m_frames)
                     {
                         if (SelectableSelected(i: string, animation_context.m_selected_frame == i))
                             animation_context.m_selected_frame = i;
@@ -479,11 +479,102 @@ namespace editor::gui::animation2d
                         {
                             if (MenuItem("新建组件数据"))
                             {
-                                
+                                let all_components = je::typeinfo::editor::get_all_components_types()
+                                    -> forall(\t = ! t->name()->beginwith("Editor::");)
+                                    -> std::sort(\at, bt = at->name() < bt->name();)
+                                    ;
+
+                                let selecting_id = mutable::create(0);
+                                let selecting_member_id = mutable::create(0);
+                                let editing_value = mutable::create(DataValue::INT(0));
+                                let editing_value_type = mutable::create(je::typeinfo::int);
+
+                                launch(func(){
+                                    let mut open = BeginAttrOpen(F"添加组件数据 {animation_context.m_path}##{JobID()}", 
+                                        WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+                                    do Combo("组件", all_components->>\t = t->name();, selecting_id->get)
+                                        ->> \nid = do selecting_id->set(nid);
+                                        ;
+
+                                    let members = all_components->get(selecting_id->get)
+                                        ->> \t = t->members;
+                                        ->  valor([]);
+
+                                    SameLine();
+
+                                    do Combo("成员", members->>\nametype = nametype[1]->name + " " + nametype[0];, selecting_member_id->get)
+                                        ->> \ nid = do selecting_member_id->set(nid);
+                                        ;
+
+                                    match (members->get(selecting_member_id->get))
+                                    {
+                                    value((member_name, member_type))?
+                                        if (member_type != je::typeinfo::int &&
+                                            member_type != je::typeinfo::float &&
+                                            member_type != je::typeinfo::float2 &&
+                                            member_type != je::typeinfo::float3 &&
+                                            member_type != je::typeinfo::float4 &&
+                                            member_type != je::typeinfo::quat)
+                                            TextDisabled(F"不能作为动画控制值，需要为int、float、vec2、vec3、vec4或quat，但是这里是{member_type->name}");
+                                        else 
+                                        {
+                                            if (editing_value_type->get != member_type)
+                                            {
+                                                do editing_value_type->set(member_type);
+
+                                                if (member_type == je::typeinfo::int)
+                                                    editing_value->set(DataValue::INT(0));
+                                                else if (member_type == je::typeinfo::float)
+                                                    editing_value->set(DataValue::FLOAT(0.));
+                                                else if (member_type == je::typeinfo::float2)
+                                                    editing_value->set(DataValue::VEC2((0., 0.)));
+                                                else if (member_type == je::typeinfo::float3)
+                                                    editing_value->set(DataValue::VEC3((0., 0., 0.)));
+                                                else if (member_type == je::typeinfo::float4)
+                                                    editing_value->set(DataValue::VEC4((0., 0., 0., 0.)));
+                                                else if (member_type == je::typeinfo::quat)
+                                                    editing_value->set(DataValue::QUAT4((0., 0., 0., 0.)));
+                                            }
+
+                                            match (editing_value->get)
+                                            {
+                                            INT(n)?
+                                                do InputInt("值", n)->>\nv = do editing_value->set(INT(nv));;
+                                            FLOAT(x)?
+                                                do InputFloat("值", x)->>\nv = do editing_value->set(FLOAT(nv));;
+                                            VEC2((x, y))?
+                                                do InputFloat2("值", x, y)->>\nv = do editing_value->set(VEC2(nv));;
+                                            VEC3((x, y, z))?
+                                                do InputFloat3("值", x, y, z)->>\nv = do editing_value->set(VEC3(nv));;
+                                            VEC4((x, y, z, w))?
+                                                do InputFloat4("值", x, y, z, w)->>\nv = do editing_value->set(VEC4(nv));;
+                                            QUAT4((x, y, z, w))?
+                                                do InputFloat4("值", x, y, z, w)->>\nv = do editing_value->set(QUAT4(nv));;
+                                            }
+
+                                            if (Button("创建"))
+                                            {
+                                                frame_data.m_component_dats->add(FrameComponentData{
+                                                    m_component_name = mut all_components[selecting_id->get]->name(),
+                                                    m_member_name = mut member_name,
+                                                    m_value = mut editing_value->get,
+                                                });
+
+                                                open = false;
+                                            }
+                                        }
+                                    none?
+                                        TextDisabled("请选择组件和成员名");
+                                    }
+
+                                    End();
+                                    return open;
+                                }, ());
                             }
                             if (MenuItem("新建着色器变量数据"))
                             {
-                                
+                                 
                             }
                             Separator();
                             if (MenuItem("删除帧"))

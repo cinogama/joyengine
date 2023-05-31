@@ -48,10 +48,7 @@ namespace jeecs
         {
             bool init = false;
         };
-        struct EditorLife
-        {
-            int life;
-        };
+
         // Used for store uniform vars of failed-shader in entity. used for 'update' shaders
         struct BadShadersUniform
         {
@@ -255,12 +252,6 @@ namespace jeecs
                 _camera_rot = trans.world_rotation;
                 _camera_pos = trans.world_position;
             }
-        }
-
-        void DebugLifeEntity(game_entity entity, Editor::EditorLife& life)
-        {
-            if (life.life-- < 0)
-                entity.close();
         }
 
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
@@ -584,8 +575,6 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                         .exec(&DefaultEditorSystem::MoveWalker).contain<Editor::EditorWalker>().except<Camera::Projection>()
                         // Move walker(camera)
                         .exec(&DefaultEditorSystem::CameraWalker).contain<Editor::EditorWalker>()
-                        // Let life entity die.
-                        .exec(&DefaultEditorSystem::DebugLifeEntity)
                         // Select entity
                         .exec(&DefaultEditorSystem::SelectEntity).except<Editor::Invisable>()
                         // Create & create mover!

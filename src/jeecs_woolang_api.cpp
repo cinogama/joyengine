@@ -804,6 +804,27 @@ WO_API wo_api wojeapi_type_name(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, type->m_typename);
 }
 
+WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+
+    wo_value result = wo_push_arr(vm, 0);
+
+    auto* member_iter = type->m_member_types;
+    while (member_iter != nullptr)
+    {
+        wo_value v = wo_arr_add(result, nullptr);
+        wo_set_struct(v, 2);
+
+        wo_set_string(wo_struct_get(v, 0), member_iter->m_member_name);
+        wo_set_pointer(wo_struct_get(v, 1), (void*)member_iter->m_member_type);
+
+        member_iter = member_iter->m_next_member;
+    }
+
+    return wo_ret_val(vm, result);
+}
+
 WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
 {
     enum basic_type
@@ -1647,7 +1668,10 @@ namespace je
             INT, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
         }
         extern("libjoyecs", "wojeapi_type_basic_type")
-        private public func create(tid: basic_type)=> typeinfo;
+        private func create(tid: basic_type)=> typeinfo;
+
+        extern("libjoyecs", "wojeapi_type_members")
+        public func members(self: typeinfo)=> array<(string, typeinfo)>;
 
         public let int = typeinfo::create(basic_type::INT);
         public let bool = typeinfo::create(basic_type::BOOL);
