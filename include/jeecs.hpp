@@ -2907,15 +2907,12 @@ namespace jeecs
             return _m_delta_time;
         }
 
-#define PreUpdate PreUpdate
-#define Update Update
-#define LateUpdate LateUpdate
-#define CommitUpdate CommitUpdate
+#define PreUpdate       PreUpdate       // 读取 Graphic
+#define Update          Update          // 写入 Animation
+#define LateUpdate      LateUpdate      // 更新 Translation 
+#define CommitUpdate    CommitUpdate    // 提交 Physics
 
-        // void PreUpdate()         // 用于变更数据的任务，在Update之前执行，Graphic 和 Physics在此执行
-        // void Update()            // 用于变更数据的任务，Tickline在此执行
-        // void LateUpdate()        // 用于变更数据的任务，在Update之后执行, 
-        // void CommitUpdate()      // 用于数据最终提交的任务，Translation在此执行
+
         /*
         struct TranslationUpdater : game_system
         {
@@ -5113,6 +5110,10 @@ namespace jeecs
         struct Rigidbody
         {
             void* native_rigidbody = nullptr;
+            math::vec2  record_body_scale = math::vec2(0.f, 0.f);
+            float       record_density = 0.f;
+            float       record_friction = 0.f;
+            float       record_restitution = 0.f;
         };
         struct Mass
         {
@@ -5312,19 +5313,23 @@ namespace jeecs
                         data_value() = default;
                         data_value(const data_value& val)
                         {
+                            m_type = val.m_type;
                             memcpy(&m_value, &val.m_value, sizeof(value));
                         }
                         data_value(data_value&& val)
                         {
+                            m_type = val.m_type;
                             memcpy(&m_value, &val.m_value, sizeof(value));
                         }
                         data_value& operator = (const data_value& val)
                         {
+                            m_type = val.m_type;
                             memcpy(&m_value, &val.m_value, sizeof(value));
                             return *this;
                         }
                         data_value& operator = (data_value&& val)
                         {
+                            m_type = val.m_type;
                             memcpy(&m_value, &val.m_value, sizeof(value));
                             return *this;
                         }
@@ -5334,8 +5339,10 @@ namespace jeecs
                         const jeecs::typing::type_info*     m_component_type;
                         const jeecs::typing::member_info*   m_member_info;
                         data_value                          m_member_value;
+                        bool                                m_offset_mode;
 
-                        void*                           m_member_addr_cache;
+                        void*                               m_member_addr_cache;
+                        jeecs::game_entity                  m_entity_cache;
                     };
                     struct uniform_data
                     {
@@ -5355,7 +5362,6 @@ namespace jeecs
 
                 jeecs::map<jeecs::string, animation_data>  m_animations;
                 jeecs::string                              m_path;
-                jeecs::game_entity                         m_entity_cache = {};
 
                 std::string to_string()const
                 {
@@ -5385,7 +5391,7 @@ namespace jeecs
                             {
                                 m_path = "";
                                 jeecs::debug::logerr("Invalid animation file '%s'.", str.c_str());
-
+                                jeecs_file_close(file_handle);
                                 return;
                             }
                             
@@ -5430,6 +5436,8 @@ namespace jeecs
                                         std::string member_name(member_name_len, '\0');
                                         jeecs_file_read(member_name.data(), sizeof(char), member_name_len, file_handle);
 
+                                        uint8_t offset_mode = 0;
+                                        jeecs_file_read(&offset_mode, sizeof(offset_mode), 1, file_handle);
 
                                         frame_data::data_value value;
                                         jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
@@ -5461,6 +5469,9 @@ namespace jeecs
                                             cdata.m_component_type = component_type;
                                             cdata.m_member_info = component_type->find_member_by_name(member_name.c_str());
                                             cdata.m_member_value = value;
+                                            cdata.m_offset_mode = offset_mode != 0;
+                                            cdata.m_member_addr_cache = nullptr;
+                                            cdata.m_entity_cache = {};
 
                                             if (cdata.m_member_info == nullptr)
                                                 jeecs::debug::logerr("Component '%s' donot have member named '%s'.", component_name.c_str(), member_name.c_str());
@@ -5511,6 +5522,7 @@ namespace jeecs
                             }
 
                             // OK，读取完毕！
+                            jeecs_file_close(file_handle);
                         }
                     }
                 }
@@ -5544,11 +5556,13 @@ namespace jeecs
 
             animation_data_set  animations;
             animation_state     currnet_state;
+            bool                loop = false;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&FrameAnimation::animations, "animations");
                 typing::register_member(&FrameAnimation::currnet_state, "currnet_state");
+                typing::register_member(&FrameAnimation::loop, "loop");
             }
         };
     }

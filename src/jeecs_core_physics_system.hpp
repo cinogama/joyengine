@@ -69,30 +69,6 @@ namespace jeecs
 
             m_all_alive_bodys[rigidbody_instance] = m_simulate_round_count;
 
-            // 检查刚体内的动力学和变换属性，从组件同步到物理引擎
-            if (kinematics != nullptr)
-            {
-                if (check_if_need_update_vec2(rigidbody_instance->GetLinearVelocity(), kinematics->linear_velocity))
-                    rigidbody_instance->SetLinearVelocity({ kinematics->linear_velocity.x, kinematics->linear_velocity.y });
-                if (check_if_need_update_float(rigidbody_instance->GetAngularVelocity(), kinematics->angular_velocity))
-                    rigidbody_instance->SetAngularVelocity(kinematics->angular_velocity);
-
-                if (check_if_need_update_float(rigidbody_instance->GetLinearDamping(), kinematics->linear_damping))
-                    rigidbody_instance->SetLinearDamping(kinematics->linear_damping);
-                if (check_if_need_update_float(rigidbody_instance->GetAngularDamping(), kinematics->angular_damping))
-                    rigidbody_instance->SetAngularDamping(kinematics->angular_damping);
-                if (check_if_need_update_float(rigidbody_instance->GetGravityScale(), kinematics->gravity_scale))
-                    rigidbody_instance->SetAngularDamping(kinematics->gravity_scale);
-            }
-
-            if (check_if_need_update_vec2(rigidbody_instance->GetPosition(), math::vec2(translation.world_position.x, translation.world_position.y))
-                || check_if_need_update_float(rigidbody_instance->GetAngle() * math::RAD2DEG, translation.world_rotation.euler_angle().z))
-            {
-                rigidbody_instance->SetTransform(b2Vec2(translation.world_position.x, translation.world_position.y),
-                    translation.world_rotation.euler_angle().z / math::RAD2DEG);
-                rigidbody_instance->SetAwake(true);
-            }
-
             // 如果实体有 Physics2D::Bullet 组件，那么就适用高精度碰撞
             rigidbody_instance->SetBullet(bullet != nullptr);
 
@@ -112,10 +88,33 @@ namespace jeecs
             auto entity_scaled_size = rendshape_mesh_size
                 * math::vec2(translation.local_scale.x, translation.local_scale.y);
 
+            bool force_update_fixture = false;
+            if (entity_scaled_size != rigidbody.record_body_scale)
+            {
+                rigidbody.record_body_scale = entity_scaled_size;
+                force_update_fixture = true;
+            }
+            if (mass != nullptr && mass->density != rigidbody.record_density)
+            {
+                rigidbody.record_density = mass->density;
+                force_update_fixture = true;
+            }
+            if (friction != nullptr && friction->value != rigidbody.record_friction)
+            {
+                rigidbody.record_friction = friction->value;
+                force_update_fixture = true;
+            }
+            if (restitution!=nullptr && restitution->value != rigidbody.record_restitution)
+            {
+                rigidbody.record_restitution = restitution->value;
+                force_update_fixture = true;
+            }
+
             if (boxcollider != nullptr)
             {
                 if (old_rigidbody_fixture == nullptr
-                    || old_rigidbody_fixture != boxcollider->native_fixture)
+                    || old_rigidbody_fixture != boxcollider->native_fixture
+                    || force_update_fixture)
                 {
                     // 引擎暂时不支持一个实体有多个fixture，这里标记一下，移除旧的。
                     need_remove_old_fixture = true;
@@ -138,7 +137,8 @@ namespace jeecs
             else if (circlecollider != nullptr)
             {
                 if (old_rigidbody_fixture == nullptr
-                    || old_rigidbody_fixture != circlecollider->native_fixture)
+                    || old_rigidbody_fixture != circlecollider->native_fixture
+                    || force_update_fixture)
                 {
                     // 引擎暂时不支持一个实体有多个fixture，这里标记一下，移除旧的。
                     need_remove_old_fixture = true;
@@ -169,10 +169,31 @@ namespace jeecs
                     rigidbody_instance->SetType(b2_kinematicBody);
                 else
                     rigidbody_instance->SetType(b2_dynamicBody);
+
+                // 检查刚体内的动力学和变换属性，从组件同步到物理引擎
+                if (check_if_need_update_vec2(rigidbody_instance->GetLinearVelocity(), kinematics->linear_velocity))
+                    rigidbody_instance->SetLinearVelocity({ kinematics->linear_velocity.x, kinematics->linear_velocity.y });
+                if (check_if_need_update_float(rigidbody_instance->GetAngularVelocity(), kinematics->angular_velocity))
+                    rigidbody_instance->SetAngularVelocity(kinematics->angular_velocity);
+
+                if (check_if_need_update_float(rigidbody_instance->GetLinearDamping(), kinematics->linear_damping))
+                    rigidbody_instance->SetLinearDamping(kinematics->linear_damping);
+                if (check_if_need_update_float(rigidbody_instance->GetAngularDamping(), kinematics->angular_damping))
+                    rigidbody_instance->SetAngularDamping(kinematics->angular_damping);
+                if (check_if_need_update_float(rigidbody_instance->GetGravityScale(), kinematics->gravity_scale))
+                    rigidbody_instance->SetAngularDamping(kinematics->gravity_scale);
+            }
+
+            if (check_if_need_update_vec2(rigidbody_instance->GetPosition(), math::vec2(translation.world_position.x, translation.world_position.y))
+                || check_if_need_update_float(rigidbody_instance->GetAngle() * math::RAD2DEG, translation.world_rotation.euler_angle().z))
+            {
+                rigidbody_instance->SetTransform(b2Vec2(translation.world_position.x, translation.world_position.y),
+                    translation.world_rotation.euler_angle().z / math::RAD2DEG);
+                rigidbody_instance->SetAwake(true);
             }
         }
 
-        void PreUpdate()
+        void CommitUpdate()
         {
             b2BodyDef default_rigidbody_config;
 
@@ -183,7 +204,7 @@ namespace jeecs
                 .anyof<Physics2D::BoxCollider, Physics2D::CircleCollider>();
 
             // 物理引擎在此处进行物理解算
-            m_physics_world.Step(input::real_delta_timef(), 8, 3);
+            m_physics_world.Step(delta_time(), 8, 3);
 
             // TODO: 在此处将动力学数据更新到组件上
             select().exec(
@@ -222,8 +243,8 @@ namespace jeecs
 
             std::vector<b2Body*> _dead_bodys;
             // 这个变量名真恐怖...
-            
-            for (auto [body, round]: m_all_alive_bodys)
+
+            for (auto [body, round] : m_all_alive_bodys)
             {
                 if (round != m_simulate_round_count)
                     _dead_bodys.push_back(body);

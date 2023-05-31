@@ -110,7 +110,7 @@ namespace jeecs
             }
         }
 
-        void CommitUpdate()
+        void LateUpdate()
         {
             m_anchor_list.clear();
 

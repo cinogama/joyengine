@@ -40,12 +40,16 @@ namespace editor::gui::animation2d
     using FrameComponentData = struct{
         m_component_name: string,
         m_member_name: string,
+        m_offset_mode: mut bool,
         m_value: mut DataValue,
     }
     {
         func tostring(self: FrameComponentData)
         {
-            return F"{self.m_component_name}::{self.m_member_name}={self.m_value->tostring}";
+            if (self.m_offset_mode)
+                return F"{self.m_component_name}.{self.m_member_name}+={self.m_value->tostring}";
+            else
+                return F"{self.m_component_name}.{self.m_member_name}={self.m_value->tostring}";
         }
         func dup(self: FrameComponentData)
         {
@@ -53,6 +57,7 @@ namespace editor::gui::animation2d
                 m_component_name = self.m_component_name,
                 m_member_name = self.m_member_name,
                 m_value = mut self.m_value,
+                m_offset_mode = mut self.m_offset_mode,
             };
         }
     }
@@ -232,11 +237,14 @@ namespace editor::gui::animation2d
                         let member_name_len = bufdata->readi64();
                         let member_name = bufdata->readbuffer(member_name_len) as buffer: string;
 
+                        let offset_mode = bufdata->readui8() != 0;
+
                         let value = read_typed_value(bufdata);
                         
                         frame_data.m_component_dats->add(FrameComponentData{
                             m_component_name = component_name,
                             m_member_name = member_name,
+                            m_offset_mode = mut offset_mode,
                             m_value = mut value,
                         });
                     }
@@ -290,7 +298,7 @@ namespace editor::gui::animation2d
                             + cdata.m_component_name as string: buffer;
                         result = result->appendi64(cdata.m_member_name->bytelen)
                             + cdata.m_member_name as string: buffer;
-                        
+                        result = result->appendui8(cdata.m_offset_mode? 1 | 0);
                         match (cdata.m_value)
                         {
                         INT(n)?
@@ -398,6 +406,21 @@ namespace editor::gui::animation2d
         let mut open = BeginAttrOpen(F"2D帧动画编辑器 {animation_context.m_path}", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
             + WindowsAttribute::ImGuiWindowFlags_MenuBar);
+
+        if (! open)
+        {
+            jeapi::gui::form::ask("是否保存动画", F"是否将动画保存到{animation_context.m_path}",
+                func(ok)
+                {
+                    if (!ok)
+                        return;
+                        
+                    if (animation_context->save())
+                        jeapi::gui::form::msg("动画已保存", F"动画已保存到{animation_context.m_path}");
+                    else
+                        jeapi::gui::form::msg("动画保存失败", F"动画未能保存到{animation_context.m_path}");
+                });
+        }
 
         if (BeginMenuBar())
         {
@@ -513,6 +536,8 @@ namespace editor::gui::animation2d
                                 let selecting_member_id = mutable::create(0);
                                 let editing_value = mutable::create(DataValue::INT(0));
                                 let editing_value_type = mutable::create(je::typeinfo::int);
+                                let offset_mode = mutable::create(false);
+                                let for_all_frame = mutable::create(false);
 
                                 launch(func(){
                                     let mut open = BeginAttrOpen(F"添加组件数据 {animation_context.m_path}##{JobID()}", 
@@ -531,6 +556,9 @@ namespace editor::gui::animation2d
                                     do Combo("成员", members->>\nametype = nametype[1]->name + " " + nametype[0];, selecting_member_id->get)
                                         ->> \ nid = do selecting_member_id->set(nid);
                                         ;
+
+                                    do CheckBox("偏移模式", offset_mode->get)->>\nv = do offset_mode->set(nv);;
+                                    do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = do for_all_frame->set(nv);;
 
                                     match (members->get(selecting_member_id->get))
                                     {
@@ -580,11 +608,21 @@ namespace editor::gui::animation2d
 
                                             if (Button("创建"))
                                             {
-                                                frame_data.m_component_dats->add(FrameComponentData{
-                                                    m_component_name = all_components[selecting_id->get]->name(),
-                                                    m_member_name = member_name,
-                                                    m_value = mut editing_value->get,
-                                                });
+                                                if (for_all_frame->get)
+                                                    for (let _, per_frame_data : animation.m_frames)
+                                                        per_frame_data.m_component_dats->add(FrameComponentData{
+                                                            m_component_name = all_components[selecting_id->get]->name(),
+                                                            m_member_name = member_name,
+                                                            m_value = mut editing_value->get,
+                                                            m_offset_mode = mut offset_mode->get,
+                                                        });
+                                                else
+                                                    frame_data.m_component_dats->add(FrameComponentData{
+                                                        m_component_name = all_components[selecting_id->get]->name(),
+                                                        m_member_name = member_name,
+                                                        m_value = mut editing_value->get,
+                                                        m_offset_mode = mut offset_mode->get,
+                                                    });
 
                                                 open = false;
                                             }
@@ -608,6 +646,7 @@ namespace editor::gui::animation2d
                                     ("vec3", mut DataValue::VEC3((0., 0., 0.))),
                                     ("vec4", mut DataValue::VEC4((0., 0., 0., 0.))),
                                 ];
+                                let for_all_frame = mutable::create(false);
 
                                 launch(func(){
                                     let mut open = BeginAttrOpen(F"添加着色器变量数据 {animation_context.m_path}##{JobID()}", 
@@ -641,14 +680,23 @@ namespace editor::gui::animation2d
                                         do InputFloat4("值", x, y, z, w)->>\nv = uniform_types[uniform_type_selected->get()][1] = QUAT4(nv);;
                                     }
 
+                                    do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = do for_all_frame->set(nv);;
+
                                     if (uniform_name->get == "")
                                         TextDisabled("变量名不能为空");
                                     else if (Button("创建"))
                                     {
-                                        frame_data.m_uniform_dats->add(FrameUniformData{
-                                            m_uniform_name = uniform_name->get,
-                                            m_value = mut uniform_types[uniform_type_selected->get()][1],
-                                        });
+                                        if (for_all_frame->get)
+                                            for (let _, per_frame_data : animation.m_frames)
+                                                per_frame_data.m_uniform_dats->add(FrameUniformData{
+                                                    m_uniform_name = uniform_name->get,
+                                                    m_value = mut uniform_types[uniform_type_selected->get()][1],
+                                                });
+                                        else
+                                            frame_data.m_uniform_dats->add(FrameUniformData{
+                                                m_uniform_name = uniform_name->get,
+                                                m_value = mut uniform_types[uniform_type_selected->get()][1],
+                                            });
 
                                         open = false;
                                     }
@@ -663,6 +711,33 @@ namespace editor::gui::animation2d
                                 launch(func(){
                                     // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
                                     do animation.m_frames->insert(i + 1, frame_data->dup());
+                                    return false;
+                                }, ());
+                            }
+                            if (MenuItem("复制并插入到最后一帧"))
+                            {
+                                launch(func(){
+                                    // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
+                                    do animation.m_frames->add(frame_data->dup());
+                                    return false;
+                                }, ());
+                            }
+                            Separator();
+                            if (MenuItemEnabled("上移", i > 0))
+                            {
+                                launch(func(){
+                                    // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
+                                    do animation.m_frames->remove(i);
+                                    do animation.m_frames->insert(i - 1, frame_data);
+                                    return false;
+                                }, ());
+                            }
+                            if (MenuItemEnabled("下移", i + 1 < animation.m_frames->len))
+                            {
+                                launch(func(){
+                                    // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
+                                    do animation.m_frames->remove(i);
+                                    do animation.m_frames->insert(i + 1, frame_data);
                                     return false;
                                 }, ());
                             }
@@ -713,10 +788,20 @@ namespace editor::gui::animation2d
                             {
                                 if (MenuItem("删除"))
                                 {
-                                    jeapi::gui::form::ask("是否删除组件数据", F"确认要删除{cdata->tostring}吗？", 
+                                    jeapi::gui::form::ask("是否删除组件数据", F"是否要删除全部的{cdata->tostring}吗？\n选择是，删除动画中的所有该组件成员的值\n选择否，仅删除当前项", 
                                     func(ok)
                                     {
                                         if (ok)
+                                        {
+                                            for (let _, fm : selected_animation->val.m_frames)
+                                                fm.m_component_dats->swap(
+                                                    fm.m_component_dats->forall(
+                                                        \dcdata = dcdata.m_component_name != cdata.m_component_name
+                                                            || dcdata.m_member_name != cdata.m_member_name
+                                                        ;)
+                                                );
+                                        }
+                                        else
                                             do f.m_component_dats->remove(cindex);
                                     });
                                 }
@@ -746,10 +831,17 @@ namespace editor::gui::animation2d
                             {
                                 if (MenuItem("删除"))
                                 {
-                                    jeapi::gui::form::ask("是否删除着色器变量数据", F"确认要删除{udata->tostring}吗？", 
+                                    jeapi::gui::form::ask("是否删除着色器变量数据", F"确认要删除全部的{udata->tostring}吗？\n选择是，删除动画中的所有该变量的值\n选择否，仅删除当前项", 
                                     func(ok)
                                     {
                                         if (ok)
+                                            for (let _, fm : selected_animation->val.m_frames)
+                                                fm.m_uniform_dats->swap(
+                                                    fm.m_uniform_dats->forall(
+                                                        \dudata = dudata.m_uniform_name != udata.m_uniform_name
+                                                        ;)
+                                                );
+                                        else
                                             do f.m_uniform_dats->remove(uindex);
                                     });
                                 }
@@ -770,22 +862,24 @@ namespace editor::gui::animation2d
                 none?
                     animation_context.m_selected_c_or_u_data = None;
                 value(cdata)?
-                    match (cdata.m_value)
                     {
-                    INT(n)?
-                        do InputInt("值", n)->>\nv = cdata.m_value = INT(nv);;
-                    FLOAT(x)?
-                        do InputFloat("值", x)->>\nv = cdata.m_value = FLOAT(nv);;
-                    VEC2((x, y))?
-                        do InputFloat2("值", x, y)->>\nv = cdata.m_value = VEC2(nv);;
-                    VEC3((x, y, z))?
-                        do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = VEC3(nv);;
-                    VEC4((x, y, z, w))?
-                        do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = VEC4(nv);;
-                    QUAT4((x, y, z, w))?
-                        do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = QUAT4(nv);;
+                        match (cdata.m_value)
+                        {
+                        INT(n)?
+                            do InputInt("值", n)->>\nv = cdata.m_value = INT(nv);;
+                        FLOAT(x)?
+                            do InputFloat("值", x)->>\nv = cdata.m_value = FLOAT(nv);;
+                        VEC2((x, y))?
+                            do InputFloat2("值", x, y)->>\nv = cdata.m_value = VEC2(nv);;
+                        VEC3((x, y, z))?
+                            do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = VEC3(nv);;
+                        VEC4((x, y, z, w))?
+                            do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = VEC4(nv);;
+                        QUAT4((x, y, z, w))?
+                            do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = QUAT4(nv);;
+                        }
+                        do CheckBox("偏移模式", cdata.m_offset_mode)->>\nv = cdata.m_offset_mode = nv;;
                     }
-
                 }
             UniformIndex(id)?
                 match (selected_frame=>>\f = f.m_uniform_dats->get(id);)
