@@ -1059,6 +1059,9 @@ JE_API bool je_io_should_lock_mouse(int* x, int* y);
 JE_API void je_io_update_windowsize(int x, int y);
 JE_API bool je_io_should_update_windowsize(int* x, int* y);
 
+JE_API void je_io_update_windowtitle(const char* title);
+JE_API bool je_io_should_update_windowtitle(const char** title);
+
 // Library / Module loader
 JE_API void* je_module_load(const char* name, const char* path);
 JE_API void* je_module_func(void* lib, const char* funcname);

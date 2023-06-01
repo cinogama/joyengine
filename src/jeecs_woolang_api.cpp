@@ -694,9 +694,12 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t argc)
 {
     je_io_update_windowsize((int)wo_int(args + 0), (int)wo_int(args + 1));
-    auto winsz = jeecs::input::windowsize();
-    wo_set_int(args + 0, (wo_int_t)winsz.x);
-    wo_set_int(args + 1, (wo_int_t)winsz.y);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_input_update_window_title(wo_vm vm, wo_value args, size_t argc)
+{
+    je_io_update_windowtitle(wo_string(args + 0));
     return wo_ret_void(vm);
 }
 
@@ -1608,13 +1611,11 @@ namespace je
         extern("libjoyecs", "wojeapi_input_keydown")
         public func keydown(kcode: keycode)=> bool;
 
-        public func set_window_size(x: int, y: int)
-        {
-            extern("libjoyecs", "wojeapi_input_update_window_size")
-            func _windowsize(width: int, height: int)=> void;
+        extern("libjoyecs", "wojeapi_input_update_window_size")
+        public func set_window_size(x: int, y: int)=> void;
 
-            _windowsize(x, y);
-        }  
+        extern("libjoyecs", "wojeapi_input_update_window_title")
+        public func set_window_title(title: string)=> void;
 
         extern("libjoyecs", "wojeapi_input_window_size")
         public func window_size()=> (int, int);

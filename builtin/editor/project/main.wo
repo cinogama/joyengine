@@ -245,7 +245,7 @@ namespace editor
                     func(_create_default_configs)
                     {
                         Text("引擎提前唤醒间隔");
-                        let result = InputFloat("##引擎提前唤醒间隔", je::editor::get_sleep_suppression());
+                        let result = InputFloatFormat("##引擎提前唤醒间隔", je::editor::get_sleep_suppression(), "%.6f");
                         do result->>\suppression=je::editor::set_sleep_suppression(suppression);;
                         TextDisabled("适当提高此值可以增加执行间隔和帧数的稳定性");
                         return result->>\_=do nil;;

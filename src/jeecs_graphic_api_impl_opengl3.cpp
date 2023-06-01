@@ -212,6 +212,10 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
     if (je_io_should_update_windowsize(&window_width, &window_height))
         glfwSetWindowSize(WINDOWS_HANDLE, window_width, window_height);
 
+    const char* title;
+    if (je_io_should_update_windowtitle(&title))
+        glfwSetWindowTitle(WINDOWS_HANDLE, title);
+
     if (glfwWindowShouldClose(WINDOWS_HANDLE))
     {
         jeecs::debug::logwarn("Graphic interface has been closed, graphic thread will exit soon.");

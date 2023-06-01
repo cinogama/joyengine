@@ -79,3 +79,21 @@ bool je_io_should_update_windowsize(int* x, int* y)
     }
     return false;
 }
+
+bool should_update_windowtitle = false;
+std::string new_windowtitle;
+void je_io_update_windowtitle(const char* title)
+{
+    new_windowtitle = title;
+    should_update_windowtitle = true;
+}
+bool je_io_should_update_windowtitle(const char** title)
+{
+    if (should_update_windowtitle)
+    {
+        *title = new_windowtitle.c_str();
+        should_update_windowtitle = false;
+        return true;
+    }
+    return false;
+}

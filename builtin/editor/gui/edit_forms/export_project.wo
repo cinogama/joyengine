@@ -208,6 +208,9 @@ namespace editor::gui::edit_forms
 
                                 // 在此设置分辨率
                                 $APPLY_RESOLUTION$
+
+                                // 在此设置窗口标题
+                                $APPLY_TITLE$
                                 
                                 // 启动Universe，在Universe中加载世界
                                 let RUNTIME_UNIVERSE = je::universe::create();
@@ -274,6 +277,7 @@ namespace editor::gui::edit_forms
                                         ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
                                         ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
                                         ->replace("$APPLY_RESOLUTION$", F"je::input::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
+                                        ->replace("$APPLY_TITLE$", F"je::input::set_window_title({proj.m_name->enstring});")
                                     )->unwarp->save_binary;
 
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
