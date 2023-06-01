@@ -1301,8 +1301,8 @@ public func frag(vf: v2f)
             }
             jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
 
-            // Clear frame buffer, (TODO: Only clear depth)
-            jegl_clear_framebuffer_depth(nullptr);
+            // Clear frame buffer
+            jegl_clear_framebuffer(nullptr);
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();

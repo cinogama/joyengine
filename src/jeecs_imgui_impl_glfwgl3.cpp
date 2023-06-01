@@ -1467,7 +1467,7 @@ void jegui_init(void* window_handle, bool reboot)
         auto* file_buf = je_mem_alloc(ttf_file->m_file_length);
         jeecs_file_read(file_buf, sizeof(char), ttf_file->m_file_length, ttf_file);
 
-        io.Fonts->AddFontFromMemoryTTF(file_buf, (int)ttf_file->m_file_length, 16, nullptr,
+        io.Fonts->AddFontFromMemoryTTF(file_buf, (int)ttf_file->m_file_length, 18, nullptr,
             io.Fonts->GetGlyphRangesChineseFull());
 
         // je_mem_free(file_buf); // No need to free.
