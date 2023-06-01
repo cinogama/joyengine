@@ -60,11 +60,11 @@ void je_clock_sleep_for(double time)
 #endif
     std::this_thread::sleep_for((time - _sleep_suppression) * 1s);
 
+    while (je_clock_time() < current_time_point + time)
+        std::this_thread::yield();
+
 #ifdef JE_OS_WINDOWS
     _result = timeEndPeriod(1);
     assert(_result == TIMERR_NOERROR);
 #endif
-
-    while (je_clock_time() < current_time_point + time)
-        std::this_thread::yield();
 }
