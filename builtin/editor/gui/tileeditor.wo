@@ -1,0 +1,166 @@
+namespace editor::gui::tileeditor
+{
+    using TileData = struct{
+        _m_tile_x: int,
+        _m_tile_y: int,
+        _m_tile_layer: int,
+    }
+    {
+        func tobinary(self: TileData)
+        {
+            return buffer::createi64(self._m_tile_x)
+                ->  appendi64(self._m_tile_y)
+                ->  appendi64(self._m_tile_layer)
+                ;
+        }
+        func loadbinary(bufdata: buffer::builder)
+        {
+            let x = bufdata->readi64();
+            let y = bufdata->readi64();
+            let layer = bufdata->readi64();
+
+            return TileData{
+                _m_tile_x = x,
+                _m_tile_y = y,
+                _m_tile_layer = layer,
+            };
+        }
+    }
+    public using TileMapContext = struct{
+        _m_width: mut int,
+        _m_height: mut int,
+        _m_layer_tiles: vec<vec<mut option<TileData>>>,
+        _m_image_set: vec<je::graphic::texture>,
+        _m_path: filesys::path_t,
+    }
+    {
+        public func create(path: filesys::path_t)
+        {
+            return TileMapContext{
+                _m_width = mut 0,
+                _m_height = mut 0,
+                _m_layer_tiles = [[]mut]mut,
+                _m_image_set = []mut,
+                _m_path = path,
+            };
+        }
+        public func add_layer(self: TileMapContext)
+        {
+            self._m_layer_tiles->add(vec::create(self._m_width * self._m_height, mut option::none));
+            return self._m_layer_tiles[self._m_layer_tiles->len() - 1];
+        }
+        public func load(path: filesys::path_t)
+        {
+            try! bufdata = buffer::builder::fromfile(path->tostring, 0, -1);
+            if (bufdata->readui32 != 0x711E3ADC)
+                return result::err(0: buffer::builder::errno_t);
+
+            let self = create(path);
+            let w = bufdata->readi64();
+            let h = bufdata->readi64();
+
+            self->resize(w, h);
+            let layer_count = bufdata->readi64();
+            for (let mut i = 0; i < layer_count; i += 1)
+            {
+                let layer = self->add_layer();
+                let layer_length = bufdata->readi64();
+
+                assert(layer->len == layer_length);
+
+                for (let mut j = 0; j < layer_length; j += 1)
+                {
+                    if (bufdata->readui8 != 0)
+                    {
+                        layer[j] = option::value(TileData::loadbinary(bufdata));
+                    }
+                }
+            }
+            let img_set_len = bufdata->readi64();
+            for (let mut i = 0; i < img_set_len; i += 1)
+            {
+                let image_path_len = bufdata->readi64();
+                let image_path = bufdata->readbuffer(image_path_len) as buffer: string;
+                match (je::graphic::texture::load(image_path))
+                {
+                none?
+                    {
+                        je::gui::form::errmsg("加载地图失败", F"找不到素材{image_path}");
+                        return result::err(0: buffer::builder::errno_t);
+                    }
+                value(t)?
+                    self._m_image_set->add(target);
+                }
+            }
+            return result::ok(self);
+        }
+        public func save(self: TileMapContext)
+        {
+            let mut result = buffer::createi32(0x711E3ADC);
+            result = result->appendi64(self._m_width);
+            result = result->appendi64(self._m_height);
+            result = result->appendi64(self._m_layer_tiles->len());
+            for (let _, layer : self._m_layer_tiles)
+            {
+                result = result->appendi64(layer->len());
+                for (let _, option_tile : layer)
+                {
+                    match (option_tile)
+                    {
+                    value(t)?
+                        result = result->appendui8(1) + t->tobinary();
+                    none?
+                        result = result->appendui8(0);
+                    }
+                    
+                }
+            }
+            result = result->appendi64(self._m_image_set->len());
+            for (let _, texture : self._m_image_set)
+            {
+                let tpath = texture->path()->valor("<内置>");
+                result = result->appendi64(tpath->len()) + tpath: buffer;
+            }
+            return filesys::writeall(self._m_path, result: string);
+        }
+        public func get_tile(self: TileMapContext, layer: int, x: int, y: int)
+        {
+            assert(x >= 0 && x < self._m_width && y >= 0 && y < self._m_height);
+            return self._m_layer_tiles[layer][y * self._m_width + x];
+        }
+        public func get_layer_count(self: TileMapContext)
+        {
+            return self._m_layer_tiles->len();
+        }
+        public func get_size(self: TileMapContext)
+        {
+            return (self._m_width, self._m_height);
+        }
+        public func resize(self: TileMapContext, w: int, h: int)
+        {
+            assert(w >= 0 && h >= 0);
+
+            // 需要注意，这里resize要保证原始地图数据不发生改变，不然玩个p
+            let result = []mut: vec<vec<mut option<TileData>>>;
+
+            for (let layerid, layer : self._m_layer_tiles)
+            {
+                let new_layer = vec::create(w * h, mut option::none: option<TileData>);
+                result->add(new_layer);
+
+                for (let mut x = 0; x < std::min(self._m_width, w); x += 1)
+                    for (let mut y = 0; y < std::min(self._m_height, h); x += 1)
+                        new_layer[x + y * w] = self->get_tile(layerid, x, y);
+            }
+
+            self._m_layer_tiles->swap(result);
+            self._m_width = w;
+            self._m_height = h;
+        }
+    }
+
+    func show(context: EditorContext, tilemap: TileMapContext)
+    {
+
+    }
+}
