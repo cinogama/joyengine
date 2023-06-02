@@ -93,6 +93,15 @@ namespace jeecs
             };
             std::vector<ok_or_bad_shader> stored_uniforms;
         };
+
+        struct MapTileSet
+        {
+
+        };
+        struct MapTile
+        {
+
+        };
     }
 
     struct DefaultEditorSystem : public game_system

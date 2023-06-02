@@ -44,5 +44,7 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::Editor::EntityMoverRoot>("Editor::EntityMoverRoot");
     jeecs::typing::type_info::of<jeecs::Editor::BadShadersUniform>("Editor::BadShadersUniform");
     jeecs::typing::type_info::of<jeecs::Editor::EntitySelectBox>("Editor::EntitySelectBox");
+    jeecs::typing::type_info::of<jeecs::Editor::MapTileSet>("Editor::MapTileSet");
+    jeecs::typing::type_info::of<jeecs::Editor::MapTile>("Editor::MapTile");
     jeecs::typing::type_info::of<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
 }
