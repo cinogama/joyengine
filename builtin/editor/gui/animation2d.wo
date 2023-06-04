@@ -122,6 +122,42 @@ namespace editor::gui::animation2d
         }
     }
 
+    func lerp(a, b, deg: real)
+        where std::is_same_type :<typeof(a),typeof(b)>
+            , a is int
+            || a is real
+            || a is (real, real)
+            || a is (real, real, real)
+            || a is (real, real, real, real)
+        ;
+    {
+        if (a is int)
+            return math::round(a: real + (b: real - a: real) * deg);
+        else if (a is real)
+            return a + (b - a) * deg;
+        else if (a is (real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg));
+        else if (a is (real, real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg), lerp(a[2], b[2], deg));
+        else if (a is (real, real, real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg), lerp(a[2], b[2], deg), lerp(a[3], b[3], deg));
+        else
+            std::panic("你是故意来找茬的吧？");
+    }
+    func lerp_data_value(a, b, deg: real)
+    {
+        match (a)
+        {
+        INT(v)? return INT(lerp(v, b->unsafe::cast :<(void, int)>()[1], deg));
+        FLOAT(v)? return FLOAT(lerp(v, b->unsafe::cast :<(void, real)>()[1], deg));
+        VEC2(v)? return VEC2(lerp(v, b->unsafe::cast :<(void, (real, real))>()[1], deg));
+        VEC3(v)? return VEC3(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
+        VEC4(v)? return VEC4(lerp(v, b->unsafe::cast :<(void, (real, real, real, real))>()[1], deg));
+        QUAT4(v)? return QUAT4(lerp(v, b->unsafe::cast :<(void, (real, real, real, real))>()[1], deg));
+        }
+    }
+
+
     using AnimationContext = struct{
         m_animations: map<string, AnimationActionData>,
         m_path: filesys::path_t,
@@ -464,14 +500,48 @@ namespace editor::gui::animation2d
 
                 if (BeginPopupContextItem())
                 {
+                    animation_context.m_selected_action_name = action_name;
+
                     if (MenuItem("新建帧"))
                     {
-                        animation_context.m_selected_action_name = action_name;
                         action_data.m_frames->add(Animation2dFrameData{
                             m_time = mut 0.1,
                             m_component_dats = []mut,
                             m_uniform_dats = []mut,
                         });
+                    }
+                    if (MenuItem("新建若干帧"))
+                    {
+                        launch(func(framecount: mutable<int>, frametime: mutable<real>)
+                        {
+                            let mut open = BeginAttrOpen(F"新建若干帧##{JobID()}", 
+                                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+                            Text("帧数量");
+                            SameLine();
+                            do InputInt("##framecount", framecount->get)->>\nt = nt > 0 ? framecount->set(nt) | nil: void;;
+
+                            Text("帧时间");
+                            SameLine();
+                            do InputFloat("##frametime", frametime->get)->>\nt = nt >= 0. ? frametime->set(nt) | nil: void;;
+
+                            if (Button("创建"))
+                            {
+                                for (let mut i = 0; i < framecount->get; i += 1)
+                                {
+                                    action_data.m_frames->add(Animation2dFrameData{
+                                        m_time = mut frametime->get,
+                                        m_component_dats = []mut,
+                                        m_uniform_dats = []mut,
+                                    });
+                                }
+
+                                open = false;
+                            }
+
+                            End();
+                            return open;
+                        }, (mutable::create(2), mutable::create(0.1)));
                     }
                     if (MenuItem("重命名"))
                     {
@@ -539,6 +609,11 @@ namespace editor::gui::animation2d
                                 let offset_mode = mutable::create(false);
                                 let for_all_frame = mutable::create(false);
 
+                                let lerp_mode = mutable::create(false);
+                                let lerp_by_ftime_mode = mutable::create(true);
+                                let lerp_frame_count = mutable::create(1);
+                                let lerp_end_value = mutable::create(DataValue::INT(1));
+
                                 launch(func(){
                                     let mut open = BeginAttrOpen(F"添加组件数据 {animation_context.m_path}##{JobID()}", 
                                         WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
@@ -558,7 +633,22 @@ namespace editor::gui::animation2d
                                         ;
 
                                     do CheckBox("偏移模式", offset_mode->get)->>\nv = do offset_mode->set(nv);;
-                                    do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = do for_all_frame->set(nv);;
+                                    do CheckBox("插值模式", lerp_mode->get)->>\nv = do lerp_mode->set(nv);;
+
+                                    if (lerp_mode->get == false)
+                                    {
+                                        do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = do for_all_frame->set(nv);;
+                                    }
+                                    else
+                                    {
+                                        do InputInt("作用帧数", lerp_frame_count->get)->>\nv = do (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
+                                        TextDisabled(F"* 取值范围 0 ~ {animation.m_frames->len - i}");
+
+                                        do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = do lerp_by_ftime_mode->set(nv);;
+                                        TextDisabled("* 若取消此项，则以帧数作为插值系数");
+                                    }
+
+                                    Separator();
 
                                     match (members->get(selecting_member_id->get))
                                     {
@@ -577,17 +667,35 @@ namespace editor::gui::animation2d
                                                 do editing_value_type->set(member_type);
 
                                                 if (member_type == je::typeinfo::int)
+                                                {
                                                     editing_value->set(DataValue::INT(0));
+                                                    lerp_end_value->set(DataValue::INT(1));
+                                                }
                                                 else if (member_type == je::typeinfo::float)
+                                                {
                                                     editing_value->set(DataValue::FLOAT(0.));
+                                                    lerp_end_value->set(DataValue::FLOAT(1.));
+                                                }
                                                 else if (member_type == je::typeinfo::float2)
+                                                {
                                                     editing_value->set(DataValue::VEC2((0., 0.)));
+                                                    lerp_end_value->set(DataValue::VEC2((1., 1.)));
+                                                }
                                                 else if (member_type == je::typeinfo::float3)
+                                                {
                                                     editing_value->set(DataValue::VEC3((0., 0., 0.)));
+                                                    lerp_end_value->set(DataValue::VEC3((1., 1., 1.)));
+                                                }
                                                 else if (member_type == je::typeinfo::float4)
+                                                {
                                                     editing_value->set(DataValue::VEC4((0., 0., 0., 0.)));
+                                                    lerp_end_value->set(DataValue::VEC4((1., 1., 1., 1.)));
+                                                }
                                                 else if (member_type == je::typeinfo::quat)
+                                                {
                                                     editing_value->set(DataValue::QUAT4((0., 0., 0., 0.)));
+                                                    lerp_end_value->set(DataValue::QUAT4((1., 1., 1., 1.)));
+                                                }
                                             }
 
                                             match (editing_value->get)
@@ -606,9 +714,66 @@ namespace editor::gui::animation2d
                                                 do InputFloat4("值", x, y, z, w)->>\nv = do editing_value->set(QUAT4(nv));;
                                             }
 
+                                            if (lerp_mode->get)
+                                            {
+                                                match (lerp_end_value->get)
+                                                {
+                                                INT(n)?
+                                                    do InputInt("插值目标", n)->>\nv = do lerp_end_value->set(INT(nv));;
+                                                FLOAT(x)?
+                                                    do InputFloat("插值目标", x)->>\nv = do lerp_end_value->set(FLOAT(nv));;
+                                                VEC2((x, y))?
+                                                    do InputFloat2("插值目标", x, y)->>\nv = do lerp_end_value->set(VEC2(nv));;
+                                                VEC3((x, y, z))?
+                                                    do InputFloat3("插值目标", x, y, z)->>\nv = do lerp_end_value->set(VEC3(nv));;
+                                                VEC4((x, y, z, w))?
+                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = do lerp_end_value->set(VEC4(nv));;
+                                                QUAT4((x, y, z, w))?
+                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = do lerp_end_value->set(QUAT4(nv));;
+                                                }
+                                            }
+
                                             if (Button("创建"))
                                             {
-                                                if (for_all_frame->get)
+                                                if (lerp_mode->get)
+                                                {
+                                                    let mut total_frame_time = 0.;
+                                                    if (lerp_by_ftime_mode->get)
+                                                    {
+                                                        for (let mut fidx = 0; fidx < lerp_frame_count->get - 1; fidx += 1)
+                                                        {
+                                                            let frameid = fidx + i;
+                                                            total_frame_time += animation.m_frames[frameid].m_time;
+                                                        }
+                                                    }
+                                                    
+                                                    let mut deltaed_time = 0.;
+                                                    for (let mut fidx = 0; fidx < lerp_frame_count->get - 1; fidx += 1)
+                                                    {
+                                                        let frameid = fidx + i;
+                                                        let frame = animation.m_frames[frameid];
+
+                                                        frame.m_component_dats->add(FrameComponentData{
+                                                            m_component_name = all_components[selecting_id->get]->name(),
+                                                            m_member_name = member_name,
+                                                            m_value = mut lerp_data_value(editing_value->get, lerp_end_value->get, 
+                                                                total_frame_time == 0.
+                                                                    ? fidx: real / (lerp_frame_count->get - 1): real
+                                                                    | deltaed_time / total_frame_time),
+                                                            m_offset_mode = mut offset_mode->get,
+                                                        });
+
+                                                        deltaed_time += frame.m_time;
+                                                    }
+                                                    animation.m_frames[i + lerp_frame_count->get - 1].m_component_dats->add(FrameComponentData{
+                                                        m_component_name = all_components[selecting_id->get]->name(),
+                                                        m_member_name = member_name,
+                                                        m_value = mut lerp_end_value->get,
+                                                        m_offset_mode = mut offset_mode->get,
+                                                    });
+
+                                                }
+                                                else if (for_all_frame->get)
                                                     for (let _, per_frame_data : animation.m_frames)
                                                         per_frame_data.m_component_dats->add(FrameComponentData{
                                                             m_component_name = all_components[selecting_id->get]->name(),
@@ -640,13 +805,17 @@ namespace editor::gui::animation2d
                                 let uniform_name = mutable::create("");
                                 let uniform_type_selected = mutable::create(0);
                                 let uniform_types = [
-                                    ("int", mut DataValue::INT(0)),
-                                    ("float", mut DataValue::FLOAT(0.)),
-                                    ("vec2", mut DataValue::VEC2((0., 0.))),
-                                    ("vec3", mut DataValue::VEC3((0., 0., 0.))),
-                                    ("vec4", mut DataValue::VEC4((0., 0., 0., 0.))),
+                                    ("int", mut DataValue::INT(0), mut DataValue::INT(1)),
+                                    ("float", mut DataValue::FLOAT(0.), mut DataValue::FLOAT(1.)),
+                                    ("vec2", mut DataValue::VEC2((0., 0.)), mut DataValue::VEC2((1., 1.))),
+                                    ("vec3", mut DataValue::VEC3((0., 0., 0.)), mut DataValue::VEC3((1., 1., 1.))),
+                                    ("vec4", mut DataValue::VEC4((0., 0., 0., 0.)), mut DataValue::VEC4((1., 1., 1., 1.))),
                                 ];
                                 let for_all_frame = mutable::create(false);
+
+                                let lerp_mode = mutable::create(false);
+                                let lerp_by_ftime_mode = mutable::create(true);
+                                let lerp_frame_count = mutable::create(1);
 
                                 launch(func(){
                                     let mut open = BeginAttrOpen(F"添加着色器变量数据 {animation_context.m_path}##{JobID()}", 
@@ -662,7 +831,21 @@ namespace editor::gui::animation2d
                                         ->> \nname = do uniform_name->set(nname);
                                         ;
 
-                                    SameLine();
+                                    do CheckBox("插值模式", lerp_mode->get)->>\nv = do lerp_mode->set(nv);;
+                                    if (lerp_mode->get == false)
+                                    {
+                                        do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = do for_all_frame->set(nv);;
+                                    }
+                                    else
+                                    {
+                                        do InputInt("作用帧数", lerp_frame_count->get)->>\nv = do (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
+                                        TextDisabled(F"* 取值范围 0 ~ {animation.m_frames->len - i}");
+
+                                        do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = do lerp_by_ftime_mode->set(nv);;
+                                        TextDisabled("* 若取消此项，则以帧数作为插值系数");
+                                    }
+
+                                    Separator();
 
                                     match (uniform_types[uniform_type_selected->get()][1])
                                     {
@@ -680,13 +863,65 @@ namespace editor::gui::animation2d
                                         do InputFloat4("值", x, y, z, w)->>\nv = uniform_types[uniform_type_selected->get()][1] = QUAT4(nv);;
                                     }
 
-                                    do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = do for_all_frame->set(nv);;
+                                    if (lerp_mode->get)
+                                    {
+                                        match (uniform_types[uniform_type_selected->get()][2])
+                                        {
+                                        INT(n)?
+                                            do InputInt("插值目标", n)->>\nv = uniform_types[uniform_type_selected->get()][2] = INT(nv);;
+                                        FLOAT(x)?
+                                            do InputFloat("插值目标", x)->>\nv = uniform_types[uniform_type_selected->get()][2] = FLOAT(nv);;
+                                        VEC2((x, y))?
+                                            do InputFloat2("插值目标", x, y)->>\nv = uniform_types[uniform_type_selected->get()][2] = VEC2(nv);;
+                                        VEC3((x, y, z))?
+                                            do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[uniform_type_selected->get()][2] = VEC3(nv);;
+                                        VEC4((x, y, z, w))?
+                                            do InputFloat4("插值目标", x, y, z, w)->>\nv = uniform_types[uniform_type_selected->get()][2] = VEC4(nv);;
+                                        QUAT4((x, y, z, w))?
+                                            do InputFloat4("插值目标", x, y, z, w)->>\nv = uniform_types[uniform_type_selected->get()][2] = QUAT4(nv);;
+                                        }
+                                    }
 
                                     if (uniform_name->get == "")
                                         TextDisabled("变量名不能为空");
                                     else if (Button("创建"))
                                     {
-                                        if (for_all_frame->get)
+                                        if (lerp_mode->get)
+                                        {
+                                            let mut total_frame_time = 0.;
+                                            if (lerp_by_ftime_mode->get)
+                                            {
+                                                for (let mut fidx = 0; fidx < lerp_frame_count->get - 1; fidx += 1)
+                                                {
+                                                    let frameid = fidx + i;
+                                                    total_frame_time += animation.m_frames[frameid].m_time;
+                                                }
+                                            }
+                                            
+                                            let mut deltaed_time = 0.;
+                                            let editing_value = uniform_types[uniform_type_selected->get()][1];
+                                            let lerp_end_value = uniform_types[uniform_type_selected->get()][2];
+                                            for (let mut fidx = 0; fidx < lerp_frame_count->get - 1; fidx += 1)
+                                            {
+                                                let frameid = fidx + i;
+                                                let frame = animation.m_frames[frameid];
+
+                                                frame.m_uniform_dats->add(FrameUniformData{
+                                                    m_uniform_name = uniform_name->get,
+                                                    m_value = mut lerp_data_value(editing_value, lerp_end_value, 
+                                                        total_frame_time == 0.
+                                                            ? fidx: real / (lerp_frame_count->get - 1): real
+                                                            | deltaed_time / total_frame_time),
+                                                });
+
+                                                deltaed_time += frame.m_time;
+                                            }
+                                            animation.m_frames[i + lerp_frame_count->get - 1].m_uniform_dats->add(FrameUniformData{
+                                                m_uniform_name = uniform_name->get,
+                                                m_value = mut lerp_end_value,
+                                            });
+                                        }
+                                        else if (for_all_frame->get)
                                             for (let _, per_frame_data : animation.m_frames)
                                                 per_frame_data.m_uniform_dats->add(FrameUniformData{
                                                     m_uniform_name = uniform_name->get,

@@ -224,6 +224,9 @@ namespace editor::gui::edit_forms
                                 // 在此处加载世界实例
                                 $LOAD_WORLD_INSTANCE$
 
+                                // 在此调用运行时脚本（如果有）
+                                $IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$
+
                                 RUNTIME_UNIVERSE->wait();
 
                                 for (let _, libhandle : LOADED_MODULE_HANDLES)
@@ -260,7 +263,7 @@ namespace editor::gui::edit_forms
 
                             // 1.5.3 加载和序列化世界
                             config.m_pack_output_log->add(F"正在生成加载世界的脚本");
-                            let mut load_world_instance = "";
+                            let mut load_world_instance = "let mut START_UP_WORLD = option::none: option<je::world>:";
                             for (let _, startup_world_path : config.m_start_up_worlds)
                             {
                                 load_world_instance += F"LOAD_WORLD({startup_world_path->enstring});\n";
@@ -268,10 +271,16 @@ namespace editor::gui::edit_forms
                             match (config.m_rend_world)
                             {
                             value(rend_world_path)?
-                                load_world_instance += F"jeapi::rend::reset_rend_world(LOADED_WORLDS_MAPPING[{rend_world_path->enstring}], je::typeinfo::load(ENGINE_GRAPHIC_PIPELINE)->val);\n";
+                                load_world_instance += F"START_UP_WORLD = option::value(LOADED_WORLDS_MAPPING[{rend_world_path->enstring}]);\n"
+                                    + F"jeapi::rend::reset_rend_world(LOADED_WORLDS_MAPPING[{rend_world_path->enstring}], je::typeinfo::load(ENGINE_GRAPHIC_PIPELINE)->val);\n";
                             none?
                                 config.m_pack_output_log->add(F"没有指定要渲染的世界，跳过");
                             }
+
+                            // 1.5.4 加载入口脚本
+                            let load_entry_script = filesys::isfile(normalized_path/"main.wo") 
+                                ? "import main;\nmain(RUNTIME_UNIVERSE, START_UP_WORLD);\n"
+                                | "";
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
                                 vm::create("@/builtin/main.wo", 
@@ -279,6 +288,7 @@ namespace editor::gui::edit_forms
                                         ->replace("$LOAD_DYLIB_MODULES$", dylib_loader)
                                         ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
                                         ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
+                                        ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
                                         ->replace("$APPLY_RESOLUTION$", F"je::input::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
                                         ->replace("$APPLY_TITLE$", F"je::input::set_window_title({proj.m_name->enstring});")
                                     )->unwarp->save_binary;

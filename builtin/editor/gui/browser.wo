@@ -151,9 +151,6 @@ namespace editor::gui
         [".jeworld"] = je::graphic::texture::load(F"!/builtin/icon/World.png")->val,
         [".jewo"] = je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val,
         [".jeanim4"] = je::graphic::texture::load(F"!/builtin/icon/AnimationFile.png")->val,
-
-        // 这个图标没做暂时先用Joy顶一下
-        [".jetileset"] = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val, 
     };
 
     // 根据文件拓展名返回文件的类型
@@ -284,11 +281,6 @@ namespace editor::gui
                         err(_)?
                             return option::value(F"无法打开和编辑帧动画文件：{p.path}");
                         }
-                    },
-                [".jetileset"] = 
-                    func(p: PathInfo, context: EditorContext)
-                    {
-                         return option::value(F"TODO：{p.path}");
                     },
             };
 
@@ -439,12 +431,6 @@ namespace editor::gui
                         \filename: string = animation2d::AnimationContext::init(file_path)
                             ? force_update()
                             | jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法")
-                        where file_path = filesys::normalize(current_work_path) / F"{filename}.jeanim4";);
-                }
-                if (MenuItem("TileSet"))
-                {
-                    jeapi::gui::form::input("新建TileSet", F"在{current_work_path}新建地图集", "NewTileSet",
-                        \filename: string = jeapi::gui::form::errmsg("创建TileSet失败", "TODO;")
                         where file_path = filesys::normalize(current_work_path) / F"{filename}.jeanim4";);
                 }
                 if (MenuItem(F"C++模块"))

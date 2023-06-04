@@ -486,7 +486,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 ? editing_entity->get_component<Transform::LocalRotation>()
                 : nullptr;
 
-            if (!_inputs.l_buttom || nullptr == editing_pos || nullptr == editing_trans)
+            if (_inputs.r_buttom || !_inputs.l_buttom || nullptr == editing_pos || nullptr == editing_trans)
                 _grab_axis_translation = nullptr;
 
             if (_grab_axis_translation && _inputs.l_buttom && editing_pos && editing_trans)
@@ -562,7 +562,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             _inputs.r_buttom_click = input::is_up(_inputs.r_buttom);
             _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
             _inputs.selected_entity = std::nullopt;
-            _inputs.delta_time = input::real_delta_timef();
+            _inputs.delta_time = delta_time();
 
             if (_inputs._wheel_count_record != INT_MAX)
             {
