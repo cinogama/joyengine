@@ -27,7 +27,7 @@ namespace editor::gui::edit_forms
             let (avail_width, avail_height) = GetContentRegionAvail();
             if (BeginListBox("##", avail_width, avail_height))
             {
-                let editing_world = je::world::rend(context->get_project->get_env->get_universe);
+                let editing_world = context->get_project->get_editing_world;
                 let is_debugging = context->get_project->is_debugging;
                 for (let _, world : context->get_project->get_env->get_universe->editor::get_all_worlds)
                 {

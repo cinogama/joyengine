@@ -37,7 +37,7 @@ namespace editor::gui::edit_forms
         
             for (let _, sys : all_systems)
                 // 不显示所有编辑器/图形系统
-                if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
+                if (!sys->name()->beginwith("Editor::"))
                     if (sys->name()->beginwith("Translation::"))
                         // 默认添加Translation相关系统
                         context.has_active_types->add(sys);
@@ -69,12 +69,12 @@ namespace editor::gui::edit_forms
         
             for (let _, sys : all_systems)
                 // 不显示所有编辑器/图形系统
-                if (!sys->name()->beginwith("Editor::") && !sys->name()->beginwith("Graphic::"))
+                if (!sys->name()->beginwith("Editor::"))
                     context.not_append_types->add(sys);
     
             // 处理一下已经创建/添加的系统
             for (let _, actived_sys : world->editor::get_systems_types())
-                if (!actived_sys->name()->beginwith("Editor::") && !actived_sys->name()->beginwith("Graphic::"))
+                if (!actived_sys->name()->beginwith("Editor::"))
                     context->active(actived_sys->name());
     
             match(proj->get_worlds_runtime_systems(world))

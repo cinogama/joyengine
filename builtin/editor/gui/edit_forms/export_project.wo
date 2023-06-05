@@ -13,7 +13,6 @@ namespace editor::gui::edit_forms
         m_pack_dll_into_image: bool,        // 将C++模块打包进镜像文件中？如果为true，则在运行时释放出动态库，否则原样复制
         m_image_size: int,
         m_start_up_worlds: array<string>,
-        m_rend_world: option<string>,
         m_rule: (filesys::path_t, string)=> Action,
         m_resolution: (int, int),
 
@@ -189,7 +188,6 @@ namespace editor::gui::edit_forms
                                 import builtin.api.serialize.main;
                                 import builtin.api.rend.main;
 
-                                let mut ENGINE_GRAPHIC_PIPELINE = "Graphic::DefaultGraphicPipelineSystem";
                                 let LOADED_WORLDS_MAPPING = {}mut: map<string, je::world>;
                                 func LOAD_WORLD(path: string)
                                 {
@@ -263,23 +261,15 @@ namespace editor::gui::edit_forms
 
                             // 1.5.3 加载和序列化世界
                             config.m_pack_output_log->add(F"正在生成加载世界的脚本");
-                            let mut load_world_instance = "let mut START_UP_WORLD = option::none: option<je::world>:";
+                            let mut load_world_instance = "";
                             for (let _, startup_world_path : config.m_start_up_worlds)
                             {
                                 load_world_instance += F"LOAD_WORLD({startup_world_path->enstring});\n";
                             }
-                            match (config.m_rend_world)
-                            {
-                            value(rend_world_path)?
-                                load_world_instance += F"START_UP_WORLD = option::value(LOADED_WORLDS_MAPPING[{rend_world_path->enstring}]);\n"
-                                    + F"jeapi::rend::reset_rend_world(LOADED_WORLDS_MAPPING[{rend_world_path->enstring}], je::typeinfo::load(ENGINE_GRAPHIC_PIPELINE)->val);\n";
-                            none?
-                                config.m_pack_output_log->add(F"没有指定要渲染的世界，跳过");
-                            }
-
+  
                             // 1.5.4 加载入口脚本
                             let load_entry_script = filesys::isfile(normalized_path/"main.wo") 
-                                ? "import main;\nmain(RUNTIME_UNIVERSE, START_UP_WORLD);\n"
+                                ? "import main;\nmain(RUNTIME_UNIVERSE);\n"
                                 | "";
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
@@ -316,7 +306,7 @@ namespace editor::gui::edit_forms
             ->  forall(\p = filesys::extension(p)->lower == ".jeworld";)
             ->> \p = (context->get_project->make_path_normalize(p), mut false);
             ;
-        let bootup_world = mutable::create(option::none: option<string>);
+            
         let pack_image_file_size = mutable::create(128);
         let reso_option_index = mutable::create(1);
         let reso_config = mutable::create((1366, 768));
@@ -367,7 +357,6 @@ namespace editor::gui::edit_forms
                 
                 if (ButtonSize("下一步", (cur_width, 0.)))
                 {
-                    do bootup_world->set(option::none);
                     step->set(current_step_count + 1);
                 }
                 if (ButtonSize("上一步", (cur_width, 0.)))
@@ -375,26 +364,35 @@ namespace editor::gui::edit_forms
             }
             if (current_step_count == 2)
             {
-                TextDisabled("第二步 选择一个启动世界");
+                TextDisabled("第二步 导出画面设置");
                 Separator();
 
                 do BeginChildSize("SUBFORM.", 500., 300.);
-                Text("请在下方选择导出项目启动后，默认渲染的场景");
-                Text("* 若不选择，则不在任何世界渲染");
-                
-                let (avail_width, avail_height) = GetContentRegionAvail();
-                if (BeginListBox("##", avail_width, avail_height))
-                {
-                    for (let _, (path, checked) : selecting_all_worlds_file)
-                    {
-                        if (checked)
+
+                 Text("请选择启动时默认渲染的画面分辨率");
+                Text("* 默认为 1366x768");
+
+                let static reso_list = [
+                    ("1280x720 [16:9]", (1280, 720)),
+                    ("1366x768 [16:9]", (1366, 768)),
+                    ("1920x1080 [16:9]", (1920, 1080)),
+                    ("2560x1440 [16:9]", (2560, 1440)),
+                    ("3840x2160 [16:9]", (3840, 2160)),
+
+                    ("800x600 [4:3]", (800, 600)),
+                    ("1024x768 [4:3]", (1024, 768)),
+                    ("1400x1050 [4:3]", (1400, 1050)),
+                    ("1920x1440 [4:3]", (1920, 1440)),
+                ];
+
+                do Combo("##RESO_LIST.", reso_list->>\RR = RR[0];, reso_option_index->get)
+                    ->> func(idx)
                         {
-                            if (SelectableSelected(path, bootup_world->get->>\p = p == path;->valor(false)))
-                                do bootup_world->set(option::value(path));
+                            do reso_option_index->set(idx);
+                            do reso_config->set(reso_list[idx][1]);
                         }
-                    }
-                    EndListBox();
-                }
+                    ;
+
                 EndChild();
                 
                 if (ButtonSize("下一步", (cur_width, 0.)))
@@ -404,54 +402,7 @@ namespace editor::gui::edit_forms
             }
             if (current_step_count == 3)
             {
-                TextDisabled("第三步 导出画面设置");
-                Separator();
-
-                do BeginChildSize("SUBFORM.", 500., 300.);
-
-                match (bootup_world->get)
-                {
-                value(_)?
-                    {
-                        Text("请选择启动时默认渲染的画面分辨率");
-                        Text("* 默认为 1366x768");
-
-                        let static reso_list = [
-                            ("1280x720 [16:9]", (1280, 720)),
-                            ("1366x768 [16:9]", (1366, 768)),
-                            ("1920x1080 [16:9]", (1920, 1080)),
-                            ("2560x1440 [16:9]", (2560, 1440)),
-                            ("3840x2160 [16:9]", (3840, 2160)),
-
-                            ("800x600 [4:3]", (800, 600)),
-                            ("1024x768 [4:3]", (1024, 768)),
-                            ("1400x1050 [4:3]", (1400, 1050)),
-                            ("1920x1440 [4:3]", (1920, 1440)),
-                        ];
-
-                        do Combo("##RESO_LIST.", reso_list->>\RR = RR[0];, reso_option_index->get)
-                            ->> func(idx)
-                                {
-                                    do reso_option_index->set(idx);
-                                    do reso_config->set(reso_list[idx][1]);
-                                }
-                            ;
-                    }
-                none?
-                    {
-                        Text("并未指定要渲染的世界，您可以返回上一步，或者继续导出");
-                    }
-                }
-                EndChild();
-                
-                if (ButtonSize("下一步", (cur_width, 0.)))
-                    step->set(current_step_count + 1);
-                if (ButtonSize("上一步", (cur_width, 0.)))
-                    step->set(current_step_count - 1);
-            }
-            if (current_step_count == 4)
-            {
-                TextDisabled("第四步 导出镜像设置");
+                TextDisabled("第三步 导出镜像设置");
                 Separator();
 
                 do BeginChildSize("SUBFORM.", 500., 300.);
@@ -473,7 +424,7 @@ namespace editor::gui::edit_forms
                 if (ButtonSize("上一步", (cur_width, 0.)))
                     step->set(current_step_count - 1);
             }
-            if (current_step_count == 5)
+            if (current_step_count == 4)
             {
                 TextDisabled("导出操作确认");
                 Separator();
@@ -495,7 +446,6 @@ namespace editor::gui::edit_forms
                         m_start_up_worlds = selecting_all_worlds_file
                             ->  forall(\path_and_checked = path_and_checked[1];)
                             ->> \path_and_checked = path_and_checked[0];,
-                        m_rend_world = bootup_world->get,
                         m_rule = _default_rule,
                         m_resolution = reso_config->get,
 
@@ -509,7 +459,7 @@ namespace editor::gui::edit_forms
                 if (ButtonSize("上一步", (cur_width, 0.)))
                     step->set(current_step_count - 1);
             }
-            if (current_step_count == 6)
+            if (current_step_count == 5)
             {
                 TextDisabled("正在导出……");
                 Separator();

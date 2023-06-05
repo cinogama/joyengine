@@ -468,8 +468,8 @@ JE_API void je_ecs_universe_stop(void* universe);
 
 JE_API void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg);
 
-typedef double(*je_job_for_worlds_t)(void* world);
-typedef double(*je_job_call_once_t)(void);
+typedef double(*je_job_for_worlds_t)(void* world, void* custom_data);
+typedef double(*je_job_call_once_t)(void* custom_data);
 
 /*
 Jobs in universe have 2*3 types:
@@ -486,12 +486,12 @@ After job used to update some data based on normal job.
 For example, graphic update will be pre-callonce-job.
 */
 
-JE_API void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
-JE_API void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job);
-JE_API void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job);
-JE_API void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job);
-JE_API void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job);
-JE_API void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
 
 JE_API void je_ecs_universe_unregister_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
 JE_API void je_ecs_universe_unregister_pre_call_once_job(void* universe, je_job_call_once_t job);
@@ -614,6 +614,7 @@ struct jegl_thread
 
     jeecs::typing::version_t m_version;
 
+    jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
     std::atomic_bool  m_stop_update;
 };
@@ -970,7 +971,6 @@ JE_API jegl_thread* jegl_start_graphic_thread(
 
 JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);
 
-JE_API bool jegl_pre_update(jegl_thread* thread);
 JE_API bool jegl_update(jegl_thread* thread_handle);
 
 JE_API void jegl_reboot_graphic_thread(
@@ -1141,7 +1141,7 @@ JE_API jeecs::typing::uid_t jedbg_get_editing_entity_uid();
 
 // NOTE: Get graphic thread
 JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
-JE_API void* jedbg_get_rendering_world(void* universe);
+
 #endif
 
 WO_FORCE_CAPI_END

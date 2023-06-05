@@ -107,13 +107,8 @@ namespace jeapi
             let editing_systems_type_list = 
                 w->editor::get_systems_types
                     ->> \st = st->name;
-                    ->  forall(\n = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
+                    ->  forall(\n = !n->beginwith("Editor::"););
 
-            // let runtime_systems_type_list = 
-            //     world.runtime_systems
-            //         ->map(\st: typeinfo = st->name;)
-            //         ->forall(\n: string = !n->beginwith("Graphic::") && !n->beginwith("Editor::"););
-    
             return result::ok({
                 ["name"] = w->editor::name: dynamic,
                 ["entities"] = entities_json_list: dynamic,

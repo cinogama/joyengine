@@ -155,18 +155,93 @@ public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: 
 
 namespace jeecs
 {
+    struct GraphicPipelineBaseSystem : public game_system
+    {
+        void (*m_frame_update_interface)(GraphicPipelineBaseSystem*);
+        int m_priority;
+
+        GraphicPipelineBaseSystem(game_world w, void (*_frame_update_interface)(GraphicPipelineBaseSystem*))
+            : game_system(w)
+            , m_priority(0)
+            , m_frame_update_interface(_frame_update_interface)
+        {
+            assert(m_frame_update_interface != nullptr);
+        }
+        void reset_priority(int priority)
+        {
+            m_priority = priority;
+        }
+        void update_priority(int priority)
+        {
+            if (priority > m_priority)
+                m_priority = priority;
+        }
+        void update_frame()
+        {
+            m_frame_update_interface(this);
+        }
+    };
+
     struct GraphicThreadHost
     {
         JECS_DISABLE_MOVE_AND_COPY(GraphicThreadHost);
 
         jegl_thread* glthread = nullptr;
-
+        jeecs::game_universe universe;
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
         basic::resource<graphic::texture> default_texture;
         jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
 
-        GraphicThreadHost()
+        static double _update_frame_universe_job(void* host)
+        {
+            auto* graphic_host = (GraphicThreadHost*)host;
+            if (!jegl_update(graphic_host->glthread))
+            {
+                graphic_host->universe.stop();
+            }
+
+            return 1.0 / (double)graphic_host->glthread->m_config.m_fps;
+        }
+
+        std::mutex m_graphic_pipelines_mx;
+        std::vector<GraphicPipelineBaseSystem*> m_graphic_pipelines;
+
+        void register_pipeline(GraphicPipelineBaseSystem* sys)
+        {
+            std::lock_guard g1(m_graphic_pipelines_mx);
+            m_graphic_pipelines.push_back(sys);
+        }
+
+        void unregister_pipeline(GraphicPipelineBaseSystem* sys)
+        {
+            std::lock_guard g1(m_graphic_pipelines_mx);
+            auto fnd = std::find(m_graphic_pipelines.begin(), m_graphic_pipelines.end(), sys);
+            assert(fnd != m_graphic_pipelines.end());
+            m_graphic_pipelines.erase(fnd);
+        }
+
+        void _frame_rend_impl()
+        {
+            // Clear frame buffer
+            jegl_clear_framebuffer(nullptr);
+
+            std::lock_guard g1(m_graphic_pipelines_mx);
+
+            std::stable_sort(m_graphic_pipelines.begin(), m_graphic_pipelines.end(), 
+                [](GraphicPipelineBaseSystem* a, GraphicPipelineBaseSystem* b)
+                {
+                    return a->m_priority < b->m_priority;
+                });
+
+            for (auto * gpipe : m_graphic_pipelines)
+            {
+                gpipe->update_frame();
+            }
+        }
+
+        GraphicThreadHost(jeecs::game_universe _universe)
+            : universe(_universe)
         {
             default_shape_quad =
                 new graphic::vertex(jegl_vertex::TRIANGLESTRIP,
@@ -221,8 +296,10 @@ public let frag =
                 jegl_using_opengl3_apis,
                 [](void* ptr, jegl_thread* glthread)
                 {
-                    ((GraphicThreadHost*)ptr)->_m_rend_update_func(glthread);
+                    ((GraphicThreadHost*)ptr)->_frame_rend_impl();
                 }, this);
+
+            je_ecs_universe_register_pre_call_once_job(universe.handle(), _update_frame_universe_job, this, nullptr);
         }
 
         ~GraphicThreadHost()
@@ -231,17 +308,17 @@ public let frag =
             _m_instance = nullptr;
             if (glthread)
                 jegl_terminate_graphic_thread(glthread);
+
+            je_ecs_universe_unregister_pre_call_once_job(universe.handle(), _update_frame_universe_job);
         }
 
         inline static std::atomic<GraphicThreadHost*> _m_instance = nullptr;
-        inline static std::atomic<void*> _m_rending_world = nullptr;
-        std::function<void(jegl_thread*)> _m_rend_update_func;
 
         static GraphicThreadHost* get_default_graphic_pipeline_instance(game_universe universe)
         {
             if (nullptr == _m_instance)
             {
-                _m_instance = new GraphicThreadHost();
+                _m_instance = new GraphicThreadHost(universe);
                 je_ecs_universe_register_exit_callback(universe.handle(),
                     [](void* instance)
                     {
@@ -252,101 +329,32 @@ public let frag =
 
             assert(_m_instance);
             return _m_instance;
-        }
-
-        bool IsActive(game_world world)const noexcept
-        {
-            return world.handle() == _m_rending_world;
-        }
-        void DeActive(game_world world)const noexcept
-        {
-            void* excpet_world = world.handle();
-            _m_rending_world.compare_exchange_weak(excpet_world, nullptr);
-        }
-
-        template<typename PipelineSystemT>
-        inline bool PreUpdateFrame(game_world world, PipelineSystemT* sys)noexcept
-        {
-            void* _null = nullptr;
-            if (_m_rending_world.compare_exchange_weak(_null, world.handle()))
-            {
-                // Rend world update, repleace frame function;
-                _m_rend_update_func = [sys](jegl_thread* gt) {sys->Frame(gt); };
-            }
-
-            if (glthread && IsActive(world))
-            {
-                if (!jegl_pre_update(glthread))
-                {
-                    // update is not work now, means graphic thread want to exit..
-                    // ready to shutdown current universe
-
-                    if (game_universe universe = world.get_universe())
-                        universe.stop();
-                }
-                return true;
-            }
-            return false;
-        }
-        template<typename PipelineSystemT>
-        inline bool UpdateFrame(game_world world, PipelineSystemT* sys)noexcept
-        {
-            if (glthread && IsActive(world))
-            {
-                if (!jegl_update(glthread))
-                {
-                    // update is not work now, means graphic thread want to exit..
-                    // ready to shutdown current universe
-
-                    if (game_universe universe = world.get_universe())
-                        universe.stop();
-                }
-                return true;
-            }
-            return false;
-        }
+        }       
     };
 
-    struct EmptyGraphicPipelineSystem : public game_system
+    template<typename PipelineT>
+    struct GraphicPipelineInterfaceSystem : GraphicPipelineBaseSystem
     {
         GraphicThreadHost* _m_pipeline;
 
-        EmptyGraphicPipelineSystem(game_world w)
-            : game_system(w)
+        GraphicPipelineInterfaceSystem(game_world w)
+            : GraphicPipelineBaseSystem(w, &PipelineT::Frame)
             , _m_pipeline(GraphicThreadHost::get_default_graphic_pipeline_instance(w.get_universe()))
         {
-
+            _m_pipeline->register_pipeline(this);
         }
-        ~EmptyGraphicPipelineSystem()
+        ~GraphicPipelineInterfaceSystem()
         {
-            _m_pipeline->DeActive(get_world());
+            _m_pipeline->unregister_pipeline(this);
         }
 
         inline GraphicThreadHost* host()const noexcept
         {
             return _m_pipeline;
         }
-
-        template<typename SysT>
-        inline bool UpdateFrame(SysT* _this) noexcept
-        {
-            return _m_pipeline->UpdateFrame(get_world(), _this);
-        }
-
-        template<typename SysT>
-        inline bool PreUpdateFrame(SysT* _this) noexcept
-        {
-            return _m_pipeline->PreUpdateFrame(get_world(), _this);
-        }
-
-        void Frame(jegl_thread* glthread)
-        {
-            jeecs::debug::logerr("No graphic frame pipeline found in current graphic system(%p), please check.",
-                this);
-        }
     };
 
-    struct DefaultGraphicPipelineSystem : public EmptyGraphicPipelineSystem
+    struct DefaultGraphicPipelineSystem : public GraphicPipelineInterfaceSystem<DefaultGraphicPipelineSystem>
     {
         using Translation = Transform::Translation;
 
@@ -406,7 +414,7 @@ public let frag =
         };
 
         DefaultGraphicPipelineSystem(game_world w)
-            : EmptyGraphicPipelineSystem(w)
+            : GraphicPipelineInterfaceSystem(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
@@ -473,47 +481,46 @@ public let frag =
 
         void PreUpdate()
         {
-            if (PreUpdateFrame(this))
-            {
-                m_camera_list.clear();
-                m_renderer_list.clear();
+            m_camera_list.clear();
+            m_renderer_list.clear();
 
-                select_from(get_world())
-                    .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
-                    .exec(
-                        [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
-                        {
-                            // Calc camera proj matrix
-                            m_camera_list.emplace_back(
-                                camera_arch{
-                                    rendqueue, &projection, cameraviewport, rendbuf
-                                }
-                            );
-                        })
-                    .exec(
-                        [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
-                        {
-                            // TODO: Need Impl AnyOf
-                                // RendOb will be input to a chain and used for swap
-                            m_renderer_list.emplace_back(
-                                renderer_arch{
-                                    rendqueue, &trans, shape, shads, texs
-                                });
-                        })
-                            .anyof<Shaders, Textures, Shape>()
-                            .except<Light2D::Color>()
-                            ;
-                        std::sort(m_camera_list.begin(), m_camera_list.end());
-                        std::sort(m_renderer_list.begin(), m_renderer_list.end());
-                        UpdateFrame(this);
-            }
+            select_from(get_world())
+                .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(
+                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
+                    {
+                        if (rendqueue != nullptr)
+                            update_priority(rendqueue->rend_queue);
+
+                        m_camera_list.emplace_back(
+                            camera_arch{
+                                rendqueue, &projection, cameraviewport, rendbuf
+                            }
+                        );
+                    })
+                .exec(
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    {
+                        // TODO: Need Impl AnyOf
+                            // RendOb will be input to a chain and used for swap
+                        m_renderer_list.emplace_back(
+                            renderer_arch{
+                                rendqueue, &trans, shape, shads, texs
+                            });
+                    })
+                        .anyof<Shaders, Textures, Shape>()
+                        .except<Light2D::Color>()
+                        ;
+                    std::sort(m_camera_list.begin(), m_camera_list.end());
+                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
         }
-        void Frame(jegl_thread* glthread)
+        static void Frame(GraphicPipelineBaseSystem* pipe)
+        {
+            static_cast<DefaultGraphicPipelineSystem*>(pipe)->DrawFrame();
+        }
+        void DrawFrame()
         {
             jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
-
-            // Clear frame buffer, (TODO: Only clear depth)
-            jegl_clear_framebuffer(nullptr);
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();
@@ -645,7 +652,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
     };
 
-    struct DeferLight2DGraphicPipelineSystem : public EmptyGraphicPipelineSystem
+    struct DeferLight2DGraphicPipelineSystem : public GraphicPipelineInterfaceSystem<DeferLight2DGraphicPipelineSystem>
     {
         struct DeferLight2DHost
         {
@@ -1068,7 +1075,7 @@ public func frag(vf: v2f)
         };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
-            : EmptyGraphicPipelineSystem(w)
+            : GraphicPipelineInterfaceSystem(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
             m_light2d_uniform_buffer = new jeecs::graphic::uniformbuffer(1, sizeof(light2d_uniform_buffer_data_t));
@@ -1136,167 +1143,168 @@ public func frag(vf: v2f)
 
         void PreUpdate()
         {
-            if (PreUpdateFrame(this))
-            {
-                m_2dlight_list.clear();
-                m_2dblock_list.clear();
-                m_camera_list.clear();
-                m_renderer_list.clear();
+            m_2dlight_list.clear();
+            m_2dblock_list.clear();
+            m_camera_list.clear();
+            m_renderer_list.clear();
 
-                select_from(get_world())
-                    .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
-                    .exec(
-                        [this](Translation& tarns, Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPass* light2dpass)
-                        {
-                            // Calc camera proj matrix
-                            m_camera_list.emplace_back(
-                                camera_arch{
-                                    rendqueue,&tarns,&projection, cameraviewport, rendbuf, light2dpass
-                                }
-                            );
+            select_from(get_world())
+                .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(
+                    [this](Translation& tarns, Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPass* light2dpass)
+                    {
+                        if (rendqueue != nullptr)
+                            update_priority(rendqueue->rend_queue);
 
-                            if (light2dpass != nullptr)
-                            {
-                                auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
-                                    ? rendbuf->framebuffer->resouce()
-                                    : nullptr;
-
-                                size_t
-                                    RENDAIMBUFFER_WIDTH =
-                                    (size_t)llround(
-                                        (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                                        (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
-                                    RENDAIMBUFFER_HEIGHT =
-                                    (size_t)llround(
-                                        (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                                        (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
-
-                                bool need_update = light2dpass->defer_rend_aim == nullptr
-                                    || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
-                                    || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
-                                if (need_update)
-                                {
-                                    light2dpass->defer_rend_aim
-                                        = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
-                                            {
-                                                jegl_texture::texture_format::RGBA, // 漫反射颜色
-                                                jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                                jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
-                                                jegl_texture::texture_format::DEPTH, // 深度缓冲区
-                                            });
-                                    light2dpass->defer_light_effect
-                                        = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
-                                            {
-                                                (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 光渲染结果
-                                            });
-                                }
+                        m_camera_list.emplace_back(
+                            camera_arch{
+                                rendqueue,&tarns,&projection, cameraviewport, rendbuf, light2dpass
                             }
-                        })
-                    .exec(
-                        [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
-                        {
-                            // RendOb will be input to a chain and used for swap
-                            m_renderer_list.emplace_back(
-                                renderer_arch{
-                                    rendqueue, &trans, shape, shads, texs
-                                });
-                        }).anyof<Shaders, Textures, Shape>()
-                            .except<Light2D::Color>()
-                            .exec(
-                                [this](Translation& trans,
-                                    Light2D::Color& color,
-                                    Light2D::Shadow* shadow,
-                                    Shape* shape,
-                                    Shaders* shads,
-                                    Textures* texs)
-                                {
-                                    m_2dlight_list.emplace_back(
-                                        light2d_arch{
-                                            &trans, &color, shadow,
-                                            shape,
-                                            shads,
-                                            texs,
-                                        }
-                                    );
-                                    if (shadow != nullptr)
-                                    {
-                                        bool generate_new_framebuffer =
-                                            shadow->shadow_buffer == nullptr
-                                            || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
-                                            || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
+                        );
 
-                                        if (generate_new_framebuffer)
+                        if (light2dpass != nullptr)
+                        {
+                            auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
+                                ? rendbuf->framebuffer->resouce()
+                                : nullptr;
+
+                            size_t
+                                RENDAIMBUFFER_WIDTH =
+                                (size_t)llround(
+                                    (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
+                                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
+                                RENDAIMBUFFER_HEIGHT =
+                                (size_t)llround(
+                                    (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
+                                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
+
+                            bool need_update = light2dpass->defer_rend_aim == nullptr
+                                || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
+                                || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
+                            if (need_update)
+                            {
+                                light2dpass->defer_rend_aim
+                                    = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            shadow->shadow_buffer = new graphic::framebuffer(
-                                                shadow->resolution_width, shadow->resolution_height,
-                                                {
-                                                    jegl_texture::texture_format::RGBA,
-                                                    // Only store shadow value to R, FBO in opengl not support rend to MONO
-                                                }
-                                            );
-                                            shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
-                                                = (jegl_texture::texture_sampling)(
-                                                    jegl_texture::texture_sampling::LINEAR
-                                                    | jegl_texture::texture_sampling::CLAMP_EDGE);
-                                        }
+                                            jegl_texture::texture_format::RGBA, // 漫反射颜色
+                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
+                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
+                                            jegl_texture::texture_format::DEPTH, // 深度缓冲区
+                                        });
+                                light2dpass->defer_light_effect
+                                    = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
+                                        {
+                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 光渲染结果
+                                        });
+                            }
+                        }
+                    })
+                .exec(
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    {
+                        // RendOb will be input to a chain and used for swap
+                        m_renderer_list.emplace_back(
+                            renderer_arch{
+                                rendqueue, &trans, shape, shads, texs
+                            });
+                    }).anyof<Shaders, Textures, Shape>()
+                        .except<Light2D::Color>()
+                        .exec(
+                            [this](Translation& trans,
+                                Light2D::Color& color,
+                                Light2D::Shadow* shadow,
+                                Shape* shape,
+                                Shaders* shads,
+                                Textures* texs)
+                            {
+                                m_2dlight_list.emplace_back(
+                                    light2d_arch{
+                                        &trans, &color, shadow,
+                                        shape,
+                                        shads,
+                                        texs,
+                                    }
+                                );
+                                if (shadow != nullptr)
+                                {
+                                    bool generate_new_framebuffer =
+                                        shadow->shadow_buffer == nullptr
+                                        || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
+                                        || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
+
+                                    if (generate_new_framebuffer)
+                                    {
+                                        shadow->shadow_buffer = new graphic::framebuffer(
+                                            shadow->resolution_width, shadow->resolution_height,
+                                            {
+                                                jegl_texture::texture_format::RGBA,
+                                                // Only store shadow value to R, FBO in opengl not support rend to MONO
+                                            }
+                                        );
+                                        shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
+                                            = (jegl_texture::texture_sampling)(
+                                                jegl_texture::texture_sampling::LINEAR
+                                                | jegl_texture::texture_sampling::CLAMP_EDGE);
                                     }
                                 }
-                            ).anyof<Shaders, Textures, Shape>()
-                                    .exec(
-                                        [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                            }
+                        ).anyof<Shaders, Textures, Shape>()
+                                .exec(
+                                    [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                                    {
+                                        if (block.mesh.m_block_mesh == nullptr)
                                         {
-                                            if (block.mesh.m_block_mesh == nullptr)
+                                            std::vector<float> _vertex_buffer;
+                                            if (!block.mesh.m_block_points.empty())
                                             {
-                                                std::vector<float> _vertex_buffer;
-                                                if (!block.mesh.m_block_points.empty())
+                                                for (auto& point : block.mesh.m_block_points)
                                                 {
-                                                    for (auto& point : block.mesh.m_block_points)
-                                                    {
-                                                        _vertex_buffer.insert(_vertex_buffer.end(),
-                                                            {
-                                                                point.x, point.y, 0.f, 0.f,
-                                                                point.x, point.y, 0.f, 1.f,
-                                                            });
-                                                    }
                                                     _vertex_buffer.insert(_vertex_buffer.end(),
                                                         {
-                                                            block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 0.f,
-                                                            block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 1.f,
+                                                            point.x, point.y, 0.f, 0.f,
+                                                            point.x, point.y, 0.f, 1.f,
                                                         });
-                                                    block.mesh.m_block_mesh = new jeecs::graphic::vertex(
-                                                        jeecs::graphic::vertex::type::TRIANGLESTRIP,
-                                                        _vertex_buffer, { 3,1 });
                                                 }
-                                            }
-                                            // Cannot create vertex with 0 point.
-
-                                            if (block.mesh.m_block_mesh != nullptr)
-                                            {
-                                                m_2dblock_list.push_back(
-                                                    block2d_arch{
-                                                         &trans, &block, texture, shape
-                                                    }
-                                                );
+                                                _vertex_buffer.insert(_vertex_buffer.end(),
+                                                    {
+                                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 0.f,
+                                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 1.f,
+                                                    });
+                                                block.mesh.m_block_mesh = new jeecs::graphic::vertex(
+                                                    jeecs::graphic::vertex::type::TRIANGLESTRIP,
+                                                    _vertex_buffer, { 3,1 });
                                             }
                                         }
-                                );
-                                std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
-                                    [](const block2d_arch& a, const block2d_arch& b) {
-                                        return a.translation->world_position.z > b.translation->world_position.z;
-                                    });
-                                std::sort(m_camera_list.begin(), m_camera_list.end());
-                                std::sort(m_renderer_list.begin(), m_renderer_list.end());
-                                UpdateFrame(this);
-            }
+                                        // Cannot create vertex with 0 point.
+
+                                        if (block.mesh.m_block_mesh != nullptr)
+                                        {
+                                            m_2dblock_list.push_back(
+                                                block2d_arch{
+                                                        &trans, &block, texture, shape
+                                                }
+                                            );
+                                        }
+                                    }
+                            );
+                            std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
+                                [](const block2d_arch& a, const block2d_arch& b) {
+                                    return a.translation->world_position.z > b.translation->world_position.z;
+                                });
+                            std::sort(m_camera_list.begin(), m_camera_list.end());
+                            std::sort(m_renderer_list.begin(), m_renderer_list.end());
         }
-        void Frame(jegl_thread* glthread)
+
+        static void Frame(GraphicPipelineBaseSystem* pipe)
         {
+            static_cast<DeferLight2DGraphicPipelineSystem*>(pipe)->DrawFrame();
+        }
+        void DrawFrame()
+        {
+            auto* glthread = _m_pipeline->glthread;
             auto* light2d_host = DeferLight2DHost::instance(glthread);
 
             jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
-
-            // Clear frame buffer
-            jegl_clear_framebuffer(nullptr);
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();
@@ -2125,10 +2133,4 @@ jegl_uniform_##TYPE(shader_pass->resouce(), builtin_uniform->m_builtin_uniform_#
 jegl_thread* jedbg_get_editing_graphic_thread(void* universe)
 {
     return jeecs::GraphicThreadHost::get_default_graphic_pipeline_instance(universe)->glthread;
-}
-
-void* jedbg_get_rendering_world(void* universe)
-{
-    auto* host = jeecs::GraphicThreadHost::get_default_graphic_pipeline_instance(universe);
-    return host->_m_rending_world;
 }

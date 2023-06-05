@@ -646,6 +646,8 @@ namespace jeecs_impl
 
     struct ecs_job
     {
+        JECS_DISABLE_MOVE_AND_COPY(ecs_job);
+
         using job_for_worlds_t = je_job_for_worlds_t;
         using job_call_once_t = je_job_call_once_t;
 
@@ -663,25 +665,35 @@ namespace jeecs_impl
         };
 
         ecs_universe* m_universe;
-
+        void* m_custom_data;
+        void(*m_free_function)(void*);
         std::mutex m_time_guard;
         double m_next_execute_time;
 
-        ecs_job(ecs_universe* universe, job_for_worlds_t _job)
+        ecs_job(ecs_universe* universe, job_for_worlds_t _job, void* custom_data, void(*free_function)(void*))
             : m_for_worlds_job(_job)
             , m_job_type(job_type::FOR_WORLDS)
             , m_next_execute_time(0.)
             , m_universe(universe)
+            , m_custom_data(custom_data)
+            , m_free_function(free_function)
         {
             assert(_job != nullptr);
         }
-        ecs_job(ecs_universe* universe, job_call_once_t _job)
+        ecs_job(ecs_universe* universe, job_call_once_t _job, void* custom_data, void(*free_function)(void*))
             : m_call_once_job(_job)
             , m_job_type(job_type::CALL_ONCE)
             , m_next_execute_time(0.)
             , m_universe(universe)
+            , m_custom_data(custom_data)
+            , m_free_function(free_function)
         {
             assert(_job != nullptr);
+        }
+        ~ecs_job()
+        {
+            if (m_free_function != nullptr)
+                m_free_function(m_custom_data);
         }
 
         inline void set_next_execute_time(double nextTime) noexcept;
@@ -1131,7 +1143,7 @@ namespace jeecs_impl
 
     };
 
-    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world);
+    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void*_);
 
     void command_buffer::update()
     {
@@ -1414,6 +1426,10 @@ namespace jeecs_impl
             };
 
             action_type m_type;
+
+            void* m_custom_data;
+            void(*m_free_function)(void*);
+
             union
             {
                 ecs_world* m_adding_world;
@@ -1492,22 +1508,22 @@ namespace jeecs_impl
                     break;
 
                 case universe_action::action_type::ADD_PRE_JOB_FOR_WORLDS:
-                    _m_shared_pre_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job));
+                    _m_shared_pre_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
                     break;
                 case universe_action::action_type::ADD_PRE_JOB_CALL_ONCE:
-                    _m_shared_pre_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job));
+                    _m_shared_pre_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
                     break;
                 case universe_action::action_type::ADD_NORMAL_JOB_FOR_WORLDS:
-                    _m_shared_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job));
+                    _m_shared_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
                     break;
                 case universe_action::action_type::ADD_NORMAL_JOB_CALL_ONCE:
-                    _m_shared_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job));
+                    _m_shared_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
                     break;
                 case universe_action::action_type::ADD_AFTER_JOB_FOR_WORLDS:
-                    _m_shared_after_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job));
+                    _m_shared_after_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
                     break;
                 case universe_action::action_type::ADD_AFTER_JOB_CALL_ONCE:
-                    _m_shared_after_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job));
+                    _m_shared_after_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
                     break;
 
                 case universe_action::action_type::REMOVE_PRE_JOB_FOR_WORLDS:
@@ -1523,6 +1539,9 @@ namespace jeecs_impl
                             cur_action->m_for_worlds_job, this);
                     else
                     {
+                        if (cur_action->m_free_function != nullptr)
+                            cur_action->m_free_function((*fnd)->m_custom_data);
+
                         delete* fnd;
                         _m_shared_pre_jobs.erase(fnd);
                     }
@@ -1629,15 +1648,14 @@ namespace jeecs_impl
         }
         void update() noexcept
         {
-            // 0. update actions & worlds
-            update_universe_action_and_worlds();
+            _m_current_time += _m_next_execute_interval;
+            _m_next_execute_interval = 1.0;
 
-            je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
+            je_clock_sleep_until(_m_current_time);
             if (je_clock_time() - _m_current_time >= 2.0)
                 _m_current_time = je_clock_time();
-
-            _m_next_execute_interval = 1.0;
             // Sleep end!
+            
             // New frame begin here!!!!
 
             // Walk through all jobs:
@@ -1651,16 +1669,19 @@ namespace jeecs_impl
                             ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
                                 [this, shared_job](ecs_world* world) {
                                     shared_job->set_next_execute_time(
-                                        next_execute_time_allign(shared_job->m_for_worlds_job(world)));
+                                        next_execute_time_allign(shared_job->m_for_worlds_job(world, shared_job->m_custom_data)));
                                 });
                         else
                             shared_job->set_next_execute_time(
-                                next_execute_time_allign(shared_job->m_call_once_job()));
+                                next_execute_time_allign(shared_job->m_call_once_job(shared_job->m_custom_data)));
                     }
                     set_next_execute_interval(shared_job->m_next_execute_time - current_time());
                 });
 
-            // 2. Do normal jobs.
+            // 2. update actions & worlds
+            update_universe_action_and_worlds();
+
+            // 3. Do normal jobs.
             ParallelForeach(
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
                 [this](ecs_job* shared_job) {
@@ -1670,16 +1691,16 @@ namespace jeecs_impl
                             ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
                                 [this, shared_job](ecs_world* world) {
                                     shared_job->set_next_execute_time(
-                                        next_execute_time_allign(shared_job->m_for_worlds_job(world)));
+                                        next_execute_time_allign(shared_job->m_for_worlds_job(world, shared_job->m_custom_data)));
                                 });
                         else
                             shared_job->set_next_execute_time(
-                                next_execute_time_allign(shared_job->m_call_once_job()));
+                                next_execute_time_allign(shared_job->m_call_once_job(shared_job->m_custom_data)));
                     }
                     set_next_execute_interval(shared_job->m_next_execute_time - current_time());
                 });
 
-            // 3. Do after jobs.
+            // 4. Do after jobs.
             ParallelForeach(
                 _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
                 [this](ecs_job* shared_job) {
@@ -1689,11 +1710,11 @@ namespace jeecs_impl
                             ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
                                 [this, shared_job](ecs_world* world) {
                                     shared_job->set_next_execute_time(
-                                        next_execute_time_allign(shared_job->m_for_worlds_job(world)));
+                                        next_execute_time_allign(shared_job->m_for_worlds_job(world, shared_job->m_custom_data)));
                                 });
                         else
                             shared_job->set_next_execute_time(
-                                next_execute_time_allign(shared_job->m_call_once_job()));
+                                next_execute_time_allign(shared_job->m_call_once_job(shared_job->m_custom_data)));
                     }
                     set_next_execute_interval(shared_job->m_next_execute_time - current_time());
                 });
@@ -1704,7 +1725,7 @@ namespace jeecs_impl
             DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
             // Append default jobs for updating systems.
-            je_ecs_universe_register_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds);
+            je_ecs_universe_register_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds, nullptr, nullptr);
 
             _m_universe_update_thread_stop_flag.test_and_set();
             _m_universe_update_thread = std::move(std::thread(
@@ -1759,52 +1780,58 @@ namespace jeecs_impl
             m_exit_callback_list.add_one(node);
         }
 
-        inline void register_pre_call_once_job(je_job_call_once_t job)noexcept
+        inline void register_pre_call_once_job(je_job_call_once_t job, void* custom_data, void(*free_function)(void*))noexcept
         {
             universe_action* action = new universe_action;
             action->m_type = universe_action::action_type::ADD_PRE_JOB_CALL_ONCE;
             action->m_call_once_job = job;
-
+            action->m_custom_data = custom_data;
+            action->m_free_function = free_function;
             append_universe_action(action);
         }
-        inline void register_pre_for_worlds_job(je_job_for_worlds_t job)noexcept
+        inline void register_pre_for_worlds_job(je_job_for_worlds_t job, void* custom_data, void(*free_function)(void*))noexcept
         {
             universe_action* action = new universe_action;
             action->m_type = universe_action::action_type::ADD_PRE_JOB_FOR_WORLDS;
             action->m_for_worlds_job = job;
-
+            action->m_custom_data = custom_data;
+            action->m_free_function = free_function;
             append_universe_action(action);
         }
-        inline void register_call_once_job(je_job_call_once_t job)noexcept
+        inline void register_call_once_job(je_job_call_once_t job, void* custom_data, void(*free_function)(void*))noexcept
         {
             universe_action* action = new universe_action;
             action->m_type = universe_action::action_type::ADD_NORMAL_JOB_CALL_ONCE;
             action->m_call_once_job = job;
-
+            action->m_custom_data = custom_data;
+            action->m_free_function = free_function;
             append_universe_action(action);
         }
-        inline void register_for_worlds_job(je_job_for_worlds_t job)noexcept
+        inline void register_for_worlds_job(je_job_for_worlds_t job, void* custom_data, void(*free_function)(void*))noexcept
         {
             universe_action* action = new universe_action;
             action->m_type = universe_action::action_type::ADD_NORMAL_JOB_FOR_WORLDS;
             action->m_for_worlds_job = job;
-
+            action->m_custom_data = custom_data;
+            action->m_free_function = free_function;
             append_universe_action(action);
         }
-        inline void register_after_call_once_job(je_job_call_once_t job)noexcept
+        inline void register_after_call_once_job(je_job_call_once_t job, void* custom_data, void(*free_function)(void*))noexcept
         {
             universe_action* action = new universe_action;
             action->m_type = universe_action::action_type::ADD_AFTER_JOB_CALL_ONCE;
             action->m_call_once_job = job;
-
+            action->m_custom_data = custom_data;
+            action->m_free_function = free_function;
             append_universe_action(action);
         }
-        inline void register_after_for_worlds_job(je_job_for_worlds_t job)noexcept
+        inline void register_after_for_worlds_job(je_job_for_worlds_t job, void* custom_data, void(*free_function)(void*))noexcept
         {
             universe_action* action = new universe_action;
             action->m_type = universe_action::action_type::ADD_AFTER_JOB_FOR_WORLDS;
             action->m_for_worlds_job = job;
-
+            action->m_custom_data = custom_data;
+            action->m_free_function = free_function;
             append_universe_action(action);
         }
 
@@ -1907,7 +1934,7 @@ namespace jeecs_impl
             m_next_execute_time = nextTime;
     }
 
-    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world)
+    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void* _)
     {
         ecs_world* cur_world = (ecs_world*)_ecs_world;
 
@@ -2313,29 +2340,29 @@ jeecs::typing::uid_t jedbg_get_editing_entity_uid()
     return _editor_entity_uid;
 }
 
-void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job)
+void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*))
 {
-    ((jeecs_impl::ecs_universe*)universe)->register_pre_for_worlds_job(job);
+    ((jeecs_impl::ecs_universe*)universe)->register_pre_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job)
+void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*))
 {
-    ((jeecs_impl::ecs_universe*)universe)->register_pre_call_once_job(job);
+    ((jeecs_impl::ecs_universe*)universe)->register_pre_call_once_job(job, data, freefunc);
 }
-void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job)
+void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*))
 {
-    ((jeecs_impl::ecs_universe*)universe)->register_for_worlds_job(job);
+    ((jeecs_impl::ecs_universe*)universe)->register_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job)
+void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*))
 {
-    ((jeecs_impl::ecs_universe*)universe)->register_call_once_job(job);
+    ((jeecs_impl::ecs_universe*)universe)->register_call_once_job(job, data, freefunc);
 }
-void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job)
+void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*))
 {
-    ((jeecs_impl::ecs_universe*)universe)->register_after_for_worlds_job(job);
+    ((jeecs_impl::ecs_universe*)universe)->register_after_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job)
+void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*))
 {
-    ((jeecs_impl::ecs_universe*)universe)->register_after_call_once_job(job);
+    ((jeecs_impl::ecs_universe*)universe)->register_after_call_once_job(job, data, freefunc);
 }
 
 void je_ecs_universe_unregister_pre_for_worlds_job(void* universe, je_job_for_worlds_t job)

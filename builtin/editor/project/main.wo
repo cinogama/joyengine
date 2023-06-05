@@ -15,9 +15,7 @@ import builtin.editor.tools.script_manager;
 
 namespace editor
 {
-    let  
-        DEFAULT_GRAPHIC_SYSTEM_NAME = "Graphic::DefaultGraphicPipelineSystem",
-        DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
+    let DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
 
     public using ProjectWorld = struct{
         m_world_instance: je::world,
@@ -37,9 +35,8 @@ namespace editor
         m_env: Environment,         // 项目环境
         m_configs: map<string, Project::IConfig>, // 配置信息，是的，这是个map，意味着开发者可以自己加点配置项目
         m_worlds: vec<ProjectWorld>,
-        m_default_worlds: mut option<je::world>, // 如果项目没有世界，那么创建一个默认的临时世界挂在这里，保证gui能跑
         m_modules: map<filesys::path_t, CxxProject>, 
-        
+        m_editing_world: mut option<je::world>,
         m_debug_context: mut option<DebugContext>,
     }
     {
@@ -71,13 +68,10 @@ namespace editor
 
             // 关闭所有世界~~
             do self->get_env->get_universe->editor::get_all_worlds
-                ->> func(w){
-                    if (self.m_default_worlds->val != w)
-                        w->close();
-                }
+                ->> \w = w->close();
                 ;
-            // 恢复所有世界！
 
+            // 恢复所有世界！
             self->restore_all_world(self.m_debug_context->val.m_dumped_editing_worlds);
             self.m_debug_context = option::none;
 
@@ -106,7 +100,6 @@ namespace editor
                 };
 
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
-            let mut rending_world = option::none: option<je::world>;
             for (let _, wdat : context.m_dumped_editing_worlds)
             {
                 let syss = wdat->getor("runtime_systems", []: dynamic) as array<dynamic>
@@ -117,23 +110,13 @@ namespace editor
                 let new_wdat = wdat->tomap;
                 new_wdat->set("systems", syss as array<dynamic>: dynamic);
 
-                let w = jeapi::deserialize::world(self->get_env->get_universe, new_wdat->unsafe::cast:<typeof(wdat)>);
-                if (wdat->getor("is_editing", false: dynamic) as bool)
-                {
-                    rending_world = option::value(w);
-                    je::gui::launch(func(){
-                        std::yield();
-                        jeapi::rend::reset_rend_world(w, self->get_config_graphic_pipeline);
-
-                        return false;
-                    }, ());
-                }
+                do jeapi::deserialize::world(self->get_env->get_universe, new_wdat->unsafe::cast:<typeof(wdat)>);
             }
             match (vmm_may_not_exist)
             {
             ok(vmm)?
                 {
-                    if (vmm->invoke("main", [self->get_env->get_universe as je::universe: dynamic, rending_world: dynamic])->has == false)
+                    if (vmm->invoke("main", [self->get_env->get_universe as je::universe: dynamic])->has == false)
                         je::logerr("运行时脚本发生了错误，可能是入口函数不存在或发生运行时终止。请检查日志");
                     do vmm->close();
                 }
@@ -182,41 +165,6 @@ namespace editor
             using je::gui;
 
             return {
-                /* 引擎的默认图形管线 */
-                ["JE_PROJECT_GRAPHIC_PIPELINE"] = IConfig::create(Config::create(
-                    typeinfo::load(DEFAULT_GRAPHIC_SYSTEM_NAME)->val,
-                    func(origin_graphic_pipeline)
-                    {
-                        let USABLE_GRAPHIC_SYSTEMS = typeinfo::editor::get_all_systems_types()
-                                ->  forall(\t = t->name->beginwith("Graphic::"););
-                        let USABLE_GRAPHIC_SYSTEM_NAMES =  USABLE_GRAPHIC_SYSTEMS
-                                ->> \t = t->name;;
-
-                        return Combo("图形管线", 
-                            USABLE_GRAPHIC_SYSTEM_NAMES, 
-                            USABLE_GRAPHIC_SYSTEM_NAMES->find(origin_graphic_pipeline->name))
-                            =>> \index = USABLE_GRAPHIC_SYSTEMS->get(index);;
-                    },
-                    func(oldval, newval)
-                    {
-                        // 移除当前世界中的老渲染管线，换个新的
-                        match (world::rend(env->get_universe))
-                        {
-                        value(current_rend_world)?
-                        {
-                            current_rend_world->remove_system(oldval);
-                            do current_rend_world->add_system(newval);
-                        }
-                        none?
-                            je::logwarn("设置管线时未发现渲染中的世界，跳过更新世界");
-                        }
-                        
-                        return true;
-                    },
-                    \val = val->name;,
-                    \str = typeinfo::load(str);,
-                    \type = F"ENGINE_GRAPHIC_PIPELINE = {type->name->enstring()};";,
-                )),
                 /* 引擎的默认编辑器系统 */
                 ["JE_PROJECT_EDITOR_SYSTEM"] = IConfig::create(Config::create(
                     typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->val,
@@ -227,25 +175,15 @@ namespace editor
                         let USABLE_EDITOR_SYSTEM_NAMES =  USABLE_EDITOR_SYSTEMS
                                 ->> \t = t->name;;
 
-                        return Combo("编辑系统", 
+                        let result = Combo("编辑系统", 
                             USABLE_EDITOR_SYSTEM_NAMES, 
                             USABLE_EDITOR_SYSTEM_NAMES->find(origin_editor_system->name))
                             =>> \index = USABLE_EDITOR_SYSTEMS->get(index);;
+                        TextDisabled("* 重启后生效");
+                        return result;
                     },
                     func(oldval, newval)
                     {
-                        // 移除当前世界中的老编辑系统，换个新的
-                        match (world::rend(env->get_universe))
-                        {
-                        value(current_rend_world)?
-                        {
-                            current_rend_world->remove_system(oldval);
-                            do current_rend_world->add_system(newval);
-                        }
-                        none?
-                            je::logwarn("设置编辑系统时未发现渲染中的世界，跳过更新世界");
-                        }
-                        
                         return true;
                     },
                     \val = val->name;,
@@ -299,13 +237,10 @@ namespace editor
                 m_env = env,
                 m_configs = _create_default_configs(env),
                 m_worlds = []mut,
-                m_default_worlds = mut option::none,
                 m_modules = {}mut,
                 m_debug_context = mut option::none,
+                m_editing_world = mut option::none,
             };
-
-            // 创建完项目后，保证创建一个新世界并开始渲染，否则GUI协程就没法跑了
-            proj->_run_default_world;
 
             tools::update_tool_scripts(proj);
             gui::drawpannel::update_and_get_scripts(proj);
@@ -410,12 +345,7 @@ namespace editor
         }
         public func get_editing_world(self: Project)
         {
-            return je::world::rend(self.m_env->get_universe)
-                =>> \w = self->is_project_world(w)
-                    ? option::value(w)
-                    | option::none
-                    ;
-                ;
+            return self.m_editing_world;
         }
         public func validate_world_or_warning(self: Project, world: je::world)
         {
@@ -452,22 +382,11 @@ namespace editor
                 }
                 none?;
                 }
-                jeapi::rend::reset_rend_world(world, self->get_config_graphic_pipeline);
                 do world->add_system(self->get_config_editor_system);
-
+                self.m_editing_world = option::value(world);
                 return result::ok(do nil);
             }
             return result::err("给定的世界不属于当前项目");
-        }
-
-        func _run_default_world(self: Project)
-        {
-            assert(self.m_worlds->empty);
-            assert(self.m_default_worlds->has == false);
-
-            let default_world = self.m_env->create_world;
-            jeapi::rend::reset_rend_world(default_world, self->get_config_graphic_pipeline);
-            self.m_default_worlds = option::value(default_world);
         }
 
         public func get_configs(self: Project)
@@ -480,14 +399,6 @@ namespace editor
             return self.m_configs->get(config_name);
         }
 
-        public func get_config_graphic_pipeline(self: Project)
-        {
-            return self->get_config("JE_PROJECT_GRAPHIC_PIPELINE")
-                ->> \config = config->tostring;
-                ->  valor(DEFAULT_GRAPHIC_SYSTEM_NAME)
-                ->  je::typeinfo::load
-                ->  val;
-        }
         public func get_config_editor_system(self: Project)
         {
             return self->get_config("JE_PROJECT_EDITOR_SYSTEM")
@@ -552,22 +463,6 @@ namespace editor
                 je::typeinfo::load("Editor::EntityMoverRoot")->val,
             ]);
 
-            // 有新建世界进来，关掉默认世界（如果有的话）
-            match (self.m_default_worlds)
-            {
-            value(default_world)?
-            {
-                default_world->close;
-                do self.m_default_worlds = option::none;
-
-                // 在此处重置编辑中世界，因为之前在渲染默认世界，
-                // 移除默认世界之后，如果没有设置渲染世界，就寄了
-                // 必须成功!
-                self->reset_editing_world(world.m_world_instance)->unwarp;
-            }
-            none?
-                ;
-            }
             return world.m_world_instance;
         }
         public func create_new_world(self: Project, new_world_file_path: filesys::path_t)
@@ -599,7 +494,7 @@ namespace editor
         }
         public func deserialize_world(self: Project, dat: dict<string, dynamic>)
         {
-            return self->append_world_to_list(
+            let w = self->append_world_to_list(
                 ProjectWorld 
                 {
                     m_world_instance = self.m_env->load_world(dat),
@@ -609,6 +504,11 @@ namespace editor
                             =>> \elem = systype->has ? [systype->val] | []
                                 where systype = je::typeinfo::load(elem as string);,
                 });
+
+            if (dat->getor("is_editing", false: dynamic) as bool)
+                do self->reset_editing_world(w);
+
+            return w;
         }
         public func save_world(self: Project, w: je::world)
         {
@@ -625,14 +525,7 @@ namespace editor
                         ->> \k, v = (k as string, v);
                         ;
                     ;
-                ->> \dat = self->deserialize_world(dat)
-                    ->  func (w)
-                        {
-                            if (dat->getor("is_editing", false: dynamic) as bool)
-                                do self->reset_editing_world(w);
-                            return w;
-                        }
-                    ;
+                ->> \dat = self->deserialize_world(dat);
                 ;
         }
         
@@ -650,13 +543,14 @@ namespace editor
                 // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
                 do self.m_worlds->remove(self.m_worlds->find(w));
 
-                // 如果还有世界，那么选择第一个作为编辑中世界顶替，否则起用默认世界
+                // 如果还有世界，那么选择第一个作为编辑中世界顶替
                 self.m_worlds->get(0)
                     ->> \w = need_update_new_editing_world 
                         ? self->reset_editing_world(w.m_world_instance)->unwarp
                         | nil: void
                         ; // 必须成功
-                    ->  or(\= self->_run_default_world;);
+                    ->  or(\ = self.m_editing_world = option::none;)
+                    ;
 
                 world->close;
                 

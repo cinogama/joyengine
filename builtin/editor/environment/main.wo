@@ -12,6 +12,7 @@ namespace editor
     {
         public func create()
         {
+            let u = je::universe::create();
             return Environment{
                 m_universe = je::universe::create(),
             };
@@ -22,6 +23,7 @@ namespace editor
         }
         public func wait(self: Environment)
         {
+            je::editor::init_graphic_pipeline(self.m_universe);
             self.m_universe->wait;
         }
         public func create_world(self: Environment)

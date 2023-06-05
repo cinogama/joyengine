@@ -483,7 +483,7 @@ namespace editor::gui::edit_forms
                 EndMenuBar();
             }
             
-            match (je::world::rend(context->get_project->get_env->get_universe))
+            match (context->get_project->get_editing_world)
             {
             value(current_editing_world)?
             {

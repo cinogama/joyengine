@@ -35,6 +35,12 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
+WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args, size_t argc)
+{
+    jedbg_get_editing_graphic_thread(wo_pointer(args + 0));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_set_runtime_path(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs_file_set_runtime_path(wo_string(args + 0));
@@ -79,11 +85,6 @@ WO_API wo_api wojeapi_woolang_version(wo_vm vm, wo_value args, size_t argc)
 {
     std::string woolang_version_info = "Woolang ";
     return wo_ret_string(vm, (woolang_version_info + wo_version() + " " + wo_compile_date()).c_str());
-}
-
-WO_API wo_api wojeapi_get_rendering_world(wo_vm vm, wo_value args, size_t argc)
-{
-    return wo_ret_option_ptr(vm, jedbg_get_rendering_world(wo_pointer(args + 0)));
 }
 
 WO_API wo_api wojeapi_crc64_file(wo_vm vm, wo_value args, size_t argc)
@@ -1482,6 +1483,9 @@ namespace je
 
     namespace editor
     {
+        extern("libjoyecs", "wojeapi_init_graphic_pipeline")
+        public func init_graphic_pipeline(u: universe)=> void;
+
         extern("libjoyecs", "wojeapi_set_runtime_path")
         public func set_runtime_path(path: string)=> void;
 
@@ -1926,9 +1930,6 @@ R"(
 
         extern("libjoyecs", "wojeapi_add_system_to_world")
         public func add_system(self: world, systype: typeinfo)=> bool;
-
-        extern("libjoyecs", "wojeapi_get_rendering_world")
-        public func rend(u: universe)=> option<world>;
 
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
         public func add_entity(self: world, components: array<typeinfo>)=> entity;
