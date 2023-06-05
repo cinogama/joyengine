@@ -496,6 +496,12 @@ R"(
     extern("libjoyecs", "je_gui_focus_on_any_windows")
     public func AnyWindowsFocused()=> bool;
 
+    extern("libjoyecs", "je_gui_begin_tool_tip")
+    public func BeginTooltip()=> void;
+
+    extern("libjoyecs", "je_gui_end_tool_tip")
+    public func EndTooltip()=> void;
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     extern("libjoyecs", "je_gui_launch")
@@ -517,6 +523,18 @@ R"(
 }
 
 )";
+
+WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::BeginTooltip();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_end_tool_tip(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::EndTooltip();
+    return wo_ret_void(vm);
+}
 
 bool any_window_focused_on = false;
 bool next_frame_any_window_focused_on = false;

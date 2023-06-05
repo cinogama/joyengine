@@ -18,6 +18,7 @@ namespace editor::gui::edit_forms
             je::gui::SetNextWindowSizeConstraints((300., 200.), (2000., 1100.));
             show->set(BeginAttrOpen("调试器视口", 
                 WindowsAttribute::ImGuiWindowFlags_MenuBar
+                + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
                 + (windows_moveable 
                     ? WindowsAttribute::ImGuiWindowFlags_None
                     | WindowsAttribute::ImGuiWindowFlags_NoMove)));

@@ -30,15 +30,21 @@ namespace jeapi::gui::widget
     {
         using je::gui;
 
+        Text(name);
+        SameLine();
         if (Button(path))
         {
             // Open File dialog?
         }
-
+        let is_hovered = IsItemHovered();
         let drag_result = accept_file_for_current_widget();
 
-        SameLine();
-        Text(name);
+        if (is_hovered)
+        {
+            BeginTooltip();
+            Text(path);
+            EndTooltip();
+        }
 
         return drag_result;
     }

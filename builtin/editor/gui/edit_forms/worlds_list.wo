@@ -18,7 +18,7 @@ namespace editor::gui::edit_forms
         if (show->get)
         {
             je::gui::SetNextWindowSizeConstraints((200., 300.), (200., 5000.));
-            do show->set(BeginOpen("世界列表##jeeditor"));
+            do show->set(BeginAttrOpen("世界列表##jeeditor", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
 
             static let img = je::graphic::texture::load("!/builtin/icon/File.png")->val;
 

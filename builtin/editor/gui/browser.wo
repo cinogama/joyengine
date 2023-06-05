@@ -1036,7 +1036,7 @@ namespace $$MODULE_NAME$$
         if (show->get)
         {
             je::gui::SetNextWindowSizeConstraints((500., 200.), (2000., 1100.));
-            do show->set(BeginAttrOpen("资源管理器", WindowsAttribute::ImGuiWindowFlags_None));
+            do show->set(BeginAttrOpen("资源管理器", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
                 path_tree(context);
                 SameLine();
                 BeginGroup();

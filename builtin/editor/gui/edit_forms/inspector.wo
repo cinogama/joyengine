@@ -119,7 +119,7 @@ namespace editor::gui::edit_forms
             if (show->get)
             {
                 je::gui::SetNextWindowSizeConstraints((250., 400.), (500., 4000.));
-                do show->set(BeginOpen("检视面板##jeeditor"));
+                do show->set(BeginAttrOpen("检视面板##jeeditor", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
 
                 let (_, mut _1_3_height) = GetContentRegionAvail();
                 _1_3_height /= 3.;
