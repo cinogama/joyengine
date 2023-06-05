@@ -1449,7 +1449,36 @@ namespace jeecs_impl
         }
         void update_universe_action_and_worlds()noexcept
         {
-            // After a round of update, execute universe actions
+            std::vector<ecs_world*> _m_removing_worlds;
+
+            // Update all worlds, if world is closing, add it to _m_removing_worlds.
+            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                [this, &_m_removing_worlds](ecs_world* world) {
+                    if (!world->update())
+                    {
+                        std::lock_guard g1(_m_removing_worlds_appending_mx);
+
+                        // Ready remove the world from list;
+                        _m_removing_worlds.push_back(world);
+                    }
+                });
+
+            // Remove all closed worlds
+            for (ecs_world* removed_world : _m_removing_worlds)
+            {
+                auto fnd = std::find(_m_world_list.begin(), _m_world_list.end(), removed_world);
+                if (fnd != _m_world_list.end())
+                    _m_world_list.erase(fnd);
+                else
+                    // Current world is not found in world_list, that should not happend.
+                    assert(false);
+
+                DEBUG_ARCH_LOG("World(%p) has been destroyed.", removed_world);
+                delete removed_world;
+            }
+
+            // After world update, some universe job might need to be removed.
+            // Update them here.
             auto* universe_act = _m_universe_actions.pick_all();
             while (universe_act)
             {
@@ -1597,40 +1626,18 @@ namespace jeecs_impl
                 delete cur_action;
             }
 
-            std::vector<ecs_world*> _m_removing_worlds;
-
-            // Update all worlds, if world is closing, add it to _m_removing_worlds.
-            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                [this, &_m_removing_worlds](ecs_world* world) {
-                    if (!world->update())
-                    {
-                        std::lock_guard g1(_m_removing_worlds_appending_mx);
-
-                        // Ready remove the world from list;
-                        _m_removing_worlds.push_back(world);
-                    }
-                });
-
-            // Remove all closed worlds
-            for (ecs_world* removed_world : _m_removing_worlds)
-            {
-                auto fnd = std::find(_m_world_list.begin(), _m_world_list.end(), removed_world);
-                if (fnd != _m_world_list.end())
-                    _m_world_list.erase(fnd);
-                else
-                    // Current world is not found in world_list, that should not happend.
-                    assert(false);
-
-                DEBUG_ARCH_LOG("World(%p) has been destroyed.", removed_world);
-                delete removed_world;
-            }
-
         }
         void update() noexcept
         {
             // 0. update actions & worlds
             update_universe_action_and_worlds();
 
+            je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
+            if (je_clock_time() - _m_current_time >= 2.0)
+                _m_current_time = je_clock_time();
+
+            _m_next_execute_interval = 1.0;
+            // Sleep end!
             // New frame begin here!!!!
 
             // Walk through all jobs:
@@ -1672,13 +1679,6 @@ namespace jeecs_impl
                     set_next_execute_interval(shared_job->m_next_execute_time - current_time());
                 });
 
-            je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
-            if (je_clock_time() - _m_current_time >= 2.0)
-                _m_current_time = je_clock_time();
-
-            _m_next_execute_interval = 1.0;
-            // Sleep end!
-
             // 3. Do after jobs.
             ParallelForeach(
                 _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
@@ -1704,7 +1704,7 @@ namespace jeecs_impl
             DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
             // Append default jobs for updating systems.
-            je_ecs_universe_register_pre_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds);
+            je_ecs_universe_register_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds);
 
             _m_universe_update_thread_stop_flag.test_and_set();
             _m_universe_update_thread = std::move(std::thread(
