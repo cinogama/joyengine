@@ -1631,13 +1631,7 @@ namespace jeecs_impl
             // 0. update actions & worlds
             update_universe_action_and_worlds();
 
-            je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
-            if (je_clock_time() - _m_current_time >= 2.0)
-                _m_current_time = je_clock_time();
-
-            _m_next_execute_interval = 1.0;
-
-            // Sleep end, new frame begin here!!!!
+            // New frame begin here!!!!
 
             // Walk through all jobs:
             // 1. Do pre jobs.
@@ -1658,6 +1652,7 @@ namespace jeecs_impl
                     }
                     set_next_execute_interval(shared_job->m_next_execute_time - current_time());
                 });
+
             // 2. Do normal jobs.
             ParallelForeach(
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
@@ -1676,6 +1671,14 @@ namespace jeecs_impl
                     }
                     set_next_execute_interval(shared_job->m_next_execute_time - current_time());
                 });
+
+            je_clock_sleep_until(_m_current_time += _m_next_execute_interval);
+            if (je_clock_time() - _m_current_time >= 2.0)
+                _m_current_time = je_clock_time();
+
+            _m_next_execute_interval = 1.0;
+            // Sleep end!
+
             // 3. Do after jobs.
             ParallelForeach(
                 _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),

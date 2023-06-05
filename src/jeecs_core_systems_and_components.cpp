@@ -27,15 +27,6 @@ const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const ch
 
 void jeecs_entry_register_core_systems()
 {
-    jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
-
-    jeecs::typing::type_info::of<jeecs::Physics2DUpdatingSystem>("Physics::Physics2DUpdatingSystem");
-
-    jeecs::typing::type_info::of<jeecs::FrameAnimation2DSystem>("Animation2D::FrameAnimation2DSystem");
-
-    jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
-    jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
-
     jeecs::typing::type_info::of<jeecs::Editor::Name>("Editor::Name");
     jeecs::typing::type_info::of<jeecs::Editor::Anchor>("Editor::Anchor");
     jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
@@ -46,5 +37,12 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::Editor::EntitySelectBox>("Editor::EntitySelectBox");
     jeecs::typing::type_info::of<jeecs::Editor::MapTileSet>("Editor::MapTileSet");
     jeecs::typing::type_info::of<jeecs::Editor::MapTile>("Editor::MapTile");
+
     jeecs::typing::type_info::of<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
+    jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
+    jeecs::typing::type_info::of<jeecs::Physics2DUpdatingSystem>("Physics::Physics2DUpdatingSystem");
+    jeecs::typing::type_info::of<jeecs::FrameAnimation2DSystem>("Animation2D::FrameAnimation2DSystem");
+
+    jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
+    jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
 }

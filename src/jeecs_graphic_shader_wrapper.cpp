@@ -823,38 +823,31 @@ public using integer = gchandle;
 
 public using structure = gchandle;
 
-private func _type_is_same<AT, BT>()=> bool
-{
-    if (func()=>AT{}() is BT)
-        return true;
-    return false;
-}
-
 private func _get_type_enum<ShaderValueT>()=> shader_value_type
 {
-    if (_type_is_same:<ShaderValueT, float>())
+    if (std::is_same_type:<ShaderValueT, float>)
         return shader_value_type::FLOAT;
-    else if (_type_is_same:<ShaderValueT, float2>())
+    else if (std::is_same_type:<ShaderValueT, float2>)
         return shader_value_type::FLOAT2;
-    else if (_type_is_same:<ShaderValueT, float3>())
+    else if (std::is_same_type:<ShaderValueT, float3>)
         return shader_value_type::FLOAT3;
-    else if (_type_is_same:<ShaderValueT, float4>())
+    else if (std::is_same_type:<ShaderValueT, float4>)
         return shader_value_type::FLOAT4;
-    else if (_type_is_same:<ShaderValueT, float2x2>())
+    else if (std::is_same_type:<ShaderValueT, float2x2>)
         return shader_value_type::FLOAT2x2;
-    else if (_type_is_same:<ShaderValueT, float3x3>())
+    else if (std::is_same_type:<ShaderValueT, float3x3>)
         return shader_value_type::FLOAT3x3;
-    else if (_type_is_same:<ShaderValueT, float4x4>())
+    else if (std::is_same_type:<ShaderValueT, float4x4>)
         return shader_value_type::FLOAT4x4;
-    else if (_type_is_same:<ShaderValueT, texture2d>())
+    else if (std::is_same_type:<ShaderValueT, texture2d>)
         return shader_value_type::TEXTURE2D;
-    else if (_type_is_same:<ShaderValueT, texture2dms>())
+    else if (std::is_same_type:<ShaderValueT, texture2dms>)
         return shader_value_type::TEXTURE2D_MS;
-    else if (_type_is_same:<ShaderValueT, texturecube>())
+    else if (std::is_same_type:<ShaderValueT, texturecube>)
         return shader_value_type::TEXTURE_CUBE;
-    else if (_type_is_same:<ShaderValueT, integer>())
+    else if (std::is_same_type:<ShaderValueT, integer>)
         return shader_value_type::INTEGER;
-    else if (_type_is_same:<ShaderValueT, structure>())
+    else if (std::is_same_type:<ShaderValueT, structure>)
         return shader_value_type::STRUCT;
 
     std::halt("Unknown type, not shader type?");

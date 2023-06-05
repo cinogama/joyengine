@@ -4,7 +4,6 @@ import pkg.filesystem;
 import woo.shell;
 import builtin.editor.cpp.main;
 import builtin.editor.gui.animation2d;
-import builtin.editor.gui.tileeditor;
 
 using je::gui;
 
