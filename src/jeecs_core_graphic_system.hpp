@@ -155,30 +155,45 @@ public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: 
 
 namespace jeecs
 {
-    struct GraphicPipelineBaseSystem : public game_system
+    struct rendchain_branch_pipeline
     {
-        void (*m_frame_update_interface)(GraphicPipelineBaseSystem*);
-        int m_priority;
+        JECS_DISABLE_MOVE_AND_COPY(rendchain_branch_pipeline);
 
-        GraphicPipelineBaseSystem(game_world w, void (*_frame_update_interface)(GraphicPipelineBaseSystem*))
-            : game_system(w)
+        std::vector<jegl_rendchain*> m_allocated_chains;
+        size_t m_allocated_chains_count;
+        int    m_priority;
+
+        rendchain_branch_pipeline()
+            : m_allocated_chains_count(0)
             , m_priority(0)
-            , m_frame_update_interface(_frame_update_interface)
         {
-            assert(m_frame_update_interface != nullptr);
         }
-        void reset_priority(int priority)
+        ~rendchain_branch_pipeline()
+        {
+            for (auto* chain : m_allocated_chains)
+                jegl_rchain_close(chain);
+        }
+
+        void new_frame(int priority)
         {
             m_priority = priority;
+            m_allocated_chains_count = 0;
         }
-        void update_priority(int priority)
+        jegl_rendchain* allocate_new_chain(jegl_resource* framebuffer, float x, float y, float w, float h)
         {
-            if (priority > m_priority)
-                m_priority = priority;
+            if (m_allocated_chains_count <= m_allocated_chains.size())
+            {
+                assert(m_allocated_chains == m_allocated_chains.size());
+                m_allocated_chains.push_back(jegl_rchain_create());
+            }
+            auto* rchain = m_allocated_chains.back();
+            jegl_rchain_begin(rchain, framebuffer, x, y, w, h);
+            return rchain;
         }
-        void update_frame()
+        void commit_frame(jegl_thread* thread)
         {
-            m_frame_update_interface(this);
+            for (size_t i = 0; i < m_allocated_chains_count; ++i)
+                jegl_rchain_commit(m_allocated_chains[i]);
         }
     };
 
@@ -190,6 +205,7 @@ namespace jeecs
         jeecs::game_universe universe;
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
+        basic::resource<graphic::shader> _test_shader;
         basic::resource<graphic::texture> default_texture;
         jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
 
@@ -204,47 +220,49 @@ namespace jeecs
             return 1.0 / (double)graphic_host->glthread->m_config.m_fps;
         }
 
-        std::mutex m_graphic_pipelines_mx;
-        std::vector<GraphicPipelineBaseSystem*> m_graphic_pipelines;
+        std::mutex m_rendchain_branchs_mx;
+        std::vector<rendchain_branch_pipeline*> m_rendchain_branchs;
 
-        void register_pipeline(GraphicPipelineBaseSystem* sys)
+        rendchain_branch_pipeline* alloc_pipeline()
         {
-            std::lock_guard g1(m_graphic_pipelines_mx);
-            m_graphic_pipelines.push_back(sys);
+            rendchain_branch_pipeline* pipe = new rendchain_branch_pipeline();
+
+            std::lock_guard g1(m_rendchain_branchs_mx);
+            m_rendchain_branchs.push_back(pipe);
+
+            return pipe;
         }
 
-        void unregister_pipeline(GraphicPipelineBaseSystem* sys)
+        void free_pipeline(rendchain_branch_pipeline* pipe)
         {
-            std::lock_guard g1(m_graphic_pipelines_mx);
-            auto fnd = std::find(m_graphic_pipelines.begin(), m_graphic_pipelines.end(), sys);
-            assert(fnd != m_graphic_pipelines.end());
-            m_graphic_pipelines.erase(fnd);
+            std::lock_guard g1(m_rendchain_branchs_mx);
+            auto fnd = std::find(m_rendchain_branchs.begin(), m_rendchain_branchs.end(), pipe);
+            assert(fnd != m_rendchain_branchs.end());
+            m_rendchain_branchs.erase(fnd);
+
+            delete pipe;
         }
 
         void _frame_rend_impl()
         {
-            // ATTENTION: 注意！
-            // 由于帧更新发生在独立的job中，与图形系统并不同步，有可能发生图形系统提交的渲染数据更新不及时，导致
-            // 渲染job访问到已经无效的实体，这会导致非常严重的问题。
-            // 考虑两种解决方案：一个是调整图形库的实现，提交渲染链，保证图形系统提交的数据不会因为实体或组件灭失
-            // 导致访问异常数据。直接支持异步渲染（数据提交），但是要考虑shader texture等资源的管理异步问题
-            // 另一个是直接把实体的获取等做到job里，或者提供类似的同步机制
-            // 
             // Clear frame buffer
             jegl_clear_framebuffer(nullptr);
 
-            std::lock_guard g1(m_graphic_pipelines_mx);
+            std::lock_guard g1(m_rendchain_branchs_mx);
 
-            std::stable_sort(m_graphic_pipelines.begin(), m_graphic_pipelines.end(), 
-                [](GraphicPipelineBaseSystem* a, GraphicPipelineBaseSystem* b)
+            std::stable_sort(m_rendchain_branchs.begin(), m_rendchain_branchs.end(),
+                [](rendchain_branch_pipeline* a, rendchain_branch_pipeline* b)
                 {
                     return a->m_priority < b->m_priority;
                 });
 
-            for (auto * gpipe : m_graphic_pipelines)
-            {
-                gpipe->update_frame();
-            }
+            for (auto* gpipe : m_rendchain_branchs)
+                gpipe->commit_frame(glthread);
+
+            size_t WINDOWS_WIDTH, WINDOWS_HEIGHT;
+            jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
+
+            jegl_rend_to_framebuffer(nullptr, 0, 0, WINDOWS_WIDTH, WINDOWS_HEIGHT);
         }
 
         GraphicThreadHost(jeecs::game_universe _universe)
@@ -266,7 +284,27 @@ namespace jeecs
             default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
             default_texture->pix(1, 0).set({ 0.25f, 0.25f, 0.25f, 1.f });
             default_texture->resouce()->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::NEAREST;
+            _test_shader = graphic::shader::create("!/builtin/test_shader.shader", R"(
+import je.shader;
 
+VAO_STRUCT! vin {
+    vertex : float3,
+};
+using v2f = struct {
+    pos : float4,
+};
+using fout = struct {
+    color : float4
+};
+
+public let vert = 
+\v: vin = v2f{ pos = vertex_pos }
+    where vertex_pos = float4::create(v.vertex, 1.);;
+
+public let frag = 
+\f: v2f = fout{ color = float4::create(t, 0., t, 1.) }
+    where t = je_time->y();;
+)");
             default_shader = graphic::shader::create("!/builtin/builtin_default.shader", R"(
 // Default shader
 import je.shader;
@@ -336,23 +374,51 @@ public let frag =
 
             assert(_m_instance);
             return _m_instance;
-        }       
+        }
     };
 
-    template<typename PipelineT>
-    struct GraphicPipelineInterfaceSystem : GraphicPipelineBaseSystem
+    struct GraphicPipelineBaseSystem : game_system
     {
         GraphicThreadHost* _m_pipeline;
 
-        GraphicPipelineInterfaceSystem(game_world w)
-            : GraphicPipelineBaseSystem(w, &PipelineT::Frame)
+        std::vector<rendchain_branch_pipeline*> _m_rchain_pipeline;
+        size_t _m_this_frame_allocate_rchain_pipeline_count;
+
+
+        GraphicPipelineBaseSystem(game_world w)
+            : game_system(w)
             , _m_pipeline(GraphicThreadHost::get_default_graphic_pipeline_instance(w.get_universe()))
+            , _m_this_frame_allocate_rchain_pipeline_count(0)
         {
-            _m_pipeline->register_pipeline(this);
         }
-        ~GraphicPipelineInterfaceSystem()
+        ~GraphicPipelineBaseSystem()
         {
-            _m_pipeline->unregister_pipeline(this);
+            for (auto* branch : _m_rchain_pipeline)
+                _m_pipeline->free_pipeline(branch);
+
+            _m_rchain_pipeline.clear();
+            _m_this_frame_allocate_rchain_pipeline_count = 0;
+        }
+
+        void pipeline_update_begin()
+        {
+            _m_this_frame_allocate_rchain_pipeline_count = 0;
+        }
+        rendchain_branch_pipeline* pipeline_allocate()
+        {
+            if (_m_this_frame_allocate_rchain_pipeline_count <= _m_rchain_pipeline.size())
+            {
+                assert(_m_this_frame_allocate_rchain_pipeline_count == _m_rchain_pipeline.size());
+                _m_rchain_pipeline.push_back(_m_pipeline->alloc_pipeline());
+            }
+            return _m_rchain_pipeline[_m_this_frame_allocate_rchain_pipeline_count++];
+        }
+        void pipeline_update_end()
+        {
+            for (size_t i = _m_this_frame_allocate_rchain_pipeline_count; i < _m_rchain_pipeline.size(); ++i)
+                _m_pipeline->free_pipeline(_m_rchain_pipeline[i]);
+
+            _m_rchain_pipeline.resize(_m_this_frame_allocate_rchain_pipeline_count);
         }
 
         inline GraphicThreadHost* host()const noexcept
@@ -361,7 +427,7 @@ public let frag =
         }
     };
 
-    struct DefaultGraphicPipelineSystem : public GraphicPipelineInterfaceSystem<DefaultGraphicPipelineSystem>
+    struct DefaultGraphicPipelineSystem : public GraphicPipelineBaseSystem
     {
         using Translation = Transform::Translation;
 
@@ -380,6 +446,8 @@ public let frag =
 
         struct camera_arch
         {
+            rendchain_branch_pipeline* branchPipeline;
+
             const Rendqueue* rendqueue;
             const Projection* projection;
             const Viewport* viewport;
@@ -421,7 +489,7 @@ public let frag =
         };
 
         DefaultGraphicPipelineSystem(game_world w)
-            : GraphicPipelineInterfaceSystem(w)
+            : GraphicPipelineBaseSystem(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
@@ -491,17 +559,18 @@ public let frag =
             m_camera_list.clear();
             m_renderer_list.clear();
 
+            this->pipeline_update_begin();
+
             select_from(get_world())
                 .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
-                        if (rendqueue != nullptr)
-                            update_priority(rendqueue->rend_queue);
-
+                        auto* branch = this->pipeline_allocate();
+                        branch->new_frame(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
-                                rendqueue, &projection, cameraviewport, rendbuf
+                                branch, rendqueue, &projection, cameraviewport, rendbuf
                             }
                         );
                     })
@@ -518,13 +587,14 @@ public let frag =
                         .anyof<Shaders, Textures, Shape>()
                         .except<Light2D::Color>()
                         ;
-                    std::sort(m_camera_list.begin(), m_camera_list.end());
-                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
+            std::sort(m_camera_list.begin(), m_camera_list.end());
+            std::sort(m_renderer_list.begin(), m_renderer_list.end());
+
+            this->pipeline_update_end();
+
+            DrawFrame();
         }
-        static void Frame(GraphicPipelineBaseSystem* pipe)
-        {
-            static_cast<DefaultGraphicPipelineSystem*>(pipe)->DrawFrame();
-        }
+
         void DrawFrame()
         {
             jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
@@ -659,7 +729,7 @@ if (builtin_uniform->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
     };
 
-    struct DeferLight2DGraphicPipelineSystem : public GraphicPipelineInterfaceSystem<DeferLight2DGraphicPipelineSystem>
+    struct DeferLight2DGraphicPipelineSystem : public GraphicPipelineBaseSystem
     {
         struct DeferLight2DHost
         {
@@ -1004,6 +1074,8 @@ public func frag(vf: v2f)
 
         struct camera_arch
         {
+            rendchain_branch_pipeline* branchPipeline;
+
             const Rendqueue* rendqueue;
             const Translation* translation;
             const Projection* projection;
@@ -1082,7 +1154,7 @@ public func frag(vf: v2f)
         };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
-            : GraphicPipelineInterfaceSystem(w)
+            : GraphicPipelineBaseSystem(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
             m_light2d_uniform_buffer = new jeecs::graphic::uniformbuffer(1, sizeof(light2d_uniform_buffer_data_t));
@@ -1160,12 +1232,12 @@ public func frag(vf: v2f)
                 .exec(
                     [this](Translation& tarns, Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPass* light2dpass)
                     {
-                        if (rendqueue != nullptr)
-                            update_priority(rendqueue->rend_queue);
+                        auto* branch = this->pipeline_allocate();
+                        branch->new_frame(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
 
                         m_camera_list.emplace_back(
                             camera_arch{
-                                rendqueue,&tarns,&projection, cameraviewport, rendbuf, light2dpass
+                                branch, rendqueue, &tarns, &projection, cameraviewport, rendbuf, light2dpass
                             }
                         );
 

@@ -81,14 +81,14 @@ void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, float 
 jegl_binding_texture_data_node* _jegl_rchain_get_texture_node(jegl_rendchain* chain)
 {
     size_t texture_index = chain->m_binding_textures_count++;
-    if (texture_index < chain->m_binding_textures.size())
+    if (texture_index <= chain->m_binding_textures.size())
     {
         assert(chain->m_binding_textures.size() == texture_index);
         chain->m_binding_textures.push_back(jegl_binding_texture_data_node{
             texture_index == 0? nullptr : &chain->m_binding_textures[texture_index - 1]
             });
     }
-    auto* textures_addr = &chain->m_binding_textures[texture_index - 1];
+    auto* textures_addr = &chain->m_binding_textures[texture_index];
     textures_addr->m_binding_textures.clear();
     return textures_addr;
 }
@@ -102,7 +102,7 @@ jegl_rendchain_rend_action* jegl_rchain_rend(jegl_rendchain* chain, jegl_resourc
 
     size_t current_id = chain->m_rend_action_count++;
 
-    if (current_id < chain->m_rend_actions.size())
+    if (current_id <= chain->m_rend_actions.size())
     {
         assert(chain->m_rend_actions.size() == current_id);
         chain->m_rend_actions.emplace_back(jegl_rendchain_rend_action{ chain });
@@ -119,7 +119,7 @@ jegl_uniform_data_node* _jegl_rchain_get_uniform_node(jegl_rendchain_rend_action
 {
     size_t uniform_index = act->m_chain->m_used_uniform_count++;
 
-    if (uniform_index < act->m_chain->m_used_uniforms.size())
+    if (uniform_index <= act->m_chain->m_used_uniforms.size())
     {
         assert(chain->m_used_uniforms.size() == uniform_index);
         act->m_chain->m_used_uniforms.push_back({});
