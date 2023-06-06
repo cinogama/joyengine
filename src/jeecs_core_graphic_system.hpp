@@ -223,6 +223,13 @@ namespace jeecs
 
         void _frame_rend_impl()
         {
+            // ATTENTION: 注意！
+            // 由于帧更新发生在独立的job中，与图形系统并不同步，有可能发生图形系统提交的渲染数据更新不及时，导致
+            // 渲染job访问到已经无效的实体，这会导致非常严重的问题。
+            // 考虑两种解决方案：一个是调整图形库的实现，提交渲染链，保证图形系统提交的数据不会因为实体或组件灭失
+            // 导致访问异常数据。直接支持异步渲染（数据提交），但是要考虑shader texture等资源的管理异步问题
+            // 另一个是直接把实体的获取等做到job里，或者提供类似的同步机制
+            // 
             // Clear frame buffer
             jegl_clear_framebuffer(nullptr);
 

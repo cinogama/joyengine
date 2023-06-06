@@ -468,8 +468,8 @@ JE_API void je_ecs_universe_stop(void* universe);
 
 JE_API void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg);
 
-typedef double(*je_job_for_worlds_t)(void* world, void* custom_data);
-typedef double(*je_job_call_once_t)(void* custom_data);
+typedef double(*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
+typedef double(*je_job_call_once_t)(void* /*custom_data*/);
 
 /*
 Jobs in universe have 2*3 types:
