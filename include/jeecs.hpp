@@ -1045,22 +1045,26 @@ JE_API jegl_thread* jegl_current_thread();
 
 // jegl rendchain api
 struct jegl_rendchain;
-struct jegl_binding_texture_data_node;
 struct jegl_rendchain_rend_action;
 struct jegl_uniform_data_node;
 
 JE_API jegl_rendchain* jegl_rchain_create();
 JE_API void jegl_rchain_close(jegl_rendchain* chain);
 JE_API void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, float x, float y, float w, float h);
-JE_API jegl_rendchain_rend_action* jegl_rchain_rend(jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex);
+JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource* uniformbuffer);
+JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain);
+JE_API void jegl_rchain_clear_depth_buffer(jegl_rendchain* chain);
+JE_API size_t jegl_rchain_allocate_texture_group(jegl_rendchain* chain);
+JE_API jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, size_t texture_group);
 JE_API void jegl_rchain_set_uniform_int(jegl_rendchain_rend_action* act, int binding_place, int val);
 JE_API void jegl_rchain_set_uniform_float(jegl_rendchain_rend_action* act, int binding_place, float val);
 JE_API void jegl_rchain_set_uniform_float2(jegl_rendchain_rend_action* act, int binding_place, float x, float y);
 JE_API void jegl_rchain_set_uniform_float3(jegl_rendchain_rend_action* act, int binding_place, float x, float y, float z);
 JE_API void jegl_rchain_set_uniform_float4(jegl_rendchain_rend_action* act, int binding_place, float x, float y, float z, float w);
-JE_API void jegl_rchain_set_uniform_float4x4(jegl_rendchain_rend_action* act, int binding_place, float(*mat)[4]);
-JE_API void jegl_rchain_bind_texture(jegl_rendchain_rend_action* act, size_t binding_pass, jegl_resource* texture);
-JE_API void jegl_rchain_commit(jegl_rendchain* chain);
+JE_API void jegl_rchain_set_uniform_float4x4(jegl_rendchain_rend_action* act, int binding_place, const float(*mat)[4]);
+JE_API void jegl_rchain_bind_texture(jegl_rendchain* chain, size_t texture_group, size_t binding_pass, jegl_resource* texture);
+JE_API void jegl_rchain_bind_pre_texture_group(jegl_rendchain* chain, size_t texture_group);
+JE_API void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread);
 
 JE_API void je_io_set_keystate(jeecs::input::keycode keycode, bool keydown);
 JE_API void je_io_set_mousepos(int group, int x, int y);
@@ -2929,10 +2933,10 @@ namespace jeecs
             return _m_delta_time;
         }
 
-#define PreUpdate       PreUpdate       // 读取 Graphic
+#define PreUpdate       PreUpdate       // 读取 
 #define Update          Update          // 写入 Animation
 #define LateUpdate      LateUpdate      // 更新 Translation 
-#define CommitUpdate    CommitUpdate    // 提交 Physics
+#define CommitUpdate    CommitUpdate    // 提交 Physics Graphic
 
 
         /*

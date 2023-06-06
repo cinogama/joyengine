@@ -16,12 +16,15 @@ struct jegl_thread_notifier
     std::condition_variable m_update_waiter;
 
     std::atomic_bool m_reboot_flag;
+
+    std::list<jegl_rendchain*> _m_commited_rendchains;
 };
 
 thread_local jegl_thread* _current_graphic_thread = nullptr;
 void* const INVALID_RESOURCE = (void*)(size_t)-1;
 
 jeecs::basic::atomic_list<jegl_resource::jegl_destroy_resouce> _destroing_graphic_resources;
+bool _jegl_rchain_resource_used_by_chain(jegl_rendchain* chain, jegl_resource* resource);
 void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jegl_thread*), void* arg)
 {
     bool first_bootup = true;
@@ -46,34 +49,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                 // graphic thread want to exit. mark stop update
                 thread->m_stop_update = true;
             
-            auto* del_res = _destroing_graphic_resources.pick_all();
-            while (del_res)
-            {
-                auto* cur_del_res = del_res;
-                del_res = del_res->last;
-
-                if (cur_del_res->m_destroy_resource->m_graphic_thread == thread
-                    && cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
-                {
-                    if (cur_del_res->m_destroy_resource->m_ptr != INVALID_RESOURCE)
-                        thread->m_apis->close_resource(thread, cur_del_res->m_destroy_resource);
-
-                    delete cur_del_res->m_destroy_resource;
-                    delete cur_del_res;
-                }
-                else if (--cur_del_res->m_retry_times)
-                    // Need re-try
-                    _destroing_graphic_resources.add_one(cur_del_res);
-                else
-                {
-                    // Free this
-                    if (cur_del_res->m_destroy_resource->m_graphic_thread != nullptr)
-                        jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
-                            cur_del_res->m_destroy_resource);
-                    delete cur_del_res->m_destroy_resource;
-                    delete cur_del_res;
-                }
-            }
+            thread->_m_thread_notifier->_m_commited_rendchains.clear();
 
             // Ready for rend..
             if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
@@ -94,6 +70,49 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                 thread->_m_thread_notifier->m_update_flag = false;
                 thread->_m_thread_notifier->m_update_waiter.notify_all();
             } while (0);
+
+            auto* del_res = _destroing_graphic_resources.pick_all();
+            while (del_res)
+            {
+                auto* cur_del_res = del_res;
+                del_res = del_res->last;
+
+                if (cur_del_res->m_destroy_resource->m_graphic_thread == thread
+                    && cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
+                {
+                    bool need_release = true;
+                    for (auto * chain : thread->_m_thread_notifier->_m_commited_rendchains)
+                    {
+                        if (_jegl_rchain_resource_used_by_chain(chain, cur_del_res->m_destroy_resource))
+                        {
+                            _destroing_graphic_resources.add_one(cur_del_res);
+                            need_release = false;
+                            break;
+                        }
+                    }
+
+                    if (need_release)
+                    {
+                        if (cur_del_res->m_destroy_resource->m_ptr != INVALID_RESOURCE)
+                            thread->m_apis->close_resource(thread, cur_del_res->m_destroy_resource);
+
+                        delete cur_del_res->m_destroy_resource;
+                        delete cur_del_res;
+                    }
+                }
+                else if (--cur_del_res->m_retry_times)
+                    // Need re-try
+                    _destroing_graphic_resources.add_one(cur_del_res);
+                else
+                {
+                    // Free this
+                    if (cur_del_res->m_destroy_resource->m_graphic_thread != nullptr)
+                        jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
+                            cur_del_res->m_destroy_resource);
+                    delete cur_del_res->m_destroy_resource;
+                    delete cur_del_res;
+                }
+            }
         }
 
         thread->m_apis->shutdown_interface(thread, custom_interface,
@@ -105,6 +124,11 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
         thread->_m_thread_notifier->m_reboot_flag = false;
     } while (true);
 
+}
+
+void _jegl_commit_rendchain(jegl_thread* glthread, jegl_rendchain* chain)
+{
+    glthread->_m_thread_notifier->_m_commited_rendchains.push_back(chain);
 }
 
 //////////////////////////////////// API /////////////////////////////////////////
