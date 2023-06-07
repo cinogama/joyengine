@@ -308,6 +308,10 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread)
         for (auto& uniform_index : action.m_binding_uniforms)
         {
             auto& uniform_data = chain->m_used_uniforms[uniform_index];
+
+            if (*uniform_data.m_binding_place_addr == jeecs::typing::INVALID_UINT32)
+                continue;
+
             switch (uniform_data.m_type)
             {
             case jegl_shader::uniform_type::INT:

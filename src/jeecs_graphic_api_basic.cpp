@@ -5,7 +5,9 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+
 #include <condition_variable>
+#include <list>
 
 struct jegl_thread_notifier
 {

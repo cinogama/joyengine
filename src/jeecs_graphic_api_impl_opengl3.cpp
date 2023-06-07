@@ -259,9 +259,6 @@ uint32_t gl_get_uniform_location(jegl_resource* shader, const char* name)
 
 void gl_set_uniform(jegl_resource*, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
-    if (location == jeecs::typing::INVALID_UINT32)
-        return;
-
     switch (type)
     {
     case jegl_shader::INT:
