@@ -249,36 +249,42 @@ void gl_finish()
     glfwTerminate();
 }
 
-int gl_get_uniform_location(jegl_resource* shader, const char* name)
+uint32_t gl_get_uniform_location(jegl_resource* shader, const char* name)
 {
-    return (int)glGetUniformLocation(shader->m_uint1, name);
+    auto loc = glGetUniformLocation(shader->m_uint1, name);
+    if (loc == -1)
+        return jeecs::typing::INVALID_UINT32;
+    return (uint32_t)loc;
 }
 
-void gl_set_uniform(jegl_resource*, int location, jegl_shader::uniform_type type, const void* val)
+void gl_set_uniform(jegl_resource*, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
+    if (location == jeecs::typing::INVALID_UINT32)
+        return;
+
     switch (type)
     {
     case jegl_shader::INT:
-        glUniform1i((GLuint)location, *(const int*)val); break;
+        glUniform1i((GLint)location, *(const int*)val); break;
     case jegl_shader::FLOAT:
-        glUniform1f((GLuint)location, *(const float*)val); break;
+        glUniform1f((GLint)location, *(const float*)val); break;
     case jegl_shader::FLOAT2:
-        glUniform2f((GLuint)location
+        glUniform2f((GLint)location
             , ((const jeecs::math::vec2*)val)->x
             , ((const jeecs::math::vec2*)val)->y); break;
     case jegl_shader::FLOAT3:
-        glUniform3f((GLuint)location
+        glUniform3f((GLint)location
             , ((const jeecs::math::vec3*)val)->x
             , ((const jeecs::math::vec3*)val)->y
             , ((const jeecs::math::vec3*)val)->z); break;
     case jegl_shader::FLOAT4:
-        glUniform4f((GLuint)location
+        glUniform4f((GLint)location
             , ((const jeecs::math::vec4*)val)->x
             , ((const jeecs::math::vec4*)val)->y
             , ((const jeecs::math::vec4*)val)->z
             , ((const jeecs::math::vec4*)val)->w); break;
     case jegl_shader::FLOAT4X4:
-        glUniformMatrix4fv((GLuint)location, 1, false, (float*)val); break;
+        glUniformMatrix4fv((GLint)location, 1, false, (float*)val); break;
     default:
         jeecs::debug::logerr("Unknown uniform variable type to set."); break;
     }

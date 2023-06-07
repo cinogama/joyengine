@@ -35,6 +35,9 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             &thread->m_config, !first_bootup);
         first_bootup = false;
         ++thread->m_version;
+
+        std::unordered_map<jegl_resource::jegl_destroy_resouce*, bool> _waiting_to_free_resource;
+
         while (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
         {
             do
@@ -65,12 +68,6 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             if (!thread->m_apis->late_update_interface(thread, custom_interface))
                 thread->m_stop_update = true;
 
-            do {
-                std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-                thread->_m_thread_notifier->m_update_flag = false;
-                thread->_m_thread_notifier->m_update_waiter.notify_all();
-            } while (0);
-
             auto* del_res = _destroing_graphic_resources.pick_all();
             while (del_res)
             {
@@ -81,7 +78,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                     && cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
                 {
                     bool need_release = true;
-                    for (auto * chain : thread->_m_thread_notifier->_m_commited_rendchains)
+                    for (auto* chain : thread->_m_thread_notifier->_m_commited_rendchains)
                     {
                         if (_jegl_rchain_resource_used_by_chain(chain, cur_del_res->m_destroy_resource))
                         {
@@ -93,11 +90,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
 
                     if (need_release)
                     {
-                        if (cur_del_res->m_destroy_resource->m_ptr != INVALID_RESOURCE)
-                            thread->m_apis->close_resource(thread, cur_del_res->m_destroy_resource);
-
-                        delete cur_del_res->m_destroy_resource;
-                        delete cur_del_res;
+                        _waiting_to_free_resource[cur_del_res] = true;
                     }
                 }
                 else if (--cur_del_res->m_retry_times)
@@ -109,10 +102,28 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                     if (cur_del_res->m_destroy_resource->m_graphic_thread != nullptr)
                         jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
                             cur_del_res->m_destroy_resource);
-                    delete cur_del_res->m_destroy_resource;
-                    delete cur_del_res;
+                    _waiting_to_free_resource[cur_del_res] = false;
                 }
             }
+
+            do {
+                std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
+                thread->_m_thread_notifier->m_update_flag = false;
+                thread->_m_thread_notifier->m_update_waiter.notify_all();
+            } while (0);
+
+            for (auto [deleting_resource, need_release] : _waiting_to_free_resource)
+            {
+                if (need_release)
+                {
+                    if (deleting_resource->m_destroy_resource->m_ptr != INVALID_RESOURCE)
+                        thread->m_apis->close_resource(thread, deleting_resource->m_destroy_resource);
+
+                    delete deleting_resource->m_destroy_resource;
+                    delete deleting_resource;
+                }
+            }
+            _waiting_to_free_resource.clear();
         }
 
         thread->m_apis->shutdown_interface(thread, custom_interface,
@@ -1023,46 +1034,46 @@ void jegl_using_texture(jegl_resource* texture, size_t pass)
     _current_graphic_thread->m_apis->bind_texture(texture, pass);
 }
 
-int jegl_uniform_location(jegl_resource* shader, const char* name)
+uint32_t jegl_uniform_location(jegl_resource* shader, const char* name)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     return _current_graphic_thread->m_apis->get_uniform_location(shader, name);
 }
 
-void jegl_uniform_int(jegl_resource* shader, int location, int value)
+void jegl_uniform_int(jegl_resource* shader, uint32_t location, int value)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::INT, &value);
 }
 
-void jegl_uniform_float(jegl_resource* shader, int location, float value)
+void jegl_uniform_float(jegl_resource* shader, uint32_t location, float value)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::FLOAT, &value);
 }
 
-void jegl_uniform_float2(jegl_resource* shader, int location, float x, float y)
+void jegl_uniform_float2(jegl_resource* shader, uint32_t location, float x, float y)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::math::vec2 value = { x,y };
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::FLOAT2, &value);
 }
 
-void jegl_uniform_float3(jegl_resource* shader, int location, float x, float y, float z)
+void jegl_uniform_float3(jegl_resource* shader, uint32_t location, float x, float y, float z)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::math::vec3 value = { x,y,z };
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::FLOAT3, &value);
 }
 
-void jegl_uniform_float4(jegl_resource* shader, int location, float x, float y, float z, float w)
+void jegl_uniform_float4(jegl_resource* shader, uint32_t location, float x, float y, float z, float w)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::math::vec4 value = { x,y,z,w };
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::FLOAT4, &value);
 }
 
-void jegl_uniform_float4x4(jegl_resource* shader, int location, const float(*mat)[4])
+void jegl_uniform_float4x4(jegl_resource* shader, uint32_t location, const float(*mat)[4])
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(shader, location, jegl_shader::FLOAT4X4, mat);

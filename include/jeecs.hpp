@@ -94,6 +94,7 @@ namespace jeecs
         constexpr typeid_t NOT_TYPEID_FLAG = ((typeid_t)1) << ((typeid_t)(8 * sizeof(NOT_TYPEID_FLAG)) - 1);
         constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
         constexpr uint32_t INVALID_UINT32 = (uint32_t)-1;
+        constexpr uint32_t PENDING_UNIFORM_LOCATION = (uint32_t)-2;
         constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
 
         struct type_info;
@@ -724,21 +725,21 @@ struct jegl_shader
     };
     struct builtin_uniform_location
     {
-        uint32_t m_builtin_uniform_m = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_v = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_p = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_mvp = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_mv = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_vp = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_local_scale = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_m = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_v = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_p = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_mvp = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_mv = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_vp = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_local_scale = jeecs::typing::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_tiling = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_offset = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_tiling = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_offset = jeecs::typing::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_color = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_color = jeecs::typing::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_shadow2d_resolution = jeecs::typing::INVALID_UINT32;
-        uint32_t m_builtin_uniform_light2d_decay = jeecs::typing::INVALID_UINT32;
+        uint32_t m_builtin_uniform_shadow2d_resolution = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_light2d_decay = jeecs::typing::PENDING_UNIFORM_LOCATION;
     };
     struct unifrom_variables
     {
@@ -930,8 +931,8 @@ struct jegl_graphic_api
     using clear_framebuf_func_t = void(*)(jegl_thread*, jegl_resource*);
     using update_shared_uniform_func_t = void(*)(jegl_thread*, size_t offset, size_t datalen, const void* data);
 
-    using get_uniform_location_func_t = int(*)(jegl_resource*, const char*);
-    using set_uniform_func_t = void(*)(jegl_resource*, int, jegl_shader::uniform_type, const void*);
+    using get_uniform_location_func_t = uint32_t(*)(jegl_resource*, const char*);
+    using set_uniform_func_t = void(*)(jegl_resource*, uint32_t, jegl_shader::uniform_type, const void*);
 
     prepare_interface_func_t    prepare_interface;
     startup_interface_func_t    init_interface;
@@ -1033,13 +1034,13 @@ JE_API void jegl_clear_framebuffer_color(jegl_resource* framebuffer);
 JE_API void jegl_clear_framebuffer_depth(jegl_resource* framebuffer);
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 
-JE_API int jegl_uniform_location(jegl_resource* shader, const char* name);
-JE_API void jegl_uniform_int(jegl_resource* shader, int location, int value);
-JE_API void jegl_uniform_float(jegl_resource* shader, int location, float value);
-JE_API void jegl_uniform_float2(jegl_resource* shader, int location, float x, float y);
-JE_API void jegl_uniform_float3(jegl_resource* shader, int location, float x, float y, float z);
-JE_API void jegl_uniform_float4(jegl_resource* shader, int location, float x, float y, float z, float w);
-JE_API void jegl_uniform_float4x4(jegl_resource* shader, int location, const float(*mat)[4]);
+JE_API uint32_t jegl_uniform_location(jegl_resource* shader, const char* name);
+JE_API void jegl_uniform_int(jegl_resource* shader, uint32_t location, int value);
+JE_API void jegl_uniform_float(jegl_resource* shader, uint32_t location, float value);
+JE_API void jegl_uniform_float2(jegl_resource* shader, uint32_t location, float x, float y);
+JE_API void jegl_uniform_float3(jegl_resource* shader, uint32_t location, float x, float y, float z);
+JE_API void jegl_uniform_float4(jegl_resource* shader, uint32_t location, float x, float y, float z, float w);
+JE_API void jegl_uniform_float4x4(jegl_resource* shader, uint32_t location, const float(*mat)[4]);
 
 JE_API jegl_thread* jegl_current_thread();
 
@@ -1056,12 +1057,20 @@ JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain);
 JE_API void jegl_rchain_clear_depth_buffer(jegl_rendchain* chain);
 JE_API size_t jegl_rchain_allocate_texture_group(jegl_rendchain* chain);
 JE_API jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, size_t texture_group);
-JE_API void jegl_rchain_set_uniform_int(jegl_rendchain_rend_action* act, int binding_place, int val);
-JE_API void jegl_rchain_set_uniform_float(jegl_rendchain_rend_action* act, int binding_place, float val);
-JE_API void jegl_rchain_set_uniform_float2(jegl_rendchain_rend_action* act, int binding_place, float x, float y);
-JE_API void jegl_rchain_set_uniform_float3(jegl_rendchain_rend_action* act, int binding_place, float x, float y, float z);
-JE_API void jegl_rchain_set_uniform_float4(jegl_rendchain_rend_action* act, int binding_place, float x, float y, float z, float w);
-JE_API void jegl_rchain_set_uniform_float4x4(jegl_rendchain_rend_action* act, int binding_place, const float(*mat)[4]);
+JE_API void jegl_rchain_set_uniform_int(jegl_rendchain_rend_action* act, uint32_t binding_place, int val);
+JE_API void jegl_rchain_set_uniform_float(jegl_rendchain_rend_action* act, uint32_t binding_place, float val);
+JE_API void jegl_rchain_set_uniform_float2(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y);
+JE_API void jegl_rchain_set_uniform_float3(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y, float z);
+JE_API void jegl_rchain_set_uniform_float4(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y, float z, float w);
+JE_API void jegl_rchain_set_uniform_float4x4(jegl_rendchain_rend_action* act, uint32_t binding_place, const float(*mat)[4]);
+
+JE_API void jegl_rchain_set_builtin_uniform_int(jegl_rendchain_rend_action* act, uint32_t* binding_place, int val);
+JE_API void jegl_rchain_set_builtin_uniform_float(jegl_rendchain_rend_action* act, uint32_t* binding_place, float val);
+JE_API void jegl_rchain_set_builtin_uniform_float2(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y);
+JE_API void jegl_rchain_set_builtin_uniform_float3(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y, float z);
+JE_API void jegl_rchain_set_builtin_uniform_float4(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y, float z, float w);
+JE_API void jegl_rchain_set_builtin_uniform_float4x4(jegl_rendchain_rend_action* act, uint32_t* binding_place, const float(*mat)[4]);
+
 JE_API void jegl_rchain_bind_texture(jegl_rendchain* chain, size_t texture_group, size_t binding_pass, jegl_resource* texture);
 JE_API void jegl_rchain_bind_pre_texture_group(jegl_rendchain* chain, size_t texture_group);
 JE_API void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread);
