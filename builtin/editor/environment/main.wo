@@ -19,6 +19,7 @@ namespace editor
         }
         public func close(self: Environment)
         {
+            je::gui::unsafe::shutdown();
             self.m_universe->stop;
         }
         public func wait(self: Environment)

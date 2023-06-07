@@ -110,7 +110,7 @@ namespace jeecs
             }
         }
 
-        void LateUpdate()
+        void PreUpdate()
         {
             m_anchor_list.clear();
 

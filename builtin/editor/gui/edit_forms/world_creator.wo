@@ -46,6 +46,9 @@ namespace editor::gui::edit_forms
                         context.has_append_types->add(sys);
                     else
                         context.not_append_types->add(sys);
+
+            // 添加默认图形管线
+            context->active("Graphic::DefaultGraphicPipelineSystem");
     
             return context;
         }    

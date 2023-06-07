@@ -508,6 +508,12 @@ R"(
     private func _launch<LT, FT, ATs>(coloop:LT, job_func:FT, args: ATs)=> void
         where coloop(job_func, args) is void;
 
+    namespace unsafe
+    {
+        extern("libjoyecs", "je_gui_stop_all_work")
+        public func shutdown()=> void;
+    }
+
     private func dialog<FT, ATs>(job_func:FT, args: ATs)=> void
         where job_func(args...) is bool;
     {
@@ -1413,8 +1419,16 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+bool _stop_work_flag = false;
+WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args, size_t argc)
+{
+    _stop_work_flag = true;
+    return wo_ret_void(vm);
+}
+
 void jegui_init(void* window_handle, bool reboot)
 {
+    _stop_work_flag = false;
     ImGui::CreateContext();
 
     // Set style:
@@ -1505,30 +1519,33 @@ void jegui_update()
     any_window_focused_on = next_frame_any_window_focused_on;
     next_frame_any_window_focused_on = false;
 
-    auto chain = _wo_job_list.pick_all();
-    while (chain)
+    if (!_stop_work_flag)
     {
-        auto cur_job = chain;
-        chain = chain->last;
-
-        auto result = wo_dispatch(cur_job->work_vm);
-        if (result == WO_CONTINUE)
+        auto chain = _wo_job_list.pick_all();
+        while (chain)
         {
-            _wo_job_list.add_one(cur_job);
-            continue;
+            auto cur_job = chain;
+            chain = chain->last;
+
+            auto result = wo_dispatch(cur_job->work_vm);
+            if (result == WO_CONTINUE)
+            {
+                _wo_job_list.add_one(cur_job);
+                continue;
+            }
+
+            wo_close_vm(cur_job->work_vm);
+            delete cur_job;
         }
 
-        wo_close_vm(cur_job->work_vm);
-        delete cur_job;
-    }
+        auto new_job_chain = _wo_new_job_list.pick_all();
+        while (new_job_chain)
+        {
+            auto cur_job = new_job_chain;
+            new_job_chain = new_job_chain->last;
 
-    auto new_job_chain = _wo_new_job_list.pick_all();
-    while (new_job_chain)
-    {
-        auto cur_job = new_job_chain;
-        new_job_chain = new_job_chain->last;
-
-        _wo_job_list.add_one(cur_job);
+            _wo_job_list.add_one(cur_job);
+        }
     }
 
     ImGui::Render();

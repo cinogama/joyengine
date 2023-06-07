@@ -238,12 +238,17 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread)
         for (auto& [pass, texture] : chain->m_binding_textures[pre_bind_texture_group_index].m_binding_textures)
             jegl_using_texture(texture, pass);
 
+    size_t last_used_texture = SIZE_MAX;
+
     for (size_t aidx = 0; aidx < chain->m_rend_action_count; ++aidx)
     {
         auto& action = chain->m_rend_actions[aidx];
-        if (action.m_binding_textures != SIZE_MAX)
+
+        if (last_used_texture != action.m_binding_textures && action.m_binding_textures != SIZE_MAX)
             for (auto& [pass, texture] : chain->m_binding_textures[action.m_binding_textures].m_binding_textures)
                 jegl_using_texture(texture, pass);
+
+        last_used_texture = action.m_binding_textures;
 
         jegl_using_resource(action.m_shader);
         for (auto& uniform_index : action.m_binding_uniforms)

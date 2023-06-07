@@ -356,9 +356,7 @@ namespace editor::gui::edit_forms
                 EndChild();
                 
                 if (ButtonSize("下一步", (cur_width, 0.)))
-                {
                     step->set(current_step_count + 1);
-                }
                 if (ButtonSize("上一步", (cur_width, 0.)))
                     step->set(current_step_count - 1);
             }
@@ -369,7 +367,7 @@ namespace editor::gui::edit_forms
 
                 do BeginChildSize("SUBFORM.", 500., 300.);
 
-                 Text("请选择启动时默认渲染的画面分辨率");
+                Text("请选择启动时默认渲染的画面分辨率");
                 Text("* 默认为 1366x768");
 
                 let static reso_list = [
