@@ -1,0 +1,126 @@
+using je::gui;
+
+namespace editor::gui::particalbaker
+{
+    public using ParticalContext = struct{
+        m_frame_count : mut int,
+        m_frame_size : mut (int, int),
+        m_frame_rate : mut real,    // Sec per frame
+        m_repeat_round : mut int,
+        m_frames_caches : mut array<je::graphic::texture>,
+        m_script : mut string,
+        m_path : filesys::path_t,
+    };
+    let PARTICALBAKER = 
+@"// 
+
+"@;
+    let DEFAULT_SOURCE = 
+@"// Particalbaker Script
+import woo.std;
+import je.particalbacker;
+
+public func launcher(total_frame: int)
+{
+    launch(0, 10);
+}
+
+using PerparticleContext = struct{
+    pos: mut (real, real),
+    speed: mut (real, real),
+};
+public func perparticle(launch_frame: int)
+{
+    return PerparticleContext{
+        pos = mut(0., 0.),
+        speed = mut(std::randreal(-1., 1.), std::randreal(-1., 1.)),
+    };
+}
+public func position(frame: int, context: PerparticleContext)
+{
+    let (x, y) = context.pos;
+    let (sx, sy) = context.speed;
+
+    context.pos = (x + sx * deltatime(), y * sy * deltatime());
+
+    return (x, y);
+}
+public func color(frame: int, context: PerparticleContext)
+{
+    return (1., 1., 1., 1.);
+}
+"@;
+
+    func _particalbaker_editor(context: EditorContext, partical_context: ParticalContext)
+    {
+        let mut open = BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path}", 
+            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+            + WindowsAttribute::ImGuiWindowFlags_MenuBar);
+
+        BeginGroup();
+
+        Text("帧数");
+        SameLine();
+        do InputInt("##framecount", partical_context.m_frame_count)
+            ->> \c = partical_context.m_frame_count = c;;
+
+        Text("尺寸");
+        SameLine();
+        do InputInt2("##framesize", partical_context.m_frame_size...)
+            ->> \s = partical_context.m_frame_size = s;;
+
+        Text("帧速率(秒/帧)");
+        SameLine();
+        do InputFloat("##framerate", partical_context.m_frame_rate)
+            ->> \r = partical_context.m_frame_rate = r;;
+
+        Text("粒子渲染趟数");
+        SameLine();
+        do InputInt("##repeatcount", partical_context.m_repeat_round)
+            ->> \r = partical_context.m_repeat_round = r;;
+        
+        do BeginChildSize("##review", 600., 400.);
+        ProgressBar(0.5);
+        
+        let drawlist = GetWindowDrawList();
+        do InvisibleButton("##draw_space", GetContentRegionAvail());
+
+        let (p0, p1) = GetItemRect();
+        let (lux, luy) = p0;
+        let (rbx, rby) = p1;
+
+        PushClipRect(p0, p1);
+        drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+        EndChild();
+
+        EndGroup();
+        SameLine();
+
+        BeginGroup();
+        
+        do InputTextMultilineSize("##source", partical_context.m_script, 500., GetContentRegionAvail()[0])
+            ->> \t = partical_context.m_script = t;;
+
+        EndGroup();
+
+        End();
+
+        return open;
+    }
+    public func show(context: EditorContext, partical_context: ParticalContext)
+    {
+        launch(_particalbaker_editor, (context, partical_context));
+    }
+    public func debugshow(context: EditorContext)
+    {
+        show(context, ParticalContext{
+            m_frame_count = mut 24,
+            m_frame_size = mut (64, 32),
+            m_frame_rate = mut 1./24.,
+            m_repeat_round = mut 1,
+            m_frames_caches = mut [],
+            m_script = mut "//TODO;",
+            m_path = filesys::normalize(std::exepath()),
+        });
+    }
+}

@@ -131,6 +131,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_progress_bar")
     public func ProgressBar(f: real)=> void;
 
+    extern("libjoyecs", "je_gui_progress_bar_size")
+    public func ProgressBarSize(f: real, size: (real, real))=> void;
+
     extern("libjoyecs", "je_gui_text")
     public func Text(msg:string)=> void;
     extern("libjoyecs", "je_gui_text_disabled")
@@ -352,6 +355,15 @@ R"(
 
     extern("libjoyecs", "je_gui_input_int_box")
     public func InputInt(label: string, value: int)=> option<int>;
+
+    extern("libjoyecs", "je_gui_input_int2_box")
+    public func InputInt2(label: string, x: int, y: int)=> option<(int, int)>;
+
+    extern("libjoyecs", "je_gui_input_int3_box")
+    public func InputInt3(label: string, x: int, y: int, z: int)=> option<(int, int, int)>;
+
+    extern("libjoyecs", "je_gui_input_int4_box")
+    public func InputInt4(label: string, x: int, y: int, z: int, w: int)=> option<(int, int, int, int)>;
 
     extern("libjoyecs", "je_gui_input_float2_box")
     public func InputFloat2(label: string, x: real, y: real)=> option<(real, real)>;
@@ -1047,6 +1059,12 @@ WO_API wo_api je_gui_progress_bar(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_progress_bar_size(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::ProgressBar(wo_float(args + 0), ImVec2{ wo_float(wo_struct_get(args + 1, 0)), wo_float(wo_struct_get(args + 1, 1)) });
+    return wo_ret_void(vm);
+}
+
 
 WO_API wo_api je_gui_text(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1268,6 +1286,61 @@ WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args, size_t argc)
         return wo_ret_option_int(vm, value);
     return wo_ret_option_none(vm);
 }
+WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2) };
+    bool update = false;
+
+    update = ImGui::InputInt2(label, values);
+
+    if (update)
+    {
+        wo_value result = wo_push_struct(vm, 2);
+        wo_set_int(wo_struct_get(result, 0), (int)values[0]);
+        wo_set_int(wo_struct_get(result, 1), (int)values[1]);
+        return wo_ret_ok_val(vm, result);
+    }
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3) };
+    bool update = false;
+
+    update = ImGui::InputInt3(label, values);
+
+    if (update)
+    {
+        wo_value result = wo_push_struct(vm, 3);
+        wo_set_int(wo_struct_get(result, 0), (int)values[0]);
+        wo_set_int(wo_struct_get(result, 1), (int)values[1]);
+        wo_set_int(wo_struct_get(result, 2), (int)values[2]);
+        return wo_ret_ok_val(vm, result);
+    }
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3), (int)wo_int(args + 4) };
+    bool update = false;
+
+    update = ImGui::InputInt3(label, values);
+
+    if (update)
+    {
+        wo_value result = wo_push_struct(vm, 4);
+        wo_set_int(wo_struct_get(result, 0), (int)values[0]);
+        wo_set_int(wo_struct_get(result, 1), (int)values[1]);
+        wo_set_int(wo_struct_get(result, 2), (int)values[2]);
+        wo_set_int(wo_struct_get(result, 3), (int)values[3]);
+        return wo_ret_ok_val(vm, result);
+    }
+    return wo_ret_option_none(vm);
+}
+
 WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args, size_t argc)
 {
     wo_string_t label = wo_string(args + 0);

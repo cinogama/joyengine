@@ -432,48 +432,6 @@ public let frag =
         }
     };
 
-    struct particle_data
-    {
-        float   m_life;
-        math::vec3 m_color;
-        math::vec3 m_speed;
-
-        math::vec3 m_position;
-        math::vec3 m_scale;
-        math::quat m_rotation;
-
-        // 虽然这里有，但是暂时先不支持。先把基本粒子系统做出来
-        size_t  m_uniform_count;
-        jegl_shader::unifrom_variables** m_uniforms;
-    };
-
-    struct particle_launcher_context
-    {
-        std::vector<particle_data> m_particles;
-        size_t m_died_particle_count;
-        jeecs::basic::resource<jeecs::graphic::shader> m_shader;
-        jeecs::basic::resource<jeecs::graphic::vertex> m_vertex;
-
-        particle_data* find_or_create_new_particle(float m_life)
-        {
-            assert(m_life > 0.f);
-            if (m_died_particle_count)
-            {
-                for (auto& dat : m_particles)
-                {
-                    if (dat.m_life <= 0.f)
-                    {
-                        --m_died_particle_count;
-                        dat.m_life = m_life;
-                        return &dat;
-                    }
-                }
-            }
-            assert(m_died_particle_count == 0);
-            m_particles.push_back(particle_data{});
-        }
-    };
-
     struct DefaultGraphicPipelineSystem : public GraphicPipelineBaseSystem
     {
         using Translation = Transform::Translation;

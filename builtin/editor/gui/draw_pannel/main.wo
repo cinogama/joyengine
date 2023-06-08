@@ -450,7 +450,7 @@ namespace editor::gui::drawpannel
 
                     let (avaliw, avalih) = GetContentRegionAvail();
 
-                    do InvisibleButton("##draw_space", (avaliw->\x=x<=100.?100.|x;, avalih->\x=x<=100.?100.|x;));
+                    do InvisibleButton("##draw_space", (avaliw <= 100. ? 100. | avaliw, avalih <= 100. ? 100. | avalih));
                     if (IsItemActive() || IsItemHovered())
                     {
                         if (input::keydown(keycode::L_CTRL) 
