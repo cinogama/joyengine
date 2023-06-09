@@ -32,35 +32,58 @@ using ParticalContext = struct{
 let mut partical_context = nil->unsafe::cast:<ParticalContext>();
 let mut baking_cache = []: array<je::graphic::texture>;
 
+public func upos2ppox(upos: (real, real))=> (int, int)
+{
+    let (w, h) = partical_context.m_frame_size;
+    let (px, py) = upos;
+    return (math::round((px + 1.) / 2. * w: real), math::round((py + 1.) / 2. * h: real));
+}
+public func ppos2upox(upos: (int, int))=> (real, real)
+{
+    let (w, h) = partical_context.m_frame_size;
+    let (ipx, ipy) = upos;
+    return ((ipx: real / w: real - 0.5) * 2.0, (ipy: real / h: real - 0.5) * 2.0);
+}
+public func clamp(v: real)
+{
+    if (v < 0.) return 0.;
+    else if (v > 1.) return 1.;
+    return v;
+}
+
 func draw(mut frame: int, pos: (real, real), color: (real, real, real, real))
 {
     let fcount = partical_context.m_frame_count;
     while (frame < 0)
         frame += fcount;
 
-    let (px, py) = pos;
     let (w, h) = partical_context.m_frame_size;
-    let ipx = math::round((px + 1.) / 2. * w: real);
-    let ipy = math::round((py + 1.) / 2. * h: real);
+    let (ipx, ipy) = upos2ppox(pos);
 
     if (ipx >= 0 && ipx < w && ipy >= 0 && ipy < h)
     {
-        let pix = baking_cache[frame % partical_context.m_frame_count]->pix((ipx, ipy));
+        let pix = baking_cache[frame % fcount]->pix((ipx, ipy));
         let (or, og, ob, oa) = pix->get_color();
         let (r, g, b, a) = color;
+        let cr = clamp(r), cg = clamp(g), cb = clamp(b), ca = clamp(a);
 
         // Mix
         pix->set_color((
-            or * (1. - a) + r * a,
-            og * (1. - a) + g * a,
-            ob * (1. - a) + b * a,
-            oa * (1. - a) + a * a,
+            or * (1. - ca) + cr * ca,
+            og * (1. - ca) + cg * ca,
+            ob * (1. - ca) + cb * ca,
+            oa * (1. - ca) + ca * ca,
         ));
     }
 }
 public func deltatime()
 {
     return partical_context.m_frame_rate;
+}
+public func pixelsize()
+{
+    let (w, h) = partical_context.m_frame_size;
+    return (1. / w: real, 1./ h: real);
 }
 public func launch(frame_place: int, partical_count: int)
 {
@@ -70,11 +93,12 @@ public func launch(frame_place: int, partical_count: int)
         for (let mut f = 0; f < partical_context.m_frame_count * partical_context.m_repeat_round; f += 1)
         {
             let fid = f + frame_place;
-            let pos = position(fid, user_data) as (real, real);
+            let poses = position(fid, user_data) as array<(real, real)>;
             let col = color(fid, user_data) as (real, real, real, real);
 
             // Apply!
-            draw(fid, pos, col);
+            for (let _, pos : poses)
+                draw(fid, pos, col);
         }
     }
 }
@@ -89,6 +113,10 @@ extern public func _start_baking(context: ParticalContext)
 
     context.m_frames_caches = baking_cache;
     launcher(partical_context.m_frame_count);
+    
+    // Make sure ok, force update all texture.
+    for (let _, t : baking_cache)
+        t->pix((0, 0))->set_color(t->pix((0, 0))->get_color());
 }
 "@;
     assert(vm::create_virtual_script("je/particalbacker.wo", PARTICALBAKER, false));
@@ -96,41 +124,61 @@ extern public func _start_baking(context: ParticalContext)
     let DEFAULT_SOURCE = 
 @"// Particalbaker Script
 import woo.std;
+import pkg.worst;
 import je.particalbacker;
+
+using std;
 
 public func launcher(total_frame: int)
 {
-    launch(0, 10);
+    for (let i : range::create(0, total_frame - 1))
+        launch(i, 1);
 }
 
 using PerparticleContext = struct{
     pos: mut (real, real),
     speed: mut (real, real),
+    life: mut int,
 };
+
 public func perparticle(launch_frame: int)
 {
     return PerparticleContext{
         pos = mut(0., 0.),
-        speed = mut(std::randreal(-1., 1.), std::randreal(-1., 1.)),
+        speed = mut(randreal(-1., 1.), randreal(-1., 1.)),
+        life = mut 20,
     };
 }
+
 public func position(frame: int, context: PerparticleContext)
 {
     let (x, y) = context.pos;
     let (sx, sy) = context.speed;
+    let (pixw, pixh) = pixelsize();
 
     context.pos = (x + sx * deltatime(), y + sy * deltatime());
+    context.life -= 1;
 
-    return (x, y);
+    // Make a star shape.
+    let (ix, iy) = upos2ppox((x, y));
+    return [
+        ppos2upox((ix + 1, iy)),
+        ppos2upox((ix - 1, iy)),
+        ppos2upox((ix, iy)),
+        ppos2upox((ix, iy + 1)),
+        ppos2upox((ix, iy - 1)),
+    ];
 }
+
 public func color(frame: int, context: PerparticleContext)
 {
-    return (1., 1., 1., 1.);
+    return (1., 1., 1., context.life: real / 19.);
 }
 "@;
     using _EditorContext = struct{
         m_last_update_time: mut real,
         m_frame_index: mut int,
+        m_enable_bake: mut bool, 
     };
     func _particalbaker_editor(
         context: EditorContext, 
@@ -143,7 +191,7 @@ public func color(frame: int, context: PerparticleContext)
 
         if (BeginMenuBar())
         {
-            if (MenuItem("烘焙"))
+            if (MenuItemEnabled("烘焙", econtext.m_enable_bake))
             {
                 match (vm::create("je/particalbacker/baker.wo", 
                     partical_context.m_script))
@@ -154,8 +202,10 @@ public func color(frame: int, context: PerparticleContext)
                             jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
                         
                         do thread::create(func(){
+                            econtext.m_enable_bake = false;
                             if (!vmm->invoke("_start_baking", [partical_context: dynamic])->has)
                                 jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
+                            econtext.m_enable_bake = true;
                         }, ());
                     }
                 err(msg)?
@@ -249,7 +299,7 @@ public func color(frame: int, context: PerparticleContext)
     {
         show(context, ParticalContext{
             m_frame_count = mut 24,
-            m_frame_size = mut (64, 32),
+            m_frame_size = mut (64, 64),
             m_frame_rate = mut 1./24.,
             m_repeat_round = mut 1,
             m_frames_caches = mut [],
@@ -258,6 +308,7 @@ public func color(frame: int, context: PerparticleContext)
         }, _EditorContext{
             m_last_update_time = mut std::time(),
             m_frame_index = mut 0,
+            m_enable_bake = mut true,
         });
     }
 }
