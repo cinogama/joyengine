@@ -487,6 +487,8 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::te
     {
         texture->m_raw_texture_data->m_pixels = (jegl_texture::pixel_data_t*)stbi__malloc(width * height * format);
         assert(texture->m_raw_texture_data->m_pixels);
+
+        memset(texture->m_raw_texture_data->m_pixels, 0, width * height * format);
     }
     else
         // For special format texture such as depth, do not alloc for pixel.

@@ -12,9 +12,87 @@ namespace editor::gui::particalbaker
         m_path : filesys::path_t,
     };
     let PARTICALBAKER = 
-@"// 
+@"// Partical baker
+// (C)Cinogama project.
 
+import woo.std;
+import pkg.math;
+import je;
+
+using ParticalContext = struct{
+    m_frame_count : mut int,
+    m_frame_size : mut (int, int),
+    m_frame_rate : mut real,    // Sec per frame
+    m_repeat_round : mut int,
+    m_frames_caches : mut array<je::graphic::texture>,
+    m_script : mut string,
+    m_path : filesys::path_t,
+};
+
+let mut partical_context = nil->unsafe::cast:<ParticalContext>();
+let mut baking_cache = []: array<je::graphic::texture>;
+
+func draw(mut frame: int, pos: (real, real), color: (real, real, real, real))
+{
+    let fcount = partical_context.m_frame_count;
+    while (frame < 0)
+        frame += fcount;
+
+    let (px, py) = pos;
+    let (w, h) = partical_context.m_frame_size;
+    let ipx = math::round((px + 1.) / 2. * w: real);
+    let ipy = math::round((py + 1.) / 2. * h: real);
+
+    if (ipx >= 0 && ipx < w && ipy >= 0 && ipy < h)
+    {
+        let pix = baking_cache[frame % partical_context.m_frame_count]->pix((ipx, ipy));
+        let (or, og, ob, oa) = pix->get_color();
+        let (r, g, b, a) = color;
+
+        // Mix
+        pix->set_color((
+            or * (1. - a) + r * a,
+            og * (1. - a) + g * a,
+            ob * (1. - a) + b * a,
+            oa * (1. - a) + a * a,
+        ));
+    }
+}
+public func deltatime()
+{
+    return partical_context.m_frame_rate;
+}
+public func launch(frame_place: int, partical_count: int)
+{
+    for (let mut i = 0; i < partical_count; i += 1)
+    {
+        let user_data = perparticle(frame_place);
+        for (let mut f = 0; f < partical_context.m_frame_count * partical_context.m_repeat_round; f += 1)
+        {
+            let fid = f + frame_place;
+            let pos = position(fid, user_data) as (real, real);
+            let col = color(fid, user_data) as (real, real, real, real);
+
+            // Apply!
+            draw(fid, pos, col);
+        }
+    }
+}
+extern public func _start_baking(context: ParticalContext)
+{
+    partical_context = context;
+
+    for (let mut i = 0; i < partical_context.m_frame_count; i += 1)
+        baking_cache->unsafe::cast:<vec<je::graphic::texture>>->add(je::graphic::texture::create(partical_context.m_frame_size...));
+
+    assert(baking_cache->len == partical_context.m_frame_count);
+
+    context.m_frames_caches = baking_cache;
+    launcher(partical_context.m_frame_count);
+}
 "@;
+    assert(vm::create_virtual_script("je/particalbacker.wo", PARTICALBAKER, false));
+
     let DEFAULT_SOURCE = 
 @"// Particalbaker Script
 import woo.std;
@@ -41,7 +119,7 @@ public func position(frame: int, context: PerparticleContext)
     let (x, y) = context.pos;
     let (sx, sy) = context.speed;
 
-    context.pos = (x + sx * deltatime(), y * sy * deltatime());
+    context.pos = (x + sx * deltatime(), y + sy * deltatime());
 
     return (x, y);
 }
@@ -50,37 +128,84 @@ public func color(frame: int, context: PerparticleContext)
     return (1., 1., 1., 1.);
 }
 "@;
-
-    func _particalbaker_editor(context: EditorContext, partical_context: ParticalContext)
+    using _EditorContext = struct{
+        m_last_update_time: mut real,
+        m_frame_index: mut int,
+    };
+    func _particalbaker_editor(
+        context: EditorContext, 
+        partical_context: ParticalContext, 
+        econtext: _EditorContext)
     {
         let mut open = BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path}", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
             + WindowsAttribute::ImGuiWindowFlags_MenuBar);
+
+        if (BeginMenuBar())
+        {
+            if (MenuItem("烘焙"))
+            {
+                match (vm::create("je/particalbacker/baker.wo", 
+                    partical_context.m_script))
+                {
+                ok(vmm)?
+                    {
+                        if (!vmm->run()->has)
+                            jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
+                        
+                        do thread::create(func(){
+                            if (!vmm->invoke("_start_baking", [partical_context: dynamic])->has)
+                                jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
+                        }, ());
+                    }
+                err(msg)?
+                    jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本存在错误\n{msg}");
+                }
+            }
+            EndMenuBar();
+        }
 
         BeginGroup();
 
         Text("帧数");
         SameLine();
         do InputInt("##framecount", partical_context.m_frame_count)
-            ->> \c = partical_context.m_frame_count = c;;
+            ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil: void);;
 
         Text("尺寸");
         SameLine();
         do InputInt2("##framesize", partical_context.m_frame_size...)
-            ->> \s = partical_context.m_frame_size = s;;
+            ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil: void)
+                where (x, y) = s
+                ;;
 
         Text("帧速率(秒/帧)");
         SameLine();
         do InputFloat("##framerate", partical_context.m_frame_rate)
-            ->> \r = partical_context.m_frame_rate = r;;
+            ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil: void);;
 
         Text("粒子渲染趟数");
         SameLine();
         do InputInt("##repeatcount", partical_context.m_repeat_round)
-            ->> \r = partical_context.m_repeat_round = r;;
+            ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil: void);;
         
-        do BeginChildSize("##review", 600., 400.);
-        ProgressBar(0.5);
+        let (w, h) = partical_context.m_frame_size;
+
+        do BeginChildSize("##review", w: real * 400. / h: real, 400.);
+        
+        let frames = partical_context.m_frames_caches;
+        
+        if (std::time() - econtext.m_last_update_time >= partical_context.m_frame_rate)
+        {
+            econtext.m_frame_index += 1;
+            econtext.m_last_update_time = std::time();
+        }
+
+        econtext.m_frame_index = frames->empty
+            ? 0
+            | econtext.m_frame_index % frames->len;
+        
+        ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
         
         let drawlist = GetWindowDrawList();
         do InvisibleButton("##draw_space", GetContentRegionAvail());
@@ -91,6 +216,12 @@ public func color(frame: int, context: PerparticleContext)
 
         PushClipRect(p0, p1);
         drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+        if (!frames->empty)
+            drawlist->AddImage(
+                (lux, luy), 
+                (rbx, rby), 
+                frames[econtext.m_frame_index]);
+
         EndChild();
 
         EndGroup();
@@ -107,9 +238,12 @@ public func color(frame: int, context: PerparticleContext)
 
         return open;
     }
-    public func show(context: EditorContext, partical_context: ParticalContext)
+    public func show(
+        context: EditorContext, 
+        partical_context: ParticalContext,
+        econtext: _EditorContext)
     {
-        launch(_particalbaker_editor, (context, partical_context));
+        launch(_particalbaker_editor, (context, partical_context, econtext));
     }
     public func debugshow(context: EditorContext)
     {
@@ -119,8 +253,11 @@ public func color(frame: int, context: PerparticleContext)
             m_frame_rate = mut 1./24.,
             m_repeat_round = mut 1,
             m_frames_caches = mut [],
-            m_script = mut "//TODO;",
+            m_script = mut DEFAULT_SOURCE,
             m_path = filesys::normalize(std::exepath()),
+        }, _EditorContext{
+            m_last_update_time = mut std::time(),
+            m_frame_index = mut 0,
         });
     }
 }
