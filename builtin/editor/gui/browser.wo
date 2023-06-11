@@ -151,6 +151,9 @@ namespace editor::gui
         [".jeworld"] = je::graphic::texture::load(F"!/builtin/icon/World.png")->val,
         [".jewo"] = je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val,
         [".jeanim4"] = je::graphic::texture::load(F"!/builtin/icon/AnimationFile.png")->val,
+        
+        // 欸嘿还没做呢，先拿joy顶一下
+        [".jepartical"] = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val,
     };
 
     // 根据文件拓展名返回文件的类型
@@ -282,6 +285,20 @@ namespace editor::gui
                             return option::value(F"无法打开和编辑帧动画文件：{p.path}");
                         }
                     },
+                [".jepartical"] = 
+                    func (p: PathInfo, context: EditorContext)
+                    {
+                        match (particalbaker::ParticalContext::load(p.path))
+                        {
+                        value(ctx)?
+                            {
+                                particalbaker::show(context, ctx);
+                                return option::none;
+                            }
+                        none?
+                            return option::value(F"无法打开和编辑粒子动画文件：{p.path}");
+                        }
+                    }
             };
 
             return registed_open_method
@@ -432,6 +449,21 @@ namespace editor::gui
                             ? force_update()
                             | jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法")
                         where file_path = filesys::normalize(current_work_path) / F"{filename}.jeanim4";);
+                }
+                if (MenuItem("粒子动画"))
+                {
+                    jeapi::gui::form::input("新建粒子动画", F"在{current_work_path}新建动画", "NewPartical",
+                        func (filename)
+                        {
+                            let path = filesys::normalize(current_work_path) / F"{filename}.jepartical";
+                            if (filesys::exist(path))
+                                jeapi::gui::form::errmsg("创建粒子动画失败", "可能是同名文件已经存在或文件名路径不合法");
+                            else
+                            {
+                                assert(particalbaker::ParticalContext::create(path)->save);
+                                force_update();
+                            }
+                        });
                 }
                 if (MenuItem(F"C++模块"))
                 {

@@ -2,6 +2,14 @@ using je::gui;
 
 namespace editor::gui::particalbaker
 {
+    using _EditorContext = struct{
+        m_last_update_time: mut real,
+        m_frame_index: mut int,
+        m_enable_bake: mut bool, 
+        
+        m_target_launch_count: mut int,
+        m_solved_launch_count: mut int,
+    };
     public using ParticalContext = struct{
         m_frame_count : mut int,
         m_frame_size : mut (int, int),
@@ -10,7 +18,52 @@ namespace editor::gui::particalbaker
         m_frames_caches : mut array<je::graphic::texture>,
         m_script : mut string,
         m_path : filesys::path_t,
-    };
+    }
+    {
+        public func create(path: filesys::path_t)
+        {
+            return ParticalContext{
+                m_frame_count = mut 24,
+                m_frame_size = mut (64, 64),
+                m_frame_rate = mut 1./24.,
+                m_repeat_round = mut 1,
+                m_frames_caches = mut [],
+                m_script = mut DEFAULT_SOURCE,
+                m_path = path,
+            };
+        }
+        public func save(self: ParticalContext)
+        {
+            return filesys::writeall(
+                self.m_path,
+                {
+                    ["framecount"] = self.m_frame_count: dynamic,
+                    ["framesize"] = [self.m_frame_size[0], self.m_frame_size[1]]: dynamic,
+                    ["framerate"] = self.m_frame_rate: dynamic,
+                    ["repeatround"] = self.m_repeat_round: dynamic,
+                    ["script"] = self.m_script: dynamic,
+                }: string,
+            );
+        }
+        public func load(path: filesys::path_t)
+        {
+            return filesys::readall(path)
+                =>> \dat = dat->todict;
+                ->> \dat = ParticalContext{
+                        m_frame_count = mut fdata["framecount"] as int,
+                        m_frame_size = mut (fdata["framesize"] as array [0] as int, fdata["framesize"] as array [1] as int),
+                        m_frame_rate = mut fdata["framerate"] as real,
+                        m_repeat_round = mut fdata["repeatround"] as int,
+                        m_frames_caches = mut [],
+                        m_script = mut fdata["script"] as string,
+                        m_path = path,
+                    }
+                    where fdata = dat->> \k, v = (k as string, v); as dict<string, dynamic>
+                    ;
+                ;
+        }
+    }
+
     let PARTICALBAKER = 
 @"// Partical baker
 // (C)Cinogama project.
@@ -18,6 +71,15 @@ namespace editor::gui::particalbaker
 import woo.std;
 import pkg.math;
 import je;
+
+using _EditorContext = struct{
+    m_last_update_time: mut real,
+    m_frame_index: mut int,
+    m_enable_bake: mut bool, 
+    
+    m_target_launch_count: mut int,
+    m_solved_launch_count: mut int,
+};
 
 using ParticalContext = struct{
     m_frame_count : mut int,
@@ -31,6 +93,7 @@ using ParticalContext = struct{
 
 let mut partical_context = nil->unsafe::cast:<ParticalContext>();
 let mut baking_cache = []: array<je::graphic::texture>;
+let baking_launch_record = []mut: vec<(int, int)>;
 
 public func upos2ppox(upos: (real, real))=> (int, int)
 {
@@ -87,6 +150,10 @@ public func pixelsize()
 }
 public func launch(frame_place: int, partical_count: int)
 {
+    baking_launch_record->add((frame_place, partical_count));
+}
+func _launch(frame_place: int, partical_count: int)
+{
     for (let mut i = 0; i < partical_count; i += 1)
     {
         let user_data = perparticle(frame_place);
@@ -102,7 +169,7 @@ public func launch(frame_place: int, partical_count: int)
         }
     }
 }
-extern public func _start_baking(context: ParticalContext)
+extern public func _start_baking(context: ParticalContext, econtext: _EditorContext)
 {
     partical_context = context;
 
@@ -114,6 +181,17 @@ extern public func _start_baking(context: ParticalContext)
     context.m_frames_caches = baking_cache;
     launcher(partical_context.m_frame_count);
     
+    econtext.m_target_launch_count = baking_launch_record->len;
+    for (let mut i = 0; i < baking_launch_record->len; i += 1)
+    {
+        _launch(baking_launch_record[i]...);
+        econtext.m_target_launch_count = baking_launch_record->len;
+        econtext.m_solved_launch_count = i + 1;
+
+        if (econtext.m_enable_bake)
+            break;
+    }
+
     // Make sure ok, force update all texture.
     for (let _, t : baking_cache)
         t->pix((0, 0))->set_color(t->pix((0, 0))->get_color());
@@ -138,7 +216,8 @@ public func launcher(total_frame: int)
 using PerparticleContext = struct{
     pos: mut (real, real),
     speed: mut (real, real),
-    life: mut int,
+    life: mut real,
+    maxlife: real
 };
 
 public func perparticle(launch_frame: int)
@@ -146,7 +225,8 @@ public func perparticle(launch_frame: int)
     return PerparticleContext{
         pos = mut(0., 0.),
         speed = mut(randreal(-1., 1.), randreal(-1., 1.)),
-        life = mut 20,
+        life = mut 1. + deltatime(),
+        maxlife = 1.,
     };
 }
 
@@ -157,7 +237,7 @@ public func position(frame: int, context: PerparticleContext)
     let (pixw, pixh) = pixelsize();
 
     context.pos = (x + sx * deltatime(), y + sy * deltatime());
-    context.life -= 1;
+    context.life -= deltatime();
 
     // Make a star shape.
     let (ix, iy) = upos2ppox((x, y));
@@ -172,14 +252,9 @@ public func position(frame: int, context: PerparticleContext)
 
 public func color(frame: int, context: PerparticleContext)
 {
-    return (1., 1., 1., context.life: real / 19.);
+    return (1., 1., 1., context.life / context.maxlife);
 }
 "@;
-    using _EditorContext = struct{
-        m_last_update_time: mut real,
-        m_frame_index: mut int,
-        m_enable_bake: mut bool, 
-    };
     func _particalbaker_editor(
         context: EditorContext, 
         partical_context: ParticalContext, 
@@ -189,29 +264,110 @@ public func color(frame: int, context: PerparticleContext)
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
             + WindowsAttribute::ImGuiWindowFlags_MenuBar);
 
+        if (! open)
+        {
+            jeapi::gui::form::ask("是否保存粒子动画", F"是否将粒子配置保存到{partical_context.m_path}",
+                func(ok)
+                {
+                    if (!ok)
+                        return;
+                        
+                    if (partical_context->save())
+                        jeapi::gui::form::msg("动画已保存", F"动画已保存到{partical_context.m_path}");
+                    else
+                        jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path}");
+                });
+        }
+
         if (BeginMenuBar())
         {
-            if (MenuItemEnabled("烘焙", econtext.m_enable_bake))
+            if (BeginMenu("文件"))
             {
-                match (vm::create("je/particalbacker/baker.wo", 
-                    partical_context.m_script))
+                if (MenuItem("保存"))
                 {
-                ok(vmm)?
+                    if (!partical_context->save())
+                        jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path}");
+                }
+                if (MenuItem("导出"))
+                {
+                    if (partical_context.m_frames_caches->empty)
+                        jeapi::gui::form::errmsg("动画导出失败", F"动画未能保存到{partical_context.m_path}");
+
+                    let filename = filesys::purename(partical_context.m_path);
+                    let outimgpath = filesys::parent(partical_context.m_path) / (filename + ".png");
+                    jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->tostring}，是否确认导出当前烘焙结果？",
+                        func(ok)
+                        {
+                            if (ok)
+                            {
+                                let framecount = partical_context.m_frames_caches->len;
+                                let width = math::round(math::sqrt(framecount: real));
+                                let height = width * width >= framecount ? width | width + 1;
+                                let (w, h) = partical_context.m_frame_size;
+
+                                let animationimg = image::create(w * width, h * height);
+
+                                for (let mut i = 0; i < framecount; i += 1)
+                                {
+                                    let img = partical_context.m_frames_caches[i];
+
+                                    for (let mut x = 0; x < w; x += 1)
+                                    {
+                                        for (let mut y = 0; y < h; y += 1)
+                                        {
+                                            let placex = i % width;
+                                            let placey = height - (i / width + 1);
+                                            let (r, g, b, a) = img->pix((x, y))->get_color();
+                                            animationimg->setpix((x + placex * w, y + placey * h), (r,g,b,a));
+                                        }
+                                    }
+                                }
+
+                                assert(animationimg->save(outimgpath->tostring()));
+                            }
+                        });
+                    
+                }
+
+                EndMenu();
+            }
+            if (econtext.m_enable_bake)
+            {
+                if (MenuItem("烘焙"))
+                {
+                    match (vm::create("je/particalbacker/baker.wo", 
+                        partical_context.m_script))
                     {
-                        if (!vmm->run()->has)
-                            jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
-                        
-                        do thread::create(func(){
-                            econtext.m_enable_bake = false;
-                            if (!vmm->invoke("_start_baking", [partical_context: dynamic])->has)
+                    ok(vmm)?
+                        {
+                            if (!vmm->run()->has)
                                 jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
-                            econtext.m_enable_bake = true;
-                        }, ());
+                            
+                            econtext.m_frame_index = 1;
+
+                            do thread::create(func(){
+                                econtext.m_enable_bake = false;
+                                if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->has)
+                                    jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
+                                econtext.m_enable_bake = true;
+                            }, ());
+                        }
+                    err(msg)?
+                        jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本存在错误\n{msg}");
                     }
-                err(msg)?
-                    jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本存在错误\n{msg}");
                 }
             }
+            else
+            {
+                func _show_bake_progress(econtext: _EditorContext)
+                {
+                    return F"烘焙中({econtext.m_solved_launch_count}/{econtext.m_target_launch_count})";
+                }
+                
+                if (MenuItem(_show_bake_progress(econtext)))
+                    econtext.m_enable_bake = true;
+            }
+           
             EndMenuBar();
         }
 
@@ -290,25 +446,16 @@ public func color(frame: int, context: PerparticleContext)
     }
     public func show(
         context: EditorContext, 
-        partical_context: ParticalContext,
-        econtext: _EditorContext)
+        partical_context: ParticalContext)
     {
-        launch(_particalbaker_editor, (context, partical_context, econtext));
-    }
-    public func debugshow(context: EditorContext)
-    {
-        show(context, ParticalContext{
-            m_frame_count = mut 24,
-            m_frame_size = mut (64, 64),
-            m_frame_rate = mut 1./24.,
-            m_repeat_round = mut 1,
-            m_frames_caches = mut [],
-            m_script = mut DEFAULT_SOURCE,
-            m_path = filesys::normalize(std::exepath()),
-        }, _EditorContext{
-            m_last_update_time = mut std::time(),
-            m_frame_index = mut 0,
-            m_enable_bake = mut true,
-        });
+        launch(_particalbaker_editor, (context, partical_context, 
+            _EditorContext{
+                m_last_update_time = mut std::time(),
+                m_frame_index = mut 0,
+                m_enable_bake = mut true,
+
+                m_target_launch_count = mut 0,
+                m_solved_launch_count = mut 0,
+            }));
     }
 }

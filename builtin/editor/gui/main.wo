@@ -1,6 +1,5 @@
 // gui.main
 // 用于启动和维持项目的编辑器界面
-
 import builtin.editor.project.main;
 
 import builtin.editor.gui.main_menu;
