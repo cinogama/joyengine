@@ -95,17 +95,17 @@ let mut partical_context = nil->unsafe::cast:<ParticalContext>();
 let mut baking_cache = []: array<je::graphic::texture>;
 let baking_launch_record = []mut: vec<(int, int)>;
 
-public func upos2ppox(upos: (real, real))=> (int, int)
+public func upos2ppox(upos: (real, real))=> (real, real)
 {
     let (w, h) = partical_context.m_frame_size;
     let (px, py) = upos;
-    return (math::round((px + 1.) / 2. * w: real), math::round((py + 1.) / 2. * h: real));
+    return (px / 2. * w: real, py / 2. * h: real);
 }
-public func ppos2upox(upos: (int, int))=> (real, real)
+public func ppos2upox(upos: (real, real))=> (real, real)
 {
     let (w, h) = partical_context.m_frame_size;
     let (ipx, ipy) = upos;
-    return ((ipx: real / w: real - 0.5) * 2.0, (ipy: real / h: real - 0.5) * 2.0);
+    return (ipx / w: real * 2.0, ipy / h: real * 2.0);
 }
 public func clamp(v: real)
 {
@@ -121,7 +121,11 @@ func draw(mut frame: int, pos: (real, real), color: (real, real, real, real))
         frame += fcount;
 
     let (w, h) = partical_context.m_frame_size;
-    let (ipx, ipy) = upos2ppox(pos);
+    let (ipx, ipy) = pos...
+        -> \px, py = (px + 1., py + 1.);
+        -> upos2ppox...
+        -> \px, py = (math::round(px), math::round(py));
+        ;
 
     if (ipx >= 0 && ipx < w && ipy >= 0 && ipy < h)
     {
@@ -223,8 +227,8 @@ using PerparticleContext = struct{
 public func perparticle(launch_frame: int)
 {
     return PerparticleContext{
-        pos = mut(0., 0.),
-        speed = mut(randreal(-1., 1.), randreal(-1., 1.)),
+        pos = mut upos2ppox((0., 0.)),
+        speed = mut(randreal(-32., 32.), randreal(-32., 32.)),
         life = mut 1. + deltatime(),
         maxlife = 1.,
     };
@@ -240,13 +244,12 @@ public func position(frame: int, context: PerparticleContext)
     context.life -= deltatime();
 
     // Make a star shape.
-    let (ix, iy) = upos2ppox((x, y));
     return [
-        ppos2upox((ix + 1, iy)),
-        ppos2upox((ix - 1, iy)),
-        ppos2upox((ix, iy)),
-        ppos2upox((ix, iy + 1)),
-        ppos2upox((ix, iy - 1)),
+        ppos2upox((x + 1.0, y)),
+        ppos2upox((x - 1.0, y)),
+        ppos2upox((x, y)),
+        ppos2upox((x, y + 1.0)),
+        ppos2upox((x, y - 1.0)),
     ];
 }
 
@@ -291,11 +294,12 @@ public func color(frame: int, context: PerparticleContext)
                 if (MenuItem("导出"))
                 {
                     if (partical_context.m_frames_caches->empty)
-                        jeapi::gui::form::errmsg("动画导出失败", F"动画未能保存到{partical_context.m_path}");
+                        jeapi::gui::form::errmsg("动画导出失败", F"当前没有烘焙结果可供导出，请先执行烘焙操作");
 
                     let filename = filesys::purename(partical_context.m_path);
                     let outimgpath = filesys::parent(partical_context.m_path) / (filename + ".png");
-                    jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->tostring}，是否确认导出当前烘焙结果？",
+                    let outanimpath = filesys::parent(partical_context.m_path) / (filename + ".jeanim4");
+                    jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->tostring} 和 {outanimpath->tostring}，是否确认导出当前烘焙结果？",
                         func(ok)
                         {
                             if (ok)
@@ -324,6 +328,10 @@ public func color(frame: int, context: PerparticleContext)
                                 }
 
                                 assert(animationimg->save(outimgpath->tostring()));
+
+                                let fanimdat = animation2d::AnimationContext::create(outanimpath);
+                                fanimdat->fast_create_for_partical(width, height, framecount, partical_context.m_frame_rate);
+                                assert(fanimdat->save);
                             }
                         });
                     

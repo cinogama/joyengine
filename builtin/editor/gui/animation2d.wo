@@ -158,7 +158,7 @@ namespace editor::gui::animation2d
     }
 
 
-    using AnimationContext = struct{
+    public using AnimationContext = struct{
         m_animations: map<string, AnimationActionData>,
         m_path: filesys::path_t,
 
@@ -168,18 +168,15 @@ namespace editor::gui::animation2d
         m_selected_c_or_u_data: mut SelectedComponentOrUniformData,
     }
     {
-        public func init(path: filesys::path_t)
+        public func create(path: filesys::path_t)
         {
-            if (filesys::exist(path))
-                return false;
-
             return AnimationContext{
                     m_animations = {}mut, 
                     m_path = path, 
                     m_selected_action_name = mut "",
                     m_selected_frame = mut -1,
                     m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
-                }->save();
+                };
         }
         public func open(path: filesys::path_t)
         {
@@ -433,6 +430,44 @@ namespace editor::gui::animation2d
             }
             // save 函数结束
             return filesys::writeall(self.m_path, result as buffer: string);
+        }
+        public func fast_create_for_partical(self: AnimationContext, x: int, y: int, fcount: int, ftime: real)
+        {
+            let mut f = fcount;
+
+            let animation_datas = AnimationActionData{m_frames = []mut};
+            self.m_animations->set("play", animation_datas);
+
+            纵向循环@
+            for (let mut j = y - 1; j >= 0; j -= 1)
+            {
+                for (let mut i = 0; i < x; i += 1)
+                {
+                    if (f == 0)
+                        break 纵向循环;
+                    
+                    f -= 1;
+                    let framedat = Animation2dFrameData{
+                        m_time = mut ftime,
+                        m_component_dats = [
+                            FrameComponentData{
+                                m_component_name = "Renderer::Textures",
+                                m_member_name = "offset",
+                                m_value = mut DataValue::VEC2((i: real / x: real, j: real / y: real)),
+                                m_offset_mode = mut false,
+                            },
+                            FrameComponentData{
+                                m_component_name = "Renderer::Textures",
+                                m_member_name = "tiling",
+                                m_value = mut DataValue::VEC2((1. / x: real, 1. / y: real)),
+                                m_offset_mode = mut false,
+                            },
+                        ]mut,
+                        m_uniform_dats = []mut,
+                    };
+                    animation_datas.m_frames->add(framedat);
+                }
+            }
         }
     }
     func _animation_edit_form(context: EditorContext, animation_context: AnimationContext)

@@ -445,10 +445,17 @@ namespace editor::gui
                 if (MenuItem("2D帧动画"))
                 {
                     jeapi::gui::form::input("新建2D帧动画", F"在{current_work_path}新建动画", "NewAnimation",
-                        \filename: string = animation2d::AnimationContext::init(file_path)
-                            ? force_update()
-                            | jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法")
-                        where file_path = filesys::normalize(current_work_path) / F"{filename}.jeanim4";);
+                        func (filename)
+                        {
+                            let path = filesys::normalize(current_work_path) / F"{filename}.jeanim4";
+                            if (filesys::exist(path))
+                                jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法");
+                            else
+                            {
+                                assert(animation2d::AnimationContext::create(path)->save);
+                                force_update();
+                            }
+                        });
                 }
                 if (MenuItem("粒子动画"))
                 {

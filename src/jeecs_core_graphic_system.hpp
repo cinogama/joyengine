@@ -1841,8 +1841,8 @@ public func frag(vf: v2f)
 
                     jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain);
                     auto lightpass_pre_bind_texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
+                    
                     // Bind attachment
-                    // 在应用光照时，只需要使用视空间坐标，其他附件均不使用，但是考虑到各种乱七八糟的问题，这里还是都绑定一下
                     // 绑定漫反射颜色通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 0,
                         current_camera.light2DPass->defer_rend_aim->get_attachment(0)->resouce());
