@@ -287,7 +287,7 @@ namespace editor::gui::edit_forms
                                     index += 1;
                                 } // end show shader.
 
-                                TextDisabled("[拖动shader文件到此处添加新的pass]");
+                                do Button("[拖动shader文件到此处添加新的pass]");
                                 if (BeginPopupContextItem())
                                 {
                                     static let mut shaders_in_project = 

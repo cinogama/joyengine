@@ -29,24 +29,27 @@ public func vert(v: vin)
     };
 }
 
-func multi_sampling_for_bias_self_glowing(tex: texture2d, reso: float2, uv: float2)
+let bias = 2.;
+let bias_weight = [
+    (-1., 1., 0.094742),    (0., 1., 0.118318),     (1., 1., 0.094742),
+    (-1., 0., 0.118318),    (0., 0., 0.147761),     (1., 0., 0.118318),
+    (-1., -1., 0.094742),   (0., -1., 0.118318),    (1., -1., 0.094742),
+];
+
+func multi_sampling_for_bias_self_glowing(tex: texture2d, reso: float2, uv: float2, depth: int)=> float3
 {
     let mut result = float3::zero;
-    let bias = 2.;
-
-    let bias_weight = [
-        (-1., 1., 0.094742),    (0., 1., 0.118318),     (1., 1., 0.094742),
-        (-1., 0., 0.118318),    (0., 0., 0.147761),     (1., 0., 0.118318),
-        (-1., -1., 0.094742),   (0., -1., 0.118318),    (1., -1., 0.094742),
-    ];
-
     let reso_inv = float2::one / reso;
-
     for (let _, (x, y, weight) : bias_weight)
     {
-        result = result + texture(
-            tex, uv + reso_inv * float2::create(x, y) * bias
-        )->xyz * weight;  
+        if (depth <= 0)
+            result = result + texture(
+                tex, uv + reso_inv * float2::create(x, y) * bias
+            )->xyz * weight;  
+        else
+            result = result + multi_sampling_for_bias_self_glowing(
+                tex, reso, uv + reso_inv * float2::create(x, y) * bias, depth - 1
+                ) * weight;
     }
     return result;
 }
@@ -59,11 +62,21 @@ public func frag(vf: v2f)
 
     let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let light_color_rgb = texture(light_buffer, vf.uv)->xyz;
-    let self_lumine_color_rgb = multi_sampling_for_bias_self_glowing(self_lumine, je_light2d_resolutin, vf.uv);
-    let mixed_color_rgb = max(float3::zero, albedo_color_rgb
-        * (self_lumine_color_rgb + light_color_rgb + float3::new(0.03, 0.03, 0.03)));
+    let self_lumine_color_rgb = texture(self_lumine, vf.uv)->xyz;
+    let self_luming_color_gos_rgb = multi_sampling_for_bias_self_glowing(self_lumine, je_light2d_resolutin, vf.uv, 1);
+    let self_luming_color_gos_rgb_hdr = self_luming_color_gos_rgb / (self_luming_color_gos_rgb + float3::one);
+    let self_luming_color_gos_rgb_hdr_brightness = 
+        float::new(0.3) * self_luming_color_gos_rgb_hdr->x
+        + float::new(0.49) * self_luming_color_gos_rgb_hdr->y
+        + float::new(0.11) * self_luming_color_gos_rgb_hdr->z;
 
-    let hdr_color_rgb = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
+    let mixed_color_rgb = max(float3::zero, albedo_color_rgb
+        * (self_luming_color_gos_rgb_hdr_brightness * self_luming_color_gos_rgb 
+            + (float::one - self_luming_color_gos_rgb_hdr_brightness) * self_lumine_color_rgb
+            + light_color_rgb 
+            + float3::new(0.03, 0.03, 0.03)));
+
+    let hdr_color_rgb = mixed_color_rgb / (mixed_color_rgb + float3::one);
     let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::new(1. / 2.2, 1. / 2.2, 1. / 2.2, ));
 
     return fout{
