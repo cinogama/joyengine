@@ -35,7 +35,7 @@ public func vert(v: vin)
     };
 }
 
-public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
+func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
 {
     let mut shadow_factor = float::zero;
     let bias = 2.;
@@ -70,7 +70,7 @@ public func frag(vf: v2f)
     let vposition = texture(visual_coord, uv);
     let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
     let fgdistance = distance(vposition->xyz, vf.vpos->xyz / vf.vpos->w);
-    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_shadow2d_resolutin, uv);
+    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_light2d_resolutin, uv);
 
     let decay = je_light2d_decay;
 

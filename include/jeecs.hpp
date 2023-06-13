@@ -736,7 +736,7 @@ struct jegl_shader
 
         uint32_t m_builtin_uniform_color = jeecs::typing::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_shadow2d_resolution = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_light2d_resolution = jeecs::typing::PENDING_UNIFORM_LOCATION;
         uint32_t m_builtin_uniform_light2d_decay = jeecs::typing::PENDING_UNIFORM_LOCATION;
     };
     struct unifrom_variables
@@ -2945,7 +2945,6 @@ namespace jeecs
 #define Update          Update          // 写入 Animation
 #define LateUpdate      LateUpdate      // 更新 Translation 
 #define CommitUpdate    CommitUpdate    // 提交 Physics 
-
 
         /*
         struct TranslationUpdater : game_system
@@ -5253,6 +5252,34 @@ namespace jeecs
         {
             basic::resource<graphic::framebuffer> defer_rend_aim = nullptr;
             basic::resource<jeecs::graphic::framebuffer> defer_light_effect = nullptr;
+
+            struct mixed_shader
+            {
+                basic::resource<jeecs::graphic::shader> shader = nullptr;
+                std::string to_string()const
+                {
+                    return std::string("#file#") + (
+                        shader == nullptr || shader->resouce()->m_path == nullptr
+                        ? "" : shader->resouce()->m_path);
+                }
+                void parse(const std::string& str)
+                {
+                    shader = nullptr;
+                    auto filepath = str.substr(6);
+                    if (filepath != "")
+                    {
+                        auto* shad = jeecs::graphic::shader::load(filepath);
+                        if (shad != nullptr)
+                            shader = shad;
+                    }
+                }
+            };
+            mixed_shader mixed_shader;
+            
+            static void JERefRegsiter()
+            {
+                typing::register_member(&CameraPass::mixed_shader, "mixed_shader");
+            }
         };
 
         struct Block

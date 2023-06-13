@@ -84,7 +84,11 @@ namespace editor::gui::edit_forms
                     if (debug_camera_entity->val->editor::get_component(l2d_camera_pass_component_type)->has)
                         debug_camera_entity->val->editor::remove_component(l2d_camera_pass_component_type);
                     else
-                        do debug_camera_entity->val->editor::add_component(l2d_camera_pass_component_type);
+                    {
+                        let camerapass = debug_camera_entity->val->editor::add_component(l2d_camera_pass_component_type);
+                        let (type, val) = camerapass->editor::get_member("mixed_shader")->val;
+                        val->parse(type, "#file#@/resource/shader/Light2DCameraPass.shader");                        
+                    }
                 }
                 EndMenuBar();
             }

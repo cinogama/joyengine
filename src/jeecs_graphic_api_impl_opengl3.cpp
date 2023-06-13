@@ -353,7 +353,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(resource, "JOYENGINE_TEXTURE_TILING");
             builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(resource, "JOYENGINE_TEXTURE_OFFSET");
 
-            builtin_uniforms.m_builtin_uniform_shadow2d_resolution = gl_get_uniform_location(resource, "JOYENGINE_SHADOW2D_RESOLUTION");
+            builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(resource, "JOYENGINE_LIGHT2D_RESOLUTION");
             builtin_uniforms.m_builtin_uniform_light2d_decay = gl_get_uniform_location(resource, "JOYENGINE_LIGHT2D_DECAY");
 
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
