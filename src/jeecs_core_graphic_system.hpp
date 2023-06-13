@@ -1896,8 +1896,7 @@ public func frag(vf: v2f)
                     JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
                         (float)current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_width,
                         (float)current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_height);
-                } // Finish for Light2d effect.                    
-
+                } // Finish for Light2d effect.
             }
         }
 
