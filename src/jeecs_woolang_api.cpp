@@ -145,20 +145,6 @@ WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_val(vm, result);
 }
 
-WO_API wo_api wojeapi_restart_graphic_interface(wo_vm vm, wo_value args, size_t argc)
-{
-    void* cur_universe = wo_pointer(args + 0);
-    jegl_interface_config config;
-    config.m_title = wo_string(args + 1);
-    config.m_resolution_x = config.m_windows_width = wo_int(args + 2);
-    config.m_resolution_y = config.m_windows_height = wo_int(args + 3);
-    config.m_fps = wo_int(args + 4);
-    config.m_fullscreen = wo_bool(args + 5);
-    jegl_reboot_graphic_thread(jedbg_get_editing_graphic_thread(cur_universe), config);
-
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api wojeapi_current_platform_config(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_string(vm,
@@ -1536,15 +1522,6 @@ namespace je
 
         extern("libjoyecs", "wojeapi_get_all_logs")
         public func getlogs()=> array<(loglevel, string)>;
-
-        extern("libjoyecs", "wojeapi_restart_graphic_interface")
-        public func restart_graphic_interface(
-            u: universe,
-            title: string, 
-            reso_x: int, 
-            reso_y: int,
-            fps:    int,
-            fullscreen: bool)=> void;
 
         extern("libjoyecs", "wojeapi_current_platform_config")
         public func platform()=> string;

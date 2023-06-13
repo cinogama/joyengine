@@ -136,7 +136,7 @@ namespace editor
         {
             return self.m_modules;
         }
-        public func dump_and_close_all_world(self: Project)
+        public func dump_all_world(self: Project)
         {
             let dump_dats = self.m_worlds->toarray
                 =>> \pw = dat->has 
@@ -149,11 +149,17 @@ namespace editor
                 ;
             
             if (dump_dats->len != self.m_worlds->len)
-                return result::err("有世界序列化失败");
+                return result::err("有世界序列化失败"); 
+
+            return result::ok(dump_dats);
+        }
+        public func dump_and_close_all_world(self: Project)
+        {
+            try! dats = self->dump_all_world();
 
             // OK 关闭全部现存世界
             do self.m_worlds->toarray->> \pw = self->destroy_world(pw.m_world_instance)->unwarp();;
-            return result::ok(dump_dats);
+            return result::ok(dats);
         }
         public func restore_all_world(self: Project, dats: array<dict<string, dynamic>>)
         {
@@ -322,6 +328,7 @@ namespace editor
         }
         public func close(self: Project)
         {
+            std::debug::breakdown();
             self.m_env->close;
         }
         public func wait(self: Project)

@@ -959,6 +959,9 @@ namespace fragment_out
 
 namespace float
 {
+    public let zero = float::new(0.);
+    public let one = float::new(1.);
+
     extern("libjoyecs", "jeecs_shader_float_create")
     public func new(init_val:real)=> float;
 
@@ -995,6 +998,9 @@ namespace float
 }
 namespace float2
 {
+    public let zero = float2::new(0., 0.);
+    public let one = float2::new(1., 1.);
+
     extern("libjoyecs", "jeecs_shader_float2_create")
     public func new(x:real, y:real)=> float2;
 
@@ -1027,6 +1033,9 @@ namespace float2
 }
 namespace float3
 {
+    public let zero = float3::new(0., 0., 0.);
+    public let one = float3::new(1., 1., 1.);
+
     extern("libjoyecs", "jeecs_shader_float3_create")
     public func new(x:real, y:real, z:real)=> float3;
 
@@ -1071,6 +1080,9 @@ namespace float3
 )" R"(
 namespace float4
 {
+    public let zero = float4::new(0., 0., 0., 0.);
+    public let one = float4::new(1., 1., 1., 1.);
+
     extern("libjoyecs", "jeecs_shader_float4_create")
     public func new(x:real, y:real, z:real, w:real)=> float4;
 
@@ -1167,6 +1179,11 @@ namespace float4
 
 namespace float4x4
 {
+    public let unit = float4x4::new(
+        1., 0., 0., 0.,
+        0., 1., 0., 0.,
+        0., 0., 1., 0.,
+        0., 0., 0., 1.);
     extern("libjoyecs", "jeecs_shader_float4x4_create")
     public func new(p00:real, p01:real, p02:real, p03:real,
                 p10:real, p11:real, p12:real, p13:real,
@@ -1239,38 +1256,25 @@ namespace shader
         public func generate_glsl_fragment(wrapper:shader_wrapper)=> string;
     }
 }
-public let float_zero = float::new(0.);
-public let float_one = float::new(1.);
-public let float2_zero = float2::new(0., 0.);
-public let float2_one = float2::new(1., 1.);
-public let float3_zero = float3::new(0., 0., 0.);
-public let float3_one = float3::new(1., 1., 1.);
-public let float4_zero = float4::new(0., 0., 0., 0.);
-public let float4_one = float4::new(1., 1., 1., 1.);
-public let float4x4_unit = float4x4::new(
-    1., 0., 0., 0.,
-    0., 1., 0., 0.,
-    0., 0., 1., 0.,
-    0., 0., 0., 1.);
 
 // Default uniform
-public let je_m = uniform("JOYENGINE_TRANS_M", float4x4_unit);
-public let je_v = uniform("JOYENGINE_TRANS_V", float4x4_unit);
-public let je_p = uniform("JOYENGINE_TRANS_P", float4x4_unit);
+public let je_m = uniform("JOYENGINE_TRANS_M", float4x4::unit);
+public let je_v = uniform("JOYENGINE_TRANS_V", float4x4::unit);
+public let je_p = uniform("JOYENGINE_TRANS_P", float4x4::unit);
 
 // je_mvp = je_p * je_v * je_m;
 // je_mv  = je_v * je_m;
 // je_vp  = je_p * je_v;
-public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4_unit);
-public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4_unit);
-public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4_unit);
+public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4::unit);
+public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4::unit);
+public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4::unit);
 
-public let je_local_scale = uniform("JOYENGINE_LOCAL_SCALE", float3_one);
+public let je_local_scale = uniform("JOYENGINE_LOCAL_SCALE", float3::one);
 
-public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2_one);
-public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2_zero);
+public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2::one);
+public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2::zero);
 
-public let je_color = uniform("JOYENGINE_MAIN_COLOR", float4_one);
+public let je_color = uniform("JOYENGINE_MAIN_COLOR", float4::one);
 
 public func texture(tex:texture2d, uv:float2)=> float4
 {

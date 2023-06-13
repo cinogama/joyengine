@@ -44,9 +44,13 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let Albedo = uniform_texture:<texture2d>("Albedo", 0);
+
+    let albedo_color = alphatest(texture(Albedo, vf.uv));
+    let self_growing = uniform("SelfGrowing", float::one);
+
     return fout{
         albedo = alphatest(texture(Albedo, vf.uv)),
-        self_luminescence = float4::zero,
+        self_luminescence = float4::create(albedo_color->xyz * self_growing, 1.),
         visual_coordinates = float4::create(vf.vpos, 1.),
     };
 }

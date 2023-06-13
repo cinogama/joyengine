@@ -413,12 +413,16 @@ namespace editor::gui
                 Separator();
                 if (BeginMenu("着色器脚本"))
                 {
-                    static let editor_origin_shader = {
-                        ["空白着色器"] = "MonoColor",
-                        ["无光着色器"] = "Unlit",
-                        ["2D光照着色器"] = "Forward2D",
-                        ["2D光照着色器（法线）"] = "Forward2DNormal",
-                    };
+                    static let editor_origin_shaders = [
+                        ("空白着色器", "MonoColor"),
+                        ("无光着色器", "Unlit"),
+                        ("2D光照着色器", "Forward2D"),
+                        ("2D光照着色器（法线）", "Forward2DNormal"),
+                        ("2D光照自发光着色器", "SelfGrowingForward2D"),
+                        ("2D光照自发光着色器（法线）", "SelfGrowingForward2DNormal"),
+                        ("2D点光源着色器", "Light2DPoint"),
+                        ("2D平行光源着色器", "Light2DParallel"),
+                    ];
 
                     let create_shader_at = func(shader_name: string, shader_src: string)
                     {
@@ -429,7 +433,7 @@ namespace editor::gui
                             force_update();
                     };
 
-                    for (let shader_display_name, shader_path_name : editor_origin_shader)
+                    for (let _, (shader_display_name, shader_path_name) : editor_origin_shaders)
                         if (MenuItem(shader_display_name))
                             jeapi::gui::form::input("创建着色器", F"将在{current_work_path}创建{shader_display_name}：",
                                 shader_path_name,
@@ -442,35 +446,39 @@ namespace editor::gui
                   
                     EndMenu();
                 }
-                if (MenuItem("2D帧动画"))
+                if (BeginMenu("动画"))
                 {
-                    jeapi::gui::form::input("新建2D帧动画", F"在{current_work_path}新建动画", "NewAnimation",
-                        func (filename)
-                        {
-                            let path = filesys::normalize(current_work_path) / F"{filename}.jeanim4";
-                            if (filesys::exist(path))
-                                jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法");
-                            else
+                    if (MenuItem("2D帧序列"))
+                    {
+                        jeapi::gui::form::input("新建2D帧动画", F"在{current_work_path}新建动画", "NewAnimation",
+                            func (filename)
                             {
-                                assert(animation2d::AnimationContext::create(path)->save);
-                                force_update();
-                            }
-                        });
-                }
-                if (MenuItem("粒子动画"))
-                {
-                    jeapi::gui::form::input("新建粒子动画", F"在{current_work_path}新建动画", "NewPartical",
-                        func (filename)
-                        {
-                            let path = filesys::normalize(current_work_path) / F"{filename}.jepartical";
-                            if (filesys::exist(path))
-                                jeapi::gui::form::errmsg("创建粒子动画失败", "可能是同名文件已经存在或文件名路径不合法");
-                            else
+                                let path = filesys::normalize(current_work_path) / F"{filename}.jeanim4";
+                                if (filesys::exist(path))
+                                    jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法");
+                                else
+                                {
+                                    assert(animation2d::AnimationContext::create(path)->save);
+                                    force_update();
+                                }
+                            });
+                    }
+                    if (MenuItem("粒子动画"))
+                    {
+                        jeapi::gui::form::input("新建粒子动画", F"在{current_work_path}新建动画", "NewPartical",
+                            func (filename)
                             {
-                                assert(particalbaker::ParticalContext::create(path)->save);
-                                force_update();
-                            }
-                        });
+                                let path = filesys::normalize(current_work_path) / F"{filename}.jepartical";
+                                if (filesys::exist(path))
+                                    jeapi::gui::form::errmsg("创建粒子动画失败", "可能是同名文件已经存在或文件名路径不合法");
+                                else
+                                {
+                                    assert(particalbaker::ParticalContext::create(path)->save);
+                                    force_update();
+                                }
+                            });
+                    }
+                    EndMenu();
                 }
                 if (MenuItem(F"C++模块"))
                 {
@@ -881,7 +889,28 @@ namespace $$MODULE_NAME$$
         }
 
         // 下面是通用的选项
+        if (MenuItem("复制路径"))
+        {
+            SetClipboardText(path.path->tostring);
+        }
+        if (MenuItemEnabled("复制文件", is_modifiable_file))
+        {
+            let path = path.path;
+            let mut target_path = filesys::parent(path) / (filesys::purename(path) + "(1)" + filesys::extension(path));
 
+            for (let mut n = 2; ; n += 1)
+                if (filesys::exist(target_path))
+                    target_path = filesys::parent(path) / (filesys::purename(path) + F"({n})" + filesys::extension(path));
+                else break;
+
+            match (filesys::copy(path, target_path))
+            {
+            ok(_)?
+                force_update();
+            err(errid)?
+                jeapi::gui::form::errmsg("失败", F"复制文件失败({errid})");
+            }
+        }
         if (MenuItemEnabled("重命名", is_modifiable_file))
         {
             jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
@@ -900,7 +929,7 @@ namespace $$MODULE_NAME$$
                         ->  or(\errid = jeapi::gui::form::errmsg("失败", F"删除失败({errid})");)
                         ;
                 });
-        }
+        }        
     }
 
     // 带图标的文件按钮

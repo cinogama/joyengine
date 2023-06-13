@@ -66,8 +66,8 @@ public let je_shadow2ds = func(){
 }();
 
 
-public let je_shadow2d_resolutin = uniform("JOYENGINE_SHADOW2D_RESOLUTION", float2_one);
-public let je_light2d_decay = uniform("JOYENGINE_LIGHT2D_DECAY", float_one);
+public let je_shadow2d_resolutin = uniform("JOYENGINE_SHADOW2D_RESOLUTION", float2::one);
+public let je_light2d_decay = uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
 
 public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", DEFER_TEX_0 + 0);
 public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", DEFER_TEX_0 + 1);
@@ -88,11 +88,11 @@ public func DistributionGGX(N: float3, H: float3, roughness: float)
 {
     let a = roughness * roughness;
     let a2 = a * a;
-    let NdotH = max(dot(N, H), float_zero);
+    let NdotH = max(dot(N, H), float::zero);
     let NdotH2 = NdotH * NdotH;
     
     let nom = a2;
-    let denom = NdotH2 * (a2 - float_one) + float_one;
+    let denom = NdotH2 * (a2 - float::one) + float::one;
     let pidenom2 = PI * denom * denom;
 
     return nom / pidenom2;
@@ -100,19 +100,19 @@ public func DistributionGGX(N: float3, H: float3, roughness: float)
 
 public func GeometrySchlickGGX(NdotV: float, roughness: float)
 {
-    let r = roughness + float_one;
+    let r = roughness + float::one;
     let k = r * r / float::new(8.);
     
     let nom = NdotV;
-    let denom = NdotV * (float_one - k) + k;
+    let denom = NdotV * (float::one - k) + k;
 
     return nom / denom;
 }
 
 public func GeometrySmith(N: float3, V: float3, L: float3, roughness: float)
 {
-    let NdotV = max(dot(N, V), float_zero);
-    let NdotL = max(dot(N, L), float_zero);
+    let NdotV = max(dot(N, V), float::zero);
+    let NdotL = max(dot(N, L), float::zero);
 
     let ggx1 = GeometrySchlickGGX(NdotL, roughness);
     let ggx2 = GeometrySchlickGGX(NdotV, roughness);
@@ -122,12 +122,12 @@ public func GeometrySmith(N: float3, V: float3, L: float3, roughness: float)
 
 public func FresnelSchlick(cosTheta: float, F0: float3)
 {
-    return F0 + (float3_one - F0) * pow(float_one - cosTheta, float::new(5.));
+    return F0 + (float3::one - F0) * pow(float::one - cosTheta, float::new(5.));
 }
 
 public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
 {
-    let mut shadow_factor = float_zero;
+    let mut shadow_factor = float::zero;
     let bias = 2.;
 
     let bias_weight = [
@@ -139,7 +139,7 @@ public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: 
         //(-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
     ];
 
-    let reso_inv = float2_one / reso;
+    let reso_inv = float2::one / reso;
 
     for (let _, (x, y, weight) : bias_weight)
     {
@@ -210,7 +210,6 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         jeecs::game_universe universe;
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
-        basic::resource<graphic::shader> _test_shader;
         basic::resource<graphic::texture> default_texture;
         jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
 
@@ -289,27 +288,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
             default_texture->pix(1, 0).set({ 0.25f, 0.25f, 0.25f, 1.f });
             default_texture->resouce()->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::NEAREST;
-            _test_shader = graphic::shader::create("!/builtin/test_shader.shader", R"(
-import je.shader;
-
-VAO_STRUCT! vin {
-    vertex : float3,
-};
-using v2f = struct {
-    pos : float4,
-};
-using fout = struct {
-    color : float4
-};
-
-public let vert = 
-\v: vin = v2f{ pos = vertex_pos }
-    where vertex_pos = float4::create(v.vertex, 1.);;
-
-public let frag = 
-\f: v2f = fout{ color = float4::create(t, 0., t, 1.) }
-    where t = je_time->y();;
-)");
+            
             default_shader = graphic::shader::create("!/builtin/builtin_default.shader", R"(
 // Default shader
 import je.shader;
@@ -337,10 +316,14 @@ public let frag =
 
             jegl_interface_config config = {};
             config.m_fps = 60;
+            config.m_windows_width = 640;
+            config.m_windows_height = 480;
             config.m_resolution_x = 640;
             config.m_resolution_y = 480;
             config.m_title = "JoyEngineECS(JoyEngine 4.0)";
-
+            config.m_fullscreen = false;
+            config.m_enable_resize = true;
+            
             glthread = jegl_start_graphic_thread(
                 config,
                 jegl_using_opengl3_apis,
@@ -559,7 +542,7 @@ public let frag =
             }
         }
 
-        void CommitUpdate()
+        void PreUpdate()
         {
             m_camera_list.clear();
             m_renderer_list.clear();
@@ -805,7 +788,7 @@ public func frag(vf: v2f)
     let final_shadow = alphatest(float4::create(je_color->xyz, texture(main_texture, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float_one)
+        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
     };
 }
 )") };
@@ -856,7 +839,7 @@ public func frag(vf: v2f)
             texture(main_texture, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float_one)
+        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
     };
 }
 )") };
@@ -899,7 +882,7 @@ public func frag(vf: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = float4::create(je_local_scale->x, je_local_scale->x, je_local_scale->x, float_one)
+        shadow_factor = float4::create(je_local_scale->x, je_local_scale->x, je_local_scale->x, float::one)
     };
 }
 )") };
@@ -950,7 +933,7 @@ public func frag(vf: v2f)
             texture(main_texture, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float_one)
+        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
     };
 }
 )") };
@@ -993,7 +976,7 @@ public func frag(vf: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = float4::create(je_local_scale->x, je_local_scale->x, je_local_scale->x, float_one)
+        shadow_factor = float4::create(je_local_scale->x, je_local_scale->x, je_local_scale->x, float::one)
     };
 }
 )") };
@@ -1040,7 +1023,7 @@ public func frag(vf: v2f)
     let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let light_color_rgb = texture(light_buffer, vf.uv)->xyz;
     let self_lumine_color_rgb = texture(self_lumine, vf.uv)->xyz;
-    let mixed_color_rgb = max(float3_zero, albedo_color_rgb 
+    let mixed_color_rgb = max(float3::zero, albedo_color_rgb 
         * (self_lumine_color_rgb + light_color_rgb + float3::new(0.03, 0.03, 0.03)));
 
     let hdr_color_rgb           = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
@@ -1229,7 +1212,7 @@ public func frag(vf: v2f)
             }
         }
 
-        void CommitUpdate()
+        void PreUpdate()
         {
             m_2dlight_list.clear();
             m_2dblock_list.clear();

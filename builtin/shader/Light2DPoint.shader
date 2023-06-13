@@ -37,7 +37,7 @@ public func vert(v: vin)
 
 public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
 {
-    let mut shadow_factor = float_zero;
+    let mut shadow_factor = float::zero;
     let bias = 2.;
 
     let bias_weight = [
@@ -46,7 +46,7 @@ public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: 
         /*(-1., -1., 0.08),*/   (0., -1., 0.08),    /*(1., -1., 0.08),*/
     ];
 
-    let reso_inv = float2_one / reso;
+    let reso_inv = float2::one / reso;
 
     for (let _, (x, y, weight) : bias_weight)
     {
@@ -74,8 +74,8 @@ public func frag(vf: v2f)
 
     let decay = je_light2d_decay;
 
-    let fade_factor = pow(float_one - uvdistance, decay);
-    let result = je_color->xyz * je_color->w * (float_one - shadow_factor) * fade_factor;
+    let fade_factor = pow(float::one - uvdistance, decay);
+    let result = je_color->xyz * je_color->w * (float::one - shadow_factor) * fade_factor;
 
     return fout{
         color = float4::create(result / (fgdistance + 1.0), 0.),

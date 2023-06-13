@@ -595,12 +595,10 @@ struct jegl_interface_config
 {
     size_t m_windows_width, m_windows_height;
     size_t m_resolution_x, m_resolution_y;
-
     size_t m_fps;
-
     const char* m_title;
-
     bool m_fullscreen;
+    bool m_enable_resize;
 };
 
 struct jegl_thread_notifier;
@@ -2943,10 +2941,10 @@ namespace jeecs
             return _m_delta_time;
         }
 
-#define PreUpdate       PreUpdate       // 读取 
+#define PreUpdate       PreUpdate       // 读取 Graphic
 #define Update          Update          // 写入 Animation
 #define LateUpdate      LateUpdate      // 更新 Translation 
-#define CommitUpdate    CommitUpdate    // 提交 Physics Graphic
+#define CommitUpdate    CommitUpdate    // 提交 Physics 
 
 
         /*

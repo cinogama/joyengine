@@ -157,6 +157,8 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     WINDOWS_SIZE_WIDTH = config->m_windows_width ? config->m_windows_width : config->m_resolution_x;
     WINDOWS_SIZE_HEIGHT = config->m_windows_height ? config->m_windows_height : config->m_resolution_y;
 
+    glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
+
     je_io_set_windowsize((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT);
 
     WINDOWS_TITLE = config->m_title ? config->m_title : WINDOWS_TITLE;

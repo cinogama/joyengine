@@ -2,6 +2,7 @@
 // 询问窗口
 
 import je.gui;
+import builtin.api.gui.inputmgr;
 
 using je::gui;
 
@@ -19,19 +20,19 @@ namespace jeapi::gui::form
 
             Text(text);
 
-            if (Button("是"))
+            if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
             {
                 okevent(true);
                 open = false;
             }
             SameLine();
-            if (Button("否"))
+            if (Button("否") || (IsWindowFocused() && inputmgr::keypush(je::keycode::BACKSPACE)))
             {
                 okevent(false);
                 open = false;
             }
             SameLine();
-            if (Button("取消"))
+            if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
                 open = false;
             End();
 

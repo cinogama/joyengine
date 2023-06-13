@@ -125,6 +125,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin_child")
     public func BeginChildSize(title:string, sizex: real, sizey: real)=> bool;
 
+    extern("libjoyecs", "je_gui_is_window_focused")
+    public func IsWindowFocused()=> bool;
+
     extern("libjoyecs", "je_gui_end_child")
     public func EndChild()=> void;
 
@@ -504,10 +507,6 @@ R"(
     extern("libjoyecs", "je_gui_set_next_item_open")
     public func SetNextItemOpen(open: bool)=> void;
 
-    //
-    extern("libjoyecs", "je_gui_focus_on_any_windows")
-    public func AnyWindowsFocused()=> bool;
-
     extern("libjoyecs", "je_gui_begin_tool_tip")
     public func BeginTooltip()=> void;
 
@@ -538,6 +537,12 @@ R"(
     {
         return _launch(dialog:<FT, ATs>, job_func, args);
     }
+
+    namespace input
+    {
+        extern("libjoyecs", "je_gui_get_input_state")
+        public func keystate(kcode: je::keycode)=> (bool, bool);
+    }
 }
 
 )";
@@ -554,12 +559,6 @@ WO_API wo_api je_gui_end_tool_tip(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-bool any_window_focused_on = false;
-bool next_frame_any_window_focused_on = false;
-WO_API wo_api je_gui_focus_on_any_windows(wo_vm vm, wo_value args, size_t argc)
-{
-    return wo_ret_bool(vm, any_window_focused_on || ImGui::GetFocusID() != 0);
-}
 WO_API wo_api je_gui_begin_drag_drop_source(wo_vm vm, wo_value args, size_t argc)
 {
     bool result;
@@ -1010,9 +1009,6 @@ WO_API wo_api je_gui_begin(wo_vm vm, wo_value args, size_t argc)
     else
         windows_flag = ImGui::Begin(wo_string(args));
 
-    if (ImGui::IsWindowFocused())
-        next_frame_any_window_focused_on = true;
-
     return wo_ret_bool(vm, windows_flag);
 }
 WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args, size_t argc)
@@ -1023,11 +1019,14 @@ WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args, size_t argc)
     ImGui::Begin(wo_string(args), &showing, (ImGuiWindowFlags)wo_int(args + 1));
     windows_flag = showing;
 
-    if (ImGui::IsWindowFocused())
-        next_frame_any_window_focused_on = true;
-
     return wo_ret_bool(vm, windows_flag);
 }
+
+WO_API wo_api je_gui_is_window_focused(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, ImGui::IsWindowFocused());
+}
+
 WO_API wo_api je_gui_end(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::End();
@@ -1499,6 +1498,37 @@ WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+struct key_state
+{
+    bool m_last_frame_down;
+    bool m_this_frame_down;
+};
+
+std::mutex _key_state_record_mx;
+std::unordered_map<jeecs::input::keycode, key_state> _key_state_record;
+
+WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::input::keycode kcode = (jeecs::input::keycode)wo_int(args + 0);
+
+    std::lock_guard g1(_key_state_record_mx);
+    auto fnd = _key_state_record.find(kcode);
+    if (fnd == _key_state_record.end())
+    {
+        _key_state_record[kcode] = key_state{
+            false,
+            jeecs::input::keydown(kcode),
+        };
+
+        fnd = _key_state_record.find(kcode);
+    }
+    
+    wo_value v = wo_push_struct(vm, 2);
+    wo_set_bool(wo_struct_get(v, 0), fnd->second.m_last_frame_down);
+    wo_set_bool(wo_struct_get(v, 1), fnd->second.m_this_frame_down);
+    return wo_ret_val(vm, v);
+}
+
 void jegui_init(void* window_handle, bool reboot)
 {
     _stop_work_flag = false;
@@ -1589,8 +1619,16 @@ void jegui_update()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    any_window_focused_on = next_frame_any_window_focused_on;
-    next_frame_any_window_focused_on = false;
+    do
+    {
+        std::lock_guard g1(_key_state_record_mx);
+        for (auto& [k, v] : _key_state_record)
+        {
+            v.m_last_frame_down = v.m_this_frame_down;
+            v.m_this_frame_down = jeecs::input::keydown(k);
+        }
+    } while (0);
+
 
     if (!_stop_work_flag)
     {

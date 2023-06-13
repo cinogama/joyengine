@@ -75,7 +75,7 @@ public func frag(vf: v2f)
 
     let vnormal = transed_normal_tangent_map(Normalize, vf);
 
-    let mut normal_effect_self_luminescence = float4::zero;
+    let mut normal_effect_self_luminescence = float3::zero;
     for (let index, light : je_light2ds)
     {
         // 点光源照射部分
@@ -99,15 +99,19 @@ public func frag(vf: v2f)
 
         normal_effect_self_luminescence =
             shadow_factor
-            * light->color->w
             * light_effect_factor
-            * float4::create(light->color->xyz, 1.)
+            * light->color->w
+            * light->color->xyz
             + normal_effect_self_luminescence;
     }
 
+    let albedo_color = alphatest(texture(Albedo, vf.uv));
+    let self_growing = uniform("SelfGrowing", float::one);
+
     return fout{
-        albedo = alphatest(texture(Albedo, vf.uv)),
-        self_luminescence = normal_effect_self_luminescence,
+        albedo = albedo_color,
+        self_luminescence = float4::create(
+            normal_effect_self_luminescence + albedo_color->xyz * self_growing, 1.),
         visual_coordinates = float4::create(vf.vpos, 1.),
     };
 }

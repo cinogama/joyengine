@@ -7,6 +7,8 @@ import pkg.filesystem;
 import tools;
 import imagescripts;
 
+import builtin.api.gui.inputmgr;
+
 using je;
 using je::gui;
 
@@ -300,6 +302,14 @@ namespace editor::gui::drawpannel
             {
                 let history_mgr = draw_context.edited_textures[texture][1];
 
+                if (IsWindowFocused())
+                {
+                    if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::Z]))
+                        history_mgr->undo();
+                    if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::Y]))
+                        history_mgr->redo();
+                }
+
                 let texture_path = texture->path->valor("<内置>");
                 if (BeginTabItem(F"通道{passid}: {texture_path}"))
                 {
@@ -358,13 +368,11 @@ namespace editor::gui::drawpannel
                         if (BeginMenu("编辑"))
                         {
                             if (MenuItemShortcutEnabled("撤销", "Ctrl + Z", history_mgr->undoable()))
-                            {
                                 history_mgr->undo();
-                            } 
-                            if (MenuItemShortcutEnabled("重做", "Ctrl + Shift + Z", history_mgr->redoable()))
-                            {
+ 
+                            if (MenuItemShortcutEnabled("重做", "Ctrl + Y", history_mgr->redoable()))
                                 history_mgr->redo();
-                            } 
+
                             Separator();
                             if (BeginMenu("从……复制"))
                             {
@@ -409,7 +417,6 @@ namespace editor::gui::drawpannel
                         }
                         EndMenuBar();
                     }
-
                     // OK 在这里显示一下绘图工具箱
                     BeginGroup();
                     

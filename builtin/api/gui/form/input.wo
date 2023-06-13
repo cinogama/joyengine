@@ -2,6 +2,8 @@
 // 输入窗口
 
 import je.gui;
+import builtin.api.gui.inputmgr;
+
 using je::gui;
 
 namespace jeapi::gui::form
@@ -25,13 +27,13 @@ namespace jeapi::gui::form
             if (Button("还原"))
                 inputval->set(defaultval);
 
-            if (Button("确定"))
+            if (Button("确定") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
             {
                 okevent(inputval->get);
                 open = false;
             }
             SameLine();
-            if (Button("取消"))
+            if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
                 open = false;
 
             End();

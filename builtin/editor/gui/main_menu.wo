@@ -5,11 +5,29 @@ import je.gui;
 import builtin.editor.gui.main;
 import builtin.api.dbg.main;
 import builtin.editor.gui.edit_forms.export_project;
+import builtin.api.gui.inputmgr;
 
 using je::gui;
 
 namespace editor::gui
 {
+    private func _save_world(context: EditorContext)
+    {
+        let proj = context->get_project;
+        if (proj->get_editing_world->>\w = proj->save_world(w);->valor(false) == false)
+        {
+            jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
+        }
+    }
+    private func _save_project(context: EditorContext)
+    {
+        let proj = context->get_project;
+        if (proj->save_project())
+            jeapi::gui::form::msg("完成", "项目和所有编辑中的世界已经保存");
+        else
+            jeapi::gui::form::errmsg("失败", "项目保存未能完成");
+    }
+
     public func show_main_menu(context: EditorContext)
     {
         context->launch_editor_form(func(){
@@ -29,23 +47,15 @@ namespace editor::gui
                 if (BeginMenu("文件"))
                 {
                     if (MenuItem("保存当前世界"))
-                    {
-                        let proj = context->get_project;
-                        if (proj->get_editing_world->>\w = proj->save_world(w);->valor(false) == false)
-                        {
-                            jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
-                        }
-                    }
+                        _save_world(context);
+
                     EndMenu();
                 }
                 if (BeginMenu("项目"))
                 {
-                    if (MenuItem("保存项目"))
-                    {
-                        let proj = context->get_project;
-                        if (proj->save_project())
-                            jeapi::gui::form::msg("完成", "项目和所有编辑中的世界已经保存"); 
-                    }
+                    if (MenuItemShortcut("保存项目", "Ctrl + S"))
+                        _save_project(context);
+
                     if (MenuItem("项目设置"))
                     {
                         context->launch_editor_form(func(){
@@ -71,7 +81,7 @@ namespace editor::gui
                 {
                     let scripts = tools::get_available_tool_scripts();
                     if (scripts->empty())
-                        do MenuItemEnabled("- 空 -", false);
+                        do MenuItemEnabled("空", false);
                     else
                         for (let _, script_name : scripts)
                             if (MenuItem(script_name))
@@ -100,6 +110,9 @@ namespace editor::gui
                     EndMenu();
                 }
                 EndMainMenuBar();
+
+                if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::S]))
+                    _save_project(context);
             }
         }, ());
     }
