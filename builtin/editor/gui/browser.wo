@@ -419,6 +419,7 @@ namespace editor::gui
                         ("2D光照法线", "Forward2DNormal"),
                         ("2D光照自发光", "SelfGrowingForward2D"),
                         ("2D光照自发光法线", "SelfGrowingForward2DNormal"),
+                        ("2D光照氛围光", "Light2DAura"),
                         ("2D点光源（光源）", "Light2DPoint"),
                         ("2D平行光源（光源）", "Light2DParallel"),
                         ("2D光照后处理（摄像机）", "Light2DCameraPass"),

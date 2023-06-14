@@ -1,11 +1,11 @@
-// SelfGrowingForward2D.shader
+// Light2DAura.shader
 // (C)Cinogama project. 2022. 版权所有
 
 import je.shader;
 
 ZTEST   (LESS);
-ZWRITE  (ENABLE);
-BLEND   (ONE, ZERO);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ONE);
 CULL    (NONE);
 
 VAO_STRUCT! vin {
@@ -43,14 +43,13 @@ public func vert(v: vin)
 
 public func frag(vf: v2f)
 {
-    let Albedo = uniform_texture:<texture2d>("Albedo", 0);
-
-    let albedo_color = alphatest(texture(Albedo, vf.uv));
-    let self_growing = uniform("SelfGrowing", float::one);
+    let color = uniform("Color", float4::one);
+    let decay = uniform("Decay", float::one);
+    let dv = clamp(float::one - length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
 
     return fout{
-        albedo = alphatest(texture(Albedo, vf.uv)),
-        self_luminescence = float4::create(albedo_color->xyz * self_growing, 1.),
-        visual_coordinates = float4::create(vf.vpos, 1.),
+        albedo = float4::new(0.,0.,0.,0.),
+        self_luminescence = float4::create(color->xyz, pow(dv, decay)) * color->w,
+        visual_coordinates = float4::zero,  // 避免影响到光照效果计算，此处不混合视空间坐标
     };
 }

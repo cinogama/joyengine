@@ -1,3 +1,6 @@
+// Light2DCameraBloomPass.shader
+// (C)Cinogama project. 2022. 版权所有
+
 import je.shader;
 import je.shader.light2d;
 
@@ -13,12 +16,12 @@ VAO_STRUCT!vin
 };
 
 using v2f = struct {
-pos: float4,
-uv : float2,
+    pos: float4,
+    uv : float2,
 };
 
 using fout = struct {
-color: float4
+    color: float4
 };
 
 public func vert(v: vin)
@@ -29,7 +32,7 @@ public func vert(v: vin)
     };
 }
 
-let bias = 2.;
+let bias = 1.;
 let bias_weight = [
     (-1., 1., 0.094742),    (0., 1., 0.118318),     (1., 1., 0.094742),
     (-1., 0., 0.118318),    (0., 0., 0.147761),     (1., 0., 0.118318),
@@ -71,7 +74,7 @@ public func frag(vf: v2f)
         + float::new(0.11) * self_luming_color_gos_rgb_hdr->z;
 
     let mixed_color_rgb = max(float3::zero, albedo_color_rgb
-        * (self_luming_color_gos_rgb_hdr_brightness * self_luming_color_gos_rgb 
+        * ( self_luming_color_gos_rgb_hdr_brightness * self_luming_color_gos_rgb 
             + (float::one - self_luming_color_gos_rgb_hdr_brightness) * self_lumine_color_rgb
             + light_color_rgb 
             + float3::new(0.03, 0.03, 0.03)));

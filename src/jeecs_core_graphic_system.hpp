@@ -1855,9 +1855,14 @@ public func frag(vf: v2f)
                                 light2d.color->color.z,
                                 light2d.color->color.w);
 
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
-                                (float)light2d.shadow->resolution_width,
-                                (float)light2d.shadow->resolution_height);
+                            if (light2d.shadow != nullptr)
+                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
+                                    (float)light2d.shadow->resolution_width,
+                                    (float)light2d.shadow->resolution_height);
+                            else
+                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
+                                    (float)1.f,
+                                    (float)1.f);
 
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_decay, float, light2d.color->decay);                           
                         }

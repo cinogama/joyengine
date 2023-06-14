@@ -1,3 +1,6 @@
+// Light2DCameraPass.shader
+// (C)Cinogama project. 2022. 版权所有
+
 import je.shader;
 import je.shader.light2d;
 
@@ -13,12 +16,12 @@ VAO_STRUCT!vin
 };
 
 using v2f = struct {
-pos: float4,
-uv : float2,
+    pos: float4,
+    uv : float2,
 };
 
 using fout = struct {
-color: float4
+    color: float4
 };
 
 public func vert(v: vin)
