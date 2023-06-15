@@ -760,7 +760,7 @@ struct jegl_shader
     struct uniform_blocks
     {
         const char* m_name;
-        size_t      m_specify_binding_place;
+        uint32_t    m_specify_binding_place;
 
         uniform_blocks* m_next;
     };
