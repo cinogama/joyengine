@@ -843,8 +843,8 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
             jeecs_write_cache_file(custom_uniform_block->m_name, sizeof(char), uniform_block_name_len, cachefile);
 
             // 3.2.2 write place
-            static_assert(sizeof(custom_uniform_block->m_specify_binding_place) == sizeof(size_t));
-            jeecs_write_cache_file(&custom_uniform_block->m_specify_binding_place, sizeof(size_t), 1, cachefile);
+            static_assert(sizeof(custom_uniform_block->m_specify_binding_place) == sizeof(uint32_t));
+            jeecs_write_cache_file(&custom_uniform_block->m_specify_binding_place, sizeof(uint32_t), 1, cachefile);
 
             custom_uniform_block = custom_uniform_block->m_next;
         }
