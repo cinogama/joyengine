@@ -122,6 +122,6 @@ The source code is licensed under the Modified BSD License, the Mesa
         }
 
         je::log(F"{je::editor::build_version()} (C)Cinogama project. 2022.");
-        je::log(F"Powered by {je::editor::woolang_version()}, (C)Cinogama project. 2021-2022.");
+        je::log(F"Powered by {je::editor::woolang_version()}, (C)Cinogama project. 2021.");
     }
 }
