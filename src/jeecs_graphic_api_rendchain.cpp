@@ -43,7 +43,7 @@ struct jegl_rendchain
     bool m_clear_target_frame_color_buffer;
     bool m_clear_target_frame_depth_buffer;
     jegl_resource* m_target_frame_buffer;
-    jeecs::math::vec4 m_target_frame_buffer_viewport;
+    size_t m_target_frame_buffer_viewport[4];
 
     std::unordered_set<jegl_resource*> m_used_resource;
 
@@ -69,12 +69,15 @@ void jegl_rchain_close(jegl_rendchain* chain)
 {
     delete chain;
 }
-void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, float x, float y, float w, float h)
+void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
     assert(framebuffer == nullptr || framebuffer->m_type == jegl_resource::type::FRAMEBUF);
 
     chain->m_target_frame_buffer = framebuffer;
-    chain->m_target_frame_buffer_viewport = jeecs::math::vec4(x, y, w, h);
+    chain->m_target_frame_buffer_viewport[0] = x;
+    chain->m_target_frame_buffer_viewport[1] = y;
+    chain->m_target_frame_buffer_viewport[2] = w;
+    chain->m_target_frame_buffer_viewport[3] = h;
 
     chain->m_clear_target_frame_color_buffer = false;
     chain->m_clear_target_frame_depth_buffer = false;
@@ -275,10 +278,10 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread)
 
     // 遍历所有绘制命令，开始提交！
     jegl_rend_to_framebuffer(chain->m_target_frame_buffer, 
-        chain->m_target_frame_buffer_viewport.x, 
-        chain->m_target_frame_buffer_viewport.y,
-        chain->m_target_frame_buffer_viewport.z,
-        chain->m_target_frame_buffer_viewport.w);
+        chain->m_target_frame_buffer_viewport[0], 
+        chain->m_target_frame_buffer_viewport[1],
+        chain->m_target_frame_buffer_viewport[2],
+        chain->m_target_frame_buffer_viewport[3]);
 
     if (chain->m_clear_target_frame_color_buffer)
         jegl_clear_framebuffer_color(chain->m_target_frame_buffer);

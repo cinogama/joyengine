@@ -183,7 +183,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             m_priority = priority;
             m_allocated_chains_count = 0;
         }
-        jegl_rendchain* allocate_new_chain(jegl_resource* framebuffer, float x, float y, float w, float h)
+        jegl_rendchain* allocate_new_chain(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
         {
             if (m_allocated_chains_count >= m_allocated_chains.size())
             {

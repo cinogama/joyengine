@@ -541,7 +541,7 @@ jegl_resource* jegl_load_texture(const char* path)
         stbi_set_flip_vertically_on_load(true);
         texture->m_raw_texture_data->m_pixels = stbi_load_from_memory(
             fbuf,
-            texfile->m_file_length,
+            (int)texfile->m_file_length,
             &w, &h, &cdepth,
             STBI_rgb_alpha
         );
@@ -668,14 +668,14 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
 
     // 1. Read generated source
     jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
-    _shader->m_vertex_glsl_src = (const char*)je_mem_alloc(vertex_glsl_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_vertex_glsl_src), sizeof(char), vertex_glsl_src_len, cache_file);
-    const_cast<char*>(_shader->m_vertex_glsl_src)[vertex_glsl_src_len] = 0;
+    _shader->m_vertex_glsl_src = (const char*)je_mem_alloc((size_t)vertex_glsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_vertex_glsl_src), sizeof(char), (size_t)vertex_glsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_vertex_glsl_src)[(size_t)vertex_glsl_src_len] = 0;
 
     jeecs_file_read(&fragment_glsl_src_len, sizeof(uint64_t), 1, cache_file);
-    _shader->m_fragment_glsl_src = (const char*)je_mem_alloc(fragment_glsl_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsl_src), sizeof(char), fragment_glsl_src_len, cache_file);
-    const_cast<char*>(_shader->m_fragment_glsl_src)[fragment_glsl_src_len] = 0;
+    _shader->m_fragment_glsl_src = (const char*)je_mem_alloc((size_t)fragment_glsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsl_src), sizeof(char), (size_t)fragment_glsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_fragment_glsl_src)[(size_t)fragment_glsl_src_len] = 0;
 
     // 2. read shader config
     jeecs_file_read(&_shader->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
@@ -705,9 +705,9 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
         // 3.1.1 read name
         uint64_t uniform_name_len;
         jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
-        current_variable->m_name = (const char*)je_mem_alloc(uniform_name_len + 1);
-        jeecs_file_read(const_cast<char*>(current_variable->m_name), sizeof(char), uniform_name_len, cache_file);
-        const_cast<char*>(current_variable->m_name)[uniform_name_len] = 0;
+        current_variable->m_name = (const char*)je_mem_alloc((size_t)uniform_name_len + 1);
+        jeecs_file_read(const_cast<char*>(current_variable->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
+        const_cast<char*>(current_variable->m_name)[(size_t)uniform_name_len] = 0;
 
         // 3.1.2 read type
         jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
@@ -742,13 +742,13 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
         // 3.2.1 read name
         uint64_t uniform_name_len;
         jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
-        current_block->m_name = (const char*)je_mem_alloc(uniform_name_len + 1);
-        jeecs_file_read(const_cast<char*>(current_block->m_name), sizeof(char), uniform_name_len, cache_file);
-        const_cast<char*>(current_block->m_name)[uniform_name_len] = 0;
+        current_block->m_name = (const char*)je_mem_alloc((size_t)uniform_name_len + 1);
+        jeecs_file_read(const_cast<char*>(current_block->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
+        const_cast<char*>(current_block->m_name)[(size_t)uniform_name_len] = 0;
 
         // 3.2.2 read binding place
-        static_assert(sizeof(current_block->m_specify_binding_place) == sizeof(size_t));
-        jeecs_file_read(&current_block->m_specify_binding_place, sizeof(size_t), 1, cache_file);
+        static_assert(sizeof(current_block->m_specify_binding_place) == sizeof(uint32_t));
+        jeecs_file_read(&current_block->m_specify_binding_place, sizeof(uint32_t), 1, cache_file);
 
         last_create_block = current_block;
         current_block->m_next = nullptr;
@@ -777,10 +777,10 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
 
         // 1. write shader generated source to cache
         jeecs_write_cache_file(&vertex_glsl_src_len, sizeof(uint64_t), 1, cachefile);
-        jeecs_write_cache_file(raw_shader_data->m_vertex_glsl_src, sizeof(char), vertex_glsl_src_len, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_vertex_glsl_src, sizeof(char), (size_t)vertex_glsl_src_len, cachefile);
 
         jeecs_write_cache_file(&fragment_glsl_src_len, sizeof(uint64_t), 1, cachefile);
-        jeecs_write_cache_file(raw_shader_data->m_fragment_glsl_src, sizeof(char), fragment_glsl_src_len, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_fragment_glsl_src, sizeof(char), (size_t)fragment_glsl_src_len, cachefile);
 
         // 2. write shader config to cache
         /*
@@ -820,7 +820,7 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
             // 3.1.1 write name
             uint64_t uniform_name_len = (uint64_t)strlen(custom_uniform->m_name);
             jeecs_write_cache_file(&uniform_name_len, sizeof(uint64_t), 1, cachefile);
-            jeecs_write_cache_file(custom_uniform->m_name, sizeof(char), uniform_name_len, cachefile);
+            jeecs_write_cache_file(custom_uniform->m_name, sizeof(char), (size_t)uniform_name_len, cachefile);
 
             // 3.1.2 write type
             jeecs_write_cache_file(&custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
@@ -840,7 +840,7 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
             // 3.2.1 write name
             uint64_t uniform_block_name_len = (uint64_t)strlen(custom_uniform_block->m_name);
             jeecs_write_cache_file(&uniform_block_name_len, sizeof(uint64_t), 1, cachefile);
-            jeecs_write_cache_file(custom_uniform_block->m_name, sizeof(char), uniform_block_name_len, cachefile);
+            jeecs_write_cache_file(custom_uniform_block->m_name, sizeof(char), (size_t)uniform_block_name_len, cachefile);
 
             // 3.2.2 write place
             static_assert(sizeof(custom_uniform_block->m_specify_binding_place) == sizeof(uint32_t));

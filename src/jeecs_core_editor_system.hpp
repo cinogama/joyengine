@@ -566,9 +566,9 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
 
             if (_inputs._wheel_count_record != INT_MAX)
             {
-                _inputs.wheel_delta_count = input::wheel(0) - _inputs._wheel_count_record;
+                _inputs.wheel_delta_count = (int)input::wheel(0) - _inputs._wheel_count_record;
             }
-            _inputs._wheel_count_record = input::wheel(0);
+            _inputs._wheel_count_record = (int)input::wheel(0);
 
             if (!_editor_enabled)
                 return;

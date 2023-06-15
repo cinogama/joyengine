@@ -65,7 +65,7 @@ WO_API wo_api wojeapi_pack_file_to_fimg_packer(wo_vm vm, wo_value args, size_t a
 WO_API wo_api wojeapi_pack_buffer_to_fimg_packer(wo_vm vm, wo_value args, size_t argc)
 {
     auto* ctx = (fimg_creating_context*)wo_pointer(args + 0);
-    return wo_ret_bool(vm, jeecs_file_image_pack_buffer(ctx, wo_pointer(args + 1), wo_int(args + 2), wo_string(args + 3)));
+    return wo_ret_bool(vm, jeecs_file_image_pack_buffer(ctx, wo_pointer(args + 1), (size_t)wo_int(args + 2), wo_string(args + 3)));
 }
 
 WO_API wo_api wojeapi_finish_fimg_packer(wo_vm vm, wo_value args, size_t argc)
@@ -119,7 +119,7 @@ WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc
 
 WO_API wo_api wojeapi_unregister_log_callback(wo_vm vm, wo_value args, size_t argc)
 {
-    auto func = (std::function<void(int, const char*)>*) je_log_unregister_callback(wo_handle(args + 0));
+    auto func = (std::function<void(int, const char*)>*) je_log_unregister_callback((size_t)wo_handle(args + 0));
     delete func;
 
     return wo_ret_void(vm);
@@ -199,7 +199,7 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args, siz
     if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
     {
         rbf->framebuffer = new jeecs::graphic::framebuffer(
-            wo_int(args + 1), wo_int(args + 2), {
+            (size_t)wo_int(args + 1), (size_t)wo_int(args + 2), {
                 jegl_texture::texture_format::RGB,
                 jegl_texture::texture_format::DEPTH,
             }
@@ -221,7 +221,7 @@ WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args, size_t argc)
                 rbf);
             return wo_ret_option_none(vm);
         }
-        auto tex = rbf->framebuffer->get_attachment(wo_int(args + 1));
+        auto tex = rbf->framebuffer->get_attachment((size_t)wo_int(args + 1));
         if (!tex)
         {
             jeecs::debug::logerr("RendToFramebuffer(%p).framebuffer not contain attach(%zu) in entity when 'wojeapi_get_framebuf_texture'.",
@@ -1038,7 +1038,7 @@ WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = jeecs::graphic::texture::create(
-        wo_int(args + 0), wo_int(args + 1), jegl_texture::texture_format::RGBA);
+        (size_t)wo_int(args + 0), (size_t)wo_int(args + 1), jegl_texture::texture_format::RGBA);
 
     return wo_ret_gchandle(vm,
         new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
@@ -1062,8 +1062,8 @@ WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
     auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(),
-        wo_int(wo_struct_get(args + 1, 0)),
-        wo_int(wo_struct_get(args + 1, 1)));
+        (size_t)wo_int(wo_struct_get(args + 1, 0)),
+        (size_t)wo_int(wo_struct_get(args + 1, 1)));
 
     return wo_ret_gchandle(vm, pix, args + 0, [](void* ptr)
         {
@@ -1151,7 +1151,7 @@ WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args, size_t ar
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_font = new jeecs::graphic::font(wo_string(args + 0), wo_int(args + 1));
+    auto* loaded_font = new jeecs::graphic::font(wo_string(args + 0), (size_t)wo_int(args + 1));
     if (loaded_font->enabled())
     {
         return wo_ret_option_gchandle(vm,
@@ -1255,7 +1255,7 @@ WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args, size_t ar
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
     if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
-        textures->bind_texture(wo_int(args + 1), *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2));
+        textures->bind_texture((size_t)wo_int(args + 1), *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2));
 
     // TODO: 如果当前实体不包含jeecs::Renderer::Textures组件，在此panic?
 
@@ -1295,7 +1295,7 @@ WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc
     if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
     {
         shaders->shaders.clear();
-        size_t arrsize = wo_lengthof(shader_array);
+        size_t arrsize = (size_t)wo_lengthof(shader_array);
         for (size_t i = 0; i < arrsize; ++i)
         {
             jeecs::basic::resource<jeecs::graphic::shader>* shader =

@@ -950,7 +950,7 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
     int selected_item = argc >= 3 ? (int)wo_int(args + 2) : -1;
     int max_height_item = argc == 4 ? (int)wo_int(args + 3) : -1;
 
-    std::vector<const char*> items(wo_lengthof(args + 1));
+    std::vector<const char*> items((size_t)wo_lengthof(args + 1));
     for (size_t i = 0; i < items.size(); i++)
         items[i] = wo_string(wo_arr_get(args + 1, i));
 

@@ -23,6 +23,7 @@
 #endif
 
 #define CHECK(A,B)((A-B>=-0.0001))
+#define jeoffsetof(T, M) ((::size_t)&reinterpret_cast<char const volatile&>((((T*)0)->M)))
 
 /*
 * 欢迎来到罪恶和灾难之地！这里是ArchSystem，整个引擎最黑暗扭曲的阴暗之地！
@@ -142,8 +143,7 @@ namespace jeecs_impl
                 , _m_types(_arch_type->_m_types_set)
                 , _m_arch_type(_arch_type)
             {
-                assert(((size_t) & reinterpret_cast<char const volatile&>((
-                    ((jeecs_impl::arch_type::arch_chunk*)0)->_m_chunk_buffer))) == 0);
+                assert(jeoffsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
 
                 _m_entities_meta = jeecs::basic::create_new_n<entity_meta>(_m_entity_count);
             }

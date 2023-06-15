@@ -364,7 +364,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             while (uniform_block)
             {
                 GLuint uniform_block_loc = glGetUniformBlockIndex(shader_program, uniform_block->m_name);
-                glUniformBlockBinding(shader_program, uniform_block_loc, uniform_block->m_specify_binding_place);
+                glUniformBlockBinding(shader_program, uniform_block_loc, (GLuint)uniform_block->m_specify_binding_place);
                 uniform_block = uniform_block->m_next;
             }
         }

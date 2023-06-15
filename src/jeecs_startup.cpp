@@ -28,7 +28,6 @@ void je_init(int argc, char** argv)
     je_log_strat();
 
     wo_init(argc, argv);
-    wo_enable_jit(true);
 
     jeecs_file_set_runtime_path(wo_exe_path());
 

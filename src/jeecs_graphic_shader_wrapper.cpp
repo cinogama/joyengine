@@ -729,7 +729,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
     config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 4));
 
     shader_struct_define** ubos = nullptr;
-    size_t ubo_count = wo_lengthof(args + 3);
+    size_t ubo_count = (size_t)wo_lengthof(args + 3);
 
     ubos = new shader_struct_define * [ubo_count + 1];
     for (size_t i = 0; i < ubo_count; ++i)

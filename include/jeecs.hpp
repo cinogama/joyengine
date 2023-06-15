@@ -1050,7 +1050,7 @@ struct jegl_uniform_data_node;
 
 JE_API jegl_rendchain* jegl_rchain_create();
 JE_API void jegl_rchain_close(jegl_rendchain* chain);
-JE_API void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, float x, float y, float w, float h);
+JE_API void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource* uniformbuffer);
 JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain);
 JE_API void jegl_rchain_clear_depth_buffer(jegl_rendchain* chain);
@@ -1616,8 +1616,8 @@ namespace jeecs
 
     namespace basic
     {
-        constexpr typing::typehash_t prime = 0x100000001B3ull;
-        constexpr typing::typehash_t basis = 0xCBF29CE484222325ull;
+        constexpr typing::typehash_t prime = (typing::typehash_t)0x100000001B3ull;
+        constexpr typing::typehash_t basis = (typing::typehash_t)0xCBF29CE484222325ull;
 
         constexpr typing::typehash_t hash_compile_time(char const* str, typing::typehash_t last_value = basis)
         {
@@ -1851,22 +1851,22 @@ namespace jeecs
             static void pre_update(void* _ptr)
             {
                 if constexpr (has_pre_update_function<T>::value)
-                    reinterpret_cast<T*>(_ptr)->PreUpdate();
+                    std::launder(reinterpret_cast<T*>(_ptr))->PreUpdate();
             }
             static void update(void* _ptr)
             {
                 if constexpr (has_update_function<T>::value)
-                    reinterpret_cast<T*>(_ptr)->Update();
+                    std::launder(reinterpret_cast<T*>(_ptr))->Update();
             }
             static void late_update(void* _ptr)
             {
                 if constexpr (has_late_update_function<T>::value)
-                    reinterpret_cast<T*>(_ptr)->LateUpdate();
+                    std::launder(reinterpret_cast<T*>(_ptr))->LateUpdate();
             }
             static void commit_update(void* _ptr)
             {
                 if constexpr (has_commit_update_function<T>::value)
-                    reinterpret_cast<T*>(_ptr)->CommitUpdate();
+                    std::launder(reinterpret_cast<T*>(_ptr))->CommitUpdate();
             }
         };
 
@@ -2633,11 +2633,11 @@ namespace jeecs
                 if (archinfo->m_component_sizes[cid])
                 {
                     if constexpr (std::is_reference<ComponentT>::value)
-                        return *reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                        return *std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset));
                     else
                     {
                         static_assert(std::is_pointer<ComponentT>::value);
-                        return reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                        return std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset));
                     }
                 }
                 if constexpr (std::is_reference<ComponentT>::value)
@@ -2713,11 +2713,11 @@ namespace jeecs
                 if (archinfo->m_component_sizes[cid])
                 {
                     if constexpr (std::is_reference<ComponentT>::value)
-                        return *reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                        return *std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset));
                     else
                     {
                         static_assert(std::is_pointer<ComponentT>::value);
-                        return reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                        return std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset));
                     }
                 }
                 if constexpr (std::is_reference<ComponentT>::value)
@@ -5469,8 +5469,8 @@ namespace jeecs
                                 jeecs_file_read(&frame_count, sizeof(uint64_t), 1, file_handle);
                                 jeecs_file_read(&frames_name_len, sizeof(uint64_t), 1, file_handle);
 
-                                std::string frame_name(frames_name_len, '\0');
-                                jeecs_file_read(frame_name.data(), sizeof(char), frames_name_len, file_handle);
+                                std::string frame_name((size_t)frames_name_len, '\0');
+                                jeecs_file_read(frame_name.data(), sizeof(char), (size_t)frames_name_len, file_handle);
 
                                 auto& animation_frame_datas = m_animations[frame_name.c_str()];
 
@@ -5488,14 +5488,14 @@ namespace jeecs
                                         uint64_t component_name_len = 0;
                                         jeecs_file_read(&component_name_len, sizeof(uint64_t), 1, file_handle);
 
-                                        std::string component_name(component_name_len, '\0');
-                                        jeecs_file_read(component_name.data(), sizeof(char), component_name_len, file_handle);
+                                        std::string component_name((size_t)component_name_len, '\0');
+                                        jeecs_file_read(component_name.data(), sizeof(char), (size_t)component_name_len, file_handle);
 
                                         uint64_t member_name_len = 0;
                                         jeecs_file_read(&member_name_len, sizeof(uint64_t), 1, file_handle);
 
-                                        std::string member_name(member_name_len, '\0');
-                                        jeecs_file_read(member_name.data(), sizeof(char), member_name_len, file_handle);
+                                        std::string member_name((size_t)member_name_len, '\0');
+                                        jeecs_file_read(member_name.data(), sizeof(char), (size_t)member_name_len, file_handle);
 
                                         uint8_t offset_mode = 0;
                                         jeecs_file_read(&offset_mode, sizeof(offset_mode), 1, file_handle);
@@ -5549,8 +5549,8 @@ namespace jeecs
                                         uint64_t uniform_name_len = 0;
                                         jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, file_handle);
 
-                                        std::string uniform_name(uniform_name_len, '\0');
-                                        jeecs_file_read(uniform_name.data(), sizeof(char), uniform_name_len, file_handle);
+                                        std::string uniform_name((size_t)uniform_name_len, '\0');
+                                        jeecs_file_read(uniform_name.data(), sizeof(char), (size_t)uniform_name_len, file_handle);
 
                                         frame_data::data_value value;
                                         jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
