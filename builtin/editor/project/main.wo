@@ -294,7 +294,6 @@ namespace editor
         {
             let (w, h) = je::input::window_size();
             let dat = {
-                ["path"] = self.m_path: dynamic,
                 ["name"] = self.m_name: dynamic,
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
                 ["worlds"] = self.m_worlds->> \pw = pw.m_world_path->tostring->sub(self.m_path->tostring->len);: dynamic,

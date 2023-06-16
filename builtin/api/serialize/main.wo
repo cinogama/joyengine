@@ -30,30 +30,33 @@ namespace jeapi
             return saving_entity
                 ->  editor::graphic::get_shaders
                 ->> \shad = [shad->path: dynamic, shad_uniforms_dats(): dynamic]
-                    where shad_uniforms_dats = func(){
-                        let result = {}mut: map<string, array<dynamic>>;
-                        for(let name, uniform_val : shad->get_uniforms())
+                    where shad_uniforms_dats = func()
                         {
-                            if (name->beginwith("JOYENGINE_"))
-                                continue; // 引擎的内置shader-uniform变量，跳过
-                            match (uniform_val)
+                            let result = {}mut: map<string, array<dynamic>>;
+                            for(let name, uniform_val : shad->get_uniforms())
                             {
-                                integer(n)? 
-                                    result->set(name, [n: dynamic]);
-                                float(x)?
-                                    result->set(name, [x: dynamic]);
-                                float2((x, y))?
-                                    result->set(name, [x: dynamic, y: dynamic]);
-                                float3((x, y, z))?
-                                    result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
-                                float4((x, y, z, w))?
-                                    result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
-                                texture(id)? /* do nothing */;
-                                others? /* do nothing */;
+                                if (name->beginwith("JOYENGINE_"))
+                                    continue; // 引擎的内置shader-uniform变量，跳过
+                                match (uniform_val)
+                                {
+                                    integer(n)? 
+                                        result->set(name, [n: dynamic]);
+                                    float(x)?
+                                        result->set(name, [x: dynamic]);
+                                    float2((x, y))?
+                                        result->set(name, [x: dynamic, y: dynamic]);
+                                    float3((x, y, z))?
+                                        result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
+                                    float4((x, y, z, w))?
+                                        result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
+                                    texture(id)? /* do nothing */;
+                                    others? /* do nothing */;
+                                }
                             }
+                            return result->todict;
                         }
-                        return result->todict;
-                    };;
+                    ;
+                ;
         }
 
         public func entity(saving_entity: je::entity)=> option<dict<string, dynamic>>
@@ -102,12 +105,16 @@ namespace jeapi
                 w->editor::get_all_entities
                     // 跳过编辑器上的不可见实体
                     ->  forall(\e = !e->editor::get_component(INVISABLE)->has;)
-                    =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e);;
+                    ->  std::sort(\ae, be = ae->editor::name() < be->editor::name();)
+                    =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e);
+                    ;
 
             let editing_systems_type_list = 
                 w->editor::get_systems_types
                     ->> \st = st->name;
-                    ->  forall(\n = !n->beginwith("Editor::"););
+                    ->  forall(\n = !n->beginwith("Editor::");)
+                    ->  std::sort(\a, b = a < b;)
+                    ;
 
             return result::ok({
                 ["name"] = w->editor::name: dynamic,
