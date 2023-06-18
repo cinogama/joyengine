@@ -202,6 +202,12 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, f: mutable
 "@);
                             do filesys::copy(filesys::normalize(F"{std::exepath()}/builtin/shader"), filesys::normalize(F"{p.m_path}/resource/shader"));
                             do filesys::copy(filesys::normalize(F"{std::exepath()}/builtin/font"), filesys::normalize(F"{p.m_path}/resource/font"));
+                            do filesys::writeall(p.m_path / ".gitignore", 
+@"# JoyEngine ECS
+
+/.export/*
+imgui.ini
+"@);
                             editor::gui::edit_project(p);
 
                             save_editor_data_after_exit();
