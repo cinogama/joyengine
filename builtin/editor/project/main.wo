@@ -492,6 +492,17 @@ namespace editor
         {
             return self->get_project_world(w)
                 =>> \pw = jeapi::serialize::world(w)->okay
+                    ->> func (dat)
+                        {
+                            let mdat = dat->tomap;
+                            mdat->set("entities", dat["entities"] as array->std::sort(
+                                    \l, r = (l as dict["name": dynamic] as string) < (r as dict["name": dynamic] as string);
+                                ): dynamic);
+                            mdat->set("systems", dat["systems"] as array->std::sort(
+                                    \l, r = (l as string) < (r as string);
+                                ): dynamic);
+                            return mdat->unsafe::cast:< typeof(dat) >;
+                        }
                     ->> \dat = dat->apply("path", pw.m_world_path->tostring->sub(self.m_path->tostring->len): dynamic);
                     ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
                     ;

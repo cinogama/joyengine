@@ -105,7 +105,6 @@ namespace jeapi
                 w->editor::get_all_entities
                     // 跳过编辑器上的不可见实体
                     ->  forall(\e = !e->editor::get_component(INVISABLE)->has;)
-                    ->  std::sort(\ae, be = ae->editor::name() < be->editor::name();)
                     =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e);
                     ;
 
@@ -113,7 +112,6 @@ namespace jeapi
                 w->editor::get_systems_types
                     ->> \st = st->name;
                     ->  forall(\n = !n->beginwith("Editor::");)
-                    ->  std::sort(\a, b = a < b;)
                     ;
 
             return result::ok({
