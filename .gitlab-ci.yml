@@ -23,22 +23,24 @@ build:
 build_win64_release:
   stage: build
   script:
-    - git submodule update --init --recursive --force
+    - git submodule update --init --recursive --forcels
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
     - del CMakeCache.txt
     - cmake ..
-    - MSBuild jedriver.vcxproj -p:Configuration=Release -m
+    - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
     - cd ..
     - baozi install
+    - cd build
+    - copy RelWithDebInfo\*
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
-      - build/Release/*.dll
-      - build/Release/*.exe
-      - build/Release/*.pdb
-      - build/Release/pkg/*
-      - build/Release/builtin/*
+      - *.dll
+      - *.exe
+      - *.pdb
+      - pkg/*
+      - builtin/*
   tags:
     - winserver22
 

@@ -49,7 +49,7 @@ namespace editor::gui::edit_forms
 
             // 添加默认图形管线
             context->active("Graphic::DefaultGraphicPipelineSystem");
-    
+            context->append("Script::ScriptRuntimeSystem");
             return context;
         }    
 

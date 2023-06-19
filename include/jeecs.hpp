@@ -2942,7 +2942,7 @@ namespace jeecs
         }
 
 #define PreUpdate       PreUpdate       // 读取 Graphic
-#define Update          Update          // 写入 Animation
+#define Update          Update          // 写入 Animation RuntimeScript
 #define LateUpdate      LateUpdate      // 更新 Translation 
 #define CommitUpdate    CommitUpdate    // 提交 Physics 
 
@@ -5137,7 +5137,6 @@ namespace jeecs
             basic::resource<graphic::framebuffer> framebuffer = nullptr;
         };
     }
-
     namespace Physics2D
     {
         struct Rigidbody
@@ -5438,7 +5437,6 @@ namespace jeecs
                         auto* file_handle = jeecs_file_open(m_path.c_str());
                         if (file_handle == nullptr)
                         {
-                            m_path = "";
                             jeecs::debug::logerr("Cannot open animation file '%s'.", str.c_str());
 
                             return;
@@ -5450,7 +5448,6 @@ namespace jeecs
                             jeecs_file_read(&mg_number, sizeof(uint32_t), 1, file_handle);
                             if (mg_number != 0xA213A710u)
                             {
-                                m_path = "";
                                 jeecs::debug::logerr("Invalid animation file '%s'.", str.c_str());
                                 jeecs_file_close(file_handle);
                                 return;

@@ -871,7 +871,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
     if (!wo_load_source(vmm, path, src))
     {
         // Compile error
-        jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(vmm, WO_NOTHING));
+        jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(vmm, WO_DEFAULT));
         wo_close_vm(vmm);
         return nullptr;
     }
