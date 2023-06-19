@@ -33,14 +33,15 @@ build_win64_release:
     - baozi install
     - cd build
     - copy RelWithDebInfo\*
+    - cd ..
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
-      - ./*.dll
-      - ./*.exe
-      - ./*.pdb
-      - ./pkg/*
-      - ./builtin/*
+      - build/*.dll
+      - build/*.exe
+      - build/*.pdb
+      - build/pkg/*
+      - build/builtin/*
   tags:
     - winserver22
 
