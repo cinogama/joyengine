@@ -36,11 +36,11 @@ build_win64_release:
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
-      - *.dll
-      - *.exe
-      - *.pdb
-      - pkg/*
-      - builtin/*
+      - ./*.dll
+      - ./*.exe
+      - ./*.pdb
+      - ./pkg/*
+      - ./builtin/*
   tags:
     - winserver22
 
