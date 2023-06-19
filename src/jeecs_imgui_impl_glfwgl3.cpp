@@ -612,7 +612,8 @@ WO_API wo_api je_gui_set_clip_board_text(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_string(vm, ImGui::GetClipboardText());
+    const char* t = ImGui::GetClipboardText();
+    return wo_ret_string(vm, t == nullptr ? "" : t);
 }
 
 //
