@@ -23,7 +23,7 @@ build:
 build_win64_release:
   stage: build
   script:
-    - git submodule update --init --recursive --forcels
+    - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
     - del CMakeCache.txt
