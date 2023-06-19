@@ -327,7 +327,6 @@ namespace editor
         }
         public func close(self: Project)
         {
-            std::debug::breakdown();
             self.m_env->close;
         }
         public func wait(self: Project)
