@@ -60,15 +60,16 @@ namespace jeapi::gui
 
         match (InputInt("size", length))
         {
-        value(mut newsize)?
+        value(newsize)?
         {
-            if (newsize < 0) newsize = 0;
             need_update = true;
-            update_str += newsize: string;
+            update_str += (newsize < 0 ? 0 | newsize): string;
         }
         none?
             update_str += length: string;
         }
+
+        update_str += ";";
 
         for (let index, (layer, factor) : datas->forall(\d = d[0]!="size";))
         {
@@ -80,7 +81,7 @@ namespace jeapi::gui
             if (new_posx != posx || new_posy != posy)
                 need_update = true;
 
-            update_str += F";{layer}:({new_posx},{new_posy})";
+            update_str += F"{layer}:({new_posx},{new_posy});";
         }
             
         if (need_update)
@@ -88,13 +89,81 @@ namespace jeapi::gui
         return option::none;
     });
 
-    register_custom_editor("file", func(dat: string)
+    register_custom_editor("je_file", func(dat: string)
+    {
+        using je::gui;
+        return jeapi::gui::widget::File("文件", dat == "" ? "<无>" | dat);
+    });
+
+    register_custom_editor("je_animation_list", func(dat: string)
     {
         using je::gui;
 
-        let display_file_path = dat == "" ? "<无>" | dat;
-        do Button(F"文件：{display_file_path}");
-        return jeapi::gui::widget::accept_file_for_current_widget();
+        let mut need_update = false;
+        let size_datas = dat->split(";");
+        let size = size_datas->get(0)->valor("0"): int;
+        let datas = (size_datas->empty ? [] | size_datas->sub(1))
+            ->> \data = data->split("|");
+            ;
+
+        let mut update_str = "";
+
+        match (InputInt("size", size))
+        {
+        value(newsize)?
+        {
+            need_update = true;
+            update_str += (newsize < 0 ? 0 | newsize): string;
+        }
+        none?
+            update_str += size: string;
+        }
+
+        update_str += ";";
+
+        for (let i, dat : datas)
+        {
+            Separator();
+
+            if (dat->len != 3) continue;
+
+            match (jeapi::gui::widget::File(F"动画##{i}", dat[0]))
+            {
+            value(path)?
+                {
+                    need_update = true;
+                    update_str += path + "|";
+                }
+            none?
+                update_str += dat[0] + "|";
+            }
+
+            match (InputText(F"动作##{i}", dat[1]))
+            {
+            value(act)?
+                {
+                    need_update = true;
+                    update_str += act + "|";
+                }
+            none?
+                update_str += dat[1] + "|";
+            }
+
+            match (CheckBox(F"循环##{i}", dat[2] == "true"))
+            {
+            value(loop)?
+                {
+                    need_update = true;
+                    update_str += (loop ? "true;" | "false;");
+                }
+            none?
+                update_str += dat[2] + ";";
+            }
+        }
+
+        if (need_update)
+            return option::value(update_str);
+        return option::none;
     });
 
     public func register_editor_for_native_value(type: je::typeinfo, method: TypedEditorMethod)

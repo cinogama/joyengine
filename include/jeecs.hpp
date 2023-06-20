@@ -5261,19 +5261,23 @@ namespace jeecs
                 basic::resource<jeecs::graphic::shader> shader = nullptr;
                 std::string to_string()const
                 {
-                    return std::string("#file#") + (
+                    return std::string("#je_file#") + (
                         shader == nullptr || shader->resouce()->m_path == nullptr
                         ? "" : shader->resouce()->m_path);
                 }
-                void parse(const std::string& str)
+                void parse(const char* databuf)
                 {
                     shader = nullptr;
-                    auto filepath = str.substr(6);
-                    if (filepath != "")
+                    size_t readed_length = 0;
+                    if (sscanf(databuf, "#je_file#%zn", &readed_length) == 0)
                     {
-                        auto* shad = jeecs::graphic::shader::load(filepath);
-                        if (shad != nullptr)
-                            shader = shad;
+                        databuf += readed_length;
+                        if (strcmp(databuf, "") != 0)
+                        {
+                            auto* shad = jeecs::graphic::shader::load(databuf);
+                            if (shad != nullptr)
+                                shader = shad;
+                        }
                     }
                 }
             };
@@ -5297,7 +5301,7 @@ namespace jeecs
                 };
                 basic::resource<graphic::vertex> m_block_mesh = nullptr;
 
-                inline std::string to_string()const
+                std::string to_string()const
                 {
                     std::string result = "#je_light2d_block_shape#";
                     result += "size:" + std::to_string(m_block_points.size()) + ";";
@@ -5307,10 +5311,9 @@ namespace jeecs
                     }
                     return result;
                 }
-                inline void parse(const char*& databuf)
+                void parse(const char* databuf)
                 {
                     size_t readed_length = 0;
-
                     size_t size = 0;
                     if (sscanf(databuf, "#je_light2d_block_shape#size:%zu;%zn", &size, &readed_length) == 1)
                     {
@@ -5347,7 +5350,7 @@ namespace jeecs
     {
         struct FrameAnimation
         {
-            struct animation_data_set
+            struct animation_data_set_list
             {
                 struct frame_data
                 {
@@ -5418,213 +5421,268 @@ namespace jeecs
                     jeecs::vector<component_data> m_component_data;
                     jeecs::vector<uniform_data>   m_uniform_data;
                 };
-
                 struct animation_data
                 {
                     jeecs::vector<frame_data> frames;
                 };
 
-                jeecs::map<jeecs::string, animation_data>  m_animations;
-                jeecs::string                              m_path;
+                struct animation_data_set
+                {
+                    jeecs::map<jeecs::string, animation_data>  m_animations;
+                    jeecs::string                              m_path;
+
+                    jeecs::string       m_current_action = "";
+                    size_t              m_current_frame_index = SIZE_MAX;
+                    double              m_next_update_time = 0.0f;
+
+                    bool                m_loop = false;
+
+                    void set_action(const std::string& animation_name)
+                    {
+                        m_current_action = animation_name;
+                        m_current_frame_index = SIZE_MAX;
+                        m_next_update_time = 0.0f;
+                    }
+                    std::string get_action()const
+                    {
+                        return m_current_action.c_str();
+                    }
+
+                    void load_animation(const std::string& str)
+                    {
+                        m_animations.clear();
+                        m_path = str;
+
+                        if (str != "")
+                        {
+                            auto* file_handle = jeecs_file_open(m_path.c_str());
+                            if (file_handle == nullptr)
+                            {
+                                jeecs::debug::logerr("Cannot open animation file '%s'.", str.c_str());
+
+                                return;
+                            }
+                            else
+                            {
+                                // 0. 读取魔数，验证文件是否是合法的动画文件
+                                uint32_t mg_number = 0;
+                                jeecs_file_read(&mg_number, sizeof(uint32_t), 1, file_handle);
+                                if (mg_number != 0xA213A710u)
+                                {
+                                    jeecs::debug::logerr("Invalid animation file '%s'.", str.c_str());
+                                    jeecs_file_close(file_handle);
+                                    return;
+                                }
+
+                                // 1. 读取动画组数量
+                                uint64_t animation_count = 0;
+                                jeecs_file_read(&animation_count, sizeof(uint64_t), 1, file_handle);
+
+                                for (uint64_t i = 0; i < animation_count; ++i)
+                                {
+                                    // 2. 读取当前动画的帧数量、名称
+                                    uint64_t frame_count = 0;
+                                    uint64_t frames_name_len = 0;
+
+                                    jeecs_file_read(&frame_count, sizeof(uint64_t), 1, file_handle);
+                                    jeecs_file_read(&frames_name_len, sizeof(uint64_t), 1, file_handle);
+
+                                    std::string frame_name((size_t)frames_name_len, '\0');
+                                    jeecs_file_read(frame_name.data(), sizeof(char), (size_t)frames_name_len, file_handle);
+
+                                    auto& animation_frame_datas = m_animations[frame_name.c_str()];
+
+                                    for (uint64_t j = 0; j < frame_count; ++j)
+                                    {
+                                        // 3. 读取每一帧的持续时间和数据数量
+                                        frame_data frame_dat;
+                                        jeecs_file_read(&frame_dat.m_frame_time, sizeof(frame_dat.m_frame_time), 1, file_handle);
+
+                                        uint64_t component_data_count = 0;
+                                        jeecs_file_read(&component_data_count, sizeof(component_data_count), 1, file_handle);
+                                        for (uint64_t k = 0; k < component_data_count; ++k)
+                                        {
+                                            // 4. 读取帧组件数据
+                                            uint64_t component_name_len = 0;
+                                            jeecs_file_read(&component_name_len, sizeof(uint64_t), 1, file_handle);
+
+                                            std::string component_name((size_t)component_name_len, '\0');
+                                            jeecs_file_read(component_name.data(), sizeof(char), (size_t)component_name_len, file_handle);
+
+                                            uint64_t member_name_len = 0;
+                                            jeecs_file_read(&member_name_len, sizeof(uint64_t), 1, file_handle);
+
+                                            std::string member_name((size_t)member_name_len, '\0');
+                                            jeecs_file_read(member_name.data(), sizeof(char), (size_t)member_name_len, file_handle);
+
+                                            uint8_t offset_mode = 0;
+                                            jeecs_file_read(&offset_mode, sizeof(offset_mode), 1, file_handle);
+
+                                            frame_data::data_value value;
+                                            jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
+                                            switch (value.m_type)
+                                            {
+                                            case frame_data::data_value::type::INT:
+                                                jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle); break;
+                                            case frame_data::data_value::type::FLOAT:
+                                                jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle); break;
+                                            case frame_data::data_value::type::VEC2:
+                                                jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle); break;
+                                            case frame_data::data_value::type::VEC3:
+                                                jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle); break;
+                                            case frame_data::data_value::type::VEC4:
+                                                jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
+                                            case frame_data::data_value::type::QUAT4:
+                                                jeecs_file_read(&value.m_value.q4, sizeof(value.m_value.q4), 1, file_handle); break;
+                                            default:
+                                                jeecs::debug::logerr("Unknown value type(%d) for component frame data.", (int)value.m_type);
+                                                break;
+                                            }
+
+                                            auto* component_type = jeecs::typing::type_info::of(component_name.c_str());
+                                            if (component_type == nullptr)
+                                                jeecs::debug::logerr("Failed to found component type named '%s'.", component_name.c_str());
+                                            else
+                                            {
+                                                frame_data::component_data cdata;
+                                                cdata.m_component_type = component_type;
+                                                cdata.m_member_info = component_type->find_member_by_name(member_name.c_str());
+                                                cdata.m_member_value = value;
+                                                cdata.m_offset_mode = offset_mode != 0;
+                                                cdata.m_member_addr_cache = nullptr;
+                                                cdata.m_entity_cache = {};
+
+                                                if (cdata.m_member_info == nullptr)
+                                                    jeecs::debug::logerr("Component '%s' donot have member named '%s'.", component_name.c_str(), member_name.c_str());
+                                                else
+                                                    frame_dat.m_component_data.push_back(cdata);
+                                            }
+                                        }
+
+                                        uint64_t uniform_data_count = 0;
+                                        jeecs_file_read(&uniform_data_count, sizeof(uniform_data_count), 1, file_handle);
+                                        for (uint64_t k = 0; k < uniform_data_count; ++k)
+                                        {
+                                            // 5. 读取帧一致变量数据
+                                            uint64_t uniform_name_len = 0;
+                                            jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, file_handle);
+
+                                            std::string uniform_name((size_t)uniform_name_len, '\0');
+                                            jeecs_file_read(uniform_name.data(), sizeof(char), (size_t)uniform_name_len, file_handle);
+
+                                            frame_data::data_value value;
+                                            jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
+                                            switch (value.m_type)
+                                            {
+                                            case frame_data::data_value::type::INT:
+                                                jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle); break;
+                                            case frame_data::data_value::type::FLOAT:
+                                                jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle); break;
+                                            case frame_data::data_value::type::VEC2:
+                                                jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle); break;
+                                            case frame_data::data_value::type::VEC3:
+                                                jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle); break;
+                                            case frame_data::data_value::type::VEC4:
+                                                jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
+                                            default:
+                                                jeecs::debug::logerr("Unknown value type(%d) for uniform frame data.", (int)value.m_type);
+                                                break;
+                                            }
+
+                                            frame_data::uniform_data udata;
+                                            udata.m_uniform_name = uniform_name;
+                                            udata.m_uniform_value = value;
+
+                                            frame_dat.m_uniform_data.push_back(udata);
+                                        }
+
+                                        animation_frame_datas.frames.push_back(frame_dat);
+                                    }
+                                }
+
+                                // OK，读取完毕！
+                                jeecs_file_close(file_handle);
+                            }
+                        }
+                    }
+                };
+                std::vector<animation_data_set> m_animations;
 
                 std::string to_string()const
                 {
-                    return std::string("#file#") + m_path.c_str();
-                }
-                void parse(const std::string& str)
-                {
-                    m_animations.clear();
-                    m_path = str.substr(6);
-
-                    if (str != "")
+                    std::string result = "#je_animation_list#";
+                    result += std::to_string(m_animations.size()) + ";";
+                    for (size_t id = 0; id < m_animations.size(); ++id)
                     {
-                        auto* file_handle = jeecs_file_open(m_path.c_str());
-                        if (file_handle == nullptr)
-                        {
-                            jeecs::debug::logerr("Cannot open animation file '%s'.", str.c_str());
+                        auto& animation = m_animations[id];
+                        result += 
+                            std::string(animation.m_path.c_str())
+                            + "|"
+                            + animation.m_current_action.c_str()
+                            + "|" 
+                            + (animation.m_loop ? "true" : "false")
+                            + ";";
+                    }
 
-                            return;
-                        }
-                        else
+                    return result;
+                }
+                void parse(const char* databuf)
+                {
+                    size_t readed_length = 0;
+                    size_t size = 0;
+                    if (sscanf(databuf, "#je_animation_list#%zu;%zn", &size, &readed_length) == 1)
+                    {
+                        databuf += readed_length;
+                        m_animations.clear();
+                        for (size_t i = 0; i < size; ++i)
                         {
-                            // 0. 读取魔数，验证文件是否是合法的动画文件
-                            uint32_t mg_number = 0;
-                            jeecs_file_read(&mg_number, sizeof(uint32_t), 1, file_handle);
-                            if (mg_number != 0xA213A710u)
+                            char animation_path[256] = {};
+                            char action_name[256] = {};
+                            char is_loop[8] = {};
+
+                            auto& animation = m_animations.emplace_back(animation_data_set{});
+
+                            size_t widx = 0;
+                            while (*databuf != 0 && widx <= 255)
                             {
-                                jeecs::debug::logerr("Invalid animation file '%s'.", str.c_str());
-                                jeecs_file_close(file_handle);
-                                return;
+                                char rdch = *(databuf++);
+                                if (rdch == '|')
+                                    break;
+
+                                animation_path[widx++] = rdch;
                             }
-                            
-                            // 1. 读取动画组数量
-                            uint64_t animation_count = 0;
-                            jeecs_file_read(&animation_count, sizeof(uint64_t), 1, file_handle);
-
-                            for (uint64_t i = 0; i < animation_count; ++i)
+                            widx = 0;
+                            while (*databuf != 0 && widx <= 255)
                             {
-                                // 2. 读取当前动画的帧数量、名称
-                                uint64_t frame_count = 0;
-                                uint64_t frames_name_len = 0;
+                                char rdch = *(databuf++);
+                                if (rdch == '|')
+                                    break;
 
-                                jeecs_file_read(&frame_count, sizeof(uint64_t), 1, file_handle);
-                                jeecs_file_read(&frames_name_len, sizeof(uint64_t), 1, file_handle);
+                                action_name[widx++] = rdch;
+                            }
+                            widx = 0;
+                            while (*databuf != 0 && widx <= 7)
+                            {
+                                char rdch = *(databuf++);
+                                if (rdch == ';')
+                                    break;
 
-                                std::string frame_name((size_t)frames_name_len, '\0');
-                                jeecs_file_read(frame_name.data(), sizeof(char), (size_t)frames_name_len, file_handle);
-
-                                auto& animation_frame_datas = m_animations[frame_name.c_str()];
-
-                                for (uint64_t j = 0; j < frame_count; ++j)
-                                {
-                                    // 3. 读取每一帧的持续时间和数据数量
-                                    frame_data frame_dat;
-                                    jeecs_file_read(&frame_dat.m_frame_time, sizeof(frame_dat.m_frame_time), 1, file_handle);
-
-                                    uint64_t component_data_count = 0;
-                                    jeecs_file_read(&component_data_count, sizeof(component_data_count), 1, file_handle);
-                                    for (uint64_t k = 0; k < component_data_count; ++k)
-                                    {
-                                        // 4. 读取帧组件数据
-                                        uint64_t component_name_len = 0;
-                                        jeecs_file_read(&component_name_len, sizeof(uint64_t), 1, file_handle);
-
-                                        std::string component_name((size_t)component_name_len, '\0');
-                                        jeecs_file_read(component_name.data(), sizeof(char), (size_t)component_name_len, file_handle);
-
-                                        uint64_t member_name_len = 0;
-                                        jeecs_file_read(&member_name_len, sizeof(uint64_t), 1, file_handle);
-
-                                        std::string member_name((size_t)member_name_len, '\0');
-                                        jeecs_file_read(member_name.data(), sizeof(char), (size_t)member_name_len, file_handle);
-
-                                        uint8_t offset_mode = 0;
-                                        jeecs_file_read(&offset_mode, sizeof(offset_mode), 1, file_handle);
-
-                                        frame_data::data_value value;
-                                        jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
-                                        switch (value.m_type)
-                                        {
-                                        case frame_data::data_value::type::INT:
-                                            jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle); break;
-                                        case frame_data::data_value::type::FLOAT:
-                                            jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle); break;
-                                        case frame_data::data_value::type::VEC2:
-                                            jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle); break;
-                                        case frame_data::data_value::type::VEC3:
-                                            jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle); break;
-                                        case frame_data::data_value::type::VEC4:
-                                            jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
-                                        case frame_data::data_value::type::QUAT4:
-                                            jeecs_file_read(&value.m_value.q4, sizeof(value.m_value.q4), 1, file_handle); break;
-                                        default:
-                                            jeecs::debug::logerr("Unknown value type(%d) for component frame data.", (int)value.m_type);
-                                            break;
-                                        }
-
-                                        auto * component_type = jeecs::typing::type_info::of(component_name.c_str());
-                                        if (component_type == nullptr)
-                                            jeecs::debug::logerr("Failed to found component type named '%s'.", component_name.c_str());
-                                        else
-                                        {
-                                            frame_data::component_data cdata;
-                                            cdata.m_component_type = component_type;
-                                            cdata.m_member_info = component_type->find_member_by_name(member_name.c_str());
-                                            cdata.m_member_value = value;
-                                            cdata.m_offset_mode = offset_mode != 0;
-                                            cdata.m_member_addr_cache = nullptr;
-                                            cdata.m_entity_cache = {};
-
-                                            if (cdata.m_member_info == nullptr)
-                                                jeecs::debug::logerr("Component '%s' donot have member named '%s'.", component_name.c_str(), member_name.c_str());
-                                            else
-                                                frame_dat.m_component_data.push_back(cdata);
-                                        }
-                                    }
-
-                                    uint64_t uniform_data_count = 0;
-                                    jeecs_file_read(&uniform_data_count, sizeof(uniform_data_count), 1, file_handle);
-                                    for (uint64_t k = 0; k < uniform_data_count; ++k)
-                                    {
-                                        // 5. 读取帧一致变量数据
-                                        uint64_t uniform_name_len = 0;
-                                        jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, file_handle);
-
-                                        std::string uniform_name((size_t)uniform_name_len, '\0');
-                                        jeecs_file_read(uniform_name.data(), sizeof(char), (size_t)uniform_name_len, file_handle);
-
-                                        frame_data::data_value value;
-                                        jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
-                                        switch (value.m_type)
-                                        {
-                                        case frame_data::data_value::type::INT:
-                                            jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle); break;
-                                        case frame_data::data_value::type::FLOAT:
-                                            jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle); break;
-                                        case frame_data::data_value::type::VEC2:
-                                            jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle); break;
-                                        case frame_data::data_value::type::VEC3:
-                                            jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle); break;
-                                        case frame_data::data_value::type::VEC4:
-                                            jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
-                                        default:
-                                            jeecs::debug::logerr("Unknown value type(%d) for uniform frame data.", (int)value.m_type);
-                                            break;
-                                        }
-
-                                        frame_data::uniform_data udata;
-                                        udata.m_uniform_name = uniform_name;
-                                        udata.m_uniform_value = value;
-
-                                        frame_dat.m_uniform_data.push_back(udata);
-                                    }
-
-                                    animation_frame_datas.frames.push_back(frame_dat);
-                                }
+                                is_loop[widx++] = rdch;
                             }
 
-                            // OK，读取完毕！
-                            jeecs_file_close(file_handle);
+                            animation.load_animation(animation_path);
+                            animation.set_action(action_name);
+                            animation.m_loop = (strcmp(is_loop, "true") == 0);
                         }
                     }
                 }
             };
-            struct animation_state
-            {
-                jeecs::string       current_animation = "";
-                size_t              current_frame_index = SIZE_MAX;
-                double              next_update_time = 0.0f;
 
-                void set_animation(const std::string& animation_name)
-                {
-                    current_animation = animation_name;
-                    current_frame_index = SIZE_MAX;
-                    next_update_time = 0.0f;
-                }
-                std::string get_animation()const
-                {
-                    return current_animation.c_str();
-                }
-
-                std::string to_string()const
-                {
-                    return get_animation();
-                }
-                void parse(const std::string& str)
-                {
-                    set_animation(str);
-                }
-            };
-
-            animation_data_set  animations;
-            animation_state     currnet_state;
-            bool                loop = false;
+            animation_data_set_list animations;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&FrameAnimation::animations, "animations");
-                typing::register_member(&FrameAnimation::currnet_state, "currnet_state");
-                typing::register_member(&FrameAnimation::loop, "loop");
             }
         };
     }
