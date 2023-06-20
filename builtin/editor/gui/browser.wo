@@ -928,7 +928,7 @@ namespace $$MODULE_NAME$$
         // 下面是通用的选项
         if (MenuItem("复制路径"))
         {
-            SetClipboardText(path.path->tostring);
+            SetClipboardText(context->get_project->make_path_normalize(path.path));
         }
         if (MenuItemEnabled("复制文件", is_modifiable_file))
         {
