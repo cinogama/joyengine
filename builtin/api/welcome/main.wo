@@ -74,7 +74,7 @@ The source code is licensed under the Modified BSD License, the Mesa
             TextDisabled("Woolang is licensed under the Apache License v2.0");
             
             Text("编辑器环境使用一些按原样提供的第三方工具:");
-            Text("CMake https://cmake.org/")
+            Text("CMake https://cmake.org/");
             Text("rcedit https://github.com/electron/rcedit");
 
             Separator();
