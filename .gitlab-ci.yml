@@ -5,7 +5,7 @@ build:
   # before_script:
   #   - apt update && apt -y install make autoconf
   script:
-    - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
+    - echo "$CI_COMMIT_SHA" > src/jeecs_commit_msg.hpp
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
