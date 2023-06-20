@@ -17,6 +17,11 @@ WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, je_build_version());
 }
 
+WO_API wo_api wojeapi_build_commit(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_string(vm, je_build_commit());
+}
+
 WO_API wo_api wojeapi_get_sleep_suppression(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_real(vm, je_clock_get_sleep_suppression());
@@ -1495,6 +1500,9 @@ namespace je
 
         extern("libjoyecs", "wojeapi_build_version")
         public func build_version()=> string;
+
+        extern("libjoyecs", "wojeapi_build_commit")
+        public func build_commit()=> string;
     
         extern("libjoyecs", "wojeapi_woolang_version")
         public func woolang_version()=> string;

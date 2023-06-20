@@ -2,6 +2,11 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
+const char* commit_sha_from_cicd =
+{
+#include "jeecs_commit_msg.hpp"
+};
+
 extern const char* shader_wrapper_path;
 extern const char* shader_wrapper_src;
 
@@ -148,6 +153,11 @@ void je_finish()
 const char* je_build_version()
 {
     return "JoyEngine 4.0.dev " __TIMESTAMP__;
+}
+
+const char* je_build_commit()
+{
+    return commit_sha_from_cicd;
 }
 
 void* je_module_load(const char* name, const char* path)
