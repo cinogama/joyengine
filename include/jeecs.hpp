@@ -2819,7 +2819,9 @@ namespace jeecs
         selector(game_system* game_sys)
             : m_system_instance(game_sys)
         {
+#ifndef NDEBUG
             jeecs::debug::loginfo("New selector(%p) created.", this);
+#endif
         }
 
         ~selector()
@@ -2827,8 +2829,9 @@ namespace jeecs
             for (auto& step : m_steps)
                 step.clear_archs();
             m_steps.clear();
-
+#ifndef NDEBUG
             jeecs::debug::loginfo("Selector(%p) closed.", this);
+#endif
         }
 
         selector& at(game_world w)

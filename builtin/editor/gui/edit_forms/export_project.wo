@@ -29,9 +29,9 @@ namespace editor::gui::edit_forms
 
             if (filesys::extension(originpath)->lower == ".jewo")
                 return Action::SKIP;  // 跳过工具脚本
-
-            if (filesys::extension(originpath)->lower == ".jetileset")
-                return Action::SKIP;  // 跳过地图源文件
+                
+            if (filesys::extension(originpath)->lower == ".dmp")
+                return Action::SKIP;  // 跳过崩溃转储文件
 
             if (filesys::extension(originpath)->lower == ".shader")
                 return Action::ACTION(func(pconfig){
@@ -268,9 +268,7 @@ namespace editor::gui::edit_forms
                             }
   
                             // 1.5.4 加载入口脚本
-                            let load_entry_script = filesys::isfile(normalized_path/"main.wo") 
-                                ? "import main;\nmain(RUNTIME_UNIVERSE);\n"
-                                | "";
+                            let load_entry_script = "";
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
                                 vm::create("@/builtin/main.wo", 

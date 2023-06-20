@@ -136,33 +136,38 @@ func open_path_to_do_sth(action_after_choice: (option<filesys::path_t>)=>void)
     return open;
 }
 
-func apply_editor_data_when_start_up_project()
+func read_editor_data()
 {
-    let dat = filesys::readall(filesys::normalize(std::exepath())/"editor.dat")
+    return filesys::readall(filesys::normalize(std::exepath())/"editor.dat")
         =>> \dat = dat->todict;
         ->  valor({})
         ;
+}
 
+func apply_editor_data_when_start_up_project(dat: dict)
+{
     let form_size = dat
         ->  getor("form_size": dynamic, [1344, 768]: dynamic) as array
         ->> \d = d as int;
         ;
     je::input::set_window_size(form_size[0], form_size[1]);
 }
-func save_editor_data_after_exit()
+func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesys::path_t)
 {
     let (win_w, win_h) = je::input::window_size();
-
+    let project_histories = dat->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
+    
     assert(
         filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", {
-            ["form_size"] = [win_w, win_h]
+            ["form_size"] = [win_w, win_h]: dynamic,
+            ["history"] = project_histories->forall(\record = record[1] != proj_path->tostring;)->inlay(0, [proj_name, proj_path->tostring]): dynamic
         }: string)
     );
 
     assert(filesys::setworkpath(filesys::normalize(std::exepath())));
 }
 
-func create_project_at(path: filesys::path_t, u: editor::Environment, f: mutable<bool>)
+func create_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict, f: mutable<bool>)
 {
     // 确保目录存在
     if (! filesys::exist(path))
@@ -190,7 +195,7 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, f: mutable
 
                     action_after_guide_form_closed = 
                         func(){
-                            apply_editor_data_when_start_up_project();
+                            apply_editor_data_when_start_up_project(editordat);
 
                             let p = editor::Project::create(projname, regular_path);
                             assert(p->save_project());
@@ -213,7 +218,7 @@ imgui.ini
 "@);
                             editor::gui::edit_project(p);
 
-                            save_editor_data_after_exit();
+                            save_editor_data_after_exit(editordat, p.m_name, p.m_path);
                         }
                     ;
                 }
@@ -221,7 +226,7 @@ imgui.ini
         });
 }
 
-func open_project_at(path: filesys::path_t, u: editor::Environment, f: mutable<bool>)
+func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict, f: mutable<bool>)
 {
     let proj_path = path/"project.jeproj4";
 
@@ -242,10 +247,12 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, f: mutable<b
             action_after_guide_form_closed = 
                 func()
                 {
-                    apply_editor_data_when_start_up_project();
-                    editor::gui::edit_project(editor::Project::load(path, dat));
+                    apply_editor_data_when_start_up_project(editordat);
 
-                    save_editor_data_after_exit();
+                    let p = editor::Project::load(path, dat);
+                    editor::gui::edit_project(p);
+
+                    save_editor_data_after_exit(editordat, p.m_name, p.m_path);
                 }
             ;
         }
@@ -257,6 +264,9 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, f: mutable<b
 
 let u = editor::Environment::create();
 {
+    let editor_configs = read_editor_data();
+    let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
+
     let w = u->create_world;
     do w->add_system(je::typeinfo::load("Graphic::DefaultGraphicPipelineSystem")->val);
     launch(func(){
@@ -273,12 +283,24 @@ let u = editor::Environment::create();
         
         if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
         {
-            launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = create_project_at(path, u, open);;,));
+            launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
         }
         if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
         {
-            launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = open_project_at(path, u, open);;,));
+            launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
         }
+
+        TextDisabled("历史项目");
+        do BeginChildSize("##history", 0., 100.);
+
+        for (let i, dat : historys)
+        {
+            if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::none))
+                open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
+        }
+
+        EndChild();
+
         if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
         {
             u->close();
@@ -286,7 +308,7 @@ let u = editor::Environment::create();
         }
 
         Separator();
-        TextDisabled("(C)Cinogama project. 2022-2023.");
+        TextDisabled("(C)Cinogama project. 2022.");
 
         End();
 

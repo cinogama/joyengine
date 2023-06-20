@@ -304,12 +304,18 @@ namespace editor::gui
             return registed_open_method
                 ->  get(self.externname->lower)
                 ->  valor(
-                        \p, _ = result == 0 
-                            ? option::none
-                            | option::value(F"文件 '{p.path}' 打开失败({result})")
-                            where result = std::shell(p.path->tostring())
-                        ;
-                    );
+                    func (p, _)
+                    {
+                        do thread::create(func()
+                            {
+                                let result = std::shell(p.path->tostring());
+                                if (0 != result)
+                                    jeapi::gui::form::errmsg("失败", F"无法打开'{p.path->tostring()}'({result})");
+
+                            }, ());
+                        return option::none;
+                    }
+                );
         }
     }
 
