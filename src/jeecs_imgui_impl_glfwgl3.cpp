@@ -519,6 +519,9 @@ R"(
     private func _launch<LT, FT, ATs>(coloop:LT, job_func:FT, args: ATs)=> void
         where coloop(job_func, args) is void;
 
+    extern("libjoyecs", "je_gui_deltatime")
+    public func deltatime()=> impure real;
+
     namespace unsafe
     {
         extern("libjoyecs", "je_gui_stop_all_work")
@@ -1614,8 +1617,15 @@ void jegui_init(void* window_handle, bool reboot)
     ImGui_ImplOpenGL3_Init("#version 330");
 }
 
-void jegui_update()
+double delta_time = 1. / 60.;
+WO_API wo_api je_gui_deltatime(wo_vm vm, wo_value args, size_t argc)
 {
+    return wo_ret_real(vm, delta_time);
+}
+void jegui_update(jegl_thread* thread_context)
+{
+    delta_time = 1. / (double)thread_context->m_config.m_fps;
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
