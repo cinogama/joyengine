@@ -5268,10 +5268,10 @@ namespace jeecs
                 void parse(const char* databuf)
                 {
                     shader = nullptr;
-                    size_t readed_length = 0;
-                    if (sscanf(databuf, "#je_file#%zn", &readed_length) == 0)
+                    const size_t head_length = strlen("#je_file#");
+                    if (strncmp(databuf, "#je_file#", head_length) == 0)
                     {
-                        databuf += readed_length;
+                        databuf += head_length;
                         if (strcmp(databuf, "") != 0)
                         {
                             auto* shad = jeecs::graphic::shader::load(databuf);

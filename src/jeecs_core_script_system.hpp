@@ -21,11 +21,15 @@ namespace jeecs
 
                 std::string to_string()const
                 {
-                    return std::string("#file#") + path;
+                    return std::string("#je_file#") + path;
                 }
-                void parse(const std::string& str)
+                void parse(const char* databuf)
                 {
-                    path = str.substr(6);
+                    const size_t head_length = strlen("#je_file#");
+                    if (strncmp(databuf, "#je_file#", head_length) == 0)
+                    {
+                        path = databuf + head_length;
+                    }
                 }
             };
             filepath    path;
