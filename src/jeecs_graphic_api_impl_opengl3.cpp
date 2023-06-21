@@ -166,6 +166,34 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     WINDOWS_HANDLE = glfwCreateWindow((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT, WINDOWS_TITLE,
         config->m_fullscreen ? glfwGetPrimaryMonitor() : NULL, NULL);
 
+    // Try load icon from @/icon.png or !/builtin/icon/icon.png.
+    // Do nothing if both not exist.
+    jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load("@/icon.png");
+    if (icon == nullptr)
+        icon = jeecs::graphic::texture::load("!/builtin/icon/icon.png");
+
+    if (icon != nullptr)
+    {
+        GLFWimage icon_data;
+        icon_data.width = (int)icon->width();
+        icon_data.height = (int)icon->height();
+        // Here need a y-direct flip.
+        auto* image_pixels = icon->resouce()->m_raw_texture_data->m_pixels;
+        icon_data.pixels = (unsigned char*)je_mem_alloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
+        assert(icon_data.pixels != nullptr);
+
+        for (size_t iy = 0; iy < (size_t)icon_data.height; ++iy)
+        {
+            size_t target_place_offset = iy * (size_t)icon_data.width * 4;
+            size_t origin_place_offset = ((size_t)icon_data.height - iy - 1) * (size_t)icon_data.width * 4;
+            memcpy(icon_data.pixels + target_place_offset, image_pixels + origin_place_offset, (size_t)icon_data.width * 4);
+        }
+
+        glfwSetWindowIcon(WINDOWS_HANDLE, 1, &icon_data);
+
+        je_mem_free(icon_data.pixels);
+    }
+
     glfwMakeContextCurrent(WINDOWS_HANDLE);
     glfwSetWindowSizeCallback(WINDOWS_HANDLE, glfw_callback_windows_size_changed);
     glfwSetCursorPosCallback(WINDOWS_HANDLE, glfw_callback_mouse_pos_changed);
