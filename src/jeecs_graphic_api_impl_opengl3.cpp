@@ -257,11 +257,11 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
 
 thread_local double _last_swap_buffer_tpoint = 0.;
 
-bool gl_lateupdate(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
+bool gl_lateupdate(jegl_thread* thread_context, jegl_graphic_api::custom_interface_info_t)
 {
     assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
 
-    jegui_update();
+    jegui_update(thread_context);
     return true;
 }
 

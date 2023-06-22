@@ -424,6 +424,13 @@ WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_get_world_from_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    void* world = je_ecs_world_of_entity(entity);
+    return wo_ret_pointer(vm, world);
+}
+
 WO_API wo_api wojeapi_set_editing_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::typing::uid_t uid{ /*0000*/ };
@@ -1973,6 +1980,30 @@ R"(
 
             _close(self);
         }
+        
+        extern("libjoyecs", "wojeapi_get_world_from_entity")
+        public func get_world(self: entity)=> world;
+
+        public func get_component(self: entity, type: typeinfo)=> option<component>
+        {
+            extern("libjoyecs", "wojeapi_get_component_from_entity")
+            func _get_component(self: entity, type: typeinfo)=> option<handle>;
+    
+            return _get_component(self, type)->map(\addr:handle = component{
+                addr = addr, type = type,
+            };);
+        };
+
+        public func add_component(self: entity, type: typeinfo)=> component
+        {
+            extern("libjoyecs", "wojeapi_add_component_from_entity")
+            func _add_component(self: entity, type: typeinfo)=> handle;
+    
+            return component{addr = _add_component(self, type), type = type,};
+        };
+
+        extern("libjoyecs", "wojeapi_remove_component_from_entity")
+        public func remove_component(self: entity, type: typeinfo)=> void;
 
         namespace editor
         {
@@ -2096,27 +2127,6 @@ R"(
 
                 return _get_components_types_from_entity(self);
             }
-
-            public func get_component(self: entity, type: typeinfo)=> option<component>
-            {
-                extern("libjoyecs", "wojeapi_get_component_from_entity")
-                func _get_component(self: entity, type: typeinfo)=> option<handle>;
-    
-                return _get_component(self, type)->map(\addr:handle = component{
-                    addr = addr, type = type,
-                };);
-            };
-
-            public func add_component(self: entity, type: typeinfo)=> component
-            {
-                extern("libjoyecs", "wojeapi_add_component_from_entity")
-                func _add_component(self: entity, type: typeinfo)=> handle;
-    
-                return component{addr = _add_component(self, type), type = type,};
-            };
-
-            extern("libjoyecs", "wojeapi_remove_component_from_entity")
-            public func remove_component(self: entity, type: typeinfo)=> void;
 
             extern("libjoyecs", "wojeapi_is_top_entity")
             public func is_top(self: entity)=> bool;
@@ -2307,16 +2317,16 @@ R"(
 
     public using component = struct{addr: handle, type: typeinfo}
     {
+        public func get_member(self: component, name: string)
+        {
+            extern("libjoyecs", "wojeapi_get_components_member")
+            func _get_member(addr: handle, type: typeinfo, name: string)=> option<(typeinfo, native_value)>;
+
+            return _get_member(self.addr, self.type, name);
+        }
+
         namespace editor
         {
-            public func get_member(self: component, name: string)
-            {
-                extern("libjoyecs", "wojeapi_get_components_member")
-                func _get_member(addr: handle, type: typeinfo, name: string)=> option<(typeinfo, native_value)>;
-
-                return _get_member(self.addr, self.type, name);
-            }
-
             public using member_iterator = gchandle;
             namespace member_iterator
             {
