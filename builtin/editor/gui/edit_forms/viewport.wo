@@ -42,12 +42,16 @@ namespace editor::gui::edit_forms
                         || (IsWindowFocused() && jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::P])))
                     {
                         do context->start_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"开始调试失败, {e}");;
+                        je::loginfo("=======================调试开始=======================");
                         launch(func(){
                             if (proj->is_debugging)
                             {
                                 do BeginAttr("调试工具", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
                                     if (Button("终止当前调试") || jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::P]))
+                                    {
                                         do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
+                                        je::loginfo("=======================调试结束=======================");
+                                    }
                                 End();
                                 return true;
                             }
