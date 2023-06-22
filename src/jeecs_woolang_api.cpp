@@ -1467,6 +1467,10 @@ const char* jeecs_woolang_api_src = R"(
 import woo.std;
 namespace je
 {
+    extern("libjoyecs", "wojeapi_startup_coroutine")
+    public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
+        where f(args...) is void;
+
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;
 

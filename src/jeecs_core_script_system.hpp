@@ -78,6 +78,8 @@ namespace jeecs
             wo_integer_t update_func;
         };
         std::unordered_map<std::string, vm_info> _compiled_vms;
+        std::list<wo_vm> _coroutine_list;
+        inline static thread_local ScriptRuntimeSystem* system_instance = nullptr;
 
         ScriptRuntimeSystem(game_world w)
             : game_system(w)
@@ -91,10 +93,15 @@ namespace jeecs
                 if (v.vm != nullptr)
                     wo_close_vm(v.vm);
             }
+            for (auto* co_vm : _coroutine_list)
+            {
+                wo_release_vm(co_vm);
+            }
         }
 
         void Update()
         {
+            system_instance = this;
             select_from(get_world()).
                 exec(
                     [this](game_entity e, Script::Woolang& woolang)
@@ -196,7 +203,11 @@ namespace jeecs
                             woolang._vm_create_func = found_base_vm_info->create_func;
                             woolang._vm_update_func = found_base_vm_info->update_func;
 
-                            wo_push_pointer(woolang._vm_instance, &e);
+                            jeecs::game_entity* entity = new jeecs::game_entity();
+                            *entity = e;
+                            wo_push_gchandle(woolang._vm_instance, entity,
+                                nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
+
                             wo_value ctx = wo_invoke_rsfunc(woolang._vm_instance, woolang._vm_create_func, 1);
                             if (ctx == nullptr)
                             {
@@ -211,7 +222,10 @@ namespace jeecs
                         }
 
                         assert(woolang._vm_instance != nullptr);
-                        wo_push_pointer(woolang._vm_instance, &e);
+                        jeecs::game_entity* entity = new jeecs::game_entity();
+                        *entity = e;
+                        wo_push_gchandle(woolang._vm_instance, entity,
+                            nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
                         wo_push_val(woolang._vm_instance, woolang._vm_context);
                         if (wo_invoke_rsfunc(woolang._vm_instance, woolang._vm_update_func, 2) == nullptr)
                         {
@@ -224,6 +238,57 @@ namespace jeecs
                         }
                     }
             );
+            std::list<wo_vm> current_co_list;
+            current_co_list.swap(_coroutine_list);
+
+            assert(_coroutine_list.empty());
+            for (auto co_vm : current_co_list)
+            {
+                wo_value result = wo_dispatch(co_vm);
+                if (result == nullptr)
+                {
+                    jeecs::debug::logerr("Coroutine %p failed: '%s':\n %s",
+                        co_vm,
+                        wo_get_runtime_error(co_vm),
+                        wo_debug_trace_callstack(co_vm, 8));
+                }
+                else if (result == WO_CONTINUE)
+                {
+                    _coroutine_list.push_back(co_vm);
+                }
+                else
+                {
+                    wo_release_vm(co_vm);
+                }
+            }
+
+            system_instance = nullptr;
         }
     };
+}
+
+WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
+{
+    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
+        return wo_ret_panic(vm, "You can only start up coroutine in Script or another Coroutine.");
+
+    // start_coroutine(workjob, (args))
+    wo_value cofunc = args + 0;
+    wo_value arguments = args + 1;
+    auto argument_count = wo_lengthof(arguments);
+
+    wo_vm co_vmm = wo_borrow_vm(vm);
+
+    for (auto i = argument_count; i > 0; --i)
+        wo_push_val(co_vmm, wo_struct_get(arguments, (uint16_t)(i-1)));
+
+    if (wo_valuetype(cofunc) == WO_INTEGER_TYPE)
+        wo_dispatch_rsfunc(co_vmm, wo_int(cofunc), argument_count);
+    else
+        wo_dispatch_closure(co_vmm, cofunc, argument_count);
+
+    jeecs::ScriptRuntimeSystem::system_instance
+        ->_coroutine_list.push_back(co_vmm);
+
+    return wo_ret_void(co_vmm);
 }
