@@ -39,9 +39,12 @@ build_win64_release:
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
-      - build/*.dll
       - build/*.exe
-      - build/*.pdb
+      - build/*.dll
+      - build/libjoyecs.lib
+      - build/libwoo.lib
+      - build/libjoyecs.pdb
+      - build/libwoo.pdb
       - build/pkg/*
       - build/builtin/*
   tags:
