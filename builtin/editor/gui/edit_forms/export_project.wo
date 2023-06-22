@@ -7,7 +7,7 @@ namespace editor::gui::edit_forms
         SKIP,       // 跳过此文件
         ORIGIN,     // 原样复制到打包路径
         PACK,       // 打包
-        ACTION((pack_config)=>array<(string, string)>),
+        ACTION((pack_config, je::editor::fimage_packer)=>array<(string, string)>),
     }
     using pack_config = struct {
         m_pack_dll_into_image: bool,        // 将C++模块打包进镜像文件中？如果为true，则在运行时释放出动态库，否则原样复制
@@ -34,7 +34,7 @@ namespace editor::gui::edit_forms
                 return Action::SKIP;  // 跳过崩溃转储文件
 
             if (filesys::extension(originpath)->lower == ".shader")
-                return Action::ACTION(func(pconfig){
+                return Action::ACTION(func(pconfig, _){
                     pconfig.m_pack_output_log->add(F"正在编译着色器：{packpath}");
                     match (je::graphic::shader::load(originpath->tostring))
                     {
@@ -46,6 +46,29 @@ namespace editor::gui::edit_forms
                             return [];
                         }
                     }
+                });
+            
+            if (filesys::extension(originpath)->lower == ".wo")
+                return Action::ACTION(func(pconfig, fimg){
+                    pconfig.m_pack_output_log->add(F"正在编译脚本：{packpath}");
+                    match (vm::load(originpath->tostring))
+                    {
+                    ok(vminstance)?
+                        {
+                            assert(
+                                vminstance->save_binary...
+                                    -> \bindata, binlen = fimg->pack_buffer(bindata->ptr, binlen, packpath);
+                            );
+                            return [];
+                        }
+                    err(_)?
+                        {
+                            pconfig.m_pack_output_log->add(F"无法编译脚本，原样传输：{packpath}");
+                            return [(originpath->tostring, packpath)];
+                        }
+                        
+                    }
+                    
                 });
 
             if (packpath->lower->find(".jemodule4") != -1)
@@ -159,7 +182,7 @@ namespace editor::gui::edit_forms
                                     }
                                 ACTION(action)?
                                     {
-                                        for (let _, (aopath, appath): action(config))
+                                        for (let _, (aopath, appath): action(config, fimg))
                                         {
                                             config.m_pack_output_log->add(F"打包 {appath}");
                                             assert(fimg->pack(aopath, appath));

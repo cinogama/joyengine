@@ -48,9 +48,9 @@ namespace jeapi::debug
         static let EditorAnchorTypeID = je::typeinfo::load("Editor::Anchor")->val;
                       
         // 确保实体拥有该有的锚，如果没有就现场创建一个
-        let anchor_uid = entity->editor::get_component(EditorAnchorTypeID)
-            -> or(\= entity->editor::add_component(EditorAnchorTypeID);)
-            -> editor::get_member("uid")
+        let anchor_uid = entity->get_component(EditorAnchorTypeID)
+            -> or(\= entity->add_component(EditorAnchorTypeID);)
+            -> get_member("uid")
             -> val...
             -> \type, nval = nval->to_string(type);
             ;

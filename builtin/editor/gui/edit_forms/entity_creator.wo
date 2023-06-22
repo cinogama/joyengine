@@ -53,7 +53,7 @@ namespace editor::gui::edit_forms
                 // 把当前已有的组件处理一下
                 let all_comps = context.not_append_types->dup();
                 for (let _, comp : all_comps)
-                    if (e->editor::get_component(comp)->has)
+                    if (e->get_component(comp)->has)
                         context->add_components(comp->name);
             });
 
@@ -317,13 +317,13 @@ namespace editor::gui::edit_forms
                     eeid->justdo(func(e){
                         // 0. 获取准备新增的组件
                         let add_components = entity_context.has_append_types->forall(
-                            \type: je::typeinfo = !e->editor::get_component(type)->has;);
+                            \type: je::typeinfo = !e->get_component(type)->has;);
                         // 1. 获取即将移除的组件
                         let removing_components = entity_context.not_append_types->forall(
-                                \type: je::typeinfo = e->editor::get_component(type)->has;);
+                                \type: je::typeinfo = e->get_component(type)->has;);
 
-                        do add_components->map(\t: je::typeinfo = e->editor::add_component(t););
-                        do removing_components->map(\t: je::typeinfo = e->editor::remove_component(t););
+                        do add_components->map(\t: je::typeinfo = e->add_component(t););
+                        do removing_components->map(\t: je::typeinfo = e->remove_component(t););
 
                         e->editor::set_name(entity_context.name);
                     });

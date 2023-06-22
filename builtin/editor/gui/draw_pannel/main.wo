@@ -632,7 +632,7 @@ namespace editor::gui::drawpannel
     {
         // 检查实体有没有纹理组件，然后遍历检查所有纹理是否都存在，有没有没有路径的问题
         // 如果发现不正常的纹理就给个提示
-        if (!e->editor::get_component(typeinfo::load("Renderer::Textures")->val)->has)
+        if (!e->get_component(typeinfo::load("Renderer::Textures")->val)->has)
         {
             jeapi::gui::form::errmsg("无法绘制当前实体", "当前实体不包含 Renderer::Textures 组件，无法绘制");
             return;

@@ -57,10 +57,10 @@ namespace editor::gui::edit_forms
             do child->editor::get_parent_uid()
                  ->> \uid = parent.e->editor::set_parent_with_uid(uid, true);
                  ->or(func(){
-                    if (parent.e->editor::get_component(LocalToParent)->has())
-                        parent.e->editor::remove_component(LocalToParent);
-                    if (!parent.e->editor::get_component(LocalToWorld)->has())
-                        do parent.e->editor::add_component(LocalToWorld);
+                    if (parent.e->get_component(LocalToParent)->has())
+                        parent.e->remove_component(LocalToParent);
+                    if (!parent.e->get_component(LocalToWorld)->has())
+                        do parent.e->add_component(LocalToWorld);
                     return true;
                  });
         }
@@ -181,8 +181,8 @@ namespace editor::gui::edit_forms
                         none?;
                         value(einst)?
                             {
-                                do einst->editor::get_component(je::typeinfo::load("Transform::LocalScale")->val)
-                                    =>> \m = m->editor::get_member("scale");
+                                do einst->get_component(je::typeinfo::load("Transform::LocalScale")->val)
+                                    =>> \m = m->get_member("scale");
                                     ->> \tv = tv...
                                         ->\_, v = v->set_float3(ctx.width, ctx.height, 1.);
                                         ;
@@ -227,8 +227,8 @@ namespace editor::gui::edit_forms
                     {
                         // 设置e的Light2D::Color.parallel,
                         // 设置默认的光照着色器
-                        do e->editor::get_component(je::typeinfo::load("Light2D::Color")->val)->val
-                            ->  editor::get_member("parallel")
+                        do e->get_component(je::typeinfo::load("Light2D::Color")->val)->val
+                            ->  get_member("parallel")
                             ->> \tv = tv[1]->set_bool(false);
                             ;
                         let default_shader_path = "@/resource/shader/Light2DPoint.shader";
@@ -255,8 +255,8 @@ namespace editor::gui::edit_forms
                     {
                         // 设置e的Light2D::Color.parallel,
                         // 设置默认的光照着色器
-                        do e->editor::get_component(je::typeinfo::load("Light2D::Color")->val)->val
-                            ->  editor::get_member("parallel")
+                        do e->get_component(je::typeinfo::load("Light2D::Color")->val)->val
+                            ->  get_member("parallel")
                             ->> \tv = tv[1]->set_bool(true);
                             ;
                         let default_shader_path = "@/resource/shader/Light2DParallel.shader";
@@ -323,10 +323,10 @@ namespace editor::gui::edit_forms
                     {
                         // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
                         static let Anchor = je::typeinfo::load("Transform::Anchor")->val;
-                        if (e->editor::get_component(Anchor)->has)
+                        if (e->get_component(Anchor)->has)
                         {
-                            e->editor::remove_component(Anchor);
-                            do e->editor::add_component(Anchor);
+                            e->remove_component(Anchor);
+                            do e->add_component(Anchor);
                         }
                     }
                     ;
@@ -424,7 +424,7 @@ namespace editor::gui::edit_forms
                 | TreeNodeAttribute::ImGuiTreeNodeFlags_None);
             ;
 
-        if (!display_debug_entity && e.e->editor::get_component(je::typeinfo::load("Editor::Invisable")->val)->has)
+        if (!display_debug_entity && e.e->get_component(je::typeinfo::load("Editor::Invisable")->val)->has)
             // 不可见实体，不准看！
             return;
 

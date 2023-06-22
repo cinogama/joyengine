@@ -5,7 +5,7 @@ namespace jeapi::varify
     public func has_bad_shader(e: je::entity)
     {
         static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
-        return e->editor::get_component(BadShadersUniform)->has;
+        return e->get_component(BadShadersUniform)->has;
     }
     public func varify_all_shader_is_valid_in_world(w: je::world)
     {

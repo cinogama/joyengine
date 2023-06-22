@@ -853,7 +853,6 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
     }
 }
 
-
 jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool is_virtual_file)
 {
     if (is_virtual_file)

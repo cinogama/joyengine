@@ -26,8 +26,8 @@ namespace editor::gui::edit_forms
             let debug_camera_entity = context->get_project->get_editing_world
                 =>> \w = w->editor::get_all_entities
                     ->forall(\e = 
-                        e->editor::get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
-                        && e->editor::get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
+                        e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
+                        && e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
                     ;)
                     ->reduce(\l, r = l;)
                     ;
@@ -66,27 +66,27 @@ namespace editor::gui::edit_forms
                     let p3d_type = je::typeinfo::load("Camera::PerspectiveProjection")->val;
 
                     let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPass")->val;
-                    if (debug_camera_entity->val->editor::get_component(o2d_type)->has)
+                    if (debug_camera_entity->val->get_component(o2d_type)->has)
                     {
-                        debug_camera_entity->val->editor::remove_component(o2d_type);
-                        do debug_camera_entity->val->editor::add_component(p3d_type);
+                        debug_camera_entity->val->remove_component(o2d_type);
+                        do debug_camera_entity->val->add_component(p3d_type);
                     }
                     else
                     {
-                        assert(debug_camera_entity->val->editor::get_component(p3d_type)->has);
-                        debug_camera_entity->val->editor::remove_component(p3d_type);
-                        do debug_camera_entity->val->editor::add_component(o2d_type);
+                        assert(debug_camera_entity->val->get_component(p3d_type)->has);
+                        debug_camera_entity->val->remove_component(p3d_type);
+                        do debug_camera_entity->val->add_component(o2d_type);
                     }
                 }
                 if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
                 {
                     let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPass")->val;
-                    if (debug_camera_entity->val->editor::get_component(l2d_camera_pass_component_type)->has)
-                        debug_camera_entity->val->editor::remove_component(l2d_camera_pass_component_type);
+                    if (debug_camera_entity->val->get_component(l2d_camera_pass_component_type)->has)
+                        debug_camera_entity->val->remove_component(l2d_camera_pass_component_type);
                     else
                     {
-                        let camerapass = debug_camera_entity->val->editor::add_component(l2d_camera_pass_component_type);
-                        let (type, val) = camerapass->editor::get_member("mixed_shader")->val;
+                        let camerapass = debug_camera_entity->val->add_component(l2d_camera_pass_component_type);
+                        let (type, val) = camerapass->get_member("mixed_shader")->val;
                         val->parse(type, "#file#@/resource/shader/Light2DCameraPass.shader");                        
                     }
                 }

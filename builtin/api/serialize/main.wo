@@ -69,7 +69,7 @@ namespace jeapi
                     ->  forall(\t = !t->name->beginwith("Editor::");)
                     =>> \t = component->has ? [(t, component->val)] | []
                         where
-                            component = saving_entity->editor::get_component(t);
+                            component = saving_entity->get_component(t);
                     ->> \tc = (t->name, collect_members)
                         where 
                             collect_members = c->editor::members()
@@ -104,7 +104,7 @@ namespace jeapi
             let entities_json_list = 
                 w->editor::get_all_entities
                     // 跳过编辑器上的不可见实体
-                    ->  forall(\e = !e->editor::get_component(INVISABLE)->has;)
+                    ->  forall(\e = !e->get_component(INVISABLE)->has;)
                     =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e);
                     ;
 
@@ -231,7 +231,7 @@ namespace jeapi
                                 where (mname,(mtype, mvalue)) = pair
                                 ;
                             ;
-                    where compmaynotfound = entity->editor::get_component(ctype)
+                    where compmaynotfound = entity->get_component(ctype)
                         , (ctype, dat) = cdata
                     ;
                 ;

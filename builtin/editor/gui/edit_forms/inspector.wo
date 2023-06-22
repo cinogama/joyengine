@@ -177,7 +177,7 @@ namespace editor::gui::edit_forms
                                             F"即将从实体{ename}中移除组件{ctype->name}，是否确认？", 
                                             func(asure){
                                                 if (asure)
-                                                    eeid->justdo(\e=e->editor::remove_component(ctype););
+                                                    eeid->justdo(\e=e->remove_component(ctype););
                                             });
                                     }
                                     if (MenuItem(F"重置"))
@@ -196,8 +196,8 @@ namespace editor::gui::edit_forms
                                                         // NOTE: 顺便说明一下，JoyEngine的ArchSystem对于一次性
                                                         //       给定所有组件，然后创建实体。理论上性能开销小于
                                                         //       逐个追加组件。
-                                                        e->editor::remove_component(ctype);
-                                                        do e->editor::add_component(ctype);
+                                                        e->remove_component(ctype);
+                                                        do e->add_component(ctype);
                                                     }
                                                 });
                                             });
@@ -232,11 +232,11 @@ namespace editor::gui::edit_forms
 
                     static let Shaders = je::typeinfo::load("Renderer::Shaders")->val();
                     static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
-                    match (cur_e->editor::get_component(Shaders))
+                    match (cur_e->get_component(Shaders))
                     {
                     value(shaders)?
                         {
-                            if (cur_e->editor::get_component(BadShadersUniform)->has)
+                            if (cur_e->get_component(BadShadersUniform)->has)
                             {
                                 let bad_shader_paths = cur_e->editor::get_bad_shader_paths();
                                 TextDisabled(F"有{bad_shader_paths->len}个着色器存在问题:");

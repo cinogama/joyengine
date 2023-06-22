@@ -17,11 +17,11 @@ namespace jeecs
         {
             struct filepath
             {
-                std::string path = {};
+                jeecs::string path = {};
 
                 std::string to_string()const
                 {
-                    return std::string("#je_file#") + path;
+                    return std::string("#je_file#") + path.c_str();
                 }
                 void parse(const char* databuf)
                 {
@@ -61,7 +61,7 @@ namespace jeecs
                     _vm_instance = nullptr;
                 }
             }
-          
+
             static void JERefRegsiter()
             {
                 typing::register_member(&Woolang::path, "path");
@@ -86,7 +86,7 @@ namespace jeecs
         }
         ~ScriptRuntimeSystem()
         {
-            for (auto & [_, v] : _compiled_vms)
+            for (auto& [_, v] : _compiled_vms)
             {
                 if (v.vm != nullptr)
                     wo_close_vm(v.vm);
@@ -97,7 +97,7 @@ namespace jeecs
         {
             select_from(get_world()).
                 exec(
-                    [this](game_entity e, Script::Woolang& woolang) 
+                    [this](game_entity e, Script::Woolang& woolang)
                     {
                         if (woolang._vm_failed == true)
                             return;
@@ -114,9 +114,11 @@ namespace jeecs
                             const vm_info* found_base_vm_info = nullptr;
                             if (fnd == _compiled_vms.end())
                             {
-                                auto &info = _compiled_vms[woolang.path.path];
+                                auto& info = _compiled_vms[woolang.path.path];
 
                                 auto* file = jeecs_file_open(woolang.path.path.c_str());
+                                if (file == nullptr)
+                                    file = jeecs_file_open((woolang.path.path.c_str() + std::string(".woo")).c_str());
                                 if (file == nullptr)
                                 {
                                     jeecs::debug::logerr("Failed to open '%s' when loading script for entity.",
@@ -193,7 +195,7 @@ namespace jeecs
                             woolang._vm_instance = wo_borrow_vm(found_base_vm_info->vm);
                             woolang._vm_create_func = found_base_vm_info->create_func;
                             woolang._vm_update_func = found_base_vm_info->update_func;
-                            
+
                             wo_push_pointer(woolang._vm_instance, &e);
                             wo_value ctx = wo_invoke_rsfunc(woolang._vm_instance, woolang._vm_create_func, 1);
                             if (ctx == nullptr)
@@ -221,7 +223,7 @@ namespace jeecs
                             return;
                         }
                     }
-                );
+            );
         }
     };
 }
