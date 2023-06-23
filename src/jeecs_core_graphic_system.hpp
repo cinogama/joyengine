@@ -620,7 +620,6 @@ public let frag =
                   { 0.0f, 0.0f, 1.0f, 0.0f },
                   { 0.0f, 0.0f, 0.0f, 1.0f },
             };
-            float MAT4_UI_VP[4][4];
             float MAT4_UI_MODULE[4][4];
 
             for (auto& current_camera : m_camera_list)
@@ -716,28 +715,28 @@ public let frag =
                                 rendentity.ui->buttom_origin ? origin_vertext_data->m_size_y / 2.0f : (rendentity.ui->top_origin ? -origin_vertext_data->m_size_y / 2.0f : 0.0f),
                                 0.0f, 1.0f },
                         };
-                        math::mat4xmat4(MAT4_UI_MODULE, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
-                        MAT4_MODEL_MATADDR = &MAT4_UI_MODULE;
+                       
+                        
                         if (rendentity.ui->keep_horizontal_ratio)
                         {
-                            math::mat4xmat4(MAT4_MV, MAT4_UI_HORIZONTAL_CORRECT, MAT4_UI_MODULE);
-                            math::mat4xmat4(MAT4_UI_VP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_UI_HORIZONTAL_CORRECT);
+                            math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
+                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_HORIZONTAL_CORRECT);
                         }
                         else if (rendentity.ui->keep_vertical_ratio)
                         {
-                            math::mat4xmat4(MAT4_MV, MAT4_UI_VERTICAL_CORRECT, MAT4_UI_MODULE);
-                            math::mat4xmat4(MAT4_UI_VP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_UI_VERTICAL_CORRECT);
+                            math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
+                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_VERTICAL_CORRECT);
                         }
                         else
                         {
-                            math::mat4xmat4(MAT4_MV, MAT4_UI_UNIT, MAT4_UI_MODULE);
-                            math::mat4xmat4(MAT4_UI_VP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_UI_UNIT);
+                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
                         }
+                        MAT4_MODEL_MATADDR = &MAT4_UI_MODULE;
 
                         MAT4_UI_P_ORIGIN_OFFSET[3][0] = rendentity.ui->left_origin ? -1.0f : (rendentity.ui->right_origin ? 1.0f : 0.0f);
                         MAT4_UI_P_ORIGIN_OFFSET[3][1] = rendentity.ui->buttom_origin ? -1.0f : (rendentity.ui->top_origin ? 1.0f : 0.0f);
 
-                        math::mat4xmat4(MAT4_MVP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_MV);
+                        math::mat4xmat4(MAT4_MVP, MAT4_UI_P_ORIGIN_OFFSET, *MAT4_MODEL_MATADDR);
                     }
                     else
                     {
@@ -766,23 +765,18 @@ public let frag =
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, *MAT4_MODEL_MATADDR);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
                         if (rendentity.ui != nullptr)
                         {
-                            if (rendentity.ui->keep_horizontal_ratio)
-                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_HORIZONTAL_CORRECT);
-                            else if (rendentity.ui->keep_vertical_ratio)
-                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_VERTICAL_CORRECT);
-                            else
-                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_UNIT);
-
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, *MAT4_MODEL_MATADDR);
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_UNIT);
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_VP);
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
                         }
                         else
                         {
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
