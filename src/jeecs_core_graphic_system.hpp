@@ -715,17 +715,16 @@ public let frag =
                                 rendentity.ui->buttom_origin ? origin_vertext_data->m_size_y / 2.0f : (rendentity.ui->top_origin ? -origin_vertext_data->m_size_y / 2.0f : 0.0f),
                                 0.0f, 1.0f },
                         };
-                       
-                        
+
                         if (rendentity.ui->keep_horizontal_ratio)
                         {
-                            math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
-                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_HORIZONTAL_CORRECT);
+                            math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_HORIZONTAL_CORRECT);
+                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
                         }
                         else if (rendentity.ui->keep_vertical_ratio)
                         {
-                            math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
-                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_VERTICAL_CORRECT);
+                            math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_VERTICAL_CORRECT);
+                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
                         }
                         else
                         {
