@@ -41,10 +41,10 @@ namespace jeecs
             }
         }
 
-        void PreUpdate()
+        void CommitUpdate()
         {
             system_instance = this;
-            select_from(get_world()).
+            select().
                 exec(
                     [this](game_entity e, Script::Woolang& woolang)
                     {
@@ -162,22 +162,6 @@ namespace jeecs
                             }
                             woolang._vm_context = wo_push_val(woolang._vm_instance, ctx);
                         }
-
-                        assert(woolang._vm_instance != nullptr);
-                    }
-            );
-            system_instance = nullptr;
-        }
-        void Update()
-        {
-            system_instance = this;
-            select().
-                exec(
-                    [this](game_entity e, Script::Woolang& woolang)
-                    {
-                        if (woolang._vm_failed == true)
-                            return;
-
                         assert(woolang._vm_instance != nullptr);
                         jeecs::game_entity* entity = new jeecs::game_entity();
                         *entity = e;

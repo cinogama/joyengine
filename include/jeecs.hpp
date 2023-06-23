@@ -2945,10 +2945,10 @@ namespace jeecs
             return _m_delta_time;
         }
 
-#define PreUpdate       PreUpdate       // 读取 Graphic
-#define Update          Update          // 写入 Animation RuntimeScript
+#define PreUpdate       PreUpdate       // 读取 Graphic 
+#define Update          Update          // 写入 Animation 
 #define LateUpdate      LateUpdate      // 更新 Translation 
-#define CommitUpdate    CommitUpdate    // 提交 Physics 
+#define CommitUpdate    CommitUpdate    // 提交 Physics RuntimeScript
 
         /*
         struct TranslationUpdater : game_system
