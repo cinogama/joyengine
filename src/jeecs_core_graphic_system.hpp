@@ -415,9 +415,10 @@ public let frag =
         }
     };
 
-    struct DefaultGraphicPipelineSystem : public GraphicPipelineBaseSystem
+    struct UnlitUIGraphicPipelineSystem : public GraphicPipelineBaseSystem
     {
         using Translation = Transform::Translation;
+        using UserInterface = Transform::UserInterface;
 
         using Rendqueue = Renderer::Rendqueue;
 
@@ -455,6 +456,7 @@ public let frag =
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
+            const UserInterface* ui;
 
             bool operator < (const renderer_arch& another) const noexcept
             {
@@ -476,13 +478,13 @@ public let frag =
             jeecs::math::vec4 time;
         };
 
-        DefaultGraphicPipelineSystem(game_world w)
+        UnlitUIGraphicPipelineSystem(game_world w)
             : GraphicPipelineBaseSystem(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
 
-        ~DefaultGraphicPipelineSystem()
+        ~UnlitUIGraphicPipelineSystem()
         {
 
         }
@@ -550,7 +552,7 @@ public let frag =
             this->pipeline_update_begin();
 
             select_from(get_world())
-                .exec(&DefaultGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(&UnlitUIGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
@@ -563,13 +565,13 @@ public let frag =
                         );
                     })
                 .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue, UserInterface* ui)
                     {
                         // TODO: Need Impl AnyOf
                             // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs
+                                rendqueue, &trans, shape, shads, texs, ui
                             });
                     })
                         .anyof<Shaders, Textures, Shape>()
@@ -605,6 +607,22 @@ public let frag =
                 sizeof(math::vec4),
                 &shader_time);
 
+            const float MAT4_UI_UNIT[4][4] = {
+                { 1.0f, 0.0f, 0.0f, 0.0f },
+                { 0.0f, 1.0f, 0.0f, 0.0f },
+                { 0.0f, 0.0f, 1.0f, 0.0f },
+                { 0.0f, 0.0f, 0.0f, 1.0f },
+            };
+
+            float MAT4_UI_P_ORIGIN_OFFSET[4][4] = {
+                  { 1.0f, 0.0f, 0.0f, 0.0f },
+                  { 0.0f, 1.0f, 0.0f, 0.0f },
+                  { 0.0f, 0.0f, 1.0f, 0.0f },
+                  { 0.0f, 0.0f, 0.0f, 1.0f },
+            };
+            float MAT4_UI_VP[4][4];
+            float MAT4_UI_MODULE[4][4];
+
             for (auto& current_camera : m_camera_list)
             {
                 jegl_resource* rend_aim_buffer = nullptr;
@@ -619,6 +637,19 @@ public let frag =
                 size_t
                     RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH,
                     RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT;
+
+                const float MAT4_UI_HORIZONTAL_CORRECT[4][4] = {
+                    { 1.0f, 0.0f, 0.0f, 0.0f },
+                    { 0.0f, (float)RENDAIMBUFFER_WIDTH / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 0.0f},
+                    { 0.0f, 0.0f, 1.0f, 0.0f },
+                    { 0.0f, 0.0f, 0.0f, 1.0f },
+                };
+                const float MAT4_UI_VERTICAL_CORRECT[4][4] = {
+                    { (float)RENDAIMBUFFER_HEIGHT / (float)RENDAIMBUFFER_WIDTH, 0.0f, 0.0f, 0.0f },
+                    { 0.0f, 1.0f, 0.0f, 0.0f},
+                    { 0.0f, 0.0f, 1.0f, 0.0f },
+                    { 0.0f, 0.0f, 0.0f, 1.0f },
+                };
 
                 const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
                 const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
@@ -650,18 +681,11 @@ public let frag =
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
                 for (auto& rendentity : m_renderer_list)
                 {
-                    assert(rendentity.translation);
-
-                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
-
-                    float MAT4_MVP[4][4];
-                    math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                    math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
-
                     auto& drawing_shape =
                         (rendentity.shape && rendentity.shape->vertex)
                         ? rendentity.shape->vertex
                         : host()->default_shape_quad;
+
                     auto& drawing_shaders =
                         (rendentity.shaders && rendentity.shaders->shaders.size())
                         ? rendentity.shaders->shaders
@@ -672,6 +696,54 @@ public let frag =
                     const jeecs::math::vec2
                         * _using_tiling = &default_tiling,
                         * _using_offset = &default_offset;
+
+                    assert(rendentity.translation);
+
+                    float MAT4_MVP[4][4];
+                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
+                    const float(*MAT4_MODEL_MATADDR)[4][4] = &MAT4_MODEL;
+
+                    // 如果是UI，VIEW 和 PROJECTION 则需要保持为单位矩阵, 即 规定如此
+                    if (rendentity.ui != nullptr)
+                    {
+                        auto* origin_vertext_data = drawing_shape->resouce()->m_raw_vertex_data;
+                        const float MAT4_UI_ORIGIN_OFFSET[4][4] = {
+                            { 1.0f, 0.0f, 0.0f, 0.0f },
+                            { 0.0f, 1.0f, 0.0f, 0.0f },
+                            { 0.0f, 0.0f, 1.0f, 0.0f },
+                            { 
+                                rendentity.ui->left_origin ? origin_vertext_data->m_size_x/2.0f :(rendentity.ui->right_origin ? -origin_vertext_data->m_size_x / 2.0f : 0.0f),
+                                rendentity.ui->buttom_origin ? origin_vertext_data->m_size_y / 2.0f : (rendentity.ui->top_origin ? -origin_vertext_data->m_size_y / 2.0f : 0.0f),
+                                0.0f, 1.0f },
+                        };
+                        math::mat4xmat4(MAT4_UI_MODULE, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
+                        MAT4_MODEL_MATADDR = &MAT4_UI_MODULE;
+                        if (rendentity.ui->keep_horizontal_ratio)
+                        {
+                            math::mat4xmat4(MAT4_MV, MAT4_UI_HORIZONTAL_CORRECT, MAT4_UI_MODULE);
+                            math::mat4xmat4(MAT4_UI_VP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_UI_HORIZONTAL_CORRECT);
+                        }
+                        else if (rendentity.ui->keep_vertical_ratio)
+                        {
+                            math::mat4xmat4(MAT4_MV, MAT4_UI_VERTICAL_CORRECT, MAT4_UI_MODULE);
+                            math::mat4xmat4(MAT4_UI_VP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_UI_VERTICAL_CORRECT);
+                        }
+                        else
+                        {
+                            math::mat4xmat4(MAT4_MV, MAT4_UI_UNIT, MAT4_UI_MODULE);
+                            math::mat4xmat4(MAT4_UI_VP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_UI_UNIT);
+                        }
+
+                        MAT4_UI_P_ORIGIN_OFFSET[3][0] = rendentity.ui->left_origin ? -1.0f : (rendentity.ui->right_origin ? 1.0f : 0.0f);
+                        MAT4_UI_P_ORIGIN_OFFSET[3][1] = rendentity.ui->buttom_origin ? -1.0f : (rendentity.ui->top_origin ? 1.0f : 0.0f);
+
+                        math::mat4xmat4(MAT4_MVP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_MV);
+                    }
+                    else
+                    {
+                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+                    }
 
                     auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
@@ -693,13 +765,28 @@ public let frag =
                         auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), rchain_texture_group);
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, *MAT4_MODEL_MATADDR);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
+
+                        if (rendentity.ui != nullptr)
+                        {
+                            if (rendentity.ui->keep_horizontal_ratio)
+                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_HORIZONTAL_CORRECT);
+                            else if (rendentity.ui->keep_vertical_ratio)
+                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_VERTICAL_CORRECT);
+                            else
+                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_UNIT);
+
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_VP);
+                        }
+                        else
+                        {
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
+                        }
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
                             rendentity.translation->local_scale.x,
@@ -995,6 +1082,7 @@ public func frag(vf: v2f)
         };
 
         using Translation = Transform::Translation;
+        using UserInterface = Transform::UserInterface;
 
         using Rendqueue = Renderer::Rendqueue;
 
@@ -1046,6 +1134,7 @@ public func frag(vf: v2f)
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
+            const UserInterface* ui;
 
             bool operator < (const renderer_arch& another) const noexcept
             {
@@ -1218,12 +1307,12 @@ public func frag(vf: v2f)
                         }
                     })
                 .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue, UserInterface* ui)
                     {
                         // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs
+                                rendqueue, &trans, shape, shads, texs, ui
                             });
                     }).anyof<Shaders, Textures, Shape>()
                         .except<Light2D::Color>()

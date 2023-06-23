@@ -268,7 +268,7 @@ let u = editor::Environment::create();
     let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
 
     let w = u->create_world;
-    do w->add_system(je::typeinfo::load("Graphic::DefaultGraphicPipelineSystem")->val);
+    do w->add_system(je::typeinfo::load("Graphic::UnlitUIGraphicPipelineSystem")->val);
     launch(func(){
         let open = mutable::create(true);
 

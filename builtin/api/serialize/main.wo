@@ -73,10 +73,11 @@ namespace jeapi
                     ->> \tc = (t->name, collect_members)
                         where 
                             collect_members = c->editor::members()
-                                ->> \name, type_addr_pair = (name, addr->to_string(type))
-                                    where (type, addr) = type_addr_pair
-                                    ;,
-                            (t, c) = tc;
+                                ->> \name_type_addr_pair = (name, addr->to_string(type))
+                                    where (name, type, addr) = name_type_addr_pair
+                                    ;
+                                ->  mapping,
+                                (t, c) = tc;
                     ->  mapping
                     // 如果一个实体没有任何组件，那么就等于不存在，实际上编辑器应该避免只有编辑器
                     // 组件的实体出现在世界中，但是如果真的发生了，那么就视为option::none;
@@ -225,10 +226,9 @@ namespace jeapi
             do component_types_dat
                 ->> \cdata = compmaynotfound
                         ->> \comp = comp->editor::members
-                            ->  unmapping
-                            ->> \pair = dat->get(mname)
+                            ->> \name_type_addr_pair = dat->get(mname)
                                 ->> \mdat = mvalue->parse(mtype, mdat);
-                                where (mname,(mtype, mvalue)) = pair
+                                where (mname, mtype, mvalue) = name_type_addr_pair
                                 ;
                             ;
                     where compmaynotfound = entity->get_component(ctype)

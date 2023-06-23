@@ -4990,6 +4990,28 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, pos) == offsetof(LocalToWorld, pos));
         static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
+
+        struct UserInterface
+        {
+            bool left_origin = false;
+            bool right_origin = false;
+            bool top_origin = false;
+            bool buttom_origin = false;
+
+            bool keep_horizontal_ratio = false;
+            bool keep_vertical_ratio = false;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&UserInterface::left_origin, "left_origin");
+                typing::register_member(&UserInterface::right_origin, "right_origin");
+                typing::register_member(&UserInterface::top_origin, "top_origin");
+                typing::register_member(&UserInterface::buttom_origin, "buttom_origin");
+
+                typing::register_member(&UserInterface::keep_horizontal_ratio, "keep_horizontal_ratio");
+                typing::register_member(&UserInterface::keep_vertical_ratio, "keep_vertical_ratio");
+            }
+        };
     }
     namespace Renderer
     {
@@ -6001,6 +6023,7 @@ namespace jeecs
             type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
             type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
             type_info::of<Transform::Translation>("Transform::Translation");
+            type_info::of<Transform::UserInterface>("Transform::UserInterface");
 
             type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
             type_info::of<Renderer::Shape>("Renderer::Shape");

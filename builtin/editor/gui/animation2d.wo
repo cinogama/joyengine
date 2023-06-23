@@ -663,7 +663,7 @@ namespace editor::gui::animation2d
 
                                     SameLine();
 
-                                    do Combo("成员", members->>\nametype = nametype[1]->name + " " + nametype[0];, selecting_member_id->get)
+                                    do Combo("成员", members->>\nametype = nametype[0] + ": " + nametype[1]->name;, selecting_member_id->get)
                                         ->> \ nid = do selecting_member_id->set(nid);
                                         ;
 

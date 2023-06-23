@@ -204,7 +204,7 @@ namespace editor::gui::edit_forms
                                     }
                                 });
 
-                                for (let mname, (mtype, mvalue): component->editor::members)
+                                for (let _, (mname, mtype, mvalue): component->editor::members)
                                 {
                                     do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
                                     SameLine();

@@ -42,9 +42,10 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
     jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
     jeecs::typing::type_info::of<jeecs::Physics2DUpdatingSystem>("Physics::Physics2DUpdatingSystem");
+
     jeecs::typing::type_info::of<jeecs::FrameAnimation2DSystem>("Animation2D::FrameAnimation2DSystem");
 
-    jeecs::typing::type_info::of<jeecs::DefaultGraphicPipelineSystem>("Graphic::DefaultGraphicPipelineSystem");
+    jeecs::typing::type_info::of<jeecs::UnlitUIGraphicPipelineSystem>("Graphic::UnlitUIGraphicPipelineSystem");
     jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
 
     jeecs::typing::type_info::of<jeecs::Script::Woolang>("Script::Woolang");

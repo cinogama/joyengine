@@ -2353,11 +2353,11 @@ R"(
             
             public func members(self: component)
             {
-                let result = {}mut: map<string, (typeinfo, native_value)>;
+                let result = []mut: vec<(string, typeinfo, native_value)>;
                 for (let name, type, addr : self->iter_member())
-                    result->set(name, (type, addr));
+                    result->add((name, type, addr));
 
-                return result->unsafe::cast:<dict<string, (typeinfo, native_value)>>; 
+                return result->unsafe::cast:<array<(string, typeinfo, native_value)>>; 
             }
         }
     }
