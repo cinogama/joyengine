@@ -44,7 +44,7 @@ namespace jeecs
         void CommitUpdate()
         {
             system_instance = this;
-            select().
+            select_from(get_world()).
                 exec(
                     [this](game_entity e, Script::Woolang& woolang)
                     {
