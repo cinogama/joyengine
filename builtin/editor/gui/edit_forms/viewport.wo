@@ -91,7 +91,7 @@ namespace editor::gui::edit_forms
                     {
                         let camerapass = debug_camera_entity->val->add_component(l2d_camera_pass_component_type);
                         let (type, val) = camerapass->get_member("mixed_shader")->val;
-                        val->parse(type, "#file#@/resource/shader/Light2DCameraPass.shader");                        
+                        val->parse(type, "#je_file#@/resource/shader/Light2DCameraPass.shader");                        
                     }
                 }
                 EndMenuBar();
