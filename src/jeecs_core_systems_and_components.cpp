@@ -48,6 +48,5 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::UnlitUIGraphicPipelineSystem>("Graphic::UnlitUIGraphicPipelineSystem");
     jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
 
-    jeecs::typing::type_info::of<jeecs::Script::Woolang>("Script::Woolang");
     jeecs::typing::type_info::of<jeecs::ScriptRuntimeSystem>("Script::ScriptRuntimeSystem");
 }

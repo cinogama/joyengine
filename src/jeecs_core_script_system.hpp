@@ -11,64 +11,6 @@
 
 namespace jeecs
 {
-    namespace Script
-    {
-        struct Woolang
-        {
-            struct filepath
-            {
-                jeecs::string path = {};
-
-                std::string to_string()const
-                {
-                    return std::string("#je_file#") + path.c_str();
-                }
-                void parse(const char* databuf)
-                {
-                    const size_t head_length = strlen("#je_file#");
-                    if (strncmp(databuf, "#je_file#", head_length) == 0)
-                    {
-                        path = databuf + head_length;
-                    }
-                }
-            };
-            filepath    path;
-
-            bool        _vm_failed = false;
-            wo_vm       _vm_instance = nullptr;
-
-            wo_integer_t _vm_create_func = 0;
-            wo_integer_t _vm_update_func = 0;
-            wo_value     _vm_context = nullptr;
-
-            Woolang() = default;
-            Woolang(const Woolang&) = delete;
-            Woolang(Woolang&& woolang)
-            {
-                path = woolang.path;
-                _vm_failed = woolang._vm_failed;
-                _vm_instance = woolang._vm_instance;
-                _vm_create_func = woolang._vm_create_func;
-                _vm_update_func = woolang._vm_update_func;
-                _vm_context = woolang._vm_context;
-                woolang._vm_instance = nullptr;
-            }
-            ~Woolang()
-            {
-                if (_vm_instance != nullptr)
-                {
-                    wo_release_vm(_vm_instance);
-                    _vm_instance = nullptr;
-                }
-            }
-
-            static void JERefRegsiter()
-            {
-                typing::register_member(&Woolang::path, "path");
-            }
-        };
-    }
-
     struct ScriptRuntimeSystem :public game_system
     {
         struct vm_info
@@ -99,7 +41,7 @@ namespace jeecs
             }
         }
 
-        void Update()
+        void PreUpdate()
         {
             system_instance = this;
             select_from(get_world()).
@@ -222,6 +164,21 @@ namespace jeecs
                         }
 
                         assert(woolang._vm_instance != nullptr);
+                    }
+            );
+            system_instance = nullptr;
+        }
+        void Update()
+        {
+            system_instance = this;
+            select().
+                exec(
+                    [this](game_entity e, Script::Woolang& woolang)
+                    {
+                        if (woolang._vm_failed == true)
+                            return;
+
+                        assert(woolang._vm_instance != nullptr);
                         jeecs::game_entity* entity = new jeecs::game_entity();
                         *entity = e;
                         wo_push_gchandle(woolang._vm_instance, entity,
@@ -229,7 +186,7 @@ namespace jeecs
                         wo_push_val(woolang._vm_instance, woolang._vm_context);
                         if (wo_invoke_rsfunc(woolang._vm_instance, woolang._vm_update_func, 2) == nullptr)
                         {
-                            jeecs::debug::logerr("Failed to create context for '%s':\n %s",
+                            jeecs::debug::logerr("Failed to update for '%s':\n %s",
                                 woolang.path.path.c_str(),
                                 wo_get_runtime_error(woolang._vm_instance));
 

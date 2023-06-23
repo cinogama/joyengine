@@ -5708,6 +5708,70 @@ namespace jeecs
             }
         };
     }
+    namespace Script
+    {
+        struct Woolang
+        {
+            struct filepath
+            {
+                jeecs::string path = {};
+
+                std::string to_string()const
+                {
+                    return std::string("#je_file#") + path.c_str();
+                }
+                void parse(const char* databuf)
+                {
+                    const size_t head_length = strlen("#je_file#");
+                    if (strncmp(databuf, "#je_file#", head_length) == 0)
+                    {
+                        path = databuf + head_length;
+                    }
+                }
+            };
+            filepath    path;
+
+            bool        _vm_failed = false;
+            wo_vm       _vm_instance = nullptr;
+
+            wo_integer_t _vm_create_func = 0;
+            wo_integer_t _vm_update_func = 0;
+            wo_value     _vm_context = nullptr;
+
+            Woolang() = default;
+            Woolang(const Woolang&) = delete;
+            Woolang(Woolang&& woolang)
+            {
+                path = woolang.path;
+                _vm_failed = woolang._vm_failed;
+                _vm_instance = woolang._vm_instance;
+                _vm_create_func = woolang._vm_create_func;
+                _vm_update_func = woolang._vm_update_func;
+                _vm_context = woolang._vm_context;
+                woolang._vm_instance = nullptr;
+            }
+            ~Woolang()
+            {
+                if (_vm_instance != nullptr)
+                {
+                    wo_release_vm(_vm_instance);
+                    _vm_instance = nullptr;
+                }
+            }
+
+            wo_vm get_vm_instance() const
+            {
+                if (!_vm_failed)
+                    return _vm_instance;
+                return nullptr;
+            }
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Woolang::path, "path");
+            }
+        };
+    }
 
     inline std::string game_entity::name()
     {
@@ -6043,6 +6107,7 @@ namespace jeecs
             type_info::of<Light2D::Shadow>("Light2D::Shadow");
             type_info::of<Light2D::CameraPass>("Light2D::CameraPass");
             type_info::of<Light2D::Block>("Light2D::Block");
+            type_info::of<Script::Woolang>("Script::Woolang");
 
             type_info::of<Physics2D::Rigidbody>("Physics2D::Rigidbody");
             type_info::of<Physics2D::Kinematics>("Physics2D::Kinematics");
