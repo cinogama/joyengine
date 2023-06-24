@@ -450,6 +450,7 @@ extern func update(c: Context, e: entity)
                     static let editor_origin_shaders = [
                         ("单色", "MonoColor"),
                         ("无光", "Unlit"),
+                        ("2D光照单色", "Forward2DMono"),
                         ("2D光照", "Forward2D"),
                         ("2D光照法线", "Forward2DNormal"),
                         ("2D光照自发光", "SelfGrowingForward2D"),
