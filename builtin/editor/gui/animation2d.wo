@@ -95,7 +95,15 @@ namespace editor::gui::animation2d
     }
     using AnimationActionData = struct{
         m_frames: vec<Animation2dFrameData>,
-    };
+    }
+    {
+        func dup(self: AnimationActionData)
+        {
+            return AnimationActionData{
+                m_frames = self.m_frames->> \afd = afd->dup();,
+            };
+        }
+    }
     union SelectedComponentOrUniformData
     {
         ComponentIndex(int),
@@ -536,7 +544,13 @@ namespace editor::gui::animation2d
                 if (BeginPopupContextItem())
                 {
                     animation_context.m_selected_action_name = action_name;
-
+                    if (MenuItem("复制此动画"))
+                    {
+                        launch(func(){
+                            animation_context.m_animations->set(action_name + "_复制", action_data->dup());
+                            return false;
+                        }, ());
+                    }
                     if (MenuItem("新建帧"))
                     {
                         action_data.m_frames->add(Animation2dFrameData{
