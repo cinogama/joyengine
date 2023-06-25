@@ -85,7 +85,7 @@ public func frag(vf: v2f)
         let ldir = normalize(f2l);
 
         let distance_factor = max(float::one - ldistance / light->position->w, float::zero);
-        let fade_factor = pow(distance_factor, light->factors->z);
+        let fade_factor = distance_factor / light->factors->z; // 用线性衰减而不是指数衰减，否则法线效果会变得很弱
         let point_light_factor = vnormal->dot(ldir->negative) / (ldistance + 1.) * fade_factor * light->factors->x;
 
         // 平行光源照射部分
