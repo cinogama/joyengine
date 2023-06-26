@@ -207,9 +207,9 @@ namespace editor::gui::edit_forms
                             let boot_up_script = @"
                                 import je;
                                 import je.gui;
+                                import je.editor;
                                 import woo.std;
                                 import builtin.api.serialize.main;
-                                import builtin.api.rend.main;
 
                                 let LOADED_WORLDS_MAPPING = {}mut: map<string, je::world>;
                                 func LOAD_WORLD(path: string)

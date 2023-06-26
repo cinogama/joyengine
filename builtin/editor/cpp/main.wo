@@ -191,7 +191,7 @@ namespace editor
                 ["name"] = name: dynamic,
                 ["path"] = project->make_path_normalize(cxx_proj_path): dynamic,
                 ["conf"] = enabled_generating: dynamic,
-            }: string));
+            }: string->chars->forall(\c = !c->isspace();)->str));
             
             for (let _, config : generating_results ->> \c = c[1]->okay->val;)
             {
@@ -249,16 +249,6 @@ namespace editor
                         ->replace("$$JEMODULE_PROJECT_NAME$$", name->replace(" ", "_"))))
                 return result::err(F"无法写入'{cxx_proj_path}/CMakeLists.txt'");
 
-            let git_ignore_file = 
-@"# Ignore cpp module's useless files.
-
-/runtime/
-/build/
-/msvcbuild_*/
-"@;
-            if (!writeall(cxx_proj_path/".gitignore", git_ignore_file))
-                return result::err(F"无法写入'{cxx_proj_path}/.gitignore'");
-
             return result::ok(generating_results);
         }
 
@@ -292,7 +282,26 @@ namespace editor
                 return result::err(reason);
             }
             ok(generating_results)?
-            {       
+            {                   
+                let git_ignore_file = 
+@"# Ignore cpp module's useless files.
+# Builtin files
+/build/
+/engine/
+/msvcbuild_*/
+/runtime/
+
+# Auto-generate files
+/builder/
+/CMakeLists.txt
+/loader.hpp
+"@;
+                if (!writeall(cxx_proj_path/".gitignore", git_ignore_file))
+                {
+                    do remove(cxx_proj_path)->unwarp;
+                    return result::err(F"无法写入'{cxx_proj_path}/.gitignore'");
+                }
+
                 let created_module = CxxProject{ 
                     name = name, 
                     path = cxx_proj_path, 
