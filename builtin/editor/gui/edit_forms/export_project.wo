@@ -56,7 +56,7 @@ namespace editor::gui::edit_forms
                     ok(vminstance)?
                         {
                             assert(
-                                vminstance->save_binary...
+                                vminstance->save_binary(false)...
                                     -> \bindata, binlen = fimg->pack_buffer(bindata->ptr, binlen, packpath);
                             );
                             return [];
@@ -300,7 +300,7 @@ namespace editor::gui::edit_forms
                                         ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
                                         ->replace("$APPLY_RESOLUTION$", F"je::input::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
                                         ->replace("$APPLY_TITLE$", F"je::input::set_window_title({proj.m_name->enstring});")
-                                    )->unwarp->save_binary;
+                                    )->unwarp->save_binary(false);
 
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
 

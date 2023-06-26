@@ -106,7 +106,7 @@ bool jedbg_main_script_entry(void)
         if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/editor/main.wo")) != nullptr)
         {
             size_t binary_length;
-            void* buffer = wo_dump_binary(vmm, &binary_length);
+            void* buffer = wo_dump_binary(vmm, true, &binary_length);
 
             FILE* objdump = fopen((std::string(wo_exe_path()) + "/builtin/editor.woo.jecache4").c_str(), "wb");
             if (objdump != nullptr)

@@ -191,7 +191,7 @@ namespace editor
                 ["name"] = name: dynamic,
                 ["path"] = project->make_path_normalize(cxx_proj_path): dynamic,
                 ["conf"] = enabled_generating: dynamic,
-            }: string->chars->forall(\c = !c->isspace();)->str));
+            }: string));
             
             for (let _, config : generating_results ->> \c = c[1]->okay->val;)
             {
