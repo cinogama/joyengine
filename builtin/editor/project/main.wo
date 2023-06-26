@@ -83,15 +83,6 @@ namespace editor
             if (self->is_debugging)
                 return result::err("已经在调试中，不可重复调试");
 
-            let vmm_may_not_exist = vm::load((self.m_path / "main.wo")->tostring());
-            match (vmm_may_not_exist)
-            {
-            ok(_)? ;
-            err(msg)?
-                if (filesys::isfile(self.m_path / "main.wo"))
-                    return err(msg);
-            }
-
             try! dumpped = self->dump_and_close_all_world();
 
             let context = DebugContext {
@@ -102,27 +93,8 @@ namespace editor
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
             for (let _, wdat : context.m_dumped_editing_worlds)
             {
-                let syss = wdat->getor("runtime_systems", []: dynamic) as array<dynamic>
-                    ->connect(
-                        wdat->getor("systems", []: dynamic) as array<dynamic>
-                    );
-
-                let new_wdat = wdat->tomap;
-                new_wdat->set("systems", syss as array<dynamic>: dynamic);
-
-                do jeapi::deserialize::world(self->get_env->get_universe, new_wdat->unsafe::cast:<typeof(wdat)>);
+                do jeapi::deserialize::world(self->get_env->get_universe, wdat, false);
             }
-            match (vmm_may_not_exist)
-            {
-            ok(vmm)?
-                {
-                    if (vmm->invoke("main", [self->get_env->get_universe as je::universe: dynamic])->has == false)
-                        je::logerr("运行时脚本发生了错误，可能是入口函数不存在或发生运行时终止。请检查日志");
-                    do vmm->close();
-                }
-            err(_)?;
-            }
-            
             self.m_debug_context = option::value(context);
 
             return result::ok(context);

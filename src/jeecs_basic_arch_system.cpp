@@ -69,7 +69,7 @@ namespace jeecs_impl
     using types_set = std::set<jeecs::typing::typeid_t>;
 
     constexpr jeecs::typing::entity_id_in_chunk_t INVALID_ENTITY_ID = SIZE_MAX;
-    constexpr size_t CHUNK_SIZE = 64 * 1024; // 64K
+    constexpr size_t CHUNK_SIZE = 16 * 1024; // 16K
 
     class command_buffer;
     class arch_manager;
@@ -245,6 +245,10 @@ namespace jeecs_impl
             {
                 return _m_entity_count;
             }
+            inline size_t get_entity_size_in_chunk() const noexcept
+            {
+                return _m_entity_size;
+            }
         private:
             // Following function only invoke by command_buffer
             friend class command_buffer;
@@ -340,10 +344,9 @@ namespace jeecs_impl
 
             const_cast<size_t&>(_m_entity_size) = 0;
             for (auto* typeinfo : _m_arch_typeinfo)
-            {
                 const_cast<size_t&>(_m_entity_size) += typeinfo->m_chunk_size;
-            }
-            assert(_m_entity_size != 0);
+            
+            assert(_m_entity_size != 0 && _m_entity_size <= CHUNK_SIZE);
             const_cast<size_t&>(_m_entity_count_per_chunk) = CHUNK_SIZE / _m_entity_size;
 
             size_t mem_offset = 0;
@@ -395,10 +398,9 @@ namespace jeecs_impl
                             }
                             peek_chunk = peek_chunk->last;
                         }
-
-                        assert(false); // entity count is ok, but there is no free place. that should not happend.
+                        // entity count is ok, but there is no free place. that should not happend.
+                        assert(false); 
                     }
-                    free_entity_count = _m_free_count; // Fail to compare, update the count and retry.
                 }
                 _create_new_chunk();
             }
@@ -2194,12 +2196,8 @@ void je_ecs_world_destroy_entity(
     void* world,
     const jeecs::game_entity* entity)
 {
-    jeecs_impl::arch_type::entity closing_entity;
-    closing_entity._m_id = entity->_m_id;
-    closing_entity._m_in_chunk = (jeecs_impl::arch_type::arch_chunk*)entity->_m_in_chunk;
-    closing_entity._m_version = entity->_m_version;
-
-    ((jeecs_impl::ecs_world*)world)->get_command_buffer().remove_entity(closing_entity);
+    ((jeecs_impl::ecs_world*)world)->get_command_buffer().remove_entity(
+        *std::launder(reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity)));
 }
 
 void* je_ecs_world_in_universe(void* world)
@@ -2338,6 +2336,18 @@ const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _w
 jeecs::typing::uid_t jedbg_get_editing_entity_uid()
 {
     return _editor_entity_uid;
+}
+void jedbg_get_entity_arch_information(
+    const jeecs::game_entity* _entity,
+    size_t* _out_chunk_size,
+    size_t* _out_entity_size,
+    size_t* _out_all_entity_count_in_chunk)
+{
+    auto* chunkaddr = (jeecs_impl::arch_type::arch_chunk*)_entity->_m_in_chunk;
+
+    *_out_chunk_size = jeecs_impl::CHUNK_SIZE;
+    *_out_entity_size = chunkaddr->get_entity_size_in_chunk();
+    *_out_all_entity_count_in_chunk = chunkaddr->get_entity_count_in_chunk();
 }
 
 void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*))

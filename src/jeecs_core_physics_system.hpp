@@ -77,7 +77,7 @@ namespace jeecs
             // 开始创建碰撞体
 
             // 获取实体的网格大小，如果没有，那么默认就是 1，1
-            // TODO: 考虑网格本身改变的情况，不过应该没人会去动网格
+            // TODO: 考虑网格本身改变的情况，不过目前应该没人会去动网格
             auto&& rendshape_mesh_size =
                 rendshape && rendshape->vertex != nullptr
                 ? math::vec2(

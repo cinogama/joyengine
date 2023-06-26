@@ -395,7 +395,7 @@ public func color(frame: int, context: PerparticleContext)
 
         Text("帧速率(秒/帧)");
         SameLine();
-        do InputFloat("##framerate", partical_context.m_frame_rate)
+        do InputFloatFormat("##framerate", partical_context.m_frame_rate, "%.6f")
             ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil: void);;
 
         Text("粒子渲染趟数");

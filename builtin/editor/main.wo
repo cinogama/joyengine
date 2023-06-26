@@ -7,6 +7,8 @@ import woo.debug;
 import pkg.filesystem;
 
 import je;
+import je.editor;
+
 import builtin.api.welcome.main;
 import builtin.api.gui.widget.icon_button;
 import builtin.api.gui.form.msg;

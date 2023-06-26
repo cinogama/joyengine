@@ -128,15 +128,25 @@ namespace editor::gui::edit_forms
                 je::gui::SetNextWindowSizeConstraints((250., 400.), (500., 4000.));
                 do show->set(BeginAttrOpen("检视面板##jeeditor", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
 
-                let (_, mut _1_3_height) = GetContentRegionAvail();
-                _1_3_height /= 3.;
-                _1_3_height -= 5.;
-
                 // 1. 获取当前编辑中的实体，
                 match (current_entity_may_none)
                 {
                 value(cur_e)?
                 { 
+                    do BeginChildSize("basic_info", 0., 100.);
+                    Text("实体名");
+                    SameLine();
+                    do InputText("##entity_name", cur_e->editor::name())->> \new_name = cur_e->editor::set_name(new_name);;
+                    Text(cur_e->editor::chunkinfo);                    
+
+                    let (chunk_size, entity_size, entity_count) = je::editor::get_entity_arch_information(cur_e);
+                    Text(F"区块/实体体积: {chunk_size}/{entity_size}={entity_count}");
+                    EndChild();
+                    
+                    let (_, mut _1_3_height) = GetContentRegionAvail();
+                    _1_3_height /= 3.;
+                    _1_3_height -= 5.;
+
                     // 2. 遍历实体的非Editor组件
                     do BeginChildSize("component_editor", 0., 2. * _1_3_height);
 

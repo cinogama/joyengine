@@ -137,7 +137,7 @@ namespace editor::gui::edit_forms
                     Text("尺寸：");
                     Text("x:");
                     SameLine();
-                    do InputFloat("##x", ctx.width)->>func(vf){
+                    do InputFloatFormat("##x", ctx.width, "%.6f")->>func(vf){
                         if (vf <= 0.) return;
                         ctx.width = vf;
                         ctx.x_pixel_count = math::round(vf * 16.0);
@@ -145,7 +145,7 @@ namespace editor::gui::edit_forms
                     SameLine();
                     Text("y:");
                     SameLine();
-                    do InputFloat("##y", ctx.height)->>func(vf){
+                    do InputFloatFormat("##y", ctx.height, "%.6f")->>func(vf){
                         if (vf <= 0.) return;
                         ctx.height = vf;
                         ctx.y_pixel_count = math::round(vf * 16.0);
@@ -318,7 +318,7 @@ namespace editor::gui::edit_forms
         if (MenuItem("粘贴"))
         {
             do GetClipboardText()->todict
-                ->> \d = jeapi::deserialize::entity(w, d->>\k,v = (k: string, v);)
+                ->> \d = jeapi::deserialize::entity(w, d->>\k,v = (k: string, v);, true)
                     ->> func(e)
                     {
                         // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）

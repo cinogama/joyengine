@@ -589,7 +589,7 @@ extern func update(c: Context, e: entity)
 
         if (engine_path_crc64 == specify_module_path_crc64)
         {
-            module->update_compile(je::editor::platform());
+            module->update_compile(je::platform());
         }
         else
         {
@@ -608,7 +608,7 @@ extern func update(c: Context, e: entity)
                         }
                     }
                     else; // 点NO 啥也不干~
-                    module->update_compile(je::editor::platform());
+                    module->update_compile(je::platform());
                 });
         }
     }

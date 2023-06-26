@@ -305,7 +305,7 @@ namespace editor
                     };
 
                 // 最后，编译一下当前平台
-                created_module->update_compile(je::editor::platform());
+                created_module->update_compile(je::platform());
 
                 return result::ok(created_module);
             }
@@ -335,7 +335,7 @@ namespace editor
             match (search_file_in(get_current_runtime_path(self->get_runtime_path(config))->val, ".dll"))
             {
             value(p)? 
-                return self.module_instance := je::editor::load_module(self.name, p->tostring);
+                return self.module_instance := je::load_module(self.name, p->tostring);
             none? 
                 return self.module_instance := option::none;
             }
@@ -457,7 +457,7 @@ namespace editor
                 return result::err(errmsg);
             ok(mut created_module)?
             {
-                let config = je::editor::platform();
+                let config = je::platform();
 
                 // 获取最新的模块版本，将其保留并重命名为0，删除其他全部版本
                 do get_current_runtime_id(created_module->get_runtime_path(config))
@@ -495,7 +495,7 @@ namespace editor
                                 }
                             =>> func(reloaded_created_module)
                                 {
-                                    match (reloaded_created_module->compile(je::editor::platform(), option::none))
+                                    match (reloaded_created_module->compile(je::platform(), option::none))
                                     {
                                     err(reason)? return err(reason);
                                     ok(_)? return ok(reloaded_created_module);
@@ -676,7 +676,7 @@ namespace editor
 
                                         self.module_instance = 
                                             self.module_instance
-                                                ->> \m = je::editor::unload_module(m);
+                                                ->> \m = je::unload_module(m);
                                                 =>> \_ = option::none;
                                                 ;
 

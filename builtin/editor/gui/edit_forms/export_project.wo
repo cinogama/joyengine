@@ -118,7 +118,7 @@ namespace editor::gui::edit_forms
                 do thread::create(func()
                     {
                         config.m_pack_output_log->add("正在编译模块");
-                        let compile_results = proj->get_all_modules->>\k, v = (k, (v, v->compile(je::editor::platform(), option::none)));;
+                        let compile_results = proj->get_all_modules->>\k, v = (k, (v, v->compile(je::platform(), option::none)));;
                         let error_compiling = compile_results->forall(\_, r = r[1]->iserr;);
                         if (error_compiling->empty == false)
                         {
@@ -137,7 +137,7 @@ namespace editor::gui::edit_forms
                             // 1.1 将生成的C++模块打入包内，并记录文件列表
                             let dll_module_path = compile_results
                                 ->  unmapping
-                                ->> \kv = (kv[1][0], bind_wrap_path(kv[1][0]->get_build_dll_path(je::editor::platform())->val)); // 必须有
+                                ->> \kv = (kv[1][0], bind_wrap_path(kv[1][0]->get_build_dll_path(je::platform())->val)); // 必须有
                                 ;
 
                             // 1.2 创建路径，准备打包
@@ -196,7 +196,7 @@ namespace editor::gui::edit_forms
                             // 1.4 将引擎本体移动至打包目录
                             config.m_pack_output_log->add(F"正在复制引擎运行时");
                             do filesys::copy(filesys::normalize(std::args()[0]), export_path/F"{proj.m_name}.exe")->unwarp;
-                            do CxxProject::get_lib_files_by_config(je::editor::platform())
+                            do CxxProject::get_lib_files_by_config(je::platform())
                                 ->> \lf = lf->get_dynamic_libs
                                         ->> \libpath = do filesys::copy(filesys::normalize(F"{std::exepath()}/{libpath}"), export_path / libpath)->unwarp;
                                     ;
@@ -220,9 +220,7 @@ namespace editor::gui::edit_forms
                                         ->> \k, v = (k as string, v);
                                         ;
                                     
-                                    let allsys = world_dat["systems"] as array->connect(world_dat["runtime_systems"] as array);
-                                    world_dat->unsafe::cast:<map<string, dynamic>>->set("systems", allsys: dynamic); 
-                                    LOADED_WORLDS_MAPPING->set(path, jeapi::deserialize::world(RUNTIME_UNIVERSE, world_dat));
+                                    LOADED_WORLDS_MAPPING->set(path, jeapi::deserialize::world(RUNTIME_UNIVERSE, world_dat, false));
                                 }
 
                                 let LOADED_MODULE_HANDLES = []mut: vec<handle>;
@@ -251,7 +249,7 @@ namespace editor::gui::edit_forms
                                 RUNTIME_UNIVERSE->wait();
 
                                 for (let _, libhandle : LOADED_MODULE_HANDLES)
-                                    je::editor::unload_module(libhandle);
+                                    je::unload_module(libhandle);
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码
@@ -264,7 +262,7 @@ namespace editor::gui::edit_forms
 
                                 let runtime_loading_code = 
                                     "LOADED_MODULE_HANDLES->add(" 
-                                    + "je::editor::load_module($MODULENAME$, std::exepath() + $MODULERPATH$)->val"
+                                    + "je::load_module($MODULENAME$, std::exepath() + $MODULERPATH$)->val"
                                     + ");";
 
                                 dylib_loader +=

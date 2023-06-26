@@ -572,7 +572,7 @@ namespace editor::gui::animation2d
 
                             Text("帧时间");
                             SameLine();
-                            do InputFloat("##frametime", frametime->get)->>\nt = nt >= 0. ? frametime->set(nt) | nil: void;;
+                            do InputFloatFormat("##frametime", frametime->get, "%.6f")->>\nt = nt >= 0. ? frametime->set(nt) | nil: void;;
 
                             if (Button("创建"))
                             {
@@ -1050,7 +1050,7 @@ namespace editor::gui::animation2d
         BeginGroup();
             Text("帧时间");
             SameLine();
-            do InputFloat("##frame_time", selected_frame->>\f = f.m_time;->valor(0.))
+            do InputFloatFormat("##frame_time", selected_frame->>\f = f.m_time;->valor(0.), "%.6f")
                 ->> \nv = selected_frame
                     ->> \f = f.m_time = nv;
                     ;

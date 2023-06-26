@@ -33,7 +33,7 @@ namespace editor
         }
         public func load_world(self: Environment, dat: dict<string, dynamic>)
         {
-            return self.m_universe->jeapi::deserialize::world(dat);
+            return self.m_universe->jeapi::deserialize::world(dat, true);
         }
         public func get_universe(self: Environment)
         {

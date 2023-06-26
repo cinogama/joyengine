@@ -169,7 +169,7 @@ namespace jeapi
             }
             return tinfo;
         }
-        public func entity(w: je::world, entity_dat: dict<string, dynamic>)=> option<je::entity>
+        public func entity(w: je::world, entity_dat: dict<string, dynamic>, in_editor: bool)=> option<je::entity>
         {
             let component_types_dat = entity_dat
                 ->  get("components")
@@ -211,16 +211,14 @@ namespace jeapi
                     }
                 ;
 
-            // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
-            let entity_has_bad_shader = shaders_and_dat->>\r=r->iserr;->valor(false);
-
             let entity = w->add_entity(
                 component_types_dat
                     ->> \tp = tp[0];
-                    ->  connect(entity_has_bad_shader 
+                    // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
+                    ->  connect(in_editor && shaders_and_dat->>\r=r->iserr;->valor(false)
                             ? [je::typeinfo::load("Editor::BadShadersUniform")->val] 
                             | [])
-                    ->  connect([je::typeinfo::load("Editor::Name")->val]));
+                    ->  connect(in_editor ? [] | [je::typeinfo::load("Editor::Name")->val]));
 
             // 开始应用数据
             do component_types_dat
@@ -268,28 +266,40 @@ namespace jeapi
                                 ;
                     };
 
-            do entity_dat
-                ->  get("name")
-                ->> \n = entity->editor::set_name(n as string);;
+            if (in_editor)
+                do entity_dat
+                    ->  get("name")
+                    ->> \n = entity->editor::set_name(n as string);;
 
             return option::value(entity);
         }
-        public func world(u: je::universe, dat: dict<string, dynamic>)=> je::world
+        public func world(u: je::universe, dat: dict<string, dynamic>, in_editor: bool)=> je::world
         {
             let w = u->je::world::create;
-            do dat->get("name")->>\name = w->editor::set_name(name as string);;
+
+            if (in_editor)
+                do dat->get("name")->>\name = w->editor::set_name(name as string);;
+            else
+                do dat->get("runtime_systems")
+                    ->> \d = d as array<dynamic>
+                        ->> \tname = type_may_none
+                            ->> \type = w->add_system(type);
+                            where type_may_none = _typeinfo_or_warning(tname as string)
+                            ;
+                        ;
+                    ;
 
             do dat->get("systems")
                 ->> \d = d as array<dynamic>
-                    =>> \tname = t->has 
-                        ? [w->add_system(t->val)] 
-                        | [] 
-                        where t = _typeinfo_or_warning(tname as string);
+                    ->> \tname = type_may_none
+                        ->> \type = w->add_system(type);
+                        where type_may_none = _typeinfo_or_warning(tname as string)
+                        ;
                     ;
                 ;
             do dat->get("entities")
                 ->> \es = es as array<dynamic>
-                    ->> \edat = deserialize::entity(w, entity_dat)
+                    ->> \edat = deserialize::entity(w, entity_dat, in_editor)
                         where entity_dat = edat as dict->>\k, v = (k as string, v);
                         ;
                     ;

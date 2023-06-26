@@ -1174,6 +1174,12 @@ JE_API jeecs::typing::uid_t jedbg_get_editing_entity_uid();
 // NOTE: Get graphic thread
 JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
 
+JE_API void jedbg_get_entity_arch_information(
+    const jeecs::game_entity* _entity,
+    size_t* _out_chunk_size,
+    size_t* _out_entity_size,
+    size_t* _out_all_entity_count_in_chunk);
+
 #endif
 
 WO_FORCE_CAPI_END

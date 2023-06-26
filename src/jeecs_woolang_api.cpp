@@ -1462,6 +1462,109 @@ WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
+WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    size_t chunk_size = 0, entity_size = 0, entity_count = 0;
+
+    jedbg_get_entity_arch_information(entity, &chunk_size, &entity_size, &entity_count);
+    wo_value result = wo_push_struct(vm, 3);
+
+    wo_set_int(wo_struct_get(result, 0), (wo_int_t)chunk_size);
+    wo_set_int(wo_struct_get(result, 1), (wo_int_t)entity_size);
+    wo_set_int(wo_struct_get(result, 2), (wo_int_t)entity_count);
+
+    return wo_ret_val(vm, result);
+}
+
+const char* jeecs_woolang_editor_api_path = "je/editor.wo";
+const char* jeecs_woolang_editor_api_src = R"(
+import je;
+namespace je::editor
+{
+    extern("libjoyecs", "wojeapi_init_graphic_pipeline")
+    public func init_graphic_pipeline(u: universe)=> void;
+
+    extern("libjoyecs", "wojeapi_set_runtime_path")
+    public func set_runtime_path(path: string)=> void;
+
+    public using fimage_packer = handle
+    {
+        extern("libjoyecs", "wojeapi_create_fimg_packer")
+        public func create(path: string, saving_path: string, max_img_size: int)=> fimage_packer;
+
+        extern("libjoyecs", "wojeapi_pack_file_to_fimg_packer")
+        public func pack(self: fimage_packer, file_path: string, pack_path: string)=> bool;
+
+        extern("libjoyecs", "wojeapi_pack_buffer_to_fimg_packer")
+        public func pack_buffer(self: fimage_packer, buffer: handle, len: int, pack_path: string)=> bool;
+
+        extern("libjoyecs", "wojeapi_finish_fimg_packer")
+        public func finish(self: fimage_packer)=> void;
+    }
+
+    extern("libjoyecs", "wojeapi_get_sleep_suppression")
+    public func get_sleep_suppression()=> real;
+
+    extern("libjoyecs", "wojeapi_set_sleep_suppression")
+    public func set_sleep_suppression(tm: real)=> void;
+
+    extern("libjoyecs", "wojeapi_build_version")
+    public func build_version()=> string;
+
+    extern("libjoyecs", "wojeapi_build_commit")
+    public func build_commit()=> string;
+    
+    extern("libjoyecs", "wojeapi_woolang_version")
+    public func woolang_version()=> string;
+
+    extern("libjoyecs", "wojeapi_crc64_file")
+    public func crc64file(file_path: string)=> option<int>;
+
+    extern("libjoyecs", "wojeapi_crc64_string")
+    public func crc64str(file_path: string)=> int;
+
+    public enum loglevel
+    {
+        NORMAL = 0,
+        INFO,
+        WARNING,
+        ERROR,
+        FATAL,
+    }
+
+    extern("libjoyecs", "wojeapi_register_log_callback")
+    public func hooklog()=> handle;
+
+    extern("libjoyecs", "wojeapi_unregister_log_callback")
+    public func unhooklog(i: handle)=> void;
+
+    extern("libjoyecs", "wojeapi_get_all_logs")
+    public func getlogs()=> array<(loglevel, string)>;
+
+    extern("libjoyecs", "wojeapi_update_editor_mouse_pos")
+    public func update_editor_mouse_pos(x: real, y: real, lockposx: int, lockposy: int)=> void;
+
+    extern("libjoyecs", "wojeapi_setable_editor_system")
+    public func enable_editor_system(able: bool)=> void;
+
+    extern("libjoyecs", "wojeapi_apply_camera_framebuf_setting")
+    public func apply_camera_framebuf_setting(camera: entity, width: int, height: int)=> void;
+
+    extern("libjoyecs", "wojeapi_get_framebuf_texture")
+    public func get_framebuf_texture(camera: entity, index: int)=> option<graphic::texture>;
+
+    extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
+    public func get_texture_sampling_method_by_path(path: string)=> graphic::texture::sampling;
+
+    extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
+    public func update_texture_sampling_method_by_path(path: string, method: graphic::texture::sampling)=> result<void, string>;
+
+    extern("libjoyecs", "wojeapi_get_entity_arch_information")
+    public func get_entity_arch_information(e: entity)=> (int, int, int); // chunk_size, entity_size, entity_count
+}
+)";
+
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
 import woo.std;
@@ -1474,100 +1577,19 @@ namespace je
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;
 
+    extern("libjoyecs", "wojeapi_current_platform_config")
+    public func platform()=> string;
+
+    extern("libjoyecs", "wojeapi_load_module")
+    public func load_module(name: string, path: string)=> option<handle>;
+
+    extern("libjoyecs", "wojeapi_unload_module")
+    public func unload_module(module: handle)=> void;
+
     namespace file
     {
         extern("libjoyecs", "wojeapi_read_file_all")
         public func readall(path: string)=> option<string>;
-    }
-
-    namespace editor
-    {
-        extern("libjoyecs", "wojeapi_init_graphic_pipeline")
-        public func init_graphic_pipeline(u: universe)=> void;
-
-        extern("libjoyecs", "wojeapi_set_runtime_path")
-        public func set_runtime_path(path: string)=> void;
-
-        public using fimage_packer = handle
-        {
-            extern("libjoyecs", "wojeapi_create_fimg_packer")
-            public func create(path: string, saving_path: string, max_img_size: int)=> fimage_packer;
-
-            extern("libjoyecs", "wojeapi_pack_file_to_fimg_packer")
-            public func pack(self: fimage_packer, file_path: string, pack_path: string)=> bool;
-
-            extern("libjoyecs", "wojeapi_pack_buffer_to_fimg_packer")
-            public func pack_buffer(self: fimage_packer, buffer: handle, len: int, pack_path: string)=> bool;
-
-            extern("libjoyecs", "wojeapi_finish_fimg_packer")
-            public func finish(self: fimage_packer)=> void;
-        }
-
-        extern("libjoyecs", "wojeapi_get_sleep_suppression")
-        public func get_sleep_suppression()=> real;
-
-        extern("libjoyecs", "wojeapi_set_sleep_suppression")
-        public func set_sleep_suppression(tm: real)=> void;
-
-        extern("libjoyecs", "wojeapi_build_version")
-        public func build_version()=> string;
-
-        extern("libjoyecs", "wojeapi_build_commit")
-        public func build_commit()=> string;
-    
-        extern("libjoyecs", "wojeapi_woolang_version")
-        public func woolang_version()=> string;
-
-        extern("libjoyecs", "wojeapi_crc64_file")
-        public func crc64file(file_path: string)=> option<int>;
-
-        extern("libjoyecs", "wojeapi_crc64_string")
-        public func crc64str(file_path: string)=> int;
-
-        public enum loglevel
-        {
-            NORMAL = 0,
-            INFO,
-            WARNING,
-            ERROR,
-            FATAL,
-        }
-
-        extern("libjoyecs", "wojeapi_register_log_callback")
-        public func hooklog()=> handle;
-
-        extern("libjoyecs", "wojeapi_unregister_log_callback")
-        public func unhooklog(i: handle)=> void;
-
-        extern("libjoyecs", "wojeapi_get_all_logs")
-        public func getlogs()=> array<(loglevel, string)>;
-
-        extern("libjoyecs", "wojeapi_current_platform_config")
-        public func platform()=> string;
-
-        extern("libjoyecs", "wojeapi_load_module")
-        public func load_module(name: string, path: string)=> option<handle>;
-
-        extern("libjoyecs", "wojeapi_unload_module")
-        public func unload_module(module: handle)=> void;
-
-        extern("libjoyecs", "wojeapi_update_editor_mouse_pos")
-        public func update_editor_mouse_pos(x: real, y: real, lockposx: int, lockposy: int)=> void;
-
-        extern("libjoyecs", "wojeapi_setable_editor_system")
-        public func enable_editor_system(able: bool)=> void;
-
-        extern("libjoyecs", "wojeapi_apply_camera_framebuf_setting")
-        public func apply_camera_framebuf_setting(camera: entity, width: int, height: int)=> void;
-
-        extern("libjoyecs", "wojeapi_get_framebuf_texture")
-        public func get_framebuf_texture(camera: entity, index: int)=> option<graphic::texture>;
-
-        extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
-        public func get_texture_sampling_method_by_path(path: string)=> graphic::texture::sampling;
-
-        extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
-        public func update_texture_sampling_method_by_path(path: string, method: graphic::texture::sampling)=> result<void, string>;
     }
 
     extern("libjoyecs", "wojeapi_log")
