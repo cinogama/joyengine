@@ -215,7 +215,7 @@ namespace editor::gui::edit_forms
                                 func LOAD_WORLD(path: string)
                                 {
                                     let world_dat = je::file::readall(path)
-                                        =>> \dat = dat->todict;
+                                        =>> \dat = dict::deserialize(dat);
                                         ->  val
                                         ->> \k, v = (k as string, v);
                                         ;

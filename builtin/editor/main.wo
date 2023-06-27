@@ -141,7 +141,7 @@ func open_path_to_do_sth(action_after_choice: (option<filesys::path_t>)=>void)
 func read_editor_data()
 {
     return filesys::readall(filesys::normalize(std::exepath())/"editor.dat")
-        =>> \dat = dat->todict;
+        =>> \dat = dict::deserialize(dat);
         ->  valor({})
         ;
 }
@@ -218,6 +218,15 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
 /.export/*
 imgui.ini
 "@);
+                            do filesys::writeall(p.m_path / ".gitattributes", 
+@"# JoyEngine ECS
+
+project.jeproj4 text eol=lf
+config.jeinf text eol=lf
+*.jeworld text eol=lf
+*.jeentity text eol=lf
+*.jecache4 !diff
+"@);
                             editor::gui::edit_project(p);
 
                             save_editor_data_after_exit(editordat, p.m_name, p.m_path);
@@ -236,7 +245,7 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
     if (! filesys::exist(proj_path))
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
     
-    match (filesys::readall(proj_path)=>> \d = d->todict->> \d = d->> \k,v = (k as string, v);;;)
+    match (filesys::readall(proj_path)=>> \d = dict::deserialize(d)->> \d = d->> \k,v = (k as string, v);;;)
     {
     value(dat)?
         {

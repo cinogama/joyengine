@@ -48,7 +48,7 @@ namespace editor::gui::particalbaker
         public func load(path: filesys::path_t)
         {
             return filesys::readall(path)
-                =>> \dat = dat->todict;
+                =>> \dat = dict::deserialize(dat);
                 ->> \dat = ParticalContext{
                         m_frame_count = mut fdata["framecount"] as int,
                         m_frame_size = mut (fdata["framesize"] as array [0] as int, fdata["framesize"] as array [1] as int),

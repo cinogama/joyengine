@@ -317,7 +317,7 @@ namespace editor::gui::edit_forms
         }
         if (MenuItem("粘贴"))
         {
-            do GetClipboardText()->todict
+            do dict::deserialize(GetClipboardText())
                 ->> \d = jeapi::deserialize::entity(w, d->>\k,v = (k: string, v);, true)
                     ->> func(e)
                     {

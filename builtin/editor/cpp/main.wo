@@ -187,11 +187,11 @@ namespace editor
             }
 
             // 3. 给支持的平台生成CMake文件，并且把配置信息存档
-            assert(writeall(cxx_proj_path/"config.inf", {
+            assert(writeall(cxx_proj_path/"config.jeinf", {
                 ["name"] = name: dynamic,
                 ["path"] = project->make_path_normalize(cxx_proj_path): dynamic,
                 ["conf"] = enabled_generating: dynamic,
-            }: string));
+            }->serialize->val));
             
             for (let _, config : generating_results ->> \c = c[1]->okay->val;)
             {
@@ -430,11 +430,11 @@ namespace editor
             // 加载指定路径的 CXX 项目信息
             if (!exist(path))
                 return result::err(F"找不到模块{path}，请检查文件是否丢失");
-            if (!exist(path/"config.inf"))
-                return result::err(F"找不到配置文件{path}/config.inf，请检查文件是否丢失");
+            if (!exist(path/"config.jeinf"))
+                return result::err(F"找不到配置文件{path}/config.jeinf，请检查文件是否丢失");
 
-            let readdat = readall(path/"config.inf")
-                =>> \d = d->todict;;
+            let readdat = readall(path/"config.jeinf")
+                =>> \d = dict::deserialize(d);;
             if (!readdat->has)
                 return result::err(F"模块{path}的配置文件无法读取或格式不正确");
 

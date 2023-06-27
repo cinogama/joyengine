@@ -508,7 +508,7 @@ namespace editor
         public func load_world(self: Project, file_path: filesys::path_t)
         {
             return filesys::readall(file_path)
-                =>> \dat = dat->todict
+                =>> \dat = dict::deserialize(dat)
                     ->> \d = d
                         ->> \k, v = (k as string, v);
                         ;
