@@ -201,6 +201,33 @@ namespace editor
                         where supp = je::editor::get_sleep_suppression()
                     ;,
                 )),
+                ["JE_GUI_FONT"] = IConfig::create(Config::create(
+                    ("@/resource/font/HarmonyOS_Sans_SC_Regular.ttf", 24),
+                    func(config)
+                    {
+                        Text("GUI字体");
+                        let (font_path, font_size) = config;
+
+                        let new_font_path = InputText("##fontpath", font_path)->valor(font_path);
+                        SameLine();
+                        let new_font_size = InputInt("##fontsize", font_size)->valor(font_size);
+
+                        TextDisabled("* 重启后生效");
+
+                        if (font_path != new_font_path || font_size != new_font_size)
+                            return option::value((new_font_path, new_font_size));
+                        return option::none;
+                    },
+                    func(o,n){je::gui::set_font(option::value(n[0]), n[1]); return true;},
+                    \v = [v[0]: dynamic, v[1]: dynamic]->serialize->val;,
+                    func (str){
+                        let v = array::deserialize(str)->val;
+                        return option::value((v[0] as string, v[1] as int));
+                    },
+                    \dat = F"je::gui::set_font(option::value({font->enstring}), {size});"
+                        where (font, size) = dat
+                    ;,
+                )),
             }mut;
         }
         public func create(name: string, path: filesys::path_t)

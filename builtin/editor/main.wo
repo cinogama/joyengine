@@ -159,11 +159,12 @@ func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesy
     let (win_w, win_h) = je::input::window_size();
     let project_histories = dat->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
     
+    let newdat = dat->tomap();
+    newdat->set("form_size": dynamic, [win_w, win_h]: dynamic);
+    newdat->set("history": dynamic, project_histories->forall(\record = record[1] != proj_path->tostring;)->inlay(0, [proj_name, proj_path->tostring]): dynamic);
+
     assert(
-        filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", {
-            ["form_size"] = [win_w, win_h]: dynamic,
-            ["history"] = project_histories->forall(\record = record[1] != proj_path->tostring;)->inlay(0, [proj_name, proj_path->tostring]): dynamic
-        }: string)
+        filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", newdat->serialize->val)
     );
 
     assert(filesys::setworkpath(filesys::normalize(std::exepath())));
@@ -351,7 +352,7 @@ let u = editor::Environment::create();
 {
     let editor_configs = read_editor_data();
     let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
-
+   
     let w = u->create_world;
     do w->add_system(je::typeinfo::load("Graphic::UnlitUIGraphicPipelineSystem")->val);
     launch(func(){

@@ -2,6 +2,7 @@
 #include "jeecs.hpp"
 #include <string>
 #include <unordered_set>
+#include <optional>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -10,8 +11,8 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
-
 #include <GLFW/glfw3.h>
+
 
 const char* gui_api_path = "je/gui.wo";
 const char* gui_api_src = R"(
@@ -552,6 +553,18 @@ R"(
     
     extern("libjoyecs", "je_gui_unregister_exit_callback")
     public func unregister_exit_callback()=> void;
+
+    public func set_font(font: option<string>, size: int)
+    {
+        extern("libjoyecs", "je_gui_set_font")
+        func _set_font(...)=> void;
+
+        match (font)
+        {
+        value(fontpath)? _set_font(fontpath, size);
+        none? _set_font(size);
+        }
+    }
 }
 
 )";
@@ -1532,7 +1545,7 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args, size_t argc)
 
         fnd = _key_state_record.find(kcode);
     }
-    
+
     wo_value v = wo_push_struct(vm, 2);
     wo_set_bool(wo_struct_get(v, 0), fnd->second.m_last_frame_down);
     wo_set_bool(wo_struct_get(v, 1), fnd->second.m_this_frame_down);
@@ -1562,6 +1575,25 @@ WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args, size_t ar
     wo_release_vm(exit_callback_handler_vm);
     exit_callback_handler_vm = nullptr;
     exit_callback_function = nullptr;
+
+    return wo_ret_void(vm);
+}
+
+std::optional<std::string> specify_font_path = std::nullopt;
+size_t specify_font_size = 24;
+
+void jegui_set_font(const char* path, size_t size)
+{
+    specify_font_path = path ? std::optional(path) : std::nullopt;
+    specify_font_size = size;
+}
+
+WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args, size_t argc)
+{
+    if (argc == 1)
+        jegui_set_font(nullptr, (size_t)wo_int(args + 0));
+    else
+        jegui_set_font(wo_string(args + 0), (size_t)wo_int(args + 1));
 
     return wo_ret_void(vm);
 }
@@ -1630,16 +1662,17 @@ void jegui_init(void* window_handle, bool reboot)
 
     ImGuiIO& io = ImGui::GetIO();
 
-    auto* ttf_file = jeecs_file_open("@/resource/font/default.ttf");
+    auto* ttf_file = specify_font_path ? jeecs_file_open(specify_font_path.value().c_str()) : nullptr;
     if (ttf_file == nullptr)
-        ttf_file = jeecs_file_open("!/builtin/font/default.ttf");
+        // Default font
+        ttf_file = jeecs_file_open("!/builtin/font/HarmonyOS_Sans_SC_Regular.ttf");
 
     if (ttf_file)
     {
         auto* file_buf = je_mem_alloc(ttf_file->m_file_length);
         jeecs_file_read(file_buf, sizeof(char), ttf_file->m_file_length, ttf_file);
 
-        io.Fonts->AddFontFromMemoryTTF(file_buf, (int)ttf_file->m_file_length, 18, nullptr,
+        io.Fonts->AddFontFromMemoryTTF(file_buf, (int)ttf_file->m_file_length, specify_font_size, nullptr,
             io.Fonts->GetGlyphRangesChineseFull());
 
         // je_mem_free(file_buf); // No need to free.
