@@ -546,6 +546,12 @@ R"(
         extern("libjoyecs", "je_gui_get_input_state")
         public func keystate(kcode: je::keycode)=> (bool, bool);
     }
+    
+    extern("libjoyecs", "je_gui_register_exit_callback")
+    public func register_exit_callback(callback: ()=> bool)=> void;
+    
+    extern("libjoyecs", "je_gui_unregister_exit_callback")
+    public func unregister_exit_callback()=> void;
 }
 
 )";
@@ -1533,6 +1539,33 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_val(vm, v);
 }
 
+wo_vm exit_callback_handler_vm = nullptr;
+wo_value exit_callback_function = nullptr;
+
+WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args, size_t argc)
+{
+    if (exit_callback_handler_vm != nullptr)
+        return wo_ret_panic(vm, "Callback has been registered.");
+
+    assert(exit_callback_handler_vm == nullptr && exit_callback_function == nullptr);
+
+    exit_callback_handler_vm = wo_borrow_vm(vm);
+    exit_callback_function = wo_push_val(exit_callback_handler_vm, args + 0);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args, size_t argc)
+{
+    if (exit_callback_handler_vm == nullptr)
+        return wo_ret_panic(vm, "Callback not found.");
+
+    wo_release_vm(exit_callback_handler_vm);
+    exit_callback_handler_vm = nullptr;
+    exit_callback_function = nullptr;
+
+    return wo_ret_void(vm);
+}
+
 void jegui_init(void* window_handle, bool reboot)
 {
     _stop_work_flag = false;
@@ -1701,4 +1734,16 @@ void jegui_shutdown(bool reboot)
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+}
+
+bool jegui_shutdown_callback()
+{
+    if (exit_callback_handler_vm == nullptr)
+        return true;
+
+    auto result = wo_invoke_value(exit_callback_handler_vm, exit_callback_function, 0);
+    if (result == nullptr)
+        return false;
+
+    return wo_bool(result);
 }

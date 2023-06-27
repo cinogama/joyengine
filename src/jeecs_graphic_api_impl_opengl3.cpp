@@ -249,8 +249,11 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
     if (glfwWindowShouldClose(WINDOWS_HANDLE) == GLFW_TRUE)
     {
         jeecs::debug::loginfo("Graphic interface has been requested to close.");
+
+        if (jegui_shutdown_callback())
+            return false;
+
         glfwSetWindowShouldClose(WINDOWS_HANDLE, GLFW_FALSE);
-        return false;
     }
     return true;
 }

@@ -169,6 +169,33 @@ func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesy
     assert(filesys::setworkpath(filesys::normalize(std::exepath())));
 }
 
+func ask_for_saving_proj_when_exit(p: editor::Project)
+{
+    static let mut shown = false;
+
+    if (shown == false)
+    {
+        shown = true;
+        jeapi::gui::form::ask("退出？", "即将退出编辑器，是否保存当前项目？",
+            func(op)
+            {
+                shown = false;
+                if (op)
+                {
+                    if (!p->save_project())
+                    {
+                        // 发生了一些事情，没有保存成功，弹框并且不退出
+                        jeapi::gui::form::errmsg("失败", "项目保存未能完成");
+                        return;
+                    }
+                }
+                p->close();
+            }
+        );
+    }
+    return false;
+}
+
 func create_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict, f: mutable<bool>)
 {
     // 确保目录存在
@@ -227,9 +254,10 @@ config.jeinf text eol=lf
 *.jeentity text eol=lf
 *.jecache4 !diff
 "@);
+                            je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
                             editor::gui::edit_project(p);
-
                             save_editor_data_after_exit(editordat, p.m_name, p.m_path);
+                            je::gui::unregister_exit_callback();
                         }
                     ;
                 }
@@ -261,9 +289,11 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
                     apply_editor_data_when_start_up_project(editordat);
 
                     let p = editor::Project::load(path, dat);
-                    editor::gui::edit_project(p);
 
+                    je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
+                    editor::gui::edit_project(p);
                     save_editor_data_after_exit(editordat, p.m_name, p.m_path);
+                    je::gui::unregister_exit_callback();
                 }
             ;
         }

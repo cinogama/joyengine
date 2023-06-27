@@ -501,7 +501,6 @@ namespace editor
         public func save_world(self: Project, w: je::world)
         {
             return self->serialize_world(w)
-                ->> \dat = dat->apply("is_editing", self->get_editing_world->>\ew = ew == w;->valor(false) as bool: dynamic);
                 ->> \dat = filesys::writeall(self.m_path / dat["path"]: string, dat as dict<string, dynamic>: string);
                 ->  valor(false);
         }
