@@ -169,6 +169,47 @@ func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesy
     assert(filesys::setworkpath(filesys::normalize(std::exepath())));
 }
 
+func my_ask_for_get_yes_no_cancel_result(
+    title: string, 
+    text: string, 
+    okevent: (int)=> void)
+{
+    // What a bull shit!
+    
+    using je::gui;
+    using jeapi::gui;
+
+    launch(func()
+    {
+        let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
+            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+        Text(text);
+
+        if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+        {
+            okevent(1);
+            open = false;
+        }
+        SameLine();
+        if (Button("否") || (IsWindowFocused() && inputmgr::keypush(je::keycode::BACKSPACE)))
+        {
+            okevent(0);
+            open = false;
+        }
+        SameLine();
+        if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+        {
+            okevent(-1);
+            open = false;
+        }
+        End();
+
+        return open;
+
+    }, ());
+}
+
 func ask_for_saving_proj_when_exit(p: editor::Project)
 {
     static let mut shown = false;
@@ -176,11 +217,12 @@ func ask_for_saving_proj_when_exit(p: editor::Project)
     if (shown == false)
     {
         shown = true;
-        jeapi::gui::form::ask("退出？", "即将退出编辑器，是否保存当前项目？",
+        my_ask_for_get_yes_no_cancel_result(
+            "退出？", "即将退出编辑器，是否保存当前项目？",
             func(op)
             {
                 shown = false;
-                if (op)
+                if (op == 1)
                 {
                     if (!p->save_project())
                     {
@@ -189,7 +231,9 @@ func ask_for_saving_proj_when_exit(p: editor::Project)
                         return;
                     }
                 }
-                p->close();
+
+                if (op != -1)
+                    p->close();
             }
         );
     }

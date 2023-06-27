@@ -75,6 +75,7 @@ void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int st
     case GLFW_KEY_TAB:
         je_io_set_keystate(jeecs::input::keycode::TAB, stage); break;
     case GLFW_KEY_ENTER:
+    case GLFW_KEY_KP_ENTER:
         je_io_set_keystate(jeecs::input::keycode::ENTER, stage); break;
     case GLFW_KEY_ESCAPE:
         je_io_set_keystate(jeecs::input::keycode::ESC, stage); break;
