@@ -4540,14 +4540,23 @@ namespace jeecs
 
         struct character
         {
+            // 字符的纹理
             basic::resource<texture> m_texture;
+            // 字符本身
             wchar_t                  m_char = 0;
+            // 字符本身的宽度和高度, 单位是像素
             int                      m_width = 0;
             int                      m_height = 0;
-            int                      m_adv_x = 0;
-            int                      m_adv_y = 0;
-            int                      m_delta_x = 0;
-            int                      m_delta_y = 0;
+
+            // 建议的当前字符的实际横向占位，通常用于计算下一列字符的起始位置，单位是像素，正数表示向右方延伸
+            int                      m_advised_w = 0;
+            // 建议的当前字符的实际纵向占位，通常用于计算下一行字符的起始位置，单位是像素，正数表示向下方延伸
+            int                      m_advised_h = 0;
+
+            // 当前字符基线横向偏移量，单位是像素，正数表示向右方偏移
+            int                      m_baseline_offset_x = 0;
+            // 当前字符基线纵向偏移量，单位是像素，正数表示向下方偏移
+            int                      m_baseline_offset_y = 0;
         };
 
         class font
@@ -4665,11 +4674,11 @@ namespace jeecs
                         }
                         else if (ch != L'\n')
                         {
-                            int px_min = next_ch_x + 0 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
-                            int py_min = -next_ch_y + 0 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * (float)font_base.m_size);
+                            int px_min = next_ch_x + 0 + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size);
+                            int py_min = -next_ch_y + 0 + gcs->m_baseline_offset_y - gcs->m_advised_h + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * (float)font_base.m_size);
 
-                            int px_max = next_ch_x + (int)gcs->m_texture->width() - 1 + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size);
-                            int py_max = -next_ch_y + (int)gcs->m_texture->height() - 1 + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
+                            int px_max = next_ch_x + (int)gcs->m_texture->width() - 1 + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size);
+                            int py_max = -next_ch_y + (int)gcs->m_texture->height() - 1 + gcs->m_baseline_offset_y - gcs->m_advised_h + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
 
                             min_px = min_px > px_min ? px_min : min_px;
                             min_py = min_py > py_min ? py_min : min_py;
@@ -4677,13 +4686,13 @@ namespace jeecs
                             max_px = max_px < px_max ? px_max : max_px;
                             max_py = max_py < py_max ? py_max : max_py;
 
-                            next_ch_x += gcs->m_adv_x;
+                            next_ch_x += gcs->m_advised_w;
                         }
 
                         if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
                         {
                             next_ch_x = 0;
-                            next_ch_y -= gcs->m_adv_y;
+                            next_ch_y -= gcs->m_advised_h;
                             line_count++;
                         }
                         if (line_count >= max_line_count)
@@ -4826,8 +4835,8 @@ namespace jeecs
                                         p_index{ 0 }, p_index{ size_t(gcs->m_texture->width()) },
                                         [&](size_t fx) {
                                             auto pdst = new_texture->pix(
-                                                correct_x + next_ch_x + int(fx) + gcs->m_delta_x + int(TEXT_OFFSET.x * font_base.m_size),
-                                                size_y - 1 - (correct_y - next_ch_y + int(fy) + gcs->m_delta_y - gcs->m_adv_y + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size))
+                                                correct_x + next_ch_x + int(fx) + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size),
+                                                size_y - 1 - (correct_y - next_ch_y + int(fy) + gcs->m_baseline_offset_y - gcs->m_advised_h + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size))
                                             );
 
                                             auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
@@ -4846,12 +4855,12 @@ namespace jeecs
                                     ); // end of  for each
                                 }
                             );
-                            next_ch_x += gcs->m_adv_x;
+                            next_ch_x += gcs->m_advised_w;
                         }
                         if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
                         {
                             next_ch_x = 0;
-                            next_ch_y -= gcs->m_adv_y;
+                            next_ch_y -= gcs->m_advised_h;
                             line_count++;
                         }
                         if (line_count >= max_line_count)

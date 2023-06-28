@@ -91,10 +91,10 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 
     ch.m_width = x1 - x0;
     ch.m_height = y1 - y0;
-    ch.m_adv_x = (int)(real_scalex * (float)advance);
-    ch.m_adv_y = (int)font->m_scale_y;
-    ch.m_delta_x = x0;
-    ch.m_delta_y = y0;
+    ch.m_advised_w = (int)(real_scalex * (float)advance);
+    ch.m_advised_h = (int)font->m_scale_y;
+    ch.m_baseline_offset_x = x0;
+    ch.m_baseline_offset_y = y0;
 
     jeecs::graphic::texture* tex =
         jeecs::graphic::texture::create(pixel_w, pixel_h, jegl_texture::texture_format::RGBA);

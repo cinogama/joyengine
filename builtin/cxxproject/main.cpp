@@ -1,7 +1,6 @@
 #include "jeecs.hpp"
 #include "loader.hpp"
 
-// Do not modify this file!
 extern "C" {
 	JE_EXPORT void jeecs_module_entry()
 	{

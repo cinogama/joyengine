@@ -1181,7 +1181,38 @@ WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args, size_t argc)
     auto* loaded_font = (jeecs::basic::resource<jeecs::graphic::font>*)wo_pointer(args + 0);
     assert(loaded_font->get()->enabled());
 
-    return wo_ret_gchandle(vm, loaded_font->get()->get_character(wo_str_get_char(wo_string(args + 1), 0)), args + 0, nullptr);
+    auto ch = loaded_font->get()->get_character(wo_char(args + 1));
+    assert(ch != nullptr);
+
+    /*
+    public using character = struct{
+            m_texture: texture,
+            m_character: char,
+            m_width: int,
+            m_height: int,
+            m_advise_width: int,
+            m_advise_height: int,
+            m_baseline_offset_x: int,
+            m_baseline_offset_y: int,
+        };
+    */
+    wo_value result = wo_push_struct(vm, 8);
+    wo_set_gchandle(wo_struct_get(result, 0), vm, new jeecs::basic::resource<jeecs::graphic::texture>(ch->m_texture), nullptr,
+        [](void* ptr) {
+            delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
+        });
+    wo_set_char(wo_struct_get(result, 1), ch->m_char);
+
+    wo_set_char(wo_struct_get(result, 2), ch->m_width);
+    wo_set_char(wo_struct_get(result, 3), ch->m_height);
+
+    wo_set_char(wo_struct_get(result, 4), ch->m_advised_w);
+    wo_set_char(wo_struct_get(result, 5), ch->m_advised_h);
+
+    wo_set_char(wo_struct_get(result, 6), ch->m_baseline_offset_x);
+    wo_set_char(wo_struct_get(result, 7), ch->m_baseline_offset_y);
+
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_font_string_texture(wo_vm vm, wo_value args, size_t argc)
@@ -1193,18 +1224,6 @@ WO_API wo_api wojeapi_font_string_texture(wo_vm vm, wo_value args, size_t argc)
         delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
         });
 }
-
-WO_API wo_api wojeapi_character_get_texture(wo_vm vm, wo_value args, size_t argc)
-{
-    auto* charac = (jeecs::graphic::character*)wo_pointer(args + 0);
-
-    return wo_ret_gchandle(vm,
-        new jeecs::basic::resource<jeecs::graphic::texture>(charac->m_texture), nullptr,
-        [](void* ptr) {
-            delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
-        });
-}
-
 
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
@@ -1788,11 +1807,16 @@ namespace je
             }
         }
 
-        public using character = gchandle
-        {
-            extern("libjoyecs", "wojeapi_character_get_texture")
-            public func get_texture(self: character)=> texture;
-        }
+        public using character = struct{
+            m_texture: texture,
+            m_character: char,
+            m_width: int,
+            m_height: int,
+            m_advise_width: int,
+            m_advise_height: int,
+            m_baseline_offset_x: int,
+            m_baseline_offset_y: int,
+        };
 
         public using font = gchandle
         {
@@ -1800,7 +1824,7 @@ namespace je
             public func load(path: string, font_width: int)=> option<font>;
 
             extern("libjoyecs", "wojeapi_font_load_char")
-            public func load_char(self: font, ch: string)=> character;
+            public func load_char(self: font, ch: char)=> character;
 
             extern("libjoyecs", "wojeapi_font_string_texture")
             public func load_string(self: font, str: string)=> texture;
