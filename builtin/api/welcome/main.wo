@@ -38,6 +38,7 @@ namespace jeapi::welcome
             Separator();
 
             Text("第三方组件及开源许可");
+            do BeginChildSize("##copyrights", 700., 500.);
             Text("OpenAL https://www.openal.org");
             TextDisabled("Copyright (C) Creative Labs, Inc.");
 
@@ -77,7 +78,19 @@ The source code is licensed under the Modified BSD License, the Mesa
             Text("CMake https://cmake.org/");
             Text("rcedit https://github.com/electron/rcedit");
 
-            Separator();
+            Text("默认提供的字体:");
+            Text("HarmonyOS_Sans_SC_Regular");
+            TextDisabled("https://developer.harmonyos.com/cn/docs/design/des-guides/font-0000001157868583");
+            TextDisabled("Copyright 2021 Huawei Device Co., Ltd. All Rights Reserved.");
+            TextDisabled("此字体可免费商用，但需标注字体版权信息。");
+            TextDisabled("* 具体条款见字体目录内的 LICENSE.txt 文件");
+
+            Text("cino_ipix_12px");
+            TextDisabled("原始来源 https://purestudio.itch.io/ipix");
+            TextDisabled("修订版本 https://git.cinogama.net/cinogamaproject/cinoipixfont");
+            TextDisabled("Origin by: Copyright (c) 2019, zengsadi. Updated by Cinogama project. (C) 2021.");
+            TextDisabled("此字体是公开领域字体，可免费商用，无需标注字体版权信息。");
+            EndChild();
 
             Text("让一切纯粹且快乐");
             Text("Keep things pure and joyful.");

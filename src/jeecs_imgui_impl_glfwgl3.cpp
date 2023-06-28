@@ -1580,7 +1580,7 @@ WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args, size_t ar
 }
 
 std::optional<std::string> specify_font_path = std::nullopt;
-size_t specify_font_size = 24;
+size_t specify_font_size = 18;
 
 void jegui_set_font(const char* path, size_t size)
 {
