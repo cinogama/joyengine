@@ -12,14 +12,17 @@ struct je_stb_font_data
     float           m_scale_x;
     float           m_scale_y;
 
-    // NOTE: Multi-thread unsafe!
+    jegl_texture::texture_sampling m_sampling;
+
+    // NOTE: Multi-thread unsfe!
     std::map<unsigned long, jeecs::graphic::character> character_set;
 };
 
-je_font* je_font_load(const char* fontPath, float scalex, float scaley)
+je_font* je_font_load(const char* fontPath, float scalex, float scaley, jegl_texture::texture_sampling samp)
 {
     je_stb_font_data* fontdata = new je_stb_font_data;
     fontdata->m_font_file_buf = nullptr;
+    fontdata->m_sampling = samp;
 
     if (auto* file = jeecs_file_open(fontPath))
     {
@@ -59,8 +62,7 @@ void je_font_free(je_font* font)
 
 jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 {
-    if (!font)
-        return nullptr;
+    assert(font != nullptr);
 
     if (auto fnd = font->character_set.find(chcode); fnd != font->character_set.end())
         return &fnd->second;
@@ -98,13 +100,16 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 
     jeecs::graphic::texture* tex =
         jeecs::graphic::texture::create(pixel_w, pixel_h, jegl_texture::texture_format::RGBA);
+    tex->resouce()->m_raw_texture_data->m_sampling = font->m_sampling;
 
     for (int j = 0; j < pixel_h; j++)
     {
         for (int i = 0; i < pixel_w; i++)
         {
-            unsigned char _vl = (i >= (int)pixel_w || j >= (int)pixel_h) ? 0 : ch_tex_buffer[i + pixel_w * j];
-            tex->pix(i, j).set({ 1.f,1.f,1.f,((float)_vl) / 255.f });
+            float _vl = ((float)ch_tex_buffer[i + pixel_w * j]) / 255.0f;
+            tex->pix(i, pixel_h - j - 1).set(
+                { 1.f, 1.f, 1.f, _vl }
+            );
         }
     }
 

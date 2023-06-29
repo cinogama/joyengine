@@ -1001,7 +1001,7 @@ JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
 
 typedef struct je_stb_font_data je_font;
 
-JE_API je_font* je_font_load(const char* fontPath, float scalex, float scaley);
+JE_API je_font* je_font_load(const char* fontPath, float scalex, float scaley, jegl_texture::texture_sampling samp);
 JE_API void         je_font_free(je_font* font);
 JE_API jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode);
 
@@ -1740,7 +1740,7 @@ namespace jeecs
                 using _true_type = std::true_type;
 
                 template<typename V>
-                static auto _tester(int) -> _true_type<decltype(new V())>;
+                static auto _tester(int)->_true_type<decltype(new V())>;
                 template<typename V>
                 static std::false_type _tester(...);
 
@@ -4563,16 +4563,30 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(font);
 
-            je_font* m_font;
-            size_t          m_size;
-            jeecs::string   m_path;
+            je_font*              m_font;
         public:
-            font(const std::string& fontfile, size_t size)noexcept
-                : m_size(size)
-                , m_path(fontfile)
+            const size_t          m_size;
+            const jeecs::string   m_path;
+            const jegl_texture::texture_sampling m_sampling;
+        private:
+            font(je_font* font_resource, size_t size, const char* path, jegl_texture::texture_sampling samp)noexcept
+                : m_font(font_resource)
+                , m_size(size)
+                , m_path(path)
+                , m_sampling(samp)
             {
-                m_font = je_font_load(fontfile.c_str(), (float)size, (float)size);
+                
             }
+        public:
+            static font* create(const std::string& fontfile, size_t size, jegl_texture::texture_sampling samp = jegl_texture::texture_sampling::DEFAULT)
+            {
+                auto* font_res = je_font_load(fontfile.c_str(), (float)size, (float)size, samp);
+                if (font_res == nullptr)
+                    return nullptr;
+
+                return new font(font_res, size, fontfile.c_str(), samp);
+            }
+            
             ~font()
             {
                 je_font_free(m_font);
@@ -4580,10 +4594,6 @@ namespace jeecs
             character* get_character(unsigned int wcharacter) const noexcept
             {
                 return je_font_get_char(m_font, wcharacter);
-            }
-            inline bool enabled() const noexcept
-            {
-                return nullptr != m_font;
             }
 
             basic::resource<texture> text_texture(const std::wstring& text, float one_line_size = 10000.0f, int max_line_count = INT_MAX)
@@ -4656,9 +4666,12 @@ namespace jeecs
                                         {
                                             auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f)/*四舍五入*/];
                                             if (new_font == nullptr)
-                                                new_font = new font(font_base.m_path, int(TEXT_SCALE * font_base.m_size + 0.5f));
+                                                new_font = font::create(font_base.m_path, int(TEXT_SCALE * font_base.m_size + 0.5f));
 
-                                            used_font = new_font.get();
+                                            if (new_font == nullptr)
+                                                debug::logerr("Failed to open font: '%s'.", font_base.m_path.c_str());
+                                            else
+                                                used_font = new_font.get();
                                         }
                                     }
                                     else if (item_name == "offset")
@@ -4826,7 +4839,7 @@ namespace jeecs
 #ifdef __cpp_lib_execution
                                 std::execution::par_unseq,
 #endif
-                                p_index{ 0 }, p_index{ size_t(gcs->m_texture->size().y) },
+                                p_index{ 0 }, p_index{ size_t(gcs->m_texture->height()) },
                                 [&](size_t fy) {
                                     std::for_each(
 #ifdef __cpp_lib_execution
@@ -4836,7 +4849,9 @@ namespace jeecs
                                         [&](size_t fx) {
                                             auto pdst = new_texture->pix(
                                                 correct_x + next_ch_x + int(fx) + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size),
-                                                size_y - 1 - (correct_y - next_ch_y + int(fy) + gcs->m_baseline_offset_y - gcs->m_advised_h + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size))
+                                                size_y - 1 -
+                                                (correct_y - next_ch_y + gcs->m_height + gcs->m_baseline_offset_y - 1 - int(fy) - gcs->m_advised_h 
+                                                    + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size))
                                             );
 
                                             auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
@@ -5319,7 +5334,7 @@ namespace jeecs
                 }
             };
             mixed_shader mixed_shader;
-            
+
             static void JERefRegsiter()
             {
                 typing::register_member(&CameraPass::mixed_shader, "mixed_shader");
@@ -5393,7 +5408,7 @@ namespace jeecs
                 {
                     struct data_value
                     {
-                        enum type: uint8_t
+                        enum type : uint8_t
                         {
                             INT,
                             FLOAT,
@@ -5440,12 +5455,12 @@ namespace jeecs
                     };
                     struct component_data
                     {
-                        const jeecs::typing::type_info*     m_component_type;
-                        const jeecs::typing::member_info*   m_member_info;
+                        const jeecs::typing::type_info* m_component_type;
+                        const jeecs::typing::member_info* m_member_info;
                         data_value                          m_member_value;
                         bool                                m_offset_mode;
 
-                        void*                               m_member_addr_cache;
+                        void* m_member_addr_cache;
                         jeecs::game_entity                  m_entity_cache;
                     };
                     struct uniform_data
@@ -5652,11 +5667,11 @@ namespace jeecs
                     for (size_t id = 0; id < m_animations.size(); ++id)
                     {
                         auto& animation = m_animations[id];
-                        result += 
+                        result +=
                             std::string(animation.m_path.c_str())
                             + "|"
                             + animation.m_current_action.c_str()
-                            + "|" 
+                            + "|"
                             + (animation.m_loop ? "true" : "false")
                             + ";";
                     }

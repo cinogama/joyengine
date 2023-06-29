@@ -1163,8 +1163,8 @@ WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args, size_t ar
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_font = new jeecs::graphic::font(wo_string(args + 0), (size_t)wo_int(args + 1));
-    if (loaded_font->enabled())
+    auto* loaded_font = jeecs::graphic::font::create(wo_string(args + 0), (size_t)wo_int(args + 1));
+    if (loaded_font != nullptr)
     {
         return wo_ret_option_gchandle(vm,
             new jeecs::basic::resource<jeecs::graphic::font>(loaded_font), nullptr,
@@ -1179,7 +1179,7 @@ WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_font = (jeecs::basic::resource<jeecs::graphic::font>*)wo_pointer(args + 0);
-    assert(loaded_font->get()->enabled());
+    assert(loaded_font != nullptr);
 
     auto ch = loaded_font->get()->get_character(wo_char(args + 1));
     assert(ch != nullptr);
