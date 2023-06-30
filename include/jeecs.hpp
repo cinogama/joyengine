@@ -5024,7 +5024,7 @@ namespace jeecs
     }
 
     namespace UserInterface
-    {
+    {      
         struct Origin
         {
             bool left_origin = false;
@@ -5032,18 +5032,31 @@ namespace jeecs
             bool top_origin = false;
             bool buttom_origin = false;
 
-            bool keep_horizontal_ratio = false;
-            bool keep_vertical_ratio = false;
-
             static void JERefRegsiter()
             {
                 typing::register_member(&Origin::left_origin, "left_origin");
                 typing::register_member(&Origin::right_origin, "right_origin");
                 typing::register_member(&Origin::top_origin, "top_origin");
                 typing::register_member(&Origin::buttom_origin, "buttom_origin");
+            }
+        };
+        struct Size
+        {
+            math::vec2 size = { 100.0f, 100.0f };
 
-                typing::register_member(&Origin::keep_horizontal_ratio, "keep_horizontal_ratio");
-                typing::register_member(&Origin::keep_vertical_ratio, "keep_vertical_ratio");
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Size::size, "size");
+            }
+        };
+        struct Offset
+        {
+            math::vec2 local_offset = { 0.0f, 0.0f };
+            // Will be update by uipipeline
+            math::vec2 global_offset = { 0.0f, 0.0f }; 
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Offset::local_offset, "local_offset");
             }
         };
     };
@@ -6124,6 +6137,8 @@ namespace jeecs
             type_info::of<Transform::Translation>("Transform::Translation");
 
             type_info::of<UserInterface::Origin>("UserInterface::Origin");
+            type_info::of<UserInterface::Size>("UserInterface::Size");
+            type_info::of<UserInterface::Offset>("UserInterface::Offset");
 
             type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
             type_info::of<Renderer::Shape>("Renderer::Shape");

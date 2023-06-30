@@ -456,6 +456,8 @@ public let frag =
             const Shaders* shaders;
             const Textures* textures;
             const UserInterface::Origin* ui_origin;
+            const UserInterface::Size* ui_size;
+            const UserInterface::Offset* ui_offset;
 
             bool operator < (const renderer_arch& another) const noexcept
             {
@@ -550,8 +552,14 @@ public let frag =
 
             this->pipeline_update_begin();
 
+            std::unordered_map<typing::uid_t, math::vec2> parent_range_offset_list;
+
             select_from(get_world())
                 .exec(&UserInterfaceGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                .exec([&](Transform::Anchor& anchor, UserInterface::Offset& offset) 
+                    {
+                        parent_range_offset_list[anchor.uid] = offset.global_offset;
+                    })
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
@@ -564,13 +572,25 @@ public let frag =
                         );
                     })
                 .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue, UserInterface::Origin& ui_origin)
+                    [this, &parent_range_offset_list](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue,
+                        Transform::LocalToParent* l2p,
+                        UserInterface::Origin& ui_origin,
+                        UserInterface::Size& size,
+                        UserInterface::Offset& offset)
                     {
-                        // TODO: Need Impl AnyOf
-                            // RendOb will be input to a chain and used for swap
+                        offset.global_offset = offset.local_offset;
+                        if (l2p != nullptr)
+                        {
+                            auto fnd = parent_range_offset_list.find(l2p->parent_uid);
+                            if (fnd != parent_range_offset_list.end())
+                            {
+                                offset.global_offset = offset.local_offset + fnd->second;
+                            }
+                        }
+
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs, &ui_origin
+                                rendqueue, &trans, shape, shads, texs, &ui_origin, &size, &offset
                             });
                     })
                         .anyof<Shaders, Textures, Shape>()
@@ -636,19 +656,6 @@ public let frag =
                     RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH,
                     RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT;
 
-                const float MAT4_UI_HORIZONTAL_CORRECT[4][4] = {
-                    { 1.0f, 0.0f, 0.0f, 0.0f },
-                    { 0.0f, (float)RENDAIMBUFFER_WIDTH / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 0.0f},
-                    { 0.0f, 0.0f, 1.0f, 0.0f },
-                    { 0.0f, 0.0f, 0.0f, 1.0f },
-                };
-                const float MAT4_UI_VERTICAL_CORRECT[4][4] = {
-                    { (float)RENDAIMBUFFER_HEIGHT / (float)RENDAIMBUFFER_WIDTH, 0.0f, 0.0f, 0.0f },
-                    { 0.0f, 1.0f, 0.0f, 0.0f},
-                    { 0.0f, 0.0f, 1.0f, 0.0f },
-                    { 0.0f, 0.0f, 0.0f, 1.0f },
-                };
-
                 jegl_rendchain* rend_chain = nullptr;
 
                 if (current_camera.viewport)
@@ -696,32 +703,37 @@ public let frag =
 
                     // 如果是UI，VIEW 和 PROJECTION 则需要保持为单位矩阵, 即 规定如此
                     assert(rendentity.ui_origin != nullptr);
+                    assert(rendentity.ui_size != nullptr);
 
                     auto* origin_vertext_data = drawing_shape->resouce()->m_raw_vertex_data;
+                    // TODO: 这里俩矩阵实际上可以优化，但是UI实际上也没有多少，暂时直接矩阵乘法也无所谓
+                    const float MAT4_UI_SIZE_OFFSET[4][4] = {
+                        { rendentity.ui_size->size.x / (float)RENDAIMBUFFER_WIDTH , 0.0f, 0.0f, 0.0f },
+                        { 0.0f, rendentity.ui_size->size.y / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 0.0f },
+                        { 0.0f, 0.0f, 1.0f, 0.0f },
+                        { rendentity.ui_offset->global_offset.x / (float)RENDAIMBUFFER_WIDTH,
+                          rendentity.ui_offset->global_offset.y / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 1.0f },
+                    };
                     const float MAT4_UI_ORIGIN_OFFSET[4][4] = {
                         { 1.0f, 0.0f, 0.0f, 0.0f },
                         { 0.0f, 1.0f, 0.0f, 0.0f },
                         { 0.0f, 0.0f, 1.0f, 0.0f },
                         {
-                            rendentity.ui_origin->left_origin ? origin_vertext_data->m_size_x / 2.0f : (rendentity.ui_origin->right_origin ? -origin_vertext_data->m_size_x / 2.0f : 0.0f),
-                            rendentity.ui_origin->buttom_origin ? origin_vertext_data->m_size_y / 2.0f : (rendentity.ui_origin->top_origin ? -origin_vertext_data->m_size_y / 2.0f : 0.0f),
+                            rendentity.ui_origin->left_origin 
+                            ? origin_vertext_data->m_size_x / 2.0f 
+                            : (rendentity.ui_origin->right_origin 
+                                ? -origin_vertext_data->m_size_x / 2.0f 
+                                : 0.0f),
+                            rendentity.ui_origin->buttom_origin 
+                            ? origin_vertext_data->m_size_y / 2.0f 
+                            : (rendentity.ui_origin->top_origin
+                                ? -origin_vertext_data->m_size_y / 2.0f 
+                                : 0.0f),
                             0.0f, 1.0f },
                     };
-                    // 这里借用MAT_MVP临时存放一下
-                    if (rendentity.ui_origin->keep_horizontal_ratio)
-                    {
-                        math::mat4xmat4(MAT4_MVP, rendentity.translation->object2world, MAT4_UI_HORIZONTAL_CORRECT);
-                        math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
-                    }
-                    else if (rendentity.ui_origin->keep_vertical_ratio)
-                    {
-                        math::mat4xmat4(MAT4_MVP, rendentity.translation->object2world, MAT4_UI_VERTICAL_CORRECT);
-                        math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
-                    }
-                    else
-                    {
-                        math::mat4xmat4(MAT4_UI_MODULE, rendentity.translation->object2world, MAT4_UI_ORIGIN_OFFSET);
-                    }
+                    // 执行原点缩放偏移，借用 MVP 矩阵作为中转
+                    math::mat4xmat4(MAT4_MVP, MAT4_UI_SIZE_OFFSET, rendentity.translation->object2world);
+                    math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
 
                     MAT4_UI_P_ORIGIN_OFFSET[3][0] = rendentity.ui_origin->left_origin ? -1.0f : (rendentity.ui_origin->right_origin ? 1.0f : 0.0f);
                     MAT4_UI_P_ORIGIN_OFFSET[3][1] = rendentity.ui_origin->buttom_origin ? -1.0f : (rendentity.ui_origin->top_origin ? 1.0f : 0.0f);
