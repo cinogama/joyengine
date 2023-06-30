@@ -5021,8 +5021,11 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
 
-        // UserInterface 组件将会影响布局计算方式
-        struct UserInterface
+    }
+
+    namespace UserInterface
+    {
+        struct Origin
         {
             bool left_origin = false;
             bool right_origin = false;
@@ -5034,16 +5037,17 @@ namespace jeecs
 
             static void JERefRegsiter()
             {
-                typing::register_member(&UserInterface::left_origin, "left_origin");
-                typing::register_member(&UserInterface::right_origin, "right_origin");
-                typing::register_member(&UserInterface::top_origin, "top_origin");
-                typing::register_member(&UserInterface::buttom_origin, "buttom_origin");
+                typing::register_member(&Origin::left_origin, "left_origin");
+                typing::register_member(&Origin::right_origin, "right_origin");
+                typing::register_member(&Origin::top_origin, "top_origin");
+                typing::register_member(&Origin::buttom_origin, "buttom_origin");
 
-                typing::register_member(&UserInterface::keep_horizontal_ratio, "keep_horizontal_ratio");
-                typing::register_member(&UserInterface::keep_vertical_ratio, "keep_vertical_ratio");
+                typing::register_member(&Origin::keep_horizontal_ratio, "keep_horizontal_ratio");
+                typing::register_member(&Origin::keep_vertical_ratio, "keep_vertical_ratio");
             }
         };
-    }
+    };
+
     namespace Renderer
     {
         // An entity need to be rendered, must have Transform::Translation and 
@@ -6118,7 +6122,8 @@ namespace jeecs
             type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
             type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
             type_info::of<Transform::Translation>("Transform::Translation");
-            type_info::of<Transform::UserInterface>("Transform::UserInterface");
+
+            type_info::of<UserInterface::Origin>("UserInterface::Origin");
 
             type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
             type_info::of<Renderer::Shape>("Renderer::Shape");

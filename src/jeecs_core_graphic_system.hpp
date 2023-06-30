@@ -415,10 +415,9 @@ public let frag =
         }
     };
 
-    struct UnlitUIGraphicPipelineSystem : public GraphicPipelineBaseSystem
+    struct UserInterfaceGraphicPipelineSystem : public GraphicPipelineBaseSystem
     {
         using Translation = Transform::Translation;
-        using UserInterface = Transform::UserInterface;
 
         using Rendqueue = Renderer::Rendqueue;
 
@@ -456,7 +455,7 @@ public let frag =
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
-            const UserInterface* ui;
+            const UserInterface::Origin* ui_origin;
 
             bool operator < (const renderer_arch& another) const noexcept
             {
@@ -478,13 +477,13 @@ public let frag =
             jeecs::math::vec4 time;
         };
 
-        UnlitUIGraphicPipelineSystem(game_world w)
+        UserInterfaceGraphicPipelineSystem(game_world w)
             : GraphicPipelineBaseSystem(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
 
-        ~UnlitUIGraphicPipelineSystem()
+        ~UserInterfaceGraphicPipelineSystem()
         {
 
         }
@@ -552,7 +551,7 @@ public let frag =
             this->pipeline_update_begin();
 
             select_from(get_world())
-                .exec(&UnlitUIGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(&UserInterfaceGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
@@ -565,13 +564,13 @@ public let frag =
                         );
                     })
                 .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue, UserInterface* ui)
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue, UserInterface::Origin& ui_origin)
                     {
                         // TODO: Need Impl AnyOf
                             // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs, ui
+                                rendqueue, &trans, shape, shads, texs, &ui_origin
                             });
                     })
                         .anyof<Shaders, Textures, Shape>()
@@ -650,6 +649,335 @@ public let frag =
                     { 0.0f, 0.0f, 0.0f, 1.0f },
                 };
 
+                jegl_rendchain* rend_chain = nullptr;
+
+                if (current_camera.viewport)
+                    rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer,
+                        (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
+                        (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
+                        (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
+                        (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
+                else
+                    rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer,
+                        0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+
+                // If camera rend to texture, clear the frame buffer (if need)
+                if (rend_aim_buffer)
+                {
+                    jegl_rchain_clear_color_buffer(rend_chain);
+                    jegl_rchain_clear_depth_buffer(rend_chain);
+                }
+
+                jegl_rchain_bind_uniform_buffer(rend_chain, m_default_uniform_buffer->resouce());
+
+                // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
+                for (auto& rendentity : m_renderer_list)
+                {
+                    auto& drawing_shape =
+                        (rendentity.shape && rendentity.shape->vertex)
+                        ? rendentity.shape->vertex
+                        : host()->default_shape_quad;
+
+                    auto& drawing_shaders =
+                        (rendentity.shaders && rendentity.shaders->shaders.size())
+                        ? rendentity.shaders->shaders
+                        : host()->default_shaders_list;
+
+                    // Bind texture here
+                    constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
+                    const jeecs::math::vec2
+                        * _using_tiling = &default_tiling,
+                        * _using_offset = &default_offset;
+
+                    assert(rendentity.translation);
+
+                    float MAT4_MVP[4][4];
+                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
+                    const float(*MAT4_MODEL_MATADDR)[4][4] = &MAT4_MODEL;
+
+                    // 如果是UI，VIEW 和 PROJECTION 则需要保持为单位矩阵, 即 规定如此
+                    assert(rendentity.ui_origin != nullptr);
+
+                    auto* origin_vertext_data = drawing_shape->resouce()->m_raw_vertex_data;
+                    const float MAT4_UI_ORIGIN_OFFSET[4][4] = {
+                        { 1.0f, 0.0f, 0.0f, 0.0f },
+                        { 0.0f, 1.0f, 0.0f, 0.0f },
+                        { 0.0f, 0.0f, 1.0f, 0.0f },
+                        {
+                            rendentity.ui_origin->left_origin ? origin_vertext_data->m_size_x / 2.0f : (rendentity.ui_origin->right_origin ? -origin_vertext_data->m_size_x / 2.0f : 0.0f),
+                            rendentity.ui_origin->buttom_origin ? origin_vertext_data->m_size_y / 2.0f : (rendentity.ui_origin->top_origin ? -origin_vertext_data->m_size_y / 2.0f : 0.0f),
+                            0.0f, 1.0f },
+                    };
+                    // 这里借用MAT_MVP临时存放一下
+                    if (rendentity.ui_origin->keep_horizontal_ratio)
+                    {
+                        math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_HORIZONTAL_CORRECT);
+                        math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
+                    }
+                    else if (rendentity.ui_origin->keep_vertical_ratio)
+                    {
+                        math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_VERTICAL_CORRECT);
+                        math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
+                    }
+                    else
+                    {
+                        math::mat4xmat4(MAT4_UI_MODULE, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
+                    }
+                    MAT4_MODEL_MATADDR = &MAT4_UI_MODULE;
+
+                    MAT4_UI_P_ORIGIN_OFFSET[3][0] = rendentity.ui_origin->left_origin ? -1.0f : (rendentity.ui_origin->right_origin ? 1.0f : 0.0f);
+                    MAT4_UI_P_ORIGIN_OFFSET[3][1] = rendentity.ui_origin->buttom_origin ? -1.0f : (rendentity.ui_origin->top_origin ? 1.0f : 0.0f);
+
+                    math::mat4xmat4(MAT4_MVP, MAT4_UI_P_ORIGIN_OFFSET, *MAT4_MODEL_MATADDR);
+
+                    auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
+
+                    jegl_rchain_bind_texture(rend_chain, rchain_texture_group, 0, host()->default_texture->resouce());
+                    if (rendentity.textures)
+                    {
+                        _using_tiling = &rendentity.textures->tiling;
+                        _using_offset = &rendentity.textures->offset;
+
+                        for (auto& texture : rendentity.textures->textures)
+                            jegl_rchain_bind_texture(rend_chain, rchain_texture_group, texture.m_pass_id, texture.m_texture->resouce());
+                    }
+                    for (auto& shader_pass : drawing_shaders)
+                    {
+                        auto* using_shader = &shader_pass;
+                        if (!shader_pass->m_builtin)
+                            using_shader = &host()->default_shader;
+
+                        auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), rchain_texture_group);
+                        auto* builtin_uniform = (*using_shader)->m_builtin;
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, *MAT4_MODEL_MATADDR);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, *MAT4_MODEL_MATADDR);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_UNIT);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
+                            rendentity.translation->local_scale.x,
+                            rendentity.translation->local_scale.y,
+                            rendentity.translation->local_scale.z);
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
+                    }
+
+                }
+
+            }
+        }
+
+    };
+
+    struct UnlitGraphicPipelineSystem : public GraphicPipelineBaseSystem
+    {
+        using Translation = Transform::Translation;
+        using Rendqueue = Renderer::Rendqueue;
+
+        using Clip = Camera::Clip;
+        using PerspectiveProjection = Camera::PerspectiveProjection;
+        using OrthoProjection = Camera::OrthoProjection;
+        using Projection = Camera::Projection;
+        using Viewport = Camera::Viewport;
+        using RendToFramebuffer = Camera::RendToFramebuffer;
+
+        using Shape = Renderer::Shape;
+        using Shaders = Renderer::Shaders;
+        using Textures = Renderer::Textures;
+
+        struct camera_arch
+        {
+            rendchain_branch_pipeline* branchPipeline;
+
+            const Rendqueue* rendqueue;
+            const Projection* projection;
+            const Viewport* viewport;
+            const RendToFramebuffer* rendToFramebuffer;
+
+            bool operator < (const camera_arch& another) const noexcept
+            {
+                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
+                return a_queue < b_queue;
+            }
+        };
+        struct renderer_arch
+        {
+            const Rendqueue* rendqueue;
+            const Translation* translation;
+            const Shape* shape;
+            const Shaders* shaders;
+            const Textures* textures;
+
+            bool operator < (const renderer_arch& another) const noexcept
+            {
+                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
+                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
+                return a_queue < b_queue;
+            }
+        };
+
+        std::vector<camera_arch> m_camera_list;
+        std::vector<renderer_arch> m_renderer_list;
+
+        size_t WINDOWS_WIDTH = 0;
+        size_t WINDOWS_HEIGHT = 0;
+
+        jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_default_uniform_buffer;
+        struct default_uniform_buffer_data_t
+        {
+            jeecs::math::vec4 time;
+        };
+
+        UnlitGraphicPipelineSystem(game_world w)
+            : GraphicPipelineBaseSystem(w)
+        {
+            m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
+        }
+
+        ~UnlitGraphicPipelineSystem()
+        {
+
+        }
+
+        void PrepareCameras(Projection& projection,
+            Translation& translation,
+            OrthoProjection* ortho,
+            PerspectiveProjection* perspec,
+            Clip* clip,
+            Viewport* viewport,
+            RendToFramebuffer* rendbuf)
+        {
+            float mat_inv_rotation[4][4];
+            translation.world_rotation.create_inv_matrix(mat_inv_rotation);
+            float mat_inv_position[4][4] = {};
+            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
+            mat_inv_position[3][0] = -translation.world_position.x;
+            mat_inv_position[3][1] = -translation.world_position.y;
+            mat_inv_position[3][2] = -translation.world_position.z;
+
+            // TODO: Optmize
+            math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
+
+            assert(ortho || perspec);
+            float znear = clip ? clip->znear : 0.3f;
+            float zfar = clip ? clip->zfar : 1000.0f;
+
+            jegl_resource* rend_aim_buffer = rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer->resouce() : nullptr;
+
+            size_t
+                RENDAIMBUFFER_WIDTH =
+                (size_t)llround(
+                    (viewport ? viewport->viewport.z : 1.0f) *
+                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
+                RENDAIMBUFFER_HEIGHT =
+                (size_t)llround(
+                    (viewport ? viewport->viewport.w : 1.0f) *
+                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
+
+            if (ortho)
+            {
+                graphic::ortho_projection(projection.projection,
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
+                    ortho->scale, znear, zfar);
+                graphic::ortho_inv_projection(projection.inv_projection,
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
+                    ortho->scale, znear, zfar);
+            }
+            else
+            {
+                graphic::perspective_projection(projection.projection,
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
+                    perspec->angle, znear, zfar);
+                graphic::perspective_inv_projection(projection.inv_projection,
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
+                    perspec->angle, znear, zfar);
+            }
+        }
+
+        void PreUpdate()
+        {
+            m_camera_list.clear();
+            m_renderer_list.clear();
+
+            this->pipeline_update_begin();
+
+            select_from(get_world())
+                .exec(&UnlitGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(
+                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
+                    {
+                        auto* branch = this->pipeline_allocate();
+                        branch->new_frame(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
+                        m_camera_list.emplace_back(
+                            camera_arch{
+                                branch, rendqueue, &projection, cameraviewport, rendbuf
+                            }
+                        );
+                    })
+                .exec(
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    {
+                        // TODO: Need Impl AnyOf
+                            // RendOb will be input to a chain and used for swap
+                        m_renderer_list.emplace_back(
+                            renderer_arch{
+                                rendqueue, &trans, shape, shads, texs
+                            });
+                    })
+                        .anyof<Shaders, Textures, Shape>()
+                        .except<Light2D::Color, UserInterface::Origin>()
+                        ;
+                    std::sort(m_camera_list.begin(), m_camera_list.end());
+                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
+
+                    this->pipeline_update_end();
+
+                    DrawFrame();
+        }
+
+        void DrawFrame()
+        {
+            auto WINDOWS_SIZE = jeecs::input::windowsize();
+            WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
+            WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
+
+            // TODO: Update shared uniform.
+            double current_time = je_clock_time();
+
+            math::vec4 shader_time =
+            {
+                (float)current_time ,
+                (float)abs(2.0 * (current_time * 2.0 - double(int(current_time * 2.0)) - 0.5)) ,
+                (float)abs(2.0 * (current_time - double(int(current_time)) - 0.5)),
+                (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5))
+            };
+
+            m_default_uniform_buffer->update_buffer(
+                offsetof(default_uniform_buffer_data_t, time),
+                sizeof(math::vec4),
+                &shader_time);
+
+            for (auto& current_camera : m_camera_list)
+            {
+                jegl_resource* rend_aim_buffer = nullptr;
+                if (current_camera.rendToFramebuffer)
+                {
+                    if (current_camera.rendToFramebuffer->framebuffer == nullptr)
+                        continue;
+                    else
+                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->resouce();
+                }
+
+                size_t
+                    RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH,
+                    RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT;
+
                 const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
                 const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
 
@@ -700,48 +1028,9 @@ public let frag =
 
                     float MAT4_MVP[4][4];
                     const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
-                    const float(*MAT4_MODEL_MATADDR)[4][4] = &MAT4_MODEL;
 
-                    // 如果是UI，VIEW 和 PROJECTION 则需要保持为单位矩阵, 即 规定如此
-                    if (rendentity.ui != nullptr)
-                    {
-                        auto* origin_vertext_data = drawing_shape->resouce()->m_raw_vertex_data;
-                        const float MAT4_UI_ORIGIN_OFFSET[4][4] = {
-                            { 1.0f, 0.0f, 0.0f, 0.0f },
-                            { 0.0f, 1.0f, 0.0f, 0.0f },
-                            { 0.0f, 0.0f, 1.0f, 0.0f },
-                            { 
-                                rendentity.ui->left_origin ? origin_vertext_data->m_size_x/2.0f :(rendentity.ui->right_origin ? -origin_vertext_data->m_size_x / 2.0f : 0.0f),
-                                rendentity.ui->buttom_origin ? origin_vertext_data->m_size_y / 2.0f : (rendentity.ui->top_origin ? -origin_vertext_data->m_size_y / 2.0f : 0.0f),
-                                0.0f, 1.0f },
-                        };
-                        // 这里借用MAT_MVP临时存放一下
-                        if (rendentity.ui->keep_horizontal_ratio)
-                        {
-                            math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_HORIZONTAL_CORRECT);
-                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
-                        }
-                        else if (rendentity.ui->keep_vertical_ratio)
-                        {
-                            math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_VERTICAL_CORRECT);
-                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
-                        }
-                        else
-                        {
-                            math::mat4xmat4(MAT4_UI_MODULE, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
-                        }
-                        MAT4_MODEL_MATADDR = &MAT4_UI_MODULE;
-
-                        MAT4_UI_P_ORIGIN_OFFSET[3][0] = rendentity.ui->left_origin ? -1.0f : (rendentity.ui->right_origin ? 1.0f : 0.0f);
-                        MAT4_UI_P_ORIGIN_OFFSET[3][1] = rendentity.ui->buttom_origin ? -1.0f : (rendentity.ui->top_origin ? 1.0f : 0.0f);
-
-                        math::mat4xmat4(MAT4_MVP, MAT4_UI_P_ORIGIN_OFFSET, *MAT4_MODEL_MATADDR);
-                    }
-                    else
-                    {
-                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
-                    }
+                    math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                    math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                     auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
@@ -763,24 +1052,13 @@ public let frag =
                         auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), rchain_texture_group);
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, *MAT4_MODEL_MATADDR);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
-
-                        if (rendentity.ui != nullptr)
-                        {
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, *MAT4_MODEL_MATADDR);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_UNIT);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
-                        }
-                        else
-                        {
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
-                        }
-
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
+                      
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
                             rendentity.translation->local_scale.x,
                             rendentity.translation->local_scale.y,
@@ -1075,7 +1353,6 @@ public func frag(vf: v2f)
         };
 
         using Translation = Transform::Translation;
-        using UserInterface = Transform::UserInterface;
 
         using Rendqueue = Renderer::Rendqueue;
 
@@ -1127,7 +1404,6 @@ public func frag(vf: v2f)
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
-            const UserInterface* ui;
 
             bool operator < (const renderer_arch& another) const noexcept
             {
@@ -1300,15 +1576,15 @@ public func frag(vf: v2f)
                         }
                     })
                 .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue, UserInterface* ui)
+                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
                     {
                         // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs, ui
+                                rendqueue, &trans, shape, shads, texs
                             });
                     }).anyof<Shaders, Textures, Shape>()
-                        .except<Light2D::Color>()
+                        .except<Light2D::Color, UserInterface::Origin>()
                         .exec(
                             [this](Translation& trans,
                                 Light2D::Color& color,
