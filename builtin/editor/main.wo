@@ -171,8 +171,7 @@ func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesy
 }
 
 func my_ask_for_get_yes_no_cancel_result(
-    title: string, 
-    text: string, 
+    p: editor::Project,
     okevent: (int)=> void)
 {
     // What a bull shit!
@@ -182,27 +181,34 @@ func my_ask_for_get_yes_no_cancel_result(
 
     launch(func()
     {
-        let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
+        let mut open = BeginAttrOpen(F"退出？##{JobID()}", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
 
-        Text(text);
+        if (p->is_debugging)
+        {
+            TextDisabled("正在编辑模式中，请先退出编辑状态");
+        }
+        else
+        {
+            Text("即将退出编辑器，是否保存当前项目？");
 
-        if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
-        {
-            okevent(1);
-            open = false;
-        }
-        SameLine();
-        if (Button("否") || (IsWindowFocused() && inputmgr::keypush(je::keycode::BACKSPACE)))
-        {
-            okevent(0);
-            open = false;
-        }
-        SameLine();
-        if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
-        {
-            okevent(-1);
-            open = false;
+            if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+            {
+                okevent(1);
+                open = false;
+            }
+            SameLine();
+            if (Button("否") || (IsWindowFocused() && inputmgr::keypush(je::keycode::BACKSPACE)))
+            {
+                okevent(0);
+                open = false;
+            }
+            SameLine();
+            if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+            {
+                okevent(-1);
+                open = false;
+            }
         }
         End();
 
@@ -218,8 +224,7 @@ func ask_for_saving_proj_when_exit(p: editor::Project)
     if (shown == false)
     {
         shown = true;
-        my_ask_for_get_yes_no_cancel_result(
-            "退出？", "即将退出编辑器，是否保存当前项目？",
+        my_ask_for_get_yes_no_cancel_result(p,
             func(op)
             {
                 shown = false;

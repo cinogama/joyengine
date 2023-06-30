@@ -715,7 +715,7 @@ public let frag =
                                 rendentity.ui->buttom_origin ? origin_vertext_data->m_size_y / 2.0f : (rendentity.ui->top_origin ? -origin_vertext_data->m_size_y / 2.0f : 0.0f),
                                 0.0f, 1.0f },
                         };
-
+                        // 这里借用MAT_MVP临时存放一下
                         if (rendentity.ui->keep_horizontal_ratio)
                         {
                             math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_HORIZONTAL_CORRECT);

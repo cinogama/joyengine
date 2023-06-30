@@ -5021,6 +5021,7 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
 
+        // UserInterface 组件将会影响布局计算方式
         struct UserInterface
         {
             bool left_origin = false;
