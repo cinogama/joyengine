@@ -692,8 +692,7 @@ public let frag =
                     assert(rendentity.translation);
 
                     float MAT4_MVP[4][4];
-                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
-                    const float(*MAT4_MODEL_MATADDR)[4][4] = &MAT4_MODEL;
+                    const float(&MAT4_MODEL)[4][4] = MAT4_UI_MODULE;
 
                     // 如果是UI，VIEW 和 PROJECTION 则需要保持为单位矩阵, 即 规定如此
                     assert(rendentity.ui_origin != nullptr);
@@ -711,24 +710,23 @@ public let frag =
                     // 这里借用MAT_MVP临时存放一下
                     if (rendentity.ui_origin->keep_horizontal_ratio)
                     {
-                        math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_HORIZONTAL_CORRECT);
+                        math::mat4xmat4(MAT4_MVP, rendentity.translation->object2world, MAT4_UI_HORIZONTAL_CORRECT);
                         math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
                     }
                     else if (rendentity.ui_origin->keep_vertical_ratio)
                     {
-                        math::mat4xmat4(MAT4_MVP, MAT4_MODEL, MAT4_UI_VERTICAL_CORRECT);
+                        math::mat4xmat4(MAT4_MVP, rendentity.translation->object2world, MAT4_UI_VERTICAL_CORRECT);
                         math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
                     }
                     else
                     {
-                        math::mat4xmat4(MAT4_UI_MODULE, MAT4_MODEL, MAT4_UI_ORIGIN_OFFSET);
+                        math::mat4xmat4(MAT4_UI_MODULE, rendentity.translation->object2world, MAT4_UI_ORIGIN_OFFSET);
                     }
-                    MAT4_MODEL_MATADDR = &MAT4_UI_MODULE;
 
                     MAT4_UI_P_ORIGIN_OFFSET[3][0] = rendentity.ui_origin->left_origin ? -1.0f : (rendentity.ui_origin->right_origin ? 1.0f : 0.0f);
                     MAT4_UI_P_ORIGIN_OFFSET[3][1] = rendentity.ui_origin->buttom_origin ? -1.0f : (rendentity.ui_origin->top_origin ? 1.0f : 0.0f);
 
-                    math::mat4xmat4(MAT4_MVP, MAT4_UI_P_ORIGIN_OFFSET, *MAT4_MODEL_MATADDR);
+                    math::mat4xmat4(MAT4_MVP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_MODEL);
 
                     auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
@@ -750,10 +748,10 @@ public let frag =
                         auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), rchain_texture_group);
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, *MAT4_MODEL_MATADDR);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, *MAT4_MODEL_MATADDR);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MODEL);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_UNIT);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
