@@ -223,11 +223,20 @@ namespace editor::gui::edit_forms
 
                 Separator();
 
-                if (MenuItem("坐标与变换"))
+                if (MenuItem("一般坐标变换"))
                 {
                     context->add_components("Transform::LocalPosition");
                     context->add_components("Transform::LocalRotation");
                     context->add_components("Transform::LocalScale");
+                    context->add_components("Transform::LocalToWorld");
+                    context->add_components("Transform::Translation");
+                }
+
+                if (MenuItem("UI变换"))
+                {
+                    context->add_components("UserInterface::Origin");
+                    context->add_components("UserInterface::Size");
+                    context->add_components("UserInterface::Offset");
                     context->add_components("Transform::LocalToWorld");
                     context->add_components("Transform::Translation");
                 }

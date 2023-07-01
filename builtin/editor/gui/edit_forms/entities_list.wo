@@ -98,6 +98,21 @@ namespace editor::gui::edit_forms
                     "Renderer::Textures",
                 ]);
             }
+            if (MenuItem("基本UI"))
+            {
+                do fast_create_entity(context, w, "默认UI", [
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                    "UserInterface::Origin",
+                    "UserInterface::Size",
+                    "UserInterface::Offset",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                ]);
+            }
             if (MenuItem("带2D阴影的基本渲染实体"))
             {
                 do fast_create_entity(context, w, "默认2D阴影物体", [
