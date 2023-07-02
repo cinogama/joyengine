@@ -707,12 +707,13 @@ public let frag =
 
                     auto* origin_vertext_data = drawing_shape->resouce()->m_raw_vertex_data;
                     // TODO: 这里俩矩阵实际上可以优化，但是UI实际上也没有多少，暂时直接矩阵乘法也无所谓
+                    // NOTE: 这里的大小和偏移大小乘二是因为一致空间是 -1 到 1，天然有一个1/2的压缩，为了保证单位正确，这里乘二
                     const float MAT4_UI_SIZE_OFFSET[4][4] = {
-                        { rendentity.ui_size->size.x / (float)RENDAIMBUFFER_WIDTH , 0.0f, 0.0f, 0.0f },
-                        { 0.0f, rendentity.ui_size->size.y / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 0.0f },
+                        { rendentity.ui_size->size.x * 2.0f / (float)RENDAIMBUFFER_WIDTH , 0.0f, 0.0f, 0.0f },
+                        { 0.0f, rendentity.ui_size->size.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 0.0f },
                         { 0.0f, 0.0f, 1.0f, 0.0f },
-                        { rendentity.ui_offset->global_offset.x / (float)RENDAIMBUFFER_WIDTH,
-                          rendentity.ui_offset->global_offset.y / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 1.0f },
+                        { rendentity.ui_offset->global_offset.x * 2.0f / (float)RENDAIMBUFFER_WIDTH,
+                          rendentity.ui_offset->global_offset.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 1.0f },
                     };
                     const float MAT4_UI_ORIGIN_OFFSET[4][4] = {
                         { 1.0f, 0.0f, 0.0f, 0.0f },
