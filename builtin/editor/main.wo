@@ -297,6 +297,7 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
 
 /.export/*
 imgui.ini
+*.dmp
 "@);
                             do filesys::writeall(p.m_path / ".gitattributes", 
 @"# JoyEngine ECS
