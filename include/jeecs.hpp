@@ -4563,7 +4563,7 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(font);
 
-            je_font*              m_font;
+            je_font* m_font;
         public:
             const size_t          m_size;
             const jeecs::string   m_path;
@@ -4575,7 +4575,7 @@ namespace jeecs
                 , m_path(path)
                 , m_sampling(samp)
             {
-                
+
             }
         public:
             static font* create(const std::string& fontfile, size_t size, jegl_texture::texture_sampling samp = jegl_texture::texture_sampling::DEFAULT)
@@ -4586,7 +4586,7 @@ namespace jeecs
 
                 return new font(font_res, size, fontfile.c_str(), samp);
             }
-            
+
             ~font()
             {
                 je_font_free(m_font);
@@ -4850,7 +4850,7 @@ namespace jeecs
                                             auto pdst = new_texture->pix(
                                                 correct_x + next_ch_x + int(fx) + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size),
                                                 size_y - 1 -
-                                                (correct_y - next_ch_y + gcs->m_height + gcs->m_baseline_offset_y - 1 - int(fy) - gcs->m_advised_h 
+                                                (correct_y - next_ch_y + gcs->m_height + gcs->m_baseline_offset_y - 1 - int(fy) - gcs->m_advised_h
                                                     + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size))
                                             );
 
@@ -5024,13 +5024,66 @@ namespace jeecs
     }
 
     namespace UserInterface
-    {      
+    {
         struct Origin
         {
             bool left_origin = false;
             bool right_origin = false;
             bool top_origin = false;
             bool buttom_origin = false;
+
+            // Will be update by uipipeline
+            math::vec2 size = {};
+            math::vec2 scale = {};
+            math::vec2 global_offset = { 0.0f, 0.0f };
+
+            bool use_vertical_ratio = true;
+            math::vec2 global_location = { 0.0f, 0.0f };
+
+            // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
+            // 其中位置是ui元素中心位置，而非坐标原点位置。
+            void calc_absolute_ui_layout(size_t w, size_t h, math::vec2* out_offset, math::vec2* out_size) const
+            {
+                math::vec2 abssize = size;
+                math::vec2 absoffset = global_offset;
+
+                if (w != 0 && h != 0)
+                {
+                    math::vec2 rel2abssize = scale * math::vec2((float)w, (float)h);
+                    math::vec2 rel2absoffset = global_location * math::vec2((float)w, (float)h);
+
+                    if (use_vertical_ratio)
+                    {
+                        rel2abssize.x *= (float)h / (float)w;
+                        rel2absoffset.x *= (float)h / (float)w;
+                    }
+                    else
+                    {
+                        rel2abssize.y *= (float)w / (float)h;
+                        rel2absoffset.y *= (float)w / (float)h;
+                    }
+
+                    abssize += rel2abssize;
+                    absoffset += rel2absoffset;
+                }
+                // 消除中心偏差
+                if (left_origin)
+                    absoffset.x += abssize.x / 2.0f;
+                else if (right_origin)
+                    absoffset.x += (float)w - abssize.x / 2.0f;
+                else
+                    absoffset.x += (float)w / 2.0f;
+
+                if (buttom_origin)
+                    absoffset.y += abssize.y / 2.0f;
+                else if (top_origin)
+                    absoffset.y += (float)h - abssize.y / 2.0f;
+                else
+                    absoffset.y += (float)h / 2.0f;
+
+                *out_size = abssize;
+                *out_offset = absoffset;
+            }
 
             static void JERefRegsiter()
             {
@@ -5040,23 +5093,36 @@ namespace jeecs
                 typing::register_member(&Origin::buttom_origin, "buttom_origin");
             }
         };
-        struct Size
+        struct Absolute
         {
             math::vec2 size = { 100.0f, 100.0f };
+            math::vec2 offset = { 0.0f, 0.0f };
 
             static void JERefRegsiter()
             {
-                typing::register_member(&Size::size, "size");
+                typing::register_member(&Absolute::size, "size");
+                typing::register_member(&Absolute::offset, "offset");
             }
         };
-        struct Offset
+        struct Relatively
         {
-            math::vec2 local_offset = { 0.0f, 0.0f };
-            // Will be update by uipipeline
-            math::vec2 global_offset = { 0.0f, 0.0f }; 
+            jeecs::math::vec2 location = {};
+            jeecs::math::vec2 scale = { 0.0f, 0.0f };
+            bool use_vertical_ratio = true;
+
             static void JERefRegsiter()
             {
-                typing::register_member(&Offset::local_offset, "local_offset");
+                typing::register_member(&Relatively::location, "location");
+                typing::register_member(&Relatively::scale, "scale");
+                typing::register_member(&Relatively::use_vertical_ratio, "use_vertical_ratio");
+            }
+        };
+        struct Rotation
+        {
+            float angle = 0.0f;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Rotation::angle, "angle");
             }
         };
     };
@@ -6137,8 +6203,9 @@ namespace jeecs
             type_info::of<Transform::Translation>("Transform::Translation");
 
             type_info::of<UserInterface::Origin>("UserInterface::Origin");
-            type_info::of<UserInterface::Size>("UserInterface::Size");
-            type_info::of<UserInterface::Offset>("UserInterface::Offset");
+            type_info::of<UserInterface::Rotation>("UserInterface::Rotation");
+            type_info::of<UserInterface::Absolute>("UserInterface::Absolute");
+            type_info::of<UserInterface::Relatively>("UserInterface::Relatively");
 
             type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
             type_info::of<Renderer::Shape>("Renderer::Shape");

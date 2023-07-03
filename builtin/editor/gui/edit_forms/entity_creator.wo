@@ -235,10 +235,9 @@ namespace editor::gui::edit_forms
                 if (MenuItem("UI变换"))
                 {
                     context->add_components("UserInterface::Origin");
-                    context->add_components("UserInterface::Size");
-                    context->add_components("UserInterface::Offset");
-                    context->add_components("Transform::LocalToWorld");
-                    context->add_components("Transform::Translation");
+                    context->add_components("UserInterface::Rotation");
+                    context->add_components("UserInterface::Absolute");
+                    context->add_components("UserInterface::Relatively");
                 }
 
                 if (MenuItem("基本渲染"))

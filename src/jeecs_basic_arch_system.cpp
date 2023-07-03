@@ -563,7 +563,9 @@ namespace jeecs_impl
 
         inline void update_dependence_archinfo(jeecs::dependence* dependence) const noexcept
         {
-            types_set contain_set, anyof_set, except_set /*, maynot_set*/;
+            types_set contain_set, except_set /*, maynot_set*/;
+            std::map<size_t/* Group id */, types_set> anyof_sets;
+
             for (auto& requirement : dependence->m_requirements)
             {
                 switch (requirement.m_require)
@@ -573,7 +575,7 @@ namespace jeecs_impl
                 case jeecs::requirement::type::MAYNOT:
                     /*maynot_set.insert(requirement.m_type);*/ break;
                 case jeecs::requirement::type::ANYOF:
-                    anyof_set.insert(requirement.m_type); break;
+                    anyof_sets[requirement.m_require_group_id].insert(requirement.m_type); break;
                 case jeecs::requirement::type::EXCEPT:
                     except_set.insert(requirement.m_type); break;
                 }
@@ -593,6 +595,13 @@ namespace jeecs_impl
                         return true;
                 return b.empty();
             };
+            static auto contain_all_any = [](const types_set& a, const std::map<size_t/* Group id */, types_set>& b)
+            {
+                for (auto& [_, type_id_set] : b)
+                    if (contain_any(a, type_id_set) == false)
+                        return false;
+                return true;
+            };
             static auto except = [](const types_set& a, const types_set& b)
             {
                 for (auto type_id : b)
@@ -608,7 +617,7 @@ namespace jeecs_impl
                 for (auto& [typeset, arch] : _m_arch_types_mapping)
                 {
                     if (contain(typeset, contain_set)
-                        && contain_any(typeset, anyof_set)
+                        && contain_all_any(typeset, anyof_sets)
                         && except(typeset, except_set))
                     {
                         // Current arch is matched!

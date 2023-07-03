@@ -107,8 +107,9 @@ namespace editor::gui::edit_forms
                     "Renderer::Shaders",
                     "Renderer::Textures",
                     "UserInterface::Origin",
-                    "UserInterface::Size",
-                    "UserInterface::Offset",
+                    "UserInterface::Rotation",
+                    "UserInterface::Absolute",
+                    "UserInterface::Relatively",
                     "Transform::LocalToWorld",
                     "Transform::Translation",
                 ]);

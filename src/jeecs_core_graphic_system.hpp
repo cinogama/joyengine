@@ -451,14 +451,12 @@ public let frag =
         struct renderer_arch
         {
             const Rendqueue* rendqueue;
-            const Translation* translation;
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
             const UserInterface::Origin* ui_origin;
-            const UserInterface::Size* ui_size;
-            const UserInterface::Offset* ui_offset;
-
+            const UserInterface::Rotation* ui_rotation;
+  
             bool operator < (const renderer_arch& another) const noexcept
             {
                 int a_queue = rendqueue ? rendqueue->rend_queue : 0;
@@ -552,13 +550,13 @@ public let frag =
 
             this->pipeline_update_begin();
 
-            std::unordered_map<typing::uid_t, math::vec2> parent_range_offset_list;
+            std::unordered_map<typing::uid_t, UserInterface::Origin*> parent_origin_list;
 
             select_from(get_world())
                 .exec(&UserInterfaceGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
-                .exec([&](Transform::Anchor& anchor, UserInterface::Offset& offset) 
+                .exec([&](Transform::Anchor& anchor, UserInterface::Origin& origin)
                     {
-                        parent_range_offset_list[anchor.uid] = offset.global_offset;
+                        parent_origin_list[anchor.uid] = &origin;
                     })
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
@@ -572,28 +570,61 @@ public let frag =
                         );
                     })
                 .exec(
-                    [this, &parent_range_offset_list](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue,
+                    [this, &parent_origin_list](
+                        Shaders* shads, 
+                        Textures* texs, 
+                        Shape* shape, 
+                        Rendqueue* rendqueue,
                         Transform::LocalToParent* l2p,
-                        UserInterface::Origin& ui_origin,
-                        UserInterface::Size& size,
-                        UserInterface::Offset& offset)
+                        UserInterface::Origin& origin,
+                        UserInterface::Rotation* rotation,
+                        UserInterface::Absolute* absolute, 
+                        UserInterface::Relatively* relatively)
                     {
-                        offset.global_offset = offset.local_offset;
+                        UserInterface::Origin* parent_origin = nullptr;
                         if (l2p != nullptr)
                         {
-                            auto fnd = parent_range_offset_list.find(l2p->parent_uid);
-                            if (fnd != parent_range_offset_list.end())
-                            {
-                                offset.global_offset = offset.local_offset + fnd->second;
-                            }
+                            auto fnd = parent_origin_list.find(l2p->parent_uid);
+                            if (fnd != parent_origin_list.end())
+                                parent_origin = fnd->second;
                         }
+
+                        if (parent_origin != nullptr)
+                        {
+                            origin.global_offset = parent_origin->global_offset;
+                            origin.global_location = parent_origin->global_location;
+                            origin.use_vertical_ratio = parent_origin->use_vertical_ratio;
+                        }
+                        else
+                        {
+                            origin.global_offset = {};
+                            origin.global_location = {};
+                        }
+
+                        if (absolute != nullptr)
+                        {
+                            origin.global_offset += absolute->offset;
+                            origin.size = absolute->size;
+                        }
+                        else
+                            origin.size = {};
+
+                        if (relatively != nullptr)
+                        {
+                            origin.global_location += relatively->location;
+                            origin.scale = relatively->scale;
+                            origin.use_vertical_ratio = relatively->use_vertical_ratio;
+                        }
+                        else
+                            origin.scale = {};
 
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs, &ui_origin, &size, &offset
+                                rendqueue, shape, shads, texs, &origin, rotation
                             });
                     })
                         .anyof<Shaders, Textures, Shape>()
+                        .anyof<UserInterface::Absolute, UserInterface::Relatively>()
                         .except<Light2D::Color>()
                         ;
                     std::sort(m_camera_list.begin(), m_camera_list.end());
@@ -633,12 +664,6 @@ public let frag =
                 { 0.0f, 0.0f, 0.0f, 1.0f },
             };
 
-            float MAT4_UI_P_ORIGIN_OFFSET[4][4] = {
-                  { 1.0f, 0.0f, 0.0f, 0.0f },
-                  { 0.0f, 1.0f, 0.0f, 0.0f },
-                  { 0.0f, 0.0f, 1.0f, 0.0f },
-                  { 0.0f, 0.0f, 0.0f, 1.0f },
-            };
             float MAT4_UI_MODULE[4][4];
 
             for (auto& current_camera : m_camera_list)
@@ -696,50 +721,36 @@ public let frag =
                         * _using_tiling = &default_tiling,
                         * _using_offset = &default_offset;
 
-                    assert(rendentity.translation);
-
-                    float MAT4_MVP[4][4];
-                    const float(&MAT4_MODEL)[4][4] = MAT4_UI_MODULE;
-
-                    // 如果是UI，VIEW 和 PROJECTION 则需要保持为单位矩阵, 即 规定如此
                     assert(rendentity.ui_origin != nullptr);
-                    assert(rendentity.ui_size != nullptr);
 
-                    auto* origin_vertext_data = drawing_shape->resouce()->m_raw_vertex_data;
+                    math::vec2 uisize, uioffset;
+                    rendentity.ui_origin->calc_absolute_ui_layout(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT, &uioffset, &uisize);
+                    uioffset.x -= (float)RENDAIMBUFFER_WIDTH / 2.0f;
+                    uioffset.y -= (float)RENDAIMBUFFER_HEIGHT / 2.0f;
+
                     // TODO: 这里俩矩阵实际上可以优化，但是UI实际上也没有多少，暂时直接矩阵乘法也无所谓
                     // NOTE: 这里的大小和偏移大小乘二是因为一致空间是 -1 到 1，天然有一个1/2的压缩，为了保证单位正确，这里乘二
                     const float MAT4_UI_SIZE_OFFSET[4][4] = {
-                        { rendentity.ui_size->size.x * 2.0f / (float)RENDAIMBUFFER_WIDTH , 0.0f, 0.0f, 0.0f },
-                        { 0.0f, rendentity.ui_size->size.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 0.0f },
+                        { uisize.x * 2.0f / (float)RENDAIMBUFFER_WIDTH , 0.0f, 0.0f, 0.0f },
+                        { 0.0f, uisize.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 0.0f },
                         { 0.0f, 0.0f, 1.0f, 0.0f },
-                        { rendentity.ui_offset->global_offset.x * 2.0f / (float)RENDAIMBUFFER_WIDTH,
-                          rendentity.ui_offset->global_offset.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 1.0f },
+                        { uioffset.x * 2.0f / (float)RENDAIMBUFFER_WIDTH,
+                          uioffset.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 1.0f },
                     };
-                    const float MAT4_UI_ORIGIN_OFFSET[4][4] = {
-                        { 1.0f, 0.0f, 0.0f, 0.0f },
-                        { 0.0f, 1.0f, 0.0f, 0.0f },
-                        { 0.0f, 0.0f, 1.0f, 0.0f },
-                        {
-                            rendentity.ui_origin->left_origin 
-                            ? origin_vertext_data->m_size_x / 2.0f 
-                            : (rendentity.ui_origin->right_origin 
-                                ? -origin_vertext_data->m_size_x / 2.0f 
-                                : 0.0f),
-                            rendentity.ui_origin->buttom_origin 
-                            ? origin_vertext_data->m_size_y / 2.0f 
-                            : (rendentity.ui_origin->top_origin
-                                ? -origin_vertext_data->m_size_y / 2.0f 
-                                : 0.0f),
-                            0.0f, 1.0f },
+
+                    float MAT4_UI_ROTATION[4][4] = {
+                      { 1.0f, 0.0f, 0.0f, 0.0f },
+                      { 0.0f, 1.0f, 0.0f, 0.0f },
+                      { 0.0f, 0.0f, 1.0f, 0.0f },
+                      { 0.0f, 0.0f, 0.0f, 1.0f },
                     };
-                    // 执行原点缩放偏移，借用 MVP 矩阵作为中转
-                    math::mat4xmat4(MAT4_MVP, MAT4_UI_SIZE_OFFSET, rendentity.translation->object2world);
-                    math::mat4xmat4(MAT4_UI_MODULE, MAT4_MVP, MAT4_UI_ORIGIN_OFFSET);
+                    if (rendentity.ui_rotation != nullptr)
+                    {
+                        math::quat q(0.0f, 0.0f, rendentity.ui_rotation->angle);
+                        q.create_matrix(MAT4_UI_ROTATION);
+                    }
 
-                    MAT4_UI_P_ORIGIN_OFFSET[3][0] = rendentity.ui_origin->left_origin ? -1.0f : (rendentity.ui_origin->right_origin ? 1.0f : 0.0f);
-                    MAT4_UI_P_ORIGIN_OFFSET[3][1] = rendentity.ui_origin->buttom_origin ? -1.0f : (rendentity.ui_origin->top_origin ? 1.0f : 0.0f);
-
-                    math::mat4xmat4(MAT4_MVP, MAT4_UI_P_ORIGIN_OFFSET, MAT4_MODEL);
+                    math::mat4xmat4(MAT4_UI_MODULE, MAT4_UI_ROTATION, MAT4_UI_SIZE_OFFSET);
 
                     auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
@@ -761,18 +772,15 @@ public let frag =
                         auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), rchain_texture_group);
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_UI_MODULE);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_UI_MODULE);
 
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MODEL);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_UI_MODULE);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_UNIT);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_P_ORIGIN_OFFSET);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_UI_UNIT);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_UNIT);
 
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
-                            rendentity.translation->local_scale.x,
-                            rendentity.translation->local_scale.y,
-                            rendentity.translation->local_scale.z);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3, 1.0f, 1.0f, 1.0f);
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
