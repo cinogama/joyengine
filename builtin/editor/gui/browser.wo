@@ -919,10 +919,6 @@ namespace $$MODULE_NAME$$
                 drawpannel::modify_sampling_method(path.path->tostring, image_samping_method, 
                     \method = do je::editor::update_texture_sampling_method_by_path(path.path->tostring, method););
             }
-            if (MenuItem("更新此图片"))
-            {
-                std::panic("TODO");
-            }
             Separator();
         }
 
