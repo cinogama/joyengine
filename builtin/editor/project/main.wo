@@ -93,7 +93,12 @@ namespace editor
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
             for (let _, wdat : context.m_dumped_editing_worlds)
             {
-                do jeapi::deserialize::world(self->get_env->get_universe, wdat, false);
+                let wdat_map = wdat->tomap();
+                let syss = wdat_map->getor("runtime_systems", []: dynamic) as array->connect(
+                    wdat_map->getor("systems", []: dynamic) as array
+                );
+                wdat_map->set("systems", syss: dynamic);
+                do jeapi::deserialize::world(self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true);
             }
             self.m_debug_context = option::value(context);
 
@@ -369,10 +374,9 @@ namespace editor
         }
         public func reset_editing_world(self: Project, world: je::world)=> result<void, string>
         {
-            if (self->is_project_world(world))
+            if (self->is_project_world(world) || self->is_debugging)
             {
                 // 将编辑器系统从旧编辑世界中移除，这里要求新编辑世界必须属于项目
-                // 但不要求旧编辑世界，因为旧编辑世界可能是默认世界
                 let editing_world = self->get_editing_world();
 
                 match (editing_world)

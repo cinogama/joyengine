@@ -25,7 +25,16 @@ namespace editor::gui
             m_open: mutable<bool>,
             m_old_state: mut option<bool>, // 仅用于开始调试时保存，结束调试时还原
         };
-
+        public func show_all_editor_form(self: EditorContext)
+        {
+            for (let _, c : self.m_editor_form_controlor)
+                do c.m_open->set(true);
+        }
+        public func hide_all_editor_form(self: EditorContext)
+        {
+            for (let _, c : self.m_editor_form_controlor)
+                do c.m_open->set(false);
+        }
         func begin_debug_and_hide_all_editor_form(self: EditorContext)
         {
             for (let _, c : self.m_editor_form_controlor)

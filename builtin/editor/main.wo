@@ -184,6 +184,9 @@ func my_ask_for_get_yes_no_cancel_result(
         let mut open = BeginAttrOpen(F"退出？##{JobID()}", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
 
+        if (open == false)
+            okevent(-1);
+
         if (p->is_debugging)
         {
             TextDisabled("正在编辑模式中，请先退出编辑状态");

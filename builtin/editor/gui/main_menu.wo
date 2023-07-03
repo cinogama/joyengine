@@ -33,6 +33,11 @@ namespace editor::gui
         context->launch_editor_form(func(){
             context->update_api();
 
+            if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::L_SHIFT, je::keycode::O]))
+                context->hide_all_editor_form();
+            else if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::O]))
+                context->show_all_editor_form();
+
             if (!context->get_project->is_debugging)
             {
                 do BeginMainMenuBar();

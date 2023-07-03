@@ -36,8 +36,7 @@ namespace editor::gui::edit_forms
                         current_world_is_editing))
                     {
                         // 更换渲染中的世界
-                        if (!is_debugging)
-                            do context->get_project->reset_editing_world(world)->unwarp;
+                        do context->get_project->reset_editing_world(world)->unwarp;
                     }
                     if (BeginPopupContextItem())
                     {

@@ -47,7 +47,7 @@ namespace editor::gui::edit_forms
                             if (proj->is_debugging)
                             {
                                 do BeginAttr("调试工具", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-                                    if (Button("终止当前调试") || jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::P]))
+                                    if (Button("终止当前调试") || jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::ESC]))
                                     {
                                         do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
                                         je::loginfo("=======================调试结束=======================");
