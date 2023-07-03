@@ -594,8 +594,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                         ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32.lib")
                         ->replace("$$JE_WOOLANG_LIB$$", "libwoo32.lib")
                         ->replace("$$JE_POSTFIX$$", "32"),
-                    cmake_option = ["-G", USING_MSVC_TARGET, "-A", "Win32", "-DCMAKE_BUILD_TYPE=RELEASE"],
-                    built_command = ["-p:Configuration=Release",],
+                    cmake_option = ["-G", USING_MSVC_TARGET, "-A", "Win32", "-DCMAKE_BUILD_TYPE=RELWITHDEBINFO"],
+                    built_command = ["-p:Configuration=RelWithDebInfo",],
                 },
                 ["win32_debug_x64"] = CxxProjectBuildConfig{ 
                     config = "win32_debug_x64",
@@ -612,8 +612,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                         ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs.lib")
                         ->replace("$$JE_WOOLANG_LIB$$", "libwoo.lib")
                         ->replace("$$JE_POSTFIX$$", ""),
-                    cmake_option = ["-G", USING_MSVC_TARGET, "-A", "x64", "-DCMAKE_BUILD_TYPE=RELEASE"],
-                    built_command = ["-p:Configuration=Release",],
+                    cmake_option = ["-G", USING_MSVC_TARGET, "-A", "x64", "-DCMAKE_BUILD_TYPE=RELWITHDEBINFO"],
+                    built_command = ["-p:Configuration=RelWithDebInfo",],
                 } 
             };
 
