@@ -1798,7 +1798,8 @@ public func frag(vf: v2f)
                 // If current camera contain light2d-pass, prepare light shadow here.
                 if (current_camera.light2DPostPass != nullptr && current_camera.light2DPostPass->post_shader.has_resource())
                 {
-                    assert(current_camera.light2DPostPass->defer_rend_aim != nullptr);
+                    assert(current_camera.light2DPostPass->post_rend_target != nullptr
+                        && current_camera.light2DPostPass->post_light_target != nullptr);
 
                     // Walk throw all light, rend shadows to light's ShadowBuffer.
                     for (auto& lightarch : m_2dlight_list)
