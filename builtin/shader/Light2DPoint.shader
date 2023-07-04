@@ -67,9 +67,11 @@ public func frag(vf: v2f)
    
     let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
 
+    let pixvpos = vf.vpos->xyz / vf.vpos->w;
+
     let vposition = texture(visual_coord, uv);
     let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
-    let fgdistance = distance(vposition->xyz, vf.vpos->xyz / vf.vpos->w);
+    let fgdistance = distance(vposition->xyz, pixvpos);
     let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_light2d_resolutin, uv);
 
     let decay = je_light2d_decay;
@@ -78,6 +80,6 @@ public func frag(vf: v2f)
     let result = je_color->xyz * je_color->w * (float::one - shadow_factor) * fade_factor;
 
     return fout{
-        color = float4::create(result / (fgdistance + 1.0), 0.),
+        color = float4::create(result / (fgdistance + 1.0) * step(pixvpos->z, vposition->z), 0.),
     };
 }

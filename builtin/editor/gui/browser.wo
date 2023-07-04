@@ -319,9 +319,9 @@ namespace editor::gui
         }
     }
 
-    static let mut current_work_path = "";        
+    static let mut current_work_path = "";
 
-    func set_current_work_path(path: filesys::path_t)
+    public func set_current_work_path(path: filesys::path_t)
     {
         assert(filesys::isdir(path));
         current_work_path = path->tostring();

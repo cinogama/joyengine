@@ -21,6 +21,7 @@ namespace editor
         m_world_instance: je::world,
         m_world_path: filesys::path_t,
         m_runtime_systems: mut array<je::typeinfo>,
+        m_remark_note: mut string,
     };
 
     using DebugContext = struct {
@@ -33,7 +34,7 @@ namespace editor
         m_name: string,             // 项目的名称，不能更改
         m_path: filesys::path_t,    // 项目所在的目录
         m_env: Environment,         // 项目环境
-        m_configs: map<string, Project::IConfig>, // 配置信息，是的，这是个map，意味着开发者可以自己加点配置项目
+        m_configs: map<string, Project::IConfig>, // 配置信息，是的，这是个map，意味着开发者理论上可以自己加点配置项目
         m_worlds: vec<ProjectWorld>,
         m_modules: map<filesys::path_t, CxxProject>, 
         m_editing_world: mut option<je::world>,
@@ -481,11 +482,20 @@ namespace editor
                     m_world_instance = self.m_env->create_world,
                     m_world_path = new_world_file_path,
                     m_runtime_systems = mut [],
+                    m_remark_note = mut "",
                 });
         }
         public func get_world_path(self: Project, w: je::world)
         {
             return self->get_project_world(w)->> \pw = pw.m_world_path;;
+        }
+        public func get_world_remark(self: Project, w: je::world)
+        {
+            return self->get_project_world(w)->> \pw = pw.m_remark_note;;
+        }
+        public func set_world_remark(self: Project, w: je::world, remark: string)
+        {
+            return self->get_project_world(w)->> \pw = pw.m_remark_note = remark;->has;
         }
         public func serialize_entity(self: Project, e: je::entity)
         {
@@ -508,6 +518,7 @@ namespace editor
                         }
                     ->> \dat = dat->apply("path", pw.m_world_path->tostring->sub(self.m_path->tostring->len): dynamic);
                     ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
+                    ->> \dat = dat->apply("remark", pw.m_remark_note as string: dynamic);
                     ;
                 ;
         }
@@ -522,6 +533,7 @@ namespace editor
                         mut dat->getor("runtime_systems", []: dynamic) as array
                             =>> \elem = systype->has ? [systype->val] | []
                                 where systype = je::typeinfo::load(elem as string);,
+                    m_remark_note = mut dat->getor("remark", "": dynamic) as string,
                 });
 
             if (dat->getor("is_editing", false: dynamic) as bool)

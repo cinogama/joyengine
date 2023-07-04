@@ -26,6 +26,13 @@ namespace jeapi::gui::widget
         }
         return option::none;
     }
+
+    let mut registered_click_file_button_callback = option::none: option<(string)=>void>;
+    public func register_click_file_callback(c: (string)=> void)
+    {
+        registered_click_file_button_callback = option::value(c);
+    }
+
     public func File(name: string, path: string)
     {
         using je::gui;
@@ -37,6 +44,11 @@ namespace jeapi::gui::widget
         if (Button((path == ""? "<空>" | path) + F"##{name}"))
         {
             // Open File dialog?
+            match (registered_click_file_button_callback)
+            {
+            value(c)? c(path);
+            none?;
+            }
         }
         let is_hovered = IsItemHovered();
         let drag_result = accept_file_for_current_widget();

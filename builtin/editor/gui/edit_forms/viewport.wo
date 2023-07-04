@@ -69,7 +69,7 @@ namespace editor::gui::edit_forms
                     let o2d_type = je::typeinfo::load("Camera::OrthoProjection")->val;
                     let p3d_type = je::typeinfo::load("Camera::PerspectiveProjection")->val;
 
-                    let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPass")->val;
+                    let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPostPass")->val;
                     if (debug_camera_entity->val->get_component(o2d_type)->has)
                     {
                         debug_camera_entity->val->remove_component(o2d_type);
@@ -84,13 +84,13 @@ namespace editor::gui::edit_forms
                 }
                 if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
                 {
-                    let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPass")->val;
+                    let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPostPass")->val;
                     if (debug_camera_entity->val->get_component(l2d_camera_pass_component_type)->has)
                         debug_camera_entity->val->remove_component(l2d_camera_pass_component_type);
                     else
                     {
                         let camerapass = debug_camera_entity->val->add_component(l2d_camera_pass_component_type);
-                        let (type, val) = camerapass->get_member("mixed_shader")->val;
+                        let (type, val) = camerapass->get_member("post_shader")->val;
                         val->parse(type, "#je_file#@/resource/shader/Light2DCameraPass.shader");                        
                     }
                 }

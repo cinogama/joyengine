@@ -4888,6 +4888,55 @@ namespace jeecs
         };
     }
 
+    namespace typing
+    {
+        template<typename T>
+        class fileresource
+        {
+            basic::resource<T> _m_resource = nullptr;
+            jeecs::string _m_path = "";
+        public:
+            bool load(const std::string& path)
+            {
+                _m_path = path;
+                _m_resource = nullptr;
+                if (path != "")
+                {
+                    _m_resource = T::load(path);
+                    return _m_resource != nullptr;
+                }
+                return true;
+            }
+            bool has_resource() const
+            {
+                return _m_resource != nullptr;
+            }
+            basic::resource<T> get_resource() const
+            {
+                return _m_resource;
+            }
+            std::string get_path() const
+            {
+                return _m_path;
+            }
+            std::string to_string()const
+            {
+                return "#je_file#" + get_path();
+            }
+            void parse(const char* databuf)
+            {
+                _m_resource = nullptr;
+                const size_t head_length = strlen("#je_file#");
+                if (strncmp(databuf, "#je_file#", head_length) == 0)
+                {
+                    databuf += head_length;
+                    load(databuf);
+                }
+            }
+
+        };
+    }
+
     namespace Transform
     {
         // An entity without childs and parent will contain these components:
@@ -5237,14 +5286,12 @@ namespace jeecs
                 typing::register_member(&Clip::zfar, "zfar");
             }
         };
-
         struct Projection
         {
             float view[4][4] = {};
             float projection[4][4] = {};
             float inv_projection[4][4] = {};
         };
-
         struct OrthoProjection
         {
             float scale = 1.0f;
@@ -5253,7 +5300,6 @@ namespace jeecs
                 typing::register_member(&OrthoProjection::scale, "scale");
             }
         };
-
         struct PerspectiveProjection
         {
             float angle = 75.0f;
@@ -5262,7 +5308,6 @@ namespace jeecs
                 typing::register_member(&PerspectiveProjection::angle, "angle");
             }
         };
-
         struct Viewport
         {
             math::vec4 viewport = math::vec4(0, 0, 1, 1);
@@ -5271,7 +5316,6 @@ namespace jeecs
                 typing::register_member(&Viewport::viewport, "viewport");
             }
         };
-
         struct RendToFramebuffer
         {
             basic::resource<graphic::framebuffer> framebuffer = nullptr;
@@ -5369,7 +5413,6 @@ namespace jeecs
                 typing::register_member(&Color::parallel, "parallel");
             }
         };
-
         struct Shadow
         {
             size_t resolution_width = 1024;
@@ -5386,45 +5429,17 @@ namespace jeecs
                 typing::register_member(&Shadow::shape_offset, "shape_offset");
             }
         };
-
-        struct CameraPass
+        struct CameraPostPass
         {
-            basic::resource<graphic::framebuffer> defer_rend_aim = nullptr;
-            basic::resource<jeecs::graphic::framebuffer> defer_light_effect = nullptr;
-
-            struct mixed_shader
-            {
-                basic::resource<jeecs::graphic::shader> shader = nullptr;
-                std::string to_string()const
-                {
-                    return std::string("#je_file#") + (
-                        shader == nullptr || shader->resouce()->m_path == nullptr
-                        ? "" : shader->resouce()->m_path);
-                }
-                void parse(const char* databuf)
-                {
-                    shader = nullptr;
-                    const size_t head_length = strlen("#je_file#");
-                    if (strncmp(databuf, "#je_file#", head_length) == 0)
-                    {
-                        databuf += head_length;
-                        if (strcmp(databuf, "") != 0)
-                        {
-                            auto* shad = jeecs::graphic::shader::load(databuf);
-                            if (shad != nullptr)
-                                shader = shad;
-                        }
-                    }
-                }
-            };
-            mixed_shader mixed_shader;
+            basic::resource<graphic::framebuffer> post_rend_target = nullptr;
+            basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
+            typing::fileresource<jeecs::graphic::shader> post_shader;
 
             static void JERefRegsiter()
             {
-                typing::register_member(&CameraPass::mixed_shader, "mixed_shader");
+                typing::register_member(&CameraPostPass::post_shader, "post_shader");
             }
         };
-
         struct Block
         {
             struct block_mesh
@@ -6223,7 +6238,7 @@ namespace jeecs
 
             type_info::of<Light2D::Color>("Light2D::Color");
             type_info::of<Light2D::Shadow>("Light2D::Shadow");
-            type_info::of<Light2D::CameraPass>("Light2D::CameraPass");
+            type_info::of<Light2D::CameraPostPass>("Light2D::CameraPostPass");
             type_info::of<Light2D::Block>("Light2D::Block");
             type_info::of<Script::Woolang>("Script::Woolang");
 

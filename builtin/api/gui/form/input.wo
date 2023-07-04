@@ -42,4 +42,38 @@ namespace jeapi::gui::form
 
         }, (mutable::create(defaultval),));
     }
+    public func multiinput(
+        title: string, 
+        text: string, 
+        defaultval: string, 
+        okevent: (string)=> void)
+    {
+        launch(func(inputval: mutable<string>)
+        {
+            let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+
+            Text(text);
+            do InputTextMultilineSize("##", inputval->get, 400., 200.)
+                ->> \val = inputval->set(val);
+                ;
+            SameLine();
+            if (Button("还原"))
+                inputval->set(defaultval);
+
+            if (Button("确定") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::ENTER])))
+            {
+                okevent(inputval->get);
+                open = false;
+            }
+            SameLine();
+            if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+                open = false;
+
+            End();
+
+            return open;
+
+        }, (mutable::create(defaultval),));
+    }
 }

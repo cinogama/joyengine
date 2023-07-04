@@ -695,10 +695,9 @@ public let frag =
 
                 // If camera rend to texture, clear the frame buffer (if need)
                 if (rend_aim_buffer)
-                {
                     jegl_rchain_clear_color_buffer(rend_chain);
-                    jegl_rchain_clear_depth_buffer(rend_chain);
-                }
+                // Clear depth buffer to overwrite pixels.
+                jegl_rchain_clear_depth_buffer(rend_chain);
 
                 jegl_rchain_bind_uniform_buffer(rend_chain, m_default_uniform_buffer->resouce());
 
@@ -1017,10 +1016,9 @@ public let frag =
 
                 // If camera rend to texture, clear the frame buffer (if need)
                 if (rend_aim_buffer)
-                {
                     jegl_rchain_clear_color_buffer(rend_chain);
-                    jegl_rchain_clear_depth_buffer(rend_chain);
-                }
+                // Clear depth buffer to overwrite pixels.
+                jegl_rchain_clear_depth_buffer(rend_chain);
 
                 jegl_rchain_bind_uniform_buffer(rend_chain, m_default_uniform_buffer->resouce());
 
@@ -1395,7 +1393,7 @@ public func frag(vf: v2f)
             const Projection* projection;
             const Viewport* viewport;
             const RendToFramebuffer* rendToFramebuffer;
-            const Light2D::CameraPass* light2DPass;
+            const Light2D::CameraPostPass* light2DPostPass;
 
             bool operator < (const camera_arch& another) const noexcept
             {
@@ -1546,18 +1544,18 @@ public func frag(vf: v2f)
             select_from(get_world())
                 .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
-                    [this](Translation& tarns, Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPass* light2dpass)
+                    [this](Translation& tarns, Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPostPass* light2dpostpass)
                     {
                         auto* branch = this->pipeline_allocate();
                         branch->new_frame(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
 
                         m_camera_list.emplace_back(
                             camera_arch{
-                                branch, rendqueue, &tarns, &projection, cameraviewport, rendbuf, light2dpass
+                                branch, rendqueue, &tarns, &projection, cameraviewport, rendbuf, light2dpostpass
                             }
                         );
 
-                        if (light2dpass != nullptr)
+                        if (light2dpostpass != nullptr)
                         {
                             auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
                                 ? rendbuf->framebuffer->resouce()
@@ -1573,12 +1571,12 @@ public func frag(vf: v2f)
                                     (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
                                     (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
 
-                            bool need_update = light2dpass->defer_rend_aim == nullptr
-                                || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
-                                || light2dpass->defer_rend_aim->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
+                            bool need_update = light2dpostpass->post_rend_target == nullptr
+                                || light2dpostpass->post_rend_target->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
+                                || light2dpostpass->post_rend_target->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
                             if (need_update)
                             {
-                                light2dpass->defer_rend_aim
+                                light2dpostpass->post_rend_target
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
                                             jegl_texture::texture_format::RGBA, // 漫反射颜色
@@ -1586,7 +1584,7 @@ public func frag(vf: v2f)
                                             jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
                                             jegl_texture::texture_format::DEPTH, // 深度缓冲区
                                         });
-                                light2dpass->defer_light_effect
+                                light2dpostpass->post_light_target
                                     = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
                                             (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 光渲染结果
@@ -1798,7 +1796,7 @@ public func frag(vf: v2f)
                 jegl_rendchain* rend_chain = nullptr;
 
                 // If current camera contain light2d-pass, prepare light shadow here.
-                if (current_camera.light2DPass != nullptr && current_camera.light2DPass->mixed_shader.shader != nullptr)
+                if (current_camera.light2DPostPass != nullptr && current_camera.light2DPostPass->post_shader.has_resource())
                 {
                     assert(current_camera.light2DPass->defer_rend_aim != nullptr);
 
@@ -2033,7 +2031,7 @@ public func frag(vf: v2f)
                         }
                     }
 
-                    auto light2d_rend_aim_buffer = current_camera.light2DPass->defer_rend_aim->resouce();
+                    auto light2d_rend_aim_buffer = current_camera.light2DPostPass->post_rend_target->resouce();
 
                     rend_chain = current_camera.branchPipeline->allocate_new_chain(light2d_rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
                     jegl_rchain_clear_color_buffer(rend_chain);
@@ -2052,10 +2050,9 @@ public func frag(vf: v2f)
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (rend_aim_buffer)
-                    {
                         jegl_rchain_clear_color_buffer(rend_chain);
-                        jegl_rchain_clear_depth_buffer(rend_chain);
-                    }
+                    // Clear depth buffer to overwrite pixels.
+                    jegl_rchain_clear_depth_buffer(rend_chain);
                 }
 
                 jegl_rchain_bind_uniform_buffer(rend_chain, m_default_uniform_buffer->resouce());
@@ -2132,17 +2129,17 @@ public func frag(vf: v2f)
 
                 }
 
-                if (current_camera.light2DPass != nullptr && current_camera.light2DPass->mixed_shader.shader != nullptr)
+                if (current_camera.light2DPostPass != nullptr && current_camera.light2DPostPass->post_shader.has_resource())
                 {
                     // Rend light buffer to target buffer.
-                    assert(current_camera.light2DPass->defer_rend_aim != nullptr
-                        && current_camera.light2DPass->defer_light_effect != nullptr);
+                    assert(current_camera.light2DPostPass->post_rend_target != nullptr
+                        && current_camera.light2DPostPass->post_light_target != nullptr);
 
                     auto* light2d_host = DeferLight2DHost::instance(glthread);
 
                     // Rend Light result to target buffer.
                     jegl_rendchain* light2d_light_effect_rend_chain = current_camera.branchPipeline->allocate_new_chain(
-                        current_camera.light2DPass->defer_light_effect->resouce(), 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                        current_camera.light2DPostPass->post_light_target->resouce(), 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain);
                     auto lightpass_pre_bind_texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
@@ -2150,13 +2147,13 @@ public func frag(vf: v2f)
                     // Bind attachment
                     // 绑定漫反射颜色通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 0,
-                        current_camera.light2DPass->defer_rend_aim->get_attachment(0)->resouce());
+                        current_camera.light2DPostPass->post_rend_target->get_attachment(0)->resouce());
                     // 绑定自发光通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 1,
-                        current_camera.light2DPass->defer_rend_aim->get_attachment(1)->resouce());
+                        current_camera.light2DPostPass->post_rend_target->get_attachment(1)->resouce());
                     // 绑定视空间坐标通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 2,
-                        current_camera.light2DPass->defer_rend_aim->get_attachment(2)->resouce());
+                        current_camera.light2DPostPass->post_rend_target->get_attachment(2)->resouce());
                     
                     jegl_rchain_bind_pre_texture_group(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group);
 
@@ -2260,24 +2257,24 @@ public func frag(vf: v2f)
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (rend_aim_buffer)
-                    {
-                        jegl_rchain_clear_color_buffer(final_target_rend_chain);
-                        jegl_rchain_clear_depth_buffer(final_target_rend_chain);
-                    }
+                        jegl_rchain_clear_color_buffer(rend_chain);
+                    // Clear depth buffer to overwrite pixels.
+                    jegl_rchain_clear_depth_buffer(rend_chain);
 
                     auto texture_group = jegl_rchain_allocate_texture_group(final_target_rend_chain);
                     jegl_rchain_bind_texture(final_target_rend_chain, texture_group, 0,
-                        current_camera.light2DPass->defer_light_effect->get_attachment(0)->resouce());
+                        current_camera.light2DPostPass->post_light_target->get_attachment(0)->resouce());
 
                     // 将光照信息储存到通道0，进行最终混合和gamma矫正等操作，完成输出
                     auto* rchain_draw_action = jegl_rchain_draw(final_target_rend_chain,
-                        current_camera.light2DPass->mixed_shader.shader->resouce(), 
+                        current_camera.light2DPostPass->post_shader.get_resource()->resouce(),
                         light2d_host->_screen_vertex->resouce(), texture_group);
-                    auto* builtin_uniform = current_camera.light2DPass->mixed_shader.shader->m_builtin;
+
+                    auto* builtin_uniform = current_camera.light2DPostPass->post_shader.get_resource()->m_builtin;
 
                     JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
-                        (float)current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_width,
-                        (float)current_camera.light2DPass->defer_light_effect->resouce()->m_raw_framebuf_data->m_height);
+                        (float)current_camera.light2DPostPass->post_light_target->resouce()->m_raw_framebuf_data->m_width,
+                        (float)current_camera.light2DPostPass->post_light_target->resouce()->m_raw_framebuf_data->m_height);
                 } // Finish for Light2d effect.
             }
         }
