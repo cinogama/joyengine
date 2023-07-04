@@ -571,9 +571,9 @@ public let frag =
                     })
                 .exec(
                     [this, &parent_origin_list](
-                        Shaders* shads, 
+                        Shaders& shads, 
                         Textures* texs, 
-                        Shape* shape, 
+                        Shape& shape, 
                         Rendqueue* rendqueue,
                         Transform::LocalToParent* l2p,
                         UserInterface::Origin& origin,
@@ -620,7 +620,7 @@ public let frag =
 
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, shape, shads, texs, &origin, rotation
+                                rendqueue, &shape, &shads, texs, &origin, rotation
                             });
                     })
                         .anyof<Shaders, Textures, Shape>()
@@ -704,23 +704,24 @@ public let frag =
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
                 for (auto& rendentity : m_renderer_list)
                 {
+                    assert(rendentity.ui_origin != nullptr
+                        && rendentity.shaders != nullptr
+                        && rendentity.shape != nullptr);
+
                     auto& drawing_shape =
-                        (rendentity.shape && rendentity.shape->vertex)
+                        rendentity.shape->vertex != nullptr
                         ? rendentity.shape->vertex
                         : host()->default_shape_quad;
 
                     auto& drawing_shaders =
-                        (rendentity.shaders && rendentity.shaders->shaders.size())
+                        rendentity.shaders->shaders.empty() == false
                         ? rendentity.shaders->shaders
                         : host()->default_shaders_list;
 
-                    // Bind texture here
                     constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
                     const jeecs::math::vec2
                         * _using_tiling = &default_tiling,
                         * _using_offset = &default_offset;
-
-                    assert(rendentity.ui_origin != nullptr);
 
                     math::vec2 uisize, uioffset;
                     rendentity.ui_origin->calc_absolute_ui_layout(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT, &uioffset, &uisize);
@@ -939,17 +940,15 @@ public let frag =
                         );
                     })
                 .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue)
                     {
                         // TODO: Need Impl AnyOf
                             // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs
+                                rendqueue, &trans, &shape, &shads, texs
                             });
-                    })
-                        .anyof<Shaders, Textures, Shape>()
-                        .except<Light2D::Color, UserInterface::Origin>()
+                    }).except<Light2D::Color, UserInterface::Origin>()
                         ;
                     std::sort(m_camera_list.begin(), m_camera_list.end());
                     std::sort(m_renderer_list.begin(), m_renderer_list.end());
@@ -1025,17 +1024,20 @@ public let frag =
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
                 for (auto& rendentity : m_renderer_list)
                 {
+                    assert(rendentity.translation != nullptr
+                        && rendentity.shaders != nullptr
+                        && rendentity.shape != nullptr);
+
                     auto& drawing_shape =
-                        (rendentity.shape && rendentity.shape->vertex)
+                        rendentity.shape->vertex != nullptr
                         ? rendentity.shape->vertex
                         : host()->default_shape_quad;
 
                     auto& drawing_shaders =
-                        (rendentity.shaders && rendentity.shaders->shaders.size())
+                        rendentity.shaders->shaders.empty() == false
                         ? rendentity.shaders->shaders
                         : host()->default_shaders_list;
 
-                    // Bind texture here
                     constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
                     const jeecs::math::vec2
                         * _using_tiling = &default_tiling,
@@ -1394,6 +1396,8 @@ public func frag(vf: v2f)
             const Viewport* viewport;
             const RendToFramebuffer* rendToFramebuffer;
             const Light2D::CameraPostPass* light2DPostPass;
+            const Shaders* shaders;
+            const Textures* textures;
 
             bool operator < (const camera_arch& another) const noexcept
             {
@@ -1544,14 +1548,22 @@ public func frag(vf: v2f)
             select_from(get_world())
                 .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
-                    [this](Translation& tarns, Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Light2D::CameraPostPass* light2dpostpass)
+                    [this](
+                        Translation& tarns, 
+                        Projection& projection, 
+                        Rendqueue* rendqueue, 
+                        Viewport* cameraviewport,
+                        RendToFramebuffer* rendbuf,
+                        Light2D::CameraPostPass* light2dpostpass,
+                        Shaders* shaders,
+                        Textures* textures)
                     {
                         auto* branch = this->pipeline_allocate();
                         branch->new_frame(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
 
                         m_camera_list.emplace_back(
                             camera_arch{
-                                branch, rendqueue, &tarns, &projection, cameraviewport, rendbuf, light2dpostpass
+                                branch, rendqueue, &tarns, &projection, cameraviewport, rendbuf, light2dpostpass, shaders, textures
                             }
                         );
 
@@ -1593,28 +1605,28 @@ public func frag(vf: v2f)
                         }
                     })
                 .exec(
-                    [this](Translation& trans, Shaders* shads, Textures* texs, Shape* shape, Rendqueue* rendqueue)
+                    [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue)
                     {
                         // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, shape, shads, texs
+                                rendqueue, &trans, &shape, &shads, texs
                             });
-                    }).anyof<Shaders, Textures, Shape>()
+                    })
                         .except<Light2D::Color, UserInterface::Origin>()
                         .exec(
                             [this](Translation& trans,
                                 Light2D::Color& color,
                                 Light2D::Shadow* shadow,
-                                Shape* shape,
-                                Shaders* shads,
+                                Shape& shape,
+                                Shaders& shads,
                                 Textures* texs)
                             {
                                 m_2dlight_list.emplace_back(
                                     light2d_arch{
                                         &trans, &color, shadow,
-                                        shape,
-                                        shads,
+                                        &shape,
+                                        &shads,
                                         texs,
                                     }
                                 );
@@ -1641,7 +1653,7 @@ public func frag(vf: v2f)
                                     }
                                 }
                             }
-                        ).anyof<Shaders, Textures, Shape>()
+                        )
                                 .exec(
                                     [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
                                     {
@@ -1796,7 +1808,7 @@ public func frag(vf: v2f)
                 jegl_rendchain* rend_chain = nullptr;
 
                 // If current camera contain light2d-pass, prepare light shadow here.
-                if (current_camera.light2DPostPass != nullptr && current_camera.light2DPostPass->post_shader.has_resource())
+                if (current_camera.light2DPostPass != nullptr)
                 {
                     assert(current_camera.light2DPostPass->post_rend_target != nullptr
                         && current_camera.light2DPostPass->post_light_target != nullptr);
@@ -2065,10 +2077,14 @@ public func frag(vf: v2f)
 
                 jegl_rchain_bind_pre_texture_group(rend_chain, shadow_pre_bind_texture_group);
 
+                constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
+
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
                 for (auto& rendentity : m_renderer_list)
                 {
-                    assert(rendentity.translation);
+                    assert(rendentity.translation != nullptr
+                        && rendentity.shaders != nullptr
+                        && rendentity.shape != nullptr);
 
                     const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
 
@@ -2076,16 +2092,15 @@ public func frag(vf: v2f)
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                     auto& drawing_shape =
-                        (rendentity.shape && rendentity.shape->vertex)
+                        rendentity.shape->vertex != nullptr
                         ? rendentity.shape->vertex
                         : host()->default_shape_quad;
                     auto& drawing_shaders =
-                        (rendentity.shaders && rendentity.shaders->shaders.size())
+                        rendentity.shaders->shaders.empty() == false
                         ? rendentity.shaders->shaders
                         : host()->default_shaders_list;
 
                     // Bind texture here
-                    constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
                     const jeecs::math::vec2
                         * _using_tiling = &default_tiling,
                         * _using_offset = &default_offset;
@@ -2130,7 +2145,8 @@ public func frag(vf: v2f)
 
                 }
 
-                if (current_camera.light2DPostPass != nullptr && current_camera.light2DPostPass->post_shader.has_resource())
+                if (current_camera.light2DPostPass != nullptr
+                    && current_camera.shaders != nullptr)
                 {
                     // Rend light buffer to target buffer.
                     assert(current_camera.light2DPostPass->post_rend_target != nullptr
@@ -2160,6 +2176,11 @@ public func frag(vf: v2f)
 
                     for (auto& light2d : m_2dlight_list)
                     {
+                        assert(light2d.translation != nullptr
+                            && light2d.color != nullptr
+                            && light2d.shaders != nullptr
+                            && light2d.shape != nullptr);
+
                         // 绑定阴影
                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
 
@@ -2176,16 +2197,15 @@ public func frag(vf: v2f)
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                         auto& drawing_shape =
-                            (light2d.shape && light2d.shape->vertex)
+                            light2d.shape->vertex != nullptr
                             ? light2d.shape->vertex
                             : host()->default_shape_quad;
                         auto& drawing_shaders =
-                            (light2d.shaders && light2d.shaders->shaders.size())
+                            light2d.shaders->shaders.empty() == false
                             ? light2d.shaders->shaders
                             : host()->default_shaders_list;
 
                         // Bind texture here
-                        constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
                         const jeecs::math::vec2
                             * _using_tiling = &default_tiling,
                             * _using_offset = &default_offset;
@@ -2198,6 +2218,10 @@ public func frag(vf: v2f)
                             for (auto& texture : light2d.textures->textures)
                                 jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resouce());
                         }
+
+                        for (auto& texture : light2d.textures->textures)
+                            jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resouce());
+  
                         for (auto& shader_pass : drawing_shaders)
                         {
                             auto* using_shader = &shader_pass;
@@ -2263,19 +2287,59 @@ public func frag(vf: v2f)
                     jegl_rchain_clear_depth_buffer(rend_chain);
 
                     auto texture_group = jegl_rchain_allocate_texture_group(final_target_rend_chain);
+
                     jegl_rchain_bind_texture(final_target_rend_chain, texture_group, 0,
                         current_camera.light2DPostPass->post_light_target->get_attachment(0)->resouce());
 
+                    // 绑定漫反射颜色通道
+                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 0,
+                        current_camera.light2DPostPass->post_rend_target->get_attachment(0)->resouce());
+                    // 绑定自发光通道
+                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 1,
+                        current_camera.light2DPostPass->post_rend_target->get_attachment(1)->resouce());
+                    // 绑定视空间坐标通道
+                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 2,
+                        current_camera.light2DPostPass->post_rend_target->get_attachment(2)->resouce());
+
+                    const jeecs::math::vec2
+                        * _using_tiling = &default_tiling,
+                        * _using_offset = &default_offset;
+
+                    if (current_camera.textures)
+                    {
+                        _using_tiling = &current_camera.textures->tiling;
+                        _using_offset = &current_camera.textures->offset;
+
+                        for (auto& texture : current_camera.textures->textures)
+                            jegl_rchain_bind_texture(final_target_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resouce());
+                    }
+
+                    auto& drawing_shaders =
+                        current_camera.shaders->shaders.empty() == false
+                        ? current_camera.shaders->shaders
+                        : host()->default_shaders_list;
+
+                    for (auto& shader_pass : drawing_shaders)
+                    {
+                        auto* using_shader = &shader_pass;
+                        if (!shader_pass->m_builtin)
+                            using_shader = &host()->default_shader;
+
+                        auto* rchain_draw_action = jegl_rchain_draw(final_target_rend_chain,
+                            (*using_shader)->resouce(), light2d_host->_screen_vertex->resouce(), texture_group);
+
+                        auto* builtin_uniform = (*using_shader)->m_builtin;
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
+                            (float)current_camera.light2DPostPass->post_light_target->resouce()->m_raw_framebuf_data->m_width,
+                            (float)current_camera.light2DPostPass->post_light_target->resouce()->m_raw_framebuf_data->m_height);
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
+                    }
+
                     // 将光照信息储存到通道0，进行最终混合和gamma矫正等操作，完成输出
-                    auto* rchain_draw_action = jegl_rchain_draw(final_target_rend_chain,
-                        current_camera.light2DPostPass->post_shader.get_resource()->resouce(),
-                        light2d_host->_screen_vertex->resouce(), texture_group);
-
-                    auto* builtin_uniform = current_camera.light2DPostPass->post_shader.get_resource()->m_builtin;
-
-                    JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
-                        (float)current_camera.light2DPostPass->post_light_target->resouce()->m_raw_framebuf_data->m_width,
-                        (float)current_camera.light2DPostPass->post_light_target->resouce()->m_raw_framebuf_data->m_height);
+                    
                 } // Finish for Light2d effect.
             }
         }

@@ -1336,7 +1336,6 @@ WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc
     }
 
     // TODO: 如果当前实体不包含jeecs::Renderer::Shaders组件，在此panic?
-
     return wo_ret_void(vm);
 }
 

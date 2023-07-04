@@ -5433,12 +5433,6 @@ namespace jeecs
         {
             basic::resource<graphic::framebuffer> post_rend_target = nullptr;
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
-            typing::fileresource<jeecs::graphic::shader> post_shader;
-
-            static void JERefRegsiter()
-            {
-                typing::register_member(&CameraPostPass::post_shader, "post_shader");
-            }
         };
         struct Block
         {
