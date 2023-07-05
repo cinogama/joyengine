@@ -891,6 +891,8 @@ struct jegl_resource
         {
             uint32_t m_uint1;
             uint32_t m_uint2;
+            uint32_t m_uint3;
+            uint32_t m_uint4;
         };
     };
     const char* m_path;
