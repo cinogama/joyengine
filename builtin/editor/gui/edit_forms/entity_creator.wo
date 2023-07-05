@@ -235,7 +235,6 @@ namespace editor::gui::edit_forms
                 if (MenuItem("UI变换"))
                 {
                     context->add_components("UserInterface::Origin");
-                    context->add_components("UserInterface::Rotation");
                     context->add_components("UserInterface::Absolute");
                     context->add_components("UserInterface::Relatively");
                 }
