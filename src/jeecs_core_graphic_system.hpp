@@ -455,7 +455,7 @@ public let frag =
             const Shaders* shaders;
             const Textures* textures;
             const UserInterface::Origin* ui_origin;
-            const UserInterface::Rotation* ui_rotation;
+            const UserInterface::Distortion* ui_distortion;
   
             bool operator < (const renderer_arch& another) const noexcept
             {
@@ -577,7 +577,7 @@ public let frag =
                         Rendqueue* rendqueue,
                         Transform::LocalToParent* l2p,
                         UserInterface::Origin& origin,
-                        UserInterface::Rotation* rotation,
+                        UserInterface::Distortion* distortion,
                         UserInterface::Absolute* absolute, 
                         UserInterface::Relatively* relatively)
                     {
@@ -620,7 +620,7 @@ public let frag =
 
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &shape, &shads, texs, &origin, rotation
+                                rendqueue, &shape, &shads, texs, &origin, distortion
                             });
                     })
                         .anyof<Shaders, Textures, Shape>()
@@ -730,13 +730,21 @@ public let frag =
 
                     // TODO: 这里俩矩阵实际上可以优化，但是UI实际上也没有多少，暂时直接矩阵乘法也无所谓
                     // NOTE: 这里的大小和偏移大小乘二是因为一致空间是 -1 到 1，天然有一个1/2的压缩，为了保证单位正确，这里乘二
-                    const float MAT4_UI_SIZE_OFFSET[4][4] = {
+                    const float MAT4_UI_SIZE[4][4] = {
                         { uisize.x * 2.0f / (float)RENDAIMBUFFER_WIDTH , 0.0f, 0.0f, 0.0f },
                         { 0.0f, uisize.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 0.0f },
                         { 0.0f, 0.0f, 1.0f, 0.0f },
-                        { uioffset.x * 2.0f / (float)RENDAIMBUFFER_WIDTH,
-                          uioffset.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 1.0f },
+                        { 0.0f, 0.0f, 0.0f, 1.0f },
                     };
+                    const float MAT4_UI_OFFSET[4][4] = {
+                       { 1.0f , 0.0f, 0.0f, 0.0f },
+                       { 0.0f, 1.0f, 0.0f, 0.0f },
+                       { 0.0f, 0.0f, 1.0f, 0.0f },
+                       { uioffset.x * 2.0f / (float)RENDAIMBUFFER_WIDTH,
+                         uioffset.y * 2.0f / (float)RENDAIMBUFFER_HEIGHT, 0.0f, 1.0f },
+                    };
+
+                    float MAT4_UI_ROTATED_SIZE[4][4];
 
                     float MAT4_UI_ROTATION[4][4] = {
                       { 1.0f, 0.0f, 0.0f, 0.0f },
@@ -744,13 +752,13 @@ public let frag =
                       { 0.0f, 0.0f, 1.0f, 0.0f },
                       { 0.0f, 0.0f, 0.0f, 1.0f },
                     };
-                    if (rendentity.ui_rotation != nullptr)
+                    if (rendentity.ui_distortion != nullptr)
                     {
-                        math::quat q(0.0f, 0.0f, rendentity.ui_rotation->angle);
+                        math::quat q(0.0f, 0.0f, rendentity.ui_distortion->angle);
                         q.create_matrix(MAT4_UI_ROTATION);
                     }
-
-                    math::mat4xmat4(MAT4_UI_MODULE, MAT4_UI_ROTATION, MAT4_UI_SIZE_OFFSET);
+                    math::mat4xmat4(MAT4_UI_ROTATED_SIZE, MAT4_UI_SIZE, MAT4_UI_ROTATION);
+                    math::mat4xmat4(MAT4_UI_MODULE, MAT4_UI_OFFSET, MAT4_UI_ROTATED_SIZE);
 
                     auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 

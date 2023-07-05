@@ -5166,12 +5166,12 @@ namespace jeecs
                 typing::register_member(&Relatively::use_vertical_ratio, "use_vertical_ratio");
             }
         };
-        struct Rotation
+        struct Distortion
         {
             float angle = 0.0f;
             static void JERefRegsiter()
             {
-                typing::register_member(&Rotation::angle, "angle");
+                typing::register_member(&Distortion::angle, "angle");
             }
         };
     };
@@ -6212,7 +6212,7 @@ namespace jeecs
             type_info::of<Transform::Translation>("Transform::Translation");
 
             type_info::of<UserInterface::Origin>("UserInterface::Origin");
-            type_info::of<UserInterface::Rotation>("UserInterface::Rotation");
+            type_info::of<UserInterface::Distortion>("UserInterface::Distortion");
             type_info::of<UserInterface::Absolute>("UserInterface::Absolute");
             type_info::of<UserInterface::Relatively>("UserInterface::Relatively");
 
