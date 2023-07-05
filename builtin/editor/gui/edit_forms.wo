@@ -26,8 +26,8 @@ namespace editor::gui
 
         jeapi::gui::widget::register_click_file_callback(func(path){
             let p = filesys::parent(context->get_project->parse_path_normalize(path));
-            if (p != "" && filesys::isdir(p))
-                set_current_work_path();
+            if (filesys::isdir(p))
+                set_current_work_path(p);
         });
     }
 }
