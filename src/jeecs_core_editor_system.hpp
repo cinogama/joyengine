@@ -289,22 +289,22 @@ namespace jeecs
 
                 static basic::resource<graphic::vertex>
                     axis_x =
-                    new graphic::vertex(graphic::vertex::type::LINES,
+                    graphic::vertex::create(jegl_vertex::type::LINES,
                         { -1.f,0,0,        0.25f,0,0,
                           1.f,0,0,      1,0,0 },
                         { 3, 3 }),
                     axis_y =
-                    new graphic::vertex(graphic::vertex::type::LINES,
+                    graphic::vertex::create(jegl_vertex::type::LINES,
                         { 0,-1.f,0,        0,0.25f,0,
                           0,1.f,0,      0,1,0 },
                         { 3, 3 }),
                     axis_z =
-                    new graphic::vertex(graphic::vertex::type::LINES,
+                    graphic::vertex::create(jegl_vertex::type::LINES,
                         { 0,0,-1.f,        0,0,0.25f,
                           0,0,1.f,          0,0,1 },
                         { 3, 3 }),
                     select_box_vert =
-                    new graphic::vertex(graphic::vertex::type::LINESTRIP,
+                    graphic::vertex::create(jegl_vertex::type::LINESTRIP,
                         {
                                -0.5f,-0.5f,-0.5f,    0.5f,-0.5f,-0.5f,    0.5f,0.5f,-0.5f,      -0.5f,0.5f,-0.5f,     -0.5f,-0.5f,-0.5f,
                                -0.5f,-0.5f,0.5f,    0.5f,-0.5f,0.5f,    0.5f,0.5f,0.5f,      -0.5f,0.5f,0.5f,     -0.5f,-0.5f,0.5f,
@@ -453,7 +453,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     position.pos = trans->world_position;
                     rotation.rot = trans->world_rotation;
 
-                    float distance = 
+                    float distance =
                         _camera_ortho_porjection == nullptr
                         ? 0.25f * (_camera_pos - trans->world_position).length()
                         : 1.0f / _camera_ortho_porjection->scale;
@@ -578,7 +578,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 .exec([this](game_entity e, Editor::Anchor& anchor)
                     {
                         if (anchor.uid == jedbg_get_editing_entity_uid())
-                        _inputs.selected_entity = std::optional(e);
+                            _inputs.selected_entity = std::optional(e);
                     })
                 // Move walker(root)
                         .exec(&DefaultEditorSystem::MoveWalker).contain<Editor::EditorWalker>().except<Camera::Projection>()

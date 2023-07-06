@@ -273,7 +273,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             : universe(_universe)
         {
             default_shape_quad =
-                new graphic::vertex(jegl_vertex::TRIANGLESTRIP,
+                graphic::vertex::create(jegl_vertex::TRIANGLESTRIP,
                     {
                         -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f,
                         -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
@@ -282,13 +282,12 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     },
                     { 3, 2, 3 });
 
-            default_texture = graphic::texture::create(2, 2, jegl_texture::texture_format::RGBA);
+            default_texture = graphic::texture::create(2, 2, jegl_texture::format::RGBA, jegl_texture::sampling::NEAREST);
             default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
             default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
             default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
             default_texture->pix(1, 0).set({ 0.25f, 0.25f, 0.25f, 1.f });
-            default_texture->resouce()->m_raw_texture_data->m_sampling = jegl_texture::texture_sampling::NEAREST;
-            
+
             default_shader = graphic::shader::create("!/builtin/builtin_default.shader", R"(
 // Default shader
 import je.shader;
@@ -323,7 +322,7 @@ public let frag =
             config.m_title = "JoyEngineECS(JoyEngine 4.0)";
             config.m_fullscreen = false;
             config.m_enable_resize = true;
-            
+
             glthread = jegl_start_graphic_thread(
                 config,
                 jegl_using_opengl3_apis,
@@ -456,7 +455,7 @@ public let frag =
             const Textures* textures;
             const UserInterface::Origin* ui_origin;
             const UserInterface::Distortion* ui_distortion;
-  
+
             bool operator < (const renderer_arch& another) const noexcept
             {
                 int a_queue = rendqueue ? rendqueue->rend_queue : 0;
@@ -569,70 +568,70 @@ public let frag =
                             }
                         );
                     })
-                .exec(
-                    [this, &parent_origin_list](
-                        Shaders& shads, 
-                        Textures* texs, 
-                        Shape& shape, 
-                        Rendqueue* rendqueue,
-                        Transform::LocalToParent* l2p,
-                        UserInterface::Origin& origin,
-                        UserInterface::Distortion* distortion,
-                        UserInterface::Absolute* absolute, 
-                        UserInterface::Relatively* relatively)
-                    {
-                        UserInterface::Origin* parent_origin = nullptr;
-                        if (l2p != nullptr)
-                        {
-                            auto fnd = parent_origin_list.find(l2p->parent_uid);
-                            if (fnd != parent_origin_list.end())
-                                parent_origin = fnd->second;
-                        }
+                        .exec(
+                            [this, &parent_origin_list](
+                                Shaders& shads,
+                                Textures* texs,
+                                Shape& shape,
+                                Rendqueue* rendqueue,
+                                Transform::LocalToParent* l2p,
+                                UserInterface::Origin& origin,
+                                UserInterface::Distortion* distortion,
+                                UserInterface::Absolute* absolute,
+                                UserInterface::Relatively* relatively)
+                            {
+                                UserInterface::Origin* parent_origin = nullptr;
+                                if (l2p != nullptr)
+                                {
+                                    auto fnd = parent_origin_list.find(l2p->parent_uid);
+                                    if (fnd != parent_origin_list.end())
+                                        parent_origin = fnd->second;
+                                }
 
-                        if (parent_origin != nullptr)
-                        {
-                            origin.global_offset = parent_origin->global_offset;
-                            origin.global_location = parent_origin->global_location;
-                            origin.use_vertical_ratio = parent_origin->use_vertical_ratio;
-                        }
-                        else
-                        {
-                            origin.global_offset = {};
-                            origin.global_location = {};
-                        }
+                                if (parent_origin != nullptr)
+                                {
+                                    origin.global_offset = parent_origin->global_offset;
+                                    origin.global_location = parent_origin->global_location;
+                                    origin.use_vertical_ratio = parent_origin->use_vertical_ratio;
+                                }
+                                else
+                                {
+                                    origin.global_offset = {};
+                                    origin.global_location = {};
+                                }
 
-                        if (absolute != nullptr)
-                        {
-                            origin.global_offset += absolute->offset;
-                            origin.size = absolute->size;
-                        }
-                        else
-                            origin.size = {};
+                                if (absolute != nullptr)
+                                {
+                                    origin.global_offset += absolute->offset;
+                                    origin.size = absolute->size;
+                                }
+                                else
+                                    origin.size = {};
 
-                        if (relatively != nullptr)
-                        {
-                            origin.global_location += relatively->location;
-                            origin.scale = relatively->scale;
-                            origin.use_vertical_ratio = relatively->use_vertical_ratio;
-                        }
-                        else
-                            origin.scale = {};
+                                if (relatively != nullptr)
+                                {
+                                    origin.global_location += relatively->location;
+                                    origin.scale = relatively->scale;
+                                    origin.use_vertical_ratio = relatively->use_vertical_ratio;
+                                }
+                                else
+                                    origin.scale = {};
 
-                        m_renderer_list.emplace_back(
-                            renderer_arch{
-                                rendqueue, &shape, &shads, texs, &origin, distortion
-                            });
-                    })
+                                m_renderer_list.emplace_back(
+                                    renderer_arch{
+                                        rendqueue, &shape, &shads, texs, &origin, distortion
+                                    });
+                            })
                         .anyof<Shaders, Textures, Shape>()
-                        .anyof<UserInterface::Absolute, UserInterface::Relatively>()
-                        .except<Light2D::Color>()
-                        ;
-                    std::sort(m_camera_list.begin(), m_camera_list.end());
-                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
+                                .anyof<UserInterface::Absolute, UserInterface::Relatively>()
+                                .except<Light2D::Color>()
+                                ;
+                            std::sort(m_camera_list.begin(), m_camera_list.end());
+                            std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
-                    this->pipeline_update_end();
+                            this->pipeline_update_end();
 
-                    DrawFrame();
+                            DrawFrame();
         }
 
         void DrawFrame()
@@ -1085,7 +1084,7 @@ public let frag =
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
-                      
+
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
                             rendentity.translation->local_scale.x,
                             rendentity.translation->local_scale.y,
@@ -1123,10 +1122,10 @@ public let frag =
                 : _m_belong_context(_ctx)
             {
                 using namespace jeecs::graphic;
-                _no_shadow = texture::create(1, 1, jegl_texture::texture_format::RGBA);
+                _no_shadow = texture::create(1, 1, jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
                 _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
 
-                _screen_vertex = new vertex(jegl_vertex::vertex_type::TRIANGLESTRIP,
+                _screen_vertex = vertex::create(jegl_vertex::type::TRIANGLESTRIP,
                     {
                         -1.f, 1.f, 0.f,     0.f, 1.f,
                         -1.f, -1.f, 0.f,    0.f, 0.f,
@@ -1557,9 +1556,9 @@ public func frag(vf: v2f)
                 .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
                     [this](
-                        Translation& tarns, 
-                        Projection& projection, 
-                        Rendqueue* rendqueue, 
+                        Translation& tarns,
+                        Projection& projection,
+                        Rendqueue* rendqueue,
                         Viewport* cameraviewport,
                         RendToFramebuffer* rendbuf,
                         Light2D::CameraPostPass* light2dpostpass,
@@ -1597,17 +1596,17 @@ public func frag(vf: v2f)
                             if (need_update)
                             {
                                 light2dpostpass->post_rend_target
-                                    = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
+                                    = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            jegl_texture::texture_format::RGBA, // 漫反射颜色
-                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                            jegl_texture::texture_format(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 视空间坐标(RGB) Alpha通道暂时留空
-                                            jegl_texture::texture_format::DEPTH, // 深度缓冲区
+                                            {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT}, // 漫反射颜色
+                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
+                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, // 视空间坐标(RGB) Alpha通道暂时留空
+                                            {jegl_texture::format::DEPTH, jegl_texture::sampling::DEFAULT }, // 深度缓冲区
                                         });
                                 light2dpostpass->post_light_target
-                                    = new jeecs::graphic::framebuffer(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
+                                    = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            (jegl_texture::texture_format)(jegl_texture::texture_format::RGBA | jegl_texture::texture_format::COLOR16), // 光渲染结果
+                                            {(jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, // 光渲染结果
                                         });
                             }
                         }
@@ -1647,58 +1646,54 @@ public func frag(vf: v2f)
 
                                     if (generate_new_framebuffer)
                                     {
-                                        shadow->shadow_buffer = new graphic::framebuffer(
+                                        shadow->shadow_buffer = graphic::framebuffer::create(
                                             shadow->resolution_width, shadow->resolution_height,
                                             {
-                                                jegl_texture::texture_format::RGBA,
+                                                {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT}
                                                 // Only store shadow value to R, FBO in opengl not support rend to MONO
                                             }
                                         );
-                                        shadow->shadow_buffer->get_attachment(0)->resouce()->m_raw_texture_data->m_sampling
-                                            = (jegl_texture::texture_sampling)(
-                                                jegl_texture::texture_sampling::LINEAR
-                                                | jegl_texture::texture_sampling::CLAMP_EDGE);
                                     }
                                 }
                             }
                         )
-                                .exec(
-                                    [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                        .exec(
+                            [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                            {
+                                if (block.mesh.m_block_mesh == nullptr)
+                                {
+                                    std::vector<float> _vertex_buffer;
+                                    if (!block.mesh.m_block_points.empty())
                                     {
-                                        if (block.mesh.m_block_mesh == nullptr)
+                                        for (auto& point : block.mesh.m_block_points)
                                         {
-                                            std::vector<float> _vertex_buffer;
-                                            if (!block.mesh.m_block_points.empty())
-                                            {
-                                                for (auto& point : block.mesh.m_block_points)
+                                            _vertex_buffer.insert(_vertex_buffer.end(),
                                                 {
-                                                    _vertex_buffer.insert(_vertex_buffer.end(),
-                                                        {
-                                                            point.x, point.y, 0.f, 0.f,
-                                                            point.x, point.y, 0.f, 1.f,
-                                                        });
-                                                }
-                                                _vertex_buffer.insert(_vertex_buffer.end(),
-                                                    {
-                                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 0.f,
-                                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 1.f,
-                                                    });
-                                                block.mesh.m_block_mesh = new jeecs::graphic::vertex(
-                                                    jeecs::graphic::vertex::type::TRIANGLESTRIP,
-                                                    _vertex_buffer, { 3,1 });
-                                            }
+                                                    point.x, point.y, 0.f, 0.f,
+                                                    point.x, point.y, 0.f, 1.f,
+                                                });
                                         }
-                                        // Cannot create vertex with 0 point.
-
-                                        if (block.mesh.m_block_mesh != nullptr)
-                                        {
-                                            m_2dblock_list.push_back(
-                                                block2d_arch{
-                                                        &trans, &block, texture, shape
-                                                }
-                                            );
-                                        }
+                                        _vertex_buffer.insert(_vertex_buffer.end(),
+                                            {
+                                                block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 0.f,
+                                                block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 1.f,
+                                            });
+                                        block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                                            jegl_vertex::type::TRIANGLESTRIP,
+                                            _vertex_buffer, { 3,1 });
                                     }
+                                }
+                                // Cannot create vertex with 0 point.
+
+                                if (block.mesh.m_block_mesh != nullptr)
+                                {
+                                    m_2dblock_list.push_back(
+                                        block2d_arch{
+                                                &trans, &block, texture, shape
+                                        }
+                                    );
+                                }
+                            }
                             );
                             std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
                                 [](const block2d_arch& a, const block2d_arch& b) {
@@ -1779,8 +1774,8 @@ public func frag(vf: v2f)
                 }
                 else
                     LIGHT2D_SHADOW.push_back(light2d_host->_no_shadow->resouce());
-                    /*jegl_using_texture(light2d_host->_no_shadow->resouce(),
-                        JE_SHADOW2D_0 + light_count);*/
+                /*jegl_using_texture(light2d_host->_no_shadow->resouce(),
+                    JE_SHADOW2D_0 + light_count);*/
 
                 ++light_count;
             }
@@ -1883,9 +1878,9 @@ public func frag(vf: v2f)
                                             : blockarch.shape->vertex;
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
-                                            light2d_shadow_rend_chain, 
+                                            light2d_shadow_rend_chain,
                                             shape_shadow_pass->resouce(),
-                                            using_shape->resouce(), 
+                                            using_shape->resouce(),
                                             texture_group);
                                         auto* builtin_uniform = shape_shadow_pass->m_builtin;
 
@@ -1903,7 +1898,7 @@ public func frag(vf: v2f)
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
                                         // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, 
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform,
                                             local_scale, float3,
                                             blockarch.block->shadow,
                                             0.f,
@@ -1911,9 +1906,9 @@ public func frag(vf: v2f)
 
                                         if (blockarch.textures != nullptr)
                                         {
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, 
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2,
                                                 blockarch.textures->tiling.x, blockarch.textures->tiling.y);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, 
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2,
                                                 blockarch.textures->offset.x, blockarch.textures->offset.y);
                                         }
 
@@ -2008,8 +2003,8 @@ public func frag(vf: v2f)
                                             : block_in_layer->shape->vertex;
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
-                                            light2d_shadow_rend_chain, 
-                                            sub_shadow_pass->resouce(), 
+                                            light2d_shadow_rend_chain,
+                                            sub_shadow_pass->resouce(),
                                             using_shape->resouce(),
                                             texture_group);
                                         auto* builtin_uniform = sub_shadow_pass->m_builtin;
@@ -2168,7 +2163,7 @@ public func frag(vf: v2f)
 
                     jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain);
                     auto lightpass_pre_bind_texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
-                    
+
                     // Bind attachment
                     // 绑定漫反射颜色通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 0,
@@ -2179,7 +2174,7 @@ public func frag(vf: v2f)
                     // 绑定视空间坐标通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 2,
                         current_camera.light2DPostPass->post_rend_target->get_attachment(2)->resouce());
-                    
+
                     jegl_rchain_bind_pre_texture_group(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group);
 
                     for (auto& light2d : m_2dlight_list)
@@ -2229,7 +2224,7 @@ public func frag(vf: v2f)
 
                         for (auto& texture : light2d.textures->textures)
                             jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resouce());
-  
+
                         for (auto& shader_pass : drawing_shaders)
                         {
                             auto* using_shader = &shader_pass;
@@ -2271,7 +2266,7 @@ public func frag(vf: v2f)
                                     (float)1.f,
                                     (float)1.f);
 
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_decay, float, light2d.color->decay);                           
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_decay, float, light2d.color->decay);
                         }
                     }
 
@@ -2347,7 +2342,7 @@ public func frag(vf: v2f)
                     }
 
                     // 将光照信息储存到通道0，进行最终混合和gamma矫正等操作，完成输出
-                    
+
                 } // Finish for Light2d effect.
             }
         }

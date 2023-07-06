@@ -415,11 +415,11 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
 
-        bool is_16bit = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::COLOR16);
-        bool is_depth = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::DEPTH);
-        bool is_cube = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::CUBE);
-        static_assert(jegl_texture::texture_format::MSAA_MASK == 0xFF00);
-        uint8_t msaa_level = (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::MSAA_MASK) >> 8;
+        bool is_16bit = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR16);
+        bool is_depth = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH);
+        bool is_cube = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::CUBE);
+        static_assert(jegl_texture::format::MSAA_MASK == 0xFF00);
+        uint8_t msaa_level = (resource->m_raw_texture_data->m_format & jegl_texture::format::MSAA_MASK) >> 8;
 
         auto gl_texture_type = GL_TEXTURE_2D;
 
@@ -431,21 +431,21 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         if (msaa_level == 0)
         {
             // Apply wrap setting
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::texture_sampling::WRAP_X_METHOD_MASK)
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_X_METHOD_MASK)
             {
-            case jegl_texture::texture_sampling::CLAMP_EDGE_X:
+            case jegl_texture::sampling::CLAMP_EDGE_X:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
-            case jegl_texture::texture_sampling::REPEAT_X:
+            case jegl_texture::sampling::REPEAT_X:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
             default:
                 jeecs::debug::logerr("Unknown texture wrap method in x(%04x)",
                     resource->m_raw_texture_data->m_sampling);
             }
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::texture_sampling::WRAP_Y_METHOD_MASK)
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_Y_METHOD_MASK)
             {
-            case jegl_texture::texture_sampling::CLAMP_EDGE_Y:
+            case jegl_texture::sampling::CLAMP_EDGE_Y:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
-            case jegl_texture::texture_sampling::REPEAT_Y:
+            case jegl_texture::sampling::REPEAT_Y:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
             default:
                 jeecs::debug::logerr("Unknown texture wrap method in y(%04x)",
@@ -453,29 +453,29 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             }
 
             // Apply fliter setting
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::texture_sampling::MIN_FILTER_MASK)
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MIN_FILTER_MASK)
             {
-            case jegl_texture::texture_sampling::MIN_LINEAR:
+            case jegl_texture::sampling::MIN_LINEAR:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_LINEAR); break;
-            case jegl_texture::texture_sampling::MIN_NEAREST:
+            case jegl_texture::sampling::MIN_NEAREST:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST); break;
-            case jegl_texture::texture_sampling::MIN_LINEAR_LINEAR_MIP:
+            case jegl_texture::sampling::MIN_LINEAR_LINEAR_MIP:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); break;
-            case jegl_texture::texture_sampling::MIN_NEAREST_LINEAR_MIP:
+            case jegl_texture::sampling::MIN_NEAREST_LINEAR_MIP:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR); break;
-            case jegl_texture::texture_sampling::MIN_LINEAR_NEAREST_MIP:
+            case jegl_texture::sampling::MIN_LINEAR_NEAREST_MIP:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST); break;
-            case jegl_texture::texture_sampling::MIN_NEAREST_NEAREST_MIP:
+            case jegl_texture::sampling::MIN_NEAREST_NEAREST_MIP:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST); break;
             default:
                 jeecs::debug::logerr("Unknown texture min filter method(%04x)",
                     resource->m_raw_texture_data->m_sampling);
             }
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::texture_sampling::MAG_FILTER_MASK)
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
             {
-            case jegl_texture::texture_sampling::MAG_LINEAR:
+            case jegl_texture::sampling::MAG_LINEAR:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MAG_FILTER, GL_LINEAR); break;
-            case jegl_texture::texture_sampling::MAG_NEAREST:
+            case jegl_texture::sampling::MAG_NEAREST:
                 glTexParameteri(gl_texture_type, GL_TEXTURE_MAG_FILTER, GL_NEAREST); break;
             default:
                 jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
@@ -508,15 +508,15 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         else
         {
             // Depth texture do not use color format
-            switch (resource->m_raw_texture_data->m_format & jegl_texture::texture_format::COLOR_DEPTH_MASK)
+            switch (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
             {
-            case jegl_texture::texture_format::MONO:
+            case jegl_texture::format::MONO:
                 texture_src_format = GL_LUMINANCE;
                 texture_aim_format = is_16bit ? GL_LUMINANCE16F_ARB : GL_LUMINANCE; break;
-            case jegl_texture::texture_format::RGB:
+            case jegl_texture::format::RGB:
                 texture_src_format = GL_RGB;
                 texture_aim_format = is_16bit ? GL_RGB16F : GL_RGB; break;
-            case jegl_texture::texture_format::RGBA:
+            case jegl_texture::format::RGBA:
                 texture_src_format = GL_RGBA;
                 texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA; break;
             default:
@@ -599,7 +599,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             GLenum using_attachment = attachment;
             GLenum buffer_texture_type = GL_TEXTURE_2D;
 
-            if (0 != (frame_texture->m_raw_texture_data->m_format & jegl_texture::texture_format::DEPTH))
+            if (0 != (frame_texture->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
             {
                 if (already_has_attached_depth)
                     jeecs::debug::logerr("Framebuffer(%p) attach depth buffer repeatedly.", resource);
@@ -609,7 +609,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             else
                 ++attachment;
 
-            if (0 != (frame_texture->m_raw_texture_data->m_format & jegl_texture::texture_format::MSAA_MASK))
+            if (0 != (frame_texture->m_raw_texture_data->m_format & jegl_texture::format::MSAA_MASK))
                 // Texture using msaa
                 buffer_texture_type = GL_TEXTURE_2D_MULTISAMPLE;
 
@@ -809,9 +809,9 @@ inline void _gl_using_texture2d(jegl_thread* gthread, jegl_resource* resource)
         }
     }
 
-    if (0 != ((jegl_texture::texture_format)resource->m_uint2 & jegl_texture::texture_format::MSAA_MASK))
+    if (0 != ((jegl_texture::format)resource->m_uint2 & jegl_texture::format::MSAA_MASK))
         glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, resource->m_uint1);
-    else if (0 != ((jegl_texture::texture_format)resource->m_uint2 & jegl_texture::texture_format::CUBE))
+    else if (0 != ((jegl_texture::format)resource->m_uint2 & jegl_texture::format::CUBE))
         glBindTexture(GL_TEXTURE_CUBE_MAP, resource->m_uint1);
     else
         glBindTexture(GL_TEXTURE_2D, resource->m_uint1);

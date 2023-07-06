@@ -12,13 +12,13 @@ struct je_stb_font_data
     float           m_scale_x;
     float           m_scale_y;
 
-    jegl_texture::texture_sampling m_sampling;
+    jegl_texture::sampling m_sampling;
 
     // NOTE: Multi-thread unsfe!
     std::map<unsigned long, jeecs::graphic::character> character_set;
 };
 
-je_font* je_font_load(const char* fontPath, float scalex, float scaley, jegl_texture::texture_sampling samp)
+je_font* je_font_load(const char* fontPath, float scalex, float scaley, jegl_texture::sampling samp)
 {
     je_stb_font_data* fontdata = new je_stb_font_data;
     fontdata->m_font_file_buf = nullptr;
@@ -99,7 +99,7 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
     ch.m_baseline_offset_y = y0;
 
     jeecs::graphic::texture* tex =
-        jeecs::graphic::texture::create(pixel_w, pixel_h, jegl_texture::texture_format::RGBA);
+        jeecs::graphic::texture::create(pixel_w, pixel_h, jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
     tex->resouce()->m_raw_texture_data->m_sampling = font->m_sampling;
 
     for (int j = 0; j < pixel_h; j++)

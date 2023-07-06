@@ -75,7 +75,7 @@ WO_API wo_api wojeapi_pack_buffer_to_fimg_packer(wo_vm vm, wo_value args, size_t
 
 WO_API wo_api wojeapi_finish_fimg_packer(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* ctx = (fimg_creating_context*)wo_pointer(args +0);
+    auto* ctx = (fimg_creating_context*)wo_pointer(args + 0);
     jeecs_file_image_finish(ctx);
     return wo_ret_void(vm);
 }
@@ -203,10 +203,10 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args, siz
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
     {
-        rbf->framebuffer = new jeecs::graphic::framebuffer(
+        rbf->framebuffer = jeecs::graphic::framebuffer::create(
             (size_t)wo_int(args + 1), (size_t)wo_int(args + 2), {
-                jegl_texture::texture_format::RGB,
-                jegl_texture::texture_format::DEPTH,
+                {jegl_texture::format::RGB, jegl_texture::sampling::DEFAULT},
+                {jegl_texture::format::DEPTH, jegl_texture::sampling::DEFAULT},
             }
         );
     }
@@ -244,24 +244,24 @@ WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::texture_sampling* samp);
-bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::texture_sampling samp);
+bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::sampling* samp);
+bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::sampling samp);
 
 WO_API wo_api wojeapi_get_texture_sampling_method_by_path(wo_vm vm, wo_value args, size_t argc)
 {
     //extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
-    //public func get_texture_sampling_method_by_path(path: string)=> texture_sampling;
-    jegl_texture::texture_sampling samp;
+    //public func get_texture_sampling_method_by_path(path: string)=> sampling;
+    jegl_texture::sampling samp;
     if (_jegl_read_texture_sampling_cache(wo_string(args + 0), &samp))
         return wo_ret_int(vm, (wo_integer_t)samp);
-    return wo_ret_int(vm, (wo_integer_t)jegl_texture::texture_sampling::DEFAULT);
+    return wo_ret_int(vm, (wo_integer_t)jegl_texture::sampling::DEFAULT);
 }
 
 WO_API wo_api wojeapi_update_texture_sampling_method_by_path(wo_vm vm, wo_value args, size_t argc)
 {
     //extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
-    //public func update_texture_sampling_method_by_path(path: string, method: texture_sampling)=> result<void, string>;
-    if (_jegl_write_texture_sampling_cache(wo_string(args + 0), (jegl_texture::texture_sampling)wo_int(args + 1)))
+    //public func update_texture_sampling_method_by_path(path: string, method: sampling)=> result<void, string>;
+    if (_jegl_write_texture_sampling_cache(wo_string(args + 0), (jegl_texture::sampling)wo_int(args + 1)))
         return wo_ret_ok_void(vm);
     return wo_ret_err_string(vm, "Failed to write image sampling method, maybe image file not exist.");
 }
@@ -1050,7 +1050,7 @@ WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = jeecs::graphic::texture::create(
-        (size_t)wo_int(args + 0), (size_t)wo_int(args + 1), jegl_texture::texture_format::RGBA);
+        (size_t)wo_int(args + 0), (size_t)wo_int(args + 1), jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
 
     return wo_ret_gchandle(vm,
         new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
@@ -1092,7 +1092,7 @@ WO_API wo_api wojeapi_texture_get_sampling_method(wo_vm vm, wo_value args, size_
 WO_API wo_api wojeapi_texture_set_sampling_method(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    (*loaded_texture)->resouce()->m_raw_texture_data->m_sampling = (jegl_texture::texture_sampling)wo_int(args + 1);
+    (*loaded_texture)->resouce()->m_raw_texture_data->m_sampling = (jegl_texture::sampling)wo_int(args + 1);
     (*loaded_texture)->resouce()->m_raw_texture_data->m_modified = true;
     return wo_ret_void(vm);
 }
@@ -1105,7 +1105,7 @@ WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args, size_t argc
     if (tex_raw->m_pixels)
     {
         auto memsz = tex_raw->m_width * tex_raw->m_height *
-            (tex_raw->m_format & jegl_texture::texture_format::COLOR_DEPTH_MASK);
+            (tex_raw->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
         if (memsz > 0)
         {
             auto* membuf = malloc(memsz);
@@ -1125,7 +1125,7 @@ WO_API wo_api wojeapi_texture_restore_snapshot(wo_vm vm, wo_value args, size_t a
     if (tex_raw->m_pixels)
     {
         auto memsz = tex_raw->m_width * tex_raw->m_height *
-            (tex_raw->m_format & jegl_texture::texture_format::COLOR_DEPTH_MASK);
+            (tex_raw->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
         memcpy(tex_raw->m_pixels, texture_buf, memsz);
 
         return wo_ret_bool(vm, true);
