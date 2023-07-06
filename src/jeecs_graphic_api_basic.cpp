@@ -972,6 +972,9 @@ wo_integer_t _crc64_of_file(const char* filepath);
 
 jegl_resource* jegl_try_update_shared_shader(jegl_resource* resource)
 {
+    if (resource == nullptr)
+        return nullptr;
+
     assert(resource != nullptr && resource->m_path != nullptr);
     if (!resource->m_raw_shader_data->m_enable_to_shared)
         return resource;
