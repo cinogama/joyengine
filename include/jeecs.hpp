@@ -834,6 +834,7 @@ struct jegl_shader
     uniform_blocks* m_custom_uniform_blocks;
     builtin_uniform_location m_builtin_uniforms;
 
+    bool                m_enable_to_shared;
     depth_test_method   m_depth_test;
     depth_mask_method   m_depth_mask;
     blend_method        m_blend_src_mode, m_blend_dst_mode;
@@ -871,7 +872,7 @@ struct jegl_resource
     };
 
     using jegl_custom_resource_t = void*;
-    enum type
+    enum type: uint8_t
     {
         VERTEX,         // Mesh
         TEXTURE,        // Texture
@@ -880,6 +881,7 @@ struct jegl_resource
         UNIFORMBUF,     // UniformBlock
     };
     type m_type;
+    bool m_shared_resource;
     jegl_thread* m_graphic_thread;
     jeecs::typing::version_t m_graphic_thread_version;
     union
@@ -895,7 +897,7 @@ struct jegl_resource
         };
     };
     const char* m_path;
-    int* m_raw_ref_count;
+    uint32_t*   m_raw_ref_count;
     union
     {
         jegl_custom_resource_t m_custom_resource;

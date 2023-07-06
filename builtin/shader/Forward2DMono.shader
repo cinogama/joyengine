@@ -1,8 +1,9 @@
-// Forward2D.shader
+// Forward2DMono.shader
 // (C)Cinogama project. 2022. 版权所有
 
 import je.shader;
 
+SHARED  (true);
 ZTEST   (LESS);
 ZWRITE  (ENABLE);
 BLEND   (ONE, ZERO);

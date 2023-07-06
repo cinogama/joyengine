@@ -3,6 +3,7 @@
 
 import je.shader;
 
+SHARED  (true);
 ZTEST   (LESS);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE);

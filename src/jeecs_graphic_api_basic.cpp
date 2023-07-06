@@ -121,6 +121,8 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                     if (deleting_resource->m_destroy_resource->m_ptr != INVALID_RESOURCE)
                         thread->m_apis->close_resource(thread, deleting_resource->m_destroy_resource);
 
+                    delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(
+                        deleting_resource->m_destroy_resource->m_raw_ref_count));
                     delete deleting_resource->m_destroy_resource;
                     delete deleting_resource;
                 }
@@ -343,10 +345,28 @@ void jegl_using_resource(jegl_resource* resource)
     
 }
 
+void _jegl_free_resource_instance(jegl_resource* resource)
+{
+    assert(resource != nullptr);
+    assert(resource->m_custom_resource != nullptr);
+    assert(resource->m_shared_resource == false ||
+        std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->load() == 0);
+
+    resource->m_custom_resource = nullptr;
+
+    // Send this resource to destroing list;
+    auto* del_res = new jegl_resource::jegl_destroy_resouce;
+    del_res->m_retry_times = 15;
+    del_res->m_destroy_resource = resource;
+    _destroing_graphic_resources.add_one(del_res);
+}
+
 void jegl_close_resource(jegl_resource* resource)
 {
+    assert(resource != nullptr);
     assert(resource->m_custom_resource != nullptr);
-    if (0 == -- * resource->m_raw_ref_count)
+
+    if (1 == std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_sub(1))
     {
         switch (resource->m_type)
         {
@@ -397,8 +417,10 @@ void jegl_close_resource(jegl_resource* resource)
 
         if (resource->m_path)
             je_mem_free((void*)resource->m_path);
+
+        _jegl_free_resource_instance(resource);
     }
-    else
+    else if (resource->m_shared_resource == false)
     {
         if (resource->m_type == jegl_resource::type::SHADER)
         {
@@ -413,15 +435,8 @@ void jegl_close_resource(jegl_resource* resource)
             }
             delete resource->m_raw_shader_data;
         }
+        _jegl_free_resource_instance(resource);
     }
-
-    resource->m_custom_resource = nullptr;
-
-    // Send this resource to destroing list;
-    auto* del_res = new jegl_resource::jegl_destroy_resouce;
-    del_res->m_retry_times = 15;
-    del_res->m_destroy_resource = resource;
-    _destroing_graphic_resources.add_one(del_res);
 }
 
 JE_API void jegl_get_windows_size(size_t* x, size_t* y)
@@ -434,46 +449,62 @@ jegl_resource* _create_resource()
     jegl_resource* res = new jegl_resource();
 
     memset(res, 0, sizeof(res));
-    res->m_raw_ref_count = new int(1);
-
+    res->m_raw_ref_count = std::launder(reinterpret_cast<uint32_t*>(new std::atomic_uint32_t(1)));
+    static_assert(sizeof(uint32_t) == sizeof(std::atomic_uint32_t));
+    static_assert(std::atomic_uint32_t::is_always_lock_free);
+    assert(std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_raw_ref_count))->load() == 1);
+    assert(*res->m_raw_ref_count == 1);
     return res;
 }
 
 jegl_resource* jegl_copy_resource(jegl_resource* resource)
 {
-    if (nullptr == resource)
-        return nullptr;
+    assert(resource != nullptr);
 
     jegl_resource* res = new jegl_resource(*resource);
 
     res->m_handle = 0;
     res->m_graphic_thread = nullptr;
     res->m_graphic_thread_version = 0;
+    res->m_shared_resource = false;
 
-    ++* res->m_raw_ref_count;
-    // If copy a shader and current shader is a dead shader, do nothing after clone.
-    if (res->m_type == jegl_resource::type::SHADER && res->m_raw_shader_data)
+    std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_raw_ref_count))->fetch_add(1);
+
+    if (res->m_custom_resource != nullptr)
     {
-        // Copy shader raw info to make sure member chain is available for all instance.
-        jegl_shader* new_shad_instance = new jegl_shader(*res->m_raw_shader_data);
-
-        jegl_shader::unifrom_variables* uniform_var = new_shad_instance->m_custom_uniforms;
-        jegl_shader::unifrom_variables* last_var = nullptr;
-        while (uniform_var)
+        // If copy a shader and current shader is a dead shader, do nothing after clone.
+        if (res->m_type == jegl_resource::type::SHADER)
         {
-            jegl_shader::unifrom_variables* cur_var = new jegl_shader::unifrom_variables(*uniform_var);
-            if (last_var)
-                last_var->m_next = cur_var;
-            else
-                new_shad_instance->m_custom_uniforms = last_var = cur_var;
-            last_var = cur_var;
+            // Copy shader raw info to make sure member chain is available for all instance.
+            jegl_shader* new_shad_instance = new jegl_shader(*res->m_raw_shader_data);
 
-            uniform_var = uniform_var->m_next;
+            jegl_shader::unifrom_variables* uniform_var = new_shad_instance->m_custom_uniforms;
+            jegl_shader::unifrom_variables* last_var = nullptr;
+            while (uniform_var)
+            {
+                jegl_shader::unifrom_variables* cur_var = new jegl_shader::unifrom_variables(*uniform_var);
+                if (last_var)
+                    last_var->m_next = cur_var;
+                else
+                    new_shad_instance->m_custom_uniforms = last_var = cur_var;
+                last_var = cur_var;
+
+                uniform_var = uniform_var->m_next;
+            }
+            res->m_raw_shader_data = new_shad_instance;
         }
-        res->m_raw_shader_data = new_shad_instance;
     }
-
     return res;
+}
+
+jegl_resource* _jegl_share_resource(jegl_resource* resource)
+{
+    assert(resource != nullptr);
+    assert(resource->m_shared_resource == true);
+
+    std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_add(1);
+
+    return resource;
 }
 
 jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling)
@@ -650,7 +681,6 @@ jegl_resource* jegl_create_vertex(
         vertex->m_raw_vertex_data->m_size_z = 1.f;
     }
 
-
     return vertex;
 }
 
@@ -684,9 +714,12 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
     jeecs_file_read(&_shader->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
     jeecs_file_read(&_shader->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
 
-    // 3. read and generate custom variable & uniform block informs
+    // 3. read if shader is enable to shared?
+    jeecs_file_read(&_shader->m_enable_to_shared, sizeof(jegl_shader::cull_mode), 1, cache_file);
+
+    // 4. read and generate custom variable & uniform block informs
     
-    // 3.1 read and generate custom variable
+    // 4.1 read and generate custom variable
     uint64_t custom_uniform_count;
     jeecs_file_read(&custom_uniform_count, sizeof(uint64_t), 1, cache_file);
 
@@ -702,17 +735,17 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
         if (last_create_variable != nullptr)
             last_create_variable->m_next = current_variable;
 
-        // 3.1.1 read name
+        // 4.1.1 read name
         uint64_t uniform_name_len;
         jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
         current_variable->m_name = (const char*)je_mem_alloc((size_t)uniform_name_len + 1);
         jeecs_file_read(const_cast<char*>(current_variable->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
         const_cast<char*>(current_variable->m_name)[(size_t)uniform_name_len] = 0;
 
-        // 3.1.2 read type
+        // 4.1.2 read type
         jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
 
-        // 3.1.3 read data
+        // 4.1.3 read data
         static_assert(sizeof(current_variable->mat4x4) == sizeof(float[4][4]));
         jeecs_file_read(&current_variable->mat4x4, sizeof(float[4][4]), 1, cache_file);
 
@@ -723,7 +756,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
         current_variable->m_next = nullptr;
     }
 
-    // 3.2 read uniform block informs
+    // 4.2 read uniform block informs
     uint64_t custom_uniform_block_count;
     jeecs_file_read(&custom_uniform_block_count, sizeof(uint64_t), 1, cache_file);
 
@@ -739,14 +772,14 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
         if (last_create_block != nullptr)
             last_create_block->m_next = current_block;
 
-        // 3.2.1 read name
+        // 4.2.1 read name
         uint64_t uniform_name_len;
         jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
         current_block->m_name = (const char*)je_mem_alloc((size_t)uniform_name_len + 1);
         jeecs_file_read(const_cast<char*>(current_block->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
         const_cast<char*>(current_block->m_name)[(size_t)uniform_name_len] = 0;
 
-        // 3.2.2 read binding place
+        // 4.2.2 read binding place
         static_assert(sizeof(current_block->m_specify_binding_place) == sizeof(uint32_t));
         jeecs_file_read(&current_block->m_specify_binding_place, sizeof(uint32_t), 1, cache_file);
 
@@ -795,7 +828,10 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         jeecs_write_cache_file(&raw_shader_data->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cachefile);
 
-        // 3. write shader custom variable & uniform block informs.
+        // 3. write if shader is enable to shared?
+        jeecs_write_cache_file(&raw_shader_data->m_enable_to_shared, sizeof(bool), 1, cachefile);
+
+        // 4. write shader custom variable & uniform block informs.
         uint64_t count_for_uniform = 0;
         uint64_t count_for_uniform_block = 0;
 
@@ -812,37 +848,37 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
             custom_uniform_block = custom_uniform_block->m_next;
         }
 
-        // 3.1 write shader custom variable
+        // 4.1 write shader custom variable
         jeecs_write_cache_file(&count_for_uniform, sizeof(uint64_t), 1, cachefile);
         custom_uniform = raw_shader_data->m_custom_uniforms;
         while (custom_uniform)
         {
-            // 3.1.1 write name
+            // 4.1.1 write name
             uint64_t uniform_name_len = (uint64_t)strlen(custom_uniform->m_name);
             jeecs_write_cache_file(&uniform_name_len, sizeof(uint64_t), 1, cachefile);
             jeecs_write_cache_file(custom_uniform->m_name, sizeof(char), (size_t)uniform_name_len, cachefile);
 
-            // 3.1.2 write type
+            // 4.1.2 write type
             jeecs_write_cache_file(&custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
 
-            // 3.1.3 write data
+            // 4.1.3 write data
             static_assert(sizeof(custom_uniform->mat4x4) == sizeof(float[4][4]));
             jeecs_write_cache_file(&custom_uniform->mat4x4, sizeof(float[4][4]), 1, cachefile);
 
             custom_uniform = custom_uniform->m_next;
         }
 
-        // 3.2 write shader custom uniform block informs
+        // 4.2 write shader custom uniform block informs
         jeecs_write_cache_file(&count_for_uniform_block, sizeof(uint64_t), 1, cachefile);
         custom_uniform_block = raw_shader_data->m_custom_uniform_blocks;
         while (custom_uniform_block)
         {
-            // 3.2.1 write name
+            // 4.2.1 write name
             uint64_t uniform_block_name_len = (uint64_t)strlen(custom_uniform_block->m_name);
             jeecs_write_cache_file(&uniform_block_name_len, sizeof(uint64_t), 1, cachefile);
             jeecs_write_cache_file(custom_uniform_block->m_name, sizeof(char), (size_t)uniform_block_name_len, cachefile);
 
-            // 3.2.2 write place
+            // 4.2.2 write place
             static_assert(sizeof(custom_uniform_block->m_specify_binding_place) == sizeof(uint32_t));
             jeecs_write_cache_file(&custom_uniform_block->m_specify_binding_place, sizeof(uint32_t), 1, cachefile);
 

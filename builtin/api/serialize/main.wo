@@ -247,12 +247,15 @@ namespace jeapi
                     entity->editor::graphic::set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
                 }
             err(dats)?
-                for (let _, (path, uniform_vars) : dats)
+                if (in_editor)
                 {
-                    let badshad = entity->editor::store_name_for_bad_shader_update(path);
+                    for (let _, (path, uniform_vars) : dats)
+                    {
+                        let badshad = entity->editor::store_name_for_bad_shader_update(path);
 
-                    for (let uname, uval: uniform_vars)
-                        restore_shader_of_entity(badshad, uname as string, uval as array<dynamic>);
+                        for (let uname, uval: uniform_vars)
+                            restore_shader_of_entity(badshad, uname as string, uval as array<dynamic>);
+                    }
                 }
             }
 

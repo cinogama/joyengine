@@ -616,6 +616,7 @@ struct shader_struct_define
 
 struct shader_configs
 {
+    bool m_enable_shared;
     jegl_shader::depth_test_method m_depth_test;
     jegl_shader::depth_mask_method m_depth_mask;
     jegl_shader::blend_method m_blend_src, m_blend_dst;
@@ -722,11 +723,12 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
 {
     shader_configs config;
 
-    config.m_depth_test = (jegl_shader::depth_test_method)wo_int(wo_struct_get(args + 2, 0));
-    config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(wo_struct_get(args + 2, 1));
-    config.m_blend_src = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 2));
-    config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 3));
-    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 4));
+    config.m_enable_shared = wo_bool(wo_struct_get(args + 2, 0));
+    config.m_depth_test = (jegl_shader::depth_test_method)wo_int(wo_struct_get(args + 2, 1));
+    config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(wo_struct_get(args + 2, 2));
+    config.m_blend_src = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 3));
+    config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 4));
+    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 5));
 
     shader_struct_define** ubos = nullptr;
     size_t ubo_count = (size_t)wo_lengthof(args + 3);
@@ -1207,6 +1209,7 @@ namespace shader
     public using shader_wrapper = gchandle;
 
     using ShaderConfig = struct {
+        shared    : mut bool,
         ztest     : mut ZConfig,
         zwrite    : mut GConfig,
         blend_src : mut BlendConfig,
@@ -1215,6 +1218,7 @@ namespace shader
     };
     let configs = ShaderConfig
     {
+        shared = mut false,
         ztest = mut LESS,
         zwrite = mut ENABLE,
         blend_src = mut ONE,
@@ -1519,6 +1523,11 @@ public let NONE = CullConfig::NONE;
 public let FRONT = CullConfig::FRONT;
 public let BACK = CullConfig::BACK;
 public let ALL = CullConfig::ALL;
+
+public func SHARED(enable: bool)
+{
+    shader::configs.shared = enable;
+}
 
 public func ZTEST(zconfig: ZConfig)
 {
@@ -1827,6 +1836,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
 {
     shader_wrapper* shader_wrapper_ptr = (shader_wrapper*)shader_generator;
 
+    write_to_shader->m_enable_to_shared = shader_wrapper_ptr->shader_config.m_enable_shared;
     write_to_shader->m_depth_test = shader_wrapper_ptr->shader_config.m_depth_test;
     write_to_shader->m_depth_mask = shader_wrapper_ptr->shader_config.m_depth_mask;
     write_to_shader->m_blend_src_mode = shader_wrapper_ptr->shader_config.m_blend_src;

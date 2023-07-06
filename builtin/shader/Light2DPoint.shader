@@ -4,6 +4,7 @@
 import je.shader;
 import je.shader.light2d;
 
+SHARED  (true);
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ONE);

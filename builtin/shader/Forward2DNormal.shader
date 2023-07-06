@@ -4,10 +4,11 @@
 import je.shader;
 import je.shader.light2d;
 
-ZTEST(LESS);
-ZWRITE(ENABLE);
-BLEND(ONE, ZERO);
-CULL(NONE);
+SHARED  (true);
+ZTEST   (LESS);
+ZWRITE  (ENABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
 
 VAO_STRUCT! vin {
     vertex  : float3,

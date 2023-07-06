@@ -4,10 +4,11 @@
 import je.shader;
 import je.shader.light2d;
 
-ZTEST(ALWAYS);
-ZWRITE(DISABLE);
-BLEND(ONE, ZERO);
-CULL(BACK);
+SHARED  (true);
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (BACK);
 
 VAO_STRUCT!vin
 {
