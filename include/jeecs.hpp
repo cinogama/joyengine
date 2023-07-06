@@ -1905,6 +1905,7 @@ namespace jeecs
             }
         };
 
+        // NOTE: 智能指针现在无线程安全保证，按照设计思路应当保证之
         template<typename T, typename CounterT = std::atomic_size_t>
         class shared_pointer
         {
