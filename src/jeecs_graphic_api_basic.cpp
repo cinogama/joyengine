@@ -121,8 +121,6 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
                     if (deleting_resource->m_destroy_resource->m_ptr != INVALID_RESOURCE)
                         thread->m_apis->close_resource(thread, deleting_resource->m_destroy_resource);
 
-                    delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(
-                        deleting_resource->m_destroy_resource->m_raw_ref_count));
                     delete deleting_resource->m_destroy_resource;
                     delete deleting_resource;
                 }
@@ -348,11 +346,8 @@ void jegl_using_resource(jegl_resource* resource)
 void _jegl_free_resource_instance(jegl_resource* resource)
 {
     assert(resource != nullptr);
-    assert(resource->m_custom_resource != nullptr);
-    assert(resource->m_shared_resource == false ||
-        std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->load() == 0);
-
-    resource->m_custom_resource = nullptr;
+    assert(resource->m_custom_resource == nullptr);
+    assert(resource->m_shared_resource == false || resource->m_raw_ref_count == nullptr);
 
     // Send this resource to destroing list;
     auto* del_res = new jegl_resource::jegl_destroy_resouce;
@@ -418,6 +413,11 @@ void jegl_close_resource(jegl_resource* resource)
         if (resource->m_path)
             je_mem_free((void*)resource->m_path);
 
+        resource->m_custom_resource = nullptr;
+
+        delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count));
+        resource->m_raw_ref_count = nullptr;
+
         _jegl_free_resource_instance(resource);
     }
     else if (resource->m_shared_resource == false)
@@ -435,6 +435,7 @@ void jegl_close_resource(jegl_resource* resource)
             }
             delete resource->m_raw_shader_data;
         }
+        resource->m_custom_resource = nullptr;
         _jegl_free_resource_instance(resource);
     }
 }
@@ -946,14 +947,101 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
 
 }
 
+
+struct shared_shader_instance
+{
+    wo_integer_t m_crc64;
+    jegl_resource* m_resource;
+
+    JECS_DISABLE_MOVE_AND_COPY(shared_shader_instance);
+    shared_shader_instance()
+        : m_crc64(0)
+        , m_resource(nullptr)
+    {
+
+    }
+    ~shared_shader_instance()
+    {
+        jegl_close_resource(m_resource);
+    }
+};
+std::unordered_map<std::string, std::unique_ptr<shared_shader_instance>> shared_shader_list;
+std::shared_mutex shared_shader_list_smx;
+
+wo_integer_t _crc64_of_file(const char* filepath);
+
+jegl_resource* jegl_try_update_shared_shader(jegl_resource* resource)
+{
+    assert(resource != nullptr && resource->m_path != nullptr);
+    if (!resource->m_raw_shader_data->m_enable_to_shared)
+        return resource;
+
+    resource->m_shared_resource = true;
+    do
+    {
+        std::lock_guard g1(shared_shader_list_smx);
+
+        auto fnd = shared_shader_list.find(resource->m_path);
+        if (fnd != shared_shader_list.end())
+        {
+            auto realfile_crc64 = _crc64_of_file(resource->m_path);
+            if (fnd->second->m_crc64 == realfile_crc64)
+            {
+                jegl_close_resource(resource);
+                return _jegl_share_resource(fnd->second->m_resource);
+            }
+            else
+            {
+                // Old one need be replace!
+                jegl_close_resource(fnd->second->m_resource);
+                fnd->second->m_crc64 = realfile_crc64;
+                return fnd->second->m_resource = _jegl_share_resource(resource);
+            }
+        }
+        // Create new fxxking one!
+
+        auto shared_info = std::make_unique<shared_shader_instance>();
+        shared_info->m_crc64 = _crc64_of_file(resource->m_path);
+        shared_info->m_resource = resource;
+        shared_shader_list.emplace(resource->m_path, std::move(shared_info));
+        return _jegl_share_resource(resource);
+
+    } while (0);
+
+    // Cannot be here
+    abort();
+}
+jegl_resource* jegl_try_load_shared_shader(const char* path)
+{
+    do
+    {
+        std::shared_lock sg1(shared_shader_list_smx);
+
+        auto fnd = shared_shader_list.find(path);
+        if (fnd != shared_shader_list.end())
+        {
+            auto realfile_crc64 = _crc64_of_file(path);
+            if (fnd->second->m_crc64 == realfile_crc64)
+                return _jegl_share_resource(fnd->second->m_resource);
+        }
+
+    } while (0);
+   
+    return nullptr;
+}
+
 jegl_resource* jegl_load_shader(const char* path)
 {
+    auto* shared_shader = jegl_try_load_shared_shader(path);
+    if (shared_shader != nullptr)
+        return shared_shader;
+
     if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, 0))
     {
         auto* shader_resource = _jegl_load_shader_cache(shader_cache);
         shader_resource->m_path = jeecs::basic::make_new_string(path);
 
-        return shader_resource;
+        return jegl_try_update_shared_shader(shader_resource);
     }
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
@@ -963,7 +1051,7 @@ jegl_resource* jegl_load_shader(const char* path)
 
         jeecs_file_close(texfile);
 
-        return jegl_load_shader_source(path, src, false);
+        return jegl_try_update_shared_shader(jegl_load_shader_source(path, src, false));
     }
     jeecs::debug::logerr("Fail to open file: '%s'", path);
     return nullptr;
