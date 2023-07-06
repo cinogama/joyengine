@@ -570,15 +570,11 @@ public let frag =
                     })
                         .exec(
                             [this, &parent_origin_list](
-                                Shaders& shads,
-                                Textures* texs,
-                                Shape& shape,
-                                Rendqueue* rendqueue,
                                 Transform::LocalToParent* l2p,
                                 UserInterface::Origin& origin,
-                                UserInterface::Distortion* distortion,
                                 UserInterface::Absolute* absolute,
-                                UserInterface::Relatively* relatively)
+                                UserInterface::Relatively* relatively
+                                )
                             {
                                 UserInterface::Origin* parent_origin = nullptr;
                                 if (l2p != nullptr)
@@ -616,7 +612,17 @@ public let frag =
                                 }
                                 else
                                     origin.scale = {};
-
+                            }
+                        )
+                        .exec(
+                            [this, &parent_origin_list](
+                                Shaders& shads,
+                                Textures* texs,
+                                Shape& shape,
+                                Rendqueue* rendqueue,
+                                UserInterface::Origin& origin,
+                                UserInterface::Distortion* distortion)
+                            {
                                 m_renderer_list.emplace_back(
                                     renderer_arch{
                                         rendqueue, &shape, &shads, texs, &origin, distortion
