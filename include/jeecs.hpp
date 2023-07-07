@@ -1185,6 +1185,28 @@ JE_API void jedbg_get_entity_arch_information(
 
 #endif
 
+// Atomic operator API
+#define JE_DECL_ATOMIC_OPERATOR_API(TYPE)\
+    JE_API TYPE je_atomic_exchange_##TYPE(TYPE* aim, TYPE value);\
+    JE_API bool je_atomic_cas_##TYPE(TYPE* aim, TYPE* comparer, TYPE value);\
+    JE_API TYPE je_atomic_fetch_add_##TYPE(TYPE* aim, TYPE value);\
+    JE_API TYPE je_atomic_fetch_sub_##TYPE(TYPE* aim, TYPE value);\
+    JE_API TYPE je_atomic_fetch_##TYPE(TYPE* aim);\
+    JE_API void je_atomic_store_##TYPE(TYPE* aim, TYPE value)
+
+JE_DECL_ATOMIC_OPERATOR_API(int8_t);
+JE_DECL_ATOMIC_OPERATOR_API(uint8_t);
+JE_DECL_ATOMIC_OPERATOR_API(int16_t);
+JE_DECL_ATOMIC_OPERATOR_API(uint16_t);
+JE_DECL_ATOMIC_OPERATOR_API(int32_t);
+JE_DECL_ATOMIC_OPERATOR_API(uint32_t);
+JE_DECL_ATOMIC_OPERATOR_API(int64_t);
+JE_DECL_ATOMIC_OPERATOR_API(uint64_t);
+JE_DECL_ATOMIC_OPERATOR_API(size_t);
+JE_DECL_ATOMIC_OPERATOR_API(intptr_t);
+
+#undef JE_DECL_ATOMIC_OPERATOR_API
+
 WO_FORCE_CAPI_END
 
 namespace jeecs
@@ -1906,151 +1928,169 @@ namespace jeecs
         };
 
         // NOTE: 智能指针现在无线程安全保证，按照设计思路应当保证之
-        template<typename T, typename CounterT = std::atomic_size_t>
+        template<typename T>
         class shared_pointer
         {
-            T* ptr = nullptr;
-            CounterT* ref_count = nullptr;
-            void(*release_func)(T*) = nullptr;
+            using count_t = size_t;
+            using free_func_t = void(*)(T*);
 
-            static_assert(sizeof(CounterT) == sizeof(size_t));
-
-            static void DEFAULT_DESTROY_FUNCTION(T* ptr) { delete ptr; }
-
-        public:
-            void clear()
+            static void _default_free_func(T* ptr)
             {
-                if (ptr)
+                delete ptr;
+            }
+
+            T*                              m_resource = nullptr;
+            mutable count_t*                m_count = nullptr;
+            free_func_t                     m_freer = nullptr;
+            constexpr static count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
+
+            static count_t* _alloc_counter()
+            {
+                return new(malloc(sizeof(count_t)))count_t(1);
+            }
+            static void _free_counter(count_t* p)
+            {
+                p->~count_t();
+                free(p);
+            }
+
+            count_t* _spin_lock()const
+            {
+                count_t* result;
+                do
                 {
-                    if (!-- * ref_count)
+                    result = (count_t*)je_atomic_exchange_intptr_t(
+                        (intptr_t*)&m_count, (intptr_t)_COUNT_USING_SPIN_LOCK_MARK);
+                } while (result == _COUNT_USING_SPIN_LOCK_MARK);
+
+                return result;
+            }
+            void _spin_unlock(count_t* p)const
+            {
+                je_atomic_exchange_intptr_t(
+                    (intptr_t*)&m_count, (intptr_t)p);
+            }
+
+            static count_t* _release_nolock_impl(T** ref_resource, free_func_t _freer, count_t* count)
+            {
+                if (count != nullptr)
+                {
+                    if (1 == je_atomic_fetch_sub_size_t(count, 1))
                     {
-                        // Recycle
-
-                        release_func(ptr);
-
-                        ref_count->~CounterT();
-                        je_mem_free(ref_count);
+                        _freer(*ref_resource);
+                        _free_counter(count);
+                        *ref_resource = nullptr;
+                        count = nullptr;
                     }
                 }
-                else
-                    assert(ref_count == nullptr);
+                return count;
             }
+
+            // This function not lock!
+            count_t* _release_nolock(count_t* count)
+            {
+                return _release_nolock_impl(&m_resource, m_freer, count);
+            }
+            count_t* _move_nolock(count_t* count, shared_pointer* out_ptr)
+            {
+                if (count != nullptr)
+                {
+                    out_ptr->m_resource = m_resource;
+                    out_ptr->m_freer = m_freer;
+                    m_resource = nullptr;
+                }
+                return nullptr;
+            }
+            count_t* _borrow_nolocks(count_t* count, shared_pointer* out_ptr) const
+            {
+                if (count != nullptr)
+                {
+                    out_ptr->m_resource = m_resource;
+                    out_ptr->m_freer = m_freer;
+                    je_atomic_fetch_add_size_t(count, 1);
+                }
+                return count;
+            }
+        public:
             ~shared_pointer()
             {
-                clear();
+                _release_nolock((count_t*)je_atomic_fetch_intptr_t((intptr_t*)&m_count));
             }
 
             shared_pointer() noexcept = default;
-            shared_pointer(T* v, void(*f)(T*) = nullptr) noexcept :
-                ptr(v),
-                release_func(f ? f : DEFAULT_DESTROY_FUNCTION),
-                ref_count(nullptr)
+            shared_pointer(T* v, void(*f)(T*) = &_default_free_func)
+                : m_resource(v)
+                , m_freer(f)
+                , m_count(nullptr)
             {
-                if (ptr != nullptr)
-                    ref_count = new (je_mem_alloc(sizeof(CounterT))) CounterT(1);
+                if (m_resource != nullptr)
+                    m_count = _alloc_counter();
             }
-
             shared_pointer(const shared_pointer& v) noexcept
             {
-                ptr = v.ptr;
-                release_func = v.release_func;
-                if ((ref_count = v.ref_count))
-                    ++* ref_count;
+                auto* counter = v._spin_lock();
+                auto* unlocker = v._borrow_nolocks(counter, this);
+                je_atomic_store_intptr_t((intptr_t*)&m_count, (intptr_t)counter);
+                v._spin_unlock(unlocker);
             }
-
             shared_pointer(shared_pointer&& v) noexcept
             {
-                ptr = v.ptr;
-                release_func = v.release_func;
-                ref_count = v.ref_count;
-                v.ptr = nullptr;
-                v.ref_count = nullptr;
+                auto* counter = v._spin_lock();
+                auto* unlocker = v._move_nolock(counter, this);
+                je_atomic_store_intptr_t((intptr_t*)&m_count, (intptr_t)counter);
+                v._spin_unlock(unlocker);
             }
-
             shared_pointer& operator =(const shared_pointer& v) noexcept
             {
-                clear();
+                _release_nolock(_spin_lock());
+                auto* counter = v._spin_lock();
 
-                ptr = v.ptr;
-                release_func = v.release_func;
-                if ((ref_count = v.ref_count))
-                    ++* ref_count;
+                auto* unlocker = v._borrow_nolocks(counter, this);
 
+                _spin_unlock(counter);
+                v._spin_unlock(unlocker);
                 return *this;
             }
-
             shared_pointer& operator =(shared_pointer&& v)noexcept
             {
-                clear();
+                _release_nolock(_spin_lock());
+                auto* counter = v._spin_lock();
 
-                ptr = v.ptr;
-                release_func = v.release_func;
-                ref_count = v.ref_count;
-                v.ptr = nullptr;
-                v.ref_count = nullptr;
+                auto* unlocker = v._move_nolock(counter, this);
+
+                _spin_unlock(counter);
+                v._spin_unlock(unlocker);
                 return *this;
             }
 
-            T* get() const noexcept
+            T* get()const
             {
-                return ptr;
-            }
-            operator T& ()const noexcept
-            {
-                return *ptr;
-            }
-            T& operator * ()const noexcept
-            {
-                return *ptr;
-            }
-            operator T* ()const noexcept
-            {
-                return ptr;
-            }
-            operator bool()const noexcept
-            {
-                return ptr;
-            }
-            bool operator !()const noexcept
-            {
-                return !ptr;
+                return m_resource;
             }
             T* operator -> ()const noexcept
             {
-                return ptr;
+                return m_resource;
             }
-
-            bool operator ==(const T* pointer)const noexcept
+            T& operator * ()const noexcept
             {
-                return ptr == pointer;
+                return *m_resource;
             }
-            bool operator !=(const T* pointer)const noexcept
+            operator bool()const noexcept
             {
-                return ptr != pointer;
+                return m_resource != nullptr;
             }
-            bool operator ==(const shared_pointer& pointer)const noexcept
+            bool operator !()const noexcept
             {
-                return ptr == pointer.ptr;
+                return m_resource == nullptr;
             }
-            bool operator !=(const shared_pointer& pointer)const noexcept
+            bool operator == (const T* ptr)const
             {
-                return ptr != pointer.ptr;
+                return m_resource == ptr;
             }
-
-            /*  std::string to_string() const
-                {
-                    if constexpr (Meta::try_get_to_string_of<T>)
-                        return ptr->to_string();
-                    else
-                        return Tool::to_cppstring(Tool::factory::__default_to_string_function<T>(ptr));
-                }
-                void parse(const char* cstr)
-                {
-                    if constexpr (Meta::try_get_parse_of<T>)
-                        ptr->parse(cstr);
-                    else
-                        Tool::factory::__default_parse_function<T>(ptr, cstr);
-                }*/
+            bool operator != (const T* ptr)const
+            {
+                return m_resource != ptr;
+            }
         };
 
         template<typename T>
@@ -4222,9 +4262,9 @@ namespace jeecs
                     return new shader(res);
                 return nullptr;
             }
-            static shader* copy(const shader& shad)
+            static shader* copy(const shader* shad)
             {
-                jegl_resource* res = jegl_copy_resource(shad.resouce());
+                jegl_resource* res = jegl_copy_resource(shad->resouce());
                 if (res != nullptr)
                     return new shader(res);
                 return nullptr;
@@ -5275,7 +5315,7 @@ namespace jeecs
 
             void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
             {
-                assert(texture);
+                assert(texture != nullptr);
                 for (auto& [pass, tex] : textures)
                 {
                     if (pass == passid)

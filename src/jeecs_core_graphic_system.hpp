@@ -1871,17 +1871,18 @@ public func frag(vf: v2f)
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
                                         if (blockarch.textures != nullptr)
                                         {
-                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0);
+                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0).get();
                                             if (main_texture != nullptr)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resouce());
                                             else
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, host()->default_texture->resouce());
                                         }
 
-                                        jeecs::graphic::vertex* using_shape = (blockarch.shape == nullptr
+                                        jeecs::graphic::vertex* using_shape = 
+                                            (blockarch.shape == nullptr
                                             || blockarch.shape->vertex == nullptr)
-                                            ? host()->default_shape_quad
-                                            : blockarch.shape->vertex;
+                                            ? host()->default_shape_quad.get()
+                                            : blockarch.shape->vertex.get();
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
                                             light2d_shadow_rend_chain,
@@ -1996,17 +1997,18 @@ public func frag(vf: v2f)
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
                                         if (block_in_layer->textures != nullptr)
                                         {
-                                            jeecs::graphic::texture* main_texture = block_in_layer->textures->get_texture(0);
+                                            jeecs::graphic::texture* main_texture = block_in_layer->textures->get_texture(0).get();
                                             if (main_texture != nullptr)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resouce());
                                             else
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, host()->default_texture->resouce());
                                         }
 
-                                        jeecs::graphic::vertex* using_shape = (block_in_layer->shape == nullptr
+                                        jeecs::graphic::vertex* using_shape = 
+                                            (block_in_layer->shape == nullptr
                                             || block_in_layer->shape->vertex == nullptr)
-                                            ? host()->default_shape_quad
-                                            : block_in_layer->shape->vertex;
+                                            ? host()->default_shape_quad.get()
+                                            : block_in_layer->shape->vertex.get();
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
                                             light2d_shadow_rend_chain,

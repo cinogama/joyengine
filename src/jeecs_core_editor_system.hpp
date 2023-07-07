@@ -417,10 +417,10 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     Editor::EntitySelectBox
                 >();
 
-                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
-                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
-                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader));
-                select_box.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(select_box_shader));
+                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader.get()));
+                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader.get()));
+                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader.get()));
+                select_box.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(select_box_shader.get()));
 
                 axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1, 0, 0);
                 axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1, 0);
@@ -813,7 +813,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
     auto copy_shader_generator = [](
         const jeecs::basic::resource<jeecs::graphic::shader>& newshader, auto oldshader)
     {
-        jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = jeecs::graphic::shader::copy(newshader);
+        jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = jeecs::graphic::shader::copy(newshader.get());
         if constexpr (std::is_same<decltype(oldshader), jeecs::basic::resource<jeecs::graphic::shader>>::value)
         {
             auto* uniform_var = oldshader->resouce()->m_raw_shader_data->m_custom_uniforms;
