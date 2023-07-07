@@ -1101,6 +1101,7 @@ JE_API bool je_io_should_update_windowtitle(const char** title);
 JE_API void* je_module_load(const char* name, const char* path);
 JE_API void* je_module_func(void* lib, const char* funcname);
 JE_API void je_module_unload(void* lib);
+JE_API void je_module_delay_unload(void* lib);
 
 // Audio
 struct jeal_device;

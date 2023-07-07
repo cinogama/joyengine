@@ -144,6 +144,9 @@ bool jedbg_main_script_entry(void)
     return !failed_in_start_script;
 }
 
+std::vector<void*> _free_module_list;
+std::mutex _free_module_list_mx;
+
 void je_finish()
 {
     jeal_finish();
@@ -151,6 +154,12 @@ void je_finish()
 
     je_log_shutdown();
     wo_finish();
+
+    std::lock_guard g1(_free_module_list_mx);
+    for (auto* mod: _free_module_list)
+        wo_unload_lib(mod);
+
+    _free_module_list.clear();
 }
 
 const char* je_build_version()
@@ -190,6 +199,17 @@ void je_module_unload(void* lib)
     if (auto leave = (jeecs::typing::module_leave_t)
         wo_load_func(lib, "jeecs_module_leave"))
         leave();
-    jeecs::debug::loginfo("Module: '%p' unloaded", lib);
-    return wo_unload_lib(lib);
+    jeecs::debug::loginfo("Module: '%p' request to unloaded", lib);
+    wo_unload_lib(lib);
+}
+
+void je_module_delay_unload(void* lib)
+{
+    assert(lib);
+    if (auto leave = (jeecs::typing::module_leave_t)
+        wo_load_func(lib, "jeecs_module_leave"))
+        leave();
+    jeecs::debug::loginfo("Module: '%p' request to unloaded", lib);
+    std::lock_guard g1(_free_module_list_mx);
+    _free_module_list.push_back(lib);
 }

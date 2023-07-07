@@ -249,7 +249,7 @@ namespace editor::gui::edit_forms
                                 RUNTIME_UNIVERSE->wait();
 
                                 for (let _, libhandle : LOADED_MODULE_HANDLES)
-                                    je::unload_module(libhandle);
+                                    je::delay_unload_module(libhandle);
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码

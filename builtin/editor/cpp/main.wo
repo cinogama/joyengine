@@ -689,7 +689,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
 
                                         self.module_instance = 
                                             self.module_instance
-                                                ->> \m = je::unload_module(m);
+                                                ->> \m = je::delay_unload_module(m);
                                                 =>> \_ = option::none;
                                                 ;
 

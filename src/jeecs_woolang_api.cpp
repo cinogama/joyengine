@@ -198,6 +198,12 @@ WO_API wo_api wojeapi_unload_module(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_delay_unload_module(wo_vm vm, wo_value args, size_t argc)
+{
+    je_module_delay_unload(wo_pointer(args + 0));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -1600,6 +1606,9 @@ namespace je
 
     extern("libjoyecs", "wojeapi_load_module")
     public func load_module(name: string, path: string)=> option<handle>;
+
+    extern("libjoyecs", "wojeapi_delay_unload_module")
+    public func delay_unload_module(module: handle)=> void;
 
     extern("libjoyecs", "wojeapi_unload_module")
     public func unload_module(module: handle)=> void;
