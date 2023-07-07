@@ -1942,7 +1942,7 @@ namespace jeecs
             T*                              m_resource = nullptr;
             mutable count_t*                m_count = nullptr;
             free_func_t                     m_freer = nullptr;
-            constexpr static count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)(void*)(intptr_t)SIZE_MAX;
+            inline const static count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
 
             static count_t* _alloc_counter()
             {
