@@ -2097,7 +2097,7 @@ namespace jeecs
         template<typename T>
         using resource = shared_pointer<T>;
 
-        template<typename T = void>
+        template<typename T>
         class fileresource
         {
             basic::resource<T> _m_resource = nullptr;
@@ -2126,6 +2126,37 @@ namespace jeecs
             basic::resource<T> get_resource() const
             {
                 return _m_resource;
+            }
+            std::string get_path() const
+            {
+                return _m_path;
+            }
+            std::string to_string()const
+            {
+                return "#je_file#" + get_path();
+            }
+            void parse(const char* databuf)
+            {
+                _m_resource = nullptr;
+                const size_t head_length = strlen("#je_file#");
+                if (strncmp(databuf, "#je_file#", head_length) == 0)
+                {
+                    databuf += head_length;
+                    load(databuf);
+                }
+            }
+
+        };
+
+        template<>
+        class fileresource<void>
+        {
+            basic::string _m_path = "";
+        public:
+            bool load(const std::string& path)
+            {
+                _m_path = path;
+                return true;
             }
             std::string get_path() const
             {
