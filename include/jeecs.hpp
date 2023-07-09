@@ -5157,7 +5157,7 @@ namespace jeecs
             math::vec2 scale = {};
             math::vec2 global_offset = { 0.0f, 0.0f };
 
-            bool use_vertical_ratio = true;
+            bool keep_vertical_ratio = false;
             math::vec2 global_location = { 0.0f, 0.0f };
 
             // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
@@ -5172,7 +5172,7 @@ namespace jeecs
                     math::vec2 rel2abssize = scale * math::vec2((float)w, (float)h);
                     math::vec2 rel2absoffset = global_location * math::vec2((float)w, (float)h);
 
-                    if (use_vertical_ratio)
+                    if (keep_vertical_ratio)
                     {
                         rel2abssize.x *= (float)h / (float)w;
                         rel2absoffset.x *= (float)h / (float)w;
@@ -5215,7 +5215,7 @@ namespace jeecs
         };
         struct Absolute
         {
-            math::vec2 size = { 100.0f, 100.0f };
+            math::vec2 size = { 0.0f, 0.0f };
             math::vec2 offset = { 0.0f, 0.0f };
 
             static void JERefRegsiter()
@@ -5228,7 +5228,7 @@ namespace jeecs
         {
             jeecs::math::vec2 location = {};
             jeecs::math::vec2 scale = { 0.0f, 0.0f };
-            bool use_vertical_ratio = true;
+            bool use_vertical_ratio = false;
 
             static void JERefRegsiter()
             {

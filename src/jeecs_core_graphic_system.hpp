@@ -588,7 +588,7 @@ public let frag =
                                 {
                                     origin.global_offset = parent_origin->global_offset;
                                     origin.global_location = parent_origin->global_location;
-                                    origin.use_vertical_ratio = parent_origin->use_vertical_ratio;
+                                    origin.keep_vertical_ratio = parent_origin->keep_vertical_ratio;
                                 }
                                 else
                                 {
@@ -608,7 +608,7 @@ public let frag =
                                 {
                                     origin.global_location += relatively->location;
                                     origin.scale = relatively->scale;
-                                    origin.use_vertical_ratio = relatively->use_vertical_ratio;
+                                    origin.keep_vertical_ratio = relatively->use_vertical_ratio;
                                 }
                                 else
                                     origin.scale = {};
