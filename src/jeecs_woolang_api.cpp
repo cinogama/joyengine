@@ -856,7 +856,7 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
     case FLOAT4:
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec4>(nullptr));
     case STRING:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::string>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::basic::string>(nullptr));
     case QUAT:
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::quat>(nullptr));
     case TEXTURE:
@@ -923,7 +923,7 @@ WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_native_value_je_string(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::string* value = (jeecs::string*)wo_pointer(args + 0);
+    jeecs::basic::string* value = (jeecs::basic::string*)wo_pointer(args + 0);
     return wo_ret_string(vm, value->c_str());
 }
 
@@ -1000,7 +1000,7 @@ WO_API wo_api wojeapi_native_value_set_float4(wo_vm vm, wo_value args, size_t ar
 
 WO_API wo_api wojeapi_native_value_set_je_string(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::string* value = (jeecs::string*)wo_pointer(args + 0);
+    jeecs::basic::string* value = (jeecs::basic::string*)wo_pointer(args + 0);
 
     *value = wo_string(args + 1);
     return wo_ret_void(vm);

@@ -211,7 +211,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
         basic::resource<graphic::texture> default_texture;
-        jeecs::vector<basic::resource<graphic::shader>> default_shaders_list;
+        basic::vector<basic::resource<graphic::shader>> default_shaders_list;
 
         static double _update_frame_universe_job(void* host)
         {

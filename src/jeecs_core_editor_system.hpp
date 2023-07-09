@@ -16,7 +16,7 @@ namespace jeecs
     {
         struct Name
         {
-            jeecs::string name;
+            basic::string name;
         };
         struct Invisable
         {

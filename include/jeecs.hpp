@@ -1218,383 +1218,6 @@ namespace jeecs
     TYPE& operator = (const TYPE &) = delete;\
     TYPE& operator = (TYPE &&) = delete;
 
-    template<typename ElemT>
-    class vector
-    {
-        ElemT* _elems_ptr_begin = nullptr;
-        ElemT* _elems_ptr_end = nullptr;
-        ElemT* _elems_buffer_end = nullptr;
-
-        static constexpr size_t _single_elem_size = sizeof(ElemT);
-
-        inline static size_t _move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
-        {
-            for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
-            {
-                new(to_begin++)ElemT(std::move(*(origin_elem++)));
-            }
-
-            return (size_t)(from_end - from_begin);
-        }
-
-        inline static size_t _copy(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
-        {
-            for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
-            {
-                new(to_begin++)ElemT(*(origin_elem++));
-            }
-
-            return (size_t)(from_end - from_begin);
-        }
-
-        inline static size_t _erase(ElemT* from_begin, ElemT* from_end)noexcept
-        {
-            if constexpr (!std::is_trivial<ElemT>::value)
-            {
-                for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
-                {
-                    (origin_elem++)->~ElemT();
-                }
-            }
-
-            return (size_t)(from_end - from_begin);
-        }
-
-        inline void _reserve(size_t elem_reserving_count)
-        {
-            const size_t _pre_reserved_count = (size_t)(_elems_buffer_end - _elems_ptr_begin);
-            if (elem_reserving_count > _pre_reserved_count)
-            {
-                ElemT* new_reserved_begin = (ElemT*)je_mem_alloc(elem_reserving_count * _single_elem_size);
-                _elems_buffer_end = new_reserved_begin + elem_reserving_count;
-
-                _elems_ptr_end = new_reserved_begin + _move(new_reserved_begin, _elems_ptr_begin, _elems_ptr_end);
-                je_mem_free(_elems_ptr_begin);
-                _elems_ptr_begin = new_reserved_begin;
-            }
-        }
-
-        inline void _assure(size_t assure_sz)
-        {
-            if (assure_sz > reserved_size())
-                _reserve(2 * assure_sz);
-        }
-
-    public:
-        vector()noexcept
-        {
-        }
-
-        ~vector()
-        {
-            clear();
-            je_mem_free(_elems_ptr_begin);
-        }
-
-        vector(const vector& another_list)
-        {
-            _reserve(another_list.size());
-            _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
-        }
-
-        vector(const std::initializer_list<ElemT>& another_list)
-        {
-            for (auto& elem : another_list)
-                push_back(elem);
-        }
-
-        vector(ElemT* ptr, size_t length)
-        {
-            _elems_ptr_begin = ptr;
-            _elems_ptr_end = _elems_buffer_end = _elems_ptr_begin + length;
-        }
-
-        vector(vector&& another_list)
-        {
-            _elems_ptr_begin = another_list._elems_ptr_begin;
-            _elems_ptr_end = another_list._elems_ptr_end;
-            _elems_buffer_end = another_list._elems_buffer_end;
-
-            another_list._elems_ptr_begin =
-                another_list._elems_ptr_end =
-                another_list._elems_buffer_end = nullptr;
-        }
-
-        inline vector& operator = (const vector& another_list)
-        {
-            _reserve(another_list.size());
-            _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
-
-            return *this;
-        }
-
-        inline vector& operator = (vector&& another_list)
-        {
-            clear();
-            je_mem_free(_elems_ptr_begin);
-
-            _elems_ptr_begin = another_list._elems_ptr_begin;
-            _elems_ptr_end = another_list._elems_ptr_end;
-            _elems_buffer_end = another_list._elems_buffer_end;
-
-            another_list._elems_ptr_begin =
-                another_list._elems_ptr_end =
-                another_list._elems_buffer_end = nullptr;
-
-            return *this;
-        }
-
-        inline size_t size() const noexcept
-        {
-            return _elems_ptr_end - _elems_ptr_begin;
-        }
-        inline bool empty() const noexcept
-        {
-            return _elems_ptr_end == _elems_ptr_begin;
-        }
-        inline ElemT& front() noexcept
-        {
-            return *_elems_ptr_begin;
-        }
-        inline ElemT& back() noexcept
-        {
-            return *(_elems_ptr_end - 1);
-        }
-        inline size_t reserved_size() const noexcept
-        {
-            return _elems_buffer_end - _elems_ptr_begin;
-        }
-        inline void clear()noexcept
-        {
-            _erase(_elems_ptr_begin, _elems_ptr_end);
-            _elems_ptr_end = _elems_ptr_begin;
-        }
-        inline void push_back(const ElemT& _e)
-        {
-            _assure(size() + 1);
-            new (_elems_ptr_end++) ElemT(_e);
-        }
-        inline void pop_back()noexcept
-        {
-            if constexpr (!std::is_trivial<ElemT>::value)
-                (_elems_ptr_end--)->~ElemT();
-            else
-                _elems_ptr_end--;
-        }
-
-        inline auto begin() const noexcept->ElemT*
-        {
-            return _elems_ptr_begin;
-        }
-
-        inline auto end() const noexcept->ElemT*
-        {
-            return _elems_ptr_end;
-        }
-
-        inline auto front() const noexcept->ElemT&
-        {
-            return *_elems_ptr_begin;
-        }
-
-        inline auto back() const noexcept->ElemT&
-        {
-            return *(_elems_ptr_end - 1);
-        }
-
-        inline void erase(size_t index)
-        {
-            _elems_ptr_begin[index].~ElemT();
-            _move(_elems_ptr_begin + index, _elems_ptr_begin + index + 1, _elems_ptr_end--);
-        }
-
-        inline void erase(ElemT* index)
-        {
-            index->~ElemT();
-            _move(index, index + 1, _elems_ptr_end--);
-        }
-
-        inline void erase_data(const ElemT& data)
-        {
-            auto fnd_place = std::find(begin(), end(), data);
-            if (fnd_place != end())
-                erase(fnd_place - begin());
-        }
-
-        ElemT* data()const noexcept
-        {
-            return _elems_ptr_begin;
-        }
-
-        ElemT& operator[](size_t index)const noexcept
-        {
-            return _elems_ptr_begin[index];
-        }
-    };
-
-    template<typename KeyT, typename ValT>
-    class map
-    {
-        struct pair {
-            KeyT k;
-            ValT v;
-        };
-        jeecs::vector<pair> dats;
-
-    public:
-        ValT& operator[](const KeyT& k)noexcept
-        {
-            auto* fnd = find(k);
-            if (fnd == dats.end())
-            {
-                dats.push_back({ k, {} });
-                return dats.back().v;
-            }
-            return fnd->v;
-        }
-
-        void clear()noexcept
-        {
-            dats.clear();
-        }
-
-        pair* find(const KeyT& k) const noexcept
-        {
-            return std::find_if(dats.begin(), dats.end(), [&k](pair& p) {return p.k == k; });
-        }
-
-        bool erase(const KeyT& k)
-        {
-            auto* fnd = find(k);
-            if (fnd != end())
-            {
-                dats.erase(fnd);
-                return true;
-            }
-            return false;
-        }
-
-        inline auto begin() const noexcept->pair*
-        {
-            return dats.begin();
-        }
-
-        inline auto end() const noexcept->pair*
-        {
-            return dats.end();
-        }
-    };
-
-    class string
-    {
-        char* _c_str = nullptr;
-        size_t _str_len = 0;
-        size_t _buf_len = 0;
-
-        inline void _reserve(size_t buf_sz)
-        {
-            if (buf_sz > _buf_len)
-            {
-                _buf_len = buf_sz + 1;
-                _c_str = (char*)je_mem_realloc(_c_str, _buf_len);
-            }
-        }
-
-    public:
-
-        ~string()
-        {
-            if (_c_str != nullptr)
-                je_mem_free(_c_str);
-        }
-
-        string()noexcept
-        {
-            _reserve(1);
-        }
-
-        string(const string& str)noexcept
-            :string(str.c_str())
-        {
-        }
-
-        string(const std::string& str)noexcept
-            :string(str.c_str())
-        {
-        }
-
-        string(string&& str)noexcept
-            :_c_str(str._c_str)
-            , _buf_len(str._buf_len)
-            , _str_len(str._str_len)
-        {
-            str._c_str = 0;
-            str._buf_len = 0;
-            str._str_len = 0;
-        }
-
-        string(const char* str) noexcept
-            : _str_len(strlen(str))
-        {
-            _reserve(_str_len + 1);
-            memcpy(_c_str, str, _str_len);
-        }
-
-        inline bool operator==(const string& str) noexcept
-        {
-            return 0 == strcmp(c_str(), str.c_str());
-        }
-        inline bool operator!=(const string& str) noexcept
-        {
-            return 0 != strcmp(c_str(), str.c_str());
-        }
-        inline string& operator=(const string& str) noexcept
-        {
-            return *this = str.c_str();
-        }
-        inline string& operator=(string&& str) noexcept
-        {
-            je_mem_free(_c_str);
-
-            _c_str = str._c_str;
-            _buf_len = str._buf_len;
-            _str_len = str._str_len;
-
-            str._c_str = 0;
-            str._buf_len = 0;
-            str._str_len = 0;
-
-            return *this;
-        }
-        inline string& operator=(const std::string& str)
-        {
-            return *this = str.c_str();
-        }
-        inline string& operator=(const char* str)
-        {
-            _reserve((_str_len = strlen(str)) + 1);
-            memcpy(_c_str, str, _str_len);
-            return *this;
-        }
-        operator std::string()const
-        {
-            return c_str();
-        }
-        /*string substr(size_t from, size_t count = (size_t)(-1))const
-        {
-            return  std::string(c_str()).substr(from, count);
-        }*/
-        size_t size()const
-        {
-            return _str_len;
-        }
-        const char* c_str()const
-        {
-            _c_str[_str_len] = 0;
-            return _c_str;
-        }
-    };
-
     namespace debug
     {
         template<typename ... ArgTs>
@@ -1649,6 +1272,383 @@ namespace jeecs
 
     namespace basic
     {
+        template<typename ElemT>
+        class vector
+        {
+            ElemT* _elems_ptr_begin = nullptr;
+            ElemT* _elems_ptr_end = nullptr;
+            ElemT* _elems_buffer_end = nullptr;
+
+            static constexpr size_t _single_elem_size = sizeof(ElemT);
+
+            inline static size_t _move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
+            {
+                for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
+                {
+                    new(to_begin++)ElemT(std::move(*(origin_elem++)));
+                }
+
+                return (size_t)(from_end - from_begin);
+            }
+
+            inline static size_t _copy(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
+            {
+                for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
+                {
+                    new(to_begin++)ElemT(*(origin_elem++));
+                }
+
+                return (size_t)(from_end - from_begin);
+            }
+
+            inline static size_t _erase(ElemT* from_begin, ElemT* from_end)noexcept
+            {
+                if constexpr (!std::is_trivial<ElemT>::value)
+                {
+                    for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
+                    {
+                        (origin_elem++)->~ElemT();
+                    }
+                }
+
+                return (size_t)(from_end - from_begin);
+            }
+
+            inline void _reserve(size_t elem_reserving_count)
+            {
+                const size_t _pre_reserved_count = (size_t)(_elems_buffer_end - _elems_ptr_begin);
+                if (elem_reserving_count > _pre_reserved_count)
+                {
+                    ElemT* new_reserved_begin = (ElemT*)je_mem_alloc(elem_reserving_count * _single_elem_size);
+                    _elems_buffer_end = new_reserved_begin + elem_reserving_count;
+
+                    _elems_ptr_end = new_reserved_begin + _move(new_reserved_begin, _elems_ptr_begin, _elems_ptr_end);
+                    je_mem_free(_elems_ptr_begin);
+                    _elems_ptr_begin = new_reserved_begin;
+                }
+            }
+
+            inline void _assure(size_t assure_sz)
+            {
+                if (assure_sz > reserved_size())
+                    _reserve(2 * assure_sz);
+            }
+
+        public:
+            vector()noexcept
+            {
+            }
+
+            ~vector()
+            {
+                clear();
+                je_mem_free(_elems_ptr_begin);
+            }
+
+            vector(const vector& another_list)
+            {
+                _reserve(another_list.size());
+                _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
+            }
+
+            vector(const std::initializer_list<ElemT>& another_list)
+            {
+                for (auto& elem : another_list)
+                    push_back(elem);
+            }
+
+            vector(ElemT* ptr, size_t length)
+            {
+                _elems_ptr_begin = ptr;
+                _elems_ptr_end = _elems_buffer_end = _elems_ptr_begin + length;
+            }
+
+            vector(vector&& another_list)
+            {
+                _elems_ptr_begin = another_list._elems_ptr_begin;
+                _elems_ptr_end = another_list._elems_ptr_end;
+                _elems_buffer_end = another_list._elems_buffer_end;
+
+                another_list._elems_ptr_begin =
+                    another_list._elems_ptr_end =
+                    another_list._elems_buffer_end = nullptr;
+            }
+
+            inline vector& operator = (const vector& another_list)
+            {
+                _reserve(another_list.size());
+                _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
+
+                return *this;
+            }
+
+            inline vector& operator = (vector&& another_list)
+            {
+                clear();
+                je_mem_free(_elems_ptr_begin);
+
+                _elems_ptr_begin = another_list._elems_ptr_begin;
+                _elems_ptr_end = another_list._elems_ptr_end;
+                _elems_buffer_end = another_list._elems_buffer_end;
+
+                another_list._elems_ptr_begin =
+                    another_list._elems_ptr_end =
+                    another_list._elems_buffer_end = nullptr;
+
+                return *this;
+            }
+
+            inline size_t size() const noexcept
+            {
+                return _elems_ptr_end - _elems_ptr_begin;
+            }
+            inline bool empty() const noexcept
+            {
+                return _elems_ptr_end == _elems_ptr_begin;
+            }
+            inline ElemT& front() noexcept
+            {
+                return *_elems_ptr_begin;
+            }
+            inline ElemT& back() noexcept
+            {
+                return *(_elems_ptr_end - 1);
+            }
+            inline size_t reserved_size() const noexcept
+            {
+                return _elems_buffer_end - _elems_ptr_begin;
+            }
+            inline void clear()noexcept
+            {
+                _erase(_elems_ptr_begin, _elems_ptr_end);
+                _elems_ptr_end = _elems_ptr_begin;
+            }
+            inline void push_back(const ElemT& _e)
+            {
+                _assure(size() + 1);
+                new (_elems_ptr_end++) ElemT(_e);
+            }
+            inline void pop_back()noexcept
+            {
+                if constexpr (!std::is_trivial<ElemT>::value)
+                    (_elems_ptr_end--)->~ElemT();
+                else
+                    _elems_ptr_end--;
+            }
+
+            inline auto begin() const noexcept->ElemT*
+            {
+                return _elems_ptr_begin;
+            }
+
+            inline auto end() const noexcept->ElemT*
+            {
+                return _elems_ptr_end;
+            }
+
+            inline auto front() const noexcept->ElemT&
+            {
+                return *_elems_ptr_begin;
+            }
+
+            inline auto back() const noexcept->ElemT&
+            {
+                return *(_elems_ptr_end - 1);
+            }
+
+            inline void erase(size_t index)
+            {
+                _elems_ptr_begin[index].~ElemT();
+                _move(_elems_ptr_begin + index, _elems_ptr_begin + index + 1, _elems_ptr_end--);
+            }
+
+            inline void erase(ElemT* index)
+            {
+                index->~ElemT();
+                _move(index, index + 1, _elems_ptr_end--);
+            }
+
+            inline void erase_data(const ElemT& data)
+            {
+                auto fnd_place = std::find(begin(), end(), data);
+                if (fnd_place != end())
+                    erase(fnd_place - begin());
+            }
+
+            ElemT* data()const noexcept
+            {
+                return _elems_ptr_begin;
+            }
+
+            ElemT& operator[](size_t index)const noexcept
+            {
+                return _elems_ptr_begin[index];
+            }
+        };
+
+        template<typename KeyT, typename ValT>
+        class map
+        {
+            struct pair {
+                KeyT k;
+                ValT v;
+            };
+            basic::vector<pair> dats;
+
+        public:
+            ValT& operator[](const KeyT& k)noexcept
+            {
+                auto* fnd = find(k);
+                if (fnd == dats.end())
+                {
+                    dats.push_back({ k, {} });
+                    return dats.back().v;
+                }
+                return fnd->v;
+            }
+
+            void clear()noexcept
+            {
+                dats.clear();
+            }
+
+            pair* find(const KeyT& k) const noexcept
+            {
+                return std::find_if(dats.begin(), dats.end(), [&k](pair& p) {return p.k == k; });
+            }
+
+            bool erase(const KeyT& k)
+            {
+                auto* fnd = find(k);
+                if (fnd != end())
+                {
+                    dats.erase(fnd);
+                    return true;
+                }
+                return false;
+            }
+
+            inline auto begin() const noexcept->pair*
+            {
+                return dats.begin();
+            }
+
+            inline auto end() const noexcept->pair*
+            {
+                return dats.end();
+            }
+        };
+
+        class string
+        {
+            char* _c_str = nullptr;
+            size_t _str_len = 0;
+            size_t _buf_len = 0;
+
+            inline void _reserve(size_t buf_sz)
+            {
+                if (buf_sz > _buf_len)
+                {
+                    _buf_len = buf_sz + 1;
+                    _c_str = (char*)je_mem_realloc(_c_str, _buf_len);
+                }
+            }
+
+        public:
+
+            ~string()
+            {
+                if (_c_str != nullptr)
+                    je_mem_free(_c_str);
+            }
+
+            string()noexcept
+            {
+                _reserve(1);
+            }
+
+            string(const string& str)noexcept
+                :string(str.c_str())
+            {
+            }
+
+            string(const std::string& str)noexcept
+                :string(str.c_str())
+            {
+            }
+
+            string(string&& str)noexcept
+                :_c_str(str._c_str)
+                , _buf_len(str._buf_len)
+                , _str_len(str._str_len)
+            {
+                str._c_str = 0;
+                str._buf_len = 0;
+                str._str_len = 0;
+            }
+
+            string(const char* str) noexcept
+                : _str_len(strlen(str))
+            {
+                _reserve(_str_len + 1);
+                memcpy(_c_str, str, _str_len);
+            }
+
+            inline bool operator==(const string& str) noexcept
+            {
+                return 0 == strcmp(c_str(), str.c_str());
+            }
+            inline bool operator!=(const string& str) noexcept
+            {
+                return 0 != strcmp(c_str(), str.c_str());
+            }
+            inline string& operator=(const string& str) noexcept
+            {
+                return *this = str.c_str();
+            }
+            inline string& operator=(string&& str) noexcept
+            {
+                je_mem_free(_c_str);
+
+                _c_str = str._c_str;
+                _buf_len = str._buf_len;
+                _str_len = str._str_len;
+
+                str._c_str = 0;
+                str._buf_len = 0;
+                str._str_len = 0;
+
+                return *this;
+            }
+            inline string& operator=(const std::string& str)
+            {
+                return *this = str.c_str();
+            }
+            inline string& operator=(const char* str)
+            {
+                _reserve((_str_len = strlen(str)) + 1);
+                memcpy(_c_str, str, _str_len);
+                return *this;
+            }
+            operator std::string()const
+            {
+                return c_str();
+            }
+            /*string substr(size_t from, size_t count = (size_t)(-1))const
+            {
+                return  std::string(c_str()).substr(from, count);
+            }*/
+            size_t size()const
+            {
+                return _str_len;
+            }
+            const char* c_str()const
+            {
+                _c_str[_str_len] = 0;
+                return _c_str;
+            }
+        };
+
         constexpr typing::typehash_t prime = (typing::typehash_t)0x100000001B3ull;
         constexpr typing::typehash_t basis = (typing::typehash_t)0xCBF29CE484222325ull;
 
@@ -1711,7 +1711,7 @@ namespace jeecs
         {
             return make_new_string(_str.c_str());
         }
-        inline char* make_new_string(const jeecs::string& _str)
+        inline char* make_new_string(const basic::string& _str)
         {
             return make_new_string(_str.c_str());
         }
@@ -2101,7 +2101,7 @@ namespace jeecs
         class fileresource
         {
             basic::resource<T> _m_resource = nullptr;
-            jeecs::string _m_path = "";
+            basic::string _m_path = "";
         public:
             bool load(const std::string& path)
             {
@@ -2529,7 +2529,7 @@ namespace jeecs
 
     struct dependence
     {
-        jeecs::vector<requirement> m_requirements;
+        basic::vector<requirement> m_requirements;
 
         // Store archtypes here?
         game_world  m_world = nullptr;
@@ -2568,7 +2568,7 @@ namespace jeecs
             size_t* m_component_offsets;
 
         };
-        jeecs::vector<arch_chunks_info*>       m_archs;
+        basic::vector<arch_chunks_info*>       m_archs;
 
         void clear_archs()noexcept
         {
@@ -2609,7 +2609,7 @@ namespace jeecs
         size_t                      m_curstep = 0;
         size_t                      m_any_id = 0;
         game_world                  m_current_world = nullptr;
-        jeecs::vector<dependence>   m_steps;
+        basic::vector<dependence>   m_steps;
 
         game_system* m_system_instance = nullptr;
     private:
@@ -4683,7 +4683,7 @@ namespace jeecs
             je_font* m_font;
         public:
             const size_t          m_size;
-            const jeecs::string   m_path;
+            const basic::string   m_path;
             const jegl_texture::sampling m_sampling;
         private:
             font(je_font* font_resource, size_t size, const char* path, jegl_texture::sampling samp)noexcept
@@ -5282,7 +5282,7 @@ namespace jeecs
         struct Shaders
         {
             // NOTE: shaders should not be nullptr!
-            jeecs::vector<basic::resource<graphic::shader>> shaders;
+            basic::vector<basic::resource<graphic::shader>> shaders;
 
             template<typename T>
             void set_uniform(const std::string& name, const T& val) noexcept
@@ -5309,7 +5309,7 @@ namespace jeecs
             };
             math::vec2 tiling = math::vec2(1.f, 1.f);
             math::vec2 offset = math::vec2(0.f, 0.f);
-            jeecs::vector<texture_with_passid> textures;
+            basic::vector<texture_with_passid> textures;
 
             void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
             {
@@ -5506,7 +5506,7 @@ namespace jeecs
         {
             struct block_mesh
             {
-                jeecs::vector<math::vec2> m_block_points = {
+                basic::vector<math::vec2> m_block_points = {
                     math::vec2(-0.5f, -0.5f),
                     math::vec2(-0.5f, 0.5f),
                     math::vec2(0.5f, 0.5f),
@@ -5626,25 +5626,25 @@ namespace jeecs
                     };
                     struct uniform_data
                     {
-                        jeecs::string                   m_uniform_name;
+                        basic::string                   m_uniform_name;
                         data_value                      m_uniform_value;
                     };
 
                     float                         m_frame_time;
-                    jeecs::vector<component_data> m_component_data;
-                    jeecs::vector<uniform_data>   m_uniform_data;
+                    basic::vector<component_data> m_component_data;
+                    basic::vector<uniform_data>   m_uniform_data;
                 };
                 struct animation_data
                 {
-                    jeecs::vector<frame_data> frames;
+                    basic::vector<frame_data> frames;
                 };
 
                 struct animation_data_set
                 {
-                    jeecs::map<jeecs::string, animation_data>  m_animations;
-                    jeecs::string                              m_path;
+                    basic::map<basic::string, animation_data>  m_animations;
+                    basic::string                              m_path;
 
-                    jeecs::string       m_current_action = "";
+                    basic::string       m_current_action = "";
                     size_t              m_current_frame_index = SIZE_MAX;
                     double              m_next_update_time = 0.0f;
 
@@ -5905,7 +5905,7 @@ namespace jeecs
         {
             struct filepath
             {
-                jeecs::string path = {};
+                basic::string path = {};
 
                 std::string to_string()const
                 {
