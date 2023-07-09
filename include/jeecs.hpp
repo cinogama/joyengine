@@ -2096,6 +2096,52 @@ namespace jeecs
 
         template<typename T>
         using resource = shared_pointer<T>;
+
+        template<typename T>
+        class fileresource
+        {
+            basic::resource<T> _m_resource = nullptr;
+            jeecs::string _m_path = "";
+        public:
+            bool load(const std::string& path)
+            {
+                _m_path = path;
+                _m_resource = nullptr;
+                if (path != "")
+                {
+                    _m_resource = T::load(path);
+                    return _m_resource != nullptr;
+                }
+                return true;
+            }
+            bool has_resource() const
+            {
+                return _m_resource != nullptr;
+            }
+            basic::resource<T> get_resource() const
+            {
+                return _m_resource;
+            }
+            std::string get_path() const
+            {
+                return _m_path;
+            }
+            std::string to_string()const
+            {
+                return "#je_file#" + get_path();
+            }
+            void parse(const char* databuf)
+            {
+                _m_resource = nullptr;
+                const size_t head_length = strlen("#je_file#");
+                if (strncmp(databuf, "#je_file#", head_length) == 0)
+                {
+                    databuf += head_length;
+                    load(databuf);
+                }
+            }
+
+        };
     }
 
     namespace typing
@@ -4954,55 +5000,6 @@ namespace jeecs
                     }
                 }
                 return new_texture;
-            }
-
-        };
-    }
-
-    namespace typing
-    {
-        template<typename T>
-        class fileresource
-        {
-            basic::resource<T> _m_resource = nullptr;
-            jeecs::string _m_path = "";
-        public:
-            bool load(const std::string& path)
-            {
-                _m_path = path;
-                _m_resource = nullptr;
-                if (path != "")
-                {
-                    _m_resource = T::load(path);
-                    return _m_resource != nullptr;
-                }
-                return true;
-            }
-            bool has_resource() const
-            {
-                return _m_resource != nullptr;
-            }
-            basic::resource<T> get_resource() const
-            {
-                return _m_resource;
-            }
-            std::string get_path() const
-            {
-                return _m_path;
-            }
-            std::string to_string()const
-            {
-                return "#je_file#" + get_path();
-            }
-            void parse(const char* databuf)
-            {
-                _m_resource = nullptr;
-                const size_t head_length = strlen("#je_file#");
-                if (strncmp(databuf, "#je_file#", head_length) == 0)
-                {
-                    databuf += head_length;
-                    load(databuf);
-                }
             }
 
         };
