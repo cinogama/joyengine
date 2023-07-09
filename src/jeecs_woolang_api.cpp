@@ -437,27 +437,30 @@ WO_API wo_api wojeapi_get_world_from_entity(wo_vm vm, wo_value args, size_t argc
     return wo_ret_pointer(vm, world);
 }
 
-WO_API wo_api wojeapi_set_editing_entity(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_set_editing_entity_uid(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::typing::uid_t uid{ /*0000*/ };
     if (argc)
-        uid.parse(wo_string(args + 0));
-
-    jedbg_set_editing_entity_uid(uid);
+        jedbg_set_editing_entity_uid((jeecs::typing::euid_t)wo_handle(args + 0));
+    else
+        jedbg_set_editing_entity_uid(0);
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_get_editing_entity(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::typing::uid_t uid = jedbg_get_editing_entity_uid();
+    jeecs::typing::euid_t uid = jedbg_get_editing_entity_uid();
 
-    if (uid != jeecs::typing::uid_t{})
-        return wo_ret_ok_string(vm, uid.to_string().c_str());
-
+    if (uid != 0)
+        return wo_ret_option_handle(vm, (wo_handle_t)uid);
     return wo_ret_option_none(vm);
 }
-
 WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    return wo_ret_handle(vm, (wo_handle_t)entity->get_euid());
+}
+
+WO_API wo_api wojeapi_get_entity_anchor_uuid(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (auto* anc = entity->get_component<jeecs::Transform::Anchor>())
@@ -465,7 +468,7 @@ WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args, size_t argc)
 
     return wo_ret_option_none(vm);
 }
-WO_API wo_api wojeapi_get_parent_uid(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_get_parent_anchor_uid(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>())
@@ -2125,13 +2128,13 @@ R"(
                 }
             }
 
-            public using euid_t = string;
+            public using euid_t = handle;
 
             public func set_editing_uid(self: option<euid_t>)
             {
-                extern("libjoyecs", "wojeapi_set_editing_entity")
+                extern("libjoyecs", "wojeapi_set_editing_entity_uid")
                 public func _set_editing_entity(euid: euid_t)=> void;
-                extern("libjoyecs", "wojeapi_set_editing_entity")
+                extern("libjoyecs", "wojeapi_set_editing_entity_uid")
                 public func _reset_editing_entity()=> void;
 
                 match(self)
@@ -2141,8 +2144,11 @@ R"(
                 }
             }
 
-            extern("libjoyecs", "wojeapi_get_editing_entity")
+            extern("libjoyecs", "wojeapi_get_editing_entity_uid")
             public func get_editing_uid()=> option<euid_t>;
+
+            extern("libjoyecs", "wojeapi_get_entity_uid")
+            public func get_entity_uid(self: entity)=> euid_t;
 
             extern("libjoyecs", "wojeapi_set_parent")
             public func set_parent(self: entity, parent: entity, force: bool)=> bool;
@@ -2150,11 +2156,8 @@ R"(
             extern("libjoyecs", "wojeapi_set_parent_with_uid")
             public func set_parent_with_uid(self: entity, parent_uid: string, force: bool)=> bool;
 
-            extern("libjoyecs", "wojeapi_get_entity_uid")
-            public func get_uid(self: entity)=> option<string>;
-
-            extern("libjoyecs", "wojeapi_get_parent_uid")
-            public func get_parent_uid(self: entity)=> option<string>;
+            extern("libjoyecs", "wojeapi_get_parent_anchor_uid")
+            public func get_parent_anchor_uid(self: entity)=> option<string>;
 
             extern("libjoyecs", "wojeapi_get_entity_name")
             public func name(self: entity)=> string;

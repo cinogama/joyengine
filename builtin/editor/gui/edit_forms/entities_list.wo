@@ -54,7 +54,7 @@ namespace editor::gui::edit_forms
             P
             */
             // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把父节点设置为L2W
-            do child->editor::get_parent_uid()
+            do child->editor::get_parent_anchor_uid()
                  ->> \uid = parent.e->editor::set_parent_with_uid(uid, true);
                  ->or(func(){
                     if (parent.e->get_component(LocalToParent)->has())
@@ -360,7 +360,7 @@ namespace editor::gui::edit_forms
                 ->> \uid = uid->justdo(\e = drawpannel::drawedit(context, e););
                 ;
         }
-        if (MenuItemEnabled("重命名", has_editing_entity))
+        if (MenuItemEnabled("重命名", has_editing_entity && !context->get_project->is_debugging))
         {
             do euid
                 ->> \uid = uid->justdo(func(e){
@@ -457,10 +457,10 @@ namespace editor::gui::edit_forms
             match (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE"))
             {
             value(drag_uid)?
-                if (drag_uid as string: jeapi::debug::Eeid != e.uid)
+                if (drag_uid as string: handle: jeapi::debug::Eeid != e.uid)
                 {
                     // 自己拖到自己身上肯定就寄了，只处理不同的实体。
-                    drag_uid as string: jeapi::debug::Eeid->justdo(
+                    drag_uid as string: handle: jeapi::debug::Eeid->justdo(
                         \c = _set_parent(c, e);
                     );
                 }

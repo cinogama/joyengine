@@ -628,9 +628,8 @@ public let frag =
                                         rendqueue, &shape, &shads, texs, &origin, distortion
                                     });
                             })
-                        .anyof<Shaders, Textures, Shape>()
-                                .anyof<UserInterface::Absolute, UserInterface::Relatively>()
-                                .except<Light2D::Color>()
+                        .anyof<UserInterface::Absolute, UserInterface::Relatively>()
+                        .except<Light2D::Color>()
                                 ;
                             std::sort(m_camera_list.begin(), m_camera_list.end());
                             std::sort(m_renderer_list.begin(), m_renderer_list.end());

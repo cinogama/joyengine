@@ -113,6 +113,7 @@ namespace jeecs_impl
             {
                 std::atomic_flag m_in_used = {};
                 jeecs::typing::version_t m_version = 0;
+                size_t m_euid = 0;
 
                 jeecs::game_entity::entity_stat m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
             };
@@ -153,7 +154,6 @@ namespace jeecs_impl
                 assert(_m_free_count == _m_entity_count);
                 jeecs::basic::destroy_free_n(_m_entities_meta, _m_entity_count);
             }
-
         public:
             // ATTENTION: move_component_to WILL INVOKE DESTRUCT FUNCTION OF from_component
             inline void move_component_to(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid, void* from_component)const
@@ -164,7 +164,7 @@ namespace jeecs_impl
                 arch_typeinfo.m_typeinfo->destruct(from_component);
             }
 
-            bool alloc_entity_id(jeecs::typing::entity_id_in_chunk_t* out_id, jeecs::typing::version_t* out_version)
+            bool alloc_entity_id(size_t euid, jeecs::typing::entity_id_in_chunk_t* out_id, jeecs::typing::version_t* out_version)
             {
                 size_t free_entity_count = _m_free_count;
                 while (free_entity_count)
@@ -176,8 +176,11 @@ namespace jeecs_impl
                         {
                             if (!_m_entities_meta[id].m_in_used.test_and_set())
                             {
+                                assert(euid != 0);
+
                                 *out_id = id;
                                 *out_version = ++(_m_entities_meta[id].m_version);
+                                _m_entities_meta[id].m_euid = euid;
                                 return true;
                             }
                         }
@@ -193,9 +196,13 @@ namespace jeecs_impl
             }
             inline bool is_entity_valid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::version_t eversion) const noexcept
             {
+                return get_entity_uid(eid, eversion) != 0;
+            }
+            inline size_t get_entity_uid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::version_t eversion) const noexcept
+            {
                 if (_m_entities_meta[eid].m_version != eversion)
-                    return false;
-                return true;
+                    return 0;
+                return _m_entities_meta[eid].m_euid;
             }
             inline void* get_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
             {
@@ -312,11 +319,30 @@ namespace jeecs_impl
                 return false;
             }
 
-            inline bool valid() const noexcept
+            inline bool is_valid() const noexcept
             {
                 return _m_in_chunk->is_entity_valid(_m_id, _m_version);
             }
+            inline jeecs::typing::euid_t get_euid() const noexcept
+            {
+                return _m_in_chunk->get_entity_uid(_m_id, _m_version);
+            }
         };
+
+    private:
+        // 这个值用于取代Editor::Anchor，因为组件的变动会影响到实体的布局，影响实际功能
+        inline static std::atomic_size_t _m_entity_euid_allocator = 0;
+        static size_t alloc_entity_uid()
+        {
+            while (true)
+            {
+                size_t uid = ++_m_entity_euid_allocator;
+                // 用于保证 uid 不会返回0，虽然理论上这个破烂玩意儿也不可能用完那么大的数到溢出
+                // 但是还是做一下额外处理，防止闹鬼（贴符！）
+                if (uid != 0)
+                    return uid;
+            }
+        }
 
     public:
         arch_type(arch_manager* _arch_manager, const types_set& _types_set)
@@ -378,7 +404,7 @@ namespace jeecs_impl
             return new_chunk;
         }
 
-        void alloc_entity(arch_chunk** out_chunk, jeecs::typing::entity_id_in_chunk_t* out_eid, jeecs::typing::version_t* out_eversion)
+        void alloc_entity(size_t euid, arch_chunk** out_chunk, jeecs::typing::entity_id_in_chunk_t* out_eid, jeecs::typing::version_t* out_eversion)
         {
             while (true)
             {
@@ -391,7 +417,7 @@ namespace jeecs_impl
                         arch_chunk* peek_chunk = _m_chunks.peek();
                         while (peek_chunk)
                         {
-                            if (peek_chunk->alloc_entity_id(out_eid, out_eversion))
+                            if (peek_chunk->alloc_entity_id(euid, out_eid, out_eversion))
                             {
                                 *out_chunk = peek_chunk;
                                 return;
@@ -412,7 +438,7 @@ namespace jeecs_impl
             jeecs::typing::entity_id_in_chunk_t entity_id;
             jeecs::typing::version_t            entity_version;
 
-            alloc_entity(&chunk, &entity_id, &entity_version);
+            alloc_entity(alloc_entity_uid(), &chunk, &entity_id, &entity_version);
             for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
             {
                 void* component_addr = chunk->get_component_addr(entity_id,
@@ -1174,7 +1200,7 @@ namespace jeecs_impl
                 // free temp components.
                 arch_type::entity current_entity = _buf_in_entity.first;
 
-                if (current_entity.valid())
+                if (current_entity.is_valid())
                 {
                     if (_buf_in_entity.second.m_entity_removed_flag)
                     {
@@ -1291,7 +1317,7 @@ namespace jeecs_impl
                             jeecs::typing::entity_id_in_chunk_t entity_id;
                             jeecs::typing::version_t entity_version;
 
-                            new_arch_type->alloc_entity(&chunk, &entity_id, &entity_version);
+                            new_arch_type->alloc_entity(current_entity.get_euid(), &chunk, &entity_id, &entity_version);
                             // Entity alloced, move component to here..
 
                             for (jeecs::typing::typeid_t type_id : new_chunk_types)
@@ -1386,8 +1412,6 @@ namespace jeecs_impl
                         world->remove_system_instance(
                             cur_append_or_remove_system->m_typeinfo);
                     }
-
-
                     delete cur_append_or_remove_system;
                 }
             });
@@ -2176,17 +2200,14 @@ size_t je_arch_entity_meta_size()
 {
     return sizeof(jeecs_impl::arch_type::arch_chunk::entity_meta);
 }
-
 size_t je_arch_entity_meta_state_offset()
 {
     return offsetof(jeecs_impl::arch_type::arch_chunk::entity_meta, m_stat);
 }
-
 size_t je_arch_entity_meta_version_offset()
 {
     return offsetof(jeecs_impl::arch_type::arch_chunk::entity_meta, m_version);
 }
-
 const void* je_arch_entity_meta_addr_in_chunk(void* chunk)
 {
     return ((jeecs_impl::arch_type::arch_chunk*)chunk)->get_entity_meta();
@@ -2207,6 +2228,12 @@ void je_ecs_world_destroy_entity(
 {
     ((jeecs_impl::ecs_world*)world)->get_command_buffer().remove_entity(
         *std::launder(reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity)));
+}
+
+jeecs::typing::euid_t je_ecs_entity_uid(const jeecs::game_entity* entity)
+{
+    auto& ecs_entity = *std::launder(reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity));
+    return ecs_entity.get_euid();
 }
 
 void* je_ecs_world_in_universe(void* world)
@@ -2314,13 +2341,16 @@ const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeec
     return outresult;
 }
 
-static jeecs::typing::uid_t _editor_entity_uid;
+static jeecs::typing::euid_t _editor_entity_uid;
 
-void jedbg_set_editing_entity_uid(const jeecs::typing::uid_t& uid)
+void jedbg_set_editing_entity_uid(const jeecs::typing::euid_t uid)
 {
     _editor_entity_uid = uid;
 }
-
+jeecs::typing::euid_t jedbg_get_editing_entity_uid()
+{
+    return _editor_entity_uid;
+}
 const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world)
 {
     jeecs_impl::ecs_world* world = (jeecs_impl::ecs_world*)_world;
@@ -2342,10 +2372,6 @@ const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _w
 
 }
 
-jeecs::typing::uid_t jedbg_get_editing_entity_uid()
-{
-    return _editor_entity_uid;
-}
 void jedbg_get_entity_arch_information(
     const jeecs::game_entity* _entity,
     size_t* _out_chunk_size,

@@ -22,15 +22,6 @@ namespace jeecs
         {
             // Entity with this component will not display in editor, and will not be saved.
         };
-        struct Anchor
-        {
-            typing::uid_t uid = je_uid_generate();
-
-            static void JERefRegsiter()
-            {
-                typing::register_member(&Anchor::uid, "uid");
-            }
-        };
         struct EditorWalker
         {
             // Walker entity will have a child camera and controled by user.
@@ -575,9 +566,9 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
 
             select_from(get_world())
                 // 获取被选中的实体
-                .exec([this](game_entity e, Editor::Anchor& anchor)
+                .exec([this](game_entity e)
                     {
-                        if (anchor.uid == jedbg_get_editing_entity_uid())
+                        if (e.get_euid() == jedbg_get_editing_entity_uid())
                             _inputs.selected_entity = std::optional(e);
                     })
                 // Move walker(root)
@@ -622,13 +613,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                             {
                                 auto _set_editing_entity = [](const jeecs::game_entity& e)
                                 {
-                                    jeecs::Editor::Anchor* anchor = e.get_component<jeecs::Editor::Anchor>();
-                                    if (anchor == nullptr)
-                                        anchor = e.add_component<jeecs::Editor::Anchor>();
-
-                                    assert(anchor != nullptr);
-
-                                    jedbg_set_editing_entity_uid(anchor->uid);
+                                    jedbg_set_editing_entity_uid(e.get_euid());
                                 };
 
                                 if (!selected_list.empty())
@@ -647,7 +632,7 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                                         _set_editing_entity(selected_list.begin()->entity);
                                 }
                                 else if (_inputs.l_buttom_pushed)
-                                    jedbg_set_editing_entity_uid(jeecs::typing::uid_t{/* 000... */ });
+                                    jedbg_set_editing_entity_uid(0);
                             }
 
                             je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);

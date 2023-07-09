@@ -157,6 +157,7 @@ namespace jeecs
             }
         };
 
+        using euid_t = size_t;
         using uid_t = uuid;
         using ms_stamp_t = uint64_t;
 
@@ -324,6 +325,8 @@ namespace jeecs
         inline std::string name();
 
         inline std::string name(const std::string& _name);
+
+        inline typing::euid_t get_euid() const noexcept;
 
         inline bool operator == (const game_entity& e) const noexcept
         {
@@ -535,6 +538,7 @@ JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
+JE_API jeecs::typing::euid_t je_ecs_entity_uid(const jeecs::game_entity* entity);
 
 // ATTENTION: These 2 functions have no thread-safe-promise.
 JE_API const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity);
@@ -1171,9 +1175,9 @@ JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(v
 
 JE_API bool jedbg_main_script_entry(void);
 
-JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::uid_t& uid);
+JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::euid_t uid);
 
-JE_API jeecs::typing::uid_t jedbg_get_editing_entity_uid();
+JE_API jeecs::typing::euid_t jedbg_get_editing_entity_uid();
 
 // NOTE: Get graphic thread
 JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
@@ -2857,7 +2861,8 @@ namespace jeecs
                     return nullptr; // Only maynot/anyof can be here, no need to cast the type;
             }
 
-            inline static typing::version_t get_entity_avaliable(const void* entity_meta, size_t eid, typing::version_t* out_version)noexcept
+            // NOTE: 写在这里的唯一目的是未来为了方便编译器自动优化，暴露状态/版本核验流程和偏移量
+            inline static bool get_entity_avaliable(const void* entity_meta, size_t eid, typing::version_t* out_version)noexcept
             {
                 static const size_t meta_size = je_arch_entity_meta_size();
                 static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
@@ -6001,6 +6006,10 @@ namespace jeecs
     inline std::string game_entity::name(const std::string& _name)
     {
         return je_ecs_set_name_of_entity(this, _name.c_str());
+    }
+    inline typing::euid_t game_entity::get_euid() const noexcept
+    {
+        return je_ecs_entity_uid(this);
     }
 
     namespace math
