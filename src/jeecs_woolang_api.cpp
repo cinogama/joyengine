@@ -1169,7 +1169,7 @@ WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args, size_t ar
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_font = jeecs::graphic::font::create(wo_string(args + 0), (size_t)wo_int(args + 1));
+    auto* loaded_font = jeecs::graphic::font::load(wo_string(args + 0), (size_t)wo_int(args + 1));
     if (loaded_font != nullptr)
     {
         return wo_ret_option_gchandle(vm,
