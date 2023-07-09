@@ -753,7 +753,8 @@ extern func update(c: Context, e: entity)
                                         }
 
                                         let system_header = 
-@"#include "jeecs.hpp"
+@"#pragma once
+#include "jeecs.hpp"
 
 namespace $$MODULE_NAME$$
 {
@@ -835,7 +836,8 @@ namespace $$MODULE_NAME$$
                                         }
 
                                         let component_header = 
-@"#include "jeecs.hpp"
+@"#pragma once
+#include "jeecs.hpp"
 
 namespace $$MODULE_NAME$$
 {
