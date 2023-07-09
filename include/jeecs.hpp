@@ -2106,17 +2106,12 @@ namespace jeecs
             bool load(const std::string& path)
             {
                 _m_path = path;
-
-                if constexpr (std::is_same<T, void>::value) 
+                _m_resource = nullptr;
+                if (path != "")
                 {
-                    _m_resource = nullptr;
-                    if (path != "")
-                    {
-                        _m_resource = T::load(path);
-                        return _m_resource != nullptr;
-                    }
+                    _m_resource = T::load(path);
+                    return _m_resource != nullptr;
                 }
-
                 return true;
             }
             bool has_resource() const
