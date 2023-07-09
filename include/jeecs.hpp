@@ -2168,7 +2168,6 @@ namespace jeecs
             }
             void parse(const char* databuf)
             {
-                _m_resource = nullptr;
                 const size_t head_length = strlen("#je_file#");
                 if (strncmp(databuf, "#je_file#", head_length) == 0)
                 {
