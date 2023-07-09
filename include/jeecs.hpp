@@ -4725,7 +4725,7 @@ namespace jeecs
 
             }
         public:
-            static font* create(const std::string& fontfile, size_t size, jegl_texture::sampling samp = jegl_texture::sampling::DEFAULT)
+            static font* load(const std::string& fontfile, size_t size, jegl_texture::sampling samp = jegl_texture::sampling::DEFAULT)
             {
                 auto* font_res = je_font_load(fontfile.c_str(), (float)size, (float)size, samp);
                 if (font_res == nullptr)
@@ -4813,7 +4813,7 @@ namespace jeecs
                                         {
                                             auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f)/*四舍五入*/];
                                             if (new_font == nullptr)
-                                                new_font = font::create(font_base.m_path, int(TEXT_SCALE * font_base.m_size + 0.5f));
+                                                new_font = font::load(font_base.m_path, int(TEXT_SCALE * font_base.m_size + 0.5f));
 
                                             if (new_font == nullptr)
                                                 debug::logerr("Failed to open font: '%s'.", font_base.m_path.c_str());
