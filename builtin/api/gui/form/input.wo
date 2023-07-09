@@ -33,7 +33,7 @@ namespace jeapi::gui::form
                 open = false;
             }
             SameLine();
-            if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+            if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
                 open = false;
 
             End();
@@ -67,7 +67,7 @@ namespace jeapi::gui::form
                 open = false;
             }
             SameLine();
-            if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+            if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
                 open = false;
 
             End();

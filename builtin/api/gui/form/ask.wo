@@ -26,13 +26,13 @@ namespace jeapi::gui::form
                 open = false;
             }
             SameLine();
-            if (Button("否") || (IsWindowFocused() && inputmgr::keypush(je::keycode::BACKSPACE)))
+            if (Button("否") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::ESC])))
             {
                 okevent(false);
                 open = false;
             }
             SameLine();
-            if (Button("取消") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+            if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
                 open = false;
             End();
 

@@ -449,6 +449,7 @@ public let frag =
         };
         struct renderer_arch
         {
+            const Renderer::Color* color;
             const Rendqueue* rendqueue;
             const Shape* shape;
             const Shaders* shaders;
@@ -621,11 +622,12 @@ public let frag =
                                 Shape& shape,
                                 Rendqueue* rendqueue,
                                 UserInterface::Origin& origin,
-                                UserInterface::Distortion* distortion)
+                                UserInterface::Distortion* distortion,
+                                Renderer::Color* color)
                             {
                                 m_renderer_list.emplace_back(
                                     renderer_arch{
-                                        rendqueue, &shape, &shads, texs, &origin, distortion
+                                        color, rendqueue, &shape, &shads, texs, &origin, distortion
                                     });
                             })
                         .anyof<UserInterface::Absolute, UserInterface::Relatively>()
@@ -796,6 +798,13 @@ public let frag =
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
+
+                        if (rendentity.color != nullptr)
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 
+                                rendentity.color->color.x,
+                                rendentity.color->color.y,
+                                rendentity.color->color.z,
+                                rendentity.color->color.w);
                     }
 
                 }
@@ -839,6 +848,7 @@ public let frag =
         };
         struct renderer_arch
         {
+            const Renderer::Color* color;
             const Rendqueue* rendqueue;
             const Translation* translation;
             const Shape* shape;
@@ -952,13 +962,13 @@ public let frag =
                         );
                     })
                 .exec(
-                    [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue)
+                    [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
                     {
                         // TODO: Need Impl AnyOf
                             // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, &shape, &shads, texs
+                                color, rendqueue, &trans, &shape, &shads, texs
                             });
                     }).except<Light2D::Color, UserInterface::Origin>()
                         ;
@@ -1097,6 +1107,13 @@ public let frag =
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
+
+                        if (rendentity.color != nullptr)
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                rendentity.color->color.x,
+                                rendentity.color->color.y,
+                                rendentity.color->color.z,
+                                rendentity.color->color.w);
                     }
 
                 }
@@ -1432,6 +1449,7 @@ public func frag(vf: v2f)
 
         struct renderer_arch
         {
+            const Renderer::Color* color;
             const Rendqueue* rendqueue;
             const Translation* translation;
             const Shape* shape;
@@ -1617,12 +1635,12 @@ public func frag(vf: v2f)
                         }
                     })
                 .exec(
-                    [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue)
+                    [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
                     {
                         // RendOb will be input to a chain and used for swap
                         m_renderer_list.emplace_back(
                             renderer_arch{
-                                rendqueue, &trans, &shape, &shads, texs
+                                color, rendqueue, &trans, &shape, &shads, texs
                             });
                     })
                         .except<Light2D::Color, UserInterface::Origin>()
@@ -2151,6 +2169,13 @@ public func frag(vf: v2f)
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
+
+                        if (rendentity.color != nullptr)
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                rendentity.color->color.x,
+                                rendentity.color->color.y,
+                                rendentity.color->color.z,
+                                rendentity.color->color.w);
                     }
 
                 }

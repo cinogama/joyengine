@@ -5375,6 +5375,15 @@ namespace jeecs
             }
         };
 
+        struct Color
+        {
+            math::vec4 color;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Color::color, "color");
+            }
+        };
     }
     namespace Camera
     {
@@ -6327,6 +6336,7 @@ namespace jeecs
             type_info::of<Renderer::Shape>("Renderer::Shape");
             type_info::of<Renderer::Shaders>("Renderer::Shaders");
             type_info::of<Renderer::Textures>("Renderer::Textures");
+            type_info::of<Renderer::Color>("Renderer::Color");
 
             type_info::of<Animation2D::FrameAnimation>("Animation2D::FrameAnimation");
 
