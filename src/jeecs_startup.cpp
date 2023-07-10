@@ -153,13 +153,15 @@ void je_finish()
     jegl_finish();
 
     je_log_shutdown();
-    wo_finish();
+    wo_finish([](void*) 
+        {
+            std::lock_guard g1(_free_module_list_mx);
+            for (auto* mod : _free_module_list)
+                wo_unload_lib(mod);
 
-    std::lock_guard g1(_free_module_list_mx);
-    for (auto* mod: _free_module_list)
-        wo_unload_lib(mod);
-
-    _free_module_list.clear();
+            _free_module_list.clear();
+        }, nullptr
+    );
 }
 
 const char* je_build_version()

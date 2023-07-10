@@ -264,7 +264,13 @@ namespace editor
         }
         public func deactive_module(self: Project, module: CxxProject)
         {
-            return self.m_modules->remove(module.path);
+            assert (std::issame(self.m_modules->getor(module.path, module), module));
+            if (self.m_modules->remove(module.path))
+            {
+                module->close();
+                return true;
+            }
+            return false;
         }
         public func load(path: filesys::path_t, dat: dict<string, dynamic>)
         {
@@ -332,6 +338,9 @@ namespace editor
         }
         public func close(self: Project)
         {
+            for (let _, m : self.m_modules)
+                m->close;
+                
             self.m_env->close;
         }
         public func wait(self: Project)

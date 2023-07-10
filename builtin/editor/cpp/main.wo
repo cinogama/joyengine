@@ -541,6 +541,11 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             
             }// End of match
         }
+        public func close(self: CxxProject)
+        {
+            do self.module_instance->> \m = je::delay_unload_module(m);;
+            self.module_instance = option::none;
+        }
 
         func generate_cmake_doc(conf: string)=> result<CxxProjectBuildConfig, string>
         {
@@ -689,11 +694,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                                         std::yield();
                                         std::yield(); // 玄学，来三下
 
-                                        self.module_instance = 
-                                            self.module_instance
-                                                ->> \m = je::delay_unload_module(m);
-                                                =>> \_ = option::none;
-                                                ;
+                                        self->close();
 
                                         // 编译成功，更新文件到runtime
                                         self->update_library_of_platform(config);
