@@ -999,16 +999,24 @@ JE_API jegl_resource* jegl_create_vertex(
 
 // TODO: Support create frame buffer with different output attachment resolutions.
 JE_API jegl_resource* jegl_create_framebuf(
-    size_t width, size_t height,
-    const jegl_texture::format* attachment_formats,
-    const jegl_texture::sampling* attachment_samlings,
-    size_t attachment_count);
+    size_t                          width,
+    size_t                          height,
+    const jegl_texture::format*     attachment_formats,
+    const jegl_texture::sampling*   attachment_samlings,
+    size_t                          attachment_count);
 
 JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
 
 typedef struct je_stb_font_data je_font;
-
-JE_API je_font* je_font_load(const char* fontPath, float scalex, float scaley, jegl_texture::sampling samp);
+typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
+JE_API je_font* je_font_load(
+    const char*             font_path,
+    float                   scalex, 
+    float                   scaley, 
+    jegl_texture::sampling  samp, 
+    size_t                  board_blank_size_x,
+    size_t                  board_blank_size_y,
+    je_font_char_updater_t  char_texture_updater);
 JE_API void         je_font_free(je_font* font);
 JE_API jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode);
 
@@ -4697,6 +4705,7 @@ namespace jeecs
             // 字符本身
             wchar_t                  m_char = 0;
             // 字符本身的宽度和高度, 单位是像素
+            // * 包含边框的影响
             int                      m_width = 0;
             int                      m_height = 0;
 
@@ -4706,8 +4715,10 @@ namespace jeecs
             int                      m_advised_h = 0;
 
             // 当前字符基线横向偏移量，单位是像素，正数表示向右方偏移
+            // * 包含边框的影响
             int                      m_baseline_offset_x = 0;
             // 当前字符基线纵向偏移量，单位是像素，正数表示向下方偏移
+            // * 包含边框的影响
             int                      m_baseline_offset_y = 0;
         };
 
@@ -4730,9 +4741,17 @@ namespace jeecs
 
             }
         public:
-            static font* load(const std::string& fontfile, size_t size, jegl_texture::sampling samp = jegl_texture::sampling::DEFAULT)
+            static font* load(
+                const std::string&      fontfile, 
+                size_t                  size, 
+                jegl_texture::sampling  samp = jegl_texture::sampling::DEFAULT, 
+                size_t                  board_size = 0, 
+                je_font_char_updater_t  char_texture_updater = nullptr)
             {
-                auto* font_res = je_font_load(fontfile.c_str(), (float)size, (float)size, samp);
+                auto* font_res = je_font_load(
+                    fontfile.c_str(), (float)size, (float)size, 
+                    samp, board_size, board_size, char_texture_updater);
+
                 if (font_res == nullptr)
                     return nullptr;
 
