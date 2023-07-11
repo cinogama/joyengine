@@ -18,7 +18,6 @@ int main(int argc, char** argv)
         enrty::module_entry();
         {
             jedbg_main_script_entry();
-            je_clock_sleep_for(1);
         }
         enrty::module_leave();
     }

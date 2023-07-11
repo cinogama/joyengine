@@ -266,10 +266,9 @@ namespace editor::gui
             static let registed_open_method = {
                 [".jeworld"] = 
                     \p: PathInfo, context: EditorContext = 
-                        ow->has
-                        ? ow =>> \w = context->get_project->reset_editing_world(w)->error;
-                        | option::value("无法加载世界")                      
-                        where ow = context->get_project->load_world(p.path)
+                        context->get_project->load_world(p.path)
+                            =>> \w =context->get_project->reset_editing_world(w);
+                            ->  error
                     ;,
                 [".jeanim4"] = 
                     func(p: PathInfo, context: EditorContext)
@@ -340,6 +339,20 @@ namespace editor::gui
         if (filesys::exist(path))
             return false;
         return filesys::writeall(path, content);
+    }
+
+    func write_file_and_ask_if_exist(path: filesys::path_t, content: string)
+    {
+        if (filesys::exist(path))
+        {
+            jeapi::gui::form::ask("是否覆盖", F"文件{path->tostring}已存在，是否覆盖？",
+                func(overwrite){
+                    if (overwrite)
+                        do filesys::writeall(path, content);
+                });
+        }
+        else
+            do filesys::writeall(path, content);
     }
 
     func context_menu(path: option<PathInfo>, context: EditorContext)
@@ -761,6 +774,8 @@ namespace $$MODULE_NAME$$
     struct $$SYSTEM_NAME$$ : public jeecs::game_system
     {
         $$SYSTEM_NAME$$(jeecs::game_world world);
+        ~$$SYSTEM_NAME$$();
+        
         void PreUpdate();
         void Update();
         void LateUpdate();
@@ -1071,6 +1086,28 @@ namespace $$MODULE_NAME$$
                     where action = FileIcon(item, context);
                 ; 
         EndChild();
+        if (BeginDragDropTarget())
+        {
+            match (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE"))
+            {
+            value(drag_uid)?
+                {
+                    let eid = drag_uid as string: handle: jeapi::debug::Eeid;
+                    eid->justdo(func(e){
+                        match (jeapi::serialize::entity(e)=>>\dat = dat->serialize;)
+                        {
+                        value(entity_json)?
+                            write_file_and_ask_if_exist(filesys::normalize(current_work_path) / (e->editor::name + ".jeentity"), entity_json);
+                        none?
+                            jeapi::gui::form::errmsg("失败", F"无法序列化实体{e->editor::name}");
+                        }
+                    });
+                }
+            none?
+                ;
+            }
+            EndDragDropTarget();
+        }
     }
 
     // 左侧的目录概况

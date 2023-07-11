@@ -2922,7 +2922,7 @@ namespace jeecs
             }
 
             // Let last step finished!
-            if (m_curstep)
+            if (m_curstep != 0)
                 m_steps[m_curstep - 1].m_requirements_inited = true;
 
             assert(m_curstep <= m_steps.size());

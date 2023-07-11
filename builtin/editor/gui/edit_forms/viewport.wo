@@ -13,6 +13,8 @@ namespace editor::gui::edit_forms
     {
         if (show->get)
         {
+            let proj = context->get_project;
+
             // 坏！不过之后再来改吧
             static let mut windows_moveable = true;
             je::gui::SetNextWindowSizeConstraints((300., 200.), (2000., 1100.));
@@ -23,7 +25,7 @@ namespace editor::gui::edit_forms
                     ? WindowsAttribute::ImGuiWindowFlags_None
                     | WindowsAttribute::ImGuiWindowFlags_NoMove)));
 
-            let debug_camera_entity = context->get_project->get_editing_world
+            let debug_camera_entity = proj->get_editing_world
                 =>> \w = w->editor::get_all_entities
                     ->forall(\e = 
                         e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
@@ -35,7 +37,6 @@ namespace editor::gui::edit_forms
 
             if (BeginMenuBar())
             {
-                let proj = context->get_project;
                 if (! proj->is_debugging)
                 {
                     if (MenuItemShortcut("调试运行", "Ctrl + P") 
@@ -177,8 +178,33 @@ namespace editor::gui::edit_forms
 
                     if (BeginPopup("RightClickContextMenu"))
                     {
-                        entity_edit_context_menu(context, context->get_project->get_editing_world->val, context->get_editing_entity);
+                        entity_edit_context_menu(context, proj->get_editing_world->val, context->get_editing_entity);
                         EndPopup();
+                    }
+
+                    match (jeapi::gui::widget::accept_file_for_current_widget())
+                    {
+                    value(path)?
+                        {
+                            let filepath = proj->parse_path_normalize(path);
+                            if (filesys::extension(filepath)->lower == ".jeentity")
+                            {
+                                let succ = filesys::readall(filepath)
+                                    =>> \text = text->dict::deserialize
+                                        ->> \dat = dat
+                                            ->> \k, v = (k: string, v);
+                                            ;
+                                        ;
+                                    =>> \dat = proj->get_editing_world
+                                        =>> \w = jeapi::deserialize::entity(w, dat, true);
+                                        ;
+                                    ->  has;
+                                    
+                                if (!succ)
+                                    jeapi::gui::form::errmsg("失败", "加载实体失败");
+                            }
+                        }
+                    none?;
                     }
                 }
             none?

@@ -558,14 +558,24 @@ namespace editor
         }
         public func load_world(self: Project, file_path: filesys::path_t)
         {
-            return filesys::readall(file_path)
-                =>> \dat = dict::deserialize(dat)
-                    ->> \d = d
-                        ->> \k, v = (k as string, v);
+            // 不允许重复加载相同路径的世界
+            if (self.m_worlds->forall(\pworld = pworld.m_world_path == file_path;)->empty)
+            {
+                match (filesys::readall(file_path)
+                    =>> \dat = dict::deserialize(dat)
+                        ->> \d = d
+                            ->> \k, v = (k as string, v);
+                            ;
                         ;
-                    ;
-                ->> \dat = self->deserialize_world(dat);
-                ;
+                    ->> \dat = self->deserialize_world(dat);)
+                {
+                value(w)?
+                    return result::ok(w);
+                none?
+                    return result::err("序列化世界失败");
+                }
+            }
+            return result::err("相同世界已存在");
         }
         
         public func destroy_world(self: Project, world: je::world)=> result<void, string>
