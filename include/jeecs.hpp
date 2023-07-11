@@ -1295,14 +1295,23 @@ namespace jeecs
 
             inline static size_t _move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
             {
-                for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
+                for (ElemT* origin_elem = from_begin; origin_elem < from_end; ++origin_elem)
                 {
-                    new(to_begin++)ElemT(std::move(*(origin_elem++)));
+                    new(to_begin++)ElemT(std::move(*origin_elem));
+                    origin_elem->~ElemT();
                 }
-
                 return (size_t)(from_end - from_begin);
             }
-
+            inline static size_t _r_move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
+            {
+                for (ElemT* origin_elem = from_end; origin_elem > from_begin;)
+                {
+                    size_t offset = (size_t)((--origin_elem) - from_begin);
+                    new(to_begin + offset)ElemT(std::move(*origin_elem));
+                    origin_elem->~ElemT();
+                }
+                return (size_t)(from_end - from_begin);
+            }
             inline static size_t _copy(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
             {
                 for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
@@ -1312,7 +1321,6 @@ namespace jeecs
 
                 return (size_t)(from_end - from_begin);
             }
-
             inline static size_t _erase(ElemT* from_begin, ElemT* from_end)noexcept
             {
                 if constexpr (!std::is_trivial<ElemT>::value)
@@ -1325,7 +1333,6 @@ namespace jeecs
 
                 return (size_t)(from_end - from_begin);
             }
-
             inline void _reserve(size_t elem_reserving_count)
             {
                 const size_t _pre_reserved_count = (size_t)(_elems_buffer_end - _elems_ptr_begin);
@@ -1339,7 +1346,6 @@ namespace jeecs
                     _elems_ptr_begin = new_reserved_begin;
                 }
             }
-
             inline void _assure(size_t assure_sz)
             {
                 if (assure_sz > reserved_size())
@@ -1350,7 +1356,6 @@ namespace jeecs
             vector()noexcept
             {
             }
-
             ~vector()
             {
                 clear();
@@ -1362,19 +1367,16 @@ namespace jeecs
                 _reserve(another_list.size());
                 _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
             }
-
             vector(const std::initializer_list<ElemT>& another_list)
             {
                 for (auto& elem : another_list)
                     push_back(elem);
             }
-
             vector(ElemT* ptr, size_t length)
             {
                 _elems_ptr_begin = ptr;
                 _elems_ptr_end = _elems_buffer_end = _elems_ptr_begin + length;
             }
-
             vector(vector&& another_list)
             {
                 _elems_ptr_begin = another_list._elems_ptr_begin;
@@ -1393,7 +1395,6 @@ namespace jeecs
 
                 return *this;
             }
-
             inline vector& operator = (vector&& another_list)
             {
                 clear();
@@ -1435,6 +1436,12 @@ namespace jeecs
                 _erase(_elems_ptr_begin, _elems_ptr_end);
                 _elems_ptr_end = _elems_ptr_begin;
             }
+            inline void push_front(const ElemT& _e)
+            {
+                _assure(size() + 1);
+                _r_move(_elems_ptr_begin + 1, _elems_ptr_begin, _elems_ptr_end++);
+                new (_elems_ptr_begin) ElemT(_e);
+            }
             inline void push_back(const ElemT& _e)
             {
                 _assure(size() + 1);
@@ -1447,22 +1454,18 @@ namespace jeecs
                 else
                     _elems_ptr_end--;
             }
-
             inline auto begin() const noexcept->ElemT*
             {
                 return _elems_ptr_begin;
             }
-
             inline auto end() const noexcept->ElemT*
             {
                 return _elems_ptr_end;
             }
-
             inline auto front() const noexcept->ElemT&
             {
                 return *_elems_ptr_begin;
             }
-
             inline auto back() const noexcept->ElemT&
             {
                 return *(_elems_ptr_end - 1);
@@ -1473,25 +1476,21 @@ namespace jeecs
                 _elems_ptr_begin[index].~ElemT();
                 _move(_elems_ptr_begin + index, _elems_ptr_begin + index + 1, _elems_ptr_end--);
             }
-
             inline void erase(ElemT* index)
             {
                 index->~ElemT();
                 _move(index, index + 1, _elems_ptr_end--);
             }
-
             inline void erase_data(const ElemT& data)
             {
                 auto fnd_place = std::find(begin(), end(), data);
                 if (fnd_place != end())
                     erase(fnd_place - begin());
             }
-
             ElemT* data()const noexcept
             {
                 return _elems_ptr_begin;
             }
-
             ElemT& operator[](size_t index)const noexcept
             {
                 return _elems_ptr_begin[index];
@@ -2575,7 +2574,6 @@ namespace jeecs
 
         // Store archtypes here?
         game_world  m_world = nullptr;
-        bool        m_requirements_inited = false;
         size_t      m_current_arch_version = 0;
 
         // archs of dependences:
@@ -2648,10 +2646,13 @@ namespace jeecs
     */
     struct selector
     {
+        JECS_DISABLE_MOVE_AND_COPY(selector);
         size_t                      m_curstep = 0;
         size_t                      m_any_id = 0;
         game_world                  m_current_world = nullptr;
-        basic::vector<dependence>   m_steps;
+
+        bool                        m_first_time_to_work = true;
+        basic::vector<dependence>   m_dependence_caches;
 
         game_system* m_system_instance = nullptr;
     private:
@@ -2663,18 +2664,20 @@ namespace jeecs
             {
                 using CurRequireT = typename f::template argument<ArgN>::type;
 
+                _apply_dependence<ArgN + 1, FT>(dep);
+
                 if constexpr (ArgN == 0 && std::is_same<CurRequireT, game_entity>::value)
                 {
                     // First argument is game_entity, skip this argument
                 }
                 else if constexpr (std::is_reference<CurRequireT>::value)
                     // Reference, means CONTAIN
-                    dep.m_requirements.push_back(
+                    dep.m_requirements.push_front(
                         requirement(requirement::type::CONTAIN, 0,
                             typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>(typeid(CurRequireT).name())));
                 else if constexpr (std::is_pointer<CurRequireT>::value)
                     // Pointer, means MAYNOT
-                    dep.m_requirements.push_back(
+                    dep.m_requirements.push_front(
                         requirement(requirement::type::MAYNOT, 0,
                             typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>(typeid(CurRequireT).name())));
                 else
@@ -2682,8 +2685,6 @@ namespace jeecs
                     static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value,
                         "'exec' of selector only accept ref or ptr type of Components.");
                 }
-
-                _apply_dependence<ArgN + 1, FT>(dep);
             }
         }
 
@@ -2913,48 +2914,38 @@ namespace jeecs
         };
 
         template<typename FT>
-        bool _update(FT&& exec)
+        void _update(FT&& exec)
         {
-            if (!m_current_world)
-            {
-                jeecs::debug::logfatal("Failed to execute current jobs(%p). Game world not specify!");
-                return false;
-            }
+            assert((bool)m_current_world);
 
-            // Let last step finished!
-            if (m_curstep != 0)
-                m_steps[m_curstep - 1].m_requirements_inited = true;
-
-            assert(m_curstep <= m_steps.size());
-            if (m_curstep == m_steps.size())
+            assert(m_curstep < m_dependence_caches.size());
+            if (m_first_time_to_work)
             {
                 // First times to execute this job or arch/world changed, register requirements
-                m_steps.push_back(dependence());
-                dependence& dep = m_steps.back();
+                assert(m_curstep + 1 == m_dependence_caches.size());
 
-                assert(dep.m_requirements.size() == 0 && dep.m_requirements_inited == false);
+                dependence& dep = m_dependence_caches.back();
                 _apply_dependence<0, FT>(dep);
+
+                m_dependence_caches.push_back(dependence());
             }
 
-            dependence& cur_dependence = m_steps[m_curstep];
-            // NOTE: Only execute when current dependence has been inited.
-            // Because some requirement might append after exec(...)
-            if (cur_dependence.m_requirements_inited)
+            dependence& cur_dependence = m_dependence_caches[m_curstep];
+
+            if (cur_dependence.need_update(m_current_world))
             {
-                if (cur_dependence.need_update(m_current_world))
-                {
-                    cur_dependence.m_world = m_current_world;
-                    je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
-                }
-
-                // OK! Execute step function!
-                static_assert(
-                    _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
-                    "Fail to extract types of arguments from 'FT'.");
-                _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
-                    &cur_dependence, exec, m_system_instance);
+                cur_dependence.m_world = m_current_world;
+                je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
             }
-            return true;
+
+            // OK! Execute step function!
+            static_assert(
+                _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
+                "Fail to extract types of arguments from 'FT'.");
+            _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
+                &cur_dependence, exec, m_system_instance);
+
+            ++m_curstep;
         }
     public:
         selector(game_system* game_sys)
@@ -2967,9 +2958,9 @@ namespace jeecs
 
         ~selector()
         {
-            for (auto& step : m_steps)
+            for (auto& step : m_dependence_caches)
                 step.clear_archs();
-            m_steps.clear();
+            m_dependence_caches.clear();
 #ifndef NDEBUG
             jeecs::debug::loginfo("Selector(%p) closed.", this);
 #endif
@@ -2977,11 +2968,17 @@ namespace jeecs
 
         selector& at(game_world w)
         {
-            if (!m_steps.empty())
+            if (m_first_time_to_work)
             {
-                assert(m_curstep == m_steps.size());
-                m_steps[m_curstep - 1].m_requirements_inited = true;
+                if (m_dependence_caches.empty())
+                    m_dependence_caches.push_back(dependence());
+                else
+                {
+                    m_dependence_caches.erase(m_dependence_caches.end() - 1);
+                    m_first_time_to_work = false;
+                }
             }
+
             m_curstep = 0;
             m_current_world = w;
             return *this;
@@ -2990,21 +2987,16 @@ namespace jeecs
         template<typename FT>
         selector& exec(FT&& _exec)
         {
-            if (_update(_exec))
-                ++m_curstep;
-
+            _update(_exec);
             return *this;
         }
 
         template<typename ... Ts>
         inline selector& except() noexcept
         {
-            assert(m_curstep > 0);
-            const size_t last_step = m_curstep - 1;
+            auto& depend = m_dependence_caches[m_curstep];
 
-            auto& depend = m_steps[last_step];
-
-            if (!depend.m_requirements_inited)
+            if (m_first_time_to_work)
             {
                 _apply_except<Ts...>(depend);
             }
@@ -3013,12 +3005,9 @@ namespace jeecs
         template<typename ... Ts>
         inline selector& contain() noexcept
         {
-            assert(m_curstep > 0);
-            const size_t last_step = m_curstep - 1;
+            auto& depend = m_dependence_caches[m_curstep];
 
-            auto& depend = m_steps[last_step];
-
-            if (!depend.m_requirements_inited)
+            if (m_first_time_to_work)
             {
                 _apply_contain<Ts...>(depend);
             }
@@ -3027,12 +3016,9 @@ namespace jeecs
         template<typename ... Ts>
         inline selector& anyof() noexcept
         {
-            assert(m_curstep > 0);
-            const size_t last_step = m_curstep - 1;
+            auto& depend = m_dependence_caches[m_curstep];
 
-            auto& depend = m_steps[last_step];
-
-            if (!depend.m_requirements_inited)
+            if (m_first_time_to_work)
             {
                 _apply_anyof<Ts...>(depend, m_any_id);
                 ++m_any_id;

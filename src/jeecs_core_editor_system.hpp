@@ -570,74 +570,81 @@ public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     {
                         if (e.get_euid() == jedbg_get_editing_entity_uid())
                             _inputs.selected_entity = std::optional(e);
-                    })
+                    }
+                )
                 // Move walker(root)
-                        .exec(&DefaultEditorSystem::MoveWalker).contain<Editor::EditorWalker>().except<Camera::Projection>()
-                        // Move walker(camera)
-                        .exec(&DefaultEditorSystem::CameraWalker).contain<Editor::EditorWalker>()
-                        // Select entity
-                        .exec(&DefaultEditorSystem::SelectEntity).except<Editor::Invisable>()
-                        // Create & create mover!
-                        .exec(&DefaultEditorSystem::UpdateAndCreateMover)
-                        .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale)
-                            {
-                                float distance =
-                                    _camera_ortho_porjection == nullptr
-                                    ? 0.25f * (_camera_pos - trans.world_position).length()
-                                    : 1.0f / _camera_ortho_porjection->scale;
+                .contain<Editor::EditorWalker>()
+                .except<Camera::Projection>()
+                .exec(&DefaultEditorSystem::MoveWalker)
+                // Move walker(camera)
+                .contain<Editor::EditorWalker>()
+                .exec(&DefaultEditorSystem::CameraWalker)
+                // Select entity
+                .except<Editor::Invisable>()
+                .exec(&DefaultEditorSystem::SelectEntity)
+                // Create & create mover!
+                .exec(&DefaultEditorSystem::UpdateAndCreateMover)
+                .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale)
+                    {
+                        float distance =
+                            _camera_ortho_porjection == nullptr
+                            ? 0.25f * (_camera_pos - trans.world_position).length()
+                            : 1.0f / _camera_ortho_porjection->scale;
 
-                                localScale.scale = math::vec3(1.0f / distance, 1.0f / distance, 1.0f / distance);
+                        localScale.scale = math::vec3(1.0f / distance, 1.0f / distance, 1.0f / distance);
 
-                                if (_inputs.selected_entity)
-                                {
-                                    if (auto* escale = _inputs.selected_entity.value().get_component<Transform::LocalScale>())
-                                        localScale.scale = localScale.scale * escale->scale;
+                        if (_inputs.selected_entity)
+                        {
+                            if (auto* escale = _inputs.selected_entity.value().get_component<Transform::LocalScale>())
+                                localScale.scale = localScale.scale * escale->scale;
 
-                                    if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
-                                        localScale.scale = localScale.scale * (
-                                            eshape->vertex == nullptr
-                                            ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
-                                            : jeecs::math::vec3(
-                                                eshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
-                                                eshape->vertex->resouce()->m_raw_vertex_data->m_size_y,
-                                                eshape->vertex->resouce()->m_raw_vertex_data->m_size_z
-                                            ));
+                            if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
+                                localScale.scale = localScale.scale * (
+                                    eshape->vertex == nullptr
+                                    ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
+                                    : jeecs::math::vec3(
+                                        eshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
+                                        eshape->vertex->resouce()->m_raw_vertex_data->m_size_y,
+                                        eshape->vertex->resouce()->m_raw_vertex_data->m_size_z
+                                    ));
 
-                                    localScale.scale = 1.05f * localScale.scale;
-                                }
-                            })
-                        // Mover mgr
-                                .exec(&DefaultEditorSystem::MoveEntity);
+                            localScale.scale = 1.05f * localScale.scale;
+                        }
+                    }
+                )
+                // Mover mgr          
+                .exec(&DefaultEditorSystem::MoveEntity)
+                ;
 
-                            if (nullptr == _grab_axis_translation)
-                            {
-                                auto _set_editing_entity = [](const jeecs::game_entity& e)
-                                {
-                                    jedbg_set_editing_entity_uid(e.get_euid());
-                                };
+            if (nullptr == _grab_axis_translation)
+            {
+                auto _set_editing_entity = [](const jeecs::game_entity& e)
+                {
+                    jedbg_set_editing_entity_uid(e.get_euid());
+                };
 
-                                if (!selected_list.empty())
-                                {
-                                    const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
-                                    if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
-                                        [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
-                                        fnd != selected_list.end())
-                                    {
-                                        if (++fnd == selected_list.end())
-                                            _set_editing_entity(selected_list.begin()->entity);
-                                        else
-                                            _set_editing_entity(fnd->entity);
-                                    }
-                                    else
-                                        _set_editing_entity(selected_list.begin()->entity);
-                                }
-                                else if (_inputs.l_buttom_pushed)
-                                    jedbg_set_editing_entity_uid(0);
-                            }
+                if (!selected_list.empty())
+                {
+                    const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
+                    if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
+                        [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
+                        fnd != selected_list.end())
+                    {
+                        if (++fnd == selected_list.end())
+                            _set_editing_entity(selected_list.begin()->entity);
+                        else
+                            _set_editing_entity(fnd->entity);
+                    }
+                    else
+                        _set_editing_entity(selected_list.begin()->entity);
+                }
+                else if (_inputs.l_buttom_pushed)
+                    jedbg_set_editing_entity_uid(0);
+            }
 
-                            je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
+            je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
 
-                            selected_list.clear();
+            selected_list.clear();
         }
     };
 }

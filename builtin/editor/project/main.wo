@@ -400,7 +400,10 @@ namespace editor
                 }
                 none?;
                 }
-                do world->add_system(self->get_config_editor_system);
+
+                if (self->is_debugging == false)
+                    do world->add_system(self->get_config_editor_system);
+
                 self.m_editing_world = option::value(world);
                 return result::ok(do nil);
             }

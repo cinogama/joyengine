@@ -200,8 +200,9 @@ namespace jeecs
             ++m_simulate_round_count;
 
             select_from(this->get_world())
+                .anyof<Physics2D::BoxCollider, Physics2D::CircleCollider>()
                 .exec(&Physics2DUpdatingSystem::UpdateBeforeSimulate)
-                .anyof<Physics2D::BoxCollider, Physics2D::CircleCollider>();
+                ;
 
             // 物理引擎在此处进行物理解算
             m_physics_world.Step(delta_time(), 8, 3);

@@ -553,11 +553,15 @@ public let frag =
             std::unordered_map<typing::uid_t, UserInterface::Origin*> parent_origin_list;
 
             select_from(get_world())
-                .exec(&UserInterfaceGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                //
+                .anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(&UserInterfaceGraphicPipelineSystem::PrepareCameras)
+                //
                 .exec([&](Transform::Anchor& anchor, UserInterface::Origin& origin)
                     {
                         parent_origin_list[anchor.uid] = &origin;
-                    })
+                    }
+                )
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
@@ -568,77 +572,79 @@ public let frag =
                                 branch, rendqueue, &projection, cameraviewport, rendbuf
                             }
                         );
-                    })
-                        .exec(
-                            [this, &parent_origin_list](
-                                Transform::LocalToParent* l2p,
-                                UserInterface::Origin& origin,
-                                UserInterface::Absolute* absolute,
-                                UserInterface::Relatively* relatively
-                                )
-                            {
-                                UserInterface::Origin* parent_origin = nullptr;
-                                if (l2p != nullptr)
-                                {
-                                    auto fnd = parent_origin_list.find(l2p->parent_uid);
-                                    if (fnd != parent_origin_list.end())
-                                        parent_origin = fnd->second;
-                                }
-
-                                if (parent_origin != nullptr)
-                                {
-                                    origin.global_offset = parent_origin->global_offset;
-                                    origin.global_location = parent_origin->global_location;
-                                    origin.keep_vertical_ratio = parent_origin->keep_vertical_ratio;
-                                }
-                                else
-                                {
-                                    origin.global_offset = {};
-                                    origin.global_location = {};
-                                }
-
-                                if (absolute != nullptr)
-                                {
-                                    origin.global_offset += absolute->offset;
-                                    origin.size = absolute->size;
-                                }
-                                else
-                                    origin.size = {};
-
-                                if (relatively != nullptr)
-                                {
-                                    origin.global_location += relatively->location;
-                                    origin.scale = relatively->scale;
-                                    origin.keep_vertical_ratio = relatively->use_vertical_ratio;
-                                }
-                                else
-                                    origin.scale = {};
-                            }
+                    }
+                )
+                .exec(
+                    [this, &parent_origin_list](
+                        Transform::LocalToParent* l2p,
+                        UserInterface::Origin& origin,
+                        UserInterface::Absolute* absolute,
+                        UserInterface::Relatively* relatively
                         )
-                        .exec(
-                            [this, &parent_origin_list](
-                                Shaders& shads,
-                                Textures* texs,
-                                Shape& shape,
-                                Rendqueue* rendqueue,
-                                UserInterface::Origin& origin,
-                                UserInterface::Distortion* distortion,
-                                Renderer::Color* color)
-                            {
-                                m_renderer_list.emplace_back(
-                                    renderer_arch{
-                                        color, rendqueue, &shape, &shads, texs, &origin, distortion
-                                    });
-                            })
-                        .anyof<UserInterface::Absolute, UserInterface::Relatively>()
-                        .except<Light2D::Color>()
-                                ;
-                            std::sort(m_camera_list.begin(), m_camera_list.end());
-                            std::sort(m_renderer_list.begin(), m_renderer_list.end());
+                    {
+                        UserInterface::Origin* parent_origin = nullptr;
+                        if (l2p != nullptr)
+                        {
+                            auto fnd = parent_origin_list.find(l2p->parent_uid);
+                            if (fnd != parent_origin_list.end())
+                                parent_origin = fnd->second;
+                        }
 
-                            this->pipeline_update_end();
+                        if (parent_origin != nullptr)
+                        {
+                            origin.global_offset = parent_origin->global_offset;
+                            origin.global_location = parent_origin->global_location;
+                            origin.keep_vertical_ratio = parent_origin->keep_vertical_ratio;
+                        }
+                        else
+                        {
+                            origin.global_offset = {};
+                            origin.global_location = {};
+                        }
 
-                            DrawFrame();
+                        if (absolute != nullptr)
+                        {
+                            origin.global_offset += absolute->offset;
+                            origin.size = absolute->size;
+                        }
+                        else
+                            origin.size = {};
+
+                        if (relatively != nullptr)
+                        {
+                            origin.global_location += relatively->location;
+                            origin.scale = relatively->scale;
+                            origin.keep_vertical_ratio = relatively->use_vertical_ratio;
+                        }
+                        else
+                            origin.scale = {};
+                    }
+                )
+                //
+                .anyof<UserInterface::Absolute, UserInterface::Relatively>()
+                .except<Light2D::Color>()
+                .exec(
+                    [this, &parent_origin_list](
+                        Shaders& shads,
+                        Textures* texs,
+                        Shape& shape,
+                        Rendqueue* rendqueue,
+                        UserInterface::Origin& origin,
+                        UserInterface::Distortion* distortion,
+                        Renderer::Color* color)
+                    {
+                        m_renderer_list.emplace_back(
+                            renderer_arch{
+                                color, rendqueue, &shape, &shads, texs, &origin, distortion
+                            });
+                    })
+                ;
+            std::sort(m_camera_list.begin(), m_camera_list.end());
+            std::sort(m_renderer_list.begin(), m_renderer_list.end());
+
+            this->pipeline_update_end();
+
+            DrawFrame();
         }
 
         void DrawFrame()
@@ -961,6 +967,8 @@ public let frag =
                             }
                         );
                     })
+                //
+                .except<Light2D::Color, UserInterface::Origin>()
                 .exec(
                     [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
                     {
@@ -970,7 +978,7 @@ public let frag =
                             renderer_arch{
                                 color, rendqueue, &trans, &shape, &shads, texs
                             });
-                    }).except<Light2D::Color, UserInterface::Origin>()
+                    })
                         ;
                     std::sort(m_camera_list.begin(), m_camera_list.end());
                     std::sort(m_renderer_list.begin(), m_renderer_list.end());
@@ -1576,7 +1584,9 @@ public func frag(vf: v2f)
             this->pipeline_update_begin();
 
             select_from(get_world())
-                .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
+                .anyof<OrthoProjection, PerspectiveProjection>()
+                .exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras)
+                //
                 .exec(
                     [this](
                         Translation& tarns,
@@ -1634,6 +1644,8 @@ public func frag(vf: v2f)
                             }
                         }
                     })
+                // 
+                .except<Light2D::Color, UserInterface::Origin>()
                 .exec(
                     [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
                     {
@@ -1643,91 +1655,91 @@ public func frag(vf: v2f)
                                 color, rendqueue, &trans, &shape, &shads, texs
                             });
                     })
-                        .except<Light2D::Color, UserInterface::Origin>()
-                        .exec(
-                            [this](Translation& trans,
-                                Light2D::Color& color,
-                                Light2D::Shadow* shadow,
-                                Shape& shape,
-                                Shaders& shads,
-                                Textures* texs)
+                //
+                .exec(
+                    [this](Translation& trans,
+                        Light2D::Color& color,
+                        Light2D::Shadow* shadow,
+                        Shape& shape,
+                        Shaders& shads,
+                        Textures* texs)
+                    {
+                        m_2dlight_list.emplace_back(
+                            light2d_arch{
+                                &trans, &color, shadow,
+                                &shape,
+                                &shads,
+                                texs,
+                            }
+                        );
+                        if (shadow != nullptr)
+                        {
+                            bool generate_new_framebuffer =
+                                shadow->shadow_buffer == nullptr
+                                || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
+                                || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
+
+                            if (generate_new_framebuffer)
                             {
-                                m_2dlight_list.emplace_back(
-                                    light2d_arch{
-                                        &trans, &color, shadow,
-                                        &shape,
-                                        &shads,
-                                        texs,
+                                shadow->shadow_buffer = graphic::framebuffer::create(
+                                    shadow->resolution_width, shadow->resolution_height,
+                                    {
+                                        {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT}
+                                        // Only store shadow value to R, FBO in opengl not support rend to MONO
                                     }
                                 );
-                                if (shadow != nullptr)
-                                {
-                                    bool generate_new_framebuffer =
-                                        shadow->shadow_buffer == nullptr
-                                        || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
-                                        || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
-
-                                    if (generate_new_framebuffer)
-                                    {
-                                        shadow->shadow_buffer = graphic::framebuffer::create(
-                                            shadow->resolution_width, shadow->resolution_height,
-                                            {
-                                                {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT}
-                                                // Only store shadow value to R, FBO in opengl not support rend to MONO
-                                            }
-                                        );
-                                    }
-                                }
                             }
-                        )
-                        .exec(
-                            [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                        }
+                    }
+                )
+                .exec(
+                    [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                    {
+                        if (block.mesh.m_block_mesh == nullptr)
+                        {
+                            std::vector<float> _vertex_buffer;
+                            if (!block.mesh.m_block_points.empty())
                             {
-                                if (block.mesh.m_block_mesh == nullptr)
+                                for (auto& point : block.mesh.m_block_points)
                                 {
-                                    std::vector<float> _vertex_buffer;
-                                    if (!block.mesh.m_block_points.empty())
-                                    {
-                                        for (auto& point : block.mesh.m_block_points)
+                                    _vertex_buffer.insert(_vertex_buffer.end(),
                                         {
-                                            _vertex_buffer.insert(_vertex_buffer.end(),
-                                                {
-                                                    point.x, point.y, 0.f, 0.f,
-                                                    point.x, point.y, 0.f, 1.f,
-                                                });
-                                        }
-                                        _vertex_buffer.insert(_vertex_buffer.end(),
-                                            {
-                                                block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 0.f,
-                                                block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 1.f,
-                                            });
-                                        block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
-                                            jegl_vertex::type::TRIANGLESTRIP,
-                                            _vertex_buffer, { 3,1 });
-                                    }
+                                            point.x, point.y, 0.f, 0.f,
+                                            point.x, point.y, 0.f, 1.f,
+                                        });
                                 }
-                                // Cannot create vertex with 0 point.
-
-                                if (block.mesh.m_block_mesh != nullptr)
-                                {
-                                    m_2dblock_list.push_back(
-                                        block2d_arch{
-                                                &trans, &block, texture, shape
-                                        }
-                                    );
-                                }
+                                _vertex_buffer.insert(_vertex_buffer.end(),
+                                    {
+                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 0.f,
+                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 1.f,
+                                    });
+                                block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                                    jegl_vertex::type::TRIANGLESTRIP,
+                                    _vertex_buffer, { 3,1 });
                             }
+                        }
+                        // Cannot create vertex with 0 point.
+
+                        if (block.mesh.m_block_mesh != nullptr)
+                        {
+                            m_2dblock_list.push_back(
+                                block2d_arch{
+                                        &trans, &block, texture, shape
+                                }
                             );
-                            std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
-                                [](const block2d_arch& a, const block2d_arch& b) {
-                                    return a.translation->world_position.z > b.translation->world_position.z;
-                                });
-                            std::sort(m_camera_list.begin(), m_camera_list.end());
-                            std::sort(m_renderer_list.begin(), m_renderer_list.end());
+                        }
+                    }
+                    );
+            std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
+                [](const block2d_arch& a, const block2d_arch& b) {
+                    return a.translation->world_position.z > b.translation->world_position.z;
+                });
+            std::sort(m_camera_list.begin(), m_camera_list.end());
+            std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
-                            this->pipeline_update_end();
+            this->pipeline_update_end();
 
-                            DrawFrame();
+            DrawFrame();
         }
 
         void DrawFrame()
