@@ -434,9 +434,12 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::move_func_t      _mover,
     jeecs::typing::to_string_func_t _to_string,
     jeecs::typing::parse_func_t     _parse,
+    jeecs::typing::update_func_t    _state_update,
     jeecs::typing::update_func_t    _pre_update,
     jeecs::typing::update_func_t    _update,
+    jeecs::typing::update_func_t    _script_update,
     jeecs::typing::update_func_t    _late_update,
+    jeecs::typing::update_func_t    _apply_update,
     jeecs::typing::update_func_t    _commit_update,
     je_typing_class                 _typecls);
 
@@ -1855,46 +1858,34 @@ namespace jeecs
                 }
             }
 
+#define has_specify_function(SpecifyT) \
+    template<typename U, typename VoidT = void>\
+    struct has_##SpecifyT##_function : std::false_type\
+    {\
+        static_assert(std::is_void<VoidT>::value);\
+    };\
+    template<typename U>\
+    struct has_##SpecifyT##_function<U, std::void_t<decltype(&U::SpecifyT)>> : std::true_type\
+    {}
 
-            template<typename U, typename VoidT = void>
-            struct has_update_function : std::false_type
+            has_specify_function(StateUpdate);
+            has_specify_function(PreUpdate);
+            has_specify_function(Update);
+            has_specify_function(ScriptUpdate);
+            has_specify_function(LateUpdate);
+            has_specify_function(ApplyUpdate);
+            has_specify_function(CommitUpdate);
+
+#undef has_specify_function
+         
+            static void state_update(void* _ptr)
             {
-                static_assert(std::is_void<VoidT>::value);
-            };
-            template<typename U>
-            struct has_update_function<U, std::void_t<decltype(&U::Update)>> : std::true_type
-            {};
-
-            template<typename U, typename VoidT = void>
-            struct has_pre_update_function : std::false_type
-            {
-                static_assert(std::is_void<VoidT>::value);
-            };
-            template<typename U>
-            struct has_pre_update_function<U, std::void_t<decltype(&U::PreUpdate)>> : std::true_type
-            {};
-
-            template<typename U, typename VoidT = void>
-            struct has_late_update_function : std::false_type
-            {
-                static_assert(std::is_void<VoidT>::value);
-            };
-            template<typename U>
-            struct has_late_update_function<U, std::void_t<decltype(&U::LateUpdate)>> : std::true_type
-            {};
-
-            template<typename U, typename VoidT = void>
-            struct has_commit_update_function : std::false_type
-            {
-                static_assert(std::is_void<VoidT>::value);
-            };
-            template<typename U>
-            struct has_commit_update_function<U, std::void_t<decltype(&U::CommitUpdate)>> : std::true_type
-            {};
-
+                if constexpr (has_StateUpdate_function<T>::value)
+                    std::launder(reinterpret_cast<T*>(_ptr))->StateUpdate();
+            }
             static void pre_update(void* _ptr)
             {
-                if constexpr (has_pre_update_function<T>::value)
+                if constexpr (has_PreUpdate_function<T>::value)
                     std::launder(reinterpret_cast<T*>(_ptr))->PreUpdate();
             }
             static void update(void* _ptr)
@@ -1902,14 +1893,24 @@ namespace jeecs
                 if constexpr (has_update_function<T>::value)
                     std::launder(reinterpret_cast<T*>(_ptr))->Update();
             }
+            static void script_update(void* _ptr)
+            {
+                if constexpr (has_ScriptUpdate_function<T>::value)
+                    std::launder(reinterpret_cast<T*>(_ptr))->ScriptUpdate();
+            }
             static void late_update(void* _ptr)
             {
                 if constexpr (has_late_update_function<T>::value)
                     std::launder(reinterpret_cast<T*>(_ptr))->LateUpdate();
             }
+            static void apply_update(void* _ptr)
+            {
+                if constexpr (has_ApplyUpdate_function<T>::value)
+                    std::launder(reinterpret_cast<T*>(_ptr))->ApplyUpdate();
+            }
             static void commit_update(void* _ptr)
             {
-                if constexpr (has_commit_update_function<T>::value)
+                if constexpr (has_CommitUpdate_function<T>::value)
                     std::launder(reinterpret_cast<T*>(_ptr))->CommitUpdate();
             }
         };
@@ -2236,9 +2237,12 @@ namespace jeecs
             to_string_func_t    m_to_string;
             parse_func_t        m_parse;
 
+            update_func_t       m_state_update;
             update_func_t       m_pre_update;
             update_func_t       m_update;
+            update_func_t       m_script_update;
             update_func_t       m_late_update;
+            update_func_t       m_apply_update;
             update_func_t       m_commit_update;
 
             je_typing_class     m_type_class;
@@ -2385,6 +2389,11 @@ namespace jeecs
                 return m_type_class == je_typing_class::JE_COMPONENT;
             }
 
+            inline void state_update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_state_update(addr);
+            }
             inline void pre_update(void* addr) const noexcept
             {
                 assert(is_system());
@@ -2395,16 +2404,27 @@ namespace jeecs
                 assert(is_system());
                 m_update(addr);
             }
+            inline void script_update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_script_update(addr);
+            }
             inline void late_update(void* addr) const noexcept
             {
                 assert(is_system());
                 m_late_update(addr);
+            }
+            inline void apply_update(void* addr) const noexcept
+            {
+                assert(is_system());
+                m_apply_update(addr);
             }
             inline void commit_update(void* addr) const noexcept
             {
                 assert(is_system());
                 m_commit_update(addr);
             }
+
             inline const member_info* find_member_by_name(const char* name) const noexcept
             {
                 auto* member_info_ptr = m_member_types;
@@ -3071,10 +3091,13 @@ namespace jeecs
             return _m_delta_time;
         }
 
-#define PreUpdate       PreUpdate       // 读取 Graphic 
-#define Update          Update          // 写入 Animation 
-#define LateUpdate      LateUpdate      // 更新 Translation 
-#define CommitUpdate    CommitUpdate    // 提交 Physics RuntimeScript
+#define StateUpdate         StateUpdate     // PhysicsUpdate Animation 用于将初始状态给予各个组件
+#define PreUpdate           PreUpdate           // * 用户读取
+#define Update              Update              // * 用户写入
+#define ScriptUpdate        ScriptUpdate    // RuntimeScript           用于脚本控制和更新
+#define LateUpdate          LateUpdate          // * 用户更新
+#define ApplyUpdate         ApplyUpdate     // Translation             用于最终影响一些特殊组件，这些组件通常不会被其他地方写入
+#define CommitUpdate        CommitUpdate         // Graphic            用于最终提交
 
         /*
         struct TranslationUpdater : game_system

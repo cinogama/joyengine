@@ -46,9 +46,12 @@ namespace jeecs_impl
             jeecs::typing::move_func_t      _mover,
             jeecs::typing::to_string_func_t _to_string,
             jeecs::typing::parse_func_t     _parse,
+            jeecs::typing::update_func_t    _state_update,
             jeecs::typing::update_func_t    _pre_update,
             jeecs::typing::update_func_t    _update,
+            jeecs::typing::update_func_t    _script_update,
             jeecs::typing::update_func_t    _late_update,
+            jeecs::typing::update_func_t    _apply_update,
             jeecs::typing::update_func_t    _commit_update,
             je_typing_class                 _typecls) noexcept
         {
@@ -90,9 +93,12 @@ namespace jeecs_impl
             tinfo->m_to_string = _to_string;
             tinfo->m_parse = _parse;
             tinfo->m_type_class = _typecls;
+            tinfo->m_state_update = _state_update;
             tinfo->m_pre_update = _pre_update;
             tinfo->m_update = _update;
+            tinfo->m_script_update = _script_update;
             tinfo->m_late_update = _late_update;
+            tinfo->m_apply_update = _apply_update;
             tinfo->m_commit_update = _commit_update;
             tinfo->m_member_types = nullptr;
 
@@ -218,9 +224,12 @@ bool je_typing_find_or_register(
     jeecs::typing::move_func_t      _mover,
     jeecs::typing::to_string_func_t _to_string,
     jeecs::typing::parse_func_t     _parse,
+    jeecs::typing::update_func_t    _state_update,
     jeecs::typing::update_func_t    _pre_update,
     jeecs::typing::update_func_t    _update,
+    jeecs::typing::update_func_t    _script_update,
     jeecs::typing::update_func_t    _late_update,
+    jeecs::typing::update_func_t    _apply_update,
     jeecs::typing::update_func_t    _commit_update,
     je_typing_class                 _typecls)
 {
@@ -236,9 +245,12 @@ bool je_typing_find_or_register(
             _mover,
             _to_string,
             _parse,
+            _state_update,
             _pre_update,
             _update,
+            _script_update,
             _late_update,
+            _apply_update,
             _commit_update,
             _typecls);
 }
