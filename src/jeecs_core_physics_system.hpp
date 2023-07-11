@@ -193,7 +193,7 @@ namespace jeecs
             }
         }
 
-        void CommitUpdate()
+        void StateUpdate()
         {
             b2BodyDef default_rigidbody_config;
 

@@ -1890,7 +1890,7 @@ namespace jeecs
             }
             static void update(void* _ptr)
             {
-                if constexpr (has_update_function<T>::value)
+                if constexpr (has_Update_function<T>::value)
                     std::launder(reinterpret_cast<T*>(_ptr))->Update();
             }
             static void script_update(void* _ptr)
@@ -1900,7 +1900,7 @@ namespace jeecs
             }
             static void late_update(void* _ptr)
             {
-                if constexpr (has_late_update_function<T>::value)
+                if constexpr (has_LateUpdate_function<T>::value)
                     std::launder(reinterpret_cast<T*>(_ptr))->LateUpdate();
             }
             static void apply_update(void* _ptr)
@@ -2299,9 +2299,12 @@ namespace jeecs
                         basic::default_functions<T>::mover,
                         basic::default_functions<T>::to_string,
                         basic::default_functions<T>::parse,
+                        basic::default_functions<T>::state_update,
                         basic::default_functions<T>::pre_update,
                         basic::default_functions<T>::update,
+                        basic::default_functions<T>::script_update,
                         basic::default_functions<T>::late_update,
+                        basic::default_functions<T>::apply_update,
                         basic::default_functions<T>::commit_update,
                         current_type))
                     {

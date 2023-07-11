@@ -543,7 +543,7 @@ public let frag =
             }
         }
 
-        void PreUpdate()
+        void CommitUpdate()
         {
             m_camera_list.clear();
             m_renderer_list.clear();
@@ -947,7 +947,7 @@ public let frag =
             }
         }
 
-        void PreUpdate()
+        void CommitUpdate()
         {
             m_camera_list.clear();
             m_renderer_list.clear();
@@ -1574,7 +1574,7 @@ public func frag(vf: v2f)
             }
         }
 
-        void PreUpdate()
+        void CommitUpdate()
         {
             m_2dlight_list.clear();
             m_2dblock_list.clear();
@@ -2403,7 +2403,7 @@ public func frag(vf: v2f)
 
         }
 
-        void Update()
+        void StateUpdate()
         {
             _fixed_time += delta_dtime();
             select_from(get_world())
