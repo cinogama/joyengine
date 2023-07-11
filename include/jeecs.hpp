@@ -3094,13 +3094,13 @@ namespace jeecs
             return _m_delta_time;
         }
 
-#define StateUpdate         StateUpdate     // PhysicsUpdate Animation 用于将初始状态给予各个组件
-#define PreUpdate           PreUpdate           // * 用户读取
-#define Update              Update              // * 用户写入
-#define ScriptUpdate        ScriptUpdate    // RuntimeScript           用于脚本控制和更新
-#define LateUpdate          LateUpdate          // * 用户更新
-#define ApplyUpdate         ApplyUpdate     // Translation             用于最终影响一些特殊组件，这些组件通常不会被其他地方写入
-#define CommitUpdate        CommitUpdate         // Graphic            用于最终提交
+#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件(PhysicsUpdate Animation)
+#define PreUpdate           PreUpdate       // * 用户读取
+#define Update              Update          // * 用户写入
+#define ScriptUpdate        ScriptUpdate    // 用于脚本控制和更新(RuntimeScript)
+#define LateUpdate          LateUpdate      // * 用户更新
+#define ApplyUpdate         ApplyUpdate     // 用于最终影响一些特殊组件，这些组件通常不会被其他地方写入(Translation)
+#define CommitUpdate        CommitUpdate    // 用于最终提交(Graphic)
 
         /*
         struct TranslationUpdater : game_system
