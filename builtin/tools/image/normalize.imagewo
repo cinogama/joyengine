@@ -1,4 +1,4 @@
-import je::editor.graphic;
+import je::editor::graphic;
 import pkg::math;
 
 NAME = "法线化";
