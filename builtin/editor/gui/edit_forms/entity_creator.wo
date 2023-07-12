@@ -1,4 +1,4 @@
-import je.gui;
+import je::gui;
 
 using je::gui;
 

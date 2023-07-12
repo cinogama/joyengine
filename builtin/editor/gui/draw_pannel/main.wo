@@ -1,13 +1,13 @@
 import je;
-import je.gui;
+import je::gui;
 
-import pkg.image;
-import pkg.filesystem;
+import pkg::image;
+import pkg::filesystem;
 
 import tools;
 import imagescripts;
 
-import builtin.api.gui.inputmgr;
+import builtin::api::gui::inputmgr;
 
 using je;
 using je::gui;

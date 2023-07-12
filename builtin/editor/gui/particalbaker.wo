@@ -68,8 +68,8 @@ namespace editor::gui::particalbaker
 @"// Partical baker
 // (C)Cinogama project.
 
-import woo.std;
-import pkg.math;
+import woo::std;
+import pkg::math;
 import je;
 
 using _EditorContext = struct{
@@ -205,9 +205,9 @@ extern public func _start_baking(context: ParticalContext, econtext: _EditorCont
 
     let DEFAULT_SOURCE = 
 @"// Particalbaker Script
-import woo.std;
-import pkg.worst;
-import je.particalbacker;
+import woo::std;
+import pkg::worst;
+import je::particalbacker;
 
 using std;
 

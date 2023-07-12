@@ -1,7 +1,7 @@
 // project.config
 // 用于储存编辑中的可编辑配置数据
 
-import builtin.api.serialize.main;
+import builtin::api::serialize::main;
 
 namespace editor::Project
 {

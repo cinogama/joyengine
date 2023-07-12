@@ -1,5 +1,5 @@
 // 这里用于管理图像效果处理脚本
-import pkg.vm;
+import pkg::vm;
 
 namespace editor::gui::drawpannel
 {

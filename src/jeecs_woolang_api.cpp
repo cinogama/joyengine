@@ -1594,7 +1594,7 @@ namespace je::editor
 
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
-import woo.std;
+import woo::std;
 namespace je
 {
     extern("libjoyecs", "wojeapi_startup_coroutine")

@@ -1,8 +1,8 @@
 // gui.form.input
 // 输入窗口
 
-import je.gui;
-import builtin.api.gui.inputmgr;
+import je::gui;
+import builtin::api::gui::inputmgr;
 
 using je::gui;
 

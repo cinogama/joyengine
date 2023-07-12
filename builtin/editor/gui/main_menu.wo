@@ -1,11 +1,11 @@
 // gui.main_menu
 // 用于显示编辑器的主菜单栏
-import je.gui;
+import je::gui;
 
-import builtin.editor.gui.main;
-import builtin.api.dbg.main;
-import builtin.editor.gui.edit_forms.export_project;
-import builtin.api.gui.inputmgr;
+import builtin::editor::gui::main;
+import builtin::api::dbg::main;
+import builtin::editor::gui::edit_forms::export_project;
+import builtin::api::gui::inputmgr;
 
 using je::gui;
 

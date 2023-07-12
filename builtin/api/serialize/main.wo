@@ -2,8 +2,8 @@
 // 负责提供序列化和反序列化实体、世界的功能
 
 import je;
-import builtin.api.gui.form.msg;
-import builtin.api.tool.varify;
+import builtin::api::gui::form::msg;
+import builtin::api::tool::varify;
 
 using je;
 

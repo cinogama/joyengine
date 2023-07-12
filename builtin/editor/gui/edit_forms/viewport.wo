@@ -1,9 +1,9 @@
 // gui.edit_forms.viewport
 // 用于显示画面！是最主要的编辑器窗口
 
-import je.gui;
-import builtin.api.gui.form.input;
-import builtin.api.gui.form.ask;
+import je::gui;
+import builtin::api::gui::form::input;
+import builtin::api::gui::form::ask;
 
 using je::gui;
 

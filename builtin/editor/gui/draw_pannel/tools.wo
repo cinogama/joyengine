@@ -1,4 +1,4 @@
-import pkg.worst;
+import pkg::worst;
 
 using je;
 

@@ -1,12 +1,12 @@
 // gui.edit_forms.inspector
 // 用于显示和编辑选选中实体的组件
 
-import je.gui;
-import builtin.api.gui.form.input;
-import builtin.api.gui.form.ask;
-import builtin.api.gui.widget.file;
-import builtin.api.gui.type_edit_widget_mgr;
-import builtin.api.gui.context_menu;
+import je::gui;
+import builtin::api::gui::form::input;
+import builtin::api::gui::form::ask;
+import builtin::api::gui::widget::file;
+import builtin::api::gui::type_edit_widget_mgr;
+import builtin::api::gui::context_menu;
 
 using je::gui;
 

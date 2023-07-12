@@ -1,4 +1,4 @@
-import pkg.vm;
+import pkg::vm;
 
 namespace editor::tools
 {

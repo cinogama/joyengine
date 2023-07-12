@@ -2,12 +2,12 @@
 // 用于管理外部模块
 
 
-import woo.std;
-import je.gui;
+import woo::std;
+import je::gui;
 
-import pkg.process;
-import pkg.filesystem;
-import pkg.thread;
+import pkg::process;
+import pkg::filesystem;
+import pkg::thread;
 
 using je::gui;
 

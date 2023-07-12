@@ -1,21 +1,21 @@
-import pkg.crashhandler;
+import pkg::crashhandler;
 crashhandler::init();
 
-import woo.std;
-import woo.debug;
+import woo::std;
+import woo::debug;
 
-import pkg.filesystem;
+import pkg::filesystem;
 
 import je;
-import je.editor;
+import je::editor;
 
-import builtin.api.welcome.main;
-import builtin.api.gui.widget.icon_button;
-import builtin.api.gui.form.msg;
-import builtin.api.gui.form.input;
-import builtin.editor.environment.main;
-import builtin.editor.project.main;
-import builtin.editor.gui.main;
+import builtin::api::welcome::main;
+import builtin::api::gui::widget::icon_button;
+import builtin::api::gui::form::msg;
+import builtin::api::gui::form::input;
+import builtin::editor::environment::main;
+import builtin::editor::project::main;
+import builtin::editor::gui::main;
 
 jeapi::welcome::display_copyright_msg();
 

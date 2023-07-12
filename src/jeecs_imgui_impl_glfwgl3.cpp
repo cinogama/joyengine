@@ -18,7 +18,7 @@ const char* gui_api_path = "je/gui.wo";
 const char* gui_api_src = R"(
 // JoyEngineECS GUI API for woo.
 
-import woo.std;
+import woo::std;
 import je;
 
 namespace je::gui

@@ -1,5 +1,5 @@
-import je.editor.graphic;
-import pkg.math;
+import je::editor.graphic;
+import pkg::math;
 
 NAME = "（横向）圆柱高度图";
 

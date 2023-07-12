@@ -314,7 +314,7 @@ namespace jeecs
                 static basic::resource<graphic::shader>
                     axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
                         R"(
-import je.shader;
+import je::shader;
         
 ZTEST (ALWAYS);
         
@@ -345,7 +345,7 @@ public let frag =
                 static basic::resource<graphic::shader>
                     select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
                         R"(
-import je.shader;
+import je::shader;
         
 ZTEST (LESS);
         

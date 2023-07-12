@@ -1,12 +1,12 @@
 // gui.edit_forms
 // 用于显示和编辑的窗口们
 
-import builtin.editor.gui.main;
-import builtin.editor.gui.edit_forms.worlds_list;
-import builtin.editor.gui.edit_forms.entities_list;
-import builtin.editor.gui.edit_forms.inspector;
-import builtin.editor.gui.edit_forms.viewport;
-import builtin.editor.gui.browser;
+import builtin::editor::gui::main;
+import builtin::editor::gui::edit_forms::worlds_list;
+import builtin::editor::gui::edit_forms::entities_list;
+import builtin::editor::gui::edit_forms::inspector;
+import builtin::editor::gui::edit_forms::viewport;
+import builtin::editor::gui::browser;
 
 namespace editor::gui
 {

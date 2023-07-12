@@ -22,7 +22,7 @@ const char* shader_light2d_src = R"(
 // JoyEngineECS RScene shader for light2d-system
 // This script only used for forward light2d pipeline.
 
-import je.shader;
+import je::shader;
 
 public let MAX_SHADOW_LIGHT_COUNT = 16;
 let SHADOW2D_TEX_0 = 24;
@@ -80,7 +80,7 @@ const char* shader_pbr_src = R"(
 // JoyEngineECS RScene shader tools.
 // This script only used for defer light-pbr.
 
-import je.shader;
+import je::shader;
 
 public let PI = float::new(3.1415926535897932384626);
 
@@ -290,7 +290,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
             default_shader = graphic::shader::create("!/builtin/builtin_default.shader", R"(
 // Default shader
-import je.shader;
+import je::shader;
 
 VAO_STRUCT! vin {
     vertex : float3,
@@ -1175,7 +1175,7 @@ public let frag =
                 // 用于消除阴影对象本身的阴影
                 _defer_light2d_shadow_sub_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_sub.shader", R"(
-import je.shader;
+import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
@@ -1217,7 +1217,7 @@ public func frag(vf: v2f)
                 // 用于产生点光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_point_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
-import je.shader;
+import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
@@ -1268,7 +1268,7 @@ public func frag(vf: v2f)
                 // 用于产生点光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_point_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
-import je.shader;
+import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
@@ -1311,7 +1311,7 @@ public func frag(vf: v2f)
                 // 用于产生平行光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_parallel_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
-import je.shader;
+import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
@@ -1362,7 +1362,7 @@ public func frag(vf: v2f)
                 // 用于产生平行光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_parallel_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
-import je.shader;
+import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);

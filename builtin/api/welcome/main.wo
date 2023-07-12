@@ -2,7 +2,7 @@
 // 嗯，大憨批程序，就是一个用来显示欢迎信息的小实例
 
 import je;
-import je.gui;
+import je::gui;
 
 using je::gui;
 

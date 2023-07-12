@@ -2,7 +2,7 @@
 // 就是个右键菜单的包装函数，没啥特别的
 
 import je;
-import je.gui;
+import je::gui;
 
 using je;
 using je::gui;

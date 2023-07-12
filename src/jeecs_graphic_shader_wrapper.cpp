@@ -779,7 +779,7 @@ const char* shader_wrapper_path = "je/shader.wo";
 const char* shader_wrapper_src = R"(
 // JoyEngineECS RScene shader wrapper
 
-import woo.std;
+import woo::std;
 
 public enum shader_value_type
 {

@@ -1,10 +1,10 @@
-import pkg.image;
-import pkg.filesystem;
+import pkg::image;
+import pkg::filesystem;
 
-import woo.shell;
-import builtin.editor.cpp.main;
-import builtin.editor.gui.animation2d;
-import builtin.editor.gui.particalbaker;
+import woo::shell;
+import builtin::editor::cpp::main;
+import builtin::editor::gui::animation2d;
+import builtin::editor::gui::particalbaker;
 
 using je::gui;
 
@@ -383,7 +383,7 @@ namespace editor::gui
                 if (MenuItem(F"Woolang 脚本"))
                 {
                     let default_empty_script = 
-@"import woo.std;
+@"import woo::std;
 import je;
 
 using std;

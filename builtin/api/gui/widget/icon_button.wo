@@ -2,7 +2,7 @@
 // 带图标的按钮控件
 
 import je;
-import je.gui;
+import je::gui;
 
 using je;
 using je::gui;

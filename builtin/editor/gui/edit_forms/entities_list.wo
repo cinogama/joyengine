@@ -1,17 +1,17 @@
 // gui.edit_forms.entities_list
 // 用于显示和编辑当前编辑世界中的实体
 
-import je.gui;
+import je::gui;
 
-import pkg.math;
-import builtin.api.gui.form.input;
-import builtin.api.gui.form.ask;
-import builtin.api.gui.form.msg;
-import builtin.api.dbg.main;
+import pkg::math;
+import builtin::api::gui::form::input;
+import builtin::api::gui::form::ask;
+import builtin::api::gui::form::msg;
+import builtin::api::dbg::main;
 
-import builtin.editor.gui.edit_forms.entity_creator;
-import builtin.editor.gui.draw_pannel.main;
-import builtin.api.serialize.main;
+import builtin::editor::gui::edit_forms::entity_creator;
+import builtin::editor::gui::draw_pannel::main;
+import builtin::api::serialize::main;
 
 using je::gui;
 

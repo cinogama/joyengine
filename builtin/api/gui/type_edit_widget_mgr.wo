@@ -2,7 +2,7 @@
 // 管理类型及对应数据的
 
 import je;
-import je.gui;
+import je::gui;
 
 using je;
 using je::gui;

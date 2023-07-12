@@ -1,5 +1,5 @@
-import pkg.buffer;
-import pkg.try;
+import pkg::buffer;
+import pkg::try;
 
 namespace editor::gui::animation2d
 {

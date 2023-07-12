@@ -2,16 +2,16 @@
 // 用于储存编辑中的项目信息
 
 import je;
-import je.gui;
+import je::gui;
 
-import pkg.try;
+import pkg::try;
 import config;
 
-import builtin.editor.environment.main;
-import builtin.api.rend.main;
-import builtin.api.gui.form.msg;
-import builtin.editor.cpp.main;
-import builtin.editor.tools.script_manager;
+import builtin::editor::environment::main;
+import builtin::api::rend::main;
+import builtin::api::gui::form::msg;
+import builtin::editor::cpp::main;
+import builtin::editor::tools::script_manager;
 
 namespace editor
 {
