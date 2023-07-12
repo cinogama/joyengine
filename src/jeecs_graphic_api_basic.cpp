@@ -1066,6 +1066,12 @@ jegl_resource* jegl_create_framebuf(
     const jegl_texture::sampling* attachment_samlings, 
     size_t attachment_count)
 {
+    if (width == 0 || height == 0 || attachment_count == 0)
+    {
+        jeecs::debug::logwarn("Failed to create invalid framebuffer: size is zero or no attachment.");
+        return nullptr;
+    }
+
     jegl_resource* framebuf = _create_resource();
     framebuf->m_type = jegl_resource::FRAMEBUF;
     framebuf->m_raw_framebuf_data = new jegl_frame_buffer();

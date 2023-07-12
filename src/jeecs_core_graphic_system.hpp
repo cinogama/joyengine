@@ -545,6 +545,10 @@ public let frag =
 
         void CommitUpdate()
         {
+            auto WINDOWS_SIZE = jeecs::input::windowsize();
+            WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
+            WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
+
             m_camera_list.clear();
             m_renderer_list.clear();
 
@@ -649,9 +653,9 @@ public let frag =
 
         void DrawFrame()
         {
-            auto WINDOWS_SIZE = jeecs::input::windowsize();
-            WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
-            WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
+            if (WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0)
+                // Windows' size is invalid, skip this frame.
+                return;
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();
@@ -949,6 +953,10 @@ public let frag =
 
         void CommitUpdate()
         {
+            auto WINDOWS_SIZE = jeecs::input::windowsize();
+            WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
+            WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
+
             m_camera_list.clear();
             m_renderer_list.clear();
 
@@ -990,9 +998,9 @@ public let frag =
 
         void DrawFrame()
         {
-            auto WINDOWS_SIZE = jeecs::input::windowsize();
-            WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
-            WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
+            if (WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0)
+                // Windows' size is invalid, skip this frame.
+                return;
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();
@@ -1576,6 +1584,10 @@ public func frag(vf: v2f)
 
         void CommitUpdate()
         {
+            auto WINDOWS_SIZE = jeecs::input::windowsize();
+            WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
+            WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
+
             m_2dlight_list.clear();
             m_2dblock_list.clear();
             m_camera_list.clear();
@@ -1747,9 +1759,9 @@ public func frag(vf: v2f)
             auto* glthread = _m_pipeline->glthread;
             auto* light2d_host = DeferLight2DHost::instance(glthread);
 
-            auto WINDOWS_SIZE = jeecs::input::windowsize();
-            WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
-            WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
+            if (WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0)
+                // Windows' size is invalid, skip this frame.
+                return;
 
             // TODO: Update shared uniform.
             double current_time = je_clock_time();
@@ -1848,8 +1860,10 @@ public func frag(vf: v2f)
                 // If current camera contain light2d-pass, prepare light shadow here.
                 if (current_camera.light2DPostPass != nullptr)
                 {
-                    assert(current_camera.light2DPostPass->post_rend_target != nullptr
-                        && current_camera.light2DPostPass->post_light_target != nullptr);
+                    if (current_camera.light2DPostPass->post_rend_target == nullptr
+                        || current_camera.light2DPostPass->post_light_target == nullptr)
+                        // Not ready, skip this frame.
+                        continue;
 
                     // Walk throw all light, rend shadows to light's ShadowBuffer.
                     for (auto& lightarch : m_2dlight_list)
