@@ -88,9 +88,34 @@ namespace jeapi
                             ["components"] = m: dynamic,
                             // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
                             ["textures"] = saving_entity->get_entity_texture_passes
-                                =>> \k, v = v->has ? {[k] = v->val} | {}; : dynamic,
+                                =>> \k, v = used_texture_id_pass->find(k) != -1 && v->has ? {[k] = v->val} | {}; : dynamic,
                             ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
-                        };;
+                        }
+                        where used_texture_id_pass = saving_entity->editor::graphic::get_shaders()
+                            =>> \shader = shader->get_uniforms()
+                                    ->  unmapping
+                                    =>> \nv = nv...
+                                        ->  func(name, uniformval)
+                                            {
+                                                if (!name->beginwith("JOYENGINE_"))
+                                                {
+                                                    match (uniformval)
+                                                    {
+                                                    texture(id)?
+                                                        return [id];
+                                                    _?;
+                                                    }
+                                                }
+                                                return [];
+                                            }
+                                        ;
+                                ;
+                            ->> \id = (id, nil);
+                            ->  mapping
+                            ->  unmapping // remove all repeated elems.
+                            ->> \idn = idn[0];
+                        ;
+                    ;
         }
         public func world(w: je::world)=> result<dict<string, dynamic>, array<je::entity>>
         {
