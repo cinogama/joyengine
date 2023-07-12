@@ -979,6 +979,7 @@ namespace $$MODULE_NAME$$
                         ->> \_ = force_update();
                         ->  or(\errid = jeapi::gui::form::errmsg("失败", F"删除失败({errid})");)
                         ;
+                    do filesys::remove(filesys::parent(path.path) / (filesys::filename(path.path) + ".jecache4"));
                 });
         }        
     }
