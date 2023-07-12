@@ -1638,7 +1638,7 @@ public func frag(vf: v2f)
                             bool need_update = light2dpostpass->post_rend_target == nullptr
                                 || light2dpostpass->post_rend_target->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
                                 || light2dpostpass->post_rend_target->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
-                            if (need_update)
+                            if (need_update && RENDAIMBUFFER_WIDTH > 0 && RENDAIMBUFFER_HEIGHT > 0)
                             {
                                 light2dpostpass->post_rend_target
                                     = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
@@ -1691,7 +1691,7 @@ public func frag(vf: v2f)
                                 || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
                                 || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
 
-                            if (generate_new_framebuffer)
+                            if (generate_new_framebuffer && shadow->resolution_width > 0 && shadow->resolution_height > 0)
                             {
                                 shadow->shadow_buffer = graphic::framebuffer::create(
                                     shadow->resolution_width, shadow->resolution_height,
