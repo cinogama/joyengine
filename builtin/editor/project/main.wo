@@ -72,10 +72,12 @@ namespace editor
                 ->> \w = w->close();
                 ;
 
-            // 恢复所有世界！
-            self->restore_all_world(self.m_debug_context->val.m_dumped_editing_worlds);
+            // 关闭调试上下文，保证恢复上下文时project已经不再处于debug状态
+            let dumped_worlds = self.m_debug_context->val.m_dumped_editing_worlds;
             self.m_debug_context = option::none;
-
+            
+            // 恢复所有世界！
+            self->restore_all_world(dumped_worlds);
             return result::ok(do nil);
         }
 
