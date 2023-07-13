@@ -796,6 +796,11 @@ namespace $$MODULE_NAME$$
         
     }
 
+    $$SYSTEM_NAME$$::~$$SYSTEM_NAME$$()
+    {
+        
+    }
+
     void $$SYSTEM_NAME$$::PreUpdate()
     {
 
