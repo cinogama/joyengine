@@ -1220,7 +1220,7 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (ONE, ZERO);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 CULL    (BACK);
 
 VAO_STRUCT! vin 
@@ -1260,7 +1260,7 @@ public func frag(vf: v2f)
             texture(main_texture, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
+        shadow_factor = float4::create(float3::one, final_shadow->x)
     };
 }
 )") };
@@ -1271,7 +1271,7 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (ONE, ZERO);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 CULL    (NONE);
 
 VAO_STRUCT! vin
@@ -1303,7 +1303,7 @@ public func frag(vf: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = float4::create(je_local_scale->x, je_local_scale->x, je_local_scale->x, float::one)
+        shadow_factor = float4::create(float3::one, je_local_scale->x)
     };
 }
 )") };
@@ -1314,7 +1314,7 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (ONE, ZERO);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 CULL    (BACK);
 
 VAO_STRUCT! vin 
@@ -1354,7 +1354,7 @@ public func frag(vf: v2f)
             texture(main_texture, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
+        shadow_factor = float4::create(float3::one, final_shadow->x)
     };
 }
 )") };
@@ -1365,7 +1365,7 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (ONE, ZERO);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 CULL    (NONE);
 
 VAO_STRUCT! vin
@@ -1397,7 +1397,7 @@ public func frag(vf: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = float4::create(je_local_scale->x, je_local_scale->x, je_local_scale->x, float::one)
+        shadow_factor = float4::create(float3::one, je_local_scale->x)
     };
 }
 )") };
