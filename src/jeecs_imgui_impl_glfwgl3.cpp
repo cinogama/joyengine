@@ -521,7 +521,7 @@ R"(
         where coloop(job_func, args) is void;
 
     extern("libjoyecs", "je_gui_deltatime")
-    public func deltatime()=> impure real;
+    public func deltatime()=> real;
 
     namespace unsafe
     {
