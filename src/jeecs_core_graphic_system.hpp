@@ -1826,6 +1826,7 @@ public func frag(vf: v2f)
 
                 ++light_count;
             }
+
             m_light2d_uniform_buffer->update_buffer(
                 0,
                 sizeof(light2d_uniform_buffer_data_t),

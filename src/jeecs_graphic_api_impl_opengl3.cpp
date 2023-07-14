@@ -829,18 +829,23 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
         glBindFramebuffer(GL_FRAMEBUFFER, resource->m_uint1);
     else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
     {
-        glBindBuffer(GL_UNIFORM_BUFFER, resource->m_uint1);
+        glBindBuffer(GL_UNIFORM_BUFFER, (GLuint)resource->m_uint1);
 
-        if (resource->m_raw_uniformbuf_data != nullptr
-            && resource->m_raw_uniformbuf_data->m_update_length != 0)
+        if (resource->m_raw_uniformbuf_data != nullptr)
         {
-            glBufferSubData(GL_UNIFORM_BUFFER,
-                resource->m_raw_uniformbuf_data->m_update_begin_offset,
-                resource->m_raw_uniformbuf_data->m_update_length,
-                resource->m_raw_uniformbuf_data->m_buffer + resource->m_raw_uniformbuf_data->m_update_begin_offset);
+            glBindBufferRange(GL_UNIFORM_BUFFER, (GLuint)resource->m_raw_uniformbuf_data->m_buffer_binding_place,
+                (GLuint)resource->m_uint1, 0, resource->m_raw_uniformbuf_data->m_buffer_size);
 
-            resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
-            resource->m_raw_uniformbuf_data->m_update_length = 0;
+            if (resource->m_raw_uniformbuf_data->m_update_length != 0)
+            {
+                glBufferSubData(GL_UNIFORM_BUFFER,
+                    resource->m_raw_uniformbuf_data->m_update_begin_offset,
+                    resource->m_raw_uniformbuf_data->m_update_length,
+                    resource->m_raw_uniformbuf_data->m_buffer + resource->m_raw_uniformbuf_data->m_update_begin_offset);
+
+                resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
+                resource->m_raw_uniformbuf_data->m_update_length = 0;
+            }
         }
     }
     else
