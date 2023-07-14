@@ -33,6 +33,7 @@ apt install libgl1-mesa-dev libglu1-mesa-dev
 baozi install
 ```
 
+#### 特别注意
 引擎的编辑器目前仅在windows上可以使用完整功能，并且需要配置环境 `MSBUILD` 
 此环境变量应该是MSBUILD.exe的所在目录，
 
