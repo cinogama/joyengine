@@ -513,18 +513,19 @@ namespace editor
         }
         public func serialize_entity(self: Project, e: je::entity)
         {
-            return jeapi::serialize::entity(e);
+            return jeapi::serialize::entity(e, false);
         }
         public func serialize_world(self: Project, w: je::world)
         {
             return self->get_project_world(w)
-                =>> \pw = jeapi::serialize::world(w)->okay
+                =>> \pw = jeapi::serialize::world(w, true)->okay
                     ->> func (dat)
                         {
                             let mdat = dat->tomap;
-                            mdat->set("entities", dat["entities"] as array->std::sort(
-                                    \l, r = (l as dict["name": dynamic] as string) < (r as dict["name": dynamic] as string);
-                                ): dynamic);
+                            mdat->set("entities", dat["entities"] as array
+                                ->  std::sort(\l, r = (l as dict->getor("euid": dynamic, 0H: dynamic) as int) < (r as dict->getor("euid": dynamic, 0H: dynamic) as int);)
+                                ->> \edat = edat as dict->erase("euid": dynamic);
+                                : dynamic);
                             mdat->set("systems", dat["systems"] as array->std::sort(
                                     \l, r = (l as string) < (r as string);
                                 ): dynamic);

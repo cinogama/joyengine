@@ -59,7 +59,7 @@ namespace jeapi
                 ;
         }
 
-        public func entity(saving_entity: je::entity)=> option<dict<string, dynamic>>
+        public func entity(saving_entity: je::entity, need_euid: bool)=> option<dict<string, dynamic>>
         {
             return
                 // TODO: 实体使用的shader和纹理路径亦需要额外做一下处理，
@@ -115,9 +115,13 @@ namespace jeapi
                             ->  unmapping // remove all repeated elems.
                             ->> \idn = idn[0];
                         ;
+                    ->> \dat = need_euid
+                        ? dat->apply("euid", saving_entity->editor::get_entity_uid as je::entity::editor::euid_t: handle: int: dynamic)
+                        | dat
+                        ;
                     ;
         }
-        public func world(w: je::world)=> result<dict<string, dynamic>, array<je::entity>>
+        public func world(w: je::world, need_euid: bool)=> result<dict<string, dynamic>, array<je::entity>>
         {
             let bad_shader_entity = varify::varify_all_shader_is_valid_in_world(w);
             if (!bad_shader_entity->empty)
@@ -131,7 +135,7 @@ namespace jeapi
                 w->editor::get_all_entities
                     // 跳过编辑器上的不可见实体
                     ->  forall(\e = !e->get_component(INVISABLE)->has;)
-                    =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e);
+                    =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e, need_euid);
                     ;
 
             let editing_systems_type_list = 

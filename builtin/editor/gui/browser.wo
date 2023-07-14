@@ -348,11 +348,17 @@ namespace editor::gui
             jeapi::gui::form::ask("是否覆盖", F"文件{path->tostring}已存在，是否覆盖？",
                 func(overwrite){
                     if (overwrite)
+                    {
                         do filesys::writeall(path, content);
+                        force_update();
+                    }
                 });
         }
         else
+        {
             do filesys::writeall(path, content);
+            force_update();
+        }
     }
 
     func context_menu(path: option<PathInfo>, context: EditorContext)
@@ -1100,7 +1106,7 @@ namespace $$MODULE_NAME$$
                 {
                     let eid = drag_uid as string: handle: jeapi::debug::Eeid;
                     eid->justdo(func(e){
-                        match (jeapi::serialize::entity(e)=>>\dat = dat->serialize;)
+                        match (jeapi::serialize::entity(e, false)=>>\dat = dat->serialize;)
                         {
                         value(entity_json)?
                             write_file_and_ask_if_exist(filesys::normalize(current_work_path) / (e->editor::name + ".jeentity"), entity_json);

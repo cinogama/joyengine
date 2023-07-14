@@ -318,7 +318,7 @@ namespace editor::gui::edit_forms
         {
             do euid
                 ->> \uid = uid->justdo(func(e){
-                        match (jeapi::serialize::entity(e)->>\dat = dat as dict<string, dynamic>: string;)
+                        match (jeapi::serialize::entity(e, false)->>\dat = dat as dict<string, dynamic>: string;)
                         {
                         value(json)?
                             SetClipboardText(json);
