@@ -178,7 +178,14 @@ extern public func _start_baking(context: ParticalContext, econtext: _EditorCont
     partical_context = context;
 
     for (let mut i = 0; i < partical_context.m_frame_count; i += 1)
-        baking_cache->unsafe::cast:<vec<je::graphic::texture>>->add(je::graphic::texture::create(partical_context.m_frame_size...));
+    {
+        using je::graphic;
+
+        let new_tex_cache = texture::create(partical_context.m_frame_size...);
+        new_tex_cache->set_sampling_method(texture::sampling::MIN_NEAREST + texture::sampling::MAG_NEAREST);
+        baking_cache->unsafe::cast:<vec<texture>>->add(new_tex_cache);
+    }
+        
 
     assert(baking_cache->len == partical_context.m_frame_count);
 
