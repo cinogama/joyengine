@@ -23,6 +23,16 @@ apt install libgl1-mesa-dev libglu1-mesa-dev
 
 ```
 
+需要安装baozi以获取引擎编辑器所需的一些包：
+
+**安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行**
+
+在项目根路径中执行：
+
+```shell
+baozi install
+```
+
 ---
 
 ## 鸣谢（Acknowledgments）
