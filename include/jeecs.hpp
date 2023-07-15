@@ -2006,20 +2006,17 @@ namespace jeecs
             }
             count_t* _move_nolock(count_t* count, shared_pointer* out_ptr)
             {
-                if (count != nullptr)
-                {
-                    out_ptr->m_resource = m_resource;
-                    out_ptr->m_freer = m_freer;
-                    m_resource = nullptr;
-                }
+                out_ptr->m_resource = m_resource;
+                out_ptr->m_freer = m_freer;
+                m_resource = nullptr;
                 return nullptr;
             }
             count_t* _borrow_nolocks(count_t* count, shared_pointer* out_ptr) const
             {
+                out_ptr->m_resource = m_resource;
+                out_ptr->m_freer = m_freer;
                 if (count != nullptr)
                 {
-                    out_ptr->m_resource = m_resource;
-                    out_ptr->m_freer = m_freer;
                     je_atomic_fetch_add_size_t(count, 1);
                 }
                 return count;
