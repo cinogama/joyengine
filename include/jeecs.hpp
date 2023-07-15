@@ -5721,6 +5721,7 @@ namespace jeecs
                     basic::string       m_current_action = "";
                     size_t              m_current_frame_index = SIZE_MAX;
                     double              m_next_update_time = 0.0f;
+                    float               m_last_speed = 1.0f;
 
                     bool                m_loop = false;
 
@@ -5967,11 +5968,13 @@ namespace jeecs
 
             animation_data_set_list animations;
             float jitter = 0.0f;
+            float speed = 1.0f;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&FrameAnimation::animations, "animations");
                 typing::register_member(&FrameAnimation::jitter, "jitter");
+                typing::register_member(&FrameAnimation::speed, "speed");
             }
         };
     }
