@@ -5547,12 +5547,14 @@ namespace jeecs
         {
             math::vec4 color = math::vec4(1, 1, 1, 1);
             float decay = 2.0f;
+            float range = 1.0f;
             bool parallel = false;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&Color::color, "color");
                 typing::register_member(&Color::decay, "decay");
+                typing::register_member(&Color::range, "range");
                 typing::register_member(&Color::parallel, "parallel");
             }
         };
@@ -5967,10 +5969,12 @@ namespace jeecs
             };
 
             animation_data_set_list animations;
+            float jitter = 0.0f;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&FrameAnimation::animations, "animations");
+                typing::register_member(&FrameAnimation::jitter, "jitter");
             }
         };
     }

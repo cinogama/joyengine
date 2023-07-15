@@ -1806,6 +1806,7 @@ public func frag(vf: v2f)
                             lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_z)
                         )
                         * lightarch.translation->local_scale).length()
+                        * lightarch.color->range
                     / 2.0f;
 
                 l2dbuf.l2ds[light_count].factors = math::vec4(
@@ -2588,7 +2589,9 @@ public func frag(vf: v2f)
                                     {
                                         animation.m_current_frame_index = 0;
                                         animation.m_next_update_time =
-                                            _fixed_time + active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time;
+                                            _fixed_time 
+                                            + active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time 
+                                            + math::random(-frame_animation.jitter, frame_animation.jitter);
                                     }
                                     else
                                     {
@@ -2619,7 +2622,10 @@ public func frag(vf: v2f)
 
                                         animation.m_current_frame_index = next_frame_index;
                                         animation.m_next_update_time =
-                                            _fixed_time + active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time - delta_time_between_frams;
+                                            _fixed_time 
+                                            + active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time 
+                                            - delta_time_between_frams
+                                            + math::random(-frame_animation.jitter, frame_animation.jitter);
                                     }
 
                                     auto& updating_frame = active_animation_frames->v.frames[animation.m_current_frame_index];
