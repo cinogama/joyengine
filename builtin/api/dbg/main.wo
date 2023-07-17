@@ -79,7 +79,7 @@ namespace jeapi::debug
                     ;
             };
 
-        for (let euid, jobs : current_request)
+        for (let _, jobs : current_request)
         {
             do jobs->> \job = job(option::none);;
             // gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{euid}");;

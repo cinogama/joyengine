@@ -307,7 +307,7 @@ public let vert =
     where vertex_pos = float4::create(v.vertex, 1.);;
 
 public let frag = 
-\f: v2f = fout{ color = float4::create(t, 0., t, 1.) }
+\_: v2f = fout{ color = float4::create(t, 0., t, 1.) }
     where t = je_time->y();;
 
 )");
@@ -1299,7 +1299,7 @@ public func vert(v: vin)
     return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
 }
 
-public func frag(vf: v2f)
+public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
@@ -1393,7 +1393,7 @@ public func vert(v: vin)
     return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
 }
 
-public func frag(vf: v2f)
+public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{

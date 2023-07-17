@@ -145,7 +145,7 @@ namespace editor
         {
             do dats->>\dat = self->deserialize_world(dat);;
         }
-        func _create_default_configs(env: Environment)
+        func _create_default_configs()
         {
             using je;
             using je::gui;
@@ -168,10 +168,7 @@ namespace editor
                         TextDisabled("* 重启后生效");
                         return result;
                     },
-                    func(oldval, newval)
-                    {
-                        return true;
-                    },
+                    \_,_ = true;,
                     \val = val->name;,
                     \str = typeinfo::load(str);,
                     \_ = "// Editor-system is not needed when export.";,
@@ -184,14 +181,14 @@ namespace editor
                         Text("项目描述");
                         return InputTextMultilineSize("##项目描述", origin_text, 400., 200.);
                     },
-                    \o,n = true;,
+                    \_,_ = true;,
                     \val = val;,
                     \str = option::value(str);,
-                    \describe = "// Describe is not needed when export.";,
+                    \_ = "// Describe is not needed when export.";,
                 )),
                 ["JE_ENGINE_TIME_SLEEP_SUPPRESSION"] = IConfig::create(Config::create(
                     do nil,
-                    func(_create_default_configs)
+                    func(_)
                     {
                         Text("引擎提前唤醒间隔");
                         let result = InputFloatFormat("##引擎提前唤醒间隔", je::editor::get_sleep_suppression(), "%.6f");
@@ -199,7 +196,7 @@ namespace editor
                         TextDisabled("适当提高此值可以增加执行间隔和帧数的稳定性");
                         return result->>\_=do nil;;
                     },
-                    \o,n = true;,
+                    \_,_ = true;,
                     \_ = je::editor::get_sleep_suppression(): string;,
                     func (str){
                         je::editor::set_sleep_suppression(str: real);
@@ -226,7 +223,7 @@ namespace editor
                             return option::value((new_font_path, new_font_size));
                         return option::none;
                     },
-                    func(o,n){je::gui::set_font(option::value(n[0]), n[1]); return true;},
+                    func(_,n){je::gui::set_font(option::value(n[0]), n[1]); return true;},
                     \v = [v[0]: dynamic, v[1]: dynamic]->serialize->val;,
                     func (str){
                         let v = array::deserialize(str)->val;
@@ -248,7 +245,7 @@ namespace editor
                 m_name = name,
                 m_path = path,
                 m_env = env,
-                m_configs = _create_default_configs(env),
+                m_configs = _create_default_configs(),
                 m_worlds = []mut,
                 m_modules = {}mut,
                 m_debug_context = mut option::none,
@@ -305,7 +302,6 @@ namespace editor
         }
         public func save_project(self: Project)
         {
-            let (w, h) = je::input::window_size();
             let dat = {
                 ["name"] = self.m_name: dynamic,
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
@@ -511,7 +507,7 @@ namespace editor
         {
             return self->get_project_world(w)->> \pw = pw.m_remark_note = remark;->has;
         }
-        public func serialize_entity(self: Project, e: je::entity)
+        public func serialize_entity(_: Project, e: je::entity)
         {
             return jeapi::serialize::entity(e, false);
         }

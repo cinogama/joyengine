@@ -224,8 +224,8 @@ namespace editor::gui
         {
             match (self.type->get)
             {
-            dir(subdirs)?;
             file? functor();
+            dir(_)?;
             }
             return self;
         }
@@ -363,7 +363,6 @@ namespace editor::gui
 
     func context_menu(path: option<PathInfo>, context: EditorContext)
     {
-        let mut shown_context = false;
         if (path
             ->map(\_ = BeginPopupContextItem();)
             ->or(\ = BeginPopupContextWindow();))
@@ -1151,7 +1150,7 @@ namespace $$MODULE_NAME$$
         {
             match (path.type->get)
             {
-            PathType::dir(subpath)?
+            PathType::dir(_)?
             {
                 let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
                                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 

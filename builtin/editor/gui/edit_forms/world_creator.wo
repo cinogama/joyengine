@@ -221,7 +221,6 @@ namespace editor::gui::edit_forms
 
         if(BeginDragDropTarget())
         {
-            let mut data = "";
             match (AcceptDragDropPayload("JEDITOR_SYSTEM_TYPE"))
             {
             value(data)?
@@ -256,7 +255,7 @@ namespace editor::gui::edit_forms
         return create_world;
     }
 
-    public func show_world_creator(context: EditorContext, world_context: WorldContext)
+    public func show_world_creator(_: EditorContext, world_context: WorldContext)
     {
         je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
         let mut open = BeginAttrOpen(world_context.edit_world->has() ? F"编辑世界##{JobID()}" | F"创建新世界##{JobID()}", 

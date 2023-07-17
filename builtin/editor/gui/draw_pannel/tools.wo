@@ -8,12 +8,24 @@ namespace editor::gui::drawpannel::tools
     {
         public func OnMouseDown(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
         {
+            do self;
+            do target;
+            do color;
+            do pos;
         }
         public func OnMouseHold(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
         {
+            do self;
+            do target;
+            do color;
+            do pos;
         }
         public func OnMouseUp(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
         {
+            do self;
+            do target;
+            do color;
+            do pos;
         }
     }
     func draw_line(target: graphic::texture, color: color4_t, p1: (int, int), p2: (int, int))
@@ -112,7 +124,7 @@ namespace editor::gui::drawpannel::tools
                 self.m_last_draw_pos = pos;
             }
         }
-        public func OnMouseUp(self: Pen, target: graphic::texture, color: color4_t, pos: (int, int))
+        public func OnMouseUp(_: Pen, _: graphic::texture, _: color4_t, _: (int, int))
         {
         }
     }
@@ -148,7 +160,7 @@ namespace editor::gui::drawpannel::tools
                 self.m_last_pos = pos;
             }
         }
-        public func OnMouseUp(self: Line, target: graphic::texture, color: color4_t, pos: (int, int))
+        public func OnMouseUp(self: Line, _: graphic::texture, _: color4_t, _: (int, int))
         {
             self.m_snapshot = option::none;
         }
@@ -189,17 +201,17 @@ namespace editor::gui::drawpannel::tools
                 self.m_last_pos = pos;
             }
         }
-        public func OnMouseUp(self: Rect, target: graphic::texture, color: color4_t, pos: (int, int))
+        public func OnMouseUp(self: Rect, _: graphic::texture, _: color4_t, _: (int, int))
         {
             self.m_snapshot = option::none;
         }
     }
     public using Fill = ()
     {
-        public func OnMouseDown(self: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
+        public func OnMouseDown(_: Fill, _: graphic::texture, _: color4_t, _: (int, int))
         {
         }
-        public func OnMouseHold(self: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
+        public func OnMouseHold(_: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
         {
             let (w, h) = target->size(), (x, y) = pos;
             if (x >= 0 && x < w && y >= 0 && y < h)
@@ -241,7 +253,7 @@ namespace editor::gui::drawpannel::tools
             }
             
         }
-        public func OnMouseUp(self: Fill, target: graphic::texture, color: color4_t, pos: (int, int))
+        public func OnMouseUp(_: Fill, _: graphic::texture, _: color4_t, _: (int, int))
         {
         }
     }

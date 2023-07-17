@@ -478,7 +478,7 @@ namespace editor::gui::animation2d
             }
         }
     }
-    func _animation_edit_form(context: EditorContext, animation_context: AnimationContext)
+    func _animation_edit_form(_: EditorContext, animation_context: AnimationContext)
     {
         using je::gui;
 

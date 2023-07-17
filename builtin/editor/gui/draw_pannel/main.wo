@@ -477,7 +477,6 @@ namespace editor::gui::drawpannel
 
                     let (p0, p1) = GetItemRect();
                     let (lux, luy) = p0;
-                    let (rbx, rby) = p1;
 
                     PushClipRect(p0, p1);
                     drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
@@ -671,13 +670,6 @@ namespace editor::gui::drawpannel
             jeapi::gui::form::errmsg("无法绘制当前实体", "当前实体不使用任何纹理，因此无法编辑");
             return;
         }
-
-        // OK
-        let has_no_exist_texture = ! used_texture_id_pass
-            ->> \id = textures->get(id)->has;
-            ->  reduce(\l, r = l ? r | l;)
-            ->  valor(true);
-            ;
 
         let create_and_copy_0pass_texture = func()
         {

@@ -388,7 +388,7 @@ let u = editor::Environment::create();
         TextDisabled("历史项目");
         do BeginChildSize("##history", 0., 100.);
 
-        for (let i, dat : historys)
+        for (let _, dat : historys)
         {
             if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::none))
                 open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);

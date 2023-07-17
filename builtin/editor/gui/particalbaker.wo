@@ -266,7 +266,6 @@ public func color(frame: int, context: PerparticleContext)
 }
 "@;
     func _particalbaker_editor(
-        context: EditorContext, 
         partical_context: ParticalContext, 
         econtext: _EditorContext)
     {
@@ -460,10 +459,10 @@ public func color(frame: int, context: PerparticleContext)
         return open;
     }
     public func show(
-        context: EditorContext, 
+        _: EditorContext, 
         partical_context: ParticalContext)
     {
-        launch(_particalbaker_editor, (context, partical_context, 
+        launch(_particalbaker_editor, (partical_context, 
             _EditorContext{
                 m_last_update_time = mut std::time(),
                 m_frame_index = mut 0,

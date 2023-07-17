@@ -27,11 +27,9 @@ namespace jeapi::gui
         let x = mutable::create(0.), y = mutable::create(0.);
         do str->take_token("(")
             =>> \s = s->take_real();
-            =>> \snr = s->take_token(",")
-                where s = snr[0], r = x->set(snr[1]);
+            =>> func(snr){x->set(snr[1]); return snr[0]->take_token(",");}
             =>> \s = s->take_real();
-            =>> \snr = s->take_token(")")
-                where s = snr[0], r = y->set(snr[1]);
+            =>> func(snr){y->set(snr[1]); return snr[0]->take_token(")");}
             ;
         return (x->get, y->get);
     }
@@ -51,7 +49,7 @@ namespace jeapi::gui
 
         let length = datas
             ->  forall(\data = data[0] == "size";)
-            ->  reduce(\l, r = l;)
+            ->  reduce(\l, _ = l;)
             ->> \data = data[1]: int;
             ->  valor(datas->len)
             ;

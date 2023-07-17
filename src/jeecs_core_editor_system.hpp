@@ -360,7 +360,7 @@ using fout = struct {
 };
         
 public let vert = \v: vin = v2f{ pos = je_mvp * float4::create(v.vertex, 1.) };;
-public let frag = \f: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
+public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
         
         )");
 

@@ -16,7 +16,7 @@ public func entry(t: je::graphic::texture)
     return true;
 }
 
-public func pixel(t: je::graphic::texture, x: int, y: int)
+public func pixel(_: je::graphic::texture, x: int, y: int)
     => (real, real, real, real)
 {
     let xf = (x: real + 0.5) / texture_width: real;

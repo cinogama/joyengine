@@ -158,7 +158,7 @@ namespace editor::gui::edit_forms
                             do filesys::mkdir(export_path/"builtin");
                             do filesys::writeall(export_path/"builtin"/".keepme", "");
 
-                            for (let _, (minstance, (opath, ppath)) : dll_module_path)
+                            for (let _, (_, (opath, ppath)) : dll_module_path)
                             {
                                 config.m_pack_output_log->add(F"复制 {ppath}");
 
@@ -255,7 +255,7 @@ namespace editor::gui::edit_forms
                             // 1.5.1 生成加载动态库相关代码
                             config.m_pack_output_log->add(F"正在生成装载动态库的脚本");
                             let mut dylib_loader = "";
-                            for (let _, (minstance, (opath, ppath)) : dll_module_path)
+                            for (let _, (minstance, (_, ppath)) : dll_module_path)
                             {
                                 // TODO: 根据情况，从镜像文件中释出相关文件
                                 assert(ppath[0] == '@');

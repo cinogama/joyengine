@@ -2,7 +2,7 @@ import je::editor::graphic;
 
 NAME = "反色";
 
-public func entry(t: je::graphic::texture)
+public func entry(_: je::graphic::texture)
 {
     return true;
 }

@@ -3,7 +3,7 @@ import pkg::math;
 
 NAME = "法线化（无边界）";
 
-public func entry(t: je::graphic::texture)
+public func entry(_: je::graphic::texture)
 {
     return true;
 }

@@ -49,7 +49,7 @@ namespace jeapi
                                         result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
                                     float4((x, y, z, w))?
                                         result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
-                                    texture(id)? /* do nothing */;
+                                    texture(_)? /* do nothing */;
                                     others? /* do nothing */;
                                 }
                             }

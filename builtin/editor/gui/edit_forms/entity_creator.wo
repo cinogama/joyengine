@@ -116,8 +116,12 @@ namespace editor::gui::edit_forms
         if (BeginDragDropSource())
         {
             if (SetDragDropPayload("JEDITOR_COMPONENT_TYPE", typename))
-                Text(F"Component: {typename}");
-            
+                Text("Component: ");
+                SameLine();
+                TextDisabled(scopename);
+                SameLine();
+                Text(purename);
+
             EndDragDropSource();
         } 
         SameLine();
@@ -189,7 +193,6 @@ namespace editor::gui::edit_forms
 
         if(BeginDragDropTarget())
         {
-            let mut data = "";
             match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
             {
             value(data)?

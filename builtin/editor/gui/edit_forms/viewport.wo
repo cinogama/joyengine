@@ -31,7 +31,7 @@ namespace editor::gui::edit_forms
                         e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
                         && e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
                     ;)
-                    ->reduce(\l, r = l;)
+                    ->reduce(\l, _ = l;)
                     ;
             ;
 
@@ -70,7 +70,6 @@ namespace editor::gui::edit_forms
                     let o2d_type = je::typeinfo::load("Camera::OrthoProjection")->val;
                     let p3d_type = je::typeinfo::load("Camera::PerspectiveProjection")->val;
 
-                    let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPostPass")->val;
                     if (debug_camera_entity->val->get_component(o2d_type)->has)
                     {
                         debug_camera_entity->val->remove_component(o2d_type);

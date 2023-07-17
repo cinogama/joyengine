@@ -197,7 +197,6 @@ namespace editor::gui::edit_forms
                                     if (MenuItem(F"重置"))
                                     {
                                         let eeid = jeapi::debug::get_entity_editor_id(cur_e);
-                                        let ename = cur_e->editor::name;
 
                                         jeapi::gui::form::ask(
                                             "确认？", 
@@ -248,7 +247,7 @@ namespace editor::gui::edit_forms
                     static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
                     match (cur_e->get_component(Shaders))
                     {
-                    value(shaders)?
+                    value(_)?
                         {
                             if (cur_e->get_component(BadShadersUniform)->has)
                             {

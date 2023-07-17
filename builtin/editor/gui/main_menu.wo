@@ -66,7 +66,7 @@ namespace editor::gui
                         context->launch_editor_form(func(){
                             je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
                             let open = BeginOpen("项目设置");
-                            for (let item_name, iconfig : context->get_project->get_configs)
+                            for (let _, iconfig : context->get_project->get_configs)
                             {
                                 do iconfig->edit();
                                 Separator();
