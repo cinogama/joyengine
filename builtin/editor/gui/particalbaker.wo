@@ -231,7 +231,7 @@ using PerparticleContext = struct{
     maxlife: real
 };
 
-public func perparticle(launch_frame: int)
+public func perparticle(_ /*launch_frame*/: int)
 {
     return PerparticleContext{
         pos = mut upos2ppox((0., 0.)),
@@ -241,11 +241,10 @@ public func perparticle(launch_frame: int)
     };
 }
 
-public func position(frame: int, context: PerparticleContext)
+public func position(_ /*frame*/: int, context: PerparticleContext)
 {
     let (x, y) = context.pos;
     let (sx, sy) = context.speed;
-    let (pixw, pixh) = pixelsize();
 
     context.pos = (x + sx * deltatime(), y + sy * deltatime());
     context.life -= deltatime();
@@ -260,7 +259,7 @@ public func position(frame: int, context: PerparticleContext)
     ];
 }
 
-public func color(frame: int, context: PerparticleContext)
+public func color(_/*frame*/: int, context: PerparticleContext)
 {
     return (1., 1., 1., context.life / context.maxlife);
 }
