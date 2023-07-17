@@ -396,11 +396,11 @@ using je;
 
 using Context = ();
 
-extern func create(e: entity)
+extern func create(_: entity)
 {
     return (): Context;
 }
-extern func update(c: Context, e: entity)
+extern func update(_: Context, _: entity)
 {
 
 }
