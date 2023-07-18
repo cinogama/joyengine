@@ -26,24 +26,27 @@ struct GBarLogmsg
     GBarLogmsg* last;
 };
 
-jeecs::basic::atomic_list<GBarLogmsg> _gbar_log_list;
-std::thread _gbar_log_thread;
-std::mutex _gbar_log_thread_mx;
-std::condition_variable _gbar_log_thread_cv;
-std::atomic_bool _gbar_log_shutdown_flag = false;
+struct je_log_context
+{
+    jeecs::basic::atomic_list<GBarLogmsg> _gbar_log_list;
+    std::thread _gbar_log_thread;
+    std::mutex _gbar_log_thread_mx;
+    std::condition_variable _gbar_log_thread_cv;
+    std::atomic_bool _gbar_log_shutdown_flag = false;
+};
 
-void _je_log_work()
+void _je_log_work(je_log_context* ctx)
 {
     do
     {
         do
         {
-            std::unique_lock ug1(_gbar_log_thread_mx);
-            _gbar_log_thread_cv.wait(ug1,
-                []()->bool {return !_gbar_log_list.empty() || _gbar_log_shutdown_flag; });
+            std::unique_lock ug1(ctx->_gbar_log_thread_mx);
+            ctx->_gbar_log_thread_cv.wait(ug1,
+                [ctx]()->bool {return !ctx->_gbar_log_list.empty() || ctx->_gbar_log_shutdown_flag; });
         } while (0);
 
-        GBarLogmsg* msg = _gbar_log_list.pick_all();
+        GBarLogmsg* msg = ctx->_gbar_log_list.pick_all();
         std::list<GBarLogmsg*> reverse_msgs;
 
         while (msg)
@@ -75,27 +78,38 @@ void _je_log_work()
             delete rmsg;
         }
 
-    } while (!_gbar_log_shutdown_flag || !_gbar_log_list.empty());
-
+    } while (!ctx->_gbar_log_shutdown_flag || !ctx->_gbar_log_list.empty());
 }
+
+std::shared_mutex log_context_instance_mx;
+je_log_context* log_context_instance = {};
 
 void je_log_strat()
 {
-    _gbar_log_thread = std::move(
-        std::thread(_je_log_work)
+    std::lock_guard g1(log_context_instance_mx);
+    je_log_context* ctx = new je_log_context;
+    log_context_instance = ctx;
+    ctx->_gbar_log_thread = std::move(
+        std::thread(_je_log_work, ctx)
     );
 }
 
 void je_log_shutdown()
 {
-    do
+    std::lock_guard g1(log_context_instance_mx);
+    if (log_context_instance != nullptr)
     {
-        std::lock_guard g1(_gbar_log_thread_mx);
-        _gbar_log_shutdown_flag = true;
-        _gbar_log_thread_cv.notify_one();
-    } while (0);
+        do
+        {
+            std::lock_guard g1(log_context_instance->_gbar_log_thread_mx);
+            log_context_instance->_gbar_log_shutdown_flag = true;
+            log_context_instance->_gbar_log_thread_cv.notify_one();
+        } while (0);
 
-    _gbar_log_thread.join();
+        log_context_instance->_gbar_log_thread.join();
+        delete log_context_instance;
+    }
+    log_context_instance = nullptr;
 }
 
 std::atomic_size_t registered_id = 0;
@@ -137,7 +151,14 @@ void je_log(int level, const char* format, ...)
     vsnprintf(buf, total_buffer_sz + 1, format, vb);
     va_end(vb);
 
-    bool need_notify = false;
+    std::shared_lock g1(log_context_instance_mx);
+
+    if (log_context_instance == nullptr)
+    {
+        printf("[LOG %d] %s\n", level, buf);
+        free(buf);
+        return;
+    }
 
     do
     {
@@ -149,6 +170,6 @@ void je_log(int level, const char* format, ...)
         }
     } while (0);
 
-    _gbar_log_list.add_one(new GBarLogmsg{ level, buf });
-    _gbar_log_thread_cv.notify_one();
+    log_context_instance->_gbar_log_list.add_one(new GBarLogmsg{ level, buf });
+    log_context_instance->_gbar_log_thread_cv.notify_one();
 }

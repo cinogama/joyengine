@@ -48,6 +48,8 @@ void je_init(int argc, char** argv)
     wo_virtual_source(shader_pbr_path, shader_pbr_src, false);
     wo_virtual_source(gui_api_path, gui_api_src, false);
     jeal_init();
+
+    jeecs::enrty::module_entry();
 }
 
 wo_integer_t crc64_of_source_and_api()
@@ -152,6 +154,8 @@ std::mutex _free_module_list_mx;
 
 void je_finish()
 {
+    jeecs::enrty::module_leave();
+
     jeal_finish();
     jegl_finish();
 

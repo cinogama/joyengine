@@ -26,7 +26,7 @@ namespace jeecs_impl
     public:
         ~type_info_holder()
         {
-
+            jeecs::debug::loginfo("Type manager shutdown.");
         }
 
         inline static type_info_holder* holder() noexcept
