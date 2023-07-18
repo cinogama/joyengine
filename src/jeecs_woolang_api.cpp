@@ -534,13 +534,13 @@ WO_API wo_api wojeapi_set_parent_with_uid(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_get_entity_name(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    return wo_ret_string(vm, entity->name().c_str());
+    return wo_ret_string(vm, je_ecs_get_name_of_entity(entity));
 }
 
 WO_API wo_api wojeapi_set_entity_name(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    entity->name(wo_string(args + 1));
+    je_ecs_set_name_of_entity(entity, wo_string(args + 1));
     return wo_ret_void(vm);
 }
 

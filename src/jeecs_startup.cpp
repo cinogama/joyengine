@@ -30,6 +30,9 @@ void jeal_finish();
 
 void jegl_finish();
 
+void je_log_strat();
+void je_log_shutdown();
+
 void je_init(int argc, char** argv)
 {
     je_log_strat();

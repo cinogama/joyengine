@@ -156,7 +156,10 @@ namespace jeecs_impl
             }
         public:
             // ATTENTION: move_component_to WILL INVOKE DESTRUCT FUNCTION OF from_component
-            inline void move_component_to(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid, void* from_component)const
+            //          `move_component_from` will move a specify component instance to current chunk.
+            //         But component in current chunk has been destructed. So we didn't need to destruct
+            //          it again.
+            inline void move_component_from(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid, void* from_component)const
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
                 void* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
@@ -558,6 +561,8 @@ namespace jeecs_impl
 
         arch_type* find_or_add_arch(const types_set& _types) noexcept
         {
+            if (_types.empty())
+                return nullptr;
             do
             {
                 std::shared_lock sg1(_m_arch_types_mapping_mx);
@@ -785,7 +790,7 @@ namespace jeecs_impl
                 }
             };
 
-            jeecs::basic::atomic_list<typed_system> m_adding_or_removing_components;
+            jeecs::basic::atomic_list<typed_system> m_adding_or_removing_systems;
             bool m_destroy_world;
 
             _world_command_buffer() = default;
@@ -897,7 +902,7 @@ namespace jeecs_impl
 
             assert(sys_instance);
 
-            _find_or_create_buffer_for(w).m_adding_or_removing_components.add_one(
+            _find_or_create_buffer_for(w).m_adding_or_removing_systems.add_one(
                 new _world_command_buffer::typed_system(type, sys_instance)
             );
         }
@@ -909,7 +914,7 @@ namespace jeecs_impl
             DEBUG_ARCH_LOG("World: %p want to remove system named '%s', operation has been committed to the command buffer.",
                 w, type->m_typename);
 
-            _find_or_create_buffer_for(w).m_adding_or_removing_components.add_one(
+            _find_or_create_buffer_for(w).m_adding_or_removing_systems.add_one(
                 new _world_command_buffer::typed_system(type, nullptr)
             );
         }
@@ -1255,7 +1260,6 @@ namespace jeecs_impl
                                     ->destruct_component_addr_with_typeid(current_entity._m_id,
                                         current_typed_component->m_typeinfo->m_id);
                             }
-
                             jeecs::basic::destroy_free(current_typed_component);
                         }
 
@@ -1268,74 +1272,90 @@ namespace jeecs_impl
                             auto current_typed_component = append_typed_components;
                             append_typed_components = append_typed_components->last;
 
-                            if (new_chunk_types.find(current_typed_component->m_typeinfo->m_id) != new_chunk_types.end())
-                            {
-                                // Origin chunk has same component, the old one will be replaced by the new one.
-                                // Give warning here!
-                                jeecs::debug::logwarn("Try adding component '%s' to entity, but here is already have a same one.",
-                                    current_typed_component->m_typeinfo->m_typename);
-                            }
-
                             auto& addr_place = append_component_type_addr_set[current_typed_component->m_typeinfo->m_id];
                             if (addr_place)
                             {
                                 // This type of component already in list, destruct/free it and give warning
-                                jeecs::debug::logwarn("Try adding same component named '%s' to entity in same frame.",
+                                // NOTE: Chain is a inv-chain, so the first one will be the last component added.
+                                //       We need to add the last component and abondon others.
+                                jeecs::debug::logwarn("Try adding same component named '%s' to entity in same frame, the last one will be kept and others will be discarded.",
                                     current_typed_component->m_typeinfo->m_typename);
-                                current_typed_component->m_typeinfo->m_destructor(addr_place);
-                                je_mem_free(addr_place);
+                                current_typed_component->m_typeinfo->m_destructor(current_typed_component->m_component_addr);
+                                je_mem_free(current_typed_component->m_component_addr);
                             }
-                            addr_place = current_typed_component->m_component_addr;
-                            new_chunk_types.insert(current_typed_component->m_typeinfo->m_id);
+                            else
+                            {
+                                if (new_chunk_types.find(current_typed_component->m_typeinfo->m_id) != new_chunk_types.end())
+                                {
+                                    // Origin chunk has same component, the old one will be replaced by the new one.
+                                    // Give warning here!
+                                    jeecs::debug::logwarn("Try adding component '%s' to entity, but here is already have a same one, replace it.",
+                                        current_typed_component->m_typeinfo->m_typename);
 
+                                    // Free component in current chunk!
+                                    // ATTENTION: Here will execute only once beacuse addr_place will be set & cannot be nullptr
+                                    //            later, so replace old component will only happend once.
+                                    current_entity.chunk()
+                                        ->destruct_component_addr_with_typeid(current_entity._m_id,
+                                            current_typed_component->m_typeinfo->m_id);
+                                }
+
+                                addr_place = current_typed_component->m_component_addr;
+                                new_chunk_types.insert(current_typed_component->m_typeinfo->m_id);
+                            }
                             jeecs::basic::destroy_free(current_typed_component);
                         }
 
                         // 5. Almost done! get new arch type:
                         auto* current_arch_type = current_entity.chunk()->get_arch_type();
-                        auto* new_arch_type = current_arch_type->get_arch_mgr()->find_or_add_arch(new_chunk_types);
+                        auto* new_arch_type_my_null = current_arch_type->get_arch_mgr()->find_or_add_arch(new_chunk_types);
 
-                        if (new_arch_type == current_arch_type)
+                        if (new_arch_type_my_null == current_arch_type)
                         {
                             // New & old arch is same, rebuilt in place.
                             for (auto [type_id, component_addr] : append_component_type_addr_set)
                             {
-                                current_entity.chunk()->move_component_to(current_entity._m_id, type_id, component_addr);
+                                current_entity.chunk()->move_component_from(current_entity._m_id, type_id, component_addr);
                                 je_mem_free(component_addr);
                             }
                         }
                         else
                         {
-                            arch_type::arch_chunk* chunk;
-                            jeecs::typing::entity_id_in_chunk_t entity_id;
-                            jeecs::typing::version_t entity_version;
-
-                            new_arch_type->alloc_entity(current_entity.get_euid(), &chunk, &entity_id, &entity_version);
-                            // Entity alloced, move component to here..
-
-                            for (jeecs::typing::typeid_t type_id : new_chunk_types)
+                            if (new_arch_type_my_null != nullptr)
                             {
-                                auto fnd = append_component_type_addr_set.find(type_id);
-                                if (fnd == append_component_type_addr_set.end())
+                                arch_type::arch_chunk* chunk;
+                                jeecs::typing::entity_id_in_chunk_t entity_id;
+                                jeecs::typing::version_t entity_version;
+
+                                new_arch_type_my_null->alloc_entity(current_entity.get_euid(), &chunk, &entity_id, &entity_version);
+                                // Entity alloced, move component to here..
+                                for (jeecs::typing::typeid_t type_id : new_chunk_types)
                                 {
-                                    // 1. Move old component
-                                    chunk->move_component_to(entity_id, type_id,
-                                        current_entity.chunk()->get_component_addr_with_typeid(
-                                            current_entity._m_id, type_id));
+                                    auto fnd = append_component_type_addr_set.find(type_id);
+                                    if (fnd == append_component_type_addr_set.end())
+                                    {
+                                        // 1. Move old component
+                                        chunk->move_component_from(entity_id, type_id,
+                                            current_entity.chunk()->get_component_addr_with_typeid(
+                                                current_entity._m_id, type_id));
+                                    }
+                                    else
+                                    {
+                                        // 2. Move new component
+                                        chunk->move_component_from(entity_id, type_id, fnd->second);
+                                        je_mem_free(fnd->second);
+                                    }
                                 }
-                                else
-                                {
-                                    // 2. Move new component
-                                    chunk->move_component_to(entity_id, type_id, fnd->second);
-                                    je_mem_free(fnd->second);
-                                }
+                                // Active new one
+                                chunk->command_active_entity(entity_id);
+                            }
+                            else
+                            {
+                                assert(new_chunk_types.empty());
                             }
 
                             // OK, Mark old entity chunk is freed, 
                             current_entity.chunk()->command_close_entity(current_entity._m_id);
-
-                            // Active new one
-                            chunk->command_active_entity(entity_id);
                         }
 
                     }// End component modify
@@ -1386,7 +1406,7 @@ namespace jeecs_impl
                 if (_buf_in_world.second.m_destroy_world)
                     world->ready_to_destroy();
 
-                auto* append_or_remove_system = _buf_in_world.second.m_adding_or_removing_components.pick_all();
+                auto* append_or_remove_system = _buf_in_world.second.m_adding_or_removing_systems.pick_all();
                 while (append_or_remove_system)
                 {
                     auto* cur_append_or_remove_system = append_or_remove_system;
@@ -2158,9 +2178,7 @@ void je_ecs_world_create_entity_with_components(
         types.insert(*(component_ids++));
 
     auto&& entity = ((jeecs_impl::ecs_world*)world)->create_entity_with_component(types);
-
-    if (out_entity)
-        out_entity->_set_arch_chunk_info(entity._m_in_chunk, entity._m_id, entity._m_version);
+    out_entity->_set_arch_chunk_info(entity._m_in_chunk, entity._m_id, entity._m_version);
 }
 
 size_t je_ecs_world_archmgr_updated_version(void* world)

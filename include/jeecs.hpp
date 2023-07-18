@@ -84,17 +84,62 @@
 #		define JE_PLATFORM_UNKNOWN
 #endif
 
+/*
+jeecs [命名空间]
+此处定义引擎自带的所有的C++接口类、函数、类型和常量
+*/
 namespace jeecs
 {
+    /*
+    jeecs::typing [命名空间]
+    此处定义引擎使用的常用类型和常量值
+    */
     namespace typing
     {
+        /*
+        jeecs::typing::typehash_t [类型别名]
+        用于储存哈希值结果的类型
+        */
         using typehash_t = size_t;
+
+        /*
+        jeecs::typing::typeid_t [类型别名]
+        用于储存引擎的类型工厂管理的类型ID，规定的无效值是 jeecs::typing::INVALID_TYPE_ID
+            请参见：
+            jeecs::typing::INVALID_TYPE_ID
+        */
         using typeid_t = size_t;
 
-        constexpr typeid_t NOT_TYPEID_FLAG = ((typeid_t)1) << ((typeid_t)(8 * sizeof(NOT_TYPEID_FLAG)) - 1);
+        /*
+        jeecs::typing::INVALID_TYPE_ID [常量]
+        jeecs::typing::typeid_t 类型的无效值
+        请参见：
+            jeecs::typing::typeid_t
+        */
         constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
+
+        /*
+        jeecs::typing::INVALID_UINT32 [常量]
+        uint32_t 类型的无效值，通常被用于在图形库的资源中指示此资源不包含有效资源
+        请参见：
+            jegl_resource
+        */
         constexpr uint32_t INVALID_UINT32 = (uint32_t)-1;
+
+        /*
+        jeecs::typing::PENDING_UNIFORM_LOCATION [常量]
+        图形库的一致变量位置信息初始值，由于此信息需要在对应着色器编译完成后才能确定，
+        因此此值暗示当前一致变量位置尚未确定，可通过此值确认shader状态，但不推荐
+        请参见：
+            jegl_shader
+        */
         constexpr uint32_t PENDING_UNIFORM_LOCATION = (uint32_t)-2;
+        
+        /*
+        jeecs::typing::ALLIGN_BASE [常量]
+        基本对齐参数，与平台相关。一般是当前平台最大内建类型的字节数
+        * ArchSystem通过此值决定ArchBlock内组件的对齐方式
+        */
         constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
 
         struct type_info;
@@ -114,6 +159,12 @@ namespace jeecs
         using entity_id_in_chunk_t = size_t;
         using version_t = size_t;
 
+        /*
+        jeecs::typing::uuid [类型]
+        UUID，一般作为全局唯一标识符使用
+        请参见：
+            jeecs::typing::uid_t
+        */
         struct uuid
         {
             union
@@ -157,8 +208,31 @@ namespace jeecs
             }
         };
 
+        /*
+        jeecs::typing::euid_t [类型别名]
+        引擎实体的跟踪ID，实体创建时自动分配，并不随组件变化而变化
+        需要注意的是，此值仅适合用于调试或编辑器环境，因为引擎只简单地递增分配，不保证分配绝对唯一的ID
+        * 无效值是 0，从失效实体中取出的ID即为0，引擎保证不分配0作为实体的ID
+        请参见：
+            je_ecs_entity_uid
+            jeecs::game_entity::get_euid
+        */
         using euid_t = size_t;
+
+        /*
+        jeecs::typing::uid_t [类型别名]
+        全局唯一标识符的类型别名
+        请参见：
+            jeecs::typing::uuid
+        */
         using uid_t = uuid;
+
+        /*
+        jeecs::typing::ms_stamp_t [类型别名]
+        用于储存以毫秒为单位的时间戳的类型别名
+        请参见：
+            je_clock_time_stamp
+        */
         using ms_stamp_t = uint64_t;
 
         template<typename T>
@@ -187,6 +261,10 @@ namespace jeecs
             using type = typename std::remove_pointer<decltype(_type_selector())>::type;
         };
 
+        /*
+        jeecs::typing::origin_t<T> [泛型类型别名]
+        等效于指定类型T去除 const volatile reference 和 pointer之后的原始类型
+        */
         template<typename T>
         using origin_t = typename _origin_type<T>::type;
 
@@ -278,6 +356,10 @@ namespace jeecs
             using type = typename std::remove_pointer<decltype(_type_selector())>::type;
         };
 
+        /*
+        jeecs::typing::index_types_t<n, Ts...> [泛型类型别名]
+        获取给定类型序列Ts，等效于其中第n个类型
+        */
         template<size_t n, typename ... Ts>
         using index_types_t = typename _variadic_type_indexer<n, Ts...>::type;
     }
@@ -285,6 +367,27 @@ namespace jeecs
     class game_system;
     class game_world;
 
+    /*
+    jeecs::game_entity [核心类型]
+    引擎的实体索引类型
+    用于指示一个ArchChunk中的位置，实体索引会因为组件发生变化（移除或添加）而失效
+    因此除非能确保实体绝不发生变动，否则不应该长期持有任何实体索引；即建议每一帧
+    即取即用。
+    注意：
+        * 若实体索引所在的世界仍然存在，那么失效的实体索引仍能进行各项操作，但均
+            不生效，亦无法从中获取任何组件。
+        * 若实体索引所在的世界已经被销毁，那么实体索引进行的操作可能直接导致崩溃。
+            换言之，任何情况下不要跨世界地储存实体索引
+    说明：
+    ECS引擎中，实体是一个仅存在于概念中的存在：一组有“关联”的组件集合，其关联
+    即为实体。而由管理组件存储的ArchType特性决定，组件会在不同的ArchType中迁移，因
+    此没有切实有效的手段可以持有一个实体的长期索引。
+    实体索引是一个储存有：所属Chunk，位置和版本的三元组。其中，所属Chunk和位置可以
+    确定和获取实体的组件，版本则用于确认当前索引是否是有效的——因为地址和位置会在
+    实体迁移之后复用，此前持有的实体可能已经移动到其他位置。每次实体的变动，所属的
+    Chunk都会对指定位置记录的版本信息进行更新。只需要校验Chunk内的版本和索引的版本
+    即可。
+    */
     struct game_entity
     {
         enum class entity_stat
@@ -309,23 +412,60 @@ namespace jeecs
             return *this;
         }
 
+        /*
+        jeecs::game_entity::get_component [方法]
+        从指定实体中获取一个指定类型的组件。
+        若实体失效或实体不存在指定组件，则返回nullptr
+        否则返回指定类型组件的地址
+        */
         template<typename T>
         inline T* get_component() const noexcept;
 
+        /*
+        jeecs::game_entity::add_component [方法]
+        向指定实体中添加一个指定类型的组件，若最终导致实体的组件发生变化，
+        那么旧的实体索引在下一帧失效
+        * 若实体失效则返回nullptr,
+        * 无论实体是否存在指定的组件，总是创建一个新的组件实例并返回其地址
+        * 最后添加的组件实例会真正生效并：
+            1. 如果实体此前已有存在的组件，则替换之，请注意：如果需要更
+                新替换组件，推荐的做法是先进行移除操作，而不是依赖此行为
+            2. 如果实体此前不存在此组件，则更新实体，旧的实体索引将失效
+        */
         template<typename T>
         inline T* add_component() const noexcept;
 
+        /*
+        jeecs::game_entity::remove_component [方法]
+        向指定实体中移除一个指定类型的组件，若最终导致实体的组件发生变化，
+        那么旧的实体索引在下一帧失效
+        * 无论先后顺序如何，一帧内的移除组件操作总是先于添加组件发生。
+            这意味着，如果在一帧之内先向实体添加了组件，再移除组件，那么
+            移除组件操作会将此实体中`原先`存在的组件移除（如果存在），
+            而新添加的组件仍会创建。
+        */
         template<typename T>
         inline void remove_component() const noexcept;
 
+        /*
+        jeecs::game_entity::game_world [方法]
+        获取当前实体所属的世界
+        * 即便实体索引失效，此方法依然能返回所属的世界
+        */
         inline jeecs::game_world game_world() const noexcept;
 
+        /*
+        jeecs::game_entity::close [方法]
+        若索引未失效，则关闭当前实体索引指向的实体。实体索引将在下一帧失效
+        */
         inline void close() const noexcept;
 
-        inline std::string name();
-
-        inline std::string name(const std::string& _name);
-
+        /*
+        jeecs::game_entity::get_euid [方法]
+        若索引未失效，则返回实体的跟踪ID，否则返回0
+        请参见：
+            jeecs::typing::euid_t
+        */
         inline typing::euid_t get_euid() const noexcept;
 
         inline bool operator == (const game_entity& e) const noexcept
@@ -340,6 +480,10 @@ namespace jeecs
 
     struct dependence;
 
+    /*
+    jeecs::input [命名空间]
+    此处定义引擎IO相关的接口、常量等
+    */
     namespace input
     {
         enum class keycode
@@ -362,6 +506,10 @@ namespace jeecs
         };
     }
 
+    /*
+    jeecs::graphic [命名空间]
+    此处定义引擎图形库相关资源的封装类型和工具
+    */
     namespace graphic
     {
         struct character;
@@ -393,27 +541,103 @@ namespace std
 }
 
 WO_FORCE_CAPI
+
+/*
+je_mem_alloc [基本接口]
+引擎的统一内存申请函数。
+*/
 JE_API void* je_mem_alloc(size_t sz);
+
+/*
+je_mem_realloc [基本接口]
+引擎的统一内存重申请函数。
+*/
 JE_API void* je_mem_realloc(void* mem, size_t sz);
+
+/*
+je_mem_free [基本接口]
+引擎的统一内存释放函数。
+*/
 JE_API void je_mem_free(void* ptr);
 
+/*
+je_init [基本接口]
+引擎的基本初始化操作，应当在所有其他引擎相关的操作之前调用
+参数为应用程序启动时的命令行参数，若不希望提供，可以传入：
+    argc = 0, argv = nullptr
+请参见：
+    je_finish
+*/
 JE_API void je_init(int argc, char** argv);
+
+/*
+je_finish [基本接口]
+引擎的退出操作，应当在所有其他引擎相关的操作之后调用
+* 引擎退出完毕之后可以重新调用 je_init 重新启动
+请参见：
+    je_init
+*/
 JE_API void je_finish(void);
 
+/*
+je_build_version [基本接口]
+用于获取引擎编译时信息
+*/
 JE_API const char* je_build_version();
+
+/*
+je_build_commit [基本接口]
+用于获取当前引擎所在的提交哈希
+* 若使用的是手动构建的引擎，此函数将返回 "untracked"
+*/
 JE_API const char* je_build_commit();
 
-JE_API void je_log_strat(void);
-JE_API void je_log_shutdown(void);
-
+/*
+JE_LOG_NORMAL [宏常量]
+用于标志通常日志等级
+*/
 #define JE_LOG_NORMAL 0
+
+/*
+JE_LOG_INFO [宏常量]
+用于标志信息日志等级
+*/
 #define JE_LOG_INFO 1
+
+/*
+JE_LOG_WARNING [宏常量]
+用于标志警告日志等级
+*/
 #define JE_LOG_WARNING 2
+
+/*
+JE_LOG_ERROR [宏常量]
+用于标志错误日志等级
+*/
 #define JE_LOG_ERROR 3
+
+/*
+JE_LOG_FATAL [宏常量]
+用于标志致命错误日志等级
+*/
 #define JE_LOG_FATAL 4
 
+/*
+je_log_register_callback [基本接口]
+用于注册一个日志发生时的回调函数，返回注册句柄。
+*/
 JE_API size_t je_log_register_callback(void(*func)(int level, const char* msg, void* custom), void* custom);
+
+/*
+je_log_unregister_callback [基本接口]
+用于释放（解除注册）一个之前注册的日志发生时回调函数。
+*/
 JE_API void* je_log_unregister_callback(size_t regid);
+
+/*
+je_log [基本接口]
+以指定的日志等级，向日志系统提交一条日志
+*/
 JE_API void je_log(int level, const char* format, ...);
 
 typedef enum je_typing_class
@@ -422,7 +646,16 @@ typedef enum je_typing_class
     JE_COMPONENT,
     JE_SYSTEM,
 } je_typing_class;
-// You should promise: different type should have different name.
+
+/*
+je_typing_find_or_register [基本接口]
+向引擎的类型管理器注册一个类型及其基本信息，通过out_typeid向外给出类型的id
+    若类型是第一次注册，则返回true，否则返回false
+* 类型的名称是区分的唯一标记符，不同类型必须使用不同的名字
+请参见：
+    jeecs::typing::typeid_t
+    je_typing_unregister
+*/
 JE_API bool je_typing_find_or_register(
     jeecs::typing::typeid_t* out_typeid,
     const char* _name,
@@ -443,15 +676,45 @@ JE_API bool je_typing_find_or_register(
     jeecs::typing::update_func_t    _commit_update,
     je_typing_class                 _typecls);
 
+/*
+je_typing_get_info_by_id [基本接口]
+通过类型id获取类型信息，若给定的id不合法，返回nullptr
+请参见：
+    jeecs::typing::typeid_t
+    jeecs::typing::type_info
+*/
 JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
     jeecs::typing::typeid_t _id);
 
+/*
+je_typing_get_info_by_name [基本接口]
+通过类型的名称获取类型信息，若给定的类型名不合法或不存在，返回nullptr
+请参见：
+    jeecs::typing::type_info
+*/
 JE_API const jeecs::typing::type_info* je_typing_get_info_by_name(
     const char* type_name);
 
+/*
+je_typing_unregister [基本接口]
+向引擎的类型管理器要求解除注册类型id指定的类型信息
+需要注意的是，一般而言引擎推荐遵循“谁注册谁释放”原则，请确保释放的
+类型是当前模块通过 je_typing_find_or_register 成功注册的类型。
+若释放的类型id不合法，则给出级别错误的日志信息。
+请参见：
+    jeecs::typing::typeid_t
+    je_typing_find_or_register
+*/
 JE_API void je_typing_unregister(
     jeecs::typing::typeid_t _id);
 
+/*
+je_register_member [基本接口]
+向引擎的类型管理器注册指定类型id的成员信息。
+请参见：
+    jeecs::typing::typeid_t
+    jeecs::typing::type_info
+*/
 JE_API void je_register_member(
     jeecs::typing::typeid_t         _classid,
     const jeecs::typing::type_info* _membertype,
@@ -460,20 +723,116 @@ JE_API void je_register_member(
 
 ////////////////////// ARCH //////////////////////
 
+/*
+je_arch_get_chunk [基本接口]
+通过给定的ArchType，获取其首个Chunk，由于ArchType总是至少有一个Chunk，
+所以总是返回非nullptr值。
+    * 此方法一般由selector调用，用于获取指定ArchType中的组件信息
+*/
 JE_API void* je_arch_get_chunk(void* archtype);
+
+/*
+je_arch_next_chunk [基本接口]
+通过给定的Chunk，获取其下一个Chunk，如果给定Chunk没有后继则返回nullptr
+    * 此方法一般由selector调用，用于获取指定ArchType中的组件信息
+*/
 JE_API void* je_arch_next_chunk(void* chunk);
+
+/*
+je_arch_entity_meta_addr_in_chunk [基本接口]
+通过给定的Chunk，获取Chunk中的实体元数据起始地址。
+    * 此方法一般由selector调用，用于获取指定ArchType中的组合（实体）情况
+    * 一般配合je_arch_entity_meta_size等方法一起使用，获取指定位置的实体信息
+请参见：
+    je_arch_entity_meta_size
+    je_arch_entity_meta_state_offset
+    je_arch_entity_meta_version_offset
+*/
 JE_API const void* je_arch_entity_meta_addr_in_chunk(void* chunk);
+
+/*
+je_arch_entity_meta_size [基本接口]
+返回实体元数据的大小，此函数的返回值是一个常量，在运行过程中不会改变
+    * 此方法一般由selector调用，用于获取指定ArchType中的组合（实体）情况
+    * 一般配合je_arch_entity_meta_addr_in_chunk等方法一起使用，获取指定位置的实体信息
+请参见：
+    je_arch_entity_meta_addr_in_chunk
+    je_arch_entity_meta_state_offset
+    je_arch_entity_meta_version_offset
+*/
 JE_API size_t je_arch_entity_meta_size(void);
+
+/*
+je_arch_entity_meta_state_offset [基本接口]
+返回实体状态在单个元数据结构中的位置（偏移量），此函数的返回值是一个常量，在运行过程中不会改变
+    * 此方法一般由selector调用，用于获取指定ArchType中的组合（实体）情况
+    * 一般配合je_arch_entity_meta_addr_in_chunk等方法一起使用，获取指定位置的实体信息
+请参见：
+    je_arch_entity_meta_addr_in_chunk
+    je_arch_entity_meta_size
+    je_arch_entity_meta_version_offset
+*/
 JE_API size_t je_arch_entity_meta_state_offset(void);
+
+/*
+je_arch_entity_meta_version_offset [基本接口]
+返回实体版本在单个元数据结构中的位置（偏移量），此函数的返回值是一个常量，在运行过程中不会改变
+    * 此方法一般由selector调用，用于获取指定ArchType中的组合（实体）情况
+    * 一般配合je_arch_entity_meta_addr_in_chunk等方法一起使用，获取指定位置的实体信息
+请参见：
+    je_arch_entity_meta_addr_in_chunk
+    je_arch_entity_meta_size
+    je_arch_entity_meta_state_offset
+*/
 JE_API size_t je_arch_entity_meta_version_offset(void);
 
 ////////////////////// ECS //////////////////////
 
+/*
+je_ecs_universe_create [基本接口]
+创建指定的宇宙（全局上下文）
+引擎允许同时存在多个Universe，原则上不同Universe之间的数据严格隔离并无关
+引擎中所有的世界、实体（组件）都位于特定的宇宙中。
+说明：
+    宇宙创建后会创建一个线程，在循环内执行逻辑更新等操作。此循环会在调用
+    je_ecs_universe_stop终止且所有世界关闭之后退出，并依次执行以下操作：
+        1. 解除注册所有Job
+        2. 按注册的相反顺序调用退出时回调
+    完成全部操作后，宇宙将处于可销毁状态。
+*/
 JE_API void* je_ecs_universe_create(void);
+
+/*
+je_ecs_universe_loop [基本接口]
+等待指定的宇宙直到其完全退出运行，这是一个阻塞函数。
+此函数一般用于宇宙创建并完成初始状态设定之后，阻塞主线程避免过早的退出。
+*/
 JE_API void je_ecs_universe_loop(void* universe);
+
+/*
+je_ecs_universe_destroy [基本接口]
+销毁一个宇宙，在执行此操作之前请确保宇宙已经完全退出，一般在je_ecs_universe_loop
+之后调用。
+请参见：
+    je_ecs_universe_loop
+*/
 JE_API void je_ecs_universe_destroy(void* universe);
+
+/*
+je_ecs_universe_stop [基本接口]
+请求终止指定宇宙的运行，此函数会请求销毁宇宙中的所有世界，然后宇宙会阻塞直到所有世界
+完全关闭后终止运行。
+* 这意味着如果在退出过程中创建了新的世界，宇宙的工作将继续持续直到这些世界完全退出，
+    因此不推荐在组件/系统的析构函数中做多余的逻辑操作。析构函数仅用于释放资源。
+*/
 JE_API void je_ecs_universe_stop(void* universe);
 
+/*
+je_ecs_universe_register_exit_callback [基本接口]
+向指定宇宙中注册宇宙关闭之后的回调函数，关于回调函数的调用时机：
+请参见
+    je_ecs_universe_create
+*/
 JE_API void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg);
 
 typedef double(*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
@@ -494,22 +853,101 @@ After job used to update some data based on normal job.
 For example, graphic update will be pre-callonce-job.
 */
 
+/*
+je_ecs_universe_register_pre_for_worlds_job [基本接口]
+向指定宇宙中注册优先遍历世界任务（Pre job for worlds）
+*/
 JE_API void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+
+/*
+je_ecs_universe_register_pre_for_worlds_job [基本接口]
+向指定宇宙中注册优先单独任务（Pre job for once）
+*/
 JE_API void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
+
+/*
+je_ecs_universe_register_for_worlds_job [基本接口]
+向指定宇宙中注册普通遍历世界任务（Job for worlds）
+*/
 JE_API void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+
+/*
+je_ecs_universe_register_call_once_job [基本接口]
+向指定宇宙中注册普通单独任务（Job for once）
+*/
 JE_API void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
+
+/*
+je_ecs_universe_register_after_for_worlds_job [基本接口]
+向指定宇宙中注册延后遍历世界任务（Defer job for worlds）
+*/
 JE_API void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+
+/*
+je_ecs_universe_register_after_call_once_job [基本接口]
+向指定宇宙中注册延后单独任务（Defer job for once）
+*/
 JE_API void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
 
+/*
+je_ecs_universe_unregister_pre_for_worlds_job [基本接口]
+从指定宇宙中取消优先遍历世界任务（Pre job for worlds）
+*/
 JE_API void je_ecs_universe_unregister_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
+
+/*
+je_ecs_universe_unregister_pre_call_once_job [基本接口]
+从指定宇宙中取消优先单独任务（Pre job for once）
+*/
 JE_API void je_ecs_universe_unregister_pre_call_once_job(void* universe, je_job_call_once_t job);
+
+/*
+je_ecs_universe_unregister_for_worlds_job [基本接口]
+从指定宇宙中取消普通遍历世界任务（Job for worlds）
+*/
 JE_API void je_ecs_universe_unregister_for_worlds_job(void* universe, je_job_for_worlds_t job);
+
+/*
+je_ecs_universe_unregister_call_once_job [基本接口]
+从指定宇宙中取消普通单独任务（Job for once）
+*/
 JE_API void je_ecs_universe_unregister_call_once_job(void* universe, je_job_call_once_t job);
+
+/*
+je_ecs_universe_unregister_after_for_worlds_job [基本接口]
+从指定宇宙中取消延后遍历世界任务（After job for worlds）
+*/
 JE_API void je_ecs_universe_unregister_after_for_worlds_job(void* universe, je_job_for_worlds_t job);
+
+/*
+je_ecs_universe_unregister_after_call_once_job [基本接口]
+从指定宇宙中取消延后单独任务（After job for once）
+*/
 JE_API void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_once_t job);
 
+/*
+je_ecs_world_in_universe [基本接口]
+获取指定世界所属的宇宙
+*/
 JE_API void* je_ecs_world_in_universe(void* world);
+
+/*
+je_ecs_world_create [基本接口]
+在指定的宇宙中创建一个世界
+*/
 JE_API void* je_ecs_world_create(void* in_universe);
+
+/*
+je_ecs_world_destroy [基本接口]
+从指定的宇宙中销毁一个世界
+    * 销毁世界不会立即生效，而是要等到下一次逻辑更新
+    * 世界销毁时，会按照如下顺序执行所有销毁操作：
+        0. 被标记为即将销毁
+        1. 销毁所有系统
+        2. 销毁所有实体
+        3. 执行最后命令缓冲区更新
+        4. 被宇宙从世界列表中移除
+*/
 JE_API void je_ecs_world_destroy(void* world);
 
 JE_API bool je_ecs_world_is_valid(void* world);
@@ -2475,10 +2913,11 @@ namespace jeecs
             return _m_ecs_world_addr;
         }
 
-        template<typename ... CompTs>
+        template<typename FirstCompT, typename ... CompTs>
         inline game_entity add_entity()
         {
-            typing::typeid_t component_ids[] = {
+            static typing::typeid_t component_ids[] = {
+                typing::type_info::id<FirstCompT>(typeid(FirstCompT).name()),
                 typing::type_info::id<CompTs>(typeid(CompTs).name())...,
                 typing::INVALID_TYPE_ID
             };
@@ -3167,7 +3606,7 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::get_component()const noexcept
     {
-        auto* type = typing::type_info::of<T>(typeid(T).name());
+        static auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return (T*)je_ecs_world_entity_get_component(this, type);
     }
@@ -3175,7 +3614,7 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
-        auto* type = typing::type_info::of<T>(typeid(T).name());
+        static auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, type);
     }
@@ -3183,7 +3622,7 @@ namespace jeecs
     template<typename T>
     inline void game_entity::remove_component() const noexcept
     {
-        auto* type = typing::type_info::of<T>(typeid(T).name());
+        static auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return je_ecs_world_entity_remove_component(je_ecs_world_of_entity(this), this, type);
     }
@@ -6043,14 +6482,6 @@ namespace jeecs
         };
     }
 
-    inline std::string game_entity::name()
-    {
-        return je_ecs_get_name_of_entity(this);
-    }
-    inline std::string game_entity::name(const std::string& _name)
-    {
-        return je_ecs_set_name_of_entity(this, _name.c_str());
-    }
     inline typing::euid_t game_entity::get_euid() const noexcept
     {
         return je_ecs_entity_uid(this);

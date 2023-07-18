@@ -28,7 +28,13 @@ add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
 
-add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+option(INSTALL_PKG_WHEN_BUILD "Install pkgs by baozi when building." ON)
+
+if (INSTALL_PKG_WHEN_BUILD)
+    add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+else()
+    add_custom_target(INSTALL_PKG COMMAND echo "INSTALL_PKG_WHEN_BUILD is disabled.")
+endif()
 
 if(WIN32)
     add_custom_target(COPY_BUILTIN_FILES 

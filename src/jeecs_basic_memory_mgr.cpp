@@ -5,7 +5,6 @@
 
 void* je_mem_alloc(size_t sz)
 {
-    assert(sz != 0);
     return malloc(sz);
 }
 void* je_mem_realloc(void* mem, size_t sz)

@@ -200,13 +200,19 @@ namespace jeecs_impl
                     jeecs::typing::type_info* typeinfo = nullptr;
                     std::swap(typeinfo, _m_type_holder_list[id - 1]);
 
-                    _m_type_hash_id_mapping.erase(typeinfo->m_hash);
-                    _m_type_name_id_mapping.erase(typeinfo->m_typename);
-                    je_mem_free((void*)typeinfo->m_typename);
+                    if (typeinfo)
+                    {
+                        _m_type_hash_id_mapping.erase(typeinfo->m_hash);
+                        _m_type_name_id_mapping.erase(typeinfo->m_typename);
+                        je_mem_free((void*)typeinfo->m_typename);
 
-                    unregister_member_info(typeinfo);
+                        unregister_member_info(typeinfo);
+
+                        return;
+                    }
                 }
             }
+            jeecs::debug::logerr("Type id: '%zu' is invalid, please check.", (size_t)id);
         }
 
 
