@@ -1,4 +1,4 @@
-﻿# JoyECS
+# JoyECS
 #
 cmake_minimum_required (VERSION 3.8)
 
@@ -61,7 +61,7 @@ else()
     add_custom_target(COPY_RCEDIT64_FILES 
         COMMAND echo "COPY_RCEDIT64_FILES is only used for win32")
     add_custom_target(COPY_RCEDIT32_FILES 
-        COMMAND xcopy "COPY_RCEDIT64_FILES is only used for win32")
+        COMMAND echo "COPY_RCEDIT64_FILES is only used for win32")
 endif()
 
 add_subdirectory("src")
