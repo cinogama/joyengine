@@ -35,7 +35,6 @@ build_win64_release:
     - copy RelWithDebInfo\*
     - ..\3rd\rcedit-x64.exe jedriver.exe --set-icon builtin\icon\icon.ico
     - cd ..
-    - baozi install
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
