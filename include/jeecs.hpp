@@ -138,7 +138,7 @@ namespace jeecs
         /*
         jeecs::typing::ALLIGN_BASE [常量]
         基本对齐参数，与平台相关。一般是当前平台最大内建类型的字节数
-        * ArchSystem通过此值决定ArchBlock内组件的对齐方式
+            * ArchSystem通过此值决定ArchBlock内组件的对齐方式
         */
         constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
 
@@ -212,7 +212,7 @@ namespace jeecs
         jeecs::typing::euid_t [类型别名]
         引擎实体的跟踪ID，实体创建时自动分配，并不随组件变化而变化
         需要注意的是，此值仅适合用于调试或编辑器环境，因为引擎只简单地递增分配，不保证分配绝对唯一的ID
-        * 无效值是 0，从失效实体中取出的ID即为0，引擎保证不分配0作为实体的ID
+            * 无效值是 0，从失效实体中取出的ID即为0，引擎保证不分配0作为实体的ID
         请参见：
             je_ecs_entity_uid
             jeecs::game_entity::get_euid
@@ -425,12 +425,11 @@ namespace jeecs
         jeecs::game_entity::add_component [方法]
         向指定实体中添加一个指定类型的组件，若最终导致实体的组件发生变化，
         那么旧的实体索引在下一帧失效
-        * 若实体失效则返回nullptr,
-        * 无论实体是否存在指定的组件，总是创建一个新的组件实例并返回其地址
-        * 最后添加的组件实例会真正生效并：
-            1. 如果实体此前已有存在的组件，则替换之，请注意：如果需要更
-                新替换组件，推荐的做法是先进行移除操作，而不是依赖此行为
-            2. 如果实体此前不存在此组件，则更新实体，旧的实体索引将失效
+            * 若实体失效则返回nullptr,
+            * 无论实体是否存在指定的组件，总是创建一个新的组件实例并返回其地址
+            * `最后`执行对组件的操作会真正生效，如果生效的是添加操作，那么：
+                1. 如果实体此前已有存在的组件，则替换之
+                2. 如果实体此前不存在此组件，则更新实体，旧的实体索引将失效
         */
         template<typename T>
         inline T* add_component() const noexcept;
@@ -439,10 +438,9 @@ namespace jeecs
         jeecs::game_entity::remove_component [方法]
         向指定实体中移除一个指定类型的组件，若最终导致实体的组件发生变化，
         那么旧的实体索引在下一帧失效
-        * 无论先后顺序如何，一帧内的移除组件操作总是先于添加组件发生。
-            这意味着，如果在一帧之内先向实体添加了组件，再移除组件，那么
-            移除组件操作会将此实体中`原先`存在的组件移除（如果存在），
-            而新添加的组件仍会创建。
+            * `最后`执行对组件的操作会真正生效，如果生效的是移除操作，那么：
+                1. 如果实体此前已经存在此组件，那么更新实体，旧的实体索引将失效
+                2. 如果实体此前不存在此组件，那么无事发生
         */
         template<typename T>
         inline void remove_component() const noexcept;
@@ -450,7 +448,7 @@ namespace jeecs
         /*
         jeecs::game_entity::game_world [方法]
         获取当前实体所属的世界
-        * 即便实体索引失效，此方法依然能返回所属的世界
+            * 即便实体索引失效，此方法依然能返回所属的世界
         */
         inline jeecs::game_world game_world() const noexcept;
 
@@ -573,7 +571,7 @@ JE_API void je_init(int argc, char** argv);
 /*
 je_finish [基本接口]
 引擎的退出操作，应当在所有其他引擎相关的操作之后调用
-* 引擎退出完毕之后可以重新调用 je_init 重新启动
+    * 引擎退出完毕之后可以重新调用 je_init 重新启动
 请参见：
     je_init
 */
@@ -984,33 +982,117 @@ JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
 /*
 je_ecs_world_add_system_instance [基本接口]
 向指定世界中添加一个指定类型的系统实例，返回此实例的指针
-TODO: 重做增/删系统逻辑，包括组件更新逻辑一起采用最后生效原则。
+每次更新时，一帧内`最后`执行的操作将会生效，如果生效的是添加系统操作，那么：
+    1. 若此前世界中不存在同类型的系统，则添加
+    2. 若此前世界中已经存在同类型系统，则替换
+
     * 若向一个正在销毁中的世界添加系统实例，返回 nullptr
-    
 */
 JE_API jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::typing::type_info* type);
+
+/*
+je_ecs_world_get_system_instance [基本接口]
+从指定世界中获取一个指定类型的系统实例，返回此实例的指针
+若世界中不存在此类型的系统，返回nullptr
+*/
 JE_API jeecs::game_system* je_ecs_world_get_system_instance(void* world, const jeecs::typing::type_info* type);
+
+/*
+je_ecs_world_remove_system_instance [基本接口]
+从指定世界中移除一个指定类型的系统实例
+每次更新时，一帧内`最后`执行的操作将会生效，如果生效的是移除系统操作，那么：
+    1. 若此前世界中不存在同类型的系统，则移除
+    2. 若此前世界中已经存在同类型系统，则无事发生
+*/
 JE_API void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type);
 
+/*
+je_ecs_world_create_entity_with_components [基本接口]
+向指定世界中创建一个用于指定组件集合的实体，创建结果通过参数 out_entity 返回
+component_ids 应该指向一个储存有N+1个jeecs::typing::typeid_t实例的连续空间，
+其中，N是组件种类数量且不应该为0，空间的最后应该是jeecs::typing::INVALID_TYPE_ID
+以表示结束。
+    * 若向一个正在销毁中的世界创建实体，则创建失败，out_entity将被写入`无效值`
+请参考：
+    jeecs::typing::typeid_t
+    jeecs::typing::INVALID_TYPE_ID
+    jeecs::game_entity
+    jeecs::game_world::add_entity
+*/
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
     jeecs::typing::typeid_t* component_ids);
+
+/*
+je_ecs_world_destroy_entity [基本接口]
+从世界中销毁一个实体索引指定的相关组件
+若实体索引是`无效值`或已失效，则无事发生
+请参考：
+    jeecs::game_entity::close
+*/
 JE_API void je_ecs_world_destroy_entity(
     void* world,
     const jeecs::game_entity* entity);
+
+/*
+je_ecs_world_entity_add_component [基本接口]
+向实体中添加一个组件，无论如何，总是返回一个新的组件实例的地址
+若实体索引是`无效值`或已失效，则最终无事发生
+引擎对于增加或移除组件的操作遵循最后生效原则，即每次更新时，针对一个特定组件类型一帧
+内`最后`执行的操作将会生效，如果生效的是添加组件操作，那么：
+    1. 若实体已经存在同类型组件，则替换之
+    2. 若实体不存在同类型组件，则更新实体
+请参考：
+    jeecs::game_entity::add_component
+*/
 JE_API void* je_ecs_world_entity_add_component(
-    void* world,
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
+
+/*
+je_ecs_world_entity_remove_component [基本接口]
+从实体中移除一个组件
+若实体索引是`无效值`或已失效，则最终无事发生
+引擎对于增加或移除组件的操作遵循最后生效原则，即每次更新时，针对一个特定组件类型一帧
+内`最后`执行的操作将会生效，如果生效的是移除组件操作，那么：
+    1. 若实体已经存在同类型组件，则移除之
+    2. 若实体不存在同类型组件，则无事发生
+请参考：
+    jeecs::game_entity::remove_component
+*/
 JE_API void je_ecs_world_entity_remove_component(
-    void* world,
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
+
+/*
+je_ecs_world_entity_get_component [基本接口]
+从实体中获取一个组件
+若实体索引是`无效值`或已失效，或者实体不存在指定类型的组件，则返回nullptr
+请参考：
+    jeecs::game_entity::get_component
+*/
 JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
     const jeecs::typing::type_info* component_info);
+
+/*
+je_ecs_world_of_entity [基本接口]
+获取实体所在的世界
+若实体索引是`无效值`或已失效，则返回nullptr
+请参考：
+    jeecs::game_entity::game_world
+*/
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
+
+/*
+je_ecs_entity_uid [基本接口]
+获取实体的跟踪ID
+若实体索引是`无效值`或已失效，则返回无效值0
+请参考：
+    jeecs::typing::euid_t
+    jeecs::game_entity::get_euid
+*/
 JE_API jeecs::typing::euid_t je_ecs_entity_uid(const jeecs::game_entity* entity);
 
 // ATTENTION: These 2 functions have no thread-safe-promise.
@@ -3646,30 +3728,21 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
-        if (_m_in_chunk == nullptr)
-            return nullptr;
-
         static auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
-        return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, type);
+        return (T*)je_ecs_world_entity_add_component(this, type);
     }
 
     template<typename T>
     inline void game_entity::remove_component() const noexcept
     {
-        if (_m_in_chunk == nullptr)
-            return nullptr;
-
         static auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
-        return je_ecs_world_entity_remove_component(je_ecs_world_of_entity(this), this, type);
+        return je_ecs_world_entity_remove_component(this, type);
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept
     {
-        if (_m_in_chunk == nullptr)
-            return nullptr;
-
         return jeecs::game_world(je_ecs_world_of_entity(this));
     }
 
