@@ -41,11 +41,6 @@ void je_clock_sleep_until(double time)
     je_clock_sleep_for(time - je_clock_time());
 }
 
-void je_clock_suppress_sleep(double sup_stax)
-{
-    _sleep_suppression = sup_stax;
-}
-
 void je_clock_sleep_for(double time)
 {
     using namespace std;

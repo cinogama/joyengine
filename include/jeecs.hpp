@@ -1013,7 +1013,7 @@ component_ids 应该指向一个储存有N+1个jeecs::typing::typeid_t实例的�
 其中，N是组件种类数量且不应该为0，空间的最后应该是jeecs::typing::INVALID_TYPE_ID
 以表示结束。
     * 若向一个正在销毁中的世界创建实体，则创建失败，out_entity将被写入`无效值`
-请参考：
+请参见：
     jeecs::typing::typeid_t
     jeecs::typing::INVALID_TYPE_ID
     jeecs::game_entity
@@ -1028,7 +1028,7 @@ JE_API void je_ecs_world_create_entity_with_components(
 je_ecs_world_destroy_entity [基本接口]
 从世界中销毁一个实体索引指定的相关组件
 若实体索引是`无效值`或已失效，则无事发生
-请参考：
+请参见：
     jeecs::game_entity::close
 */
 JE_API void je_ecs_world_destroy_entity(
@@ -1043,7 +1043,7 @@ je_ecs_world_entity_add_component [基本接口]
 内`最后`执行的操作将会生效，如果生效的是添加组件操作，那么：
     1. 若实体已经存在同类型组件，则替换之
     2. 若实体不存在同类型组件，则更新实体
-请参考：
+请参见：
     jeecs::game_entity::add_component
 */
 JE_API void* je_ecs_world_entity_add_component(
@@ -1058,7 +1058,7 @@ je_ecs_world_entity_remove_component [基本接口]
 内`最后`执行的操作将会生效，如果生效的是移除组件操作，那么：
     1. 若实体已经存在同类型组件，则移除之
     2. 若实体不存在同类型组件，则无事发生
-请参考：
+请参见：
     jeecs::game_entity::remove_component
 */
 JE_API void je_ecs_world_entity_remove_component(
@@ -1069,7 +1069,7 @@ JE_API void je_ecs_world_entity_remove_component(
 je_ecs_world_entity_get_component [基本接口]
 从实体中获取一个组件
 若实体索引是`无效值`或已失效，或者实体不存在指定类型的组件，则返回nullptr
-请参考：
+请参见：
     jeecs::game_entity::get_component
 */
 JE_API void* je_ecs_world_entity_get_component(
@@ -1080,7 +1080,7 @@ JE_API void* je_ecs_world_entity_get_component(
 je_ecs_world_of_entity [基本接口]
 获取实体所在的世界
 若实体索引是`无效值`或已失效，则返回nullptr
-请参考：
+请参见：
     jeecs::game_entity::game_world
 */
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
@@ -1089,44 +1089,160 @@ JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
 je_ecs_entity_uid [基本接口]
 获取实体的跟踪ID
 若实体索引是`无效值`或已失效，则返回无效值0
-请参考：
+请参见：
     jeecs::typing::euid_t
     jeecs::game_entity::get_euid
 */
 JE_API jeecs::typing::euid_t je_ecs_entity_uid(const jeecs::game_entity* entity);
 
 // ATTENTION: These 2 functions have no thread-safe-promise.
+/*
+je_ecs_get_name_of_entity [基本接口]
+获取实体的名称，一般只用于调试使用，不建议使用在实际项目中
+若实体不包含 Editor::Name 或实体索引是`无效值`或已失效，则返回空字符串
+从实体中取出的名称必须立即复制到其他位置或使用完毕，此函数直接
+返回 Editor::Name 组件中的字符串地址，这意味着如果实体发生更新、重命名
+或者其他操作，取出的字符串可能失效
+*/
 JE_API const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity);
+
+/*
+je_ecs_set_name_of_entity [基本接口]
+设置实体的名称，一般只用于调试使用，不建议使用在实际项目中
+若实体索引是`无效值`或已失效，则返回空字符串，否则返回设置完成之后的新名称
+实体的名称被储存在内置组件 Editor::Name 中，这意味着给实体命名将可能
+使得实体索引失效
+另外，从实体中取出的名称必须立即复制到其他位置或使用完毕，此函数直接
+返回 Editor::Name 组件中的字符串地址，这意味着如果实体发生更新、重命名
+或者其他操作，取出的字符串可能失效
+若实体不包含 Editor::Name，则创建后再进行设置
+*/
 JE_API const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
 
+/*
+je_clock_get_sleep_suppression [基本接口]
+获取引擎的提前唤醒间隔，单位是秒
+此值影响sleep操作，将会减少sleep的实际时间，这有助于提升画面的流畅度，
+但会增加CPU空转导致的开销（虽然不影响实际性能）
+请参见：
+    je_clock_set_sleep_suppression
+*/
 JE_API double je_clock_get_sleep_suppression();
+
+/*
+je_clock_set_sleep_suppression [基本接口]
+设置引擎的提前唤醒间隔，单位是秒
+此值影响sleep操作，将会减少sleep的实际时间，这有助于提升画面的流畅度，
+但会增加CPU空转导致的开销（虽然不影响实际性能）
+请参见：
+    je_clock_get_sleep_suppression
+*/
 JE_API void je_clock_set_sleep_suppression(double v);
+
+/*
+je_clock_time [基本接口]
+获取引擎的运行时间戳，单位是秒
+获取到的时间是引擎自启动到当前为止的时间
+*/
 JE_API double je_clock_time();
+
+/*
+je_clock_time_stamp [基本接口]
+获取引擎的运行时间戳，单位是毫秒
+获取到的时间是引擎自启动到当前为止的时间
+*/
 JE_API jeecs::typing::ms_stamp_t je_clock_time_stamp();
+
+/*
+je_clock_sleep_until [基本接口]
+挂起当前线程直到指定时间点
+*/
 JE_API void je_clock_sleep_until(double time);
+
+/*
+je_clock_sleep_until [基本接口]
+挂起当前线程若干秒
+*/
 JE_API void je_clock_sleep_for(double time);
-JE_API void je_clock_suppress_sleep(double sup_stax);
 
 /////////////////////////// JUID /////////////////////////////////
 
+/*
+je_uid_generate [基本接口]
+生成一个uuid
+请参见：
+    jeecs::typing::uid_t
+*/
 JE_API jeecs::typing::uid_t je_uid_generate(void);
 
 /////////////////////////// CORE /////////////////////////////////
 
+/*
+jeecs_entry_register_core_systems [基本接口]
+注册引擎内置的组件和系统类型，在调用jeecs::entry::module_entry时会一并执行
+请参见：
+    jeecs::entry::module_entry
+*/
 JE_API void jeecs_entry_register_core_systems(void);
 
 /////////////////////////// FILE /////////////////////////////////
+
+/*
+jeecs_fimg_file [类型]
+镜像文件类型，用于加载从镜像中读取的文件时储存镜像文件的上下文信息
+一般使用此类型的指针类型
+请参见：
+    jeecs_file
+*/
 struct jeecs_fimg_file;
+
+/*
+fimg_creating_context [类型]
+镜像上下文，用于创建镜像时保存创建上下文信息
+一般使用此类型的指针类型
+请参见：
+    jeecs_file_image_begin
+    jeecs_file_image_pack_file
+    jeecs_file_image_pack_buffer
+    jeecs_file_image_finish
+*/
 struct fimg_creating_context;
 
+/*
+jeecs_file [类型]
+文件，用于保存引擎读取的文件
+一般使用此类型的指针类型
+请参见：
+    jeecs_file_open
+    jeecs_file_close
+    jeecs_file_read
+*/
 struct jeecs_file
 {
     jeecs_fimg_file* m_image_file_handle;
     FILE* m_native_file_handle;
     size_t m_file_length;
 };
+
+/*
+jeecs_file_set_runtime_path [类型]
+设置当前引擎的运行时路径，不影响“工作路径”
+    * 设置此路径将影响以 @ 开头的路径的实际位置
+设置路径时，引擎会尝试在目标运行路径中打开 fimg_table.jeimgidx4 作为默认
+镜像文件，尝试打开打开以 @ 开头的文件路径读取时会优先从默认镜像中读取
+*/
 JE_API void        jeecs_file_set_runtime_path(const char* path);
+
+/*
+jeecs_file_get_runtime_path [类型]
+获取当前引擎的运行时路径，与“工作路径”无关
+    * 运行时路径影响以 @ 开头的路径的实际位置
+若没有使用 jeecs_file_set_runtime_path 设置此路径，则此路径默认为引擎的可
+执行文件所在路径
+请参见：
+    jeecs_file_set_runtime_path
+*/
 JE_API const char* jeecs_file_get_runtime_path();
 JE_API jeecs_file* jeecs_file_open(const char* path);
 JE_API void        jeecs_file_close(jeecs_file* file);
