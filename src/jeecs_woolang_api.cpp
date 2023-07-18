@@ -587,8 +587,7 @@ WO_API wo_api wojeapi_add_component_from_entity(wo_vm vm, wo_value args, size_t 
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
-    return wo_ret_pointer(vm, je_ecs_world_entity_add_component(
-        je_ecs_world_of_entity(entity), entity,
+    return wo_ret_pointer(vm, je_ecs_world_entity_add_component(entity,
         (const jeecs::typing::type_info*)wo_pointer(args + 1)));
 }
 
@@ -596,7 +595,7 @@ WO_API wo_api wojeapi_remove_component_from_entity(wo_vm vm, wo_value args, size
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
-    je_ecs_world_entity_remove_component(je_ecs_world_of_entity(entity), entity, (const jeecs::typing::type_info*)wo_pointer(args + 1));
+    je_ecs_world_entity_remove_component(entity, (const jeecs::typing::type_info*)wo_pointer(args + 1));
     return wo_ret_void(vm);
 }
 
