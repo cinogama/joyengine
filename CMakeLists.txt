@@ -28,6 +28,8 @@ add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
 
+add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(WIN32)
     add_custom_target(COPY_BUILTIN_FILES 
         COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\\" /Y /S /I /D)
@@ -37,6 +39,10 @@ if(WIN32)
         COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\woolang\\include\\wo.h\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\include\" /Y /I /D)
     add_custom_target(COPY_CMAKE_FILES 
         COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\cmake\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\cmake\" /Y /S /I /D)
+    add_custom_target(COPY_RCEDIT64_FILES 
+        COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\rcedit-x64.exe\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\" /Y /I /D)
+    add_custom_target(COPY_RCEDIT32_FILES 
+        COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\rcedit-x86.exe\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\" /Y /I /D)
 else()
     add_custom_target(COPY_BUILTIN_FILES 
         COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin\" -r)
@@ -46,6 +52,10 @@ else()
         COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include/wo.h\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/include\")
     add_custom_target(COPY_CMAKE_FILES 
         COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/3rd/cmake\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/cmake\" -r)
+    add_custom_target(COPY_RCEDIT64_FILES 
+        COMMAND echo "COPY_RCEDIT64_FILES is only used for win32")
+    add_custom_target(COPY_RCEDIT32_FILES 
+        COMMAND xcopy "COPY_RCEDIT64_FILES is only used for win32")
 endif()
 
 add_subdirectory("src")
@@ -66,9 +76,12 @@ else()
 	message(FATAL_ERROR "Unknown platform")
 endif()
 
-add_dependencies(COPY_CMAKE_FILES COPY_BUILTIN_FILES)
-add_dependencies(COPY_ENGINE_FILES COPY_CMAKE_FILES)
+add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
 add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
-add_dependencies(jedriver COPY_WOOLANG_FILES)
+add_dependencies(COPY_CMAKE_FILES COPY_WOOLANG_FILES)
+add_dependencies(COPY_RCEDIT64_FILES COPY_CMAKE_FILES)
+add_dependencies(COPY_RCEDIT32_FILES COPY_RCEDIT64_FILES)
+add_dependencies(INSTALL_PKG COPY_RCEDIT32_FILES)
+add_dependencies(jedriver INSTALL_PKG)
 
 target_link_libraries(jedriver joyecs)
