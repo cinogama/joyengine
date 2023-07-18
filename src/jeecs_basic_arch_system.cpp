@@ -295,7 +295,7 @@ namespace jeecs_impl
             template<typename CT = void>
             inline CT* get_component(jeecs::typing::typeid_t tid) const
             {
-                if (_m_in_chunk && _m_in_chunk->is_entity_valid(_m_id, _m_version))
+                if (_m_in_chunk != nullptr && _m_in_chunk->is_entity_valid(_m_id, _m_version))
                     return (CT*)_m_in_chunk->get_component_addr_with_typeid(_m_id, tid);
                 return nullptr;
             }
@@ -981,7 +981,7 @@ namespace jeecs_impl
         static bool is_valid(ecs_world* world) noexcept
         {
             std::shared_lock sg1(_m_alive_worlds_mx);
-            return _m_alive_worlds.find(world) != _m_alive_worlds.end();
+            return _m_alive_worlds.find(world) != _m_alive_worlds.end() && !world->is_destroying();
         }
 
         system_container_t& get_system_instances() noexcept
@@ -1152,7 +1152,10 @@ namespace jeecs_impl
         inline arch_type::entity create_entity_with_component(const types_set& types)
         {
             if (is_destroying())
+            {
+                jeecs::debug::logwarn("It's not allowed to create entity while world is closing.");
                 return {};
+            }
 
             auto&& entity = _m_arch_manager.create_an_entity_with_component(types);
             _m_command_buffer.init_new_entity(entity);
@@ -1162,7 +1165,10 @@ namespace jeecs_impl
         inline jeecs::game_system* request_to_append_system(const jeecs::typing::type_info* type)
         {
             if (is_destroying())
+            {
+                jeecs::debug::logwarn("It's not allowed to add system while world is closing.");
                 return nullptr;
+            }
 
             jeecs::game_system* sys = (jeecs::game_system*)je_mem_alloc(type->m_size);
             type->construct(sys, this);

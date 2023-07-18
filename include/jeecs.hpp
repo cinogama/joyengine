@@ -947,15 +947,47 @@ je_ecs_world_destroy [基本接口]
         2. 销毁所有实体
         3. 执行最后命令缓冲区更新
         4. 被宇宙从世界列表中移除
+    * 向一个正在销毁中的实体中创建实体或添加世界是无效的
+请参见：
+    je_ecs_world_add_system_instance
+    je_ecs_world_create_entity_with_components
 */
 JE_API void je_ecs_world_destroy(void* world);
 
+/*
+je_ecs_world_is_valid [基本接口]
+检验指定的世界是否是一个有效的世界——即是否仍然存活且未开始销毁
+*/
 JE_API bool je_ecs_world_is_valid(void* world);
 
+/*
+je_ecs_world_archmgr_updated_version [基本接口]
+获取当前世界的 ArchManager 的版本号
+此函数可获取世界的 ArchType 是否有增加，一般用于selector检测是否需要更新 ArchType 缓存
+*/
 JE_API size_t je_ecs_world_archmgr_updated_version(void* world);
+
+/*
+je_ecs_world_update_dependences_archinfo [基本接口]
+从当前世界更新类型依赖信息（即 ArchType 缓存）
+此函数一般用于selector更新 ArchType 缓存
+*/
 JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
+
+/*
+je_ecs_clear_dependence_archinfos [基本接口]
+释放依赖中的 ArchType 缓存信息
+此函数一般用于selector销毁时，释放持有的 ArchType 缓存
+*/
 JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
 
+/*
+je_ecs_world_add_system_instance [基本接口]
+向指定世界中添加一个指定类型的系统实例，返回此实例的指针
+TODO: 重做增/删系统逻辑，包括组件更新逻辑一起采用最后生效原则。
+    * 若向一个正在销毁中的世界添加系统实例，返回 nullptr
+    
+*/
 JE_API jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::typing::type_info* type);
 JE_API jeecs::game_system* je_ecs_world_get_system_instance(void* world, const jeecs::typing::type_info* type);
 JE_API void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type);
@@ -3614,6 +3646,9 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
+        if (_m_in_chunk == nullptr)
+            return nullptr;
+
         static auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return (T*)je_ecs_world_entity_add_component(je_ecs_world_of_entity(this), this, type);
@@ -3622,6 +3657,9 @@ namespace jeecs
     template<typename T>
     inline void game_entity::remove_component() const noexcept
     {
+        if (_m_in_chunk == nullptr)
+            return nullptr;
+
         static auto* type = typing::type_info::of<T>(typeid(T).name());
         assert(type->is_component());
         return je_ecs_world_entity_remove_component(je_ecs_world_of_entity(this), this, type);
@@ -3629,11 +3667,17 @@ namespace jeecs
 
     inline jeecs::game_world game_entity::game_world() const noexcept
     {
+        if (_m_in_chunk == nullptr)
+            return nullptr;
+
         return jeecs::game_world(je_ecs_world_of_entity(this));
     }
 
     inline void game_entity::close() const noexcept
     {
+        if (_m_in_chunk == nullptr)
+            return;
+
         game_world().remove_entity(*this);
     }
 
