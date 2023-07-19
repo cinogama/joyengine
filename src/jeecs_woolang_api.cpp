@@ -56,8 +56,7 @@ WO_API wo_api wojeapi_create_fimg_packer(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_pointer(vm, jeecs_file_image_begin(
         wo_string(args + 0),
-        wo_string(args + 1),
-        (size_t)wo_int(args + 2)
+        (size_t)wo_int(args + 1)
     ));
 }
 
@@ -1517,7 +1516,7 @@ namespace je::editor
     public using fimage_packer = handle
     {
         extern("libjoyecs", "wojeapi_create_fimg_packer")
-        public func create(path: string, saving_path: string, max_img_size: int)=> fimage_packer;
+        public func create(saving_path: string, max_img_size: int)=> fimage_packer;
 
         extern("libjoyecs", "wojeapi_pack_file_to_fimg_packer")
         public func pack(self: fimage_packer, file_path: string, pack_path: string)=> bool;

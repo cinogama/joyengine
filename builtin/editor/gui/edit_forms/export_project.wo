@@ -19,6 +19,7 @@ namespace editor::gui::edit_forms
         m_pack_output_log: vec<string>,
         m_finished: mut bool,
     };
+
     func _default_rule(originpath: filesys::path_t, packpath: string)=> Action
     {
         // 如果是文件，才考虑打包
@@ -71,10 +72,13 @@ namespace editor::gui::edit_forms
                     
                 });
 
-            if (packpath->lower->find(".jemodule4") != -1)
+            if (packpath->lower->find("/.jemodule4/") != -1)
                 return Action::SKIP;  // 跳过C++工程文件
+
+            if (packpath->lower->find("/.runtime/") != -1)
+                return Action::SKIP;  // 跳过缓存文件
             
-            if (packpath->lower->find(".git") != -1)
+            if (packpath->lower->find("/.git/") != -1)
                 return Action::SKIP;  // 跳过git文件
 
             return Action::PACK;
@@ -143,7 +147,7 @@ namespace editor::gui::edit_forms
                             // 1.2 创建路径，准备打包
                             let export_path = normalized_path/".export";
                             do filesys::mkdir(export_path);
-                            let fimg = je::editor::fimage_packer::create(proj.m_path->tostring, export_path->tostring, config.m_image_size * 1024 * 1024);
+                            let fimg = je::editor::fimage_packer::create(export_path->tostring, config.m_image_size * 1024 * 1024);
      
                             let copy_origin = func(opath: filesys::path_t, ppath: string)
                             {

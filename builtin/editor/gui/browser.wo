@@ -200,7 +200,10 @@ namespace editor::gui
             static let HIDING_FILE_TYPE = [".jecache4"];
             
             if (editor_need_hiding_file)
-                return HIDING_FILE_TYPE->find(self.externname) != -1;
+            {
+                return HIDING_FILE_TYPE->find(self.externname) != -1
+                    || self.name->beginwith(".");
+            }
             return false;
         }
         func isdir(self : PathInfo)

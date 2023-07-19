@@ -1226,7 +1226,7 @@ struct jeecs_file
 };
 
 /*
-jeecs_file_set_runtime_path [类型]
+jeecs_file_set_runtime_path [基本接口]
 设置当前引擎的运行时路径，不影响“工作路径”
     * 设置此路径将影响以 @ 开头的路径的实际位置
 设置路径时，引擎会尝试在目标运行路径中打开 fimg_table.jeimgidx4 作为默认
@@ -1235,7 +1235,7 @@ jeecs_file_set_runtime_path [类型]
 JE_API void        jeecs_file_set_runtime_path(const char* path);
 
 /*
-jeecs_file_get_runtime_path [类型]
+jeecs_file_get_runtime_path [基本接口]
 获取当前引擎的运行时路径，与“工作路径”无关
     * 运行时路径影响以 @ 开头的路径的实际位置
 若没有使用 jeecs_file_set_runtime_path 设置此路径，则此路径默认为引擎的可
@@ -1244,29 +1244,114 @@ jeecs_file_get_runtime_path [类型]
     jeecs_file_set_runtime_path
 */
 JE_API const char* jeecs_file_get_runtime_path();
+
+/*
+jeecs_file_open [基本接口]
+从指定路径打开一个文件，若打开失败返回nullptr
+若文件成功打开，使用完毕后需要使用 jeecs_file_close 关闭
+    * 若路径由 '@' 开头，则如同加载指定运行目录下的文件（优先加
+    载镜像中的文件）
+    * 若路径由 '!' 开头，则如同加载可执行文件所在目录下的文件
+请参见：
+    jeecs_file_close
+*/
 JE_API jeecs_file* jeecs_file_open(const char* path);
+
+/*
+jeecs_file_close [基本接口]
+关闭一个文件
+*/
 JE_API void        jeecs_file_close(jeecs_file* file);
+
+/*
+jeecs_file_read [基本接口]
+从文件中读取若干个指定大小的元素，返回成功读取的元素数量
+*/
 JE_API size_t      jeecs_file_read(
     void* out_buffer,
     size_t elem_size,
     size_t count,
     jeecs_file* file);
 
-JE_API fimg_creating_context* jeecs_file_image_begin(const char* path, const char* storing_path, size_t max_image_size);
+/*
+jeecs_file_image_begin [基本接口]
+准备开始创建文件镜像，镜像文件将被保存到 storing_path 指定的目录下
+镜像会进行分卷操作，max_image_size是单个镜像文件的大小
+*/
+JE_API fimg_creating_context* jeecs_file_image_begin(const char* storing_path, size_t max_image_size);
+
+/*
+jeecs_file_image_pack_file [基本接口]
+向指定镜像中写入由 filepath 指定的一个文件，此文件在镜像中的路径被
+指定为packingpath
+*/
 JE_API bool jeecs_file_image_pack_file(fimg_creating_context* context, const char* filepath, const char* packingpath);
+
+/*
+jeecs_file_image_pack_file [基本接口]
+向指定镜像中写入一个缓冲区指定的内容作为文件，此文件在镜像中的路径被
+指定为packingpath
+*/
 JE_API bool jeecs_file_image_pack_buffer(fimg_creating_context* context, const void* buffer, size_t len, const char* packingpath);
+
+/*
+jeecs_file_image_finish [基本接口]
+结束镜像创建，将最后剩余数据写入镜像并创建镜像索引文件
+*/
 JE_API void jeecs_file_image_finish(fimg_creating_context* context);
 
 // If ignore_crc64 == true, cache will always work even if origin file changed.
+
+/*
+jeecs_load_cache_file [基本接口]
+尝试读取 filepath 对应的缓存文件，将校验缓存文件的格式版本和校验码
+缓存文件存在且校验通过则成功读取，否则返回nullptr
+    * 若 virtual_crc64 被指定为 -1，则忽略检验原始文件一致性
+    * 若 virtual_crc64 被指定为 0，则使用 filepath 指定文件的内容计算校验值
+    * 其他情况，使用 virtual_crc64 直接指定校验值
+    * 打开后的缓存文件需要使用 jeecs_file_close 关闭
+    * 使用 jeecs_file_read 读取数据
+请参见：
+    jeecs_file_read
+    jeecs_file_close
+*/
 JE_API jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, wo_integer_t virtual_crc64);
+
 // If usecrc64 != 0, cache file will use it instead of reading from origin file.
+
+/*
+jeecs_create_cache_file [基本接口]
+为 filepath 指定的文件创建缓存文件，将覆盖已有的缓存文件（如果已有的话）
+若创建文件失败，则返回nullptr
+    * 若 usecrc64 被指定为 0，则自动计算 filepath 指定文件的校验值
+    * 否则直接使用 usecrc64 作为校验值
+    * 打开后的缓存文件需要使用 jeecs_close_cache_file 关闭
+    * 使用 jeecs_write_cache_file 写入数据 
+请参见：
+    jeecs_close_cache_file
+    jeecs_write_cache_file
+*/
 JE_API void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_integer_t usecrc64);
+
+/*
+jeecs_write_cache_file [基本接口]
+向已创建的缓存文件中写入若干个指定大小的元素，返回成功写入的元素数量
+*/
 JE_API size_t jeecs_write_cache_file(const void* write_buffer, size_t elem_size, size_t count, void* file);
+
+/*
+jeecs_close_cache_file [基本接口]
+关闭创建出的缓存文件
+*/
 JE_API void jeecs_close_cache_file(void* file);
 
 /////////////////////////// GRAPHIC //////////////////////////////
 // Here to store low-level-graphic-api.
 
+/*
+jegl_interface_config [类型]
+图形接口的配置类型，创建图形线程时传入并生效
+*/
 struct jegl_interface_config
 {
     size_t m_windows_width, m_windows_height;
@@ -1281,6 +1366,10 @@ struct jegl_thread_notifier;
 struct jegl_graphic_api;
 struct jegl_resource;
 
+/*
+jegl_thread [类型]
+图形上下文，储存有当前图形线程的各项信息
+*/
 struct jegl_thread
 {
     std::thread* _m_thread;
@@ -1294,6 +1383,10 @@ struct jegl_thread
     std::atomic_bool  m_stop_update;
 };
 
+/*
+jegl_texture [类型]
+纹理原始数据，储存有纹理的采样方式和像素数据等信息
+*/
 struct jegl_texture
 {
     using pixel_data_t = uint8_t;
@@ -1364,6 +1457,10 @@ struct jegl_texture
     bool            m_modified;
 };
 
+/*
+jegl_vertex [类型]
+顶点原始数据，储存有顶点的绘制方式、格式、大小和顶点数据等信息
+*/
 struct jegl_vertex
 {
     enum type
@@ -1384,6 +1481,10 @@ struct jegl_vertex
     type m_type;
 };
 
+/*
+jegl_shader [类型]
+着色器原始数据，储存有着色器源码、绘制参数和一致变量等信息
+*/
 struct jegl_shader
 {
     enum uniform_type
@@ -1516,27 +1617,39 @@ struct jegl_shader
     cull_mode           m_cull_mode;
 };
 
+/*
+jegl_frame_buffer [类型]
+帧缓冲区原始数据，储存有帧大小、附件等信息
+*/
 struct jegl_frame_buffer
 {
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
-    attachment_t* m_output_attachments;
+    attachment_t*   m_output_attachments;
     size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
 };
 
+/*
+jegl_uniform_buffer [类型]
+一致变量缓冲区原始数据，储存有一致变量的数据和容量等信息
+*/
 struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t* m_buffer;
+    uint8_t*    m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
     size_t      m_update_length;
 };
 
+/*
+jegl_resource [类型]
+图形资源初级封装，纹理、着色器、帧缓冲区等均为图形资源
+*/
 struct jegl_resource
 {
     struct jegl_destroy_resouce
@@ -1584,6 +1697,10 @@ struct jegl_resource
     };
 };
 
+/*
+jegl_graphic_api [类型]
+图形接口，包含底层使用的各项基本函数
+*/
 struct jegl_graphic_api
 {
     using custom_interface_info_t = void*;
@@ -1641,26 +1758,88 @@ static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
 using jeecs_api_register_func_t = void(*)(jegl_graphic_api*);
 
+/*
+jegl_start_graphic_thread [基本接口]
+创建图形线程
+指定配置、图形库接口和帧更新函数创建一个图形绘制线程。
+图形线程的帧更新操作 jegl_update 将调用指定的帧更新函数，
+实际的绘制任务应该放在帧更新函数中
+请参见：
+    jegl_update
+*/
 JE_API jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
     jeecs_api_register_func_t register_func,
     void(*frame_rend_work)(void*, jegl_thread*),
     void* arg);
 
+/*
+jegl_terminate_graphic_thread [基本接口]
+终止图形线程，将会阻塞直到图形线程完全退出
+*/
 JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);
 
+/*
+jegl_update [基本接口]
+调度图形线程更新一帧，此函数将阻塞直到一帧的绘制操作完成
+*/
 JE_API bool jegl_update(jegl_thread* thread_handle);
 
+/*
+jegl_reboot_graphic_thread [基本接口]
+以指定的配置重启一个图形线程
+*/
 JE_API void jegl_reboot_graphic_thread(
     jegl_thread* thread_handle,
     jegl_interface_config config);
 
+/*
+jegl_get_windows_size [基本接口]
+获取当前绘制窗口的大小
+    * 注意，若创建多个图形线程，则不保证此函数的可用性
+*/
 JE_API void jegl_get_windows_size(size_t* x, size_t* y);
 
+/*
+jegl_load_texture [基本接口]
+从指定路径加载一个纹理资源，加载的路径规则与 jeecs_file_open 相同
+    * 若指定的文件不存在或不是一个合法的纹理，则返回nullptr
+    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+请参见：
+    jeecs_file_open
+    jegl_close_resource
+*/
 JE_API jegl_resource* jegl_load_texture(const char* path);
+
+/*
+jegl_create_texture [基本接口]
+创建一个指定大小和格式的纹理资源
+    * 若指定的格式包含 COLOR16、DEPTH、FRAMEBUF、CUBE 或有 MSAA 支持，则不创建像素缓冲，
+        对应纹理原始数据的像素将被设置为 nullptr
+    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+请参见：
+    jegl_close_resource
+*/
 JE_API jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling);
 
+/*
+jegl_load_vertex [基本接口] (暂未实现)
+从指定路径加载一个顶点（模型）资源，加载的路径规则与 jeecs_file_open 相同
+    * 若指定的文件不存在或不是一个合法的模型，则返回nullptr
+    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+请参见：
+    jeecs_file_open
+    jegl_close_resource
+*/
 JE_API jegl_resource* jegl_load_vertex(const char* path);
+
+/*
+jegl_create_vertex [基本接口]
+用指定的顶点数据创建一个顶点（模型）资源
+    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+请参见：
+    jegl_close_resource
+*/
 JE_API jegl_resource* jegl_create_vertex(
     jegl_vertex::type    type,
     const float* datas,
@@ -1668,7 +1847,13 @@ JE_API jegl_resource* jegl_create_vertex(
     size_t                      data_length,
     size_t                      format_length);
 
-// TODO: Support create frame buffer with different output attachment resolutions.
+/*
+jegl_create_framebuf [基本接口]
+使用指定的附件配置创建一个纹理缓冲区资源
+    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+请参见：
+    jegl_close_resource
+*/
 JE_API jegl_resource* jegl_create_framebuf(
     size_t                          width,
     size_t                          height,
@@ -1676,6 +1861,13 @@ JE_API jegl_resource* jegl_create_framebuf(
     const jegl_texture::sampling*   attachment_samlings,
     size_t                          attachment_count);
 
+/*
+jegl_copy_resource [基本接口]
+复制一个图形资源实例
+    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+请参见：
+    jegl_close_resource
+*/
 JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
 
 typedef struct je_stb_font_data je_font;

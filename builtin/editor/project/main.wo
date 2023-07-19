@@ -78,6 +78,8 @@ namespace editor
             
             // 恢复所有世界！
             self->restore_all_world(dumped_worlds);
+
+            do filesys::remove(self.m_path / ".runtime" / "debugcontext.dump");
             return result::ok(do nil);
         }
 
@@ -92,6 +94,15 @@ namespace editor
                     m_project = self,
                     m_dumped_editing_worlds = dumpped,
                 };
+
+            do filesys::mkdir(self.m_path / ".runtime");
+            if (! dumpped->serialize
+                ->> \dat = filesys::writeall(self.m_path / ".runtime" / "debugcontext.dump", dat);
+                ->  valor(false))
+            {
+                jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
+                je::logwarn("调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
+            }
 
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
             for (let _, wdat : context.m_dumped_editing_worlds)
@@ -133,12 +144,15 @@ namespace editor
 
             return result::ok(dump_dats);
         }
+        public func close_all_world(self: Project)
+        {
+            // OK 关闭全部现存世界
+            do self.m_worlds->toarray->> \pw = self->destroy_world(pw.m_world_instance)->unwarp();;
+        }
         public func dump_and_close_all_world(self: Project)
         {
             try! dats = self->dump_all_world();
-
-            // OK 关闭全部现存世界
-            do self.m_worlds->toarray->> \pw = self->destroy_world(pw.m_world_instance)->unwarp();;
+            do self->close_all_world();
             return result::ok(dats);
         }
         public func restore_all_world(self: Project, dats: array<dict<string, dynamic>>)
@@ -294,9 +308,36 @@ namespace editor
                 ->> \mr = jeapi::gui::form::errmsg("加载失败", F"无法加载 '{mr[0]}'：{mr[1]}"); 
                 ;
 
-            do dat["worlds"] as array
-                ->> \wpath = self->load_world(path / wpath as string);
-                ;
+            match (filesys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
+            {
+            value(dat)?
+                    for (let wpath, isediting : dat)
+                    {
+                        match (self->load_world(self.m_path / wpath as string))
+                        {
+                        ok(w)?
+                            if (isediting as bool) do self->reset_editing_world(w);
+                        err(info)?
+                            jeapi::gui::form::errmsg("失败", F"无法加载世界 '{wpath as string}': {info}");
+                        }
+                    }
+            none?;
+            }
+
+            match (filesys::readall(self.m_path / ".runtime" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
+            {
+            value(dat)?
+                jeapi::gui::form::ask("是否恢复", "检查到上次引擎在调试过程中意外退出，是否恢复之前的编辑器状态？",
+                    func(opt)
+                    {
+                        if (opt)
+                        {
+                            self->close_all_world();
+                            self->restore_all_world(dat->>\wdat = wdat as dict->>\k, v = (k as string, v);;);
+                        }
+                    });
+            none?;
+            }
 
             return self;
         }
@@ -305,9 +346,25 @@ namespace editor
             let dat = {
                 ["name"] = self.m_name: dynamic,
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
-                ["worlds"] = self.m_worlds->> \pw = pw.m_world_path->tostring->sub(self.m_path->tostring->len);: dynamic,
                 ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->tostring->sub(self.m_path->tostring->len);: dynamic,
             };
+
+            // 编辑中的世界保存到 .runtime 目录内
+            do filesys::mkdir(self.m_path / ".runtime");
+
+            if (! self.m_worlds
+                ->> \pw = (
+                        pw.m_world_path->tostring->sub(self.m_path->tostring->len), 
+                        self->get_editing_world->>\w = w == pw.m_world_instance;->valor(false))
+                    ;
+                ->  mapping
+                ->  serialize
+                ->> \dat = filesys::writeall(self.m_path / ".runtime" / "world.list", dat);
+                ->  valor(false))
+            {
+                jeapi::gui::form::errmsg("失败", "保存编辑中的世界列表失败");
+                je::logwarn("保存编辑中的世界列表失败");
+            }
 
             // 顺手保存所有世界
             let failed_saving_worlds = self.m_worlds

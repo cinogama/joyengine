@@ -970,7 +970,8 @@ namespace jeecs_impl
         }
         ~ecs_world()
         {
-            assert(is_valid(this));
+            // Must be destroyed before destruct.
+            assert(is_destroying());
 
             std::lock_guard g1(_m_alive_worlds_mx);
             _m_alive_worlds.erase(this);

@@ -193,7 +193,7 @@ size_t fimg_save_file_to_img_impl(fimg_creating_context* ctx, const char* file_p
     return (size_t)-1;
 }
 
-fimg_creating_context* fimg_create_new_img_for_storing(const char* path, const char* storing_path, size_t packsize)
+fimg_creating_context* fimg_create_new_img_for_storing(const char* storing_path, size_t packsize)
 {
     using namespace std;
 
@@ -201,7 +201,7 @@ fimg_creating_context* fimg_create_new_img_for_storing(const char* path, const c
     ctx->image = new fimg_img;
     ctx->writing_path = storing_path;
     ctx->writing_offset = 0;
-    ctx->image->path = path;
+    ctx->image->path = storing_path;
     ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE =
         packsize == 0 ? DEFAULT_IMAGE_SIZE : packsize;
     ctx->writing_buffer = new unsigned char[(size_t)ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE];
@@ -477,9 +477,9 @@ size_t jeecs_file_read(
     }
 }
 
-fimg_creating_context* jeecs_file_image_begin(const char* path, const char* storing_path, size_t max_image_size)
+fimg_creating_context* jeecs_file_image_begin(const char* storing_path, size_t max_image_size)
 {
-    return fimg_create_new_img_for_storing(path, storing_path, max_image_size);
+    return fimg_create_new_img_for_storing(storing_path, max_image_size);
 }
 bool jeecs_file_image_pack_file(fimg_creating_context* context, const char* filepath, const char* packingpath)
 {

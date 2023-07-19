@@ -296,6 +296,7 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
 @"# JoyEngine ECS
 
 /.export/*
+/.runtime/*
 imgui.ini
 *.dmp
 "@);
