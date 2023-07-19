@@ -1872,6 +1872,18 @@ JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
 
 typedef struct je_stb_font_data je_font;
 typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
+
+/*
+je_font_load [基本接口]
+加载一个字体
+scalex和scaley 分别是此字体的横线和纵向字号（单位像素）
+samp用于指示此字体创建的文字纹理的采样方式
+board_blank_size_x、board_blank_size_y用于指示文字纹理的横线和纵向预留空间
+char_texture_updater 用于指示文字纹理创建后所需的预处理方法，不需要可以指定为nullptr
+使用完毕之后的字体需要使用je_font_free关闭
+请参见：
+    je_font_free
+*/
 JE_API je_font* je_font_load(
     const char*             font_path,
     float                   scalex, 
@@ -1880,49 +1892,272 @@ JE_API je_font* je_font_load(
     size_t                  board_blank_size_x,
     size_t                  board_blank_size_y,
     je_font_char_updater_t  char_texture_updater);
+
+/*
+je_font_free [基本接口]
+关闭一个字体
+*/
 JE_API void         je_font_free(je_font* font);
+
+/*
+je_font_get_char [基本接口]
+从字体中加载指定的一个字符的纹理及其他信息
+请参见：
+    jeecs::graphic::character
+*/
 JE_API jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode);
 
-JE_API void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
-JE_API void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
+/*
+jegl_load_shader_source [基本接口]
+从源码加载一个着色器实例，可创建或使用缓存文件以加速着色器的加载
+    * 实际上jegl_load_shader会读取文件内容之后，调用此函数进行实际上的着色器加载
+若不需要创建缓存文件，请将 is_virtual_file 指定为 false
+请参见：
+    jegl_load_shader
+*/
 JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool is_virtual_file);
+
+/*
+jegl_load_shader [基本接口]
+从源码文件加载一个着色器实例，会创建或使用缓存文件以加速着色器的加载
+*/
 JE_API jegl_resource* jegl_load_shader(const char* path);
 
+/*
+jegl_create_uniformbuf [基本接口]
+创建一个指定大小和绑定位置的一致变量缓冲区资源
+    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+请参见：
+    jegl_close_resource
+*/
 JE_API jegl_resource* jegl_create_uniformbuf(
     size_t binding_place,
     size_t length);
+
+/*
+jegl_update_uniformbuf [基本接口]
+更新一个一致变量缓冲区中，指定位置起，若干长度的数据
+*/
 JE_API void jegl_update_uniformbuf(
     jegl_resource* uniformbuf,
     const void* buf,
     size_t update_offset,
     size_t update_length);
 
+/*
+jegl_using_opengl3_apis [基本接口]
+加载opengl 3.0 core API集合，通常与jegl_start_graphic_thread一起使用
+用于指定图形线程使用的基本图形库
+请参见：
+    jegl_start_graphic_thread
+*/
 JE_API void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis);
+
+/*
+jegl_using_vulkan_apis [基本接口] (暂未实现)
+加载vulkan API集合，通常与jegl_start_graphic_thread一起使用
+用于指定图形线程使用的基本图形库
+请参见：
+    jegl_start_graphic_thread
+*/
 JE_API void jegl_using_vulkan_apis(jegl_graphic_api* write_to_apis);
+
+/*
+jegl_using_dx11_apis [基本接口] (暂未实现)
+加载dx11 API集合，通常与jegl_start_graphic_thread一起使用
+用于指定图形线程使用的基本图形库
+请参见：
+    jegl_start_graphic_thread
+*/
 JE_API void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis);
 
+/*
+jegl_using_resource [基本接口]
+使用指定的资源，一般用于指定使用着色器或一致变量缓冲区，同时根据情况决定是否执行
+资源的初始化操作
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+*/
 JE_API void jegl_using_resource(jegl_resource* resource);
+
+/*
+jegl_close_resource [基本接口]
+关闭指定的图形资源，图形资源的原始数据信息会被立即回收，对应图形库的实际资源会在
+图形线程中延迟销毁
+    * 若存在多个图形线程，因为相关实现的原因，可能出现部分图形资源无法正确释放而泄漏
+*/
 JE_API void jegl_close_resource(jegl_resource* resource);
 
+/*
+jegl_using_texture [基本接口]
+将指定的纹理绑定到指定的纹理通道，与jegl_using_resource类似，会根据情况是否执行资源
+的初始化操作
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
+
+/*
+jegl_draw_vertex [基本接口]
+使用当前着色器（通过jegl_using_resource指定）和纹理（通过jegl_using_texture绑定）绘制
+一个模型，与jegl_using_resource类似，会根据情况是否执行资源的初始化操作
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+请参见：
+    jegl_using_resource
+    jegl_using_texture
+*/
 JE_API void jegl_draw_vertex(jegl_resource* vert);
 
+/*
+jegl_clear_framebuffer [基本接口]
+清除指定帧缓冲的颜色和深度信息，若framebuffer == nullptr，则清除屏幕缓冲区，与
+jegl_using_resource类似，会根据情况是否执行资源的初始化操作
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_clear_framebuffer(jegl_resource* framebuffer);
+
+/*
+jegl_clear_framebuffer_color [基本接口]
+清除指定帧缓冲的颜色信息，若framebuffer == nullptr，则清除屏幕缓冲区，与
+jegl_using_resource类似，会根据情况是否执行资源的初始化操作
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_clear_framebuffer_color(jegl_resource* framebuffer);
+
+/*
+jegl_clear_framebuffer [基本接口]
+清除指定帧缓冲的深度信息，若framebuffer == nullptr，则清除屏幕缓冲区，与
+jegl_using_resource类似，会根据情况是否执行资源的初始化操作
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_clear_framebuffer_depth(jegl_resource* framebuffer);
+
+/*
+jegl_rend_to_framebuffer [基本接口]
+指定接下来的绘制操作作用于指定缓冲区，xywh用于指定绘制剪裁区域的左下角位置和区域大小
+若 framebuffer == nullptr 则绘制目标缓冲区设置为屏幕缓冲区，与jegl_using_resource类
+似，会根据情况是否执行资源的初始化操作
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 
+/*
+jegl_uniform_location [基本接口]
+获取指定着色器的一致变量在实例中的实际位置，以便后续操作
+jegl_uniform_location 不会初始化着色器，请在操作之前调用 jegl_using_resource
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_using_resource
+*/
 JE_API uint32_t jegl_uniform_location(jegl_resource* shader, const char* name);
+
+/*
+jegl_uniform_int [基本接口]
+向着色器指定位置的一致变量设置一个整型数值
+jegl_uniform_int 不会初始化着色器，请在操作之前调用 jegl_using_resource
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_uniform_int(jegl_resource* shader, uint32_t location, int value);
+
+/*
+jegl_uniform_float [基本接口]
+向着色器指定位置的一致变量设置一个单精度浮点数值
+jegl_uniform_float 不会初始化着色器，请在操作之前调用 jegl_using_resource
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_uniform_float(jegl_resource* shader, uint32_t location, float value);
+
+/*
+jegl_uniform_float2 [基本接口]
+向着色器指定位置的一致变量设置一个二维单精度浮点矢量数值
+jegl_uniform_float2 不会初始化着色器，请在操作之前调用 jegl_using_resource
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_uniform_float2(jegl_resource* shader, uint32_t location, float x, float y);
+
+/*
+jegl_uniform_float3 [基本接口]
+向着色器指定位置的一致变量设置一个三维单精度浮点矢量数值
+jegl_uniform_float3 不会初始化着色器，请在操作之前调用 jegl_using_resource
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_uniform_float3(jegl_resource* shader, uint32_t location, float x, float y, float z);
+
+/*
+jegl_uniform_float4 [基本接口]
+向着色器指定位置的一致变量设置一个四维单精度浮点矢量数值
+jegl_uniform_float4 不会初始化着色器，请在操作之前调用 jegl_using_resource
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_uniform_float4(jegl_resource* shader, uint32_t location, float x, float y, float z, float w);
+
+/*
+jegl_uniform_float4x4 [基本接口]
+向着色器指定位置的一致变量设置一个4x4单精度浮点矩阵数值
+jegl_uniform_float4x4 不会初始化着色器，请在操作之前调用 jegl_using_resource
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_using_resource
+*/
 JE_API void jegl_uniform_float4x4(jegl_resource* shader, uint32_t location, const float(*mat)[4]);
 
-JE_API jegl_thread* jegl_current_thread();
-
 // jegl rendchain api
+
+/*
+jegl_rendchain [类型]
+绘制链对象
+RendChain是引擎提供的一致绘制操作接口，支持不同线程提交不同的渲染链，并最终完成渲染
+概念：
+    一个RendChain是对一个缓冲区的渲染操作，包括以下流程：
+    * 第0步：创建
+    * 第1步：调用jegl_rchain_begin绑定缓冲区
+    * 第2步：根据需要，调用jegl_rchain_clear_color_buffer或jegl_rchain_clear_depth_buffer
+            用于清除指定缓冲区的状态
+    * 第3步：根据需要，调用jegl_rchain_bind_uniform_buffer绑定所需的一致变量缓冲区
+    * 第4步：绘制
+    * 第5步：在图形线程中调用jegl_rchain_commit提交绘制链
+    * 第6步：如果需要复用此链，可以保留链实例，从第1步重新开始绘制，否则进行：
+    * 第7步：调用jegl_rchain_close销毁当前链
+请参见：
+    jegl_rchain_begin
+    jegl_rchain_close
+    jegl_rchain_bind_uniform_buffer
+    jegl_rchain_clear_color_buffer
+    jegl_rchain_clear_depth_buffer
+    jegl_rchain_close
+*/
 struct jegl_rendchain;
 struct jegl_rendchain_rend_action;
 struct jegl_uniform_data_node;

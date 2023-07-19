@@ -144,6 +144,9 @@ void _jegl_commit_rendchain(jegl_thread* glthread, jegl_rendchain* chain)
     glthread->_m_thread_notifier->_m_commited_rendchains.push_back(chain);
 }
 
+void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
+void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
+
 //////////////////////////////////// API /////////////////////////////////////////
 
 std::vector<jegl_graphic_api::finish_interface_func_t> _jegl_finish_list;
@@ -1139,11 +1142,6 @@ void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t u
             uniformbuf->m_raw_uniformbuf_data->m_update_length = update_length;
         }
     }
-}
-
-jegl_thread* jegl_current_thread()
-{
-    return _current_graphic_thread;
 }
 
 void jegl_draw_vertex(jegl_resource* vert)
