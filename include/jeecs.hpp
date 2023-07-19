@@ -2139,16 +2139,15 @@ JE_API void jegl_uniform_float4x4(jegl_resource* shader, uint32_t location, cons
 jegl_rendchain [类型]
 绘制链对象
 RendChain是引擎提供的一致绘制操作接口，支持不同线程提交不同的渲染链，并最终完成渲染
-概念：
-    一个RendChain是对一个缓冲区的渲染操作，包括以下流程：
+一个RendChain是对一个缓冲区的渲染操作，包括以下流程：
     * 第0步：创建
     * 第1步：调用jegl_rchain_begin绑定缓冲区
     * 第2步：根据需要，调用jegl_rchain_clear_color_buffer或jegl_rchain_clear_depth_buffer
             用于清除指定缓冲区的状态
     * 第3步：根据需要，调用jegl_rchain_bind_uniform_buffer绑定所需的一致变量缓冲区
-    * 第4步：绘制
+    * 第4步：进行若干次绘制
     * 第5步：在图形线程中调用jegl_rchain_commit提交绘制链
-    * 第6步：如果需要复用此链，可以保留链实例，从第1步重新开始绘制，否则进行：
+    * 第6步：如果需要复用此链，可以保留链实例，从第1步重新开始绘制，否则：
     * 第7步：调用jegl_rchain_close销毁当前链
 请参见：
     jegl_rchain_begin
@@ -2159,58 +2158,314 @@ RendChain是引擎提供的一致绘制操作接口，支持不同线程提交�
     jegl_rchain_close
 */
 struct jegl_rendchain;
-struct jegl_rendchain_rend_action;
-struct jegl_uniform_data_node;
 
+/*
+jegl_rendchain_rend_action [类型]
+绘制操作对象，调用jegl_rchain_draw执行绘制操作时返回此对象地址用于
+后续指定一致变量操作使用
+请参见：
+    jegl_rchain_draw
+*/
+struct jegl_rendchain_rend_action;
+
+/*
+jegl_rchain_create [基本接口]
+创建绘制链实例
+请参见：
+    jegl_rendchain
+*/
 JE_API jegl_rendchain* jegl_rchain_create();
+
+/*
+jegl_rchain_close [基本接口]
+销毁绘制链实例
+请参见：
+    jegl_rendchain
+*/
 JE_API void jegl_rchain_close(jegl_rendchain* chain);
+
+/*
+jegl_rchain_begin [基本接口]
+绑定绘制链的绘制目标，此操作是绘制周期的开始，若指定的framebuffer == nullptr，
+指示绘制目标为屏幕缓冲区，xywh为绘制剪裁空间左下角的位置和宽高，单位是像素
+请参见：
+    jegl_rendchain
+*/
 JE_API void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
+
+/*
+jegl_rchain_bind_uniform_buffer [基本接口]
+绑定绘制链的一致变量缓冲区
+*/
 JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource* uniformbuffer);
+
+/*
+jegl_rchain_clear_color_buffer [基本接口]
+指示此链绘制开始时需要清除目标缓冲区的颜色缓存
+*/
 JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain);
+
+/*
+jegl_rchain_clear_depth_buffer [基本接口]
+指示此链绘制开始时需要清除目标缓冲区的深度缓存
+*/
 JE_API void jegl_rchain_clear_depth_buffer(jegl_rendchain* chain);
+
+/*
+jegl_rchain_allocate_texture_group [基本接口]
+创建纹理组，返回可通过jegl_rchain_draw作用于绘制操作或jegl_rchain_bind_pre_texture_group
+作用于全局的纹理组句柄
+可通过jegl_rchain_bind_texture向纹理组中提交纹理
+请参见：
+    jegl_rchain_draw
+    jegl_rchain_bind_texture
+    jegl_rchain_bind_pre_texture_group
+*/
 JE_API size_t jegl_rchain_allocate_texture_group(jegl_rendchain* chain);
+
+/*
+jegl_rchain_draw [基本接口]
+将指定的顶点，使用指定的着色器和纹理将绘制操作作用到绘制链上
+    * 若绘制的物体不需要使用纹理，可以使用不绑定纹理的纹理组或传入 SIZE_MAX
+*/
 JE_API jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, size_t texture_group);
+
+/*
+jegl_rchain_set_uniform_int [基本接口]
+为 act 指定的绘制操作应用整型一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_uniform_int(jegl_rendchain_rend_action* act, uint32_t binding_place, int val);
+
+/*
+jegl_rchain_set_uniform_float [基本接口]
+为 act 指定的绘制操作应用单精度浮点数一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_uniform_float(jegl_rendchain_rend_action* act, uint32_t binding_place, float val);
+
+/*
+jegl_rchain_set_uniform_float2 [基本接口]
+为 act 指定的绘制操作应用二维单精度浮点数矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_uniform_float2(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y);
+
+/*
+jegl_rchain_set_uniform_float3 [基本接口]
+为 act 指定的绘制操作应用三维单精度浮点数矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_uniform_float3(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y, float z);
+
+/*
+jegl_rchain_set_uniform_float4 [基本接口]
+为 act 指定的绘制操作应用四维单精度浮点数矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_uniform_float4(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y, float z, float w);
+
+/*
+jegl_rchain_set_uniform_float4x4 [基本接口]
+为 act 指定的绘制操作应用4x4单精度浮点数矩阵一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_uniform_float4x4(jegl_rendchain_rend_action* act, uint32_t binding_place, const float(*mat)[4]);
 
+
+/*
+jegl_rchain_set_builtin_uniform_int [基本接口]
+为 act 指定的绘制操作应用整型一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_builtin_uniform_int(jegl_rendchain_rend_action* act, uint32_t* binding_place, int val);
+
+/*
+jegl_rchain_set_builtin_uniform_float [基本接口]
+为 act 指定的绘制操作应用单精度浮点数一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_builtin_uniform_float(jegl_rendchain_rend_action* act, uint32_t* binding_place, float val);
+
+/*
+jegl_rchain_set_builtin_uniform_float2 [基本接口]
+为 act 指定的绘制操作应用二维单精度浮点数矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_builtin_uniform_float2(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y);
+
+/*
+jegl_rchain_set_builtin_uniform_float3 [基本接口]
+为 act 指定的绘制操作应用三维单精度浮点数矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_builtin_uniform_float3(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y, float z);
+
+/*
+jegl_rchain_set_builtin_uniform_float4 [基本接口]
+为 act 指定的绘制操作应用四维单精度浮点数矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_builtin_uniform_float4(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y, float z, float w);
+
+/*
+jegl_rchain_set_builtin_uniform_float4x4 [基本接口]
+为 act 指定的绘制操作应用4x4单精度浮点数矩阵一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
 JE_API void jegl_rchain_set_builtin_uniform_float4x4(jegl_rendchain_rend_action* act, uint32_t* binding_place, const float(*mat)[4]);
 
+/*
+jegl_rchain_bind_texture [基本接口]
+为指定的纹理组，在指定的纹理通道绑定一个纹理
+请参见：
+    jegl_rchain_allocate_texture_group
+*/
 JE_API void jegl_rchain_bind_texture(jegl_rendchain* chain, size_t texture_group, size_t binding_pass, jegl_resource* texture);
+
+/*
+jegl_rchain_bind_pre_texture_group [基本接口]
+将指定的纹理组在全部绘制操作开始前绑定
+    * 预先绑定的纹理可能被覆盖，请保证与其他绘制操作占据的通道做出区分
+请参见：
+    jegl_rchain_allocate_texture_group
+    jegl_rchain_bind_texture
+*/
 JE_API void jegl_rchain_bind_pre_texture_group(jegl_rendchain* chain, size_t texture_group);
+
+/*
+jegl_rchain_commit [基本接口]
+将指定的绘制链在图形线程中进行提交
+    * 此函数只允许在图形线程内调用
+*/
 JE_API void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread);
 
+/*
+je_io_set_keystate [基本接口]
+设置指定键的状态
+*/
 JE_API void je_io_set_keystate(jeecs::input::keycode keycode, bool keydown);
+
+/*
+je_io_set_mousepos [基本接口]
+设置鼠标的坐标
+    * 此操作`不会`影响光标的实际位置
+*/
 JE_API void je_io_set_mousepos(int group, int x, int y);
+
+/*
+je_io_set_windowsize [基本接口]
+设置窗口大小
+    * 此操作`不会`影响窗口的实际大小
+*/
 JE_API void je_io_set_windowsize(int x, int y);
+
+/*
+je_io_set_wheel [基本接口]
+设置鼠标滚轮的计数
+*/
 JE_API void je_io_set_wheel(int group, float count);
 
+/*
+je_io_is_keydown [基本接口]
+获取指定的按键是否被按下
+*/
 JE_API bool je_io_is_keydown(jeecs::input::keycode keycode);
+
+/*
+je_io_mouse_pos [基本接口]
+获取鼠标的坐标
+*/
 JE_API void je_io_mouse_pos(int group, int* x, int* y);
+
+/*
+je_io_windowsize [基本接口]
+获取窗口的大小
+*/
 JE_API void je_io_windowsize(int* x, int* y);
+
+/*
+je_io_wheel [基本接口]
+获取鼠标滚轮的计数
+*/
 JE_API float je_io_wheel(int group);
 
+/*
+je_io_lock_mouse [基本接口]
+设置是否需要将鼠标锁定在指定位置，x,y是窗口坐标
+*/
 JE_API void je_io_lock_mouse(bool lock, int x, int y);
+
+/*
+je_io_should_lock_mouse [基本接口]
+获取当前是否应该锁定鼠标及锁定的位置
+*/
 JE_API bool je_io_should_lock_mouse(int* x, int* y);
 
+/*
+je_io_update_windowsize [基本接口]
+请求对窗口大小进行调整
+    * 此操作将在图形线程生效
+*/
 JE_API void je_io_update_windowsize(int x, int y);
+
+/*
+je_io_should_update_windowsize [基本接口]
+获取当前窗口大小是否应该调整及调整的大小
+    * 此操作会导致请求操作被拦截
+*/
 JE_API bool je_io_should_update_windowsize(int* x, int* y);
 
+/*
+je_io_update_windowtitle [基本接口]
+请求对窗口标题进行调整
+    * 此操作将在图形线程生效
+*/
 JE_API void je_io_update_windowtitle(const char* title);
+
+/*
+je_io_update_windowtitle [基本接口]
+获取当前是否需要对窗口标题进行调整及调整之后的内容
+    * 此操作会导致请求操作被拦截
+*/
 JE_API bool je_io_should_update_windowtitle(const char** title);
 
 // Library / Module loader
+
+/*
+je_module_load [基本接口]
+以name为名字，加载指定路径的动态库（遵循woolang规则）加载失败返回nullptr
+*/
 JE_API void* je_module_load(const char* name, const char* path);
+
+/*
+je_module_func [基本接口]
+从动态库中加载某个函数，返回函数的地址
+*/
 JE_API void* je_module_func(void* lib, const char* funcname);
+
+/*
+je_module_unload [基本接口]
+立即卸载某个动态库
+*/
 JE_API void je_module_unload(void* lib);
+
+/*
+je_module_delay_unload [基本接口]
+延迟卸载某个动态库，会在执行je_finish时正式释放
+*/
 JE_API void je_module_delay_unload(void* lib);
 
 // Audio
@@ -2225,34 +2480,161 @@ enum class jeal_state
     PAUSED,
 };
 
+/*
+jeal_get_all_devices [基本接口]
+获取所有可用设备
+*/
 JE_API jeal_device** jeal_get_all_devices();
+
+/*
+jeal_device_name [基本接口]
+获取某个设备的名称
+*/
 JE_API const char* jeal_device_name(jeal_device* device);
+
+/*
+jeal_using_device [基本接口]
+指定声音库使用某个设备
+*/
 JE_API void             jeal_using_device(jeal_device* device);
 
-JE_API jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop);
+/*
+jeal_load_buffer_from_wav [基本接口]
+加载一个波形，loop指示此波形是否需要循环播放
+*/
+JE_API jeal_buffer*     jeal_load_buffer_from_wav(const char* filename, bool loop);
+
+/*
+jeal_close_buffer [基本接口]
+关闭一个波形
+*/
 JE_API void             jeal_close_buffer(jeal_buffer* buffer);
+
+/*
+jeal_buffer_byte_size [基本接口]
+获取一个波形的长度，单位是字节
+*/
 JE_API size_t           jeal_buffer_byte_size(jeal_buffer* buffer);
+
+/*
+jeal_buffer_byte_size [基本接口]
+获取一个波形的速率，单位是比特率
+    * 波形长度除以比特率即可得到波形的持续时间
+*/
 JE_API size_t           jeal_buffer_byte_rate(jeal_buffer* buffer);
 
-JE_API jeal_source* jeal_open_source();
+/*
+jeal_open_source [基本接口]
+创建一个声源
+*/
+JE_API jeal_source*     jeal_open_source();
+
+/*
+jeal_close_source [基本接口]
+关闭一个声源
+*/
 JE_API void             jeal_close_source(jeal_source* source);
+
+/*
+jeal_source_set_buffer [基本接口]
+向声源指定一个波形，注意：
+    * 更换波形之前，需要调用jeal_source_stop终止当前声源的播放操作
+请参见：
+    jeal_source_stop
+*/
 JE_API void             jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer);
+
+/*
+jeal_source_play [基本接口]
+让声源开始或继续播放
+*/
 JE_API void             jeal_source_play(jeal_source* source);
+
+/*
+jeal_source_pause [基本接口]
+暂停当前声源的播放
+*/
 JE_API void             jeal_source_pause(jeal_source* source);
+
+/*
+jeal_source_stop [基本接口]
+停止当前声源的播放
+*/
 JE_API void             jeal_source_stop(jeal_source* source);
+
+/*
+jeal_source_position [基本接口]
+设置当前声源的位置
+*/
 JE_API void             jeal_source_position(jeal_source* source, float x, float y, float z);
+
+/*
+jeal_source_position [基本接口]
+设置当前声源的速度
+    * 此处的速度用于处理多普勒效应，并非是播放速率
+*/
 JE_API void             jeal_source_velocity(jeal_source* source, float x, float y, float z);
+
+/*
+jeal_source_get_byte_offset [基本接口]
+获取当前声源播放到波形的偏移量
+*/
 JE_API size_t           jeal_source_get_byte_offset(jeal_source* source);
+
+/*
+jeal_source_get_byte_offset [基本接口]
+设置当前声源播放到波形的偏移量
+*/
 JE_API void             jeal_source_set_byte_offset(jeal_source* source, size_t byteoffset);
+
+/*
+jeal_source_pitch [基本接口]
+调整声源的播放速度，默认值是 1.0
+*/
 JE_API void             jeal_source_pitch(jeal_source* source, float playspeed);
+
+/*
+jeal_source_volume [基本接口]
+调整声源的播放音量，默认值是 1.0
+*/
 JE_API void             jeal_source_volume(jeal_source* source, float volume);
+
+/*
+jeal_source_get_state [基本接口]
+获取当前的声源处于的状态（已停止，播放中或暂停中？）
+*/
 JE_API jeal_state       jeal_source_get_state(jeal_source* source);
 
+/*
+jeal_listener_position [基本接口]
+设置当前监听者的位置
+*/
 JE_API void             jeal_listener_position(float x, float y, float z);
+
+/*
+jeal_listener_position [基本接口]
+设置当前监听者的速度
+*/
 JE_API void             jeal_listener_velocity(float x, float y, float z);
+
+/*
+jeal_listener_direction [基本接口]
+设置当前监听者的面朝方向
+*/
 JE_API void             jeal_listener_direction(float forwardx, float forwardy, float forwardz, float upx, float upy, float upz);
+
+/*
+jeal_listener_pitch [基本接口]
+设置当前全局声音的播放速度，默认是 1.0
+*/
 JE_API void             jeal_listener_pitch(float playspeed);
+
+/*
+jeal_listener_volume [基本接口]
+设置当前全局声音的播放音量，默认是 1.0
+*/
 JE_API void             jeal_listener_volume(float volume);
+
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
 
@@ -2328,28 +2710,56 @@ namespace jeecs
     TYPE& operator = (const TYPE &) = delete;\
     TYPE& operator = (TYPE &&) = delete;
 
+    /*
+    jeecs::debug [命名空间]
+    此处包含用于调试的工具类或工具函数
+    */
     namespace debug
     {
+        /*
+        jeecs::debug::log [函数]
+        用于产生一般日志
+        */
         template<typename ... ArgTs>
         inline void log(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_NORMAL, format, args...);
         }
+
+        /*
+        jeecs::debug::loginfo [函数]
+        用于产生信息日志
+        */
         template<typename ... ArgTs>
         inline void loginfo(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_INFO, format, args...);
         }
+
+        /*
+        jeecs::debug::logwarn [函数]
+        用于产生警告日志
+        */
         template<typename ... ArgTs>
         inline void logwarn(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_WARNING, format, args...);
         }
+
+        /*
+        jeecs::debug::logerr [函数]
+        用于产生错误日志
+        */
         template<typename ... ArgTs>
         inline void logerr(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_ERROR, format, args...);
         }
+
+        /*
+        jeecs::debug::logfatal [函数]
+        用于产生严重错误日志
+        */
         template<typename ... ArgTs>
         inline void logfatal(const char* format, ArgTs&& ... args)
         {
@@ -3035,7 +3445,6 @@ namespace jeecs
             }
         };
 
-        // NOTE: 智能指针现在无线程安全保证，按照设计思路应当保证之
         template<typename T>
         class shared_pointer
         {
