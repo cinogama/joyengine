@@ -227,8 +227,6 @@ WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args, size_t argc)
     {
         if (!rbf->framebuffer)
         {
-            jeecs::debug::logerr("RendToFramebuffer(%p).framebuffer not specify in entity when 'wojeapi_get_framebuf_texture'.",
-                rbf);
             return wo_ret_option_none(vm);
         }
         auto tex = rbf->framebuffer->get_attachment((size_t)wo_int(args + 1));

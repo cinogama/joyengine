@@ -113,66 +113,77 @@ namespace editor::gui::edit_forms
                 EndMenuBar();
             }
 
-            match(debug_camera_entity =>> \camera = je::editor::get_framebuf_texture(camera, 0);)
+            match(debug_camera_entity)
             {
-            value(frametex)?
+            value(camera_entity)?
                 {
-                    let (frame_tex_width, frame_tex_height) = frametex->size;
-
                     let (available_width, available_height) = GetContentRegionAvail();
-
-                    let (wx, wy) = GetWindowPos();
-                    let (lupx, lupy) = GetCursorPos();
-
-                    ImageSize(frametex, available_width, available_height);
-
-                    let (itemw, itemh) = GetItemRectSize();
-                    let (mx, my) = GetMousePos();
-                    let (offsetx, offsety) = (mx - lupx - wx, my - lupy - wy);
-
-                    if (IsItemHovered())
+                    let mut need_update_frame = false;
+                    match (je::editor::get_framebuf_texture(camera_entity, 0))
                     {
-                        // 在渲染区域内！
-                        windows_moveable = false;
-
-                        let uniform_mpos_x = 2. * ((offsetx:int - itemw:int/2):real / itemw), 
-                            uniform_mpos_y = -2. * ((offsety:int - itemh:int/2):real / itemh);
-
-                        je::editor::enable_editor_system(true);
-                        je::editor::update_editor_mouse_pos(
-                            uniform_mpos_x, 
-                            uniform_mpos_y, 
-                            wx:int + lupx:int + (itemw:int/2), 
-                            wy:int + lupy:int + (itemh:int/2));
-
-                        static let 
-                            mut right_key_down_time = 0., 
-                            mut noclick_flag = true;
-
-                        if (je::input::keydown(je::keycode::MOUSE_R_BUTTION) && noclick_flag)
+                    value(frametex)?
                         {
-                            noclick_flag = false;
-                            right_key_down_time = std::time();
-                        }
+                            let (frame_tex_width, frame_tex_height) = frametex->size;
 
-                        if (!je::input::keydown(je::keycode::MOUSE_R_BUTTION))
-                        {
-                            noclick_flag = true;
-                            if (std::time() - right_key_down_time < 0.3)
-                                OpenPopup("RightClickContextMenu");
+                            let (wx, wy) = GetWindowPos();
+                            let (lupx, lupy) = GetCursorPos();
+
+                            ImageSize(frametex, available_width, available_height);
+
+                            let (itemw, itemh) = GetItemRectSize();
+                            let (mx, my) = GetMousePos();
+                            let (offsetx, offsety) = (mx - lupx - wx, my - lupy - wy);
+
+                            if (IsItemHovered())
+                            {
+                                // 在渲染区域内！
+                                windows_moveable = false;
+
+                                let uniform_mpos_x = 2. * ((offsetx:int - itemw:int/2):real / itemw), 
+                                    uniform_mpos_y = -2. * ((offsety:int - itemh:int/2):real / itemh);
+
+                                je::editor::enable_editor_system(true);
+                                je::editor::update_editor_mouse_pos(
+                                    uniform_mpos_x, 
+                                    uniform_mpos_y, 
+                                    wx:int + lupx:int + (itemw:int/2), 
+                                    wy:int + lupy:int + (itemh:int/2));
+
+                                static let 
+                                    mut right_key_down_time = 0., 
+                                    mut noclick_flag = true;
+
+                                if (je::input::keydown(je::keycode::MOUSE_R_BUTTION) && noclick_flag)
+                                {
+                                    noclick_flag = false;
+                                    right_key_down_time = std::time();
+                                }
+
+                                if (!je::input::keydown(je::keycode::MOUSE_R_BUTTION))
+                                {
+                                    noclick_flag = true;
+                                    if (std::time() - right_key_down_time < 0.3)
+                                        OpenPopup("RightClickContextMenu");
+                                }
+                            }
+                            else
+                            {
+                                windows_moveable = true;
+                                je::editor::enable_editor_system(false);
+                            }
+
+                            if (frame_tex_width != available_width: int || frame_tex_height != available_height: int)
+                                need_update_frame = true;
                         }
-                    }
-                    else
-                    {
-                        windows_moveable = true;
-                        je::editor::enable_editor_system(false);
+                    none?
+                        need_update_frame = true;
                     }
 
-                    if (frame_tex_width != available_width: int || frame_tex_height != available_height: int)
+                    if (need_update_frame)
                     {
-                        debug_camera_entity
-                            ->val
-                            ->je::editor::apply_camera_framebuf_setting(available_width: int, available_height: int);
+                        if (available_width: int > 0 && available_height: int > 0)
+                            camera_entity->je::editor::apply_camera_framebuf_setting(
+                                available_width: int, available_height: int);
                     }
 
                     if (BeginPopup("RightClickContextMenu"))

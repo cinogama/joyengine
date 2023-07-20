@@ -9,7 +9,10 @@ import pkg::process;
 import pkg::filesystem;
 import pkg::thread;
 
+import builtin::api::tool::varify;
+
 using je::gui;
+using jeapi::varify;
 
 namespace editor
 {
@@ -470,16 +473,39 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             {
                 let config = je::platform();
 
-                // 获取最新的模块版本，将其保留并重命名为0，删除其他全部版本
-                do get_current_runtime_id(created_module->get_runtime_path(config))
-                    ->map(\newest_id: int = 
-                        subpath(created_module->get_runtime_path(config))
-                            ->map(\child_paths = child_paths
-                                ->forall(\path = !isdir(path) || newest_id != filename(path): int;)
-                                ->map(\path = remove(path)->unwarp;)
-                            ;)
-                    ;)
-                ;
+                // 校验最后一次编译时的引擎版本，如果不一致，那么删掉全部动态库
+                let is_same_version = filesys::readall(path / "version.json")
+                    =>> \dat = dat->dict::deserialize;
+                    ->> \dat = dat
+                        ->> \k, v = (k: string, v: string);
+                        ;
+                    =>> \dat = EngineVersionInfo::restore(dat);
+                    ->> \dat = dat->isequal(EngineVersionInfo::current());
+                    ->  valor(false)
+                    ;
+                if (is_same_version)
+                {
+                    // 获取最新的模块版本，将其保留并重命名为0，删除其他全部版本
+                    do get_current_runtime_id(created_module->get_runtime_path(config))
+                        ->map(\newest_id: int = 
+                            subpath(created_module->get_runtime_path(config))
+                                ->map(\child_paths = child_paths
+                                    ->forall(\path = !isdir(path) || newest_id != filename(path): int;)
+                                    ->map(\path = remove(path)->unwarp;)
+                                ;)
+                        ;)
+                    ;
+                }
+                else
+                {
+                    // 删除build builder engine runtime loader.hpp和 config.jeinf，用于准备重新编译
+                    do filesys::remove(path / "build");
+                    do filesys::remove(path / "builder");
+                    do filesys::remove(path / "engine");
+                    do filesys::remove(path / "runtime");
+                    do filesys::remove(path / "loader.hpp");
+                    do filesys::remove(path / "config.jeinf");
+                }
 
                 let founding_newest_result = 
                     get_current_runtime_path(created_module->get_runtime_path(config))
@@ -858,6 +884,12 @@ $$REGISTER_SYSTEM_TYPES$$
             do context->>\context = context.progress = 100;;
 
             self.project->active_module(self);
+
+            // 更新编译版本
+            if (! filesys::writeall(self.path / "version.json", EngineVersionInfo::current()->serialize))
+            {
+                jeapi::gui::form::errmsg("警告", "无法为生成的模块记录版本信息文件，请检查");
+            }
 
             return result::ok("编译完成");
         }
