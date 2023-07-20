@@ -23,15 +23,11 @@ apt install libgl1-mesa-dev libglu1-mesa-dev
 
 ```
 
-需要安装baozi以获取引擎编辑器所需的一些包：
+在编译之前，还需要安装baozi，用以获取引擎编辑器所需的一些包：
 
 **安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行**
 
-在项目根路径中执行：
-
-```shell
-baozi install
-```
+编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`INSTALL_PKG_WHEN_BUILD` 设置为 OFF 关闭安装操作
 
 #### 特别注意
 引擎的编辑器目前仅在windows上可以使用完整功能，并且需要配置环境 `MSBUILD` 
