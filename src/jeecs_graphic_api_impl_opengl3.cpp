@@ -167,6 +167,14 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     WINDOWS_HANDLE = glfwCreateWindow((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT, WINDOWS_TITLE,
         config->m_fullscreen ? glfwGetPrimaryMonitor() : NULL, NULL);
 
+    const char* reason;
+    auto err_code = glfwGetError(&reason);
+    if (err_code != GLFW_NO_ERROR)
+    {
+        jeecs::debug::logfatal("Opengl3 glfw reports an error(%d): %s.", err_code, reason);
+        abort();
+    }
+
     // Try load icon from @/icon.png or !/builtin/icon/icon.png.
     // Do nothing if both not exist.
     jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load("@/icon.png");

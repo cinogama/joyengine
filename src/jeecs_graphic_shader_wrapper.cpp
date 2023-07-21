@@ -41,16 +41,6 @@ struct jegl_shader_value
     type m_type;
     size_t m_ref_count;
 
-    mutable std::atomic_flag _m_spin;
-    inline void lock() const noexcept
-    {
-        while (_m_spin.test_and_set());
-    }
-    inline void unlock() const noexcept
-    {
-        _m_spin.clear();
-    }
-
     union
     {
         float m_float;
@@ -83,7 +73,6 @@ struct jegl_shader_value
         : m_type((type)(type::INTEGER | type::INIT_VALUE))
         , m_integer(init_val)
         , m_ref_count(0)
-        , _m_spin({})
     {
     }
 
@@ -91,14 +80,12 @@ struct jegl_shader_value
         : m_type((type)(type::FLOAT | type::INIT_VALUE))
         , m_float(init_val)
         , m_ref_count(0)
-        , _m_spin({})
     {
     }
 
     jegl_shader_value(float x, float y)
         : m_type((type)(type::FLOAT2 | type::INIT_VALUE))
         , m_ref_count(0)
-        , _m_spin({})
     {
         m_float2[0] = x;
         m_float2[1] = y;
@@ -106,7 +93,6 @@ struct jegl_shader_value
     jegl_shader_value(float x, float y, float z)
         : m_type((type)(type::FLOAT3 | type::INIT_VALUE))
         , m_ref_count(0)
-        , _m_spin({})
     {
         m_float3[0] = x;
         m_float3[1] = y;
@@ -115,7 +101,6 @@ struct jegl_shader_value
     jegl_shader_value(float x, float y, float z, float w)
         : m_type((type)(type::FLOAT4 | type::INIT_VALUE))
         , m_ref_count(0)
-        , _m_spin({})
     {
         m_float4[0] = x;
         m_float4[1] = y;
@@ -125,7 +110,6 @@ struct jegl_shader_value
     jegl_shader_value(float* data, type typing)
         : m_type((type)(typing | type::INIT_VALUE))
         , m_ref_count(0)
-        , _m_spin({})
     {
         if (data)
         {
@@ -157,7 +141,6 @@ struct jegl_shader_value
 
     void add_useref_count()
     {
-        std::lock_guard g1(*this);
         ++m_ref_count;
     }
 
@@ -189,7 +172,6 @@ struct jegl_shader_value
         , m_opname(jeecs::basic::make_new_string(operat))
         , m_opnums_count(opnum_count)
         , m_ref_count(0)
-        , _m_spin({})
     {
         m_opnums = new jegl_shader_value * [m_opnums_count];
     }
@@ -198,7 +180,6 @@ struct jegl_shader_value
         : m_type((type)(resulttype | type::CALC_VALUE | type::SHADER_IN_VALUE))
         , m_shader_in_index(0)
         , m_ref_count(0)
-        , _m_spin({})
     {
     }
 
@@ -208,7 +189,6 @@ struct jegl_shader_value
         , m_uniform_texture_channel(0)
         , m_ref_count(0)
         , m_uniform_init_val_may_nil(init_val)
-        , _m_spin({})
     {
         if (m_uniform_init_val_may_nil)
             m_uniform_init_val_may_nil->add_useref_count();
@@ -216,7 +196,6 @@ struct jegl_shader_value
 
     inline bool is_init_value() const noexcept
     {
-        std::lock_guard g(*this);
         return !(m_type & CALC_VALUE);
     }
     inline bool is_calc_value() const noexcept
@@ -225,22 +204,18 @@ struct jegl_shader_value
     }
     inline bool is_shader_in_value() const noexcept
     {
-        std::lock_guard g(*this);
         return m_type & SHADER_IN_VALUE;
     }
     inline bool is_uniform_variable() const noexcept
     {
-        std::lock_guard g(*this);
         return (m_type & UNIFORM_VARIABLE) || (m_type & UNIFORM_BLOCK_VARIABLE);
     }
     inline bool is_block_uniform_variable() const noexcept
     {
-        std::lock_guard g(*this);
         return m_type & UNIFORM_BLOCK_VARIABLE;
     }
     inline type get_type() const
     {
-        std::lock_guard g(*this);
         return (type)(m_type & TYPE_MASK);
     }
 };
@@ -249,7 +224,6 @@ void delete_shader_value(jegl_shader_value* shader_val)
 {
     do
     {
-        std::lock_guard g(*shader_val);
         if (shader_val->m_ref_count)
         {
             --shader_val->m_ref_count;
