@@ -29,6 +29,8 @@ apt install libgl1-mesa-dev libglu1-mesa-dev
 
 编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`INSTALL_PKG_WHEN_BUILD` 设置为 OFF 关闭安装操作
 
+> 推荐CMake版本至少达到 3.20，以保证baozi和编辑器的编译流程能够正常进行
+
 #### 特别注意
 引擎的编辑器目前仅在windows上可以使用完整功能，并且需要配置环境 `MSBUILD` 
 此环境变量应该是MSBUILD.exe的所在目录，
