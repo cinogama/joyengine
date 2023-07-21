@@ -161,7 +161,6 @@ struct jegl_shader_value
         , m_opname(jeecs::basic::make_new_string(operat))
         , m_opnums_count(sizeof...(args) + 1)
         , m_ref_count(0)
-        , _m_spin({})
     {
         m_opnums = new jegl_shader_value * [m_opnums_count];
         set_used_val(0, val, args...);
