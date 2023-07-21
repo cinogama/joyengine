@@ -152,7 +152,7 @@ func apply_editor_data_when_start_up_project(dat: dict)
         ->  getor("form_size": dynamic, [1344, 768]: dynamic) as array
         ->> \d = d as int;
         ;
-    je::input::set_window_size(form_size[0], form_size[1]);
+    je::editor::set_window_size(form_size[0], form_size[1]);
 }
 func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesys::path_t)
 {

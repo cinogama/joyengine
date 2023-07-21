@@ -695,6 +695,17 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_val(vm, result);
 }
 
+WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    auto winsz = jeecs::input::mousepos(0);
+
+    wo_value result = wo_push_struct(vm, 2);
+    wo_set_int(wo_struct_get(result, 0), (wo_int_t)winsz.x);
+    wo_set_int(wo_struct_get(result, 1), (wo_int_t)winsz.y);
+
+    return wo_ret_val(vm, result);
+}
+
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t argc)
 {
     je_io_update_windowsize((int)wo_int(args + 0), (int)wo_int(args + 1));
@@ -1511,6 +1522,12 @@ namespace je::editor
     extern("libjoyecs", "wojeapi_set_runtime_path")
     public func set_runtime_path(path: string)=> void;
 
+    extern("libjoyecs", "wojeapi_input_update_window_size")
+    public func set_window_size(x: int, y: int)=> void;
+
+    extern("libjoyecs", "wojeapi_input_update_window_title")
+    public func set_window_title(title: string)=> void;
+
     public using fimage_packer = handle
     {
         extern("libjoyecs", "wojeapi_create_fimg_packer")
@@ -1656,14 +1673,11 @@ namespace je
         extern("libjoyecs", "wojeapi_input_keydown")
         public func keydown(kcode: keycode)=> bool;
 
-        extern("libjoyecs", "wojeapi_input_update_window_size")
-        public func set_window_size(x: int, y: int)=> void;
-
-        extern("libjoyecs", "wojeapi_input_update_window_title")
-        public func set_window_title(title: string)=> void;
-
         extern("libjoyecs", "wojeapi_input_window_size")
-        public func window_size()=> (int, int);
+        public func windowsize()=> (int, int);
+
+        extern("libjoyecs", "wojeapi_input_mouse_pos")
+        public func mousepos()=> (int, int);
     }
 
     public using typeinfo = handle;
