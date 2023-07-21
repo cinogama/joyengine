@@ -156,7 +156,7 @@ func apply_editor_data_when_start_up_project(dat: dict)
 }
 func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesys::path_t)
 {
-    let (win_w, win_h) = je::input::window_size();
+    let (win_w, win_h) = je::input::windowsize();
     let project_histories = dat->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
     
     let newdat = dat->tomap();
