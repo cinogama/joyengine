@@ -60,6 +60,38 @@ namespace editor
         {
             return self.m_debug_context->has;
         }
+        public func create_dump(self: Project, dumpped: array<dict<string, dynamic>>)
+        {
+            do filesys::mkdir(self.m_path / ".runtime");
+            if (! dumpped->serialize
+                ->> \dat = filesys::writeall(self.m_path / ".runtime" / "debugcontext.dump", dat);
+                ->  valor(false))
+            {
+                jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
+                je::logwarn("调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
+            }
+        }
+        public func restore_dump(self: Project)
+        {
+            match (filesys::readall(self.m_path / ".runtime" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
+            {
+            value(dat)?
+                jeapi::gui::form::ask("是否恢复", "检查到上次引擎在调试过程中意外退出，是否恢复之前的编辑器状态？",
+                    func(opt)
+                    {
+                        if (opt)
+                        {
+                            self->close_all_world();
+                            self->restore_all_world(dat->>\wdat = wdat as dict->>\k, v = (k as string, v);;);
+                        }
+                    });
+            none?;
+            }
+        }
+        public func clear_dump(self: Project)
+        {
+            do filesys::remove(self.m_path / ".runtime" / "debugcontext.dump");
+        }
         public func stop_debug(self: Project)
         {
             if (! self->is_debugging)
@@ -79,7 +111,8 @@ namespace editor
             // 恢复所有世界！
             self->restore_all_world(dumped_worlds);
 
-            do filesys::remove(self.m_path / ".runtime" / "debugcontext.dump");
+            self->clear_dump();
+
             return result::ok(do nil);
         }
 
@@ -95,14 +128,7 @@ namespace editor
                     m_dumped_editing_worlds = dumpped,
                 };
 
-            do filesys::mkdir(self.m_path / ".runtime");
-            if (! dumpped->serialize
-                ->> \dat = filesys::writeall(self.m_path / ".runtime" / "debugcontext.dump", dat);
-                ->  valor(false))
-            {
-                jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
-                je::logwarn("调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
-            }
+            self->create_dump(dumpped);
 
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
             for (let _, wdat : context.m_dumped_editing_worlds)
@@ -324,20 +350,7 @@ namespace editor
             none?;
             }
 
-            match (filesys::readall(self.m_path / ".runtime" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
-            {
-            value(dat)?
-                jeapi::gui::form::ask("是否恢复", "检查到上次引擎在调试过程中意外退出，是否恢复之前的编辑器状态？",
-                    func(opt)
-                    {
-                        if (opt)
-                        {
-                            self->close_all_world();
-                            self->restore_all_world(dat->>\wdat = wdat as dict->>\k, v = (k as string, v);;);
-                        }
-                    });
-            none?;
-            }
+            self->restore_dump();
 
             return self;
         }
@@ -389,6 +402,8 @@ namespace editor
                 jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
                 return false;
             }
+
+            self->clear_dump();
             return true;
         }
         public func close(self: Project)

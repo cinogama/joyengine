@@ -712,6 +712,9 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                                 {
                                 ok(dump_worlds)?
                                     {
+                                        // 正式更新之前创建dump，直到下一次保存或调试才消除之
+                                        self.project->create_dump(dump_worlds);
+
                                         // 这里的操作非常重要，需要确保全部世界已经被完全正确地关闭，
                                         // 否则如果有世界在卸载模块之后才执行清理操作，就有可能发生调用到已经不再有效的析构
                                         // 函数。这玩意儿非常恐怖，这里yield一下，保证一切按部就班

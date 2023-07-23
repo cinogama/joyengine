@@ -1065,8 +1065,8 @@ namespace jeecs_impl
             // Complete command buffer:
             _m_command_buffer.update();
 
-            bool is_destroying = false;
-            if (!is_destroying)
+            bool in_destroy = is_destroying();
+            if (in_destroy)
             {
                 // Remove all system from world.
                 std::vector<const jeecs::typing::type_info*> _removing_sys_types;
@@ -1088,7 +1088,7 @@ namespace jeecs_impl
             if (_m_arch_manager._arch_modified())
                 ++_m_archmgr_updated_version;
 
-            return !is_destroying;
+            return !in_destroy;
         }
 
         inline arch_type::entity create_entity_with_component(const types_set& types)
