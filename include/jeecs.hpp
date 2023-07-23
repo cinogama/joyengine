@@ -833,8 +833,8 @@ je_ecs_universe_register_exit_callback [基本接口]
 */
 JE_API void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg);
 
-typedef double(*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
-typedef double(*je_job_call_once_t)(void* /*custom_data*/);
+typedef void(*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
+typedef void(*je_job_call_once_t)(void* /*custom_data*/);
 
 /*
 Jobs in universe have 2*3 types:
@@ -922,6 +922,28 @@ je_ecs_universe_unregister_after_call_once_job [基本接口]
 从指定宇宙中取消延后单独任务（After job for once）
 */
 JE_API void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_once_t job);
+
+/*
+je_ecs_universe_get_deltatime [基本接口]
+获取当前宇宙的帧更新间隔时间，若没有使用je_ecs_universe_set_deltatime设置，默认为 1.0/60.0
+请参见：
+    je_ecs_universe_set_deltatime
+*/
+JE_API double je_ecs_universe_get_deltatime(void* universe);
+
+/*
+je_ecs_universe_set_deltatime [基本接口]
+设置当前宇宙的帧更新间隔时间
+*/
+JE_API void je_ecs_universe_set_deltatime(void* universe, double delta);
+
+/*
+je_ecs_universe_able_vsync_mode [基本接口]
+设置当前宇宙的帧更新是否启用vsync模式
+    * 若启用vsync模式，universe的update将不再使用内置的同步机制
+    * 默认关闭
+*/
+JE_API void je_ecs_universe_able_vsync_mode(void* universe, bool able);
 
 /*
 je_ecs_world_in_universe [基本接口]
@@ -1356,10 +1378,10 @@ struct jegl_interface_config
 {
     size_t m_windows_width, m_windows_height;
     size_t m_resolution_x, m_resolution_y;
-    size_t m_fps;
     const char* m_title;
     bool m_fullscreen;
     bool m_enable_resize;
+    bool m_vsync;
 };
 
 struct jegl_thread_notifier;
@@ -1375,6 +1397,7 @@ struct jegl_thread
     std::thread* _m_thread;
     jegl_thread_notifier* _m_thread_notifier;
     void* _m_interface_handle;
+    void* _m_universe_instance;
 
     jeecs::typing::version_t m_version;
 
@@ -1769,6 +1792,7 @@ jegl_start_graphic_thread [基本接口]
 */
 JE_API jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
+    void* universe_instance,
     jeecs_api_register_func_t register_func,
     void(*frame_rend_work)(void*, jegl_thread*),
     void* arg);
@@ -4552,21 +4576,77 @@ namespace jeecs
         }
     };
 
+    class game_universe
+    {
+        void* _m_universe_addr;
+    public:
+        game_universe(void* universe_addr)
+            :_m_universe_addr(universe_addr)
+        {
+
+        }
+        inline void* handle()const noexcept
+        {
+            return _m_universe_addr;
+        }
+        game_world create_world()
+        {
+            return je_ecs_world_create(_m_universe_addr);
+        }
+        inline void wait()const noexcept
+        {
+            je_ecs_universe_loop(handle());
+        }
+        inline void stop() const noexcept
+        {
+            je_ecs_universe_stop(handle());
+        }
+        inline double get_deltatimed() const
+        {
+            return je_ecs_universe_get_deltatime(handle());
+        }
+        inline float get_deltatime() const
+        {
+            return (float)get_deltatimed();
+        }
+
+        inline operator bool() const noexcept
+        {
+            return _m_universe_addr;
+        }
+       
+    public:
+        static game_universe create_universe()
+        {
+            return game_universe(je_ecs_universe_create());
+        }
+        static void destroy_universe(game_universe universe)
+        {
+            return je_ecs_universe_destroy(universe.handle());
+        }
+    };
+
     class game_system
     {
         JECS_DISABLE_MOVE_AND_COPY(game_system);
     private:
-        double _m_delta_time;
-
         game_world _m_game_world;
         selector   _m_default_selector;
-
     public:
-        game_system(game_world world, double delta_tm = 1. / 60.)
+        game_system(game_world world)
             : _m_game_world(world)
-            , _m_delta_time(delta_tm)
             , _m_default_selector(this)
-        { }
+        {
+        }
+
+        double deltatimed() const
+        {
+            return _m_game_world.get_universe().get_deltatimed();
+        }
+        float deltatime()const
+        {
+            return _m_game_world.get_universe().get_deltatime();
+        }
 
         // Get binded world or attached world
         game_world get_world() const noexcept
@@ -4584,16 +4664,6 @@ namespace jeecs
         inline selector& select() noexcept
         {
             return _m_default_selector;
-        }
-
-        inline float delta_time() const noexcept
-        {
-            return (float)_m_delta_time;
-        }
-
-        inline double delta_dtime() const noexcept
-        {
-            return _m_delta_time;
         }
 
 #define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件(PhysicsUpdate Animation)
@@ -4617,52 +4687,6 @@ namespace jeecs
         */
     };
 
-    class game_universe
-    {
-        void* _m_universe_addr;
-    public:
-
-        game_universe(void* universe_addr)
-            :_m_universe_addr(universe_addr)
-        {
-
-        }
-
-        inline void* handle()const noexcept
-        {
-            return _m_universe_addr;
-        }
-
-        game_world create_world()
-        {
-            return je_ecs_world_create(_m_universe_addr);
-        }
-
-        inline void wait()const noexcept
-        {
-            je_ecs_universe_loop(handle());
-        }
-
-        inline void stop() const noexcept
-        {
-            je_ecs_universe_stop(handle());
-        }
-
-        inline operator bool() const noexcept
-        {
-            return _m_universe_addr;
-        }
-
-    public:
-        static game_universe create_universe()
-        {
-            return game_universe(je_ecs_universe_create());
-        }
-        static void destroy_universe(game_universe universe)
-        {
-            return je_ecs_universe_destroy(universe.handle());
-        }
-    };
 
     inline game_universe game_world::get_universe() const noexcept
     {

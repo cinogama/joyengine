@@ -553,7 +553,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             _inputs.r_buttom_click = input::is_up(_inputs.r_buttom);
             _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
             _inputs.selected_entity = std::nullopt;
-            _inputs.delta_time = delta_time();
+            _inputs.delta_time = deltatime();
 
             if (_inputs._wheel_count_record != INT_MAX)
             {

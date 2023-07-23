@@ -154,6 +154,7 @@ std::mutex _jegl_finish_list_mx;
 
 jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
+    void* universe_instance,
     jeecs_api_register_func_t register_func,
     void(*frame_rend_work)(void*, jegl_thread*),
     void* arg)
@@ -189,6 +190,9 @@ jegl_thread* jegl_start_graphic_thread(
         return nullptr;
     }
 
+    // Do prepare job
+    je_ecs_universe_able_vsync_mode(universe_instance, config.m_vsync);
+
     // Register finish functions
     do
     {
@@ -205,6 +209,7 @@ jegl_thread* jegl_start_graphic_thread(
     // Take place.
     thread_handle->m_config = config;
     thread_handle->_m_thread_notifier->m_graphic_terminate_flag.test_and_set();
+    thread_handle->_m_universe_instance = universe_instance;
     thread_handle->_m_thread_notifier->m_update_flag = false;
     thread_handle->_m_thread_notifier->m_reboot_flag = false;
 

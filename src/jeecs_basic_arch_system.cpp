@@ -710,12 +710,10 @@ namespace jeecs_impl
         void* m_custom_data;
         void(*m_free_function)(void*);
         std::mutex m_time_guard;
-        double m_next_execute_time;
 
         ecs_job(ecs_universe* universe, job_for_worlds_t _job, void* custom_data, void(*free_function)(void*))
             : m_for_worlds_job(_job)
             , m_job_type(job_type::FOR_WORLDS)
-            , m_next_execute_time(0.)
             , m_universe(universe)
             , m_custom_data(custom_data)
             , m_free_function(free_function)
@@ -725,7 +723,6 @@ namespace jeecs_impl
         ecs_job(ecs_universe* universe, job_call_once_t _job, void* custom_data, void(*free_function)(void*))
             : m_call_once_job(_job)
             , m_job_type(job_type::CALL_ONCE)
-            , m_next_execute_time(0.)
             , m_universe(universe)
             , m_custom_data(custom_data)
             , m_free_function(free_function)
@@ -737,8 +734,6 @@ namespace jeecs_impl
             if (m_free_function != nullptr)
                 m_free_function(m_custom_data);
         }
-
-        inline void set_next_execute_time(double nextTime) noexcept;
     };
 
     class command_buffer
@@ -928,21 +923,7 @@ namespace jeecs_impl
     {
         JECS_DISABLE_MOVE_AND_COPY(ecs_world);
     public:
-        struct storage_system
-        {
-            jeecs::game_system* m_system_instance;
-            double m_next_commit_update_time;
-            double m_execute_interval;
-
-            storage_system& set_system_instance(jeecs::game_system* sys)noexcept
-            {
-                m_system_instance = sys;
-                m_next_commit_update_time = 0.;
-                m_execute_interval = sys->delta_dtime();
-                return *this;
-            }
-        };
-        using system_container_t = std::unordered_map<const jeecs::typing::type_info*, storage_system>;
+        using system_container_t = std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*>;
     private:
         ecs_universe* _m_universe;
 
@@ -998,13 +979,13 @@ namespace jeecs_impl
             auto fnd = m_systems.find(type);
             if (fnd == m_systems.end())
             {
-                m_systems[type].set_system_instance(sys);
+                m_systems[type] = sys;
             }
             else
             {
 #ifndef NDEBUG
                 jeecs::debug::logwarn("Trying to append system: '%s', but current world(%p) has already contain same one(%p), replace it with %p",
-                    type->m_typename, this, fnd->second.m_system_instance, sys);
+                    type->m_typename, this, fnd->second, sys);
 #endif
                 remove_system_instance(type);
                 append_system_instance(type, sys);
@@ -1014,7 +995,7 @@ namespace jeecs_impl
         {
             if (m_systems.find(type) != m_systems.end())
             {
-                _destroy_system_instance(type, m_systems[type].m_system_instance);
+                _destroy_system_instance(type, m_systems[type]);
                 m_systems.erase(m_systems.find(type));
             }
 #ifndef NDEBUG
@@ -1144,7 +1125,7 @@ namespace jeecs_impl
 
     };
 
-    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void*_);
+    void default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void*_);
 
     void command_buffer::update()
     {
@@ -1403,7 +1384,9 @@ namespace jeecs_impl
 
         std::mutex _m_next_execute_interval_mx;
         volatile double _m_current_time = 0.;
-        double _m_next_execute_interval = 0.5;
+
+        bool _m_vsync_mode = false;
+        double _m_frame_deltatime = 1./60.;
 
         struct universe_action
         {
@@ -1442,27 +1425,23 @@ namespace jeecs_impl
 
         jeecs::basic::atomic_list<universe_action> _m_universe_actions;
 
-        void set_next_execute_interval(double interval)
-        {
-            std::lock_guard g1(_m_next_execute_interval_mx);
-            if (interval > 0 && interval < _m_next_execute_interval)
-                _m_next_execute_interval = interval;
-        }
-
         void append_universe_action(universe_action* act) noexcept
         {
             _m_universe_actions.add_one(act);
         }
 
     public:
-        inline double current_time() const noexcept
+        double get_frame_deltatime() const
         {
-            return _m_current_time;
+            return _m_frame_deltatime;
         }
-        inline double next_execute_time_allign(double exec_intv)const noexcept
+        void set_frame_deltatime(double delta)
         {
-            const double align_base = 1.0 / 600.0;
-            return align_base * ceil((current_time() + exec_intv) / align_base);
+            _m_frame_deltatime = delta;
+        }
+        void set_able_vsync_mode(bool able)
+        {
+            _m_vsync_mode = able;
         }
         void update_universe_action_and_worlds()noexcept
         {
@@ -1649,13 +1628,17 @@ namespace jeecs_impl
         }
         void update() noexcept
         {
-            _m_current_time += _m_next_execute_interval;
-            _m_next_execute_interval = 1.0;
+            if (!_m_vsync_mode)
+            {
+                // NOTE: 启用垂直同步模式之后，引擎的sleep将不再
+                //      生效，而是依赖其他模块的同步机制。
+                _m_current_time += _m_frame_deltatime;
 
-            je_clock_sleep_until(_m_current_time);
-            if (je_clock_time() - _m_current_time >= 2.0)
-                _m_current_time = je_clock_time();
-            // Sleep end!
+                je_clock_sleep_until(_m_current_time);
+                if (je_clock_time() - _m_current_time >= 2.0)
+                    _m_current_time = je_clock_time();
+                // Sleep end!
+            }
             
             // New frame begin here!!!!
 
@@ -1664,19 +1647,14 @@ namespace jeecs_impl
             ParallelForeach(
                 _m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
                 [this](ecs_job* shared_job) {
-                    if (CHECK(_m_current_time, shared_job->m_next_execute_time))
-                    {
+
                         if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
                             ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
                                 [this, shared_job](ecs_world* world) {
-                                    shared_job->set_next_execute_time(
-                                        next_execute_time_allign(shared_job->m_for_worlds_job(world, shared_job->m_custom_data)));
+                                    shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
                                 });
                         else
-                            shared_job->set_next_execute_time(
-                                next_execute_time_allign(shared_job->m_call_once_job(shared_job->m_custom_data)));
-                    }
-                    set_next_execute_interval(shared_job->m_next_execute_time - current_time());
+                            shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
 
             // 2. update actions & worlds
@@ -1686,38 +1664,26 @@ namespace jeecs_impl
             ParallelForeach(
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
                 [this](ecs_job* shared_job) {
-                    if (CHECK(_m_current_time, shared_job->m_next_execute_time))
-                    {
-                        if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
-                            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                                [this, shared_job](ecs_world* world) {
-                                    shared_job->set_next_execute_time(
-                                        next_execute_time_allign(shared_job->m_for_worlds_job(world, shared_job->m_custom_data)));
-                                });
-                        else
-                            shared_job->set_next_execute_time(
-                                next_execute_time_allign(shared_job->m_call_once_job(shared_job->m_custom_data)));
-                    }
-                    set_next_execute_interval(shared_job->m_next_execute_time - current_time());
+                    if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
+                        ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                            [this, shared_job](ecs_world* world) {
+                                shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
+                            });
+                    else
+                        shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
 
             // 4. Do after jobs.
             ParallelForeach(
                 _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
                 [this](ecs_job* shared_job) {
-                    if (CHECK(_m_current_time, shared_job->m_next_execute_time))
-                    {
-                        if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
-                            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                                [this, shared_job](ecs_world* world) {
-                                    shared_job->set_next_execute_time(
-                                        next_execute_time_allign(shared_job->m_for_worlds_job(world, shared_job->m_custom_data)));
-                                });
-                        else
-                            shared_job->set_next_execute_time(
-                                next_execute_time_allign(shared_job->m_call_once_job(shared_job->m_custom_data)));
-                    }
-                    set_next_execute_interval(shared_job->m_next_execute_time - current_time());
+                    if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
+                        ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                            [this, shared_job](ecs_world* world) {
+                                shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
+                            });
+                    else
+                        shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
         }
     public:
@@ -1927,15 +1893,7 @@ namespace jeecs_impl
         }
     };
 
-    inline void ecs_job::set_next_execute_time(double nextTime)noexcept
-    {
-        std::lock_guard g1(m_time_guard);
-        if (CHECK(m_universe->current_time(), m_next_execute_time)
-            || (nextTime > 0 && nextTime < m_next_execute_time))
-            m_next_execute_time = nextTime;
-    }
-
-    double default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void* _)
+    void default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void* _)
     {
         ecs_world* cur_world = (ecs_world*)_ecs_world;
 
@@ -1944,91 +1902,51 @@ namespace jeecs_impl
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                auto& system_info = val.second;
-                const double current_time = cur_world->get_universe()->current_time();
-
-                if (CHECK(current_time, system_info.m_next_commit_update_time))
-                    val.first->state_update(system_info.m_system_instance);
+                val.first->state_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                auto& system_info = val.second;
-                const double current_time = cur_world->get_universe()->current_time();
-
-                if (CHECK(current_time, system_info.m_next_commit_update_time))
-                    val.first->pre_update(system_info.m_system_instance);
+                val.first->pre_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                auto& system_info = val.second;
-                const double current_time = cur_world->get_universe()->current_time();
-
-                if (CHECK(current_time, system_info.m_next_commit_update_time))
-                    val.first->update(system_info.m_system_instance);
+                val.first->update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                auto& system_info = val.second;
-                const double current_time = cur_world->get_universe()->current_time();
-
-                if (CHECK(current_time, system_info.m_next_commit_update_time))
-                    val.first->script_update(system_info.m_system_instance);
+                val.first->script_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                auto& system_info = val.second;
-                const double current_time = cur_world->get_universe()->current_time();
-
-                if (CHECK(current_time, system_info.m_next_commit_update_time))
-                    val.first->late_update(system_info.m_system_instance);
+                val.first->late_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                auto& system_info = val.second;
-                const double current_time = cur_world->get_universe()->current_time();
-
-                if (CHECK(current_time, system_info.m_next_commit_update_time))
-                    val.first->apply_update(system_info.m_system_instance);
+                val.first->apply_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                auto& system_info = val.second;
-                const double current_time = cur_world->get_universe()->current_time();
-                if (CHECK(current_time, system_info.m_next_commit_update_time))
-                {
-                    val.first->commit_update(system_info.m_system_instance);
-                    system_info.m_next_commit_update_time = current_time + system_info.m_execute_interval;
-                }
+                val.first->commit_update(val.second);
             }
         );
-
-        double next_time_to_exec_system = 1.0f;
-
-        for (auto& cur_system : active_systems)
-        {
-            double waittime = (cur_system.second.m_next_commit_update_time - cur_world->get_universe()->current_time());
-            if (waittime < next_time_to_exec_system)
-                next_time_to_exec_system = waittime;
-        }
-        return next_time_to_exec_system;
     }
 }
 
@@ -2107,7 +2025,7 @@ jeecs::game_system* je_ecs_world_get_system_instance(void* world, const jeecs::t
     auto fnd = syss.find(type);
     if (fnd == syss.end())
         return nullptr;
-    return fnd->second.m_system_instance;
+    return fnd->second;
 }
 
 void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type)
@@ -2409,4 +2327,17 @@ void je_ecs_universe_unregister_after_for_worlds_job(void* universe, je_job_for_
 void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_once_t job)
 {
     std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->unregister_after_call_once_job(job);
+}
+
+double je_ecs_universe_get_deltatime(void* universe)
+{
+    return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_frame_deltatime();
+}
+void je_ecs_universe_set_deltatime(void* universe, double delta)
+{
+    std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->set_frame_deltatime(delta);
+}
+void je_ecs_universe_able_vsync_mode(void* universe, bool able)
+{
+    std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->set_able_vsync_mode(able);
 }

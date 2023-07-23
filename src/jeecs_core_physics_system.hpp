@@ -205,9 +205,9 @@ namespace jeecs
                 ;
 
             // 物理引擎在此处进行物理解算
-            m_physics_world.Step(delta_time(), 8, 3);
+            m_physics_world.Step(deltatime(), 8, 3);
 
-            // TODO: 在此处将动力学数据更新到组件上
+            // 在此处将动力学数据更新到组件上
             select().exec(
                 [](
                     Transform::Translation& translation,

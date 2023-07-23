@@ -213,15 +213,13 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         basic::resource<graphic::texture> default_texture;
         basic::vector<basic::resource<graphic::shader>> default_shaders_list;
 
-        static double _update_frame_universe_job(void* host)
+        static void _update_frame_universe_job(void* host)
         {
             auto* graphic_host = (GraphicThreadHost*)host;
             if (!jegl_update(graphic_host->glthread))
             {
                 graphic_host->universe.stop();
             }
-
-            return 1.0 / (double)graphic_host->glthread->m_config.m_fps;
         }
 
         std::mutex m_rendchain_branchs_mx;
@@ -314,7 +312,6 @@ public let frag =
             default_shaders_list.push_back(default_shader);
 
             jegl_interface_config config = {};
-            config.m_fps = 60;
             config.m_windows_width = 640;
             config.m_windows_height = 480;
             config.m_resolution_x = 640;
@@ -322,9 +319,11 @@ public let frag =
             config.m_title = "JoyEngineECS(JoyEngine 4.0)";
             config.m_fullscreen = false;
             config.m_enable_resize = true;
+            config.m_vsync = true;
 
             glthread = jegl_start_graphic_thread(
                 config,
+                universe.handle(),
                 jegl_using_opengl3_apis,
                 [](void* ptr, jegl_thread* glthread)
                 {
@@ -2421,7 +2420,8 @@ public func frag(_: v2f)
 
         void StateUpdate()
         {
-            _fixed_time += delta_dtime();
+            _fixed_time += deltatime();
+
             select_from(get_world())
                 .exec([this](game_entity e, Animation2D::FrameAnimation& frame_animation, Renderer::Shaders* shaders)
                     {

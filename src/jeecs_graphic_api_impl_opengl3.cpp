@@ -209,7 +209,16 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glfwSetMouseButtonCallback(WINDOWS_HANDLE, glfw_callback_mouse_key_clicked);
     glfwSetScrollCallback(WINDOWS_HANDLE, glfw_callback_mouse_scroll_changed);
     glfwSetKeyCallback(WINDOWS_HANDLE, glfw_callback_keyboard_stage_changed);
-    glfwSwapInterval(0);
+
+    if (config->m_vsync)
+    {
+        // TODO: 检查窗口在哪个屏幕渲染，刷新率以更低的那块屏幕计
+        je_ecs_universe_set_deltatime(gthread->_m_universe_instance,
+            1.0 / (double)glfwGetVideoMode(glfwGetPrimaryMonitor())->refreshRate);
+        glfwSwapInterval(1);
+    }
+    else
+        glfwSwapInterval(0);
 
     if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
         jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
