@@ -7980,23 +7980,6 @@ namespace jeecs
             return false;
         }
 
-        template<typing::typehash_t hash_v1, int v2>
-        static double _realDeltaTime()
-        {
-            static double last_time = je_clock_time();
-
-            double last = last_time;
-            last_time = je_clock_time();
-
-            return last_time - last;
-        }
-
-        template<typing::typehash_t hash_v1, int v2>
-        static float _realDeltaTimeF()
-        {
-            return (float)_realDeltaTime<hash_v1, v2>();
-        }
-
         static void is_up(...);
         static void first_down(...);
         static void double_click(...);// just for fool ide
@@ -8004,8 +7987,6 @@ namespace jeecs
 #define is_up _isUp<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
-#define real_delta_time _realDeltaTime<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
-#define real_delta_timef _realDeltaTimeF<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
     }
 }
 

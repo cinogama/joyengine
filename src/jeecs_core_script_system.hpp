@@ -21,6 +21,9 @@ namespace jeecs
         };
         std::unordered_map<std::string, vm_info> _compiled_vms;
         std::list<wo_vm> _coroutine_list;
+        
+        double deltatime = 0.;
+
         inline static thread_local ScriptRuntimeSystem* system_instance = nullptr;
 
         ScriptRuntimeSystem(game_world w)
@@ -44,6 +47,7 @@ namespace jeecs
         void CommitUpdate()
         {
             system_instance = this;
+
             select_from(get_world()).
                 exec(
                     [this](game_entity e, Script::Woolang& woolang)
@@ -231,5 +235,12 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
     jeecs::ScriptRuntimeSystem::system_instance
         ->_coroutine_list.push_back(co_vmm);
 
-    return wo_ret_void(co_vmm);
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_logic_deltatime(wo_vm vm, wo_value args, size_t argc)
+{
+    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
+        return wo_ret_panic(vm, "You can only get delta time in Script or another Coroutine.");
+
+    return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->delta_time());
 }

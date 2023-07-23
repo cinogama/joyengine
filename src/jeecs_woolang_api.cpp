@@ -1610,6 +1610,9 @@ const char* jeecs_woolang_api_src = R"(
 import woo::std;
 namespace je
 {
+    extern("libjoyecs", "wojeapi_logic_deltatime")
+    public func deltatime()=> real;
+
     extern("libjoyecs", "wojeapi_startup_coroutine")
     public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
         where f(args...) is void;
