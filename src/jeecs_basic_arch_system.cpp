@@ -1062,7 +1062,11 @@ namespace jeecs_impl
 
         bool update()
         {
-            if (is_destroying())
+            // Complete command buffer:
+            _m_command_buffer.update();
+
+            bool is_destroying = false;
+            if (!is_destroying)
             {
                 // Remove all system from world.
                 std::vector<const jeecs::typing::type_info*> _removing_sys_types;
@@ -1077,19 +1081,14 @@ namespace jeecs_impl
                 // Find all entity to close.
                 _m_arch_manager.close_all_entity(this);
 
-                // After this round, we should do a round of command buffer update, then close this.     
+                // After this round, we should do a round of command buffer update, then close this world.     
                 _m_command_buffer.update();
-
-                // Return false and world will be closed by universe-loop.
-                return false;
             }
 
-            // Complete command buffer:
-            _m_command_buffer.update();
             if (_m_arch_manager._arch_modified())
                 ++_m_archmgr_updated_version;
 
-            return true;
+            return !is_destroying;
         }
 
         inline arch_type::entity create_entity_with_component(const types_set& types)
