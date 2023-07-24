@@ -215,10 +215,14 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
         // TODO: 检查窗口在哪个屏幕渲染，刷新率以更低的那块屏幕计
         je_ecs_universe_set_deltatime(gthread->_m_universe_instance,
             1.0 / (double)glfwGetVideoMode(glfwGetPrimaryMonitor())->refreshRate);
+        je_ecs_universe_able_vsync_mode(gthread->_m_universe_instance, true);
         glfwSwapInterval(1);
     }
     else
+    {
+        je_ecs_universe_able_vsync_mode(gthread->_m_universe_instance, false);
         glfwSwapInterval(0);
+    }
 
     if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
         jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));

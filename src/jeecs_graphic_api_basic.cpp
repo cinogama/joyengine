@@ -190,9 +190,6 @@ jegl_thread* jegl_start_graphic_thread(
         return nullptr;
     }
 
-    // Do prepare job
-    je_ecs_universe_able_vsync_mode(universe_instance, config.m_vsync);
-
     // Register finish functions
     do
     {
