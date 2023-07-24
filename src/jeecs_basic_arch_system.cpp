@@ -1383,10 +1383,18 @@ namespace jeecs_impl
         std::vector<ecs_job*> _m_shared_after_jobs;
 
         std::mutex _m_next_execute_interval_mx;
-        volatile double _m_current_time = 0.;
+        double _m_frame_current_time = 0.;
+        double _m_real_current_time = 0.;
 
-        bool _m_vsync_mode = false;
+        // 期待的universe同步间隔
+        // 由于图形计算等开销，实际上的同步间隔可能大于此值
         double _m_frame_deltatime = 1./60.;
+
+        // Universe每次Update时与实际世界时间进行计算得到的值
+        double _m_real_deltatime = 1. / 60.;
+
+        // Universe每次Update时与实际世界时间进行计算得到的值，与过去若干帧的平均更新间隔
+        double _m_smooth_deltatime = 1. / 60.;
 
         struct universe_action
         {
@@ -1435,14 +1443,20 @@ namespace jeecs_impl
         {
             return _m_frame_deltatime;
         }
+        double get_real_deltatime() const
+        {
+            return _m_real_deltatime;
+        }
+        double get_smooth_deltatime() const
+        {
+            return _m_smooth_deltatime;
+        }
+
         void set_frame_deltatime(double delta)
         {
             _m_frame_deltatime = delta;
         }
-        void set_able_vsync_mode(bool able)
-        {
-            _m_vsync_mode = able;
-        }
+
         void update_universe_action_and_worlds()noexcept
         {
             std::vector<ecs_world*> _m_removing_worlds;
@@ -1628,16 +1642,17 @@ namespace jeecs_impl
         }
         void update() noexcept
         {
-            if (!_m_vsync_mode)
-            {
-                // NOTE: 启用垂直同步模式之后，引擎的sleep将不再
-                //      生效，而是依赖其他模块的同步机制。
-                _m_current_time += _m_frame_deltatime;
+            double current_time = je_clock_time();
+            _m_real_deltatime = current_time - _m_real_current_time;
+            _m_smooth_deltatime = (_m_smooth_deltatime * 9. + _m_real_deltatime) / 10.;
+            _m_real_current_time = current_time;
 
-                je_clock_sleep_until(_m_current_time);
-                if (je_clock_time() - _m_current_time >= 2.0)
-                    _m_current_time = je_clock_time();
-                // Sleep end!
+            if (_m_frame_deltatime > 0.)
+            {
+                _m_frame_current_time += _m_frame_deltatime;
+                je_clock_sleep_until(_m_frame_current_time);
+                if (current_time - _m_frame_current_time >= 2.0)
+                    _m_frame_current_time = current_time;
             }
             
             // New frame begin here!!!!
@@ -2329,15 +2344,21 @@ void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_
     std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->unregister_after_call_once_job(job);
 }
 
-double je_ecs_universe_get_deltatime(void* universe)
+double je_ecs_universe_get_frame_deltatime(void* universe)
 {
     return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_frame_deltatime();
 }
-void je_ecs_universe_set_deltatime(void* universe, double delta)
+void je_ecs_universe_set_frame_deltatime(void* universe, double delta)
 {
     std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->set_frame_deltatime(delta);
 }
-void je_ecs_universe_able_vsync_mode(void* universe, bool able)
+
+double je_ecs_universe_get_real_deltatime(void* universe)
 {
-    std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->set_able_vsync_mode(able);
+    return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_real_deltatime();
+}
+
+double je_ecs_universe_get_smooth_deltatime(void* universe)
+{
+    return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_smooth_deltatime();
 }

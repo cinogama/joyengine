@@ -297,14 +297,14 @@ WO_API wo_api wojeapi_wait_universe(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_universe_get_deltatime(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_universe_get_frame_deltatime(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_real(vm, je_ecs_universe_get_deltatime(wo_pointer(args + 0)));
+    return wo_ret_real(vm, je_ecs_universe_get_frame_deltatime(wo_pointer(args + 0)));
 }
 
-WO_API wo_api wojeapi_universe_set_deltatime(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_universe_set_frame_deltatime(wo_vm vm, wo_value args, size_t argc)
 {
-    je_ecs_universe_set_deltatime(wo_pointer(args + 0), wo_real(args + 1));
+    je_ecs_universe_set_frame_deltatime(wo_pointer(args + 0), wo_real(args + 1));
     return wo_ret_void(vm);
 }
 
@@ -1622,6 +1622,9 @@ import woo::std;
 namespace je
 {
     extern("libjoyecs", "wojeapi_deltatime")
+    public func real_deltatime()=> real;
+
+    extern("libjoyecs", "wojeapi_smooth_deltatime")
     public func deltatime()=> real;
 
     extern("libjoyecs", "wojeapi_startup_coroutine")
@@ -1986,11 +1989,11 @@ R"(
         extern("libjoyecs", "wojeapi_wait_universe")
         public func wait(self: universe)=> void;
 
-        extern("libjoyecs", "wojeapi_universe_get_deltatime")
-        public func get_deltatime(self: universe)=> real;
+        extern("libjoyecs", "wojeapi_universe_get_frame_deltatime")
+        public func get_frame_deltatime(self: universe)=> real;
 
-        extern("libjoyecs", "wojeapi_universe_set_deltatime")
-        public func set_deltatime(self: universe, delta: real)=> void;
+        extern("libjoyecs", "wojeapi_universe_set_frame_deltatime")
+        public func set_frame_deltatime(self: universe, delta: real)=> void;
 
         namespace editor
         {

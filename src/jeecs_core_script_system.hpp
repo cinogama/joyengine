@@ -217,6 +217,14 @@ WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args, size_t argc)
     if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
         return wo_ret_panic(vm, "You can only start up coroutine in Script or another Coroutine.");
 
+    return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->real_deltatimed());
+}
+
+WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args, size_t argc)
+{
+    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
+        return wo_ret_panic(vm, "You can only start up coroutine in Script or another Coroutine.");
+
     return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->deltatimed());
 }
 

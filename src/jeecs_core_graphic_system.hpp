@@ -319,8 +319,8 @@ public let frag =
             config.m_title = "JoyEngineECS(JoyEngine 4.0)";
             config.m_fullscreen = false;
             config.m_enable_resize = true;
-            config.m_vsync = true;
-
+            config.m_fps = 0;   // Use vsync
+                
             glthread = jegl_start_graphic_thread(
                 config,
                 universe.handle(),

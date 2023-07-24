@@ -924,26 +924,31 @@ je_ecs_universe_unregister_after_call_once_job [基本接口]
 JE_API void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_once_t job);
 
 /*
-je_ecs_universe_get_deltatime [基本接口]
-获取当前宇宙的帧更新间隔时间，若没有使用je_ecs_universe_set_deltatime设置，默认为 1.0/60.0
+je_ecs_universe_get_frame_deltatime [基本接口]
+获取当前宇宙的期待的帧更新间隔时间，默认为 1.0/60.0
 请参见：
     je_ecs_universe_set_deltatime
 */
-JE_API double je_ecs_universe_get_deltatime(void* universe);
+JE_API double je_ecs_universe_get_frame_deltatime(void* universe);
 
 /*
-je_ecs_universe_set_deltatime [基本接口]
+je_ecs_universe_set_frame_deltatime [基本接口]
 设置当前宇宙的帧更新间隔时间
 */
-JE_API void je_ecs_universe_set_deltatime(void* universe, double delta);
+JE_API void je_ecs_universe_set_frame_deltatime(void* universe, double delta);
 
 /*
-je_ecs_universe_able_vsync_mode [基本接口]
-设置当前宇宙的帧更新是否启用vsync模式
-    * 若启用vsync模式，universe的update将不再使用内置的同步机制
-    * 默认关闭
+je_ecs_universe_get_real_deltatime [基本接口]
+获取当前宇宙的实际更新间隔（即距离上次更新的实际时间差异）
 */
-JE_API void je_ecs_universe_able_vsync_mode(void* universe, bool able);
+JE_API double je_ecs_universe_get_real_deltatime(void* universe);
+
+/*
+je_ecs_universe_get_smooth_deltatime [基本接口]
+获取当前宇宙的实际更新间隔（即距离上次更新的实际时间差异），是过去若干帧率的平均值
+*/
+JE_API double je_ecs_universe_get_smooth_deltatime(void* universe);
+
 
 /*
 je_ecs_world_in_universe [基本接口]
@@ -1378,10 +1383,10 @@ struct jegl_interface_config
 {
     size_t m_windows_width, m_windows_height;
     size_t m_resolution_x, m_resolution_y;
+    size_t m_fps;
     const char* m_title;
     bool m_fullscreen;
     bool m_enable_resize;
-    bool m_vsync;
 };
 
 struct jegl_thread_notifier;
@@ -4601,13 +4606,21 @@ namespace jeecs
         {
             je_ecs_universe_stop(handle());
         }
-        inline double get_deltatimed() const
+        inline double get_real_deltatimed() const
         {
-            return je_ecs_universe_get_deltatime(handle());
+            return je_ecs_universe_get_real_deltatime(handle());
         }
-        inline float get_deltatime() const
+        inline float get_real_deltatime() const
         {
-            return (float)get_deltatimed();
+            return (float)get_real_deltatimed();
+        }
+        inline double get_smooth_deltatimed() const
+        {
+            return je_ecs_universe_get_smooth_deltatime(handle());
+        }
+        inline float get_smooth_deltatime() const
+        {
+            return (float)get_smooth_deltatimed();
         }
 
         inline operator bool() const noexcept
@@ -4639,13 +4652,22 @@ namespace jeecs
         {
         }
 
+        double real_deltatimed() const
+        {
+            return _m_game_world.get_universe().get_real_deltatimed();
+        }
+        float real_deltatime()const
+        {
+            return _m_game_world.get_universe().get_real_deltatime();
+        }
+
         double deltatimed() const
         {
-            return _m_game_world.get_universe().get_deltatimed();
+            return _m_game_world.get_universe().get_smooth_deltatimed();
         }
         float deltatime()const
         {
-            return _m_game_world.get_universe().get_deltatime();
+            return _m_game_world.get_universe().get_smooth_deltatime();
         }
 
         // Get binded world or attached world

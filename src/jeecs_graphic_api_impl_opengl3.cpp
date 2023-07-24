@@ -210,17 +210,15 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glfwSetScrollCallback(WINDOWS_HANDLE, glfw_callback_mouse_scroll_changed);
     glfwSetKeyCallback(WINDOWS_HANDLE, glfw_callback_keyboard_stage_changed);
 
-    if (config->m_vsync)
+    if (config->m_fps == 0)
     {
         // TODO: 检查窗口在哪个屏幕渲染，刷新率以更低的那块屏幕计
-        je_ecs_universe_set_deltatime(gthread->_m_universe_instance,
-            1.0 / (double)glfwGetVideoMode(glfwGetPrimaryMonitor())->refreshRate);
-        je_ecs_universe_able_vsync_mode(gthread->_m_universe_instance, true);
+        je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 0.0);
         glfwSwapInterval(1);
     }
     else
     {
-        je_ecs_universe_able_vsync_mode(gthread->_m_universe_instance, false);
+        je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 1.0 / (double)config->m_fps);
         glfwSwapInterval(0);
     }
 
