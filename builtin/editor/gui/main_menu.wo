@@ -44,8 +44,7 @@ namespace editor::gui
                 if (BeginMenu("JoyEngine"))
                 {
                     if (MenuItem("退出编辑器"))
-                        // 关闭环境正在编辑的项目，退出
-                        context->get_project->close();
+                        do ask_for_saving_proj_when_exit(context->get_project);
 
                     EndMenu();
                 }

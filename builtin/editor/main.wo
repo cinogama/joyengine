@@ -220,7 +220,7 @@ func my_ask_for_get_yes_no_cancel_result(
     }, ());
 }
 
-func ask_for_saving_proj_when_exit(p: editor::Project)
+public func ask_for_saving_proj_when_exit(p: editor::Project)
 {
     static let mut shown = false;
 

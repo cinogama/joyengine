@@ -312,12 +312,10 @@ public let frag =
             default_shaders_list.push_back(default_shader);
 
             jegl_interface_config config = {};
-            config.m_windows_width = 640;
-            config.m_windows_height = 480;
-            config.m_resolution_x = 640;
-            config.m_resolution_y = 480;
+            config.m_width = 640;
+            config.m_height = 480;
             config.m_title = "JoyEngineECS(JoyEngine 4.0)";
-            config.m_fullscreen = false;
+            config.m_displaymode = jegl_interface_config::display_mode::WINDOWED;
             config.m_enable_resize = true;
             config.m_fps = 0;   // Use vsync
                 
