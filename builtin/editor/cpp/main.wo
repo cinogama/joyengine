@@ -49,7 +49,7 @@ namespace editor
     {
         // Cmake所在路径，项目会使用此路径指示的cmake
         let CMAKE_PATH = filesys::normalize(F"{std::exepath()}/builtin/cmake/bin/cmake.exe"); 
-        let MSVC_PATH = filesys::normalize(F"{std::env("MSBUILD")->val}/MSBuild.exe");
+        let MSVC_PATH_MAY_NULL = std::env("MSBUILD")->>\p = filesys::normalize(F"{p}/MSBuild.exe");;
 
         // C++模块样例，创建项目文件时会复制这个目录
         let CXX_PROJECT_EXAMPLE_PATH = filesys::normalize(F"{std::exepath()}/builtin/cxxproject");
@@ -57,21 +57,31 @@ namespace editor
         // 引擎的头文件路径
         public let ENGINE_HEADER_PATH = filesys::normalize(F"{std::exepath()}/builtin/include");
 
+        let mut SPECIFY_MSBUILD_TARGET_VERSION = option::none: option<int>;
         let MSVC_TARGET_KEYWORDS = {
             [2017] = "Visual Studio 15 2017",
             [2019] = "Visual Studio 16 2019",
             [2022] = "Visual Studio 17 2022",
         };
 
-        let USING_MSVC_TARGET = MSVC_TARGET_KEYWORDS[
-            MSVC_TARGET_KEYWORDS
-                ->   unmapping
-                ->> \ver_and_config = ver_and_config[0];
-                ->  forall(\ver = std::env("MSBUILD")->val->find(ver as int: string) != -1;)
-                ->  reduce(\l, r = l > r ? l | r;)
-                ->  val
-            ];
+        let USING_MSVC_TARGET_MAY_NULL =
+            SPECIFY_MSBUILD_TARGET_VERSION->orbind(
+                \= MSVC_TARGET_KEYWORDS
+                    ->  unmapping
+                    ->> \ver_and_config = ver_and_config[0];
+                    ->  forall(\ver = MSVC_PATH_MAY_NULL->>\p = p->tostring->find(ver as int: string) != -1;->valor(false);)
+                    ->  reduce(\l, r = l > r ? l | r;)
+                ;)
+                =>> \val = MSVC_TARGET_KEYWORDS->get(val);
+            ;
 
+        public func is_builder_ready()
+        {
+            return MSVC_PATH_MAY_NULL
+                =>> \_ = USING_MSVC_TARGET_MAY_NULL;
+                ->  has
+                ;
+        }
 
         // 引擎的库目录
         let ENGINE_CORE_LIBRARYS_LOCATE_PATH = filesys::normalize(std::exepath());
@@ -451,10 +461,13 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                     path = proj->parse_path_normalize(readdat->val["path": dynamic] as string), 
                     configs = readdat
                         ->val["conf": dynamic] as array
-                        ->map(\d: dynamic = d as string;)
-                        // 如果文件打不开，直接在这里爆炸
-                        ->map(\conf: string = (conf, generate_cmake_doc(conf)->okay->val);)
-                        ->mapping,
+                        ->> \d = d as string;
+                        =>> \conf: string = generated_doc->isok
+                                ? [(conf, generated_doc->unwarp)]
+                                | []
+                                where generated_doc = generate_cmake_doc(conf)
+                            ;
+                        ->  mapping,
                     module_instance = mut option::none,
                     project = proj,
                 };
@@ -578,7 +591,11 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
         func generate_cmake_doc(conf: string)=> result<CxxProjectBuildConfig, string>
         {
-            let win32_cmake = 
+            match (USING_MSVC_TARGET_MAY_NULL)
+            {
+            value(USING_MSVC_TARGET)?
+                {
+                    let win32_cmake = 
 @"# Build config for $$JEMODULE_PROJECT_NAME$$
 cmake_minimum_required (VERSION 3.8)
 
@@ -612,51 +629,55 @@ set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES DEBUG_POSTFIX "$$JE_P
 
 target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
 "@;
-            
-            // 根据给定的配置和项目路径等信息，生成CMake文档
-            let static config_cmake_file = {
-                ["win32_debug_x86"] = CxxProjectBuildConfig{ 
-                    config = "win32_debug_x86",
-                    cmake = win32_cmake
-                        ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32_debug.lib")
-                        ->replace("$$JE_WOOLANG_LIB$$", "libwoo32_debug.lib")
-                        ->replace("$$JE_POSTFIX$$", "32_debug"),
-                    cmake_option = ["-G", USING_MSVC_TARGET, "-A", "Win32", "-DCMAKE_BUILD_TYPE=DEBUG"],
-                    built_command = ["-p:Configuration=Debug",],
-                },
-                ["win32_release_x86"] = CxxProjectBuildConfig{ 
-                    config = "win32_release_x86",
-                    cmake = win32_cmake
-                        ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32.lib")
-                        ->replace("$$JE_WOOLANG_LIB$$", "libwoo32.lib")
-                        ->replace("$$JE_POSTFIX$$", "32"),
-                    cmake_option = ["-G", USING_MSVC_TARGET, "-A", "Win32", "-DCMAKE_BUILD_TYPE=RELWITHDEBINFO"],
-                    built_command = ["-p:Configuration=RelWithDebInfo",],
-                },
-                ["win32_debug_x64"] = CxxProjectBuildConfig{ 
-                    config = "win32_debug_x64",
-                    cmake = win32_cmake
-                        ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs_debug.lib")
-                        ->replace("$$JE_WOOLANG_LIB$$", "libwoo_debug.lib")
-                        ->replace("$$JE_POSTFIX$$", "_debug"),
-                    cmake_option = ["-G", USING_MSVC_TARGET, "-A", "x64", "-DCMAKE_BUILD_TYPE=DEBUG"],
-                    built_command = ["-p:Configuration=Debug",],
-                },
-                ["win32_release_x64"] = CxxProjectBuildConfig{ 
-                    config = "win32_release_x64",
-                    cmake = win32_cmake
-                        ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs.lib")
-                        ->replace("$$JE_WOOLANG_LIB$$", "libwoo.lib")
-                        ->replace("$$JE_POSTFIX$$", ""),
-                    cmake_option = ["-G", USING_MSVC_TARGET, "-A", "x64", "-DCMAKE_BUILD_TYPE=RELWITHDEBINFO"],
-                    built_command = ["-p:Configuration=RelWithDebInfo",],
-                } 
-            };
+                 
+                    // 根据给定的配置和项目路径等信息，生成CMake文档
+                    let static config_cmake_file = {
+                        ["win32_debug_x86"] = CxxProjectBuildConfig{ 
+                            config = "win32_debug_x86",
+                            cmake = win32_cmake
+                                ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32_debug.lib")
+                                ->replace("$$JE_WOOLANG_LIB$$", "libwoo32_debug.lib")
+                                ->replace("$$JE_POSTFIX$$", "32_debug"),
+                            cmake_option = ["-G", USING_MSVC_TARGET, "-A", "Win32", "-DCMAKE_BUILD_TYPE=DEBUG"],
+                            built_command = ["-p:Configuration=Debug",],
+                        },
+                        ["win32_release_x86"] = CxxProjectBuildConfig{ 
+                            config = "win32_release_x86",
+                            cmake = win32_cmake
+                                ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs32.lib")
+                                ->replace("$$JE_WOOLANG_LIB$$", "libwoo32.lib")
+                                ->replace("$$JE_POSTFIX$$", "32"),
+                            cmake_option = ["-G", USING_MSVC_TARGET, "-A", "Win32", "-DCMAKE_BUILD_TYPE=RELWITHDEBINFO"],
+                            built_command = ["-p:Configuration=RelWithDebInfo",],
+                        },
+                        ["win32_debug_x64"] = CxxProjectBuildConfig{ 
+                            config = "win32_debug_x64",
+                            cmake = win32_cmake
+                                ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs_debug.lib")
+                                ->replace("$$JE_WOOLANG_LIB$$", "libwoo_debug.lib")
+                                ->replace("$$JE_POSTFIX$$", "_debug"),
+                            cmake_option = ["-G", USING_MSVC_TARGET, "-A", "x64", "-DCMAKE_BUILD_TYPE=DEBUG"],
+                            built_command = ["-p:Configuration=Debug",],
+                        },
+                        ["win32_release_x64"] = CxxProjectBuildConfig{ 
+                            config = "win32_release_x64",
+                            cmake = win32_cmake
+                                ->replace("$$JE_ENGINE_LIB$$",  "libjoyecs.lib")
+                                ->replace("$$JE_WOOLANG_LIB$$", "libwoo.lib")
+                                ->replace("$$JE_POSTFIX$$", ""),
+                            cmake_option = ["-G", USING_MSVC_TARGET, "-A", "x64", "-DCMAKE_BUILD_TYPE=RELWITHDEBINFO"],
+                            built_command = ["-p:Configuration=RelWithDebInfo",],
+                        } 
+                    };
 
-            return
-                config_cmake_file->get(conf)
-                    ->map(\c: CxxProjectBuildConfig = result::ok(c): result<typeof(c), string>;)
-                    ->valor(result::err(F"未知的配置{conf}"));
+                    return
+                        config_cmake_file->get(conf)
+                            ->map(\c: CxxProjectBuildConfig = result::ok(c): result<typeof(c), string>;)
+                            ->valor(result::err(F"未知的配置{conf}"));
+                }
+            none?
+                return result::err(F"没有指定使用的MSBUILD版本");
+            }
         }
 
         using compile_context = struct {
@@ -749,155 +770,163 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
 
         public func compile(self: CxxProject, config: string, context: option<compile_context>)
         {
-            // 输入所需的配置，如果项目支持这个配置，则编译模块
-            let conf = self.configs->get(config);
-            if (!conf->has)
+            match (MSVC_PATH_MAY_NULL)
             {
-                do context->>\context = context.show = false;;
-                do context->>\context = context.display_msg = "不支持的配置";;
-                return result::err("不支持的配置");
-            }
+            value(MSVC_PATH)?
+                {
+                    // 输入所需的配置，如果项目支持这个配置，则编译模块
+                    let conf = self.configs->get(config);
+                    if (!conf->has)
+                    {
+                        do context->>\context = context.show = false;;
+                        do context->>\context = context.display_msg = "不支持的配置";;
+                        return result::err("不支持的配置");
+                    }
 
-            using filesys;
-            using filesys;
+                    using filesys;
+                    using filesys;
 
-            do context->>\context = context.display_msg = "正在检查工具链";;
-            do context->>\context = context.progress = 0;;
+                    do context->>\context = context.display_msg = "正在检查工具链";;
+                    do context->>\context = context.progress = 0;;
 
-            if (!exist(CMAKE_PATH))
+                    if (!exist(CMAKE_PATH))
+                    {
+                        do context->>\context = context.display_msg = F"无法找到{CMAKE_PATH}，请检查CMake配置和环境变量";;
+                        return result::err(F"无法找到{CMAKE_PATH}，请检查CMake配置和环境变量");
+                    }
+                    if (!exist(MSVC_PATH))
+                    {
+                        do context->>\context = context.display_msg = F"无法找到{MSVC_PATH}，请检查工具链环境变量";;
+                        return result::err(F"无法找到{MSVC_PATH}，请检查工具链环境变量");
+                    }
+
+                    do context->>\context = context.display_msg = "正在扫描并生成loader.hpp";;
+                    do context->>\context = context.progress = 5;;
+
+                    let components = subpath(self.path/"components")
+                        ->> \childs = childs
+                            ->  forall(\f = extension(f)->lower == ".hpp";)
+                            ->> \f = fname->subto(0, fname->len - 4)
+                                where fname = filename(f)
+                                ;
+                            ;
+                        ->or(\_=[];);
+                    
+                    let systems = subpath(self.path/"systems")
+                        ->> \childs = childs
+                            ->  forall(\f = extension(f)->lower == ".hpp";)
+                            ->> \f = fname->subto(0, fname->len - 4)
+                                where fname = filename(f)
+                                ;
+                            ;
+                        ->or(\_=[];);
+
+                    let loader_header = 
+        @"#pragma once
+
+        // Do not modify this file
+        // 'loader.hpp' will be generated by editor.
+
+        // Headers of components/systems
+        // E.G. #include "ExampleComponent.hpp"
+        $$INCLUDE_COMPONENT_HEADERS$$
+        $$INCLUDE_SYSTEM_HEADERS$$
+
+        namespace jemodule
+        {
+            void register_types()
             {
-                do context->>\context = context.display_msg = F"无法找到{CMAKE_PATH}，请检查CMake配置和环境变量";;
-                return result::err(F"无法找到{CMAKE_PATH}，请检查CMake配置和环境变量");
+                // Here to load components/system
+                // e.g. jeecs::typing::type_info::of<Module::ExampleComponent>("Module::ExampleComponent");
+        $$REGISTER_COMPONENT_TYPES$$
+        $$REGISTER_SYSTEM_TYPES$$
             }
-            if (!exist(MSVC_PATH))
-            {
-                do context->>\context = context.display_msg = F"无法找到{MSVC_PATH}，请检查工具链环境变量";;
-                return result::err(F"无法找到{MSVC_PATH}，请检查工具链环境变量");
+        }
+        "@;
+                    let import_component_headers = 
+                        components
+                            ->map(\f: string = F"#include \"{f}.hpp\"";)
+                            ->reduce(\l: string, r: string = l + "\n" + r;)
+                            ->valor("");
+                    let import_system_headers = 
+                        systems
+                            ->map(\f: string = F"#include \"{f}.hpp\"";)
+                            ->reduce(\l: string, r: string = l + "\n" + r;)
+                            ->valor("");
+
+                    let register_component_types =
+                        components
+                            ->map(\f: string = F"        jeecs::typing::type_info::of<{self.name}::{f}>(\"{self.name}::{f}\");";)
+                            ->reduce(\l: string, r: string = l + "\n" + r;)
+                            ->valor("");
+                    let register_system_types = 
+                        systems
+                            ->map(\f: string = F"        jeecs::typing::type_info::of<{self.name}::{f}>(\"{self.name}::{f}\");";)
+                            ->reduce(\l: string, r: string = l + "\n" + r;)
+                            ->valor("");
+
+                    let loader_src = 
+                        loader_header
+                            ->replace("$$INCLUDE_COMPONENT_HEADERS$$", import_component_headers)
+                            ->replace("$$INCLUDE_SYSTEM_HEADERS$$", import_system_headers)
+                            ->replace("$$REGISTER_COMPONENT_TYPES$$", register_component_types)
+                            ->replace("$$REGISTER_SYSTEM_TYPES$$", register_system_types);
+
+                    if (!writeall(self.path/"loader.hpp", loader_src))
+                    {
+                        do context->>\context = context.display_msg = F"无法写入'{self.path}/loader.hpp'";;
+                        return result::err(F"无法写入'{self.path}/loader.hpp'");
+                    }
+
+                    do context->>\context = context.display_msg = F"正在使用CMake生成编译配置\n{config}";;
+                    do context->>\context = context.progress = 15;;
+
+                    if (start_process(CMAKE_PATH->tostring, 
+                        [CMAKE_PATH->tostring, self.path->tostring, "-B", self.path->tostring + "/msvcbuild_" + config, F"-DJEMODULE_BUILT_AIM=\"{config}\""]
+                            ->connect(conf->val.cmake_option)) != true)
+                    {
+                        do context->>\context = context.display_msg = "CMake生成失败";;
+                        return result::err("CMake生成失败");
+                    }
+
+                    let msvc_proj_path = self.path/F"msvcbuild_{config}"/"builder"/config/F"{self.name->replace(" ", "_")}.vcxproj";
+                    let msvc_compile_result_path = self.path/F"msvcbuild_{config}"/"compile.log";
+
+                    do remove(msvc_compile_result_path)->unwarp;
+
+                    do context->>\context = context.display_msg = F"正在构建二进制文件\n{config}";;
+                    do context->>\context = context.progress = 45;;
+
+                    let compile_result_statu_code = start_process(MSVC_PATH->tostring(), [
+                        MSVC_PATH->tostring(), msvc_proj_path->tostring, "-v:quiet", "-fl",
+                        F"-flp:logfile={msvc_compile_result_path->tostring}" 
+                    ]->connect(conf->val.built_command));
+                    let compile_result = readall(msvc_compile_result_path);
+
+                    do context->>\context = context.massive_msg = option::value(compile_result->valor("没有找到编译日志，查看控制台获取更多信息"));;
+
+                    if (compile_result_statu_code != true)
+                    {
+                        do context->>\context = context.display_msg = "C++编译失败";;
+                        return result::err("C++编译失败");
+                    }
+                    
+                    do context->>\context = context.display_msg = "编译完成";;
+                    do context->>\context = context.progress = 100;;
+
+                    self.project->active_module(self);
+
+                    // 更新编译版本
+                    if (! filesys::writeall(self.path / "version.json", EngineVersionInfo::current()->serialize))
+                    {
+                        jeapi::gui::form::errmsg("警告", "无法为生成的模块记录版本信息文件，请检查");
+                    }
+
+                    return result::ok("编译完成");
+                }
+            none?
+                return result::err("没有找到MSBUILD，编译无法进行");
             }
-
-            do context->>\context = context.display_msg = "正在扫描并生成loader.hpp";;
-            do context->>\context = context.progress = 5;;
-
-            let components = subpath(self.path/"components")
-                ->> \childs = childs
-                    ->  forall(\f = extension(f)->lower == ".hpp";)
-                    ->> \f = fname->subto(0, fname->len - 4)
-                        where fname = filename(f)
-                        ;
-                    ;
-                ->or(\_=[];);
-            
-            let systems = subpath(self.path/"systems")
-                ->> \childs = childs
-                    ->  forall(\f = extension(f)->lower == ".hpp";)
-                    ->> \f = fname->subto(0, fname->len - 4)
-                        where fname = filename(f)
-                        ;
-                    ;
-                ->or(\_=[];);
-
-            let loader_header = 
-@"#pragma once
-
-// Do not modify this file
-// 'loader.hpp' will be generated by editor.
-
-// Headers of components/systems
-// E.G. #include "ExampleComponent.hpp"
-$$INCLUDE_COMPONENT_HEADERS$$
-$$INCLUDE_SYSTEM_HEADERS$$
-
-namespace jemodule
-{
-    void register_types()
-    {
-        // Here to load components/system
-        // e.g. jeecs::typing::type_info::of<Module::ExampleComponent>("Module::ExampleComponent");
-$$REGISTER_COMPONENT_TYPES$$
-$$REGISTER_SYSTEM_TYPES$$
-    }
-}
-"@;
-            let import_component_headers = 
-                components
-                    ->map(\f: string = F"#include \"{f}.hpp\"";)
-                    ->reduce(\l: string, r: string = l + "\n" + r;)
-                    ->valor("");
-            let import_system_headers = 
-                systems
-                    ->map(\f: string = F"#include \"{f}.hpp\"";)
-                    ->reduce(\l: string, r: string = l + "\n" + r;)
-                    ->valor("");
-
-            let register_component_types =
-                components
-                    ->map(\f: string = F"        jeecs::typing::type_info::of<{self.name}::{f}>(\"{self.name}::{f}\");";)
-                    ->reduce(\l: string, r: string = l + "\n" + r;)
-                    ->valor("");
-            let register_system_types = 
-                systems
-                    ->map(\f: string = F"        jeecs::typing::type_info::of<{self.name}::{f}>(\"{self.name}::{f}\");";)
-                    ->reduce(\l: string, r: string = l + "\n" + r;)
-                    ->valor("");
-
-            let loader_src = 
-                loader_header
-                    ->replace("$$INCLUDE_COMPONENT_HEADERS$$", import_component_headers)
-                    ->replace("$$INCLUDE_SYSTEM_HEADERS$$", import_system_headers)
-                    ->replace("$$REGISTER_COMPONENT_TYPES$$", register_component_types)
-                    ->replace("$$REGISTER_SYSTEM_TYPES$$", register_system_types);
-
-            if (!writeall(self.path/"loader.hpp", loader_src))
-            {
-                do context->>\context = context.display_msg = F"无法写入'{self.path}/loader.hpp'";;
-                return result::err(F"无法写入'{self.path}/loader.hpp'");
-            }
-
-            do context->>\context = context.display_msg = F"正在使用CMake生成编译配置\n{config}";;
-            do context->>\context = context.progress = 15;;
-
-            if (start_process(CMAKE_PATH->tostring, 
-                [CMAKE_PATH->tostring, self.path->tostring, "-B", self.path->tostring + "/msvcbuild_" + config, F"-DJEMODULE_BUILT_AIM=\"{config}\""]
-                    ->connect(conf->val.cmake_option)) != true)
-            {
-                do context->>\context = context.display_msg = "CMake生成失败";;
-                return result::err("CMake生成失败");
-            }
-
-            let msvc_proj_path = self.path/F"msvcbuild_{config}"/"builder"/config/F"{self.name->replace(" ", "_")}.vcxproj";
-            let msvc_compile_result_path = self.path/F"msvcbuild_{config}"/"compile.log";
-
-            do remove(msvc_compile_result_path)->unwarp;
-
-            do context->>\context = context.display_msg = F"正在构建二进制文件\n{config}";;
-            do context->>\context = context.progress = 45;;
-
-            let compile_result_statu_code = start_process(MSVC_PATH->tostring(), [
-                MSVC_PATH->tostring(), msvc_proj_path->tostring, "-v:quiet", "-fl",
-                F"-flp:logfile={msvc_compile_result_path->tostring}" 
-            ]->connect(conf->val.built_command));
-            let compile_result = readall(msvc_compile_result_path);
-
-            do context->>\context = context.massive_msg = option::value(compile_result->valor("没有找到编译日志，查看控制台获取更多信息"));;
-
-            if (compile_result_statu_code != true)
-            {
-                do context->>\context = context.display_msg = "C++编译失败";;
-                return result::err("C++编译失败");
-            }
-            
-            do context->>\context = context.display_msg = "编译完成";;
-            do context->>\context = context.progress = 100;;
-
-            self.project->active_module(self);
-
-            // 更新编译版本
-            if (! filesys::writeall(self.path / "version.json", EngineVersionInfo::current()->serialize))
-            {
-                jeapi::gui::form::errmsg("警告", "无法为生成的模块记录版本信息文件，请检查");
-            }
-
-            return result::ok("编译完成");
         }
 
     }

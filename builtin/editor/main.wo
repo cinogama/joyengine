@@ -365,51 +365,79 @@ let u = editor::Environment::create();
    
     let w = u->create_world;
     do w->add_system(je::typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->val);
-    launch(func(){
-        let open = mutable::create(true);
 
-        do BeginAttr("JoyEngineECS 项目导航", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-        Text("欢迎使用JoyEngine，请选择一项以开始");
+    if (editor::CxxProject::is_builder_ready())
+        launch(func(){
+            let open = mutable::create(true);
 
-        Separator();
+            do BeginAttr("JoyEngineECS 项目导航", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+            Text("欢迎使用JoyEngine，请选择一项以开始");
 
-        static let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val;
-        static let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP.png")->val;
-        static let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
-        
-        if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
-        {
-            launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
-        }
-        if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
-        {
-            launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
-        }
+            Separator();
 
-        TextDisabled("历史项目");
-        do BeginChildSize("##history", 0., 100.);
+            static let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val;
+            static let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP.png")->val;
+            static let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
+            
+            if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
+            {
+                launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
+            }
+            if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
+            {
+                launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
+            }
 
-        for (let _, dat : historys)
-        {
-            if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::none))
-                open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
-        }
+            TextDisabled("历史项目");
+            do BeginChildSize("##history", 0., 100.);
 
-        EndChild();
+            for (let _, dat : historys)
+            {
+                if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::none))
+                    open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
+            }
 
-        if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
-        {
-            u->close();
-            do open->set(false);
-        }
+            EndChild();
 
-        Separator();
-        TextDisabled("(C)Cinogama project. 2022.");
+            if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
+            {
+                u->close();
+                do open->set(false);
+            }
 
-        End();
+            Separator();
+            TextDisabled("(C)Cinogama project. 2022.");
 
-        return open->get();
-    }, ());
+            End();
+
+            return open->get();
+        }, ());
+    else
+        launch(func(){
+            do BeginAttr("JoyEngineECS 项目导航", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+            Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
+            Text("* 项目中的C++模块需要使用构建工具进行编译");
+            Separator();
+            Text("请确认以下事项已经完成，然后重启编辑器");
+
+            do BeginChildSize("##history", 500., 200.);
+            Text("1. 请确认已经安装 Visual Studio 的2017、2019或2022版本其中之一");
+            Text("2. 请找到 Visual Studio 携带的 MSBuild.exe 的所在路径");
+            Text("  * 以安装在C盘的为例，MSBuild.exe所在路径可能为:");
+            do InputText("##path", @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin"@);
+            Text("3. 请设置环境变量 `MSBUILD` 指向此路径");
+            Text("4. 请确保以上路径包含 2017、2019或2022 字样");
+            Text("5. 若确实没有，请打开引擎可执行文件所在的目录，用以下内容：");
+            do InputText("##vsver", @"{"": 2017}"@);
+            EndChild();
+            
+            Separator();
+            TextDisabled("(C)Cinogama project. 2022.");
+
+            End();
+
+            return true;
+        }, ());
     u->wait();
 }
 
