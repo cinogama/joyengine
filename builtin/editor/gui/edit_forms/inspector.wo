@@ -19,13 +19,18 @@ namespace editor::gui::edit_forms
         DoNothing,
     }
             
-    func show_shader_menu()
+    func show_shader_menu(shader: je::graphic::shader)
     {
         using je::gui;
 
         let mut menu_option = shader_option::DoNothing;
         if (BeginPopupContextItem())
         {
+            if (MenuItem("找到所在目录"))
+                jeapi::gui::widget::invoke_click_file_callback(shader->path);
+            if (MenuItem("复制路径"))
+                SetClipboardText(shader->path);
+            Separator();
             if (MenuItem("移除"))
                 menu_option = shader_option::DelShader;
 
@@ -50,8 +55,11 @@ namespace editor::gui::edit_forms
         SetNextItemOpen(true);
 
         let show_uniforms = TreeNodeEx(F"{shader->path}##{index}", attribute);
+        if (IsItemClickedLeft())
+            jeapi::gui::widget::invoke_click_file_callback(shader->path);
+        
         let is_hovered = IsItemHovered();
-        let mut shader_operation = show_shader_menu();
+        let mut shader_operation = show_shader_menu(shader);
 
         match (jeapi::gui::widget::accept_file_for_current_widget())
         {
@@ -107,7 +115,9 @@ namespace editor::gui::edit_forms
                             ->> \path = context->get_project->make_path_normalize(filesys::normalize(path));
                             ->> \path =  je::graphic::texture::load(path)
                                 ->> \tex = entity->editor::graphic::bind_texture(id, tex);
-                                ->  or(\=jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理");)
+                                ->  or(\= path == "" 
+                                        ? jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理")
+                                        | jeapi::gui::form::errmsg("清空纹理失败", "纹理文件不允许被清空");)
                                 ;
                             ;
                     }

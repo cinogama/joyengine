@@ -49,7 +49,7 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
         jeecs_file_read(&cache_mgr_ver, sizeof(uint32_t), 1, cache_file);
         if (cache_mgr_ver != cache_mgr_version)
         {
-            jeecs::debug::logwarn("Found cache file when loading '%s', but cache's MGR_VERSION din't match.",
+            jeecs::debug::loginfo("Found cache file when loading '%s', but cache's MGR_VERSION din't match.",
                 filepath);
             jeecs_file_close(cache_file);
             return nullptr;
@@ -58,7 +58,7 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
         jeecs_file_read(&cache_format_ver, sizeof(uint32_t), 1, cache_file);
         if (cache_format_ver != format_version)
         {
-            jeecs::debug::logwarn("Found cache file when loading '%s', but cache's FORMAT_VERSION din't match.",
+            jeecs::debug::loginfo("Found cache file when loading '%s', but cache's FORMAT_VERSION din't match.",
                 filepath);
             jeecs_file_close(cache_file);
             return nullptr;
@@ -74,14 +74,14 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
         {
             if (crc64_result != cache_crc64)
             {
-                jeecs::debug::logwarn("Found cache file when loading '%s', but cache's CRC64 din't match.",
+                jeecs::debug::loginfo("Found cache file when loading '%s', but cache's CRC64 din't match.",
                     filepath);
                 jeecs_file_close(cache_file);
                 return nullptr;
             }
         }
         else if (virtual_crc64 != -1)
-            jeecs::debug::logwarn("Found cache file when loading '%s', but origin file missing.", filepath);
+            jeecs::debug::loginfo("Found cache file when loading '%s', but origin file missing.", filepath);
         return cache_file;
     }
     return nullptr;
@@ -94,7 +94,7 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
     wo_integer_t crc64_result = usecrc64 == 0 ? _crc64_of_file(filepath) : usecrc64;
     if (crc64_result == 0)
     {
-        jeecs::debug::logwarn("Empty or failed to read file: '%s'", filepath);
+        jeecs::debug::logerr("Empty or failed to read file: '%s', failed to get crc64, create cache failed.", filepath);
         return nullptr;
     }
 

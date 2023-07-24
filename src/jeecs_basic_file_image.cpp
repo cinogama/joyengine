@@ -404,7 +404,8 @@ jeecs_file* jeecs_file_open(const char* path)
     // TODO: Open file in work path.
     std::string path_str = path;
 
-    assert(path_str.empty() == false);
+    if (path_str.empty())
+        return nullptr;
 
     if (path_str[0] == '@')
     {
@@ -442,7 +443,7 @@ jeecs_file* jeecs_file_open(const char* path)
 
         return jefhandle;
     }
-    jeecs::debug::logwarn("Fail to open file: '%s'(%d).", path, (int)errno);
+
     return nullptr;
 }
 void jeecs_file_close(jeecs_file* file)

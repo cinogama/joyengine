@@ -591,7 +591,7 @@ jegl_resource* jegl_load_texture(const char* path)
 
         if (texture->m_raw_texture_data->m_pixels == nullptr)
         {
-            jeecs::debug::logerr("Fail to load texture form file: '%s'", path);
+            jeecs::debug::logerr("Cannot load texture: Invalid image format of file: '%s'", path);
             delete texture->m_raw_texture_data;
             delete texture;
             return nullptr;
@@ -609,7 +609,7 @@ jegl_resource* jegl_load_texture(const char* path)
         return texture;
     }
 
-    jeecs::debug::logerr("Fail to open file: '%s'", path);
+    jeecs::debug::logerr("Cannot load texture: Failed to open file: '%s'", path);
     return nullptr;
 }
 
