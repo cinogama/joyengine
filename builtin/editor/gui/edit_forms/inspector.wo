@@ -115,7 +115,7 @@ namespace editor::gui::edit_forms
                             ->> \path = context->get_project->make_path_normalize(filesys::normalize(path));
                             ->> \path =  je::graphic::texture::load(path)
                                 ->> \tex = entity->editor::graphic::bind_texture(id, tex);
-                                ->  or(\= path == "" 
+                                ->  or(\= path != "" 
                                         ? jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理")
                                         | jeapi::gui::form::errmsg("清空纹理失败", "纹理文件不允许被清空");)
                                 ;
