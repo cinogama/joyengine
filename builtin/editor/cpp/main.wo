@@ -57,23 +57,25 @@ namespace editor
         // 引擎的头文件路径
         public let ENGINE_HEADER_PATH = filesys::normalize(F"{std::exepath()}/builtin/include");
 
-        let mut SPECIFY_MSBUILD_TARGET_VERSION = option::none: option<int>;
         let MSVC_TARGET_KEYWORDS = {
             [2017] = "Visual Studio 15 2017",
             [2019] = "Visual Studio 16 2019",
             [2022] = "Visual Studio 17 2022",
         };
 
-        let USING_MSVC_TARGET_MAY_NULL =
-            SPECIFY_MSBUILD_TARGET_VERSION->orbind(
-                \= MSVC_TARGET_KEYWORDS
-                    ->  unmapping
-                    ->> \ver_and_config = ver_and_config[0];
-                    ->  forall(\ver = MSVC_PATH_MAY_NULL->>\p = p->tostring->find(ver as int: string) != -1;->valor(false);)
-                    ->  reduce(\l, r = l > r ? l | r;)
-                ;)
+        let mut USING_MSVC_TARGET_MAY_NULL =
+            MSVC_TARGET_KEYWORDS
+                ->  unmapping
+                ->> \ver_and_config = ver_and_config[0];
+                ->  forall(\ver = MSVC_PATH_MAY_NULL->>\p = p->tostring->find(ver as int: string) != -1;->valor(false);)
+                ->  reduce(\l, r = l > r ? l | r;)
                 =>> \val = MSVC_TARGET_KEYWORDS->get(val);
             ;
+
+        public func specify_cmake_msvc_target_version(ver: int)
+        {
+            USING_MSVC_TARGET_MAY_NULL = MSVC_TARGET_KEYWORDS->get(ver);
+        }
 
         public func is_builder_ready()
         {
