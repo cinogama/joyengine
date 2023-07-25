@@ -1381,11 +1381,17 @@ jegl_interface_config [类型]
 */
 struct jegl_interface_config
 {
-    size_t m_windows_width, m_windows_height;
-    size_t m_resolution_x, m_resolution_y;
+    enum display_mode
+    {
+        WINDOWED,
+        FULLSCREEN,
+        BOARDLESS,
+    };
+    size_t m_width;
+    size_t m_height;
     size_t m_fps;
     const char* m_title;
-    bool m_fullscreen;
+    display_mode m_displaymode;
     bool m_enable_resize;
 };
 

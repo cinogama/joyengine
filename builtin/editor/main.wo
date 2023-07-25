@@ -220,7 +220,7 @@ func my_ask_for_get_yes_no_cancel_result(
     }, ());
 }
 
-func ask_for_saving_proj_when_exit(p: editor::Project)
+public func ask_for_saving_proj_when_exit(p: editor::Project)
 {
     static let mut shown = false;
 
@@ -362,7 +362,14 @@ let u = editor::Environment::create();
 {
     let editor_configs = read_editor_data();
     let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
-   
+
+    match (editor_configs->get("specify_vs_version": dynamic))
+    {
+    value(ver)?
+        editor::CxxProject::specify_cmake_msvc_target_version(ver as int);
+    none?;
+    }
+
     let w = u->create_world;
     do w->add_system(je::typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->val);
 
@@ -413,22 +420,50 @@ let u = editor::Environment::create();
             return open->get();
         }, ());
     else
-        launch(func(){
+        launch(func(specify_vs_version: mutable<option<int>>){
             do BeginAttr("JoyEngineECS 项目导航", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
             Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
             Text("* 项目中的C++模块需要使用构建工具进行编译");
             Separator();
             Text("请确认以下事项已经完成，然后重启编辑器");
 
-            do BeginChildSize("##history", 500., 200.);
+            do BeginChildSize("##history", 500., 300.);
             Text("1. 请确认已经安装 Visual Studio 的2017、2019或2022版本其中之一");
             Text("2. 请找到 Visual Studio 携带的 MSBuild.exe 的所在路径");
             Text("  * 以安装在C盘的为例，MSBuild.exe所在路径可能为:");
-            do InputText("##path", @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin"@);
+            Text("    "); SameLine();
+            do InputText("(仅供参考)", @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin"@);
             Text("3. 请设置环境变量 `MSBUILD` 指向此路径");
             Text("4. 请确保以上路径包含 2017、2019或2022 字样");
-            Text("5. 若确实没有，请打开引擎可执行文件所在的目录，用以下内容：");
-            do InputText("##vsver", @"{"": 2017}"@);
+            Text("  * 若没有包含，请在此指定Visual Studio的版本：");
+
+            if (specify_vs_version->get->>\val = val != 2017 && val != 2019 && val != 2022;-> valor(false))
+                specify_vs_version->set(option::none);
+
+            let _set_specify_vs_version = func(version_code: option<int>)
+            {
+                specify_vs_version->set(version_code);
+
+                let edit_conf = editor_configs->tomap();
+
+                match (version_code)
+                {
+                value(version)?
+                    edit_conf->set("specify_vs_version": dynamic, version: dynamic);
+                none?
+                    do edit_conf->remove("specify_vs_version": dynamic);
+                }
+                do filesys::writeall(
+                    filesys::normalize(std::exepath())/"editor.dat", 
+                    edit_conf->serialize->val);
+            };
+
+            let now_specify_version = specify_vs_version->get->valor(0);
+            do CheckBox("未指定（默认）", now_specify_version == 0)->>func(_){_set_specify_vs_version(option::none);};
+            do CheckBox("强制指定为 2017", now_specify_version == 2017)->> func(_){_set_specify_vs_version(option::value(2017));};
+            do CheckBox("强制指定为 2019", now_specify_version == 2019)->> func(_){_set_specify_vs_version(option::value(2019));};
+            do CheckBox("强制指定为 2022", now_specify_version == 2022)->> func(_){_set_specify_vs_version(option::value(2022));};
+            
             EndChild();
             
             Separator();
@@ -437,7 +472,7 @@ let u = editor::Environment::create();
             End();
 
             return true;
-        }, ());
+        }, (mutable::create(option::none),));
     u->wait();
 }
 

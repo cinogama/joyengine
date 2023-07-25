@@ -109,7 +109,7 @@ void APIENTRY glDebugOutput(GLenum source,
     const void* userParam)
 {
     // ignore non-significant error/warning codes
-    if (id == 131169 || id == 131185 || id == 131218 || id == 131204) 
+    if (id == 131169 || id == 131185 || id == 131218 || id == 131204)
         return;
 
     const char* source_type = "UNKNOWN";
@@ -141,9 +141,9 @@ void APIENTRY glDebugOutput(GLenum source,
     switch (severity)
     {
     case GL_DEBUG_SEVERITY_HIGH:         jelog_level = JE_LOG_FATAL; break;
-    case GL_DEBUG_SEVERITY_MEDIUM:       ; break;
-    case GL_DEBUG_SEVERITY_LOW:          ; break;
-    case GL_DEBUG_SEVERITY_NOTIFICATION: ; break;
+    case GL_DEBUG_SEVERITY_MEDIUM:; break;
+    case GL_DEBUG_SEVERITY_LOW:; break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION:; break;
     }
 
     je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
@@ -155,23 +155,50 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
 
     GRAPHIC_THREAD_ID = std::this_thread::get_id();
 
-    WINDOWS_SIZE_WIDTH = config->m_windows_width ? config->m_windows_width : config->m_resolution_x;
-    WINDOWS_SIZE_HEIGHT = config->m_windows_height ? config->m_windows_height : config->m_resolution_y;
+    auto* primary_monitor = glfwGetPrimaryMonitor();
+    auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
 
+    WINDOWS_SIZE_WIDTH = config->m_width == 0? primary_monitor_video_mode->width : config->m_width;
+    WINDOWS_SIZE_HEIGHT = config->m_height == 0 ? primary_monitor_video_mode->height : config->m_height;
+
+    glfwWindowHint(GLFW_REFRESH_RATE, config->m_fps == 0 ? primary_monitor_video_mode->refreshRate : config->m_fps);
     glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
 
     je_io_set_windowsize((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT);
 
     WINDOWS_TITLE = config->m_title ? config->m_title : WINDOWS_TITLE;
 
-    WINDOWS_HANDLE = glfwCreateWindow((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT, WINDOWS_TITLE,
-        config->m_fullscreen ? glfwGetPrimaryMonitor() : NULL, NULL);
+    switch (config->m_displaymode)
+    {
+    case jegl_interface_config::display_mode::FULLSCREEN:
+        WINDOWS_HANDLE = glfwCreateWindow(
+            (int)WINDOWS_SIZE_WIDTH,
+            (int)WINDOWS_SIZE_HEIGHT,
+            WINDOWS_TITLE,
+            primary_monitor, NULL);
+        break;
+    case jegl_interface_config::display_mode::BOARDLESS:
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    case jegl_interface_config::display_mode::WINDOWED:
+        WINDOWS_HANDLE = glfwCreateWindow(
+            (int)WINDOWS_SIZE_WIDTH,
+            (int)WINDOWS_SIZE_HEIGHT,
+            WINDOWS_TITLE,
+            NULL, NULL);
+        break;
+    default:
+        jeecs::debug::logfatal("Unknown display mode to start up graphic thread.");
+        je_clock_sleep_for(1.);
+        abort();
+        break;
+    }
 
     const char* reason;
     auto err_code = glfwGetError(&reason);
     if (err_code != GLFW_NO_ERROR)
     {
         jeecs::debug::logfatal("Opengl3 glfw reports an error(%d): %s.", err_code, reason);
+        je_clock_sleep_for(1.);
         abort();
     }
 
@@ -212,7 +239,6 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
 
     if (config->m_fps == 0)
     {
-        // TODO: 检查窗口在哪个屏幕渲染，刷新率以更低的那块屏幕计
         je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 0.0);
         glfwSwapInterval(1);
     }
@@ -413,7 +439,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
             builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(resource, "JOYENGINE_LOCAL_SCALE");
             builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(resource, "JOYENGINE_MAIN_COLOR");
-         
+
             auto* uniform_block = resource->m_raw_shader_data->m_custom_uniform_blocks;
             while (uniform_block)
             {
