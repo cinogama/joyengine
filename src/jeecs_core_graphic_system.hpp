@@ -213,54 +213,7 @@ public let frag =
         }
     };
 
-    struct GraphicPipelineBaseSystem : game_system
-    {
-        DefaultResources m_default_resources;
-
-        graphic_uhost* _m_graphic_host;
-        std::vector<rendchain_branch*> _m_rchain_pipeline;
-        size_t _m_this_frame_allocate_rchain_pipeline_count;
-
-        GraphicPipelineBaseSystem(game_world w)
-            : game_system(w)
-            , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle()))
-            , _m_this_frame_allocate_rchain_pipeline_count(0)
-        {
-        }
-        ~GraphicPipelineBaseSystem()
-        {
-            for (auto* branch : _m_rchain_pipeline)
-                jegl_uhost_free_branch(_m_graphic_host, branch);
-
-            _m_rchain_pipeline.clear();
-            _m_this_frame_allocate_rchain_pipeline_count = 0;
-        }
-
-        void pipeline_update_begin()
-        {
-            _m_this_frame_allocate_rchain_pipeline_count = 0;
-        }
-        rendchain_branch* pipeline_allocate(int p)
-        {
-            if (_m_this_frame_allocate_rchain_pipeline_count >= _m_rchain_pipeline.size())
-            {
-                assert(_m_this_frame_allocate_rchain_pipeline_count == _m_rchain_pipeline.size());
-                _m_rchain_pipeline.push_back(jegl_uhost_alloc_branch(_m_graphic_host));
-            }
-            auto* result = _m_rchain_pipeline[_m_this_frame_allocate_rchain_pipeline_count++];
-            jegl_branch_new_frame(result, p);
-            return result;
-        }
-        void pipeline_update_end()
-        {
-            for (size_t i = _m_this_frame_allocate_rchain_pipeline_count; i < _m_rchain_pipeline.size(); ++i)
-                jegl_uhost_free_branch(_m_graphic_host, _m_rchain_pipeline[i]);
-
-            _m_rchain_pipeline.resize(_m_this_frame_allocate_rchain_pipeline_count);
-        }
-    };
-
-    struct UserInterfaceGraphicPipelineSystem : public GraphicPipelineBaseSystem
+    struct UserInterfaceGraphicPipelineSystem : public graphic::BasePipelineInterface
     {
         using Translation = Transform::Translation;
 
@@ -311,6 +264,8 @@ public let frag =
             }
         };
 
+        DefaultResources m_default_resources;
+
         std::vector<camera_arch> m_camera_list;
         std::vector<renderer_arch> m_renderer_list;
 
@@ -324,7 +279,7 @@ public let frag =
         };
 
         UserInterfaceGraphicPipelineSystem(game_world w)
-            : GraphicPipelineBaseSystem(w)
+            : BasePipelineInterface(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
@@ -398,7 +353,7 @@ public let frag =
             m_camera_list.clear();
             m_renderer_list.clear();
 
-            this->pipeline_update_begin();
+            this->branch_allocate_begin();
 
             std::unordered_map<typing::uid_t, UserInterface::Origin*> parent_origin_list;
 
@@ -415,7 +370,7 @@ public let frag =
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
-                        auto* branch = this->pipeline_allocate(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
+                        auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
                                 branch, rendqueue, &projection, cameraviewport, rendbuf
@@ -491,7 +446,7 @@ public let frag =
             std::sort(m_camera_list.begin(), m_camera_list.end());
             std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
-            this->pipeline_update_end();
+            this->branch_allocate_end();
 
             DrawFrame();
         }
@@ -669,7 +624,7 @@ public let frag =
 
     };
 
-    struct UnlitGraphicPipelineSystem : public GraphicPipelineBaseSystem
+    struct UnlitGraphicPipelineSystem : public graphic::BasePipelineInterface
     {
         using Translation = Transform::Translation;
         using Rendqueue = Renderer::Rendqueue;
@@ -718,6 +673,7 @@ public let frag =
             }
         };
 
+        DefaultResources m_default_resources;
         std::vector<camera_arch> m_camera_list;
         std::vector<renderer_arch> m_renderer_list;
 
@@ -731,7 +687,7 @@ public let frag =
         };
 
         UnlitGraphicPipelineSystem(game_world w)
-            : GraphicPipelineBaseSystem(w)
+            : BasePipelineInterface(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
@@ -805,14 +761,14 @@ public let frag =
             m_camera_list.clear();
             m_renderer_list.clear();
 
-            this->pipeline_update_begin();
+            this->branch_allocate_begin();
 
             select_from(get_world())
                 .exec(&UnlitGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
-                        auto* branch = this->pipeline_allocate(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
+                        auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
                                 branch, rendqueue, &projection, cameraviewport, rendbuf
@@ -835,7 +791,7 @@ public let frag =
                     std::sort(m_camera_list.begin(), m_camera_list.end());
                     std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
-                    this->pipeline_update_end();
+                    this->branch_allocate_end();
 
                     DrawFrame();
         }
@@ -983,7 +939,7 @@ public let frag =
 
     };
 
-    struct DeferLight2DGraphicPipelineSystem : public GraphicPipelineBaseSystem
+    struct DeferLight2DGraphicPipelineSystem : public graphic::BasePipelineInterface
     {
         struct DeferLight2DResource
         {
@@ -1321,6 +1277,7 @@ public func frag(_: v2f)
             const Shape* shape;
         };
 
+        DefaultResources m_default_resources;
         std::vector<camera_arch> m_camera_list;
         std::vector<renderer_arch> m_renderer_list;
         std::list<light2d_arch> m_2dlight_list;
@@ -1349,7 +1306,7 @@ public func frag(_: v2f)
         };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
-            : GraphicPipelineBaseSystem(w)
+            : BasePipelineInterface(w)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
             m_light2d_uniform_buffer = new jeecs::graphic::uniformbuffer(1, sizeof(light2d_uniform_buffer_data_t));
@@ -1426,7 +1383,7 @@ public func frag(_: v2f)
             m_camera_list.clear();
             m_renderer_list.clear();
 
-            this->pipeline_update_begin();
+            this->branch_allocate_begin();
 
             select_from(get_world())
                 .anyof<OrthoProjection, PerspectiveProjection>()
@@ -1443,7 +1400,7 @@ public func frag(_: v2f)
                         Shaders* shaders,
                         Textures* textures)
                     {
-                        auto* branch = this->pipeline_allocate(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
+                        auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
                                 branch, rendqueue, &tarns, &projection, cameraviewport, rendbuf, light2dpostpass, shaders, textures
@@ -1580,7 +1537,7 @@ public func frag(_: v2f)
             std::sort(m_camera_list.begin(), m_camera_list.end());
             std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
-            this->pipeline_update_end();
+            this->branch_allocate_end();
 
             DrawFrame();
         }

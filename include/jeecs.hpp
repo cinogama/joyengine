@@ -3062,7 +3062,6 @@ namespace jeecs
             {
                 return *(_elems_ptr_end - 1);
             }
-
             inline void erase(size_t index)
             {
                 _elems_ptr_begin[index].~ElemT();
@@ -6675,6 +6674,59 @@ namespace jeecs
             }
 
         };
+
+        /*
+        jeecs::graphic::BasePipelineInterface [`系统(System)`接口]
+        可编程图形管线系统的接口类，用于简化图形管线的创建，包装了一些基本函数
+        （实际上开发者可以直接通过jegl_uhost_get_or_create_for_universe获取uhost进行绘制）
+        请参见：
+            jegl_uhost_get_or_create_for_universe
+        */
+        struct BasePipelineInterface : game_system
+        {
+            graphic_uhost*                  _m_graphic_host;
+            std::vector<rendchain_branch*>  _m_rchain_pipeline;
+            size_t                          _m_this_frame_allocate_rchain_pipeline_count;
+
+            BasePipelineInterface(game_world w)
+                : game_system(w)
+                , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle()))
+                , _m_this_frame_allocate_rchain_pipeline_count(0)
+            {
+            }
+            ~BasePipelineInterface()
+            {
+                for (auto* branch : _m_rchain_pipeline)
+                    jegl_uhost_free_branch(_m_graphic_host, branch);
+
+                _m_rchain_pipeline.clear();
+                _m_this_frame_allocate_rchain_pipeline_count = 0;
+            }
+
+            void branch_allocate_begin()
+            {
+                _m_this_frame_allocate_rchain_pipeline_count = 0;
+            }
+            rendchain_branch* allocate_branch(int priority)
+            {
+                if (_m_this_frame_allocate_rchain_pipeline_count >= _m_rchain_pipeline.size())
+                {
+                    assert(_m_this_frame_allocate_rchain_pipeline_count == _m_rchain_pipeline.size());
+                    _m_rchain_pipeline.push_back(jegl_uhost_alloc_branch(_m_graphic_host));
+                }
+                auto* result = _m_rchain_pipeline[_m_this_frame_allocate_rchain_pipeline_count++];
+                jegl_branch_new_frame(result, priority);
+                return result;
+            }
+            void branch_allocate_end()
+            {
+                for (size_t i = _m_this_frame_allocate_rchain_pipeline_count; i < _m_rchain_pipeline.size(); ++i)
+                    jegl_uhost_free_branch(_m_graphic_host, _m_rchain_pipeline[i]);
+
+                _m_rchain_pipeline.resize(_m_this_frame_allocate_rchain_pipeline_count);
+            }
+        };
+
     }
 
     namespace Transform
