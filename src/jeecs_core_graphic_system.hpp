@@ -1071,7 +1071,7 @@ import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (NONE);
+CULL    (FRONT);
 
 VAO_STRUCT! vin
 {
@@ -1165,7 +1165,7 @@ import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (NONE);
+CULL    (FRONT);
 
 VAO_STRUCT! vin
 {
