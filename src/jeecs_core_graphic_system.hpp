@@ -159,116 +159,16 @@ namespace jeecs
 do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
     jegl_rchain_set_builtin_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
 
-    struct rendchain_branch_pipeline
+    struct DefaultResources
     {
-        JECS_DISABLE_MOVE_AND_COPY(rendchain_branch_pipeline);
-
-        std::vector<jegl_rendchain*> m_allocated_chains;
-        size_t m_allocated_chains_count;
-        int    m_priority;
-
-        rendchain_branch_pipeline()
-            : m_allocated_chains_count(0)
-            , m_priority(0)
-        {
-        }
-        ~rendchain_branch_pipeline()
-        {
-            for (auto* chain : m_allocated_chains)
-                jegl_rchain_close(chain);
-        }
-
-        void new_frame(int priority)
-        {
-            m_priority = priority;
-            m_allocated_chains_count = 0;
-        }
-        jegl_rendchain* allocate_new_chain(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
-        {
-            if (m_allocated_chains_count >= m_allocated_chains.size())
-            {
-                assert(m_allocated_chains_count == m_allocated_chains.size());
-                m_allocated_chains.push_back(jegl_rchain_create());
-            }
-            auto* rchain = m_allocated_chains[m_allocated_chains_count];
-            jegl_rchain_begin(rchain, framebuffer, x, y, w, h);
-            ++m_allocated_chains_count;
-            return rchain;
-        }
-        void commit_frame(jegl_thread* thread)
-        {
-            for (size_t i = 0; i < m_allocated_chains_count; ++i)
-                jegl_rchain_commit(m_allocated_chains[i], thread);
-        }
-    };
-
-    struct GraphicThreadHost
-    {
-        JECS_DISABLE_MOVE_AND_COPY(GraphicThreadHost);
-
-        jegl_thread* glthread = nullptr;
-        jeecs::game_universe universe;
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
         basic::resource<graphic::texture> default_texture;
         basic::vector<basic::resource<graphic::shader>> default_shaders_list;
+    
+        JECS_DISABLE_MOVE_AND_COPY(DefaultResources);
 
-        static void _update_frame_universe_job(void* host)
-        {
-            auto* graphic_host = (GraphicThreadHost*)host;
-            if (!jegl_update(graphic_host->glthread))
-            {
-                graphic_host->universe.stop();
-            }
-        }
-
-        std::mutex m_rendchain_branchs_mx;
-        std::vector<rendchain_branch_pipeline*> m_rendchain_branchs;
-
-        rendchain_branch_pipeline* alloc_pipeline()
-        {
-            rendchain_branch_pipeline* pipe = new rendchain_branch_pipeline();
-
-            std::lock_guard g1(m_rendchain_branchs_mx);
-            m_rendchain_branchs.push_back(pipe);
-
-            return pipe;
-        }
-
-        void free_pipeline(rendchain_branch_pipeline* pipe)
-        {
-            std::lock_guard g1(m_rendchain_branchs_mx);
-            auto fnd = std::find(m_rendchain_branchs.begin(), m_rendchain_branchs.end(), pipe);
-            assert(fnd != m_rendchain_branchs.end());
-            m_rendchain_branchs.erase(fnd);
-
-            delete pipe;
-        }
-
-        void _frame_rend_impl()
-        {
-            // Clear frame buffer
-            jegl_clear_framebuffer(nullptr);
-
-            std::lock_guard g1(m_rendchain_branchs_mx);
-
-            std::stable_sort(m_rendchain_branchs.begin(), m_rendchain_branchs.end(),
-                [](rendchain_branch_pipeline* a, rendchain_branch_pipeline* b)
-                {
-                    return a->m_priority < b->m_priority;
-                });
-
-            for (auto* gpipe : m_rendchain_branchs)
-                gpipe->commit_frame(glthread);
-
-            size_t WINDOWS_WIDTH, WINDOWS_HEIGHT;
-            jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
-
-            jegl_rend_to_framebuffer(nullptr, 0, 0, WINDOWS_WIDTH, WINDOWS_HEIGHT);
-        }
-
-        GraphicThreadHost(jeecs::game_universe _universe)
-            : universe(_universe)
+        DefaultResources()
         {
             default_shape_quad =
                 graphic::vertex::create(jegl_vertex::TRIANGLESTRIP,
@@ -310,75 +210,27 @@ public let frag =
 
 )");
             default_shaders_list.push_back(default_shader);
-
-            jegl_interface_config config = {};
-            config.m_width = 640;
-            config.m_height = 480;
-            config.m_title = "JoyEngineECS(JoyEngine 4.0)";
-            config.m_displaymode = jegl_interface_config::display_mode::WINDOWED;
-            config.m_enable_resize = true;
-            config.m_fps = 0;   // Use vsync
-                
-            glthread = jegl_start_graphic_thread(
-                config,
-                universe.handle(),
-                jegl_using_opengl3_apis,
-                [](void* ptr, jegl_thread* glthread)
-                {
-                    ((GraphicThreadHost*)ptr)->_frame_rend_impl();
-                }, this);
-
-            je_ecs_universe_register_pre_call_once_job(universe.handle(), _update_frame_universe_job, this, nullptr);
-        }
-
-        ~GraphicThreadHost()
-        {
-            assert(this == _m_instance);
-            _m_instance = nullptr;
-            if (glthread)
-                jegl_terminate_graphic_thread(glthread);
-
-            je_ecs_universe_unregister_pre_call_once_job(universe.handle(), _update_frame_universe_job);
-        }
-
-        inline static std::atomic<GraphicThreadHost*> _m_instance = nullptr;
-
-        static GraphicThreadHost* get_default_graphic_pipeline_instance(game_universe universe)
-        {
-            if (nullptr == _m_instance)
-            {
-                _m_instance = new GraphicThreadHost(universe);
-                je_ecs_universe_register_exit_callback(universe.handle(),
-                    [](void* instance)
-                    {
-                        delete (GraphicThreadHost*)instance;
-                    },
-                    _m_instance);
-            }
-
-            assert(_m_instance);
-            return _m_instance;
         }
     };
 
     struct GraphicPipelineBaseSystem : game_system
     {
-        GraphicThreadHost* _m_pipeline;
+        DefaultResources m_default_resources;
 
-        std::vector<rendchain_branch_pipeline*> _m_rchain_pipeline;
+        graphic_uhost* _m_graphic_host;
+        std::vector<rendchain_branch*> _m_rchain_pipeline;
         size_t _m_this_frame_allocate_rchain_pipeline_count;
-
 
         GraphicPipelineBaseSystem(game_world w)
             : game_system(w)
-            , _m_pipeline(GraphicThreadHost::get_default_graphic_pipeline_instance(w.get_universe()))
+            , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle()))
             , _m_this_frame_allocate_rchain_pipeline_count(0)
         {
         }
         ~GraphicPipelineBaseSystem()
         {
             for (auto* branch : _m_rchain_pipeline)
-                _m_pipeline->free_pipeline(branch);
+                jegl_uhost_free_branch(_m_graphic_host, branch);
 
             _m_rchain_pipeline.clear();
             _m_this_frame_allocate_rchain_pipeline_count = 0;
@@ -388,26 +240,23 @@ public let frag =
         {
             _m_this_frame_allocate_rchain_pipeline_count = 0;
         }
-        rendchain_branch_pipeline* pipeline_allocate()
+        rendchain_branch* pipeline_allocate(int p)
         {
             if (_m_this_frame_allocate_rchain_pipeline_count >= _m_rchain_pipeline.size())
             {
                 assert(_m_this_frame_allocate_rchain_pipeline_count == _m_rchain_pipeline.size());
-                _m_rchain_pipeline.push_back(_m_pipeline->alloc_pipeline());
+                _m_rchain_pipeline.push_back(jegl_uhost_alloc_branch(_m_graphic_host));
             }
-            return _m_rchain_pipeline[_m_this_frame_allocate_rchain_pipeline_count++];
+            auto* result = _m_rchain_pipeline[_m_this_frame_allocate_rchain_pipeline_count++];
+            jegl_branch_new_frame(result, p);
+            return result;
         }
         void pipeline_update_end()
         {
             for (size_t i = _m_this_frame_allocate_rchain_pipeline_count; i < _m_rchain_pipeline.size(); ++i)
-                _m_pipeline->free_pipeline(_m_rchain_pipeline[i]);
+                jegl_uhost_free_branch(_m_graphic_host, _m_rchain_pipeline[i]);
 
             _m_rchain_pipeline.resize(_m_this_frame_allocate_rchain_pipeline_count);
-        }
-
-        inline GraphicThreadHost* host()const noexcept
-        {
-            return _m_pipeline;
         }
     };
 
@@ -430,7 +279,7 @@ public let frag =
 
         struct camera_arch
         {
-            rendchain_branch_pipeline* branchPipeline;
+            rendchain_branch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Projection* projection;
@@ -566,8 +415,7 @@ public let frag =
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
-                        auto* branch = this->pipeline_allocate();
-                        branch->new_frame(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
+                        auto* branch = this->pipeline_allocate(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
                                 branch, rendqueue, &projection, cameraviewport, rendbuf
@@ -697,13 +545,13 @@ public let frag =
                 jegl_rendchain* rend_chain = nullptr;
 
                 if (current_camera.viewport)
-                    rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer,
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
                         (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                         (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                 else
-                    rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer,
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 // If camera rend to texture, clear the frame buffer (if need)
@@ -724,12 +572,12 @@ public let frag =
                     auto& drawing_shape =
                         rendentity.shape->vertex != nullptr
                         ? rendentity.shape->vertex
-                        : host()->default_shape_quad;
+                        : m_default_resources.default_shape_quad;
 
                     auto& drawing_shaders =
                         rendentity.shaders->shaders.empty() == false
                         ? rendentity.shaders->shaders
-                        : host()->default_shaders_list;
+                        : m_default_resources.default_shaders_list;
 
                     constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
                     const jeecs::math::vec2
@@ -775,7 +623,7 @@ public let frag =
 
                     auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
-                    jegl_rchain_bind_texture(rend_chain, rchain_texture_group, 0, host()->default_texture->resouce());
+                    jegl_rchain_bind_texture(rend_chain, rchain_texture_group, 0, m_default_resources.default_texture->resouce());
                     if (rendentity.textures)
                     {
                         _using_tiling = &rendentity.textures->tiling;
@@ -788,7 +636,7 @@ public let frag =
                     {
                         auto* using_shader = &shader_pass;
                         if (!shader_pass->m_builtin)
-                            using_shader = &host()->default_shader;
+                            using_shader = &m_default_resources.default_shader;
 
                         auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), rchain_texture_group);
                         auto* builtin_uniform = (*using_shader)->m_builtin;
@@ -839,7 +687,7 @@ public let frag =
 
         struct camera_arch
         {
-            rendchain_branch_pipeline* branchPipeline;
+            rendchain_branch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Projection* projection;
@@ -964,8 +812,7 @@ public let frag =
                 .exec(
                     [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
                     {
-                        auto* branch = this->pipeline_allocate();
-                        branch->new_frame(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
+                        auto* branch = this->pipeline_allocate(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
                                 branch, rendqueue, &projection, cameraviewport, rendbuf
@@ -1039,13 +886,13 @@ public let frag =
                 jegl_rendchain* rend_chain = nullptr;
 
                 if (current_camera.viewport)
-                    rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer,
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
                         (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                         (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                 else
-                    rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer,
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 // If camera rend to texture, clear the frame buffer (if need)
@@ -1066,12 +913,12 @@ public let frag =
                     auto& drawing_shape =
                         rendentity.shape->vertex != nullptr
                         ? rendentity.shape->vertex
-                        : host()->default_shape_quad;
+                        : m_default_resources.default_shape_quad;
 
                     auto& drawing_shaders =
                         rendentity.shaders->shaders.empty() == false
                         ? rendentity.shaders->shaders
-                        : host()->default_shaders_list;
+                        : m_default_resources.default_shaders_list;
 
                     constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
                     const jeecs::math::vec2
@@ -1088,7 +935,7 @@ public let frag =
 
                     auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
-                    jegl_rchain_bind_texture(rend_chain, rchain_texture_group, 0, host()->default_texture->resouce());
+                    jegl_rchain_bind_texture(rend_chain, rchain_texture_group, 0, m_default_resources.default_texture->resouce());
                     if (rendentity.textures)
                     {
                         _using_tiling = &rendentity.textures->tiling;
@@ -1101,7 +948,7 @@ public let frag =
                     {
                         auto* using_shader = &shader_pass;
                         if (!shader_pass->m_builtin)
-                            using_shader = &host()->default_shader;
+                            using_shader = &m_default_resources.default_shader;
 
                         auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), rchain_texture_group);
                         auto* builtin_uniform = (*using_shader)->m_builtin;
@@ -1138,9 +985,9 @@ public let frag =
 
     struct DeferLight2DGraphicPipelineSystem : public GraphicPipelineBaseSystem
     {
-        struct DeferLight2DHost
+        struct DeferLight2DResource
         {
-            jegl_thread* _m_belong_context;
+            JECS_DISABLE_MOVE_AND_COPY(DeferLight2DResource);
 
             // Used for move rend result to camera's render aim buffer.
             jeecs::basic::resource<jeecs::graphic::texture> _no_shadow;
@@ -1153,8 +1000,7 @@ public let frag =
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
 
-            DeferLight2DHost(jegl_thread* _ctx)
-                : _m_belong_context(_ctx)
+            DeferLight2DResource()
             {
                 using namespace jeecs::graphic;
                 _no_shadow = texture::create(1, 1, jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
@@ -1399,19 +1245,9 @@ public func frag(_: v2f)
 }
 )") };
             }
-
-            static DeferLight2DHost* instance(jegl_thread* glcontext)
-            {
-                static DeferLight2DHost* _instance = nullptr;
-                if (_instance == nullptr || _instance->_m_belong_context != glcontext)
-                {
-                    if (_instance != nullptr)
-                        delete _instance;
-                    _instance = new DeferLight2DHost(glcontext);
-                }
-                return _instance;
-            }
         };
+
+        DeferLight2DResource m_defer_light2d_host;
 
         using Translation = Transform::Translation;
 
@@ -1430,7 +1266,7 @@ public func frag(_: v2f)
 
         struct camera_arch
         {
-            rendchain_branch_pipeline* branchPipeline;
+            rendchain_branch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Translation* translation;
@@ -1607,9 +1443,7 @@ public func frag(_: v2f)
                         Shaders* shaders,
                         Textures* textures)
                     {
-                        auto* branch = this->pipeline_allocate();
-                        branch->new_frame(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-
+                        auto* branch = this->pipeline_allocate(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
                                 branch, rendqueue, &tarns, &projection, cameraviewport, rendbuf, light2dpostpass, shaders, textures
@@ -1753,9 +1587,6 @@ public func frag(_: v2f)
 
         void DrawFrame()
         {
-            auto* glthread = _m_pipeline->glthread;
-            auto* light2d_host = DeferLight2DHost::instance(glthread);
-
             if (WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0)
                 // Windows' size is invalid, skip this frame.
                 return;
@@ -1794,9 +1625,9 @@ public func frag(_: v2f)
                 l2dbuf.l2ds[light_count].position.w =
                     ((lightarch.shape == nullptr || lightarch.shape->vertex == nullptr
                         ? math::vec3(
-                            host()->default_shape_quad->resouce()->m_raw_vertex_data->m_size_x,
-                            host()->default_shape_quad->resouce()->m_raw_vertex_data->m_size_y,
-                            host()->default_shape_quad->resouce()->m_raw_vertex_data->m_size_z)
+                            m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_x,
+                            m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_y,
+                            m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_z)
                         : math::vec3(
                             lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_x,
                             lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_y,
@@ -1818,8 +1649,8 @@ public func frag(_: v2f)
                     LIGHT2D_SHADOW.push_back(lightarch.shadow->shadow_buffer->get_attachment(0)->resouce());
                 }
                 else
-                    LIGHT2D_SHADOW.push_back(light2d_host->_no_shadow->resouce());
-                /*jegl_using_texture(light2d_host->_no_shadow->resouce(),
+                    LIGHT2D_SHADOW.push_back(m_defer_light2d_host._no_shadow->resouce());
+                /*jegl_using_texture(m_defer_light2d_host._no_shadow->resouce(),
                     JE_SHADOW2D_0 + light_count);*/
 
                 ++light_count;
@@ -1870,7 +1701,8 @@ public func frag(_: v2f)
                         if (lightarch.shadow != nullptr)
                         {
                             auto light2d_shadow_aim_buffer = lightarch.shadow->shadow_buffer->resouce();
-                            jegl_rendchain* light2d_shadow_rend_chain = current_camera.branchPipeline->allocate_new_chain(
+                            jegl_rendchain* light2d_shadow_rend_chain = jegl_branch_new_chain(
+                                current_camera.branchPipeline,
                                 light2d_shadow_aim_buffer, 0, 0,
                                 light2d_shadow_aim_buffer->m_raw_framebuf_data->m_width,
                                 light2d_shadow_aim_buffer->m_raw_framebuf_data->m_height);
@@ -1880,14 +1712,14 @@ public func frag(_: v2f)
 
                             const auto& normal_shadow_pass =
                                 lightarch.color->parallel ?
-                                light2d_host->_defer_light2d_shadow_parallel_pass :
-                                light2d_host->_defer_light2d_shadow_point_pass;
+                                m_defer_light2d_host._defer_light2d_shadow_parallel_pass :
+                                m_defer_light2d_host._defer_light2d_shadow_point_pass;
                             const auto& shape_shadow_pass =
                                 lightarch.color->parallel ?
-                                light2d_host->_defer_light2d_shadow_shape_parallel_pass :
-                                light2d_host->_defer_light2d_shadow_shape_point_pass;
+                                m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass :
+                                m_defer_light2d_host._defer_light2d_shadow_shape_point_pass;
 
-                            const auto& sub_shadow_pass = light2d_host->_defer_light2d_shadow_sub_pass;
+                            const auto& sub_shadow_pass = m_defer_light2d_host._defer_light2d_shadow_sub_pass;
                             const size_t block_entity_count = m_2dblock_list.size();
 
                             std::list<block2d_arch*> block_in_current_layer;
@@ -1917,13 +1749,13 @@ public func frag(_: v2f)
                                             if (main_texture != nullptr)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resouce());
                                             else
-                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, host()->default_texture->resouce());
+                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                                         }
 
                                         jeecs::graphic::vertex* using_shape = 
                                             (blockarch.shape == nullptr
                                             || blockarch.shape->vertex == nullptr)
-                                            ? host()->default_shape_quad.get()
+                                            ? m_default_resources.default_shape_quad.get()
                                             : blockarch.shape->vertex.get();
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
@@ -2043,13 +1875,13 @@ public func frag(_: v2f)
                                             if (main_texture != nullptr)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resouce());
                                             else
-                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, host()->default_texture->resouce());
+                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                                         }
 
                                         jeecs::graphic::vertex* using_shape = 
                                             (block_in_layer->shape == nullptr
                                             || block_in_layer->shape->vertex == nullptr)
-                                            ? host()->default_shape_quad.get()
+                                            ? m_default_resources.default_shape_quad.get()
                                             : block_in_layer->shape->vertex.get();
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
@@ -2099,20 +1931,24 @@ public func frag(_: v2f)
 
                     auto light2d_rend_aim_buffer = current_camera.light2DPostPass->post_rend_target->resouce();
 
-                    rend_chain = current_camera.branchPipeline->allocate_new_chain(light2d_rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                    rend_chain = jegl_branch_new_chain(
+                        current_camera.branchPipeline, 
+                        light2d_rend_aim_buffer,
+                        0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
                     jegl_rchain_clear_color_buffer(rend_chain);
                     jegl_rchain_clear_depth_buffer(rend_chain);
                 }
                 else
                 {
                     if (current_camera.viewport)
-                        rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer,
+                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
                             (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                             (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                     else
-                        rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer, 
+                            0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (rend_aim_buffer)
@@ -2147,11 +1983,11 @@ public func frag(_: v2f)
                     auto& drawing_shape =
                         rendentity.shape->vertex != nullptr
                         ? rendentity.shape->vertex
-                        : host()->default_shape_quad;
+                        : m_default_resources.default_shape_quad;
                     auto& drawing_shaders =
                         rendentity.shaders->shaders.empty() == false
                         ? rendentity.shaders->shaders
-                        : host()->default_shaders_list;
+                        : m_default_resources.default_shaders_list;
 
                     // Bind texture here
                     const jeecs::math::vec2
@@ -2160,7 +1996,7 @@ public func frag(_: v2f)
 
                     auto texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
-                    jegl_rchain_bind_texture(rend_chain, texture_group, 0, host()->default_texture->resouce());
+                    jegl_rchain_bind_texture(rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                     if (rendentity.textures)
                     {
                         _using_tiling = &rendentity.textures->tiling;
@@ -2174,7 +2010,7 @@ public func frag(_: v2f)
                     {
                         auto* using_shader = &shader_pass;
                         if (!shader_pass->m_builtin)
-                            using_shader = &host()->default_shader;
+                            using_shader = &m_default_resources.default_shader;
 
                         auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), texture_group);
                         auto* builtin_uniform = (*using_shader)->m_builtin;
@@ -2212,10 +2048,8 @@ public func frag(_: v2f)
                     assert(current_camera.light2DPostPass->post_rend_target != nullptr
                         && current_camera.light2DPostPass->post_light_target != nullptr);
 
-                    auto* light2d_host = DeferLight2DHost::instance(glthread);
-
                     // Rend Light result to target buffer.
-                    jegl_rendchain* light2d_light_effect_rend_chain = current_camera.branchPipeline->allocate_new_chain(
+                    jegl_rendchain* light2d_light_effect_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                         current_camera.light2DPostPass->post_light_target->resouce(), 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain);
@@ -2248,7 +2082,7 @@ public func frag(_: v2f)
                             JE_LIGHT2D_DEFER_0 + 3,
                             light2d.shadow != nullptr
                             ? light2d.shadow->shadow_buffer->get_attachment(0)->resouce()
-                            : light2d_host->_no_shadow->resouce());
+                            : m_defer_light2d_host._no_shadow->resouce());
 
                         // 开始渲染光照！
                         const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
@@ -2259,17 +2093,17 @@ public func frag(_: v2f)
                         auto& drawing_shape =
                             light2d.shape->vertex != nullptr
                             ? light2d.shape->vertex
-                            : host()->default_shape_quad;
+                            : m_default_resources.default_shape_quad;
                         auto& drawing_shaders =
                             light2d.shaders->shaders.empty() == false
                             ? light2d.shaders->shaders
-                            : host()->default_shaders_list;
+                            : m_default_resources.default_shaders_list;
 
                         // Bind texture here
                         const jeecs::math::vec2
                             * _using_tiling = &default_tiling,
                             * _using_offset = &default_offset;
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, 0, host()->default_texture->resouce());
+                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                         if (light2d.textures)
                         {
                             _using_tiling = &light2d.textures->tiling;
@@ -2286,7 +2120,7 @@ public func frag(_: v2f)
                         {
                             auto* using_shader = &shader_pass;
                             if (!shader_pass->m_builtin)
-                                using_shader = &host()->default_shader;
+                                using_shader = &m_default_resources.default_shader;
 
                             auto* rchain_draw_action = jegl_rchain_draw(light2d_light_effect_rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), texture_group);
                             auto* builtin_uniform = (*using_shader)->m_builtin;
@@ -2331,13 +2165,14 @@ public func frag(_: v2f)
                     // Set target buffer.
                     jegl_rendchain* final_target_rend_chain = nullptr;
                     if (current_camera.viewport)
-                        final_target_rend_chain = current_camera.branchPipeline->allocate_new_chain(rend_aim_buffer,
+                        final_target_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                            rend_aim_buffer,
                             (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                             (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                     else
-                        final_target_rend_chain = current_camera.branchPipeline->allocate_new_chain(
+                        final_target_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                             rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     // If camera rend to texture, clear the frame buffer (if need)
@@ -2377,16 +2212,16 @@ public func frag(_: v2f)
                     auto& drawing_shaders =
                         current_camera.shaders->shaders.empty() == false
                         ? current_camera.shaders->shaders
-                        : host()->default_shaders_list;
+                        : m_default_resources.default_shaders_list;
 
                     for (auto& shader_pass : drawing_shaders)
                     {
                         auto* using_shader = &shader_pass;
                         if (!shader_pass->m_builtin)
-                            using_shader = &host()->default_shader;
+                            using_shader = &m_default_resources.default_shader;
 
                         auto* rchain_draw_action = jegl_rchain_draw(final_target_rend_chain,
-                            (*using_shader)->resouce(), light2d_host->_screen_vertex->resouce(), texture_group);
+                            (*using_shader)->resouce(), m_defer_light2d_host._screen_vertex->resouce(), texture_group);
 
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
@@ -2686,9 +2521,4 @@ public func frag(_: v2f)
             );
         }
     };
-}
-
-jegl_thread* jedbg_get_editing_graphic_thread(void* universe)
-{
-    return jeecs::GraphicThreadHost::get_default_graphic_pipeline_instance(universe)->glthread;
 }

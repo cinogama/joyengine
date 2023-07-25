@@ -91,6 +91,20 @@ jeecs [命名空间]
 namespace jeecs
 {
     /*
+    jeecs::rendchain_branch [类型]
+    可编程图形接口类型，用于表示一组绘制流程
+    请参见
+        jegl_rendchain
+    */
+    struct rendchain_branch;
+
+    /*
+    jeecs::graphic_uhost [类型]
+    可编程图形接口类型，用于表示一个渲染上下文的总和
+    */
+    struct graphic_uhost;
+
+    /*
     jeecs::typing [命名空间]
     此处定义引擎使用的常用类型和常量值
     */
@@ -2388,6 +2402,44 @@ jegl_rchain_commit [基本接口]
 JE_API void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread);
 
 /*
+jegl_uhost_get_or_create_for_universe [基本接口]
+获取或创建指定Universe的可编程图形上下文接口
+*/
+JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(void* universe);
+
+/*
+jegl_uhost_get_gl_thread [基本接口]
+从指定的可编程图形上下文接口获取图形线程的正式描述符
+*/
+JE_API jegl_thread* jegl_uhost_get_gl_thread(jeecs::graphic_uhost* host);
+
+/*
+jegl_uhost_alloc_branch [基本接口]
+从指定的可编程图形上下文接口申请一个绘制组
+*/
+JE_API jeecs::rendchain_branch* jegl_uhost_alloc_branch(jeecs::graphic_uhost* host);
+
+/*
+jegl_uhost_free_branch [基本接口]
+从指定的可编程图形上下文接口释放一个绘制组
+*/
+JE_API void jegl_uhost_free_branch(jeecs::graphic_uhost* host, jeecs::rendchain_branch* free_branch);
+
+/*
+jegl_branch_new_frame [基本接口]
+在绘制开始之前，指示绘制组开始新的一帧，并指定优先级
+*/
+JE_API void jegl_branch_new_frame(jeecs::rendchain_branch* branch, int priority);
+
+/*
+jegl_branch_new_chain [基本接口]
+从绘制组中获取一个新的RendChain
+请参见：
+    jegl_rendchain
+*/
+JE_API jegl_rendchain* jegl_branch_new_chain(jeecs::rendchain_branch* branch, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
+
+/*
 je_io_set_keystate [基本接口]
 设置指定键的状态
 */
@@ -2701,9 +2753,6 @@ JE_API bool jedbg_main_script_entry(void);
 JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::euid_t uid);
 
 JE_API jeecs::typing::euid_t jedbg_get_editing_entity_uid();
-
-// NOTE: Get graphic thread
-JE_API jegl_thread* jedbg_get_editing_graphic_thread(void* universe);
 
 JE_API void jedbg_get_entity_arch_information(
     const jeecs::game_entity* _entity,

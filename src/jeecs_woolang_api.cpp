@@ -42,7 +42,7 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args, size_t argc)
 {
-    jedbg_get_editing_graphic_thread(wo_pointer(args + 0));
+    jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0));
     return wo_ret_void(vm);
 }
 

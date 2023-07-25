@@ -721,7 +721,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
     jeecs_file_read(&_shader->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
 
     // 3. read if shader is enable to shared?
-    jeecs_file_read(&_shader->m_enable_to_shared, sizeof(jegl_shader::cull_mode), 1, cache_file);
+    jeecs_file_read(&_shader->m_enable_to_shared, sizeof(bool), 1, cache_file);
 
     // 4. read and generate custom variable & uniform block informs
     

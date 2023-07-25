@@ -158,10 +158,10 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     auto* primary_monitor = glfwGetPrimaryMonitor();
     auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
 
-    WINDOWS_SIZE_WIDTH = config->m_width == 0? primary_monitor_video_mode->width : config->m_width;
+    WINDOWS_SIZE_WIDTH = config->m_width == 0 ? primary_monitor_video_mode->width : config->m_width;
     WINDOWS_SIZE_HEIGHT = config->m_height == 0 ? primary_monitor_video_mode->height : config->m_height;
 
-    glfwWindowHint(GLFW_REFRESH_RATE, config->m_fps == 0 ? primary_monitor_video_mode->refreshRate : config->m_fps);
+    glfwWindowHint(GLFW_REFRESH_RATE, config->m_fps == 0 ? primary_monitor_video_mode->refreshRate : (int)config->m_fps);
     glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
 
     je_io_set_windowsize((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT);
