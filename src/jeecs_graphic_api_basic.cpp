@@ -1146,9 +1146,9 @@ void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t u
     }
 }
 
-void jegl_draw_vertex(jegl_resource* vert)
+void jegl_draw_vertex(jegl_resource* vert, jegl_vertex::type draw_type)
 {
-    _current_graphic_thread->m_apis->draw_vertex(vert);
+    _current_graphic_thread->m_apis->draw_vertex(vert, draw_type);
 }
 
 void jegl_clear_framebuffer(jegl_resource* framebuffer)

@@ -1970,6 +1970,7 @@ public func frag(_: v2f)
                             using_shader = &m_default_resources.default_shader;
 
                         auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), texture_group);
+
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);

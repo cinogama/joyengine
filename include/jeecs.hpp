@@ -1766,7 +1766,7 @@ struct jegl_graphic_api
     using update_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
 
-    using draw_vertex_func_t = void(*)(jegl_resource*);
+    using draw_vertex_func_t = void(*)(jegl_resource*, jegl_vertex::type);
     using bind_texture_func_t = void(*)(jegl_resource*, size_t);
 
     using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h);
@@ -2050,15 +2050,15 @@ JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
 
 /*
 jegl_draw_vertex [基本接口]
-使用当前着色器（通过jegl_using_resource指定）和纹理（通过jegl_using_texture绑定）绘制
-一个模型，与jegl_using_resource类似，会根据情况是否执行资源的初始化操作
+使用当前着色器（通过jegl_using_resource指定）和纹理（通过jegl_using_texture绑定）,
+以指定方式绘制一个模型，与jegl_using_resource类似，会根据情况是否执行资源的初始化操作
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 请参见：
     jegl_using_resource
     jegl_using_texture
 */
-JE_API void jegl_draw_vertex(jegl_resource* vert);
+JE_API void jegl_draw_vertex(jegl_resource* vert, jegl_vertex::type draw_type);
 
 /*
 jegl_clear_framebuffer [基本接口]
@@ -2278,6 +2278,12 @@ jegl_rchain_draw [基本接口]
     * 若绘制的物体不需要使用纹理，可以使用不绑定纹理的纹理组或传入 SIZE_MAX
 */
 JE_API jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, size_t texture_group);
+
+/*
+jegl_rchain_specify_draw_method [基本接口]
+重新指定使用的绘制方法，替代原本顶点的绘制方法
+*/
+JE_API void jegl_rchain_specify_draw_method(jegl_rendchain_rend_action* act, jegl_vertex::type drawtype);
 
 /*
 jegl_rchain_set_uniform_int [基本接口]

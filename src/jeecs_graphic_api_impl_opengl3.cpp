@@ -922,7 +922,7 @@ void gl_bind_texture(jegl_resource* texture, size_t pass)
     jegl_using_resource(texture);
 }
 
-void gl_draw_vertex_with_shader(jegl_resource* vert)
+void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_vertex::type drawtype)
 {
     const static GLenum DRAW_METHODS[] = {
         GL_LINES,
@@ -933,7 +933,7 @@ void gl_draw_vertex_with_shader(jegl_resource* vert)
     };
 
     jegl_using_resource(vert);
-    glDrawArrays(DRAW_METHODS[vert->m_uint3], 0, (GLsizei)vert->m_uint4);
+    glDrawArrays(DRAW_METHODS[drawtype], 0, (GLsizei)vert->m_uint4);
 }
 
 void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
