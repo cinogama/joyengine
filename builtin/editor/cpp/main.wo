@@ -266,7 +266,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
             return result::ok(generating_results);
         }
-
+        
         public func start(name: string, locpath: string, proj: Project)=> result<CxxProject, string>
         {
             using filesys;
@@ -478,7 +478,93 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
             return result::ok(created_module);
         }
+        func check_verify_info(self: CxxProject, vinfo: string)
+        {
+            match (vinfo->dict::deserialize->>\dat=dat->>\k, v = (k: string, v);;)
+            {
+            value(vdat)?
+                {
+                    let engine_version_is_same = vdat->get("engine_version")
+                        =>> \v = v: string
+                            ->  dict::deserialize
+                                ->> \dat = dat
+                                    ->> \k, v = (k: string, v: string);
+                                    ;
+                            ;
+                        =>> \v = EngineVersionInfo::restore(v);
+                        ->> \v = v->isequal(EngineVersionInfo::current());
+                        ->  valor(false)
+                        ;
+                    
+                    if (engine_version_is_same == false)
+                        return false;
 
+                    let sources = vdat->get("sources")
+                        =>> \srcs = srcs is dict
+                            ? option::value(srcs as dict->>\k, v = (k: string, v: int);)
+                            | option::none
+                            ;
+                        ;
+                    match (sources=>>\srcs = filesys::allsubpath(self.path)->okay->>\subpaths = (subpaths, srcs);;)
+                    {
+                    value((subpaths, srclist))?
+                        {
+                            let mut varified_file = 0;
+                            for (let _, path : subpaths) 
+                            {
+                                if (filesys::isfile(path))
+                                {
+                                    let extension = filesys::extension(path)->lower;
+                                    if (extension == ".cpp" 
+                                        || extension == ".hpp" 
+                                        || extension == ".c" 
+                                        || extension == ".h")
+                                    {
+                                        let wpath = self.project->make_path_normalize(path);
+                                        let crc64 = je::editor::crc64file(path->tostring());
+                                        varified_file += 1;
+
+                                        if (! srclist->get(wpath)->>\crc = crc == crc64->valor(0);->valor(false))
+                                            return false;
+                                    }
+                                }
+                            }
+                            return varified_file == srclist->len;
+                        }
+                    none?
+                        return false;
+                    }
+                }
+            none?
+                return false;
+            }
+        }
+        func generate_varify_info(self: CxxProject)
+        {
+            let source_code_versions = {}mut: map<string, int>;
+            for (let _, path : filesys::allsubpath(self.path)->unwarpor([])) 
+            {
+                if (filesys::isfile(path))
+                {
+                    let extension = filesys::extension(path)->lower;
+                    if (extension == ".cpp" 
+                        || extension == ".hpp" 
+                        || extension == ".c" 
+                        || extension == ".h")
+                    {
+                        let wpath = self.project->make_path_normalize(path);
+                        let crc64 = je::editor::crc64file(path->tostring());
+
+                        source_code_versions->set(wpath, crc64->valor(0));
+                    }
+                }
+            }
+
+            return {
+                ["engine_version"] = EngineVersionInfo::current()->serialize: dynamic,
+                ["sources"] = source_code_versions: dynamic
+            }->serialize->val;
+        }
         public func load(path: filesys::path_t, proj: Project)
         {
             using filesys;
@@ -493,12 +579,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
                 // 校验最后一次编译时的引擎版本，如果不一致，那么删掉全部动态库
                 let is_same_version = filesys::readall(path / "version.json")
-                    =>> \dat = dat->dict::deserialize;
-                    ->> \dat = dat
-                        ->> \k, v = (k: string, v: string);
-                        ;
-                    =>> \dat = EngineVersionInfo::restore(dat);
-                    ->> \dat = dat->isequal(EngineVersionInfo::current());
+                    ->> \dat = created_module->check_verify_info(dat);
                     ->  valor(false)
                     ;
                 if (is_same_version)
@@ -919,7 +1000,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                     self.project->active_module(self);
 
                     // 更新编译版本
-                    if (! filesys::writeall(self.path / "version.json", EngineVersionInfo::current()->serialize))
+                    if (! filesys::writeall(self.path / "version.json", self->generate_varify_info))
                     {
                         jeapi::gui::form::errmsg("警告", "无法为生成的模块记录版本信息文件，请检查");
                     }
