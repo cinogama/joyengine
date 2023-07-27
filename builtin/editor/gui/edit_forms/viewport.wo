@@ -122,25 +122,35 @@ namespace editor::gui::edit_forms
 
                 if (IsWindowFocused())
                 {
-                    if (jeapi::gui::inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::C]))
+                    if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::C]))
                         mover_mode = je::editor::mover_mode::selection;
-                    if (jeapi::gui::inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::T]))
+                    else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::T]))
                         mover_mode = je::editor::mover_mode::movement;
-                    if (jeapi::gui::inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::R]))
+                    else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::R]))
                         mover_mode = je::editor::mover_mode::rotation;
-                    if (jeapi::gui::inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::S]))
+                    else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::S]))
                         mover_mode = je::editor::mover_mode::scale;
+                    else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB]))
+                    {
+                        static let mut last_click_time = 0.;
+                        if (std::time() - last_click_time <= 0.2)
+                        {
+                            if ((mover_mode +:= 1: je::editor::mover_mode) > je::editor::mover_mode::scale)
+                                mover_mode = je::editor::mover_mode::selection;
+                        }
+                        last_click_time = std::time();
+                    }
                 }
 
                 if (BeginMenuEnabled(MOVER_MODE[mover_mode], debug_camera_entity->has))
                 {   
-                    if (MenuItemShortcutSelectedEnabled("仅选中", "Shift + C", mover_mode == je::editor::mover_mode::selection, debug_camera_entity->has)->has)
+                    if (MenuItemShortcutSelectedEnabled("仅选中", "Tab + C", mover_mode == je::editor::mover_mode::selection, debug_camera_entity->has)->has)
                         mover_mode = je::editor::mover_mode::selection;
-                    if (MenuItemShortcutSelectedEnabled("移动", "Shift + T", mover_mode == je::editor::mover_mode::movement, debug_camera_entity->has)->has)
+                    if (MenuItemShortcutSelectedEnabled("移动", "Tab + T", mover_mode == je::editor::mover_mode::movement, debug_camera_entity->has)->has)
                         mover_mode = je::editor::mover_mode::movement;
-                    if (MenuItemShortcutSelectedEnabled("旋转", "Shift + R", mover_mode == je::editor::mover_mode::rotation, debug_camera_entity->has)->has)
+                    if (MenuItemShortcutSelectedEnabled("旋转", "Tab + R", mover_mode == je::editor::mover_mode::rotation, debug_camera_entity->has)->has)
                         mover_mode = je::editor::mover_mode::rotation;
-                    if (MenuItemShortcutSelectedEnabled("缩放", "Shift + S", mover_mode == je::editor::mover_mode::scale, debug_camera_entity->has)->has)
+                    if (MenuItemShortcutSelectedEnabled("缩放", "Tab + S", mover_mode == je::editor::mover_mode::scale, debug_camera_entity->has)->has)
                         mover_mode = je::editor::mover_mode::scale;
                     EndMenu();
                 }
