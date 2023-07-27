@@ -28,6 +28,17 @@ namespace jeecs
         };
         struct EntityMover
         {
+            enum mover_mode
+            {
+                nospecify,
+                selection,
+                movement,
+                rotation,
+                scale,
+            };
+
+            mover_mode mode = mover_mode::nospecify;
+
             // Editor will create a entity with EntityMoverRoot,
             // and DefaultEditorSystem should handle this entity hand create 3 mover for x,y,z axis
             math::vec3 axis = {};
@@ -38,6 +49,11 @@ namespace jeecs
         struct EntityMoverRoot
         {
             bool init = false;
+        };
+
+        struct NewCreatedEntity
+        {
+            // 用于新创建的实体，把它放到当前摄像机面前 1.0 处
         };
 
         // Used for store uniform vars of failed-shader in entity. used for 'update' shaders
@@ -84,20 +100,20 @@ namespace jeecs
             };
             std::vector<ok_or_bad_shader> stored_uniforms;
         };
-
-        struct MapTileSet
-        {
-
-        };
-        struct MapTile
-        {
-
-        };
     }
 
     struct DefaultEditorSystem : public game_system
     {
         inline static bool _editor_enabled = true;
+
+        Editor::EntityMover::mover_mode _mode = Editor::EntityMover::mover_mode::rotation;
+
+        basic::resource<graphic::vertex> axis_x;
+        basic::resource<graphic::vertex> axis_y;
+        basic::resource<graphic::vertex> axis_z;
+        basic::resource<graphic::vertex> circ_x;
+        basic::resource<graphic::vertex> circ_y;
+        basic::resource<graphic::vertex> circ_z;
 
         math::vec3 _begin_drag;
         bool _drag_viewing = false;
@@ -149,7 +165,39 @@ namespace jeecs
         DefaultEditorSystem(game_world w)
             : game_system(w)
         {
+            axis_x = graphic::vertex::create(jegl_vertex::type::LINES,
+                { -1.f, 0.f, 0.f,       0.25f, 0.f, 0.f,
+                   1.f, 0.f, 0.f,       1.f,   0.f, 0.f },
+                { 3, 3 });
+            axis_y = graphic::vertex::create(jegl_vertex::type::LINES,
+                { 0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
+                  0.f, 1.f, 0.f,        0.f, 1.f, 0.f },
+                { 3, 3 });
+            axis_z = graphic::vertex::create(jegl_vertex::type::LINES,
+                { 0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
+                  0.f, 0.f,  1.f,       0.f, 0.f, 1.f },
+                { 3, 3 });
+            circ_x = _create_circle_vertex({ 1.f, 0.f, 0.f });
+            circ_y = _create_circle_vertex({ 0.f, 1.f, 0.f });
+            circ_z = _create_circle_vertex({ 0.f, 0.f, 1.f });
+            
+            circ_x->resouce()->m_raw_vertex_data->m_size_y += 0.2f;
+            circ_x->resouce()->m_raw_vertex_data->m_size_z += 0.2f;
+            circ_y->resouce()->m_raw_vertex_data->m_size_x += 0.2f;
+            circ_y->resouce()->m_raw_vertex_data->m_size_z += 0.2f;
+            circ_z->resouce()->m_raw_vertex_data->m_size_x += 0.2f;
+            circ_z->resouce()->m_raw_vertex_data->m_size_y += 0.2f;
 
+            circ_x->resouce()->m_raw_vertex_data->m_size_x =
+                circ_y->resouce()->m_raw_vertex_data->m_size_y =
+                circ_z->resouce()->m_raw_vertex_data->m_size_z =
+                axis_x->resouce()->m_raw_vertex_data->m_size_y
+                = axis_x->resouce()->m_raw_vertex_data->m_size_z
+                = axis_y->resouce()->m_raw_vertex_data->m_size_x
+                = axis_y->resouce()->m_raw_vertex_data->m_size_z
+                = axis_z->resouce()->m_raw_vertex_data->m_size_x
+                = axis_z->resouce()->m_raw_vertex_data->m_size_y
+                = 0.2f;
         }
 
         struct SelectedResult
@@ -265,6 +313,49 @@ namespace jeecs
             }
         }
 
+        static graphic::vertex* _create_circle_vertex(math::vec3 anx)
+        {
+            auto rot = 90.0f * anx;
+            std::swap(rot.x, rot.y);
+
+            math::quat r(rot.x, rot.y, rot.z);
+
+           const size_t half_step_count = 50;
+
+            std::vector<float> points;
+            for (size_t i = 0; i < half_step_count; ++i)
+            {
+                // x2 + y2 = r2
+                // y = + sqrt(r2 - x2)
+                float x = (float)i / (float)half_step_count * 2.0f - 1.0f;
+                auto pos = r * math::vec3(x, sqrt(1.f - x * x), 0.f);
+
+                points.push_back(pos.x);
+                points.push_back(pos.y);
+                points.push_back(pos.z);
+
+                points.push_back(anx.x);
+                points.push_back(anx.y);
+                points.push_back(anx.z);
+            }
+            for (size_t i = 0; i <= half_step_count; ++i)
+            {
+                // x2 + y2 = r2
+                // y = + sqrt(r2 - x2)
+                float x = 1.0f - (float)i / (float)half_step_count * 2.0f;
+                auto pos = r * math::vec3(x, -sqrt(1.f - x * x), 0.f);
+
+                points.push_back(pos.x);
+                points.push_back(pos.y);
+                points.push_back(pos.z);
+
+                points.push_back(anx.x);
+                points.push_back(anx.y);
+                points.push_back(anx.z);
+            }
+            return graphic::vertex::create(jegl_vertex::type::LINESTRIP, points, {3, 3});
+        }
+
         void UpdateAndCreateMover(game_entity mover_entity,
             Transform::Anchor& anchor,
             Transform::LocalPosition& position,
@@ -272,48 +363,19 @@ namespace jeecs
             Transform::LocalScale& scale,
             Transform::Translation& trans,
             Editor::EntityMoverRoot& mover)
-
         {
-            if (!mover.init)
-            {
-                mover.init = true;
+            basic::resource<graphic::vertex> select_box_vert =
+                graphic::vertex::create(jegl_vertex::type::LINESTRIP,
+                    {
+                           -0.5f,-0.5f,-0.5f,    0.5f,-0.5f,-0.5f,    0.5f,0.5f,-0.5f,      -0.5f,0.5f,-0.5f,     -0.5f,-0.5f,-0.5f,
+                           -0.5f,-0.5f,0.5f,    0.5f,-0.5f,0.5f,    0.5f,0.5f,0.5f,      -0.5f,0.5f,0.5f,     -0.5f,-0.5f,0.5f,
+                           -0.5f,0.5f,0.5f,       -0.5f,0.5f,-0.5f,    0.5f,0.5f,-0.5f,  0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f
+                    },
+                    { 3 });
 
-                static basic::resource<graphic::vertex>
-                    axis_x =
-                    graphic::vertex::create(jegl_vertex::type::LINES,
-                        { -1.f,0,0,        0.25f,0,0,
-                          1.f,0,0,      1,0,0 },
-                        { 3, 3 }),
-                    axis_y =
-                    graphic::vertex::create(jegl_vertex::type::LINES,
-                        { 0,-1.f,0,        0,0.25f,0,
-                          0,1.f,0,      0,1,0 },
-                        { 3, 3 }),
-                    axis_z =
-                    graphic::vertex::create(jegl_vertex::type::LINES,
-                        { 0,0,-1.f,        0,0,0.25f,
-                          0,0,1.f,          0,0,1 },
-                        { 3, 3 }),
-                    select_box_vert =
-                    graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                        {
-                               -0.5f,-0.5f,-0.5f,    0.5f,-0.5f,-0.5f,    0.5f,0.5f,-0.5f,      -0.5f,0.5f,-0.5f,     -0.5f,-0.5f,-0.5f,
-                               -0.5f,-0.5f,0.5f,    0.5f,-0.5f,0.5f,    0.5f,0.5f,0.5f,      -0.5f,0.5f,0.5f,     -0.5f,-0.5f,0.5f,
-                               -0.5f,0.5f,0.5f,       -0.5f,0.5f,-0.5f,    0.5f,0.5f,-0.5f,  0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f
-                        },
-                        { 3 });
-
-                axis_x->resouce()->m_raw_vertex_data->m_size_y
-                    = axis_x->resouce()->m_raw_vertex_data->m_size_z
-                    = axis_y->resouce()->m_raw_vertex_data->m_size_x
-                    = axis_y->resouce()->m_raw_vertex_data->m_size_z
-                    = axis_z->resouce()->m_raw_vertex_data->m_size_x
-                    = axis_z->resouce()->m_raw_vertex_data->m_size_y
-                    = 0.2f;
-
-                static basic::resource<graphic::shader>
-                    axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
-                        R"(
+            static basic::resource<graphic::shader>
+                axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
+                    R"(
 import je::shader;
         
 ZTEST (ALWAYS);
@@ -342,9 +404,9 @@ public let frag =
             high_light = uniform("high_light", float::new(0.));;
         
         )");
-                static basic::resource<graphic::shader>
-                    select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
-                        R"(
+            static basic::resource<graphic::shader>
+                select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
+                    R"(
 import je::shader;
         
 ZTEST (LESS);
@@ -364,9 +426,14 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
         
         )");
 
+            if (!mover.init)
+            {
+                mover.init = true;
+
                 game_world current_world = mover_entity.game_world();
                 game_entity axis_x_e = current_world.add_entity<
                     Transform::LocalPosition,
+                    Transform::LocalScale,
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
@@ -377,6 +444,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 >();
                 game_entity axis_y_e = current_world.add_entity<
                     Transform::LocalPosition,
+                    Transform::LocalScale,
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
@@ -387,6 +455,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 >();
                 game_entity axis_z_e = current_world.add_entity<
                     Transform::LocalPosition,
+                    Transform::LocalScale,
                     Transform::LocalToParent,
                     Transform::Translation,
                     Renderer::Shaders,
@@ -463,11 +532,47 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
         void MoveEntity(
             Editor::EntityMover& mover,
             Transform::Translation& trans,
+            Transform::LocalPosition& posi,
+            Transform::LocalScale& scale,
             Renderer::Shape* shape,
             Renderer::Shaders& shaders)
         {
+            if (mover.mode != _mode)
+            {
+                mover.mode = _mode;
+                switch (_mode)
+                {
+                case jeecs::Editor::EntityMover::selection:
+                    scale.scale = { 0.f,0.f,0.f };
+                    break;
+                case jeecs::Editor::EntityMover::rotation:
+                    if (mover.axis.x != 0.f) shape->vertex = circ_x;
+                    else if (mover.axis.y != 0.f) shape->vertex = circ_y;
+                    else shape->vertex = circ_z;
+                    posi.pos = { 0.f, 0.f, 0.f };
+                    scale.scale = { 1.f, 1.f, 1.f };
+                    break;
+                case jeecs::Editor::EntityMover::movement:
+                case jeecs::Editor::EntityMover::scale:
+                    if (mover.axis.x != 0.f) shape->vertex = axis_x;
+                    else if (mover.axis.y != 0.f) shape->vertex = axis_y;
+                    else shape->vertex = axis_z;
+                    scale.scale = { 1.f, 1.f, 1.f };
+                    break;
+                default:
+                    jeecs::debug::logerr("Unknown mode.");
+                    break;
+                }
+
+                if (_mode != jeecs::Editor::EntityMover::rotation)
+                    posi.pos = mover.axis;
+
+            }
+            if (mover.mode == Editor::EntityMover::selection)
+                return;
+
             const auto* editing_entity = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
-            Transform::LocalPosition* editing_pos = editing_entity
+            Transform::LocalPosition* editing_pos_may_null = editing_entity
                 ? editing_entity->get_component<Transform::LocalPosition>()
                 : nullptr;
             Transform::Translation* editing_trans = editing_entity
@@ -476,15 +581,21 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             Transform::LocalRotation* editing_rot_may_null = editing_entity
                 ? editing_entity->get_component<Transform::LocalRotation>()
                 : nullptr;
+            Transform::LocalScale* editing_scale_may_null = editing_entity
+                ? editing_entity->get_component<Transform::LocalScale>()
+                : nullptr;
 
-            if (_inputs.r_buttom || !_inputs.l_buttom || nullptr == editing_pos || nullptr == editing_trans)
+            if (_inputs.r_buttom || !_inputs.l_buttom || nullptr == editing_trans)
                 _grab_axis_translation = nullptr;
 
-            if (_grab_axis_translation && _inputs.l_buttom && editing_pos && editing_trans)
+
+            if (_grab_axis_translation && _inputs.l_buttom && editing_trans)
             {
                 if (_grab_axis_translation == &trans && _camera_porjection)
                 {
                     // advise_lock_mouse = true;
+                    math::vec2 cur_mouse_pos = _inputs.uniform_mouse_pos;
+                    math::vec2 diff = cur_mouse_pos - _grab_last_pos;
 
                     math::vec4 p0 = trans.world_position;
                     p0.w = 1.0f;
@@ -496,24 +607,34 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     math::vec2 screen_axis = { p1.x - p0.x,p1.y - p0.y };
                     screen_axis = screen_axis.unit();
 
-                    math::vec2 cur_mouse_pos = _inputs.uniform_mouse_pos;
-                    math::vec2 diff = cur_mouse_pos - _grab_last_pos;
+                    float factor = 1.0f;
+                    if (_inputs.l_ctrl)
+                        factor *= 0.5f;
+                    if (_inputs.l_shift)
+                        factor *= 2.0f;
 
                     float distance =
                         _camera_ortho_porjection == nullptr
                         ? (_camera_pos - trans.world_position).length()
                         : 5.0f / _camera_ortho_porjection->scale;
 
-                    if (_inputs.l_ctrl)
-                        distance = distance * 0.5f;
-                    if (_inputs.l_shift)
-                        distance = distance * 2.0f;
-
-                    editing_pos->set_world_position(
-                        editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * (mover.axis * distance)),
-                        *editing_trans,
-                        editing_rot_may_null
-                    );
+                    if (mover.mode == Editor::EntityMover::mover_mode::movement && editing_pos_may_null)
+                    {
+                        editing_pos_may_null->set_world_position(
+                            editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * (mover.axis * distance * factor)),
+                            *editing_trans,
+                            editing_rot_may_null
+                        );
+                    }
+                    else if (mover.mode == Editor::EntityMover::mover_mode::scale && editing_scale_may_null)
+                    {
+                        editing_scale_may_null->scale += diff.dot(screen_axis) * (mover.axis * distance * factor);
+                    }
+                    else if (mover.mode == Editor::EntityMover::mover_mode::rotation && editing_rot_may_null)
+                    {
+                        auto euler = trans.world_rotation * mover.axis * (diff.x + diff.y) * factor * 20.0f;
+                        editing_rot_may_null->rot = math::quat(euler.x, euler.y, euler.z) * editing_rot_may_null->rot;
+                    }
 
                     _grab_last_pos = cur_mouse_pos;
                 }
@@ -523,7 +644,21 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 auto result = _camera_ray.intersect_entity(trans, shape);
                 bool select_click = _inputs.l_buttom_pushed;
 
-                if (result.intersected)
+                bool intersected = result.intersected;
+                if (intersected && mover.mode == Editor::EntityMover::mover_mode::rotation)
+                {
+                    float distance =
+                        _camera_ortho_porjection == nullptr
+                        ? 0.25f * (_camera_pos - trans.world_position).length()
+                        : 1.0f / _camera_ortho_porjection->scale;
+
+                    auto dist = 1.f - ((result.place - trans.world_position) / distance).length();
+
+                    if (abs(dist) > 0.2f)
+                        intersected = false;
+                }
+
+                if (intersected)
                 {
                     if (select_click)
                     {
@@ -581,7 +716,14 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 .exec(&DefaultEditorSystem::CameraWalker)
                 // Select entity
                 .except<Editor::Invisable>()
+                .anyof<Renderer::Shape, Renderer::Shaders, Renderer::Textures>()
                 .exec(&DefaultEditorSystem::SelectEntity)
+                .exec([this](game_entity e, Transform::LocalPosition* l2p, Editor::NewCreatedEntity&)
+                    {
+                        if (l2p != nullptr)
+                            l2p->pos = _camera_pos + _camera_rot * math::vec3(0.f, 0.f, 1.f);
+                        e.remove_component<Editor::NewCreatedEntity>();
+                    })
                 // Create & create mover!
                 .exec(&DefaultEditorSystem::UpdateAndCreateMover)
                 .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale)
@@ -996,6 +1138,24 @@ WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args, size_t ar
 
     jeecs::DefaultEditorSystem::_inputs.advise_lock_mouse_pos =
         jeecs::math::ivec2{ (int)wo_int(args + 2), (int)wo_int(args + 3) };
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world world(wo_pointer(args + 0));
+    jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
+    if (sys == nullptr)
+        return wo_ret_int(vm, (wo_integer_t)jeecs::Editor::EntityMover::mover_mode::nospecify);
+    return wo_ret_int(vm, (wo_integer_t)sys->_mode);
+}
+
+WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world world(wo_pointer(args + 0));
+    jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
+    if (sys != nullptr)
+        sys->_mode = (jeecs::Editor::EntityMover::mover_mode)wo_int(args + 1);
 
     return wo_ret_void(vm);
 }

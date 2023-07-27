@@ -78,7 +78,7 @@ namespace jeecs_impl
             }
 
             // Not found! create!
-            jeecs::typing::type_info* tinfo = jeecs::basic::create_new<jeecs::typing::type_info>();
+            jeecs::typing::type_info* tinfo = new jeecs::typing::type_info();
             tinfo->m_typename = jeecs::basic::make_new_string(_name);
             tinfo->m_size = _size;
             tinfo->m_chunk_size = jeecs::basic::allign_size(_size, jeecs::typing::ALLIGN_BASE);
@@ -159,7 +159,7 @@ namespace jeecs_impl
             const char* _member_name,
             ptrdiff_t _member_offset) noexcept
         {
-            jeecs::typing::member_info* meminfo = jeecs::basic::create_new<jeecs::typing::member_info>();
+            jeecs::typing::member_info* meminfo = new jeecs::typing::member_info();
 
             auto* classtype = get_info_by_id(classid);
 
@@ -186,7 +186,7 @@ namespace jeecs_impl
 
                 je_mem_free((void*)curmem->m_member_name);
 
-                jeecs::basic::destroy_free(curmem);
+                delete curmem;
             }
         }
 
@@ -207,7 +207,7 @@ namespace jeecs_impl
                         je_mem_free((void*)typeinfo->m_typename);
 
                         unregister_member_info(typeinfo);
-
+                        delete typeinfo;
                         return;
                     }
                 }

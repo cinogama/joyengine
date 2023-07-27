@@ -159,11 +159,11 @@ jegl_thread* jegl_start_graphic_thread(
     void(*frame_rend_work)(void*, jegl_thread*),
     void* arg)
 {
-    jegl_thread* thread_handle = jeecs::basic::create_new<jegl_thread>();
+    jegl_thread* thread_handle = new jegl_thread();
 
     thread_handle->m_version = 0;
-    thread_handle->_m_thread_notifier = jeecs::basic::create_new<jegl_thread_notifier>();
-    thread_handle->m_apis = jeecs::basic::create_new<jegl_graphic_api>();
+    thread_handle->_m_thread_notifier = new jegl_thread_notifier();
+    thread_handle->m_apis = new jegl_graphic_api();
 
     memset(thread_handle->m_apis, 0, sizeof(jegl_graphic_api));
     register_func(thread_handle->m_apis);
@@ -182,9 +182,9 @@ jegl_thread* jegl_start_graphic_thread(
 
     if (err_api_no)
     {
-        jeecs::basic::destroy_free(thread_handle->_m_thread_notifier);
-        jeecs::basic::destroy_free(thread_handle->m_apis);
-        jeecs::basic::destroy_free(thread_handle);
+        delete thread_handle->_m_thread_notifier;
+        delete thread_handle->m_apis;
+        delete thread_handle;
 
         jeecs::debug::logfatal("Fail to start up graphic thread, abort and return nullptr.");
         return nullptr;
@@ -211,7 +211,7 @@ jegl_thread* jegl_start_graphic_thread(
     thread_handle->_m_thread_notifier->m_reboot_flag = false;
 
     thread_handle->_m_thread =
-        jeecs::basic::create_new<std::thread>(
+        new std::thread(
             _graphic_work_thread,
             thread_handle,
             frame_rend_work,
@@ -243,8 +243,8 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
 
     thread->_m_thread->join();
 
-    jeecs::basic::destroy_free(thread->_m_thread_notifier);
-    jeecs::basic::destroy_free(thread);
+    delete thread->_m_thread_notifier;
+    delete thread;
 }
 
 bool jegl_update(jegl_thread* thread)
@@ -734,7 +734,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
     jegl_shader::unifrom_variables* last_create_variable = nullptr;
     for (uint64_t i = 0; i < custom_uniform_count; ++i)
     {
-        jegl_shader::unifrom_variables* current_variable = jeecs::basic::create_new<jegl_shader::unifrom_variables>();
+        jegl_shader::unifrom_variables* current_variable = new jegl_shader::unifrom_variables();
         if (_shader->m_custom_uniforms == nullptr)
             _shader->m_custom_uniforms = current_variable;
 
@@ -771,7 +771,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
     jegl_shader::uniform_blocks* last_create_block = nullptr;
     for (uint64_t i = 0; i < custom_uniform_block_count; ++i)
     {
-        jegl_shader::uniform_blocks* current_block = jeecs::basic::create_new<jegl_shader::uniform_blocks>();
+        jegl_shader::uniform_blocks* current_block = new jegl_shader::uniform_blocks();
         if (_shader->m_custom_uniform_blocks == nullptr)
             _shader->m_custom_uniform_blocks = current_block;
 

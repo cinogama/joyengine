@@ -146,13 +146,13 @@ namespace jeecs_impl
             {
                 assert(jeoffsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
 
-                _m_entities_meta = jeecs::basic::create_new_n<entity_meta>(_m_entity_count);
+                _m_entities_meta = new entity_meta[_m_entity_count];
             }
             ~arch_chunk()
             {
                 // All entity in chunk should be free.
                 assert(_m_free_count == _m_entity_count);
-                jeecs::basic::destroy_free_n(_m_entities_meta, _m_entity_count);
+                delete [] _m_entities_meta;
             }
         public:
             // ATTENTION: move_component_to WILL INVOKE DESTRUCT FUNCTION OF from_component
@@ -393,7 +393,7 @@ namespace jeecs_impl
             while (chunk)
             {
                 auto* next_chunk = chunk->last;
-                jeecs::basic::destroy_free(chunk);
+                delete chunk;
 
                 chunk = next_chunk;
             }
@@ -401,7 +401,7 @@ namespace jeecs_impl
 
         arch_chunk* _create_new_chunk()
         {
-            arch_chunk* new_chunk = jeecs::basic::create_new<arch_chunk>(this);
+            arch_chunk* new_chunk = new arch_chunk(this);
             _m_chunks.add_one(new_chunk);
             _m_free_count += _m_entity_count_per_chunk;
             return new_chunk;
@@ -556,7 +556,7 @@ namespace jeecs_impl
         ~arch_manager()
         {
             for (auto& [types, archtype] : _m_arch_types_mapping)
-                jeecs::basic::destroy_free(archtype);
+                delete archtype;
         }
 
         arch_type* find_or_add_arch(const types_set& _types) noexcept
@@ -576,7 +576,7 @@ namespace jeecs_impl
             std::lock_guard g1(_m_arch_types_mapping_mx);
             arch_type*& atype = _m_arch_types_mapping[_types];
             if (nullptr == atype)
-                atype = jeecs::basic::create_new<arch_type>(this, _types);
+                atype = new arch_type(this, _types);
             _m_arch_modified.clear();
             return atype;
         }
@@ -1740,7 +1740,7 @@ namespace jeecs_impl
                         callback_func_node = callback_func_node->last;
 
                         current_callback->m_method();
-                        jeecs::basic::destroy_free(current_callback);
+                        delete current_callback;
                     }
                 }
             ));
@@ -1757,7 +1757,7 @@ namespace jeecs_impl
 
         inline void register_exit_callback(const std::function<void(void)>& function)noexcept
         {
-            callback_function_node* node = jeecs::basic::create_new<callback_function_node>();
+            callback_function_node* node = new callback_function_node();
             node->m_method = function;
             m_exit_callback_list.add_one(node);
         }
@@ -1967,7 +1967,7 @@ namespace jeecs_impl
 
 void* je_ecs_universe_create()
 {
-    return jeecs::basic::create_new<jeecs_impl::ecs_universe>();
+    return new jeecs_impl::ecs_universe();
 }
 
 void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg)
@@ -2001,7 +2001,7 @@ void je_ecs_universe_loop(void* ecs_universe)
 
 void je_ecs_universe_destroy(void* ecs_universe)
 {
-    jeecs::basic::destroy_free(std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(ecs_universe)));
+    delete std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(ecs_universe));
 }
 
 void je_ecs_universe_stop(void* ecs_universe)
@@ -2189,7 +2189,7 @@ void jedbg_set_world_name(void* _world, const char* name)
 
 void jedbg_free_entity(jeecs::game_entity* _entity_list)
 {
-    jeecs::basic::destroy_free(_entity_list);
+    delete _entity_list;
 }
 
 jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world)
@@ -2210,7 +2210,7 @@ jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world)
             {
                 if (entity_meta_arr[i].m_stat == jeecs::game_entity::entity_stat::READY)
                 {
-                    jeecs::game_entity* entity = jeecs::basic::create_new<jeecs::game_entity>();
+                    jeecs::game_entity* entity = new jeecs::game_entity();
                     entity->_set_arch_chunk_info(chunk, i, entity_meta_arr[i].m_version);
 
                     out_entities.push_back(entity);

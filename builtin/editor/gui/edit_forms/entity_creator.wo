@@ -350,9 +350,9 @@ namespace editor::gui::edit_forms
                 {
                 value(w)?
                     {
-                        w->add_entity(entity_context.has_append_types->toarray)
-                            ->editor::set_name(entity_context.name);
-                        
+                        let e = w->add_entity(entity_context.has_append_types->toarray);
+                        e->editor::set_name(entity_context.name);
+                        do e->add_component(je::typeinfo::load("Editor::NewCreatedEntity")->val);
                         open = false;
                     }
                 none? jeapi::gui::form::errmsg("失败", F"操作无法完成，没有正在编辑中的世界");

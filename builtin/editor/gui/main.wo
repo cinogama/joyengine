@@ -197,6 +197,9 @@ namespace editor::gui
         // 等待，直到项目被关闭
         proj->wait;
 
+        // 释放模块
+        proj->free_modules_after_close();
+
         // 项目退出了，将编辑器上下文置为 stop, 用于指示窗口应当关闭
         context.m_stopped = true;
     }

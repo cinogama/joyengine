@@ -1867,7 +1867,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         jegl_shader::unifrom_variables** last = &write_to_shader->m_custom_uniforms;
         for (auto& [_/*useless*/, uniform_info] : _uniforms)
         {
-            jegl_shader::unifrom_variables* variable = jeecs::basic::create_new<jegl_shader::unifrom_variables>();
+            jegl_shader::unifrom_variables* variable = new jegl_shader::unifrom_variables();
             variable->m_next = nullptr;
 
             auto& [name, type, init_val] = *uniform_info;
@@ -1926,7 +1926,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         jegl_shader::uniform_blocks** last = &write_to_shader->m_custom_uniform_blocks;
         for (auto& [_/*useless*/, uniform_block_info] : _uniform_blocks)
         {
-            jegl_shader::uniform_blocks* block = jeecs::basic::create_new<jegl_shader::uniform_blocks>();
+            jegl_shader::uniform_blocks* block = new jegl_shader::uniform_blocks();
             block->m_next = nullptr;
 
             assert(uniform_block_info->binding_place != jeecs::typing::INVALID_UINT32);
@@ -1953,7 +1953,7 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
 
         je_mem_free((void*)current_uniform_variable->m_name);
 
-        jeecs::basic::destroy_free(current_uniform_variable);
+        delete current_uniform_variable;
     }
     auto* uniform_block_info = write_to_shader->m_custom_uniform_blocks;
     while (uniform_block_info)

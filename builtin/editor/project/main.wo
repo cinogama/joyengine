@@ -407,11 +407,14 @@ namespace editor
             return true;
         }
         public func close(self: Project)
+        {  
+            // 关闭env, 稍后释放模块
+            self.m_env->close;          
+        }
+        public func free_modules_after_close(self: Project)
         {
             for (let _, m : self.m_modules)
                 m->close;
-                
-            self.m_env->close;
         }
         public func wait(self: Project)
         {

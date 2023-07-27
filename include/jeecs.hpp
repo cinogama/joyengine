@@ -2566,6 +2566,10 @@ struct jeal_device;
 struct jeal_source;
 struct jeal_buffer;
 
+/*
+jeal_state [类型]
+用于表示当前声源的播放状态，包括停止、播放中和暂停
+*/
 enum class jeal_state
 {
     STOPPED,
@@ -2880,8 +2884,17 @@ namespace jeecs
         };
     }
 
+    /*
+    jeecs::basic [命名空间]
+    用于存放引擎的基本工具
+    */
     namespace basic
     {
+        /*
+        jeecs::basic::vector [类型]
+        用于存放大小可变的连续存储容器
+            * 为了保证模块之间的二进制一致性，公共组件中请不要使用std::vector
+        */
         template<typename ElemT>
         class vector
         {
@@ -3094,6 +3107,11 @@ namespace jeecs
             }
         };
 
+        /*
+        jeecs::basic::map [类型]
+        用于存放大小可变的唯一键值对
+            * 为了保证模块之间的二进制一致性，公共组件中请不要使用std::map
+        */
         template<typename KeyT, typename ValT>
         class map
         {
@@ -3147,6 +3165,11 @@ namespace jeecs
             }
         };
 
+        /*
+        jeecs::basic::string [类型]
+        用于存放字符串
+            * 为了保证模块之间的二进制一致性，公共组件中请不要使用std::string
+        */
         class string
         {
             char* _c_str = nullptr;
@@ -3260,11 +3283,19 @@ namespace jeecs
         constexpr typing::typehash_t prime = (typing::typehash_t)0x100000001B3ull;
         constexpr typing::typehash_t basis = (typing::typehash_t)0xCBF29CE484222325ull;
 
+        /*
+        jeecs::basic::hash_compile_time [函数]
+        可在编译时计算字符串的哈希值的哈希函数
+        */
         constexpr typing::typehash_t hash_compile_time(char const* str, typing::typehash_t last_value = basis)
         {
             return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
         }
 
+        /*
+        jeecs::basic::allign_size [函数]
+        用于计算满足对齐要求的下一个起始偏移量位置
+        */
         constexpr static size_t allign_size(size_t _origin_sz, size_t _allign_base)
         {
             size_t aligned_sz = (_origin_sz / _allign_base) * _allign_base;
@@ -3534,6 +3565,10 @@ namespace jeecs
             }
         };
 
+        /*
+        jeecs::basic::shared_pointer [类型]
+        线程安全的共享智能指针类型
+        */
         template<typename T>
         class shared_pointer
         {
@@ -3545,19 +3580,20 @@ namespace jeecs
                 delete ptr;
             }
 
-            T*                              m_resource = nullptr;
-            mutable count_t*                m_count = nullptr;
-            free_func_t                     m_freer = nullptr;
-            inline const static count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
+            T*                  m_resource = nullptr;
+            mutable count_t*    m_count = nullptr;
+            free_func_t         m_freer = nullptr;
+
+            inline const static 
+            count_t*            _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
 
             static count_t* _alloc_counter()
             {
-                return new(malloc(sizeof(count_t)))count_t(1);
+                return create_new<count_t>(1);
             }
             static void _free_counter(count_t* p)
             {
-                p->~count_t();
-                free(p);
+                destroy_free(p);
             }
 
             count_t* _spin_lock()const
@@ -3609,9 +3645,8 @@ namespace jeecs
                 out_ptr->m_resource = m_resource;
                 out_ptr->m_freer = m_freer;
                 if (count != nullptr)
-                {
                     je_atomic_fetch_add_size_t(count, 1);
-                }
+
                 return count;
             }
         public:
@@ -3645,24 +3680,30 @@ namespace jeecs
             }
             shared_pointer& operator =(const shared_pointer& v) noexcept
             {
-                _release_nolock(_spin_lock());
-                auto* counter = v._spin_lock();
+                if (this != &v)
+                {
+                    _release_nolock(_spin_lock());
+                    auto* counter = v._spin_lock();
 
-                auto* unlocker = v._borrow_nolocks(counter, this);
+                    auto* unlocker = v._borrow_nolocks(counter, this);
 
-                _spin_unlock(counter);
-                v._spin_unlock(unlocker);
+                    _spin_unlock(counter);
+                    v._spin_unlock(unlocker);
+                }
                 return *this;
             }
             shared_pointer& operator =(shared_pointer&& v)noexcept
             {
-                _release_nolock(_spin_lock());
-                auto* counter = v._spin_lock();
+                if (this != &v)
+                {
+                    _release_nolock(_spin_lock());
+                    auto* counter = v._spin_lock();
 
-                auto* unlocker = v._move_nolock(counter, this);
+                    auto* unlocker = v._move_nolock(counter, this);
 
-                _spin_unlock(counter);
-                v._spin_unlock(unlocker);
+                    _spin_unlock(counter);
+                    v._spin_unlock(unlocker);
+                }
                 return *this;
             }
 
@@ -3696,9 +3737,19 @@ namespace jeecs
             }
         };
 
+        /*
+        jeecs::basic::resource [类型别名]
+        智能指针的类型别名，一般用于保管需要共享和自动管理的资源类型
+        */
         template<typename T>
         using resource = shared_pointer<T>;
 
+        /*
+        jeecs::basic::fileresource [类型]
+        文件资源包装类型，用于组件内的成员变量
+            * 类型T应该有 load 方法以创建和返回自身
+            * 类型T如果是void，那么相当于只读取文件名
+        */
         template<typename T>
         class fileresource
         {
@@ -3800,6 +3851,10 @@ namespace jeecs
         {
         };
 
+        /*
+        jeecs::typing::member_info [类型]
+        用于储存组件的成员信息
+        */
         struct member_info
         {
             const type_info* m_class_type;
@@ -3811,6 +3866,10 @@ namespace jeecs
             member_info* m_next_member;
         };
 
+        /*
+        jeecs::typing::type_info [类型]
+        用于储存类型信息和基本接口
+        */
         struct type_info
         {
             typeid_t    m_id;
@@ -4108,7 +4167,7 @@ namespace jeecs
         template<typename SystemT>
         inline SystemT* get_system()
         {
-            return (SystemT*)has_system(typing::type_info::of<SystemT>(typeid(SystemT).name()));
+            return static_cast<SystemT*>(get_system(typing::type_info::of<SystemT>(typeid(SystemT).name())));
         }
 
         inline void remove_system(const jeecs::typing::type_info* type)
@@ -4158,7 +4217,6 @@ namespace jeecs
 
         inline game_universe get_universe() const noexcept;
     };
-
 
     // Used for select the components of entities which match spcify requirements.
     struct requirement
