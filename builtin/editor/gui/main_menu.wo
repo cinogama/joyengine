@@ -6,11 +6,129 @@ import builtin::editor::gui::main;
 import builtin::api::dbg::main;
 import builtin::editor::gui::edit_forms::export_project;
 import builtin::api::gui::inputmgr;
+import builtin::api::gui::style;
 
 using je::gui;
+using jeapi::gui::style;
+using jeapi::gui::form;
+using je::gui::ImGuiCol;
 
 namespace editor::gui
 {
+    public let config_name_describe = {
+        [ImGuiCol_Text]                   = ("文本", "没有此配置项的描述"),,
+        [ImGuiCol_TextDisabled]           = ("失效文本", "没有此配置项的描述"),,
+        [ImGuiCol_WindowBg]               = ("窗体背景", "没有此配置项的描述"),,
+        [ImGuiCol_ChildBg]                = ("子窗体背景", "没有此配置项的描述"),,
+        [ImGuiCol_PopupBg]                = ("弹出菜单背景", "没有此配置项的描述"),,
+        [ImGuiCol_Border]                 = ("边框", "没有此配置项的描述"),,
+        [ImGuiCol_BorderShadow]           = ("边框阴影", "没有此配置项的描述"),,
+        [ImGuiCol_FrameBg]                = ("ImGuiCol_FrameBg", "没有此配置项的描述"),,
+        [ImGuiCol_FrameBgHovered]         = ("ImGuiCol_FrameBgHovered", "没有此配置项的描述"),,
+        [ImGuiCol_FrameBgActive]          = ("ImGuiCol_FrameBgActive", "没有此配置项的描述"),,
+        [ImGuiCol_TitleBg]                = ("窗口标题", "没有此配置项的描述"),,
+        [ImGuiCol_TitleBgActive]          = ("激活窗口标题", "没有此配置项的描述"),,
+        [ImGuiCol_TitleBgCollapsed]       = ("折叠窗口标题", "没有此配置项的描述"),,
+        [ImGuiCol_MenuBarBg]              = ("窗体主菜单栏", "没有此配置项的描述"),,
+        [ImGuiCol_ScrollbarBg]            = ("滚动条", "没有此配置项的描述"),,
+        [ImGuiCol_ScrollbarGrab]          = ("滚动条把手", "没有此配置项的描述"),,
+        [ImGuiCol_ScrollbarGrabHovered]   = ("鼠标悬浮的滚动条把手", "没有此配置项的描述"),,
+        [ImGuiCol_ScrollbarGrabActive]    = ("使用中的滚动条把手", "没有此配置项的描述"),,
+        [ImGuiCol_CheckMark]              = ("CheckBox打钩标记", "没有此配置项的描述"),,
+        [ImGuiCol_SliderGrab]             = ("滑块把手", "没有此配置项的描述"),,
+        [ImGuiCol_SliderGrabActive]       = ("使用中的滑块把手", "没有此配置项的描述"),,
+        [ImGuiCol_Button]                 = ("按钮", "没有此配置项的描述"),,
+        [ImGuiCol_ButtonHovered]          = ("鼠标悬浮的按钮", "没有此配置项的描述"),,
+        [ImGuiCol_ButtonActive]           = ("使用中的按钮", "没有此配置项的描述"),,
+        [ImGuiCol_Header]                 = ("ImGuiCol_Header", "没有此配置项的描述"),,
+        [ImGuiCol_HeaderHovered]          = ("ImGuiCol_HeaderHovered", "没有此配置项的描述"),,
+        [ImGuiCol_HeaderActive]           = ("ImGuiCol_HeaderActive", "没有此配置项的描述"),,
+        [ImGuiCol_Separator]              = ("分割线", "没有此配置项的描述"),,
+        [ImGuiCol_SeparatorHovered]       = ("鼠标悬浮的分割线", "没有此配置项的描述"),,
+        [ImGuiCol_SeparatorActive]        = ("使用中的分割线", "没有此配置项的描述"),,
+        [ImGuiCol_ResizeGrip]             = ("窗口大小调整把手", "没有此配置项的描述"),,
+        [ImGuiCol_ResizeGripHovered]      = ("鼠标悬浮的窗口大小调整把手", "没有此配置项的描述"),,
+        [ImGuiCol_ResizeGripActive]       = ("使用中的窗口大小调整把手", "没有此配置项的描述"),,
+        [ImGuiCol_Tab]                    = ("选项卡", "没有此配置项的描述"),,
+        [ImGuiCol_TabHovered]             = ("鼠标悬浮的选项卡", "没有此配置项的描述"),,
+        [ImGuiCol_TabActive]              = ("选中的选项卡", "没有此配置项的描述"),,
+        [ImGuiCol_TabUnfocused]           = ("ImGuiCol_TabUnfocused", "没有此配置项的描述"),,
+        [ImGuiCol_TabUnfocusedActive]     = ("ImGuiCol_TabUnfocusedActive", "没有此配置项的描述"),,
+        [ImGuiCol_PlotLines]              = ("ImGuiCol_PlotLines", "没有此配置项的描述"),,
+        [ImGuiCol_PlotLinesHovered]       = ("ImGuiCol_PlotLinesHovered", "没有此配置项的描述"),,
+        [ImGuiCol_PlotHistogram]          = ("ImGuiCol_PlotHistogram", "没有此配置项的描述"),,
+        [ImGuiCol_PlotHistogramHovered]   = ("ImGuiCol_PlotHistogramHovered", "没有此配置项的描述"),,
+        [ImGuiCol_TableHeaderBg]          = ("ImGuiCol_TableHeaderBg", "没有此配置项的描述"),,
+        [ImGuiCol_TableBorderStrong]      = ("ImGuiCol_TableBorderStrong", "没有此配置项的描述"),,
+        [ImGuiCol_TableBorderLight]       = ("ImGuiCol_TableBorderLight", "没有此配置项的描述"),,
+        [ImGuiCol_TableRowBg]             = ("ImGuiCol_TableRowBg", "没有此配置项的描述"),,
+        [ImGuiCol_TableRowBgAlt]          = ("ImGuiCol_TableRowBgAlt", "没有此配置项的描述"),,
+        [ImGuiCol_TextSelectedBg]         = ("ImGuiCol_TextSelectedBg", "没有此配置项的描述"),,
+        [ImGuiCol_DragDropTarget]         = ("拖放目标", "没有此配置项的描述"),,
+        [ImGuiCol_NavHighlight]           = ("ImGuiCol_NavHighlight", "没有此配置项的描述"),,
+        [ImGuiCol_NavWindowingHighlight]  = ("ImGuiCol_NavWindowingHighlight", "没有此配置项的描述"),,
+        [ImGuiCol_NavWindowingDimBg]      = ("ImGuiCol_NavWindowingDimBg", "没有此配置项的描述"),,
+        [ImGuiCol_ModalWindowDimBg]       = ("ImGuiCol_ModalWindowDimBg", "没有此配置项的描述"),,
+    };
+
+    // NOTE: 实际上这部分应该写在独立的文件里，但是懒，先放这儿吧
+    func style_editor(context: EditorContext)
+    {
+        let origin_style = dump_current_style_color();
+        let formopen = mutable::create(true);
+        launch(func()
+            {
+                SetNextWindowSizeConstraints((700., 550.), (700., 550.));
+                let open = BeginOpen(F"样式编辑器");
+                
+                if (Button("使用默认暗色配置")) SetStyleColorDark();
+                SameLine();
+                if (Button("使用默认亮色配置")) SetStyleColorLight();
+                SameLine();
+                if (Button("使用默认经典配置")) SetStyleColorClassic();
+                
+                Separator();
+                
+                for (let item, (name, desc) : config_name_describe)
+                {
+                    let col = GetStyleColor(item);
+                    Text(name); SameLine();
+                    if (ColorButton(F"##main_color{item}", col))
+                        OpenPopup(F"ColorPicker##{item}");
+                    if (BeginPopup(F"ColorPicker##{item}"))
+                    {
+                        do ColorPicker4(F"##main_color_picker{item}", col)
+                            ->> \c = SetStyleColor(item, c);;
+                        EndPopup();
+                    }
+
+                    TextDisabled(desc);
+                    Separator();
+                }
+
+                if (! open)
+                {
+                    ask("是否保存配色", "即将关闭，是否保存编辑器样式和颜色配置文件？", 
+                        func(check)
+                        {
+                            formopen->set(false);
+                            if (check)
+                            {
+                                if (! filesys::writeall(context->get_project.m_path / "style.config",
+                                    dump_current_style_color()->serialize->val))
+                                    errmsg("保存样式失败", "无法写入文件：'" + (context->get_project.m_path / "style.config")->tostring + "'");
+                            }
+                            else
+                                restore_config(origin_style);
+                        });
+                }
+
+                End();
+                return formopen->get;
+            }, 
+            ());
+    }
+
     private func _save_world(context: EditorContext)
     {
         let proj = context->get_project;
@@ -43,6 +161,11 @@ namespace editor::gui
                 do BeginMainMenuBar();
                 if (BeginMenu("JoyEngine"))
                 {
+                    if (MenuItem("编辑器样式"))
+                    {
+                        style_editor(context);
+                    }
+                    Separator();
                     if (MenuItem("退出编辑器"))
                         do ask_for_saving_proj_when_exit(context->get_project);
 

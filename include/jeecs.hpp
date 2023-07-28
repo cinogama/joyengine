@@ -963,6 +963,29 @@ je_ecs_universe_get_smooth_deltatime [基本接口]
 */
 JE_API double je_ecs_universe_get_smooth_deltatime(void* universe);
 
+/*
+je_ecs_universe_get_max_deltatime [基本接口]
+获取当前宇宙的最大时间间隔，deltatime的最大值即为此值
+*/
+JE_API double je_ecs_universe_get_max_deltatime(void* universe);
+
+/*
+je_ecs_universe_get_min_deltatime [基本接口]
+获取当前宇宙的最小时间间隔，deltatime的最小值即为此值
+*/
+JE_API double je_ecs_universe_get_min_deltatime(void* universe);
+
+/*
+je_ecs_universe_set_max_deltatime [基本接口]
+设置当前宇宙的最大时间间隔，deltatime的最大值即为此值
+*/
+JE_API void je_ecs_universe_set_max_deltatime(void* universe, double val);
+
+/*
+je_ecs_universe_set_min_deltatime [基本接口]
+设置当前宇宙的最小时间间隔，deltatime的最小值即为此值
+*/
+JE_API void je_ecs_universe_set_min_deltatime(void* universe, double val);
 
 /*
 je_ecs_world_in_universe [基本接口]
@@ -4877,14 +4900,7 @@ namespace jeecs
         template<typename T>
         static T clamp(T src, T min, T max)
         {
-            return (src < min) ? (
-                min
-                ) :
-                (
-                    (src > max) ?
-                    (max) :
-                    (src)
-                    );
+            return std::min(std::max(src, min), max);
         }
         template<typename T>
         inline T lerp(T va, T vb, float deg)

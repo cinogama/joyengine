@@ -18,7 +18,7 @@ namespace editor::gui::edit_forms
         if (show->get)
         {
             je::gui::SetNextWindowSizeConstraints((200., 300.), (200., 5000.));
-            do show->set(BeginAttrOpen("世界列表##jeeditor", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
+            show->set(BeginAttrOpen("世界列表##jeeditor", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
             
             let (avail_width, avail_height) = GetContentRegionAvail();
             if (BeginListBox("##", avail_width, avail_height))

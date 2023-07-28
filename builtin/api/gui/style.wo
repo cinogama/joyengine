@@ -1,0 +1,31 @@
+//  builtin.api.gui.style
+// 用于编辑器样式调整
+import je::gui;
+import woo::std;
+import builtin::api::gui::form::ask;
+
+using je::gui;
+using je::gui::ImGuiCol;
+
+namespace jeapi::gui::style
+{
+    public func dump_current_style_color()
+    {
+        let style_color = {}mut: map<ImGuiCol, array<real>>;
+        for (let mut i = 0; i < ImGuiCol::ImGuiCol_COUNT: int; i += 1)    
+        {
+            let col = GetStyleColor(i: ImGuiCol);
+            let color = [col[0], col[1], col[2], col[3]];
+            style_color->set(i: ImGuiCol, color);
+        }
+        return style_color->unsafe::cast:< dict<ImGuiCol, array<real>> >;
+    }
+
+    public func restore_config(conf: dict<ImGuiCol, array<real>>)
+    {
+        for (let item, col : conf)
+        {
+            SetStyleColor(item, (col[0], col[1], col[2], col[3]));
+        }
+    }
+}

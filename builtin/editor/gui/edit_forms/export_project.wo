@@ -409,8 +409,8 @@ namespace editor::gui::edit_forms
                 do Combo("##RESO_LIST.", reso_list->>\RR = RR[0];, reso_option_index->get)
                     ->> func(idx)
                         {
-                            do reso_option_index->set(idx);
-                            do reso_config->set(reso_list[idx][1]);
+                            reso_option_index->set(idx);
+                            reso_config->set(reso_list[idx][1]);
                         }
                     ;
 
@@ -434,7 +434,7 @@ namespace editor::gui::edit_forms
                     ->> func(n)
                         {
                             if (n > 0)
-                                do pack_image_file_size->set(n);
+                                pack_image_file_size->set(n);
                         }
                     ;
 

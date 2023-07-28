@@ -668,7 +668,7 @@ namespace editor::gui::animation2d
                                         WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
 
                                     do Combo("组件", all_components->>\t = t->name();, selecting_id->get)
-                                        ->> \nid = do selecting_id->set(nid);
+                                        ->> \nid = selecting_id->set(nid);
                                         ;
 
                                     let members = all_components->get(selecting_id->get)
@@ -678,22 +678,22 @@ namespace editor::gui::animation2d
                                     SameLine();
 
                                     do Combo("成员", members->>\nametype = nametype[0] + ": " + nametype[1]->name;, selecting_member_id->get)
-                                        ->> \ nid = do selecting_member_id->set(nid);
+                                        ->> \ nid = selecting_member_id->set(nid);
                                         ;
 
-                                    do CheckBox("偏移模式", offset_mode->get)->>\nv = do offset_mode->set(nv);;
-                                    do CheckBox("插值模式", lerp_mode->get)->>\nv = do lerp_mode->set(nv);;
+                                    do CheckBox("偏移模式", offset_mode->get)->>\nv = offset_mode->set(nv);;
+                                    do CheckBox("插值模式", lerp_mode->get)->>\nv = lerp_mode->set(nv);;
 
                                     if (lerp_mode->get == false)
                                     {
-                                        do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = do for_all_frame->set(nv);;
+                                        do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = for_all_frame->set(nv);;
                                     }
                                     else
                                     {
-                                        do InputInt("作用帧数", lerp_frame_count->get)->>\nv = do (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
+                                        do InputInt("作用帧数", lerp_frame_count->get)->>\nv = (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
                                         TextDisabled(F"* 取值范围 0 ~ {animation.m_frames->len - i}");
 
-                                        do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = do lerp_by_ftime_mode->set(nv);;
+                                        do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = lerp_by_ftime_mode->set(nv);;
                                         TextDisabled("* 若取消此项，则以帧数作为插值系数");
                                     }
 
@@ -713,7 +713,7 @@ namespace editor::gui::animation2d
                                         {
                                             if (editing_value_type->get != member_type)
                                             {
-                                                do editing_value_type->set(member_type);
+                                                editing_value_type->set(member_type);
 
                                                 if (member_type == je::typeinfo::int)
                                                 {
@@ -750,17 +750,17 @@ namespace editor::gui::animation2d
                                             match (editing_value->get)
                                             {
                                             INT(n)?
-                                                do InputInt("值", n)->>\nv = do editing_value->set(INT(nv));;
+                                                do InputInt("值", n)->>\nv = editing_value->set(INT(nv));;
                                             FLOAT(x)?
-                                                do InputFloat("值", x)->>\nv = do editing_value->set(FLOAT(nv));;
+                                                do InputFloat("值", x)->>\nv = editing_value->set(FLOAT(nv));;
                                             VEC2((x, y))?
-                                                do InputFloat2("值", x, y)->>\nv = do editing_value->set(VEC2(nv));;
+                                                do InputFloat2("值", x, y)->>\nv = editing_value->set(VEC2(nv));;
                                             VEC3((x, y, z))?
-                                                do InputFloat3("值", x, y, z)->>\nv = do editing_value->set(VEC3(nv));;
+                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(VEC3(nv));;
                                             VEC4((x, y, z, w))?
-                                                do InputFloat4("值", x, y, z, w)->>\nv = do editing_value->set(VEC4(nv));;
+                                                do InputFloat4("值", x, y, z, w)->>\nv = editing_value->set(VEC4(nv));;
                                             QUAT4((x, y, z, w))?
-                                                do InputFloat4("值", x, y, z, w)->>\nv = do editing_value->set(QUAT4(nv));;
+                                                do InputFloat4("值", x, y, z, w)->>\nv = editing_value->set(QUAT4(nv));;
                                             }
 
                                             if (lerp_mode->get)
@@ -768,17 +768,17 @@ namespace editor::gui::animation2d
                                                 match (lerp_end_value->get)
                                                 {
                                                 INT(n)?
-                                                    do InputInt("插值目标", n)->>\nv = do lerp_end_value->set(INT(nv));;
+                                                    do InputInt("插值目标", n)->>\nv = lerp_end_value->set(INT(nv));;
                                                 FLOAT(x)?
-                                                    do InputFloat("插值目标", x)->>\nv = do lerp_end_value->set(FLOAT(nv));;
+                                                    do InputFloat("插值目标", x)->>\nv = lerp_end_value->set(FLOAT(nv));;
                                                 VEC2((x, y))?
-                                                    do InputFloat2("插值目标", x, y)->>\nv = do lerp_end_value->set(VEC2(nv));;
+                                                    do InputFloat2("插值目标", x, y)->>\nv = lerp_end_value->set(VEC2(nv));;
                                                 VEC3((x, y, z))?
-                                                    do InputFloat3("插值目标", x, y, z)->>\nv = do lerp_end_value->set(VEC3(nv));;
+                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(VEC3(nv));;
                                                 VEC4((x, y, z, w))?
-                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = do lerp_end_value->set(VEC4(nv));;
+                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = lerp_end_value->set(VEC4(nv));;
                                                 QUAT4((x, y, z, w))?
-                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = do lerp_end_value->set(QUAT4(nv));;
+                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = lerp_end_value->set(QUAT4(nv));;
                                                 }
                                             }
 
@@ -871,26 +871,26 @@ namespace editor::gui::animation2d
                                         WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
 
                                     do Combo("类型", uniform_types->>\namevalue = namevalue[0];, uniform_type_selected->get)
-                                        ->> \nid = do uniform_type_selected->set(nid);
+                                        ->> \nid = uniform_type_selected->set(nid);
                                         ;
 
                                     SameLine();
 
                                     do InputText("变量名", uniform_name->get())
-                                        ->> \nname = do uniform_name->set(nname);
+                                        ->> \nname = uniform_name->set(nname);
                                         ;
 
-                                    do CheckBox("插值模式", lerp_mode->get)->>\nv = do lerp_mode->set(nv);;
+                                    do CheckBox("插值模式", lerp_mode->get)->>\nv = lerp_mode->set(nv);;
                                     if (lerp_mode->get == false)
                                     {
-                                        do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = do for_all_frame->set(nv);;
+                                        do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = for_all_frame->set(nv);;
                                     }
                                     else
                                     {
-                                        do InputInt("作用帧数", lerp_frame_count->get)->>\nv = do (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
+                                        do InputInt("作用帧数", lerp_frame_count->get)->>\nv = (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
                                         TextDisabled(F"* 取值范围 0 ~ {animation.m_frames->len - i}");
 
-                                        do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = do lerp_by_ftime_mode->set(nv);;
+                                        do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = lerp_by_ftime_mode->set(nv);;
                                         TextDisabled("* 若取消此项，则以帧数作为插值系数");
                                     }
 

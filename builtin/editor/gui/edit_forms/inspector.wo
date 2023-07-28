@@ -136,7 +136,7 @@ namespace editor::gui::edit_forms
             if (show->get)
             {
                 je::gui::SetNextWindowSizeConstraints((250., 400.), (500., 4000.));
-                do show->set(BeginAttrOpen("检视面板##jeeditor", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
+                show->set(BeginAttrOpen("检视面板##jeeditor", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
 
                 // 1. 获取当前编辑中的实体，
                 match (current_entity_may_none)

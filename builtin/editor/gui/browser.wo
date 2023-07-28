@@ -941,13 +941,24 @@ namespace $$MODULE_NAME$$
         else if (IMAGE_FILE_EXTERN_NAMES->find(path.externname) != -1)
         {
             // 是图片，在这里编辑图片的采用方法等数据
-            if (MenuItem("编辑图片"))
+            if (MenuItem("设置采样方式"))
             {
                 using je::editor;
                 let image_samping_method = je::editor::get_texture_sampling_method_by_path(path.path->tostring);
 
                 drawpannel::modify_sampling_method(path.path->tostring, image_samping_method, 
                     \method = do je::editor::update_texture_sampling_method_by_path(path.path->tostring, method););
+            }
+            if (MenuItem("预览并编辑"))
+            {
+                match (je::graphic::texture::load(path.path->tostring))
+                {
+                value(tex)?
+                    drawpannel::drawimg(context, tex);
+                none?
+                    jeapi::gui::form::errmsg("编辑图片失败", F"无法打开图片纹理:{path.path->tostring}");
+                }
+                
             }
             Separator();
         }
@@ -1191,7 +1202,7 @@ namespace $$MODULE_NAME$$
         if (show->get)
         {
             je::gui::SetNextWindowSizeConstraints((500., 200.), (2000., 1100.));
-            do show->set(BeginAttrOpen("资源管理器", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
+            show->set(BeginAttrOpen("资源管理器", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
                 path_tree(context);
                 SameLine();
                 BeginGroup();

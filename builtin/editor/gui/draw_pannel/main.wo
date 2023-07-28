@@ -34,7 +34,7 @@ namespace editor::gui::drawpannel
     public func modify_sampling_method(path: string, method: je::graphic::texture::sampling, callback: (je::graphic::texture::sampling)=>void)
     {
         launch(func(method: mutable<je::graphic::texture::sampling>){
-            je::gui::SetNextWindowSizeConstraints((300., 200.), (300., 200.));
+            je::gui::SetNextWindowSizeConstraints((300., 250.), (300., 250.));
             let mut open = BeginOpen(F"编辑图片{path}");
                 static let MIN_SAMPLING_METHODS = {
                     ["线性采样"] = je::graphic::texture::sampling::MIN_LINEAR,
@@ -626,7 +626,28 @@ namespace editor::gui::drawpannel
         }
         return nt;
     }
+    public func drawimg(context: EditorContext, t: graphic::texture)
+    {
+        launch(edittexture, (
+            context,
+            option::none,
+            [(0, mut t)],
+            DrawContextT{
+                scale = mut 10.,
+                offset_x = mut 0.,
+                offset_y = mut 0.,
+                drawtool = mut all_draw_tools["无"](),
 
+                mousedown = mut false,
+
+                usecolor = mut (1., 1., 1., 1.),
+                maincolor = mut (1., 1., 1., 1.),
+                subcolor = mut (0., 0., 0., 0.),
+
+                edited_textures = {[t] = (0, HistoryManager::create(t))}mut,
+            }
+        ));
+    }
     public func drawedit(context: EditorContext, e: entity)
     {
         // 检查实体有没有纹理组件，然后遍历检查所有纹理是否都存在，有没有没有路径的问题

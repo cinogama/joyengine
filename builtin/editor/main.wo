@@ -271,7 +271,7 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
                 {
                     // OK, 关闭当前universe，关闭编辑器导航窗口，创建项目并保存到
                     u->close();
-                    do f->set(false);
+                    f->set(false);
                     
                     je::editor::set_runtime_path(project_path->tostring);
 
@@ -334,7 +334,7 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
         {
             // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
             u->close();
-            do f->set(false);
+            f->set(false);
 
             je::editor::set_runtime_path(path->tostring());
 
@@ -361,7 +361,7 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
 let u = editor::Environment::create();
 {
     let editor_configs = read_editor_data();
-    let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
+    let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< vec<array<string>> >;
 
     match (editor_configs->get("specify_vs_version": dynamic))
     {
@@ -398,9 +398,39 @@ let u = editor::Environment::create();
             TextDisabled("历史项目");
             do BeginChildSize("##history", 0., 100.);
 
-            for (let _, dat : historys)
+            for (let index, dat : historys)
             {
-                if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::none))
+                let context_menu_func = func()
+                {
+                    if (MenuItem("加载此项目"))
+                        open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
+                    if (MenuItem("打开项目所在路径"))
+                        do std::shell(F"explorer \"{filesys::normalize(dat[1])->tostring->replace("/", "\\")}\"");
+                    Separator();
+                    if (MenuItem("从历史记录中移除"))
+                    {
+                        jeapi::gui::form::ask("确认移除？", F"确认要将项目{dat[0]} ({dat[1]})\n从历史记录中移除吗？",
+                            func(check)
+                            {
+                                if (check)
+                                {
+                                    match (historys->get(index))
+                                    {
+                                    value(removing_data)?
+                                        if (removing_data[0] == dat[0] && removing_data[1] == dat[1])
+                                        {
+                                            do historys->remove(index);
+                                            assert(
+                                                filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", editor_configs->serialize->val)
+                                            );
+                                        }
+                                    none?;
+                                    }
+                                }
+                            });
+                    }
+                };
+                if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::value(context_menu_func)))
                     open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
             }
 
@@ -409,7 +439,7 @@ let u = editor::Environment::create();
             if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
             {
                 u->close();
-                do open->set(false);
+                open->set(false);
             }
 
             Separator();

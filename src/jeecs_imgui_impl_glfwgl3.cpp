@@ -514,6 +514,79 @@ R"(
     extern("libjoyecs", "je_gui_end_tool_tip")
     public func EndTooltip()=> void;
 
+    public enum ImGuiCol
+    {
+        ImGuiCol_Text,
+        ImGuiCol_TextDisabled,
+        ImGuiCol_WindowBg,              // Background of normal windows
+        ImGuiCol_ChildBg,               // Background of child windows
+        ImGuiCol_PopupBg,               // Background of popups, menus, tooltips windows
+        ImGuiCol_Border,
+        ImGuiCol_BorderShadow,
+        ImGuiCol_FrameBg,               // Background of checkbox, radio button, plot, slider, text input
+        ImGuiCol_FrameBgHovered,
+        ImGuiCol_FrameBgActive,
+        ImGuiCol_TitleBg,
+        ImGuiCol_TitleBgActive,
+        ImGuiCol_TitleBgCollapsed,
+        ImGuiCol_MenuBarBg,
+        ImGuiCol_ScrollbarBg,
+        ImGuiCol_ScrollbarGrab,
+        ImGuiCol_ScrollbarGrabHovered,
+        ImGuiCol_ScrollbarGrabActive,
+        ImGuiCol_CheckMark,
+        ImGuiCol_SliderGrab,
+        ImGuiCol_SliderGrabActive,
+        ImGuiCol_Button,
+        ImGuiCol_ButtonHovered,
+        ImGuiCol_ButtonActive,
+        ImGuiCol_Header,                // Header* colors are used for CollapsingHeader, TreeNode, Selectable, MenuItem
+        ImGuiCol_HeaderHovered,
+        ImGuiCol_HeaderActive,
+        ImGuiCol_Separator,
+        ImGuiCol_SeparatorHovered,
+        ImGuiCol_SeparatorActive,
+        ImGuiCol_ResizeGrip,
+        ImGuiCol_ResizeGripHovered,
+        ImGuiCol_ResizeGripActive,
+        ImGuiCol_Tab,
+        ImGuiCol_TabHovered,
+        ImGuiCol_TabActive,
+        ImGuiCol_TabUnfocused,
+        ImGuiCol_TabUnfocusedActive,
+        ImGuiCol_PlotLines,
+        ImGuiCol_PlotLinesHovered,
+        ImGuiCol_PlotHistogram,
+        ImGuiCol_PlotHistogramHovered,
+        ImGuiCol_TableHeaderBg,         // Table header background
+        ImGuiCol_TableBorderStrong,     // Table outer and header borders (prefer using Alpha=1.0 here)
+        ImGuiCol_TableBorderLight,      // Table inner borders (prefer using Alpha=1.0 here)
+        ImGuiCol_TableRowBg,            // Table row background (even rows)
+        ImGuiCol_TableRowBgAlt,         // Table row background (odd rows)
+        ImGuiCol_TextSelectedBg,
+        ImGuiCol_DragDropTarget,
+        ImGuiCol_NavHighlight,          // Gamepad/keyboard: current highlighted item
+        ImGuiCol_NavWindowingHighlight, // Highlight window when using CTRL+TAB
+        ImGuiCol_NavWindowingDimBg,     // Darken/colorize entire screen behind the CTRL+TAB window list, when active
+        ImGuiCol_ModalWindowDimBg,      // Darken/colorize entire screen behind a modal window, when one is active
+        ImGuiCol_COUNT
+    }
+
+    extern("libjoyecs", "je_gui_style_get_config_color")
+    public func GetStyleColor(item: ImGuiCol)=> (real, real, real, real);    
+
+    extern("libjoyecs", "je_gui_style_set_config_color")
+    public func SetStyleColor(item: ImGuiCol, col: (real, real, real, real))=>void;  
+
+    extern("libjoyecs", "je_gui_style_set_config_color_dark")
+    public func SetStyleColorDark()=>void;  
+
+    extern("libjoyecs", "je_gui_style_set_config_color_classic")
+    public func SetStyleColorClassic()=>void; 
+
+    extern("libjoyecs", "je_gui_style_set_config_color_light")
+    public func SetStyleColorLight()=>void; 
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     extern("libjoyecs", "je_gui_launch")
@@ -1595,67 +1668,57 @@ WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGuiStyle* style = &ImGui::GetStyle();
+    auto color = style->Colors[wo_int(args + 0)];
+
+    wo_value result = wo_push_struct(vm, 4);
+    wo_set_float(wo_struct_get(result, 0), color.x);
+    wo_set_float(wo_struct_get(result, 1), color.y);
+    wo_set_float(wo_struct_get(result, 2), color.z);
+    wo_set_float(wo_struct_get(result, 3), color.w);
+
+    return wo_ret_val(vm, result);
+}
+
+WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGuiStyle* style = &ImGui::GetStyle();
+    auto& color = style->Colors[wo_int(args + 0)];
+
+    color.x = wo_float(wo_struct_get(args + 1, 0));
+    color.y = wo_float(wo_struct_get(args + 1, 1));
+    color.z = wo_float(wo_struct_get(args + 1, 2));
+    color.w = wo_float(wo_struct_get(args + 1, 3));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_style_set_config_color_dark(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::StyleColorsDark();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_style_set_config_color_classic(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::StyleColorsClassic();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_style_set_config_color_light(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::StyleColorsLight();
+    return wo_ret_void(vm);
+}
+
 void jegui_init(void* window_handle, bool reboot)
 {
     _stop_work_flag = false;
     ImGui::CreateContext();
 
     // Set style:
-    ImGuiStyle* style = &ImGui::GetStyle();
-    ImVec4* colors = style->Colors;
-    colors[ImGuiCol_Text] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-    colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
-    colors[ImGuiCol_WindowBg] = ImVec4(0.94f, 0.94f, 0.94f, 1.00f);
-    colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    colors[ImGuiCol_PopupBg] = ImVec4(1.00f, 1.00f, 1.00f, 0.98f);
-    colors[ImGuiCol_Border] = ImVec4(0.00f, 0.00f, 0.00f, 0.30f);
-    colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    colors[ImGuiCol_FrameBg] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.26f, 0.59f, 0.98f, 0.40f);
-    colors[ImGuiCol_FrameBgActive] = ImVec4(0.26f, 0.59f, 0.98f, 0.67f);
-    colors[ImGuiCol_TitleBg] = ImVec4(0.96f, 0.96f, 0.96f, 1.00f);
-    colors[ImGuiCol_TitleBgActive] = ImVec4(0.82f, 0.82f, 0.82f, 1.00f);
-    colors[ImGuiCol_TitleBgCollapsed] = ImVec4(1.00f, 1.00f, 1.00f, 0.51f);
-    colors[ImGuiCol_MenuBarBg] = ImVec4(0.86f, 0.86f, 0.86f, 1.00f);
-    colors[ImGuiCol_ScrollbarBg] = ImVec4(0.98f, 0.98f, 0.98f, 0.53f);
-    colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.69f, 0.69f, 0.69f, 0.80f);
-    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.49f, 0.49f, 0.49f, 0.80f);
-    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.49f, 0.49f, 0.49f, 1.00f);
-    colors[ImGuiCol_CheckMark] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
-    colors[ImGuiCol_SliderGrab] = ImVec4(0.26f, 0.59f, 0.98f, 0.78f);
-    colors[ImGuiCol_SliderGrabActive] = ImVec4(0.46f, 0.54f, 0.80f, 0.60f);
-    colors[ImGuiCol_Button] = ImVec4(0.26f, 0.59f, 0.98f, 0.40f);
-    colors[ImGuiCol_ButtonHovered] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
-    colors[ImGuiCol_ButtonActive] = ImVec4(0.06f, 0.53f, 0.98f, 1.00f);
-    colors[ImGuiCol_Header] = ImVec4(0.26f, 0.59f, 0.98f, 0.31f);
-    colors[ImGuiCol_HeaderHovered] = ImVec4(0.26f, 0.59f, 0.98f, 0.80f);
-    colors[ImGuiCol_HeaderActive] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
-    colors[ImGuiCol_Separator] = ImVec4(0.39f, 0.39f, 0.39f, 0.62f);
-    colors[ImGuiCol_SeparatorHovered] = ImVec4(0.14f, 0.44f, 0.80f, 0.78f);
-    colors[ImGuiCol_SeparatorActive] = ImVec4(0.14f, 0.44f, 0.80f, 1.00f);
-    colors[ImGuiCol_ResizeGrip] = ImVec4(0.35f, 0.35f, 0.35f, 0.17f);
-    colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.26f, 0.59f, 0.98f, 0.67f);
-    colors[ImGuiCol_ResizeGripActive] = ImVec4(0.26f, 0.59f, 0.98f, 0.95f);
-    colors[ImGuiCol_Tab] = ImLerp(colors[ImGuiCol_Header], colors[ImGuiCol_TitleBgActive], 0.90f);
-    colors[ImGuiCol_TabHovered] = colors[ImGuiCol_HeaderHovered];
-    colors[ImGuiCol_TabActive] = ImLerp(colors[ImGuiCol_HeaderActive], colors[ImGuiCol_TitleBgActive], 0.60f);
-    colors[ImGuiCol_TabUnfocused] = ImLerp(colors[ImGuiCol_Tab], colors[ImGuiCol_TitleBg], 0.80f);
-    colors[ImGuiCol_TabUnfocusedActive] = ImLerp(colors[ImGuiCol_TabActive], colors[ImGuiCol_TitleBg], 0.40f);
-    colors[ImGuiCol_PlotLines] = ImVec4(0.39f, 0.39f, 0.39f, 1.00f);
-    colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
-    colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
-    colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.45f, 0.00f, 1.00f);
-    colors[ImGuiCol_TableHeaderBg] = ImVec4(0.78f, 0.87f, 0.98f, 1.00f);
-    colors[ImGuiCol_TableBorderStrong] = ImVec4(0.57f, 0.57f, 0.64f, 1.00f);   // Prefer using Alpha=1.0 here
-    colors[ImGuiCol_TableBorderLight] = ImVec4(0.68f, 0.68f, 0.74f, 1.00f);   // Prefer using Alpha=1.0 here
-    colors[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.30f, 0.30f, 0.30f, 0.09f);
-    colors[ImGuiCol_TextSelectedBg] = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
-    colors[ImGuiCol_DragDropTarget] = ImVec4(0.26f, 0.59f, 0.98f, 0.95f);
-    colors[ImGuiCol_NavHighlight] = colors[ImGuiCol_HeaderHovered];
-    colors[ImGuiCol_NavWindowingHighlight] = ImVec4(0.70f, 0.70f, 0.70f, 0.70f);
-    colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.20f);
-    colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
+    ImGui::StyleColorsLight();
 
     ImGuiIO& io = ImGui::GetIO();
 
@@ -1677,7 +1740,7 @@ void jegui_init(void* window_handle, bool reboot)
     }
 
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    ImGui_ImplOpenGL3_Init("#version 330 core");
 }
 
 void jegui_update(jegl_thread* thread_context)
