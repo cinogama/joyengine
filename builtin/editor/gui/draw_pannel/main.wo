@@ -233,7 +233,7 @@ namespace editor::gui::drawpannel
         subcolor:   mut color4_t,
 
         edited_textures: map<graphic::texture, (int/*texture pass id*/, HistoryManager)>,
-        // 傻逼键盘迟早得换！
+        openform: mut bool,
     }
     {
         func update_edit_textures_history(self: DrawContextT, passid: int, oldtex: graphic::texture, newtex: graphic::texture)
@@ -292,7 +292,11 @@ namespace editor::gui::drawpannel
         ["填充"] = \=DrawToolT::create("填充", (): tools::Fill);,
     };
 
-    func edittexture(context: EditorContext, entity: option<jeapi::debug::Eeid>, images: array<(int, mut graphic::texture)>, draw_context: DrawContextT)
+    func edittexture(
+        context: EditorContext, 
+        entity: option<jeapi::debug::Eeid>, 
+        images: array<(int, mut graphic::texture)>, 
+        draw_context: DrawContextT)
     {
         let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
 
@@ -564,10 +568,10 @@ namespace editor::gui::drawpannel
         }
         End();
 
-        if (open)
-            return true;
-        else
+        if (!open)
         {
+            let saving_image_action = []mut: vec<()=> void>;
+
             // 遍历所有被编辑过的图片，直接保存！
             for (let _, (passid, edited_texture) : images)
             {
@@ -593,22 +597,42 @@ namespace editor::gui::drawpannel
                         ;
                 ;
                 
-                if (save_texture_to_path(context, edited_texture, saving_path))
+                saving_image_action->add(func()
+                    {
+                        if (save_texture_to_path(context, edited_texture, saving_path))
+                        {
+                            do je::editor::update_texture_sampling_method_by_path(saving_path, edited_texture->get_sampling_method());
+                            do entity
+                                ->> \eid = eid->justdo(
+                                        \e = e->editor::graphic::bind_texture(passid, je::graphic::texture::load(
+                                            // NOTE: saving_path是一个可能为规范路径 也有可能是项目路径的东西，这里直接简单处理了
+                                            //       照理来说应该区分出类型再分别处理
+                                            context->get_project->make_path_normalize(filesys::normalize(saving_path)))->val);
+                                    )
+                                    ;
+                                ;
+                        }
+                    });
+                
+            }
+
+            draw_context.openform = false;
+            if (! saving_image_action->empty)
+            {
+                draw_context.openform = true;
+                jeapi::gui::form::ask("是否保存", F"是否保存绘制的图片",
+                func(ok)
                 {
-                    do je::editor::update_texture_sampling_method_by_path(saving_path, edited_texture->get_sampling_method());
-                    do entity
-                        ->> \eid = eid->justdo(
-                                \e = e->editor::graphic::bind_texture(passid, je::graphic::texture::load(
-                                    // NOTE: saving_path是一个可能为规范路径 也有可能是项目路径的东西，这里直接简单处理了
-                                    //       照理来说应该区分出类型再分别处理
-                                    context->get_project->make_path_normalize(filesys::normalize(saving_path)))->val);
-                            )
-                            ;
-                        ;
-                }
+                    draw_context.openform = false;
+                    if (!ok)
+                        return;
+                        
+                    for (let _, act : saving_image_action)
+                        act();
+                });
             }
         }
-        return false;
+        return draw_context.openform;
     }
 
     func create_and_copy_texture(t: je::graphic::texture)
@@ -645,6 +669,7 @@ namespace editor::gui::drawpannel
                 subcolor = mut (0., 0., 0., 0.),
 
                 edited_textures = {[t] = (0, HistoryManager::create(t))}mut,
+                openform = mut true,
             }
         ));
     }
@@ -727,6 +752,7 @@ namespace editor::gui::drawpannel
                     ->  mapping
                     ->  tomap
                     ,
+                openform = mut true,
             }
         ));
     }

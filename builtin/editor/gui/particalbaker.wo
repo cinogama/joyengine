@@ -266,7 +266,8 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 "@;
     func _particalbaker_editor(
         partical_context: ParticalContext, 
-        econtext: _EditorContext)
+        econtext: _EditorContext,
+        openform: mutable<bool>)
     {
         let mut open = BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path}", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
@@ -277,13 +278,15 @@ public func color(_/*frame*/: int, context: PerparticleContext)
             jeapi::gui::form::ask("是否保存粒子动画", F"是否将粒子配置保存到{partical_context.m_path}",
                 func(ok)
                 {
+                    openform->set(false);
                     if (!ok)
                         return;
                         
-                    if (partical_context->save())
-                        jeapi::gui::form::msg("动画已保存", F"动画已保存到{partical_context.m_path}");
-                    else
+                    if (! partical_context->save())
+                    {
                         jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path}");
+                        openform->set(true);
+                    }
                 });
         }
 
@@ -455,7 +458,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
         End();
 
-        return open;
+        return openform->get;
     }
     public func show(
         _: EditorContext, 
@@ -469,6 +472,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
                 m_target_launch_count = mut 0,
                 m_solved_launch_count = mut 0,
-            }));
+            },
+            mutable::create(true)));
     }
 }

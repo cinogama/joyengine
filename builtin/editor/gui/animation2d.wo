@@ -478,7 +478,7 @@ namespace editor::gui::animation2d
             }
         }
     }
-    func _animation_edit_form(_: EditorContext, animation_context: AnimationContext)
+    func _animation_edit_form(_: EditorContext, animation_context: AnimationContext, openform: mutable<bool>)
     {
         using je::gui;
 
@@ -491,13 +491,15 @@ namespace editor::gui::animation2d
             jeapi::gui::form::ask("是否保存动画", F"是否将动画保存到{animation_context.m_path}",
                 func(ok)
                 {
+                    openform->set(true);
                     if (!ok)
                         return;
                         
-                    if (animation_context->save())
-                        jeapi::gui::form::msg("动画已保存", F"动画已保存到{animation_context.m_path}");
-                    else
+                    if (! animation_context->save())
+                    {
                         jeapi::gui::form::msg("动画保存失败", F"动画未能保存到{animation_context.m_path}");
+                        openform->set(false);
+                    }
                 });
         }
 
@@ -1195,10 +1197,10 @@ namespace editor::gui::animation2d
 
         End();
 
-        return open;
+        return openform->get;
     }
     public func show(context: EditorContext, animation_context: AnimationContext)
     {
-        je::gui::launch(_animation_edit_form, (context, animation_context));
+        je::gui::launch(_animation_edit_form, (context, animation_context, mutable::create(true)));
     }
 }
