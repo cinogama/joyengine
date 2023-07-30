@@ -7207,6 +7207,7 @@ namespace jeecs
         struct Rigidbody
         {
             void* native_rigidbody = nullptr;
+            bool        rigidbody_just_created = false;
             math::vec2  record_body_scale = math::vec2(0.f, 0.f);
             float       record_density = 0.f;
             float       record_friction = 0.f;

@@ -62,7 +62,11 @@ namespace jeecs
                 default_rigidbody_config.position = { translation.world_position.x, translation.world_position.y };
                 default_rigidbody_config.angle = localrotation.rot.euler_angle().z / math::RAD2DEG;
                 rigidbody.native_rigidbody = m_physics_world.CreateBody(&default_rigidbody_config);
+
+                rigidbody.rigidbody_just_created = true;
             }
+            else
+                rigidbody.rigidbody_just_created = false;
 
             b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
             assert(rigidbody_instance != nullptr);
@@ -221,7 +225,7 @@ namespace jeecs
                             // 从刚体获取解算完成之后的坐标
                             b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
 
-                            if (kinematics != nullptr)
+                            if (kinematics != nullptr && rigidbody.rigidbody_just_created == false)
                             {
                                 auto& new_position = rigidbody_instance->GetPosition();
 
