@@ -231,8 +231,8 @@ namespace jeecs
                                 };
                                 localposition.set_world_position(
                                     math::vec3(
-                                        kinematics->lock_movement_x ? 0.0f : new_position.x, 
-                                        kinematics->lock_movement_y ? 0.0f : new_position.y, 
+                                        kinematics->lock_movement_x ? translation.world_position.x : new_position.x,
+                                        kinematics->lock_movement_y ? translation.world_position.y : new_position.y,
                                         translation.world_position.z),
                                     translation, &localrotation);
 
