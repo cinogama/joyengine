@@ -7237,6 +7237,7 @@ namespace jeecs
                 typing::register_member(&Restitution::value, "value");
             }
         };
+
         struct Kinematics
         {
             math::vec2 linear_velocity = {};
@@ -7245,6 +7246,10 @@ namespace jeecs
             float angular_damping = 0.f;
             float gravity_scale = 1.f;
 
+            bool lock_movement_x = false;
+            bool lock_movement_y = false;
+            bool lock_rotation = false;
+
             static void JERefRegsiter()
             {
                 typing::register_member(&Kinematics::linear_velocity, "linear_velocity");
@@ -7252,6 +7257,9 @@ namespace jeecs
                 typing::register_member(&Kinematics::linear_damping, "linear_damping");
                 typing::register_member(&Kinematics::angular_damping, "angular_damping");
                 typing::register_member(&Kinematics::gravity_scale, "gravity_scale");
+                typing::register_member(&Kinematics::lock_movement_x, "lock_movement_x");
+                typing::register_member(&Kinematics::lock_movement_y, "lock_movement_y");
+                typing::register_member(&Kinematics::lock_rotation, "lock_rotation");
             }
         };
         struct Bullet
@@ -7466,6 +7474,10 @@ namespace jeecs
 
                     bool                m_loop = false;
 
+                    void set_loop(bool loop)
+                    {
+                        m_loop = loop;
+                    }
                     void set_action(const std::string& animation_name)
                     {
                         m_current_action = animation_name;
@@ -7636,6 +7648,16 @@ namespace jeecs
                     }
                 };
                 std::vector<animation_data_set> m_animations;
+
+                void active_action(size_t id, const char* act_name, bool loop)
+                {
+                    if (id < m_animations.size())
+                    {
+                        if (m_animations[id].get_action() != act_name)
+                            m_animations[id].set_action(act_name);
+                        m_animations[id].set_loop(loop);
+                    }
+                }
 
                 std::string to_string()const
                 {

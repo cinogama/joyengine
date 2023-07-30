@@ -104,7 +104,7 @@ namespace jeecs
                 rigidbody.record_friction = friction->value;
                 force_update_fixture = true;
             }
-            if (restitution!=nullptr && restitution->value != rigidbody.record_restitution)
+            if (restitution != nullptr && restitution->value != rigidbody.record_restitution)
             {
                 rigidbody.record_restitution = restitution->value;
                 force_update_fixture = true;
@@ -220,23 +220,30 @@ namespace jeecs
                         {
                             // 从刚体获取解算完成之后的坐标
                             b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
-                            auto& new_position = rigidbody_instance->GetPosition();
-
-                            localposition.set_world_position(
-                                math::vec3(new_position.x, new_position.y, translation.world_position.z),
-                                translation, &localrotation);
-
-                            auto&& world_angle = translation.world_rotation.euler_angle();
-                            world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
-
-                            localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
-
-                            // TODO: 检查刚体内的动力学属性，从物理引擎同步到组件
 
                             if (kinematics != nullptr)
                             {
-                                kinematics->linear_velocity = math::vec2{ rigidbody_instance->GetLinearVelocity().x, rigidbody_instance->GetLinearVelocity().y };
-                                kinematics->angular_velocity = rigidbody_instance->GetAngularVelocity();
+                                auto& new_position = rigidbody_instance->GetPosition();
+
+                                kinematics->linear_velocity = math::vec2{
+                                    kinematics->lock_movement_x ? 0.0f : rigidbody_instance->GetLinearVelocity().x,
+                                    kinematics->lock_movement_y ? 0.0f : rigidbody_instance->GetLinearVelocity().y
+                                };
+                                localposition.set_world_position(
+                                    math::vec3(
+                                        kinematics->lock_movement_x ? 0.0f : new_position.x, 
+                                        kinematics->lock_movement_y ? 0.0f : new_position.y, 
+                                        translation.world_position.z),
+                                    translation, &localrotation);
+
+                                kinematics->angular_velocity =
+                                    kinematics->lock_rotation ? 0.0f : rigidbody_instance->GetAngularVelocity();
+                                if (!kinematics->lock_rotation)
+                                {
+                                    auto&& world_angle = translation.world_rotation.euler_angle();
+                                    world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
+                                    localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
+                                }
                             }
                         }
                 }
