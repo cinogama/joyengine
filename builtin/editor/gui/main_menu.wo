@@ -79,35 +79,39 @@ namespace editor::gui
         launch(func()
             {
                 SetNextWindowSizeConstraints((700., 550.), (700., 550.));
-                let open = BeginOpen(F"样式编辑器");
-                
-                if (Button("使用默认暗色配置")) SetStyleColorDark();
-                SameLine();
-                if (Button("使用默认亮色配置")) SetStyleColorLight();
-                SameLine();
-                if (Button("使用默认经典配置")) SetStyleColorClassic();
-                
-                Separator();
-                
-                for (let item, (name, desc) : config_name_describe)
+                match (BeginOpen(F"样式编辑器"))
                 {
-                    let col = GetStyleColor(item);
-                    Text(name); SameLine();
-                    if (ColorButton(F"##main_color{item}", col))
-                        OpenPopup(F"ColorPicker##{item}");
-                    if (BeginPopup(F"ColorPicker##{item}"))
+                value(show)?
                     {
-                        do ColorPicker4(F"##main_color_picker{item}", col)
-                            ->> \c = SetStyleColor(item, c);;
-                        EndPopup();
+                        if (show)
+                        {
+                            if (Button("使用默认暗色配置")) SetStyleColorDark();
+                            SameLine();
+                            if (Button("使用默认亮色配置")) SetStyleColorLight();
+                            SameLine();
+                            if (Button("使用默认经典配置")) SetStyleColorClassic();
+                            
+                            Separator();
+                            
+                            for (let item, (name, desc) : config_name_describe)
+                            {
+                                let col = GetStyleColor(item);
+                                Text(name); SameLine();
+                                if (ColorButton(F"##main_color{item}", col))
+                                    OpenPopup(F"ColorPicker##{item}");
+                                if (BeginPopup(F"ColorPicker##{item}"))
+                                {
+                                    do ColorPicker4(F"##main_color_picker{item}", col)
+                                        ->> \c = SetStyleColor(item, c);;
+                                    EndPopup();
+                                }
+
+                                TextDisabled(desc);
+                                Separator();
+                            }
+                        }
                     }
-
-                    TextDisabled(desc);
-                    Separator();
-                }
-
-                if (! open)
-                {
+                none?
                     ask("是否保存配色", "即将关闭，是否保存编辑器样式和颜色配置文件？", 
                         func(check)
                         {
@@ -187,11 +191,20 @@ namespace editor::gui
                     {
                         context->launch_editor_form(func(){
                             je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
-                            let open = BeginOpen("项目设置");
-                            for (let _, iconfig : context->get_project->get_configs)
+                            let mut open = true;
+                            match (BeginOpen("项目设置"))
                             {
-                                do iconfig->edit();
-                                Separator();
+                            value(show)?
+                                if (show)
+                                {
+                                    for (let _, iconfig : context->get_project->get_configs)
+                                    {
+                                        do iconfig->edit();
+                                        Separator();
+                                    }
+                                }
+                            none?
+                                open = false;
                             }
                             End();
                             return open;

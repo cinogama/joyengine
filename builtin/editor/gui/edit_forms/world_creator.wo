@@ -258,82 +258,91 @@ namespace editor::gui::edit_forms
     public func show_world_creator(_: EditorContext, world_context: WorldContext)
     {
         je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
-        let mut open = BeginAttrOpen(world_context.edit_world->has() ? F"编辑世界##{JobID()}" | F"创建新世界##{JobID()}", 
-        WindowsAttribute::ImGuiWindowFlags_MenuBar);
-
-        if (menu_bar(world_context))
+        let mut open = true;
+        match (BeginAttrOpen(world_context.edit_world->has() ? F"编辑世界##{JobID()}" | F"创建新世界##{JobID()}", 
+            WindowsAttribute::ImGuiWindowFlags_MenuBar))
         {
-            match (world_context.edit_world)
+        value(show)?
+            if (show)
             {
-                none?
+                if (menu_bar(world_context))
                 {
-                    let created_world = world_context.current_project->create_new_world(world_context.target_path);
-
-                    created_world->editor::set_name(world_context.name);
-
-                    for (let _, active_sys : world_context.has_active_types)
-                        do created_world->add_system(active_sys);
-
-                    if (! world_context.current_project->set_worlds_runtime_systems(
-                        created_world, world_context.has_append_types->toarray))
+                    match (world_context.edit_world)
                     {
-                        je::logfatal("无法添加运行时激活的系统，未知的错误");
-                    }
-                    launch(func(){
-                        // 为了保证世界数据写入完全之后再执行回调（一般用于序列化并保存）
-                        // 此处摇匀一下，不过仍然需要考虑不同世界位于不同线程可能导致的问题
-                        // 摇晃一次即可，摇晃三次纯属玄学
-                        std::yield();
-                        std::yield();
-                        std::yield();
-
-                        if ((world_context.callback->val)(created_world) == false)
+                        none?
                         {
-                            world_context.current_project->destroy_world(created_world)->unwarp;
+                            let created_world = world_context.current_project->create_new_world(world_context.target_path);
+
+                            created_world->editor::set_name(world_context.name);
+
+                            for (let _, active_sys : world_context.has_active_types)
+                                do created_world->add_system(active_sys);
+
+                            if (! world_context.current_project->set_worlds_runtime_systems(
+                                created_world, world_context.has_append_types->toarray))
+                            {
+                                je::logfatal("无法添加运行时激活的系统，未知的错误");
+                            }
+                            launch(func(){
+                                // 为了保证世界数据写入完全之后再执行回调（一般用于序列化并保存）
+                                // 此处摇匀一下，不过仍然需要考虑不同世界位于不同线程可能导致的问题
+                                // 摇晃一次即可，摇晃三次纯属玄学
+                                std::yield();
+                                std::yield();
+                                std::yield();
+
+                                if ((world_context.callback->val)(created_world) == false)
+                                {
+                                    world_context.current_project->destroy_world(created_world)->unwarp;
+                                }
+                                return false;
+                            }, ());
+
                         }
-                        return false;
-                    }, ());
+                        value(world)?
+                        {
+                            if (! world_context.current_project->set_worlds_runtime_systems(
+                                world, world_context.has_append_types->toarray))
+                            {
+                                je::logfatal("无法添加运行时激活的系统，未知的错误");
+                            }
+                            
+                            let active_systems = world->editor::get_systems_types();
 
-                }
-                value(world)?
-                {
-                    if (! world_context.current_project->set_worlds_runtime_systems(
-                        world, world_context.has_append_types->toarray))
-                    {
-                        je::logfatal("无法添加运行时激活的系统，未知的错误");
+                            // 当前世界中还没有这个系统，立即添加
+                            do world_context.has_active_types
+                                ->forall(\t: je::typeinfo=active_systems->find(t) == -1;)
+                                ->map(\t: je::typeinfo=world->add_system(t););
+
+                            // 系统被移除
+                            do active_systems
+                                ->forall(\t: je::typeinfo = world_context.not_append_types->find(t) != -1 
+                                                        || world_context.has_append_types->find(t) != -1;)
+                                ->map(\t: je::typeinfo=world->remove_system(t););
+                            world->editor::set_name(world_context.name);
+                        }
                     }
-                    
-                    let active_systems = world->editor::get_systems_types();
-
-                    // 当前世界中还没有这个系统，立即添加
-                    do world_context.has_active_types
-                        ->forall(\t: je::typeinfo=active_systems->find(t) == -1;)
-                        ->map(\t: je::typeinfo=world->add_system(t););
-
-                    // 系统被移除
-                    do active_systems
-                        ->forall(\t: je::typeinfo = world_context.not_append_types->find(t) != -1 
-                                                 || world_context.has_append_types->find(t) != -1;)
-                        ->map(\t: je::typeinfo=world->remove_system(t););
-                    world->editor::set_name(world_context.name);
+                    open = false;
                 }
+
+                do InputText("名称", world_context.name)
+                    ->> \new_text = world_context.name = new_text;
+                    ;
+
+                let (available_width, available_height) = GetContentRegionAvail();
+
+                BeginGroup();
+                show_append_systems(world_context, available_width / 2., available_height * 2. / 3.);
+                show_active_systems(world_context, available_width / 2., available_height / 3.);
+                EndGroup();
+
+                SameLine();
+                show_usable_systems(world_context, available_width / 2.);
             }
+        none?
             open = false;
         }
 
-        do InputText("名称", world_context.name)
-            ->> \new_text = world_context.name = new_text;
-            ;
-
-        let (available_width, available_height) = GetContentRegionAvail();
-
-        BeginGroup();
-        show_append_systems(world_context, available_width / 2., available_height * 2. / 3.);
-        show_active_systems(world_context, available_width / 2., available_height / 3.);
-        EndGroup();
-
-        SameLine();
-        show_usable_systems(world_context, available_width / 2.);
         End(); // End of Form
 
         return open;

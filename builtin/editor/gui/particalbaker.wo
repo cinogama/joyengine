@@ -269,9 +269,183 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         econtext: _EditorContext,
         openform: mutable<bool>)
     {
-        let mut open = BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path}", 
+        let mut open = true;
+        match (BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path}", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-            + WindowsAttribute::ImGuiWindowFlags_MenuBar);
+            + WindowsAttribute::ImGuiWindowFlags_MenuBar))
+        {
+        value(show)?
+            if (show)
+            {
+                if (BeginMenuBar())
+                {
+                    if (BeginMenu("文件"))
+                    {
+                        if (MenuItem("保存"))
+                        {
+                            if (!partical_context->save())
+                                jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path}");
+                        }
+                        if (MenuItem("导出"))
+                        {
+                            if (partical_context.m_frames_caches->empty)
+                                jeapi::gui::form::errmsg("动画导出失败", F"当前没有烘焙结果可供导出，请先执行烘焙操作");
+
+                            let filename = filesys::purename(partical_context.m_path);
+                            let outimgpath = filesys::parent(partical_context.m_path) / (filename + ".png");
+                            let outanimpath = filesys::parent(partical_context.m_path) / (filename + ".jeanim4");
+                            jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->tostring} 和 {outanimpath->tostring}，是否确认导出当前烘焙结果？",
+                                func(ok)
+                                {
+                                    if (ok)
+                                    {
+                                        let framecount = partical_context.m_frames_caches->len;
+                                        let width = math::round(math::sqrt(framecount: real));
+                                        let height = width * width >= framecount ? width | width + 1;
+                                        let (w, h) = partical_context.m_frame_size;
+
+                                        let animationimg = image::create(w * width, h * height);
+
+                                        for (let mut i = 0; i < framecount; i += 1)
+                                        {
+                                            let img = partical_context.m_frames_caches[i];
+
+                                            for (let mut x = 0; x < w; x += 1)
+                                            {
+                                                for (let mut y = 0; y < h; y += 1)
+                                                {
+                                                    let placex = i % width;
+                                                    let placey = height - (i / width + 1);
+                                                    let (r, g, b, a) = img->pix((x, y))->get_color();
+                                                    animationimg->setpix((x + placex * w, y + placey * h), (r,g,b,a));
+                                                }
+                                            }
+                                        }
+
+                                        assert(animationimg->save(outimgpath->tostring()));
+
+                                        let fanimdat = animation2d::AnimationContext::create(outanimpath);
+                                        fanimdat->fast_create_for_partical(width, height, framecount, partical_context.m_frame_rate);
+                                        assert(fanimdat->save);
+                                    }
+                                });
+                            
+                        }
+
+                        EndMenu();
+                    }
+                    if (econtext.m_enable_bake)
+                    {
+                        if (MenuItem("烘焙"))
+                        {
+                            match (vm::create("je/particalbacker/baker.wo", 
+                                partical_context.m_script))
+                            {
+                            ok(vmm)?
+                                {
+                                    if (!vmm->run()->has)
+                                        jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
+                                    
+                                    econtext.m_frame_index = 1;
+
+                                    do thread::create(func(){
+                                        econtext.m_enable_bake = false;
+                                        if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->has)
+                                            jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
+                                        econtext.m_enable_bake = true;
+                                    }, ());
+                                }
+                            err(msg)?
+                                jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本存在错误\n{msg}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        func _show_bake_progress(econtext: _EditorContext)
+                        {
+                            return F"烘焙中({econtext.m_solved_launch_count}/{econtext.m_target_launch_count})";
+                        }
+                        
+                        if (MenuItem(_show_bake_progress(econtext)))
+                            econtext.m_enable_bake = true;
+                    }
+                
+                    EndMenuBar();
+                }
+
+                BeginGroup();
+
+                Text("帧数");
+                SameLine();
+                do InputInt("##framecount", partical_context.m_frame_count)
+                    ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil: void);;
+
+                Text("尺寸");
+                SameLine();
+                do InputInt2("##framesize", partical_context.m_frame_size...)
+                    ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil: void)
+                        where (x, y) = s
+                        ;;
+
+                Text("帧速率(秒/帧)");
+                SameLine();
+                do InputFloatFormat("##framerate", partical_context.m_frame_rate, "%.6f")
+                    ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil: void);;
+
+                Text("粒子渲染趟数");
+                SameLine();
+                do InputInt("##repeatcount", partical_context.m_repeat_round)
+                    ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil: void);;
+                
+                let (w, h) = partical_context.m_frame_size;
+
+                do BeginChildSize("##review", w: real * 400. / h: real, 400.);
+                
+                let frames = partical_context.m_frames_caches;
+                
+                if (std::time() - econtext.m_last_update_time >= partical_context.m_frame_rate)
+                {
+                    econtext.m_frame_index += 1;
+                    econtext.m_last_update_time = std::time();
+                }
+
+                econtext.m_frame_index = frames->empty
+                    ? 0
+                    | econtext.m_frame_index % frames->len;
+                
+                ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
+                
+                let drawlist = GetWindowDrawList();
+                do InvisibleButton("##draw_space", GetContentRegionAvail());
+
+                let (p0, p1) = GetItemRect();
+                let (lux, luy) = p0;
+                let (rbx, rby) = p1;
+
+                PushClipRect(p0, p1);
+                drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+                if (!frames->empty)
+                    drawlist->AddImage(
+                        (lux, luy), 
+                        (rbx, rby), 
+                        frames[econtext.m_frame_index]);
+
+                EndChild();
+
+                EndGroup();
+                SameLine();
+
+                BeginGroup();
+                
+                do InputTextMultilineSize("##source", partical_context.m_script, 500., GetContentRegionAvail()[0])
+                    ->> \t = partical_context.m_script = t;;
+
+                EndGroup();
+            }
+        none?
+            open = false;
+        }
 
         if (! open)
         {
@@ -289,173 +463,6 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     }
                 });
         }
-
-        if (BeginMenuBar())
-        {
-            if (BeginMenu("文件"))
-            {
-                if (MenuItem("保存"))
-                {
-                    if (!partical_context->save())
-                        jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path}");
-                }
-                if (MenuItem("导出"))
-                {
-                    if (partical_context.m_frames_caches->empty)
-                        jeapi::gui::form::errmsg("动画导出失败", F"当前没有烘焙结果可供导出，请先执行烘焙操作");
-
-                    let filename = filesys::purename(partical_context.m_path);
-                    let outimgpath = filesys::parent(partical_context.m_path) / (filename + ".png");
-                    let outanimpath = filesys::parent(partical_context.m_path) / (filename + ".jeanim4");
-                    jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->tostring} 和 {outanimpath->tostring}，是否确认导出当前烘焙结果？",
-                        func(ok)
-                        {
-                            if (ok)
-                            {
-                                let framecount = partical_context.m_frames_caches->len;
-                                let width = math::round(math::sqrt(framecount: real));
-                                let height = width * width >= framecount ? width | width + 1;
-                                let (w, h) = partical_context.m_frame_size;
-
-                                let animationimg = image::create(w * width, h * height);
-
-                                for (let mut i = 0; i < framecount; i += 1)
-                                {
-                                    let img = partical_context.m_frames_caches[i];
-
-                                    for (let mut x = 0; x < w; x += 1)
-                                    {
-                                        for (let mut y = 0; y < h; y += 1)
-                                        {
-                                            let placex = i % width;
-                                            let placey = height - (i / width + 1);
-                                            let (r, g, b, a) = img->pix((x, y))->get_color();
-                                            animationimg->setpix((x + placex * w, y + placey * h), (r,g,b,a));
-                                        }
-                                    }
-                                }
-
-                                assert(animationimg->save(outimgpath->tostring()));
-
-                                let fanimdat = animation2d::AnimationContext::create(outanimpath);
-                                fanimdat->fast_create_for_partical(width, height, framecount, partical_context.m_frame_rate);
-                                assert(fanimdat->save);
-                            }
-                        });
-                    
-                }
-
-                EndMenu();
-            }
-            if (econtext.m_enable_bake)
-            {
-                if (MenuItem("烘焙"))
-                {
-                    match (vm::create("je/particalbacker/baker.wo", 
-                        partical_context.m_script))
-                    {
-                    ok(vmm)?
-                        {
-                            if (!vmm->run()->has)
-                                jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
-                            
-                            econtext.m_frame_index = 1;
-
-                            do thread::create(func(){
-                                econtext.m_enable_bake = false;
-                                if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->has)
-                                    jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
-                                econtext.m_enable_bake = true;
-                            }, ());
-                        }
-                    err(msg)?
-                        jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本存在错误\n{msg}");
-                    }
-                }
-            }
-            else
-            {
-                func _show_bake_progress(econtext: _EditorContext)
-                {
-                    return F"烘焙中({econtext.m_solved_launch_count}/{econtext.m_target_launch_count})";
-                }
-                
-                if (MenuItem(_show_bake_progress(econtext)))
-                    econtext.m_enable_bake = true;
-            }
-           
-            EndMenuBar();
-        }
-
-        BeginGroup();
-
-        Text("帧数");
-        SameLine();
-        do InputInt("##framecount", partical_context.m_frame_count)
-            ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil: void);;
-
-        Text("尺寸");
-        SameLine();
-        do InputInt2("##framesize", partical_context.m_frame_size...)
-            ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil: void)
-                where (x, y) = s
-                ;;
-
-        Text("帧速率(秒/帧)");
-        SameLine();
-        do InputFloatFormat("##framerate", partical_context.m_frame_rate, "%.6f")
-            ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil: void);;
-
-        Text("粒子渲染趟数");
-        SameLine();
-        do InputInt("##repeatcount", partical_context.m_repeat_round)
-            ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil: void);;
-        
-        let (w, h) = partical_context.m_frame_size;
-
-        do BeginChildSize("##review", w: real * 400. / h: real, 400.);
-        
-        let frames = partical_context.m_frames_caches;
-        
-        if (std::time() - econtext.m_last_update_time >= partical_context.m_frame_rate)
-        {
-            econtext.m_frame_index += 1;
-            econtext.m_last_update_time = std::time();
-        }
-
-        econtext.m_frame_index = frames->empty
-            ? 0
-            | econtext.m_frame_index % frames->len;
-        
-        ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
-        
-        let drawlist = GetWindowDrawList();
-        do InvisibleButton("##draw_space", GetContentRegionAvail());
-
-        let (p0, p1) = GetItemRect();
-        let (lux, luy) = p0;
-        let (rbx, rby) = p1;
-
-        PushClipRect(p0, p1);
-        drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
-        if (!frames->empty)
-            drawlist->AddImage(
-                (lux, luy), 
-                (rbx, rby), 
-                frames[econtext.m_frame_index]);
-
-        EndChild();
-
-        EndGroup();
-        SameLine();
-
-        BeginGroup();
-        
-        do InputTextMultilineSize("##source", partical_context.m_script, 500., GetContentRegionAvail()[0])
-            ->> \t = partical_context.m_script = t;;
-
-        EndGroup();
-
         End();
 
         return openform->get;

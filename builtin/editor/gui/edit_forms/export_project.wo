@@ -336,175 +336,176 @@ namespace editor::gui::edit_forms
         let pack_config_instance = mutable::create(option::none: option<pack_config>);
 
         context->launch_editor_form(func(step: mutable<int>){
-            do BeginAttr("项目导出向导", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-                
             let mut open = true;
-            let (cur_width, _) = GetContentRegionAvail();
+            if (BeginAttr("项目导出向导", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+            {                
+                let (cur_width, _) = GetContentRegionAvail();
 
-            let current_step_count = step->get;
-            if (current_step_count == 0)
-            {
-                TextDisabled("即将开始……");
-                Separator();
-
-                do BeginChildSize("SUBFORM.", 500., 300.);
-
-                Text("欢迎使用JoyEngineECS 项目导出向导");
-                Text("向导将引导您完成接下来一系列的配置操作");
-                Text("注意：导出操作将删除项目目录下的 .export 目录中的全部内容");
-                
-                EndChild();
-                
-                if (ButtonSize("我已确认准备就绪，继续下一步", (cur_width, 0.)))
-                    step->set(current_step_count + 1);
-                if (ButtonSize("取消导出", (cur_width, 0.)))
-                    open = false;
-            }
-            if (current_step_count == 1)
-            {
-                TextDisabled("第一步 选择启动时加载的世界");
-                Separator();
-
-                do BeginChildSize("SUBFORM.", 500., 300.);
-
-                Text("请在下方勾选导出项目启动时，需要自动加载的世界");
-
-                do BeginChild("SUBFORM.2");
-                do selecting_all_worlds_file
-                    ->> \path_and_checked = do CheckBox(path_and_checked...)
-                            ->> \opt = path_and_checked[1] = opt;
-                        ;
-                    ;
-                EndChild();
-                EndChild();
-                
-                if (ButtonSize("下一步", (cur_width, 0.)))
-                    step->set(current_step_count + 1);
-                if (ButtonSize("上一步", (cur_width, 0.)))
-                    step->set(current_step_count - 1);
-            }
-            if (current_step_count == 2)
-            {
-                TextDisabled("第二步 导出画面设置");
-                Separator();
-
-                do BeginChildSize("SUBFORM.", 500., 300.);
-
-                Text("请选择启动时默认渲染的画面分辨率");
-                Text("* 默认为 1366x768");
-
-                let static reso_list = [
-                    ("1280x720 [16:9]", (1280, 720)),
-                    ("1366x768 [16:9]", (1366, 768)),
-                    ("1920x1080 [16:9]", (1920, 1080)),
-                    ("2560x1440 [16:9]", (2560, 1440)),
-                    ("3840x2160 [16:9]", (3840, 2160)),
-
-                    ("800x600 [4:3]", (800, 600)),
-                    ("1024x768 [4:3]", (1024, 768)),
-                    ("1400x1050 [4:3]", (1400, 1050)),
-                    ("1920x1440 [4:3]", (1920, 1440)),
-                ];
-
-                do Combo("##RESO_LIST.", reso_list->>\RR = RR[0];, reso_option_index->get)
-                    ->> func(idx)
-                        {
-                            reso_option_index->set(idx);
-                            reso_config->set(reso_list[idx][1]);
-                        }
-                    ;
-
-                EndChild();
-                
-                if (ButtonSize("下一步", (cur_width, 0.)))
-                    step->set(current_step_count + 1);
-                if (ButtonSize("上一步", (cur_width, 0.)))
-                    step->set(current_step_count - 1);
-            }
-            if (current_step_count == 3)
-            {
-                TextDisabled("第三步 导出镜像设置");
-                Separator();
-
-                do BeginChildSize("SUBFORM.", 500., 300.);
-                Text("请为打包镜像设置分包大小，单位为MB");
-                Text("* 默认为 128MB");
-                
-                do InputInt("##IMAGESZ.", pack_image_file_size->get)
-                    ->> func(n)
-                        {
-                            if (n > 0)
-                                pack_image_file_size->set(n);
-                        }
-                    ;
-
-                EndChild();
-                
-                if (ButtonSize("下一步", (cur_width, 0.)))
-                    step->set(current_step_count + 1);
-                if (ButtonSize("上一步", (cur_width, 0.)))
-                    step->set(current_step_count - 1);
-            }
-            if (current_step_count == 4)
-            {
-                TextDisabled("导出操作确认");
-                Separator();
-
-                do BeginChildSize("SUBFORM.", 500., 300.);
-                Text("打包导出的全部配置已经准备就绪");
-                Text("按下确认开始打包");
-
-                Separator();
-                Text("* 请再次确认 .export 目录是否有文件尚未备份！");
-                
-                EndChild();
-                
-                if (ButtonSize("开始打包", (cur_width, 0.)))
+                let current_step_count = step->get;
+                if (current_step_count == 0)
                 {
-                    let conf = pack_config{
-                        m_pack_dll_into_image = false,
-                        m_image_size = pack_image_file_size->get,
-                        m_start_up_worlds = selecting_all_worlds_file
-                            ->  forall(\path_and_checked = path_and_checked[1];)
-                            ->> \path_and_checked = path_and_checked[0];,
-                        m_rule = _default_rule,
-                        m_resolution = reso_config->get,
+                    TextDisabled("即将开始……");
+                    Separator();
 
-                        m_pack_output_log = []mut,
-                        m_finished = mut false,
-                    };
-                    do _export_logic(context->get_project, conf)->unwarp;
-                    pack_config_instance->set(option::value(conf));
-                    step->set(current_step_count + 1);
-                }
-                if (ButtonSize("上一步", (cur_width, 0.)))
-                    step->set(current_step_count - 1);
-            }
-            if (current_step_count == 5)
-            {
-                TextDisabled("正在导出……");
-                Separator();
+                    do BeginChildSize("SUBFORM.", 500., 300.);
 
-                do BeginChildSize("SUBFORM.", 500., 300.);
-                
-                let (avail_width, avail_height) = GetContentRegionAvail();
-                if (BeginListBox("##", avail_width, avail_height))
-                {
-                    let logs = pack_config_instance->get->val.m_pack_output_log;
-                    for (let mut index = logs->len; index > 0; index -= 1)
-                        do Selectable(logs[index - 1]);
-
-                    EndListBox();
-                }
-                
-                EndChild();
-                
-                if (pack_config_instance->get->val.m_finished)
-                {
-                    if (ButtonSize("完成", (cur_width, 0.)))
+                    Text("欢迎使用JoyEngineECS 项目导出向导");
+                    Text("向导将引导您完成接下来一系列的配置操作");
+                    Text("注意：导出操作将删除项目目录下的 .export 目录中的全部内容");
+                    
+                    EndChild();
+                    
+                    if (ButtonSize("我已确认准备就绪，继续下一步", (cur_width, 0.)))
+                        step->set(current_step_count + 1);
+                    if (ButtonSize("取消导出", (cur_width, 0.)))
                         open = false;
                 }
+                if (current_step_count == 1)
+                {
+                    TextDisabled("第一步 选择启动时加载的世界");
+                    Separator();
 
+                    do BeginChildSize("SUBFORM.", 500., 300.);
+
+                    Text("请在下方勾选导出项目启动时，需要自动加载的世界");
+
+                    do BeginChild("SUBFORM.2");
+                    do selecting_all_worlds_file
+                        ->> \path_and_checked = do CheckBox(path_and_checked...)
+                                ->> \opt = path_and_checked[1] = opt;
+                            ;
+                        ;
+                    EndChild();
+                    EndChild();
+                    
+                    if (ButtonSize("下一步", (cur_width, 0.)))
+                        step->set(current_step_count + 1);
+                    if (ButtonSize("上一步", (cur_width, 0.)))
+                        step->set(current_step_count - 1);
+                }
+                if (current_step_count == 2)
+                {
+                    TextDisabled("第二步 导出画面设置");
+                    Separator();
+
+                    do BeginChildSize("SUBFORM.", 500., 300.);
+
+                    Text("请选择启动时默认渲染的画面分辨率");
+                    Text("* 默认为 1366x768");
+
+                    let static reso_list = [
+                        ("1280x720 [16:9]", (1280, 720)),
+                        ("1366x768 [16:9]", (1366, 768)),
+                        ("1920x1080 [16:9]", (1920, 1080)),
+                        ("2560x1440 [16:9]", (2560, 1440)),
+                        ("3840x2160 [16:9]", (3840, 2160)),
+
+                        ("800x600 [4:3]", (800, 600)),
+                        ("1024x768 [4:3]", (1024, 768)),
+                        ("1400x1050 [4:3]", (1400, 1050)),
+                        ("1920x1440 [4:3]", (1920, 1440)),
+                    ];
+
+                    do Combo("##RESO_LIST.", reso_list->>\RR = RR[0];, reso_option_index->get)
+                        ->> func(idx)
+                            {
+                                reso_option_index->set(idx);
+                                reso_config->set(reso_list[idx][1]);
+                            }
+                        ;
+
+                    EndChild();
+                    
+                    if (ButtonSize("下一步", (cur_width, 0.)))
+                        step->set(current_step_count + 1);
+                    if (ButtonSize("上一步", (cur_width, 0.)))
+                        step->set(current_step_count - 1);
+                }
+                if (current_step_count == 3)
+                {
+                    TextDisabled("第三步 导出镜像设置");
+                    Separator();
+
+                    do BeginChildSize("SUBFORM.", 500., 300.);
+                    Text("请为打包镜像设置分包大小，单位为MB");
+                    Text("* 默认为 128MB");
+                    
+                    do InputInt("##IMAGESZ.", pack_image_file_size->get)
+                        ->> func(n)
+                            {
+                                if (n > 0)
+                                    pack_image_file_size->set(n);
+                            }
+                        ;
+
+                    EndChild();
+                    
+                    if (ButtonSize("下一步", (cur_width, 0.)))
+                        step->set(current_step_count + 1);
+                    if (ButtonSize("上一步", (cur_width, 0.)))
+                        step->set(current_step_count - 1);
+                }
+                if (current_step_count == 4)
+                {
+                    TextDisabled("导出操作确认");
+                    Separator();
+
+                    do BeginChildSize("SUBFORM.", 500., 300.);
+                    Text("打包导出的全部配置已经准备就绪");
+                    Text("按下确认开始打包");
+
+                    Separator();
+                    Text("* 请再次确认 .export 目录是否有文件尚未备份！");
+                    
+                    EndChild();
+                    
+                    if (ButtonSize("开始打包", (cur_width, 0.)))
+                    {
+                        let conf = pack_config{
+                            m_pack_dll_into_image = false,
+                            m_image_size = pack_image_file_size->get,
+                            m_start_up_worlds = selecting_all_worlds_file
+                                ->  forall(\path_and_checked = path_and_checked[1];)
+                                ->> \path_and_checked = path_and_checked[0];,
+                            m_rule = _default_rule,
+                            m_resolution = reso_config->get,
+
+                            m_pack_output_log = []mut,
+                            m_finished = mut false,
+                        };
+                        do _export_logic(context->get_project, conf)->unwarp;
+                        pack_config_instance->set(option::value(conf));
+                        step->set(current_step_count + 1);
+                    }
+                    if (ButtonSize("上一步", (cur_width, 0.)))
+                        step->set(current_step_count - 1);
+                }
+                if (current_step_count == 5)
+                {
+                    TextDisabled("正在导出……");
+                    Separator();
+
+                    do BeginChildSize("SUBFORM.", 500., 300.);
+                    
+                    let (avail_width, avail_height) = GetContentRegionAvail();
+                    if (BeginListBox("##", avail_width, avail_height))
+                    {
+                        let logs = pack_config_instance->get->val.m_pack_output_log;
+                        for (let mut index = logs->len; index > 0; index -= 1)
+                            do Selectable(logs[index - 1]);
+
+                        EndListBox();
+                    }
+                    
+                    EndChild();
+                    
+                    if (pack_config_instance->get->val.m_finished)
+                    {
+                        if (ButtonSize("完成", (cur_width, 0.)))
+                            open = false;
+                    }
+
+                }
             }
             End();
             return open;

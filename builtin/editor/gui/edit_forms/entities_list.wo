@@ -145,80 +145,88 @@ namespace editor::gui::edit_forms
                     y_pixel_count = mut 16,
                 };
                 launch(func(){
-                    let mut open = BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-                    Text("名称：");
-                    SameLine();
-                    do InputText("##name", ctx.name)->>\name = ctx.name = name;;
-                    Text("尺寸：");
-                    Text("x:");
-                    SameLine();
-                    do InputFloatFormat("##x", ctx.width, "%.6f")->>func(vf){
-                        if (vf <= 0.) return;
-                        ctx.width = vf;
-                        ctx.x_pixel_count = math::round(vf * 16.0);
-                    };
-                    SameLine();
-                    Text("y:");
-                    SameLine();
-                    do InputFloatFormat("##y", ctx.height, "%.6f")->>func(vf){
-                        if (vf <= 0.) return;
-                        ctx.height = vf;
-                        ctx.y_pixel_count = math::round(vf * 16.0);
-                    };
-
-                    Text("px:");
-                    SameLine();
-                    do InputInt("##px", ctx.x_pixel_count)->>func(vi){
-                        if (vi <= 0) return;
-                        ctx.x_pixel_count = vi;
-                        ctx.y_pixel_count = math::round(vi: real / ctx.width  * ctx.height);
-                    };
-                    SameLine();
-                    Text("py:");
-                    SameLine();
-                    do InputInt("##py", ctx.y_pixel_count)->>\vi = vi <= 0 ? (ctx.y_pixel_count = vi) | nil: void;;
-
-                    if (Button("创建"))
+                    let mut open = true;
+                    match (BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
                     {
-                        open = false;
-                        let e = fast_create_entity(context, w, ctx.name, [
-                            "Transform::LocalPosition",
-                            "Transform::LocalRotation",
-                            "Transform::LocalScale",
-                            "Transform::LocalToWorld",
-                            "Transform::Translation",
-                            "Renderer::Shape",
-                            "Renderer::Shaders",
-                            "Renderer::Textures",
-                        ]);
-                        match (e)
+                    value(show)?
+                        if (show)
                         {
-                        none?;
-                        value(einst)?
+                            Text("名称：");
+                            SameLine();
+                            do InputText("##name", ctx.name)->>\name = ctx.name = name;;
+                            Text("尺寸：");
+                            Text("x:");
+                            SameLine();
+                            do InputFloatFormat("##x", ctx.width, "%.6f")->>func(vf){
+                                if (vf <= 0.) return;
+                                ctx.width = vf;
+                                ctx.x_pixel_count = math::round(vf * 16.0);
+                            };
+                            SameLine();
+                            Text("y:");
+                            SameLine();
+                            do InputFloatFormat("##y", ctx.height, "%.6f")->>func(vf){
+                                if (vf <= 0.) return;
+                                ctx.height = vf;
+                                ctx.y_pixel_count = math::round(vf * 16.0);
+                            };
+
+                            Text("px:");
+                            SameLine();
+                            do InputInt("##px", ctx.x_pixel_count)->>func(vi){
+                                if (vi <= 0) return;
+                                ctx.x_pixel_count = vi;
+                                ctx.y_pixel_count = math::round(vi: real / ctx.width  * ctx.height);
+                            };
+                            SameLine();
+                            Text("py:");
+                            SameLine();
+                            do InputInt("##py", ctx.y_pixel_count)->>\vi = vi <= 0 ? (ctx.y_pixel_count = vi) | nil: void;;
+
+                            if (Button("创建"))
                             {
-                                do einst->get_component(je::typeinfo::load("Transform::LocalScale")->val)
-                                    =>> \m = m->get_member("scale");
-                                    ->> \tv = tv...
-                                        ->\_, v = v->set_float3(ctx.width, ctx.height, 1.);
-                                        ;
-                                    ;
-                                einst->editor::graphic::bind_texture(0, 
-                                    je::graphic::texture::create(ctx.x_pixel_count, ctx.y_pixel_count));
+                                open = false;
+                                let e = fast_create_entity(context, w, ctx.name, [
+                                    "Transform::LocalPosition",
+                                    "Transform::LocalRotation",
+                                    "Transform::LocalScale",
+                                    "Transform::LocalToWorld",
+                                    "Transform::Translation",
+                                    "Renderer::Shape",
+                                    "Renderer::Shaders",
+                                    "Renderer::Textures",
+                                ]);
+                                match (e)
+                                {
+                                none?;
+                                value(einst)?
+                                    {
+                                        do einst->get_component(je::typeinfo::load("Transform::LocalScale")->val)
+                                            =>> \m = m->get_member("scale");
+                                            ->> \tv = tv...
+                                                ->\_, v = v->set_float3(ctx.width, ctx.height, 1.);
+                                                ;
+                                            ;
+                                        einst->editor::graphic::bind_texture(0, 
+                                            je::graphic::texture::create(ctx.x_pixel_count, ctx.y_pixel_count));
 
-                                let default_shader_path = "@/resource/shader/Unlit.shader";
-                                do je::graphic::shader::load(default_shader_path)
-                                    ->> \s = einst->editor::graphic::set_shaders([s]);
-                                    ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
-                                    ;
-                                
-                                drawpannel::drawedit(context, einst);
+                                        let default_shader_path = "@/resource/shader/Unlit.shader";
+                                        do je::graphic::shader::load(default_shader_path)
+                                            ->> \s = einst->editor::graphic::set_shaders([s]);
+                                            ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                                            ;
+                                        
+                                        drawpannel::drawedit(context, einst);
+                                    }
+                                }
                             }
+                            SameLine();
+                            if (Button("取消"))
+                                open = false;
                         }
-                    }
-                    SameLine();
-                    if (Button("取消"))
+                    none?
                         open = false;
-
+                    }
                     End();
 
                     return open;
@@ -481,40 +489,50 @@ namespace editor::gui::edit_forms
             TreePop();
         }
     }
-    public func show_entities_list(context: EditorContext, show: mutable<bool>)
+    public func show_entities_list(context: EditorContext, open: mutable<bool>)
     {
-        if (show->get)
+        if (open->get)
         {
             je::gui::SetNextWindowSizeConstraints((200., 300.), (200., 5000.));
-            show->set(BeginAttrOpen("实体列表##jeeditor",
+            open->set(true);
+
+            match (BeginAttrOpen("实体列表##jeeditor",
                 WindowsAttribute::ImGuiWindowFlags_MenuBar
-                + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus));
-
-            if (BeginMenuBar())
+                + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus))
             {
-                if (MenuItem("创建新实体"))
-                    launch(show_entity_creator, (context, EntityContext::create()));
-    
-                EndMenuBar();
-            }
-            
-            match (context->get_project->get_editing_world)
-            {
-            value(current_editing_world)?
-            {
-                if (BeginPopupContextWindowLabel("EntityMenu"))
+            value(show)?
+                if (show)
                 {
-                    entity_edit_context_menu(context, current_editing_world, option::none);
-                    EndPopup();
-                }    
+                    if (BeginMenuBar())
+                    {
+                        if (MenuItem("创建新实体"))
+                            launch(show_entity_creator, (context, EntityContext::create()));
+            
+                        EndMenuBar();
+                    }
+                    
+                    match (context->get_project->get_editing_world)
+                    {
+                    value(current_editing_world)?
+                    {
+                        if (BeginPopupContextWindowLabel("EntityMenu"))
+                        {
+                            entity_edit_context_menu(context, current_editing_world, option::none);
+                            EndPopup();
+                        }    
 
-                do jeapi::debug::get_all_entities_layer_from_world(current_editing_world)
-                    ->> \ec = display_entity_and_child_tree(context, current_editing_world, ec);
-                    ;
-            }
+                        do jeapi::debug::get_all_entities_layer_from_world(current_editing_world)
+                            ->> \ec = display_entity_and_child_tree(context, current_editing_world, ec);
+                            ;
+                    }
+                    none?
+                        Text("没有正在编辑中的世界");
+                    }
+                }
             none?
-                Text("没有正在编辑中的世界");
+                open->set(false);
             }
+
             End();
         }
     }

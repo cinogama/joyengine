@@ -110,7 +110,7 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin")
     public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_open")
-    public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> bool;
+    public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> option<bool>;
     public func BeginOpen(title:string)
     {
         return BeginAttrOpen(title, WindowsAttribute::ImGuiWindowFlags_None);
@@ -1090,29 +1090,22 @@ WO_API wo_api je_gui_job_vm_handle(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_begin(wo_vm vm, wo_value args, size_t argc)
 {
-    bool windows_flag = false;
-    if (argc == 3)
-    {
-        bool showing = true;
-        ImGui::Begin(wo_string(args), &showing, (ImGuiWindowFlags)wo_int(args + 1));
-        windows_flag = showing;
-    }
-    else if (argc == 2)
-        windows_flag = ImGui::Begin(wo_string(args), 0, (ImGuiWindowFlags)wo_int(args + 1));
+    bool showing = false;
+    if (argc == 2)
+        showing = ImGui::Begin(wo_string(args), 0, (ImGuiWindowFlags)wo_int(args + 1));
     else
-        windows_flag = ImGui::Begin(wo_string(args));
+        showing = ImGui::Begin(wo_string(args));
 
-    return wo_ret_bool(vm, windows_flag);
+    return wo_ret_bool(vm, showing);
 }
 WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args, size_t argc)
 {
-    bool windows_flag = false;
+    bool windows_flag = true;
+    bool showing = ImGui::Begin(wo_string(args), &windows_flag, (ImGuiWindowFlags)wo_int(args + 1));
 
-    bool showing = true;
-    ImGui::Begin(wo_string(args), &showing, (ImGuiWindowFlags)wo_int(args + 1));
-    windows_flag = showing;
-
-    return wo_ret_bool(vm, windows_flag);
+    if (windows_flag)
+        return wo_ret_option_bool(vm, showing);
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api je_gui_is_window_focused(wo_vm vm, wo_value args, size_t argc)

@@ -17,13 +17,20 @@ namespace jeapi::gui::form
     {
         launch(func()
         {
-            let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-
-            Text(text);
-
-            if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+            let mut open = true;
+            match (BeginAttrOpen(F"{title}##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+            {
+            value(show)?
+                if (show)
+                {
+                    Text(text);
+                    if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                        open = false;
+                }
+            none?
                 open = false;
+            }
 
             End();
 
@@ -39,17 +46,25 @@ namespace jeapi::gui::form
         static let WARNICON = je::graphic::texture::load("!/builtin/icon/joyengine.png")->val;
         launch(func()
         {
-            let mut open = BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+            let mut open = true;
+            match (BeginAttrOpen(F"{title}##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+            {
+            value(show)?
+                if (show)
+                {
+                    ImageSize(WARNICON, 32., 32.);
 
-            ImageSize(WARNICON, 32., 32.);
+                    SameLine();
 
-            SameLine();
+                    Text(text);
 
-            Text(text);
-
-            if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                    if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                        open = false;
+                }
+            none?
                 open = false;
+            }
 
             End();
 

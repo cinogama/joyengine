@@ -785,21 +785,30 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                 massive_msg = mut option::none,
                 };
             je::gui::launch(func(){
-                context.show = BeginAttrOpen(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None);
-                    Text(F"正在编译C++模块：{self.name}");
-                    Text(context.display_msg);
-                    
-                    match (context.massive_msg)
+                context.show = true;
+                match (BeginAttrOpen(F"编译C++模块##{JobID()}", WindowsAttribute::ImGuiWindowFlags_None))
+                {
+                value(show)?
+                    if (show)
                     {
-                    value(msg)?
-                    {
-                        let (w, h) = GetContentRegionAvail();
-                        do InputTextMultilineSize("##", msg, w, h);
+                        Text(F"正在编译C++模块：{self.name}");
+                        Text(context.display_msg);
+                        
+                        match (context.massive_msg)
+                        {
+                        value(msg)?
+                        {
+                            let (w, h) = GetContentRegionAvail();
+                            do InputTextMultilineSize("##", msg, w, h);
+                        }
+                        none?;
+                            
+                        }
+                        ProgressBar(context.progress: real / 100.);
                     }
-                    none? ;
-                    }
-
-                    ProgressBar(context.progress: real / 100.);
+                none?
+                    context.show = false;
+                }
                 End();
 
                 return context.show;

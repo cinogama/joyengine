@@ -35,100 +35,108 @@ namespace editor::gui::drawpannel
     {
         launch(func(method: mutable<je::graphic::texture::sampling>){
             je::gui::SetNextWindowSizeConstraints((300., 250.), (300., 250.));
-            let mut open = BeginOpen(F"编辑图片{path}");
-                static let MIN_SAMPLING_METHODS = {
-                    ["线性采样"] = je::graphic::texture::sampling::MIN_LINEAR,
-                    ["临近采样"] = je::graphic::texture::sampling::MIN_NEAREST,
-                    ["MIN_NEAREST_NEAREST_MIP"] = je::graphic::texture::sampling::MIN_NEAREST_NEAREST_MIP,
-                    ["MIN_LINEAR_NEAREST_MIP"] = je::graphic::texture::sampling::MIN_LINEAR_NEAREST_MIP,
-                    ["MIN_NEAREST_LINEAR_MIP"] = je::graphic::texture::sampling::MIN_NEAREST_LINEAR_MIP,
-                    ["MIN_LINEAR_LINEAR_MIP"] = je::graphic::texture::sampling::MIN_LINEAR_LINEAR_MIP,
-                };
-                static let MAG_SAMPLING_METHODS = {
-                    ["线性采样"] = je::graphic::texture::sampling::MAG_LINEAR,
-                    ["临近采样"] = je::graphic::texture::sampling::MAG_NEAREST,
-                };
-                static let X_SAMPLING_METHODS = {
-                    ["截断"] = je::graphic::texture::sampling::CLAMP_EDGE_X,
-                    ["重复"] = je::graphic::texture::sampling::REPEAT_X,
-                };
-                static let Y_SAMPLING_METHODS = {
-                    ["截断"] = je::graphic::texture::sampling::CLAMP_EDGE_Y,
-                    ["重复"] = je::graphic::texture::sampling::REPEAT_Y,
-                };
-
-                static let MIN_SAMPLING_METHODS_NAMES = MIN_SAMPLING_METHODS->keys;
-                static let MIN_SAMPLING_METHODS_VALUES = MIN_SAMPLING_METHODS->vals;
-                static let MAG_SAMPLING_METHODS_NAMES = MAG_SAMPLING_METHODS->keys;
-                static let MAG_SAMPLING_METHODS_VALUES = MAG_SAMPLING_METHODS->vals;
-
-                static let X_SAMPLING_METHODS_NAMES = X_SAMPLING_METHODS->keys;
-                static let X_SAMPLING_METHODS_VALUES = X_SAMPLING_METHODS->vals;
-                static let Y_SAMPLING_METHODS_NAMES = Y_SAMPLING_METHODS->keys;
-                static let Y_SAMPLING_METHODS_VALUES = Y_SAMPLING_METHODS->vals;
-
-                Text("采样设置");
-                Separator();
-                match (Combo("缩小时", 
-                    MIN_SAMPLING_METHODS_NAMES, 
-                    MIN_SAMPLING_METHODS_VALUES
-                        ->find(std::bitand(method->get: int, je::graphic::texture::sampling::MIN_FILTER_MASK: int): je::graphic::texture::sampling)))
+            let mut open = true;
+            match (BeginOpen(F"编辑图片{path}"))
+            {
+            value(show)?
+                if (show)
                 {
-                value(newselect)?
-                    method->set(std::bitnot(je::graphic::texture::sampling::MIN_FILTER_MASK: int)
-                        ->std::bitand(method->get: int)
-                        ->std::bitor(MIN_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
-                none?
-                    ;
-                }
+                    static let MIN_SAMPLING_METHODS = {
+                        ["线性采样"] = je::graphic::texture::sampling::MIN_LINEAR,
+                        ["临近采样"] = je::graphic::texture::sampling::MIN_NEAREST,
+                        ["MIN_NEAREST_NEAREST_MIP"] = je::graphic::texture::sampling::MIN_NEAREST_NEAREST_MIP,
+                        ["MIN_LINEAR_NEAREST_MIP"] = je::graphic::texture::sampling::MIN_LINEAR_NEAREST_MIP,
+                        ["MIN_NEAREST_LINEAR_MIP"] = je::graphic::texture::sampling::MIN_NEAREST_LINEAR_MIP,
+                        ["MIN_LINEAR_LINEAR_MIP"] = je::graphic::texture::sampling::MIN_LINEAR_LINEAR_MIP,
+                    };
+                    static let MAG_SAMPLING_METHODS = {
+                        ["线性采样"] = je::graphic::texture::sampling::MAG_LINEAR,
+                        ["临近采样"] = je::graphic::texture::sampling::MAG_NEAREST,
+                    };
+                    static let X_SAMPLING_METHODS = {
+                        ["截断"] = je::graphic::texture::sampling::CLAMP_EDGE_X,
+                        ["重复"] = je::graphic::texture::sampling::REPEAT_X,
+                    };
+                    static let Y_SAMPLING_METHODS = {
+                        ["截断"] = je::graphic::texture::sampling::CLAMP_EDGE_Y,
+                        ["重复"] = je::graphic::texture::sampling::REPEAT_Y,
+                    };
 
-                match (Combo("放大时", 
-                    MAG_SAMPLING_METHODS_NAMES, 
-                    MAG_SAMPLING_METHODS_VALUES
-                        ->find(std::bitand(method->get: int, je::graphic::texture::sampling::MAG_FILTER_MASK: int): je::graphic::texture::sampling)))
-                {
-                value(newselect)?
-                    method->set(std::bitnot(je::graphic::texture::sampling::MAG_FILTER_MASK: int)
-                        ->std::bitand(method->get: int)
-                        ->std::bitor(MAG_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
-                none?
-                    ;
-                }
-                
-                Separator();
+                    static let MIN_SAMPLING_METHODS_NAMES = MIN_SAMPLING_METHODS->keys;
+                    static let MIN_SAMPLING_METHODS_VALUES = MIN_SAMPLING_METHODS->vals;
+                    static let MAG_SAMPLING_METHODS_NAMES = MAG_SAMPLING_METHODS->keys;
+                    static let MAG_SAMPLING_METHODS_VALUES = MAG_SAMPLING_METHODS->vals;
 
-                match (Combo("X方向", 
-                    X_SAMPLING_METHODS_NAMES, 
-                    X_SAMPLING_METHODS_VALUES
-                        ->find(std::bitand(method->get: int, je::graphic::texture::sampling::WRAP_X_METHOD_MASK: int): je::graphic::texture::sampling)))
-                {
-                value(newselect)?
-                    method->set(std::bitnot(je::graphic::texture::sampling::WRAP_X_METHOD_MASK: int)
-                        ->std::bitand(method->get: int)
-                        ->std::bitor(X_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
-                none?
-                    ;
-                }
+                    static let X_SAMPLING_METHODS_NAMES = X_SAMPLING_METHODS->keys;
+                    static let X_SAMPLING_METHODS_VALUES = X_SAMPLING_METHODS->vals;
+                    static let Y_SAMPLING_METHODS_NAMES = Y_SAMPLING_METHODS->keys;
+                    static let Y_SAMPLING_METHODS_VALUES = Y_SAMPLING_METHODS->vals;
 
-                match (Combo("Y方向", 
-                    Y_SAMPLING_METHODS_NAMES, 
-                    Y_SAMPLING_METHODS_VALUES
-                        ->find(std::bitand(method->get: int, je::graphic::texture::sampling::WRAP_Y_METHOD_MASK: int): je::graphic::texture::sampling)))
-                {
-                value(newselect)?
-                    method->set(std::bitnot(je::graphic::texture::sampling::WRAP_Y_METHOD_MASK: int)
-                        ->std::bitand(method->get: int)
-                        ->std::bitor(Y_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
-                none?
-                    ;
-                }
+                    Text("采样设置");
+                    Separator();
+                    match (Combo("缩小时", 
+                        MIN_SAMPLING_METHODS_NAMES, 
+                        MIN_SAMPLING_METHODS_VALUES
+                            ->find(std::bitand(method->get: int, je::graphic::texture::sampling::MIN_FILTER_MASK: int): je::graphic::texture::sampling)))
+                    {
+                    value(newselect)?
+                        method->set(std::bitnot(je::graphic::texture::sampling::MIN_FILTER_MASK: int)
+                            ->std::bitand(method->get: int)
+                            ->std::bitor(MIN_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
+                    none?
+                        ;
+                    }
 
-                if (Button("确认"))
-                {
-                    open = false;
-                    callback(method->get);
-                }
+                    match (Combo("放大时", 
+                        MAG_SAMPLING_METHODS_NAMES, 
+                        MAG_SAMPLING_METHODS_VALUES
+                            ->find(std::bitand(method->get: int, je::graphic::texture::sampling::MAG_FILTER_MASK: int): je::graphic::texture::sampling)))
+                    {
+                    value(newselect)?
+                        method->set(std::bitnot(je::graphic::texture::sampling::MAG_FILTER_MASK: int)
+                            ->std::bitand(method->get: int)
+                            ->std::bitor(MAG_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
+                    none?
+                        ;
+                    }
+                    
+                    Separator();
 
+                    match (Combo("X方向", 
+                        X_SAMPLING_METHODS_NAMES, 
+                        X_SAMPLING_METHODS_VALUES
+                            ->find(std::bitand(method->get: int, je::graphic::texture::sampling::WRAP_X_METHOD_MASK: int): je::graphic::texture::sampling)))
+                    {
+                    value(newselect)?
+                        method->set(std::bitnot(je::graphic::texture::sampling::WRAP_X_METHOD_MASK: int)
+                            ->std::bitand(method->get: int)
+                            ->std::bitor(X_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
+                    none?
+                        ;
+                    }
+
+                    match (Combo("Y方向", 
+                        Y_SAMPLING_METHODS_NAMES, 
+                        Y_SAMPLING_METHODS_VALUES
+                            ->find(std::bitand(method->get: int, je::graphic::texture::sampling::WRAP_Y_METHOD_MASK: int): je::graphic::texture::sampling)))
+                    {
+                    value(newselect)?
+                        method->set(std::bitnot(je::graphic::texture::sampling::WRAP_Y_METHOD_MASK: int)
+                            ->std::bitand(method->get: int)
+                            ->std::bitor(Y_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
+                    none?
+                        ;
+                    }
+
+                    if (Button("确认"))
+                    {
+                        open = false;
+                        callback(method->get);
+                    }
+                }
+            none?
+                open = false;
+            }
             End();
             
             return open;
@@ -298,273 +306,291 @@ namespace editor::gui::drawpannel
         images: array<(int, mut graphic::texture)>, 
         draw_context: DrawContextT)
     {
-        let open = BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar);
-
-        if (BeginTabBar("##draw_textures"))
+        let mut open = true;
+        match (BeginAttrOpen(F"绘制##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
         {
-            for (let index, (passid, texture) : images)
+        value(show)?
+            if (show)
             {
-                let history_mgr = draw_context.edited_textures[texture][1];
-
-                if (IsWindowFocused())
+                if (BeginTabBar("##draw_textures"))
                 {
-                    if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::Z]))
-                        history_mgr->undo();
-                    if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::Y]))
-                        history_mgr->redo();
-                }
-
-                let texture_path = texture->path->valor("<内置>");
-                if (BeginTabItem(F"通道{passid}: {texture_path}"))
-                {
-                    if (BeginMenuBar())
+                    for (let index, (passid, texture) : images)
                     {
-                        if (BeginMenu("文件"))
-                        {
-                            if (MenuItem("画布尺寸"))
-                            {
-                                // 更新画布尺寸之后，创建新的纹理对象覆盖到数组里
-                                let image_old_sz = texture->size;
-                                let image_new_sz = (mut image_old_sz[0], mut image_old_sz[1]);
-                                launch(func(){
-                                    let mut open = BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
-                                    Text("尺寸：");
-                                    Text("x:");
-                                    SameLine();
-                                    do InputInt("##x", image_new_sz[0])->>func(vi){
-                                        if (vi <= 0) return;
-                                        image_new_sz[0] = vi;
-                                    };
-                                    SameLine();
-                                    Text("y:");
-                                    SameLine();
-                                    do InputInt("##y", image_new_sz[1])->>func(vi){
-                                        if (vi <= 0) return;
-                                        image_new_sz[1] = vi;
-                                    };
-                                    if (Button("应用"))
-                                    {
-                                        open = false;
-                                        let new_texture = je::graphic::texture::create(image_new_sz...);
-                                        for (let mut ix = 0; ix < std::min(image_new_sz[0], image_old_sz[0]); ix += 1)
-                                            for (let mut iy = 0; iy < std::min(image_new_sz[1], image_old_sz[1]); iy += 1)
-                                                new_texture->pix((ix, iy))->set_color(texture->pix((ix, iy))->get_color());
+                        let history_mgr = draw_context.edited_textures[texture][1];
 
-                                        images[index][1] = new_texture;
-                                        do texture->path->>\path = new_texture->bind_path(path);;
-
-                                        draw_context->update_edit_textures_history(passid, texture, new_texture);
-                                    }
-                                    End();
-                                    return open;
-                                }, ());
-                            }
-                            if (MenuItem("采样方式"))
-                            {
-                                drawpannel::modify_sampling_method(texture_path, texture->get_sampling_method, 
-                                    func(method){
-                                        texture->set_sampling_method(method);
-                                        history_mgr->mark_as_edited();
-                                    });
-                            }
-                            EndMenu();
-                        }
-                        if (BeginMenu("编辑"))
+                        if (IsWindowFocused())
                         {
-                            if (MenuItemShortcutEnabled("撤销", "Ctrl + Z", history_mgr->undoable()))
+                            if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::Z]))
                                 history_mgr->undo();
- 
-                            if (MenuItemShortcutEnabled("重做", "Ctrl + Y", history_mgr->redoable()))
+                            if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::Y]))
                                 history_mgr->redo();
+                        }
 
-                            Separator();
-                            if (BeginMenu("从……复制"))
+                        let texture_path = texture->path->valor("<内置>");
+                        if (BeginTabItem(F"通道{passid}: {texture_path}"))
+                        {
+                            if (BeginMenuBar())
                             {
-                                for (let _, (opassid, otexture) : images)
+                                if (BeginMenu("文件"))
                                 {
-                                    if (MenuItemEnabled(F"通道{opassid}：{otexture->path->valor("<内置>")}", passid != opassid))
+                                    if (MenuItem("画布尺寸"))
                                     {
-                                        let new_tex = create_and_copy_texture(otexture);
-                                        images[index][1] = new_tex;
-                                        draw_context->update_edit_textures_history(passid, texture, new_tex);
-                                    }
-                                }
-                                EndMenu();
-                            }
-                            Separator();
-                            if (BeginMenu("自定义效果"))
-                            {
-                                let scripts = get_all_scripts_name();
-                                if (scripts->empty)
-                                    do MenuItemEnabled("<无>", false);
+                                        // 更新画布尺寸之后，创建新的纹理对象覆盖到数组里
+                                        let image_old_sz = texture->size;
+                                        let image_new_sz = (mut image_old_sz[0], mut image_old_sz[1]);
+                                        launch(func(){
+                                            let mut open = true;
+                                            match (BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                                            {
+                                            value(show)?
+                                                if (show)
+                                                {
+                                                    Text("尺寸：");
+                                                    Text("x:");
+                                                    SameLine();
+                                                    do InputInt("##x", image_new_sz[0])->>func(vi){
+                                                        if (vi <= 0) return;
+                                                        image_new_sz[0] = vi;
+                                                    };
+                                                    SameLine();
+                                                    Text("y:");
+                                                    SameLine();
+                                                    do InputInt("##y", image_new_sz[1])->>func(vi){
+                                                        if (vi <= 0) return;
+                                                        image_new_sz[1] = vi;
+                                                    };
+                                                    if (Button("应用"))
+                                                    {
+                                                        open = false;
+                                                        let new_texture = je::graphic::texture::create(image_new_sz...);
+                                                        for (let mut ix = 0; ix < std::min(image_new_sz[0], image_old_sz[0]); ix += 1)
+                                                            for (let mut iy = 0; iy < std::min(image_new_sz[1], image_old_sz[1]); iy += 1)
+                                                                new_texture->pix((ix, iy))->set_color(texture->pix((ix, iy))->get_color());
 
-                                for (let _, name: scripts)
-                                {
-                                    if (MenuItem(name))
+                                                        images[index][1] = new_texture;
+                                                        do texture->path->>\path = new_texture->bind_path(path);;
+
+                                                        draw_context->update_edit_textures_history(passid, texture, new_texture);
+                                                    }
+                                                }
+                                            none?
+                                                open = false;
+                                            }
+                                            
+                                            End();
+                                            return open;
+                                        }, ());
+                                    }
+                                    if (MenuItem("采样方式"))
                                     {
-                                        if (false == apply_script(name, texture))
-                                            jeapi::gui::form::errmsg("失败", "图像处理过程报告了一个错误");
-                                        else
-                                            history_mgr->save_step();
+                                        drawpannel::modify_sampling_method(texture_path, texture->get_sampling_method, 
+                                            func(method){
+                                                texture->set_sampling_method(method);
+                                                history_mgr->mark_as_edited();
+                                            });
                                     }
+                                    EndMenu();
                                 }
-
-                                Separator();
-                                if (MenuItem("重新获取脚本"))
+                                if (BeginMenu("编辑"))
                                 {
-                                    update_and_get_scripts(context->get_project);
+                                    if (MenuItemShortcutEnabled("撤销", "Ctrl + Z", history_mgr->undoable()))
+                                        history_mgr->undo();
+        
+                                    if (MenuItemShortcutEnabled("重做", "Ctrl + Y", history_mgr->redoable()))
+                                        history_mgr->redo();
+
+                                    Separator();
+                                    if (BeginMenu("从……复制"))
+                                    {
+                                        for (let _, (opassid, otexture) : images)
+                                        {
+                                            if (MenuItemEnabled(F"通道{opassid}：{otexture->path->valor("<内置>")}", passid != opassid))
+                                            {
+                                                let new_tex = create_and_copy_texture(otexture);
+                                                images[index][1] = new_tex;
+                                                draw_context->update_edit_textures_history(passid, texture, new_tex);
+                                            }
+                                        }
+                                        EndMenu();
+                                    }
+                                    Separator();
+                                    if (BeginMenu("自定义效果"))
+                                    {
+                                        let scripts = get_all_scripts_name();
+                                        if (scripts->empty)
+                                            do MenuItemEnabled("<无>", false);
+
+                                        for (let _, name: scripts)
+                                        {
+                                            if (MenuItem(name))
+                                            {
+                                                if (false == apply_script(name, texture))
+                                                    jeapi::gui::form::errmsg("失败", "图像处理过程报告了一个错误");
+                                                else
+                                                    history_mgr->save_step();
+                                            }
+                                        }
+
+                                        Separator();
+                                        if (MenuItem("重新获取脚本"))
+                                        {
+                                            update_and_get_scripts(context->get_project);
+                                        }
+
+                                        EndMenu();
+                                    }
+                                    EndMenu();
                                 }
-
-                                EndMenu();
+                                EndMenuBar();
                             }
-                            EndMenu();
-                        }
-                        EndMenuBar();
-                    }
-                    // OK 在这里显示一下绘图工具箱
-                    BeginGroup();
-                    
-                    if (ColorButton("##main_color", draw_context.maincolor) )
-                        OpenPopup("MainColorPicker");
-                    SameLine();
-                    if (ColorButton("##sub_color", draw_context.subcolor) )
-                        OpenPopup("SubColorPicker");
+                            // OK 在这里显示一下绘图工具箱
+                            BeginGroup();
+                            
+                            if (ColorButton("##main_color", draw_context.maincolor) )
+                                OpenPopup("MainColorPicker");
+                            SameLine();
+                            if (ColorButton("##sub_color", draw_context.subcolor) )
+                                OpenPopup("SubColorPicker");
 
-                    let mut enable_draw = !input::keydown(keycode::L_CTRL);
-                    if (BeginPopup("MainColorPicker"))
-                    {
-                        enable_draw = false;
-                        do ColorPicker4("##main_color_picker", draw_context.maincolor)
-                            ->> \c = draw_context.maincolor = c;;
-                        EndPopup();
-                    }
-                    if (BeginPopup("SubColorPicker"))
-                    {
-                        enable_draw = false;
-                        do ColorPicker4("##sub_color_picker", draw_context.subcolor)
-                            ->> \c = draw_context.subcolor = c;;
-                        EndPopup();
-                    }
-
-                    Text(F"当前工具: \n {draw_context.drawtool.name}");
-                    for (let name, tool_create_method : all_draw_tools)
-                    {
-                        if (ButtonSize(name, (100., 0.)))
-                            draw_context.drawtool = tool_create_method();
-                    }
-                    EndGroup();
-
-                    SameLine();
-
-                    let (tex_width, tex_height) = texture->size;
-                    let drawlist = GetWindowDrawList();
-
-                    let (avaliw, avalih) = GetContentRegionAvail();
-
-                    do InvisibleButton("##draw_space", (avaliw <= 100. ? 100. | avaliw, avalih <= 100. ? 100. | avalih));
-                    if (IsItemActive() || IsItemHovered())
-                    {
-                        if (input::keydown(keycode::L_CTRL) 
-                            && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
-                        {
-                            let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
-                            draw_context.offset_x += mousedelta_x;
-                            draw_context.offset_y += mousedelta_y;
-                        }
-                        draw_context.scale += _delta_wheel();
-
-                        if (draw_context.scale < 1.)
-                            draw_context.scale = 1.;
-                    }
-                    else if (!draw_context.mousedown)
-                        enable_draw = false;
-
-                    let (p0, p1) = GetItemRect();
-                    let (lux, luy) = p0;
-
-                    PushClipRect(p0, p1);
-                    drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
-                    drawlist->AddImage(
-                        (lux + draw_context.offset_x, luy + draw_context.offset_y), 
-                        (lux + draw_context.scale * tex_width:real + draw_context.offset_x, 
-                        luy + draw_context.scale * tex_height:real + draw_context.offset_y), 
-                        texture);
-                        
-                    // OK 如果缩放大于5，就顺手画一下网格
-                    if (draw_context.scale >= 5.)
-                    {
-                        for (let mut yoffset = 0.; yoffset <= tex_height:real * draw_context.scale; yoffset += draw_context.scale)
-                            drawlist->AddLine(
-                                (lux + draw_context.offset_x, luy + draw_context.offset_y + yoffset), 
-                                (lux + draw_context.offset_x + tex_width:real * draw_context.scale, luy + draw_context.offset_y + yoffset), 
-                                (0, 0, 0, 20));
-                        for (let mut xoffset = 0.; xoffset <= tex_width:real * draw_context.scale; xoffset += draw_context.scale)
-                            drawlist->AddLine(
-                                (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y), 
-                                (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y + tex_height:real * draw_context.scale), 
-                                (0, 0, 0, 20));
-                    }
-
-                    // 获取鼠标所在的像素位置，高亮这一块儿
-                    let (mposx, mposy) = GetMousePos();
-                    let mpixx = ((mposx - lux - draw_context.offset_x) / draw_context.scale): int: real;
-                    let mpixy = ((mposy - luy - draw_context.offset_y) / draw_context.scale): int: real;
-
-                    if (mpixx >= 0. && mpixx < tex_width:real && mpixy >= 0. && mpixy < tex_height:real)
-                    {
-                        // Ok 鼠标指向的像素位置是合法的，高亮！
-                        let highlight_p0 = (mpixx * draw_context.scale + draw_context.offset_x + lux, mpixy * draw_context.scale + draw_context.offset_y + luy);
-                        let highlight_p1 = ((mpixx + 1.) * draw_context.scale + draw_context.offset_x + lux, (mpixy + 1.) * draw_context.scale + draw_context.offset_y + luy);
-                        drawlist->AddRectFilled(highlight_p0, highlight_p1, (255, 255, 255, 100));
-                    }
-
-                    // 不过需要注意的是，引擎使用的像素坐标原点不是左上角，而是左下角，所以这里需要做一次简单变换
-                    let mepixx = mpixx: int;
-                    let mepixy = tex_height - 1 - mpixy: int;
-
-                    if (input::keydown(keycode::MOUSE_M_BUTTION)
-                        && mepixx >= 0 && mepixx < tex_width
-                        && mepixy >= 0 && mepixy < tex_height)
-                        draw_context.maincolor = texture->pix((mepixx, mepixy))->get_color;
-
-                    // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
-                    if (enable_draw)
-                    {
-                        let mut first_click = false;
-                        if (draw_context.mousedown == false)
-                        {
-                            first_click = true;
-                            if (input::keydown(keycode::MOUSE_L_BUTTION))
-                                draw_context.usecolor = draw_context.maincolor;
-                            else if (input::keydown(keycode::MOUSE_R_BUTTION))
-                                draw_context.usecolor = draw_context.subcolor;
-                            else
-                                first_click = false;
-                        }
-                        if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
-                        {
-                            draw_context.mousedown = true;
-                            if (first_click)
-                                draw_context.drawtool->OnMouseDown(texture, draw_context.usecolor, (mepixx, mepixy));
-                            else
-                                draw_context.drawtool->OnMouseHold(texture, draw_context.usecolor, (mepixx, mepixy));
-                        }
-                        else
-                        {
-                            if (draw_context.mousedown)
+                            let mut enable_draw = !input::keydown(keycode::L_CTRL);
+                            if (BeginPopup("MainColorPicker"))
                             {
-                                draw_context.drawtool->OnMouseUp(texture, draw_context.usecolor, (mepixx, mepixy));
-                                history_mgr->save_step();
+                                enable_draw = false;
+                                do ColorPicker4("##main_color_picker", draw_context.maincolor)
+                                    ->> \c = draw_context.maincolor = c;;
+                                EndPopup();
                             }
-                            draw_context.mousedown = false;
+                            if (BeginPopup("SubColorPicker"))
+                            {
+                                enable_draw = false;
+                                do ColorPicker4("##sub_color_picker", draw_context.subcolor)
+                                    ->> \c = draw_context.subcolor = c;;
+                                EndPopup();
+                            }
+
+                            Text(F"当前工具: \n {draw_context.drawtool.name}");
+                            for (let name, tool_create_method : all_draw_tools)
+                            {
+                                if (ButtonSize(name, (100., 0.)))
+                                    draw_context.drawtool = tool_create_method();
+                            }
+                            EndGroup();
+
+                            SameLine();
+
+                            let (tex_width, tex_height) = texture->size;
+                            let drawlist = GetWindowDrawList();
+
+                            let (avaliw, avalih) = GetContentRegionAvail();
+
+                            do InvisibleButton("##draw_space", (avaliw <= 100. ? 100. | avaliw, avalih <= 100. ? 100. | avalih));
+                            if (IsItemActive() || IsItemHovered())
+                            {
+                                if (input::keydown(keycode::L_CTRL) 
+                                    && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
+                                {
+                                    let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
+                                    draw_context.offset_x += mousedelta_x;
+                                    draw_context.offset_y += mousedelta_y;
+                                }
+                                draw_context.scale += _delta_wheel();
+
+                                if (draw_context.scale < 1.)
+                                    draw_context.scale = 1.;
+                            }
+                            else if (!draw_context.mousedown)
+                                enable_draw = false;
+
+                            let (p0, p1) = GetItemRect();
+                            let (lux, luy) = p0;
+
+                            PushClipRect(p0, p1);
+                            drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+                            drawlist->AddImage(
+                                (lux + draw_context.offset_x, luy + draw_context.offset_y), 
+                                (lux + draw_context.scale * tex_width:real + draw_context.offset_x, 
+                                luy + draw_context.scale * tex_height:real + draw_context.offset_y), 
+                                texture);
+                                
+                            // OK 如果缩放大于5，就顺手画一下网格
+                            if (draw_context.scale >= 5.)
+                            {
+                                for (let mut yoffset = 0.; yoffset <= tex_height:real * draw_context.scale; yoffset += draw_context.scale)
+                                    drawlist->AddLine(
+                                        (lux + draw_context.offset_x, luy + draw_context.offset_y + yoffset), 
+                                        (lux + draw_context.offset_x + tex_width:real * draw_context.scale, luy + draw_context.offset_y + yoffset), 
+                                        (0, 0, 0, 20));
+                                for (let mut xoffset = 0.; xoffset <= tex_width:real * draw_context.scale; xoffset += draw_context.scale)
+                                    drawlist->AddLine(
+                                        (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y), 
+                                        (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y + tex_height:real * draw_context.scale), 
+                                        (0, 0, 0, 20));
+                            }
+
+                            // 获取鼠标所在的像素位置，高亮这一块儿
+                            let (mposx, mposy) = GetMousePos();
+                            let mpixx = ((mposx - lux - draw_context.offset_x) / draw_context.scale): int: real;
+                            let mpixy = ((mposy - luy - draw_context.offset_y) / draw_context.scale): int: real;
+
+                            if (mpixx >= 0. && mpixx < tex_width:real && mpixy >= 0. && mpixy < tex_height:real)
+                            {
+                                // Ok 鼠标指向的像素位置是合法的，高亮！
+                                let highlight_p0 = (mpixx * draw_context.scale + draw_context.offset_x + lux, mpixy * draw_context.scale + draw_context.offset_y + luy);
+                                let highlight_p1 = ((mpixx + 1.) * draw_context.scale + draw_context.offset_x + lux, (mpixy + 1.) * draw_context.scale + draw_context.offset_y + luy);
+                                drawlist->AddRectFilled(highlight_p0, highlight_p1, (255, 255, 255, 100));
+                            }
+
+                            // 不过需要注意的是，引擎使用的像素坐标原点不是左上角，而是左下角，所以这里需要做一次简单变换
+                            let mepixx = mpixx: int;
+                            let mepixy = tex_height - 1 - mpixy: int;
+
+                            if (input::keydown(keycode::MOUSE_M_BUTTION)
+                                && mepixx >= 0 && mepixx < tex_width
+                                && mepixy >= 0 && mepixy < tex_height)
+                                draw_context.maincolor = texture->pix((mepixx, mepixy))->get_color;
+
+                            // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
+                            if (enable_draw)
+                            {
+                                let mut first_click = false;
+                                if (draw_context.mousedown == false)
+                                {
+                                    first_click = true;
+                                    if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                        draw_context.usecolor = draw_context.maincolor;
+                                    else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                                        draw_context.usecolor = draw_context.subcolor;
+                                    else
+                                        first_click = false;
+                                }
+                                if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
+                                {
+                                    draw_context.mousedown = true;
+                                    if (first_click)
+                                        draw_context.drawtool->OnMouseDown(texture, draw_context.usecolor, (mepixx, mepixy));
+                                    else
+                                        draw_context.drawtool->OnMouseHold(texture, draw_context.usecolor, (mepixx, mepixy));
+                                }
+                                else
+                                {
+                                    if (draw_context.mousedown)
+                                    {
+                                        draw_context.drawtool->OnMouseUp(texture, draw_context.usecolor, (mepixx, mepixy));
+                                        history_mgr->save_step();
+                                    }
+                                    draw_context.mousedown = false;
+                                }
+                            }
+
+                            PopClipRect();
+                            EndTabItem();
                         }
                     }
-
-                    PopClipRect();
-                    EndTabItem();
+                    EndTabBar();
                 }
             }
-            EndTabBar();
+        none?
+            open = false;
         }
         End();
 

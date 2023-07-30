@@ -31,74 +31,82 @@ namespace jeapi::welcome
         {
             static let cinogama_logo = je::graphic::texture::load(F"!/builtin/icon/cinoicon_light.png")->val;
 
-            let mut open = BeginAttrOpen(F"关于##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize);
+            let mut open = true;
+            match (BeginAttrOpen(F"关于##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+            {
+            value(show)?
+                if (show)
+                {
+                    Text("JoyEngine ECS 4.0");
+                    Separator();
 
-            Text("JoyEngine ECS 4.0");
-            Separator();
+                    Text("第三方组件及开源许可");
+                    do BeginChildSize("##copyrights", 700., 500.);
+                    Text("OpenAL https://www.openal.org");
+                    TextDisabled("Copyright (C) Creative Labs, Inc.");
 
-            Text("第三方组件及开源许可");
-            do BeginChildSize("##copyrights", 700., 500.);
-            Text("OpenAL https://www.openal.org");
-            TextDisabled("Copyright (C) Creative Labs, Inc.");
-
-            Text("GLEW https://github.com/nigels-com/glew");
-            TextDisabled("The OpenGL Extension Wrangler Library");
-            TextDisabled("Copyright (C) 2002-2007, Milan Ikits <milan ikits@ieee.org>");
-            TextDisabled("Copyright (C) 2002-2007, Marcelo E. Magallon <mmagallo@debian.org>");
-            TextDisabled("Copyright (C) 2002, Lev Povalahev");
-            TextDisabled("All rights reserved.");
-            TextDisabled(
+                    Text("GLEW https://github.com/nigels-com/glew");
+                    TextDisabled("The OpenGL Extension Wrangler Library");
+                    TextDisabled("Copyright (C) 2002-2007, Milan Ikits <milan ikits@ieee.org>");
+                    TextDisabled("Copyright (C) 2002-2007, Marcelo E. Magallon <mmagallo@debian.org>");
+                    TextDisabled("Copyright (C) 2002, Lev Povalahev");
+                    TextDisabled("All rights reserved.");
+                    TextDisabled(
 @"GLEW is originally derived from the EXTGL project by Lev Povalahev. 
 The source code is licensed under the Modified BSD License, the Mesa 
 3-D License (MIT) and the Khronos License (MIT)."@);
-            
-            Text("GLFW https://www.glfw.org");
-            TextDisabled("Copyright (c) 2002-2006 Marcus Geelnard.");
-            TextDisabled("Copyright (c) 2006-2019 Camilla Löwy.");
-            TextDisabled("GLFW is licensed under the zlib/libpng license.");
-            
-            Text("STB https://github.com/nothings/stb");
-            TextDisabled("Copyright (c) 2017 Sean Barrett.");
-            TextDisabled("STB is licensed under the MIT License");
+                    
+                    Text("GLFW https://www.glfw.org");
+                    TextDisabled("Copyright (c) 2002-2006 Marcus Geelnard.");
+                    TextDisabled("Copyright (c) 2006-2019 Camilla Löwy.");
+                    TextDisabled("GLFW is licensed under the zlib/libpng license.");
+                    
+                    Text("STB https://github.com/nothings/stb");
+                    TextDisabled("Copyright (c) 2017 Sean Barrett.");
+                    TextDisabled("STB is licensed under the MIT License");
 
-            Text("Dear ImGui https://github.com/ocornut/imgui");
-            TextDisabled("Copyright (c) 2014-2023 Omar Cornut.");
-            TextDisabled("Dear ImGui is licensed under the MIT License");
+                    Text("Dear ImGui https://github.com/ocornut/imgui");
+                    TextDisabled("Copyright (c) 2014-2023 Omar Cornut.");
+                    TextDisabled("Dear ImGui is licensed under the MIT License");
 
-            Text("Box2D https://box2d.org/");
-            TextDisabled("Copyright (c) 2019 Erin Catto.");
-            TextDisabled("Box2D is licensed under the MIT License");
+                    Text("Box2D https://box2d.org/");
+                    TextDisabled("Copyright (c) 2019 Erin Catto.");
+                    TextDisabled("Box2D is licensed under the MIT License");
 
-            Text("Woolang https://github.com/cinogama/woolang");
-            TextDisabled("Copyright (c) 2021-2023 Cinogama project.");
-            TextDisabled("Woolang is licensed under the Apache License v2.0");
-            
-            Text("编辑器环境使用一些按原样提供的第三方工具:");
-            Text("CMake https://cmake.org/");
-            Text("rcedit https://github.com/electron/rcedit");
+                    Text("Woolang https://github.com/cinogama/woolang");
+                    TextDisabled("Copyright (c) 2021-2023 Cinogama project.");
+                    TextDisabled("Woolang is licensed under the Apache License v2.0");
+                    
+                    Text("编辑器环境使用一些按原样提供的第三方工具:");
+                    Text("CMake https://cmake.org/");
+                    Text("rcedit https://github.com/electron/rcedit");
 
-            Text("默认提供的字体:");
-            Text("HarmonyOS_Sans_SC_Regular");
-            TextDisabled("https://developer.harmonyos.com/cn/docs/design/des-guides/font-0000001157868583");
-            TextDisabled("Copyright 2021 Huawei Device Co., Ltd. All Rights Reserved.");
-            TextDisabled("此字体可免费商用，但需标注字体版权信息。");
-            TextDisabled("* 具体条款见字体目录内的 LICENSE.txt 文件");
+                    Text("默认提供的字体:");
+                    Text("HarmonyOS_Sans_SC_Regular");
+                    TextDisabled("https://developer.harmonyos.com/cn/docs/design/des-guides/font-0000001157868583");
+                    TextDisabled("Copyright 2021 Huawei Device Co., Ltd. All Rights Reserved.");
+                    TextDisabled("此字体可免费商用，但需标注字体版权信息。");
+                    TextDisabled("* 具体条款见字体目录内的 LICENSE.txt 文件");
 
-            Text("cino_ipix_12px");
-            TextDisabled("原始来源 https://purestudio.itch.io/ipix");
-            TextDisabled("修订版本 https://git.cinogama.net/cinogamaproject/cinoipixfont");
-            TextDisabled("Origin by: Copyright (c) 2019, zengsadi. Updated by Cinogama project. (C) 2021.");
-            TextDisabled("此字体是公开领域字体，可免费商用，无需标注字体版权信息。");
-            EndChild();
+                    Text("cino_ipix_12px");
+                    TextDisabled("原始来源 https://purestudio.itch.io/ipix");
+                    TextDisabled("修订版本 https://git.cinogama.net/cinogamaproject/cinoipixfont");
+                    TextDisabled("Origin by: Copyright (c) 2019, zengsadi. Updated by Cinogama project. (C) 2021.");
+                    TextDisabled("此字体是公开领域字体，可免费商用，无需标注字体版权信息。");
+                    EndChild();
 
-            Text("让一切纯粹且快乐");
-            Text("Keep things pure and joyful.");
-            Text("(C)Cinogama project. 2022.");
-            SameLine();
+                    Text("让一切纯粹且快乐");
+                    Text("Keep things pure and joyful.");
+                    Text("(C)Cinogama project. 2022.");
+                    SameLine();
 
-            ImageScale(cinogama_logo, 0.15);
+                    ImageScale(cinogama_logo, 0.15);
 
+                }
+            none?
+                open = false;
+            }
             End();
 
             return open;
