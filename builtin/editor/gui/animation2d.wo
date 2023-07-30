@@ -1213,14 +1213,14 @@ namespace editor::gui::animation2d
             jeapi::gui::form::ask("是否保存动画", F"是否将动画保存到{animation_context.m_path}",
                 func(ok)
                 {
-                    openform->set(true);
+                    openform->set(false);
                     if (!ok)
                         return;
                         
                     if (! animation_context->save())
                     {
                         jeapi::gui::form::msg("动画保存失败", F"动画未能保存到{animation_context.m_path}");
-                        openform->set(false);
+                        openform->set(true);
                     }
                 });
         }
