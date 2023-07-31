@@ -978,14 +978,32 @@ JE_API double je_ecs_universe_get_min_deltatime(void* universe);
 /*
 je_ecs_universe_set_max_deltatime [基本接口]
 设置当前宇宙的最大时间间隔，deltatime的最大值即为此值
+    * 此值仅约束缩放之前的deltatime
+请参见：
+    je_ecs_universe_set_time_scale
 */
 JE_API void je_ecs_universe_set_max_deltatime(void* universe, double val);
 
 /*
 je_ecs_universe_set_min_deltatime [基本接口]
 设置当前宇宙的最小时间间隔，deltatime的最小值即为此值
+    * 此值仅约束缩放之前的deltatime
+请参见：
+    je_ecs_universe_set_time_scale
 */
 JE_API void je_ecs_universe_set_min_deltatime(void* universe, double val);
+
+/*
+je_ecs_universe_set_time_scale [基本接口]
+设置当前宇宙的时间缩放系数
+*/
+JE_API void je_ecs_universe_set_time_scale(void* universe, double scale);
+
+/*
+je_ecs_universe_get_time_scale [基本接口]
+获取当前宇宙的时间缩放系数
+*/
+JE_API double je_ecs_universe_get_time_scale(void* universe);
 
 /*
 je_ecs_world_in_universe [基本接口]
@@ -4735,7 +4753,7 @@ namespace jeecs
         {
             return _m_universe_addr;
         }
-        game_world create_world()
+        inline game_world create_world()
         {
             return je_ecs_world_create(_m_universe_addr);
         }
@@ -4762,6 +4780,22 @@ namespace jeecs
         inline float get_smooth_deltatime() const
         {
             return (float)get_smooth_deltatimed();
+        }
+        inline double get_timescaled() const
+        {
+            return je_ecs_universe_get_time_scale(handle());
+        }
+        inline float get_timescale() const
+        {
+            return (float)get_timescaled();
+        }
+        inline void set_timescaled(double scale) const
+        {
+            je_ecs_universe_set_time_scale(handle(), scale);
+        }
+        inline void set_timescale(float scale) const
+        {
+            set_timescaled((double)scale);
         }
 
         inline operator bool() const noexcept
@@ -4793,26 +4827,33 @@ namespace jeecs
         {
         }
 
-        double real_deltatimed() const
+        inline double real_deltatimed() const
         {
             return _m_game_world.get_universe().get_real_deltatimed();
         }
-        float real_deltatime()const
+        inline float real_deltatime()const
         {
             return _m_game_world.get_universe().get_real_deltatime();
         }
-
-        double deltatimed() const
+        inline double deltatimed() const
         {
             return _m_game_world.get_universe().get_smooth_deltatimed();
         }
-        float deltatime()const
+        inline float deltatime()const
         {
             return _m_game_world.get_universe().get_smooth_deltatime();
         }
+        inline double timescaled() const
+        {
+            return _m_game_world.get_universe().get_timescaled();
+        }
+        inline float timescale() const
+        {
+            return _m_game_world.get_universe().get_timescale();
+        }
 
         // Get binded world or attached world
-        game_world get_world() const noexcept
+        inline game_world get_world() const noexcept
         {
             assert(_m_game_world);
             return _m_game_world;

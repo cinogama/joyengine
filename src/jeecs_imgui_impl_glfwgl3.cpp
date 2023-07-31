@@ -351,6 +351,9 @@ R"(
     extern("libjoyecs", "je_gui_input_text_box")
     public func InputText(label:string, buffer: string)=> option<string>;
 
+    extern("libjoyecs", "je_gui_drag_float")
+    public func DragFloat(label: string, value: real, step: real, min: real, max: real)=> option<real>;
+
     extern("libjoyecs", "je_gui_input_float_box")
     public func InputFloat(label: string, value: real)=> option<real>;
 
@@ -1423,6 +1426,18 @@ WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args, size_t argc)
         wo_set_int(wo_struct_get(result, 3), (int)values[3]);
         return wo_ret_ok_val(vm, result);
     }
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_drag_float(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t label = wo_string(args + 0);
+    float value = wo_float(args + 1);
+    float speed = wo_float(args + 2);
+    float minval = wo_float(args + 3);
+    float maxval = wo_float(args + 4);
+    if (ImGui::DragFloat(label, &value, speed, minval, maxval))
+        return wo_ret_option_float(vm, value);
     return wo_ret_option_none(vm);
 }
 

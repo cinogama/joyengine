@@ -226,7 +226,7 @@ namespace editor::gui
                         for (let _, script_name : scripts)
                             if (MenuItem(script_name))
                             {
-                                match (tools::run_tool_script(script_name))
+                                match (tools::run_tool_script(script_name, context->get_project))
                                 {
                                 err(msg)?
                                     jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg}");

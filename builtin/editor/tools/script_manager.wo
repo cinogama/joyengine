@@ -7,7 +7,7 @@ namespace editor::tools
     {
         return _available_tool_scripts->unmapping->>\kv = kv[0];;
     }
-    public func run_tool_script(script: string)
+    public func run_tool_script(script: string, proj: Project)
     {
         match (_available_tool_scripts->get(script))
         {
@@ -21,9 +21,10 @@ namespace editor::tools
                     return result::err(F"运行脚本失败：{msg}");
                 ok(vmm)?
                     {
-                        let r = vmm->run();
+                        do vmm->run();
+                        do vmm->invoke("main", [proj: dynamic]);
                         do vmm->close();
-                        return result::ok(r);
+                        return result::ok(nil: void);
                     }
                 }             
             }

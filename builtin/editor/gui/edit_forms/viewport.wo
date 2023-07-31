@@ -55,8 +55,12 @@ namespace editor::gui::edit_forms
                                     {
                                         if (BeginAttr("调试工具", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
                                         {
+                                            do DragFloat("时间缩放", proj->get_env->get_universe->get_timescale, 0.1, 0.0, 16.0)
+                                                ->> \val = proj->get_env->get_universe->set_timescale(val);
+                                                ;
                                             if (Button("终止当前调试") || jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::ESC]))
                                             {
+                                                proj->get_env->get_universe->set_timescale(1.);
                                                 do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
                                                 je::loginfo("=======================调试结束=======================");
                                             }

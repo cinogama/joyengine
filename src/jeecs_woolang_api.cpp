@@ -327,6 +327,16 @@ WO_API wo_api wojeapi_universe_set_min_deltatime(wo_vm vm, wo_value args, size_t
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_universe_get_timescale(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, je_ecs_universe_get_time_scale(wo_pointer(args + 0)));
+}
+WO_API wo_api wojeapi_universe_set_timescale(wo_vm vm, wo_value args, size_t argc)
+{
+    je_ecs_universe_set_time_scale(wo_pointer(args + 0), wo_real(args + 1));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_pointer(vm,
@@ -2039,6 +2049,12 @@ R"(
 
         extern("libjoyecs", "wojeapi_universe_set_min_deltatime")
         public func set_min_deltatime(self: universe, delta: real)=> void;
+
+        extern("libjoyecs", "wojeapi_universe_get_timescale")
+        public func get_timescale(self: universe)=> real;
+
+        extern("libjoyecs", "wojeapi_universe_set_timescale")
+        public func set_timescale(self: universe, scale: real)=> void;
 
         namespace editor
         {
