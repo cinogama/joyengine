@@ -186,6 +186,13 @@ namespace jeecs
                     rigidbody_instance->SetAngularDamping(kinematics->angular_damping);
                 if (check_if_need_update_float(rigidbody_instance->GetGravityScale(), kinematics->gravity_scale))
                     rigidbody_instance->SetAngularDamping(kinematics->gravity_scale);
+
+                if (rigidbody_instance->IsFixedRotation() != kinematics->lock_rotation)
+                {
+                    rigidbody_instance->SetFixedRotation(kinematics->lock_rotation);
+                    rigidbody_instance->SetAwake(true);
+                }
+
             }
 
             if (check_if_need_update_vec2(rigidbody_instance->GetPosition(), math::vec2(translation.world_position.x, translation.world_position.y))
@@ -240,14 +247,11 @@ namespace jeecs
                                         translation.world_position.z),
                                     translation, &localrotation);
 
-                                kinematics->angular_velocity =
-                                    kinematics->lock_rotation ? 0.0f : rigidbody_instance->GetAngularVelocity();
-                                if (!kinematics->lock_rotation)
-                                {
-                                    auto&& world_angle = translation.world_rotation.euler_angle();
-                                    world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
-                                    localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
-                                }
+                                kinematics->angular_velocity = rigidbody_instance->GetAngularVelocity();
+
+                                auto&& world_angle = translation.world_rotation.euler_angle();
+                                world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
+                                localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
                             }
                         }
                 }
