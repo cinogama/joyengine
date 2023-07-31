@@ -673,7 +673,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             }
         }
 
-        void Update()
+        void CommitUpdate()
         {
             _inputs.w = input::keydown(input::keycode::W);
             _inputs.s = input::keydown(input::keycode::S);
