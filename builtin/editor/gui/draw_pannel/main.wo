@@ -292,13 +292,13 @@ namespace editor::gui::drawpannel
         }
     }
 
-    let all_draw_tools = {
-        ["无"] = \=DrawToolT::create("无", (): tools::Nothing);,
-        ["钢笔"] = \=DrawToolT::create("钢笔", tools::Pen::create());,
-        ["直线"] = \=DrawToolT::create("直线", tools::Line::create());,
-        ["矩形"] = \=DrawToolT::create("矩形", tools::Rect::create());,
-        ["填充"] = \=DrawToolT::create("填充", (): tools::Fill);,
-    };
+    let all_draw_tools = [
+        ("无", \=DrawToolT::create("无", (): tools::Nothing);),
+        ("钢笔", \=DrawToolT::create("钢笔", tools::Pen::create());),
+        ("直线", \=DrawToolT::create("直线", tools::Line::create());),
+        ("矩形", \=DrawToolT::create("矩形", tools::Rect::create());),
+        ("填充", \=DrawToolT::create("填充", (): tools::Fill);),
+    ];
 
     func edittexture(
         context: EditorContext, 
@@ -469,7 +469,7 @@ namespace editor::gui::drawpannel
                             }
 
                             Text(F"当前工具: \n {draw_context.drawtool.name}");
-                            for (let name, tool_create_method : all_draw_tools)
+                            for (let _, (name, tool_create_method) : all_draw_tools)
                             {
                                 if (ButtonSize(name, (100., 0.)))
                                     draw_context.drawtool = tool_create_method();
@@ -686,7 +686,7 @@ namespace editor::gui::drawpannel
                 scale = mut 10.,
                 offset_x = mut 0.,
                 offset_y = mut 0.,
-                drawtool = mut all_draw_tools["无"](),
+                drawtool = mut all_draw_tools[0][1](),
 
                 mousedown = mut false,
 
@@ -743,19 +743,33 @@ namespace editor::gui::drawpannel
             return;
         }
 
+        let (size_x, size_y, _) = e->get_component(typeinfo::load("Transform::LocalScale")->val)
+            =>> \c = c->get_member("scale");
+            ->> \m = m[1]->float3;
+            ->  valor((1., 1., 1.))
+            ;
+
         let create_and_copy_0pass_texture = func()
         {
             match (textures->get(0))
             {
-            value(t)?
-                return create_and_copy_texture(t);
-            none?
-                return je::graphic::texture::create(16, 16);
+            value(t)? return create_and_copy_texture(t);
+            none? return je::graphic::texture::create(math::round(16. * size_x), math::round(16. * size_y));
             }
         };
 
         let id_tex_list = used_texture_id_pass 
-            ->> \id = (id, mut textures->get(id)->or(\ = create_and_copy_0pass_texture();));
+            ->> \id = (id, mut textures->get(id)
+                -> or(\= create_and_copy_0pass_texture()
+                        ->  func(tex)
+                            {
+                                tex->set_sampling_method(
+                                    je::graphic::texture::sampling::MIN_NEAREST + 
+                                    je::graphic::texture::sampling::MAG_NEAREST);
+                                return tex;
+                            }
+                    ;))
+                ;
             ;
         launch(edittexture, (
             context,
@@ -765,7 +779,7 @@ namespace editor::gui::drawpannel
                 scale = mut 10.,
                 offset_x = mut 0.,
                 offset_y = mut 0.,
-                drawtool = mut all_draw_tools["无"](),
+                drawtool = mut all_draw_tools[0][1](),
 
                 mousedown = mut false,
 

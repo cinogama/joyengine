@@ -207,8 +207,11 @@ namespace editor::gui::edit_forms
                                                 ->\_, v = v->set_float3(ctx.width, ctx.height, 1.);
                                                 ;
                                             ;
-                                        einst->editor::graphic::bind_texture(0, 
-                                            je::graphic::texture::create(ctx.x_pixel_count, ctx.y_pixel_count));
+                                        let tex = je::graphic::texture::create(ctx.x_pixel_count, ctx.y_pixel_count);
+                                        tex->set_sampling_method(
+                                            je::graphic::texture::sampling::MIN_NEAREST + 
+                                            je::graphic::texture::sampling::MAG_NEAREST);
+                                        einst->editor::graphic::bind_texture(0, tex);
 
                                         let default_shader_path = "@/resource/shader/Unlit.shader";
                                         do je::graphic::shader::load(default_shader_path)
