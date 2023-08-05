@@ -279,9 +279,9 @@ namespace editor
                     {
                         Text("最大差分时间");
                         let result = InputFloatFormat("##最大差分时间", env->get_universe->get_max_deltatime(), "%.6f");
-                        do result->>\val= val > env->get_universe->get_min_deltatime() ? env->get_universe->set_max_deltatime(val) | nil: void;;
+                        do result->>\val= val > 0. ? env->get_universe->set_max_deltatime(val) | nil: void;;
                         TextDisabled("DeltaTime相关函数将不会返回大于此值的差分时间");
-                        TextDisabled("* 保证大于最小差分时间");
+                        TextDisabled("* 保证大于 0.0");
                         return result->>\_=do nil;;
                     },
                     \_,_ = true;,
@@ -292,27 +292,6 @@ namespace editor
                     },
                     \_ = F"RUNTIME_UNIVERSE->set_max_deltatime({supp});"
                         where supp = env->get_universe->get_max_deltatime()
-                    ;,
-                )),
-                ["JE_ENGINE_TIME_MIN_DELTATIME"] = IConfig::create(Config::create(
-                    do nil,
-                    func(_)
-                    {
-                        Text("最小差分时间");
-                        let result = InputFloatFormat("##最小差分时间", env->get_universe->get_min_deltatime(), "%.6f");
-                        do result->>\val= val < env->get_universe->get_max_deltatime() ? env->get_universe->set_min_deltatime(val) | nil: void;;
-                        TextDisabled("DeltaTime相关函数将不会返回小于此值的差分时间");
-                        TextDisabled("* 保证小于最大差分时间");
-                        return result->>\_=do nil;;
-                    },
-                    \_,_ = true;,
-                    \_ = env->get_universe->get_min_deltatime(): string;,
-                    func (str){
-                        env->get_universe->set_min_deltatime(str: real);
-                        return option::value(do nil);
-                    },
-                    \_ = F"RUNTIME_UNIVERSE->set_min_deltatime({supp});"
-                        where supp = env->get_universe->get_min_deltatime()
                     ;,
                 )),
             }mut;

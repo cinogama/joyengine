@@ -1400,9 +1400,6 @@ namespace jeecs_impl
         // 最大DeltaTime值，防止出现巨大的跳变
         double _m_max_deltatime = 0.2;
 
-        // 最小DeltaTime值，避免帧率过高引发的一些特殊情况
-        double _m_min_deltatime = 0.0001;
-
         // 时间缩放
         double _m_time_scale = 1.0;
 
@@ -1471,17 +1468,9 @@ namespace jeecs_impl
         {
             return _m_max_deltatime;
         }
-        double get_min_deltatime() const
-        {
-            return _m_min_deltatime;
-        }
         void set_max_deltatime(double val)
         {
             _m_max_deltatime = val;
-        }
-        void set_min_deltatime(double val)
-        {
-            _m_min_deltatime = val;
         }
 
         double get_time_scale() const
@@ -1680,7 +1669,7 @@ namespace jeecs_impl
         {
             double current_time = je_clock_time();
             _m_real_deltatime = jeecs::math::clamp(
-                current_time - _m_real_current_time, _m_min_deltatime, _m_max_deltatime);
+                current_time - _m_real_current_time, 0., _m_max_deltatime);
             _m_smooth_deltatime = (_m_smooth_deltatime * 9. + _m_real_deltatime) / 10.;
             _m_real_current_time = current_time;
 
@@ -2404,17 +2393,9 @@ double je_ecs_universe_get_max_deltatime(void* universe)
 {
     return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_max_deltatime();
 }
-double je_ecs_universe_get_min_deltatime(void* universe)
-{
-    return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_min_deltatime();
-}
 void je_ecs_universe_set_max_deltatime(void* universe, double val)
 {
     std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->set_max_deltatime(val);
-}
-void je_ecs_universe_set_min_deltatime(void* universe, double val)
-{
-    std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->set_min_deltatime(val);
 }
 void je_ecs_universe_set_time_scale(void* universe, double scale)
 {

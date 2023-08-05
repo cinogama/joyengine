@@ -970,12 +970,6 @@ je_ecs_universe_get_max_deltatime [基本接口]
 JE_API double je_ecs_universe_get_max_deltatime(void* universe);
 
 /*
-je_ecs_universe_get_min_deltatime [基本接口]
-获取当前宇宙的最小时间间隔，deltatime的最小值即为此值
-*/
-JE_API double je_ecs_universe_get_min_deltatime(void* universe);
-
-/*
 je_ecs_universe_set_max_deltatime [基本接口]
 设置当前宇宙的最大时间间隔，deltatime的最大值即为此值
     * 此值仅约束缩放之前的deltatime
@@ -983,15 +977,6 @@ je_ecs_universe_set_max_deltatime [基本接口]
     je_ecs_universe_set_time_scale
 */
 JE_API void je_ecs_universe_set_max_deltatime(void* universe, double val);
-
-/*
-je_ecs_universe_set_min_deltatime [基本接口]
-设置当前宇宙的最小时间间隔，deltatime的最小值即为此值
-    * 此值仅约束缩放之前的deltatime
-请参见：
-    je_ecs_universe_set_time_scale
-*/
-JE_API void je_ecs_universe_set_min_deltatime(void* universe, double val);
 
 /*
 je_ecs_universe_set_time_scale [基本接口]
