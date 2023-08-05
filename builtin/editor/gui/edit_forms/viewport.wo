@@ -132,26 +132,23 @@ namespace editor::gui::edit_forms
                         static let mut mover_mode = je::editor::mover_mode::selection;
                         do debug_world->>\w = je::editor::set_editing_mover_mode(w, mover_mode);;
 
-                        if (IsWindowFocused())
+                        if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::C]))
+                            mover_mode = je::editor::mover_mode::selection;
+                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::T]))
+                            mover_mode = je::editor::mover_mode::movement;
+                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::R]))
+                            mover_mode = je::editor::mover_mode::rotation;
+                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::S]))
+                            mover_mode = je::editor::mover_mode::scale;
+                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB]))
                         {
-                            if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::C]))
-                                mover_mode = je::editor::mover_mode::selection;
-                            else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::T]))
-                                mover_mode = je::editor::mover_mode::movement;
-                            else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::R]))
-                                mover_mode = je::editor::mover_mode::rotation;
-                            else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::S]))
-                                mover_mode = je::editor::mover_mode::scale;
-                            else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB]))
+                            static let mut last_click_time = 0.;
+                            if (std::time() - last_click_time <= 0.2)
                             {
-                                static let mut last_click_time = 0.;
-                                if (std::time() - last_click_time <= 0.2)
-                                {
-                                    if ((mover_mode +:= 1: je::editor::mover_mode) > je::editor::mover_mode::scale)
-                                        mover_mode = je::editor::mover_mode::selection;
-                                }
-                                last_click_time = std::time();
+                                if ((mover_mode +:= 1: je::editor::mover_mode) > je::editor::mover_mode::scale)
+                                    mover_mode = je::editor::mover_mode::selection;
                             }
+                            last_click_time = std::time();
                         }
 
                         if (BeginMenuEnabled(MOVER_MODE[mover_mode], debug_camera_entity->has))
