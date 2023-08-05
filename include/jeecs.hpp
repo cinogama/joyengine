@@ -7372,10 +7372,10 @@ namespace jeecs
             struct block_mesh
             {
                 basic::vector<math::vec2> m_block_points = {
-                    math::vec2(-0.5f, -0.5f),
                     math::vec2(-0.5f, 0.5f),
-                    math::vec2(0.5f, 0.5f),
+                    math::vec2(-0.5f, -0.5f),
                     math::vec2(0.5f, -0.5f),
+                    math::vec2(0.5f, 0.5f),
                 };
                 basic::resource<graphic::vertex> m_block_mesh = nullptr;
 
