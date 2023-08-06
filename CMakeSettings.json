@@ -13,7 +13,7 @@
       "variables": [
         {
           "name": "INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
-          "value": "True",
+          "value": "False",
           "type": "BOOL"
         }
       ]
