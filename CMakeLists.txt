@@ -20,8 +20,11 @@ option(USING_OPENAL_SOFT_INSTEAD_1_1 "Using openal-soft instead of openal 1.1." 
 
 if (INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    add_custom_target(COPYING_LICENCES_SCRIPT COMMAND woodriver ./script/copylicences.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    add_dependencies(COPYING_LICENCES_SCRIPT INSTALL_PKG)
 else()
     add_custom_target(INSTALL_PKG COMMAND echo "INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
+    add_custom_target(COPYING_LICENCES_SCRIPT COMMAND echo "INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
 endif()
 
 if (USING_OPENAL_SOFT_INSTEAD_1_1)
@@ -97,5 +100,5 @@ add_dependencies(COPY_RCEDIT64_FILES COPY_CMAKE_FILES)
 add_dependencies(COPY_RCEDIT32_FILES COPY_RCEDIT64_FILES)
 add_dependencies(INSTALL_PKG COPY_RCEDIT32_FILES)
 add_dependencies(jedriver INSTALL_PKG)
-
+add_dependencies(jedriver COPYING_LICENCES_SCRIPT)
 target_link_libraries(jedriver joyecs)

@@ -1,0 +1,26 @@
+import woo::std;
+import build::pkg::filesystem;
+
+using filesys;
+
+let third_party_path = workpath() / "3rd";
+let build_path = workpath() / "build";
+
+match (allsubpath(third_party_path))
+{
+ok(subpaths)?
+    for (let _, p : subpaths)
+    {
+        if (filename(p)->lower->find("license") != -1
+            || filename(p)->lower->find("copying") != -1)
+        {
+            let relpath = p->tostring()->sub(third_party_path->tostring->len);
+
+            let target_path = build_path / "licenses" / relpath;
+            do mkdir(parent(target_path));
+            do copy(p, target_path);
+        }
+    }
+err(_)?
+    std::println("Failed to get 3rd licenses");
+}

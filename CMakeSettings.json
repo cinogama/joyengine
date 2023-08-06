@@ -12,8 +12,8 @@
       "ctestCommandArgs": "",
       "variables": [
         {
-          "name": "INSTALL_PKG_WHEN_BUILD",
-          "value": "False",
+          "name": "INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
+          "value": "True",
           "type": "BOOL"
         }
       ]
@@ -30,7 +30,7 @@
       "inheritEnvironments": [ "msvc_x64_x64" ],
       "variables": [
         {
-          "name": "INSTALL_PKG_WHEN_BUILD",
+          "name": "INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
           "value": "False",
           "type": "BOOL"
         }
