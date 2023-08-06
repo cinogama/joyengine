@@ -10,7 +10,7 @@ build:
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
-    - sudo make
+    - sudo make -j 4
     - cd ..
   cache:
     when: on_success
