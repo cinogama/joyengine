@@ -40,6 +40,11 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
+WO_API wo_api wojeapi_is_using_openal_soft(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, JEECS_USE_OPENAL_SOFT ? true : false);
+}
+
 WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args, size_t argc)
 {
     jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0));
@@ -1546,6 +1551,9 @@ const char* jeecs_woolang_editor_api_src = R"(
 import je;
 namespace je::editor
 {
+    extern("libjoyecs", "wojeapi_is_using_openal_soft")
+    public func is_using_openal_soft()=> bool;
+
     extern("libjoyecs", "wojeapi_init_graphic_pipeline")
     public func init_graphic_pipeline(u: universe)=> void;
 

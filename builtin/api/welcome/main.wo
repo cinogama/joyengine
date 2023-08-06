@@ -2,6 +2,7 @@
 // 嗯，大憨批程序，就是一个用来显示欢迎信息的小实例
 
 import je;
+import je::editor;
 import je::gui;
 
 using je::gui;
@@ -43,8 +44,17 @@ namespace jeapi::welcome
 
                     Text("第三方组件及开源许可");
                     do BeginChildSize("##copyrights", 700., 500.);
-                    Text("OpenAL https://www.openal.org");
-                    TextDisabled("Copyright (C) Creative Labs, Inc.");
+                    if (je::editor::is_using_openal_soft())
+                    {
+                        Text("OpenAL v1.1 https://www.openal.org");
+                        TextDisabled("Copyright (C) Creative Labs, Inc.");
+                    }
+                    else
+                    {
+                        Text("OpenAL Soft https://openal-soft.org");
+                        TextDisabled("Copyright (C) ?.");
+                        TextDisabled("OpenAL Soft is licensed under the LGPL License");
+                    }
 
                     Text("GLEW https://github.com/nigels-com/glew");
                     TextDisabled("The OpenGL Extension Wrangler Library");

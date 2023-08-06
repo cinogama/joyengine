@@ -30,3 +30,7 @@
 	path = 3rd/openalsdk
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/openalsdk.git
 	branch = master
+[submodule "3rd/openal-soft"]
+	path = 3rd/openal-soft
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/openal-soft.git
+	branch = v1.23.1

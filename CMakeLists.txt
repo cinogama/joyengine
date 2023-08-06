@@ -15,8 +15,24 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
-set(ENV{OPENALDIR} "${CMAKE_CURRENT_SOURCE_DIR}/3rd/openalsdk")
-include(FindOpenAL)
+option(INSTALL_PKG_BY_BAOZI_WHEN_BUILD "Install pkgs by baozi when building." ON)
+option(USING_OPENAL_SOFT_INSTEAD_1_1 "Using openal-soft instead of openal 1.1." ON)
+
+if (INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
+    add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+else()
+    add_custom_target(INSTALL_PKG COMMAND echo "INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
+endif()
+
+if (USING_OPENAL_SOFT_INSTEAD_1_1)
+    # openal-soft will be compiled to dynamic-libs
+    add_subdirectory("3rd/openal-soft")
+    add_definitions(-DJEECS_USE_OPENAL_SOFT=1)
+else()
+    set(ENV{OPENALDIR} "${CMAKE_CURRENT_SOURCE_DIR}/3rd/openalsdk")
+    include(FindOpenAL)
+    add_definitions(-DJEECS_USE_OPENAL_SOFT=0)
+endif()
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")
@@ -27,14 +43,6 @@ set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
-
-option(INSTALL_PKG_WHEN_BUILD "Install pkgs by baozi when building." ON)
-
-if (INSTALL_PKG_WHEN_BUILD)
-    add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-else()
-    add_custom_target(INSTALL_PKG COMMAND echo "INSTALL_PKG_WHEN_BUILD is disabled.")
-endif()
 
 if(WIN32)
     add_custom_target(COPY_BUILTIN_FILES 
