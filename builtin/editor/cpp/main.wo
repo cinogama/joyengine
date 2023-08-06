@@ -314,7 +314,8 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 # Ignore IDE File
 /.vscode/
-
+/.vs/
+/CMakeSettings.json
 "@;
                 if (!writeall(cxx_proj_path/".gitignore", git_ignore_file))
                 {

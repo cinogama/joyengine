@@ -68,5 +68,7 @@ else()
 	message(FATAL_ERROR "Unknown platform")
 endif()
 
+target_compile_options (glew_s PRIVATE -fPIC)
+target_compile_options (box2d PRIVATE -fPIC)
 target_link_libraries(joyecs ${jeecs_system_libs})
 target_link_libraries(joyecs woolang glew_s glfw box2d ${OPENAL_LIBRARY})
