@@ -46,6 +46,7 @@ build_win64_release:
       - build/libwoo.pdb
       - build/pkg/*
       - build/builtin/*
+      - build/licenses/*
   tags:
     - winserver22
 
