@@ -18,15 +18,6 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 option(INSTALL_PKG_BY_BAOZI_WHEN_BUILD "Install pkgs by baozi when building." ON)
 option(USING_OPENAL_SOFT_INSTEAD_1_1 "Using openal-soft instead of openal 1.1." ON)
 
-if (INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
-    add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    add_custom_target(COPYING_LICENCES_SCRIPT COMMAND woodriver ./script/copylicences.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    add_dependencies(COPYING_LICENCES_SCRIPT INSTALL_PKG)
-else()
-    add_custom_target(INSTALL_PKG COMMAND echo "INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
-    add_custom_target(COPYING_LICENCES_SCRIPT COMMAND echo "INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
-endif()
-
 if (USING_OPENAL_SOFT_INSTEAD_1_1)
     # openal-soft will be compiled to dynamic-libs
     add_subdirectory("3rd/openal-soft")
@@ -46,6 +37,16 @@ set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
+
+if (INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
+    add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    add_custom_target(COPYING_LICENCES_SCRIPT COMMAND woodriver ./script/copylicences.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    add_dependencies(COPYING_LICENCES_SCRIPT INSTALL_PKG)
+    add_dependencies(COPYING_LICENCES_SCRIPT woodriver)
+else()
+    add_custom_target(INSTALL_PKG COMMAND echo "INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
+    add_custom_target(COPYING_LICENCES_SCRIPT COMMAND echo "INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
+endif()
 
 if(WIN32)
     add_custom_target(COPY_BUILTIN_FILES 
