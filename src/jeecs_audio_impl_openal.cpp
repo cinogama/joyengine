@@ -28,7 +28,6 @@ struct jeal_buffer
     ALsizei m_frequency;
     ALsizei m_byterate;
     ALenum m_format;
-    bool m_loop;
 };
 
 std::mutex _jeal_all_sources_mx;
@@ -66,6 +65,9 @@ void jeal_init()
 
     if (devices.size() == 0)
         jeecs::debug::logfatal("No audio device found.");
+    else
+        // Using first device as default.
+        jeal_using_device(devices.front());
 
     _jegl_device_list = new jeal_device * [devices.size() + 1];
     memcpy(_jegl_device_list, devices.data(), devices.size() * sizeof(jeal_device*));
@@ -148,9 +150,10 @@ void jeal_using_device(jeal_device* device)
         float m_volume;
         jeal_state m_state;
         jeal_buffer* m_playing_buffer;
+        ALint m_loop;
     };
-    source_restoring_information listener_information;
-    float listener_orientation[6] = {};
+    source_restoring_information listener_information = {};
+    float listener_orientation[6] = { 0.0f,0.0f,1.0f, 0.0f,1.0f,0.0f };
 
     std::vector<source_restoring_information> sources_information;
 
@@ -168,8 +171,6 @@ void jeal_using_device(jeal_device* device)
             &listener_information.m_velocity.y,
             &listener_information.m_velocity.z);
         alGetListenerfv(AL_ORIENTATION, listener_orientation);
-        alGetListenerf(AL_PITCH,
-            &listener_information.m_pitch);
         alGetListenerf(AL_GAIN,
             &listener_information.m_volume);
 
@@ -191,6 +192,8 @@ void jeal_using_device(jeal_device* device)
                 &src_info.m_pitch);
             alGetSourcef(source->m_openal_source, AL_GAIN,
                 &src_info.m_volume);
+            alGetSourcei(source->m_openal_source, AL_LOOPING,
+                &src_info.m_loop);
             src_info.m_state = jeal_source_get_state(source);
             src_info.m_playing_buffer = source->m_last_played_buffer;
 
@@ -200,6 +203,10 @@ void jeal_using_device(jeal_device* device)
         if (AL_FALSE == alcMakeContextCurrent(nullptr))
             jeecs::debug::logerr("Failed to clear current context.");
         alcDestroyContext(current_context);
+    }
+    else
+    {
+        listener_information.m_volume = 1.0f;
     }
     current_context = alcCreateContext(device->m_openal_device, nullptr);
     if (current_context == nullptr)
@@ -227,7 +234,6 @@ void jeal_using_device(jeal_device* device)
             listener_orientation[3], 
             listener_orientation[4], 
             listener_orientation[5]);
-        jeal_listener_pitch(listener_information.m_pitch);
         jeal_listener_volume(listener_information.m_volume);
 
         for (auto& src_info : sources_information)
@@ -250,9 +256,14 @@ void jeal_using_device(jeal_device* device)
             jeal_source_volume(
                 src_info.m_source,
                 src_info.m_volume);
+            jeal_source_loop(
+                src_info.m_source,
+                src_info.m_loop != 0);
 
             if (src_info.m_state != jeal_state::STOPPED)
             {
+                assert(src_info.m_playing_buffer != nullptr);
+
                 jeal_source_set_buffer(src_info.m_source, src_info.m_playing_buffer);
                 jeal_source_set_byte_offset(src_info.m_source, src_info.m_offset);
                 if (src_info.m_state == jeal_state::PAUSED)
@@ -272,6 +283,7 @@ jeal_source* jeal_open_source()
     _jeal_all_sources.insert(audio_source);
 
     _jeal_update_source(audio_source);
+    audio_source->m_last_played_buffer = nullptr;
 
     return audio_source;
 }
@@ -286,7 +298,7 @@ void jeal_close_source(jeal_source* source)
     delete source;
 }
 
-jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop)
+jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
 {
     struct WAVE_Data {//Wav文件数据体模块
         char subChunkID[4]; //should contain the word data
@@ -394,7 +406,6 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename, bool loop)
     audio_buffer->m_frequency = wave_format.sampleRate;
     audio_buffer->m_byterate = wave_format.byteRate;
     audio_buffer->m_format = AL_NONE;
-    audio_buffer->m_loop = loop;
 
     //The format is worked out by looking at the number of
     //channels and the bits per sample.
@@ -445,8 +456,12 @@ size_t jeal_buffer_byte_rate(jeal_buffer* buffer)
 void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
 {
     source->m_last_played_buffer = buffer;
-    alSourcei(source->m_openal_source, AL_LOOPING, buffer->m_loop ? 1 : 0);
     alSourcei(source->m_openal_source, AL_BUFFER, buffer->m_openal_buffer);
+}
+
+void jeal_source_loop(jeal_source* source, bool loop)
+{
+    alSourcei(source->m_openal_source, AL_LOOPING, loop ? 1 : 0);
 }
 
 void jeal_source_play(jeal_source* source)
@@ -526,11 +541,6 @@ void jeal_listener_direction(float forwardx, float forwardy, float forwardz, flo
 {
     float orientation[] = { forwardx, forwardy, forwardz, upx, upy, upz };
     alListenerfv(AL_ORIENTATION, orientation);
-}
-
-void jeal_listener_pitch(float playspeed)
-{
-    alListenerf(AL_PITCH, playspeed);
 }
 
 void jeal_listener_volume(float volume)

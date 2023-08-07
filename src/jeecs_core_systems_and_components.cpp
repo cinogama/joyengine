@@ -7,6 +7,7 @@
 #include "jeecs_core_editor_system.hpp"
 #include "jeecs_core_physics_system.hpp"
 #include "jeecs_core_script_system.hpp"
+#include "jeecs_core_audio_system.hpp"
 
 const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
 {
@@ -48,4 +49,5 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
 
     jeecs::typing::type_info::of<jeecs::ScriptRuntimeSystem>("Script::ScriptRuntimeSystem");
+    jeecs::typing::type_info::of<jeecs::AudioUpdatingSystem>("Audio::AudioUpdatingSystem");
 }

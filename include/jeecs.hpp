@@ -2623,9 +2623,9 @@ JE_API void             jeal_using_device(jeal_device* device);
 
 /*
 jeal_load_buffer_from_wav [基本接口]
-加载一个波形，loop指示此波形是否需要循环播放
+从wav文件加载一个波形
 */
-JE_API jeal_buffer*     jeal_load_buffer_from_wav(const char* filename, bool loop);
+JE_API jeal_buffer*     jeal_load_buffer_from_wav(const char* filename);
 
 /*
 jeal_close_buffer [基本接口]
@@ -2666,6 +2666,12 @@ jeal_source_set_buffer [基本接口]
     jeal_source_stop
 */
 JE_API void             jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer);
+
+/*
+jeal_source_loop [基本接口]
+向声源指定是否需要循环播放
+*/
+JE_API void             jeal_source_loop(jeal_source* source, bool loop);
 
 /*
 jeal_source_play [基本接口]
@@ -2745,12 +2751,6 @@ jeal_listener_direction [基本接口]
 设置当前监听者的面朝方向
 */
 JE_API void             jeal_listener_direction(float forwardx, float forwardy, float forwardz, float upx, float upy, float upz);
-
-/*
-jeal_listener_pitch [基本接口]
-设置当前全局声音的播放速度，默认是 1.0
-*/
-JE_API void             jeal_listener_pitch(float playspeed);
 
 /*
 jeal_listener_volume [基本接口]
@@ -3825,16 +3825,21 @@ namespace jeecs
         template<>
         class fileresource<void>
         {
+            bool _m_has_resource = false;
             basic::string _m_path = "";
         public:
             bool load(const std::string& path)
             {
                 _m_path = path;
-                return true;
+                return _m_has_resource = (path != "");
             }
             std::string get_path() const
             {
                 return _m_path;
+            }
+            bool has_resource() const
+            {
+                return _m_has_resource;
             }
             std::string to_string()const
             {
@@ -5927,21 +5932,21 @@ namespace jeecs
             {
             }
         public:
-            static texture* load(const std::string& str)
+            static basic::resource<texture> load(const std::string& str)
             {
                 jegl_resource* res = jegl_load_texture(str.c_str());
                 if (res != nullptr)
                     return new texture(res);
                 return nullptr;
             }
-            static texture* copy(const texture& tex)
+            static basic::resource<texture> copy(const texture& tex)
             {
                 jegl_resource* res = jegl_copy_resource(tex.resouce());
                 if (res != nullptr)
                     return new texture(res);
                 return nullptr;
             }
-            static texture* create(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling)
+            static basic::resource<texture> create(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling)
             {
                 jegl_resource* res = jegl_create_texture(width, height, format, sampling);
 
@@ -6061,21 +6066,21 @@ namespace jeecs
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
-            static shader* create(const std::string& name_path, const std::string& src)
+            static basic::resource<shader> create(const std::string& name_path, const std::string& src)
             {
                 jegl_resource* res = jegl_load_shader_source(name_path.c_str(), src.c_str(), true);
                 if (res != nullptr)
                     return new shader(res);
                 return nullptr;
             }
-            static shader* load(const std::string& src_path)
+            static basic::resource<shader> load(const std::string& src_path)
             {
                 jegl_resource* res = jegl_load_shader(src_path.c_str());
                 if (res != nullptr)
                     return new shader(res);
                 return nullptr;
             }
-            static shader* copy(const shader* shad)
+            static basic::resource<shader> copy(const shader* shad)
             {
                 jegl_resource* res = jegl_copy_resource(shad->resouce());
                 if (res != nullptr)
@@ -6203,21 +6208,21 @@ namespace jeecs
             {
             }
         public:
-            static vertex* load(const std::string& str)
+            static basic::resource<vertex> load(const std::string& str)
             {
                 auto* res = jegl_load_vertex(str.c_str());
                 if (res != nullptr)
                     return new vertex(res);
                 return nullptr;
             }
-            static vertex* copy(const vertex& vet)
+            static basic::resource<vertex> copy(const vertex& vet)
             {
                 auto* res = jegl_copy_resource(vet.resouce());
                 if (res != nullptr)
                     return new vertex(res);
                 return nullptr;
             }
-            static vertex* create(jegl_vertex::type type, const std::vector<float>& pdatas, const std::vector<size_t>& formats)
+            static basic::resource<vertex> create(jegl_vertex::type type, const std::vector<float>& pdatas, const std::vector<size_t>& formats)
             {
                 auto* res = jegl_create_vertex(type, pdatas.data(), formats.data(), pdatas.size(), formats.size());
                 if (res != nullptr)
@@ -6233,7 +6238,7 @@ namespace jeecs
             {
             }
         public:
-            static framebuffer* create(size_t reso_w, size_t reso_h, const std::vector<std::pair<jegl_texture::format, jegl_texture::sampling>>& attachment)
+            static basic::resource<framebuffer> create(size_t reso_w, size_t reso_h, const std::vector<std::pair<jegl_texture::format, jegl_texture::sampling>>& attachment)
             {
                 std::vector<jegl_texture::format> formats;
                 std::vector<jegl_texture::sampling> samplings;
@@ -6619,7 +6624,7 @@ namespace jeecs
                 TEXT_OFFSET = { 0,0 };
                 used_font = &font_base;
 
-                auto* new_texture = texture::create(size_x, size_y, jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
+                auto new_texture = texture::create(size_x, size_y, jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
                 assert(new_texture != nullptr);
                 std::memset(new_texture->resouce()->m_raw_texture_data->m_pixels, 0, size_x * size_y * 4);
 
@@ -6835,6 +6840,151 @@ namespace jeecs
 
     }
 
+    namespace audio
+    {
+        class buffer
+        {
+            JECS_DISABLE_MOVE_AND_COPY(buffer);
+
+            jeal_buffer* _m_audio_buffer;
+            buffer(jeal_buffer* audio_buffer)
+                : _m_audio_buffer(audio_buffer)
+            {
+                assert(_m_audio_buffer != nullptr);
+            }
+        public:
+            ~buffer()
+            {
+                jeal_close_buffer(_m_audio_buffer);
+            }
+            inline static basic::resource<buffer> load(const std::string& path)
+            {
+                auto* buf = jeal_load_buffer_from_wav(path.c_str());
+                if (buf != nullptr)
+                    return new buffer(buf);
+                return nullptr;
+            }
+            inline size_t get_byte_rate()const
+            {
+                return jeal_buffer_byte_rate(_m_audio_buffer);
+            }
+            inline size_t get_byte_size()const
+            {
+                return jeal_buffer_byte_size(_m_audio_buffer);
+            }
+            jeal_buffer* handle()const
+            {
+                return _m_audio_buffer;
+            }
+        };
+        class source
+        {
+            JECS_DISABLE_MOVE_AND_COPY(source);
+
+            jeal_source*            _m_audio_source;
+            basic::resource<buffer> _m_playing_buffer;
+
+            source(jeal_source* audio_source)
+                : _m_audio_source(audio_source)
+                , _m_playing_buffer(nullptr)
+            {
+                assert(_m_audio_source != nullptr);
+            }
+        public:
+            ~source()
+            {
+                stop();
+                jeal_close_source(_m_audio_source);
+            }
+            inline jeal_state get_state() const
+            {
+                return jeal_source_get_state(_m_audio_source);
+            }
+            inline static basic::resource<source> create()
+            {
+                auto * src = jeal_open_source();
+                assert(src != nullptr);
+                return new source(src);
+            }
+            inline void set_playing_source(const basic::resource<buffer>& buffer)
+            {
+                if (_m_playing_buffer != buffer)
+                {
+                    _m_playing_buffer = buffer;
+                    stop();
+                    jeal_source_set_buffer(_m_audio_source, buffer->handle());
+                }
+            }
+            jeal_source* handle()const
+            {
+                return _m_audio_source;
+            }
+            void play()
+            {
+                jeal_source_play(_m_audio_source);
+            }
+            void pause()
+            {
+                jeal_source_pause(_m_audio_source);
+            }
+            void stop()
+            {
+                jeal_source_stop(_m_audio_source);
+            }
+            size_t get_playing_offset() const
+            {
+                jeal_source_get_byte_offset(_m_audio_source);
+            }
+            void set_playing_offset(size_t offset)
+            {
+                jeal_source_set_byte_offset(_m_audio_source, offset);
+            }
+            void set_pitch(float patch)
+            {
+                jeal_source_pitch(_m_audio_source, patch);
+            }
+            void set_volume(float patch)
+            {
+                jeal_source_volume(_m_audio_source, patch);
+            }
+            void set_position(const math::vec3& pos)
+            {
+                jeal_source_position(_m_audio_source, pos.x, pos.y, pos.z);
+            }
+            void set_velocity(const math::vec3& vlo)
+            {
+                jeal_source_velocity(_m_audio_source, vlo.x, vlo.y, vlo.z);
+            }
+            void set_loop(bool looping)
+            {
+                jeal_source_loop(_m_audio_source, looping);
+            }
+        };
+        class listener
+        {
+        public:
+            inline static void set_position(const math::vec3& pos)
+            {
+                jeal_listener_position(pos.x, pos.y, pos.z);
+            }
+            inline static void set_velocity(const math::vec3& pos)
+            {
+                jeal_listener_velocity(pos.x, pos.y, pos.z);
+            }
+            inline static void set_direction(const math::quat& rot)
+            {
+                math::vec3 forward = rot * math::vec3(0.0f, 0.0f, 1.0f);
+                math::vec3 up = rot * math::vec3(0.0f, 1.0f, 0.0f);
+
+                jeal_listener_direction(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+            }
+            inline static void set_volume(float volume)
+            {
+                jeal_listener_volume(volume);
+            }
+        };
+    }
+
     namespace Transform
     {
         // An entity without childs and parent will contain these components:
@@ -6969,7 +7119,6 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
 
     }
-
     namespace UserInterface
     {
         struct Origin
@@ -7073,7 +7222,6 @@ namespace jeecs
             }
         };
     };
-
     namespace Renderer
     {
         // An entity need to be rendered, must have Transform::Translation and 
@@ -7772,24 +7920,7 @@ namespace jeecs
     {
         struct Woolang
         {
-            struct filepath
-            {
-                basic::string path = {};
-
-                std::string to_string()const
-                {
-                    return std::string("#je_file#") + path.c_str();
-                }
-                void parse(const char* databuf)
-                {
-                    const size_t head_length = strlen("#je_file#");
-                    if (strncmp(databuf, "#je_file#", head_length) == 0)
-                    {
-                        path = databuf + head_length;
-                    }
-                }
-            };
-            filepath    path;
+            basic::fileresource<void> path;
 
             bool        _vm_failed = false;
             wo_vm       _vm_instance = nullptr;
@@ -7800,7 +7931,18 @@ namespace jeecs
 
             Woolang() = default;
             Woolang(const Woolang&) = delete;
+            Woolang& operator = (const Woolang&) = delete;
             Woolang(Woolang&& woolang)
+            {
+                path = woolang.path;
+                _vm_failed = woolang._vm_failed;
+                _vm_instance = woolang._vm_instance;
+                _vm_create_func = woolang._vm_create_func;
+                _vm_update_func = woolang._vm_update_func;
+                _vm_context = woolang._vm_context;
+                woolang._vm_instance = nullptr;
+            }
+            Woolang& operator = (Woolang&& woolang)
             {
                 path = woolang.path;
                 _vm_failed = woolang._vm_failed;
@@ -7829,6 +7971,50 @@ namespace jeecs
             static void JERefRegsiter()
             {
                 typing::register_member(&Woolang::path, "path");
+            }
+        };
+    }
+    namespace Audio
+    {
+        struct Source
+        {
+            basic::resource<audio::source> source = audio::source::create();
+
+            float pitch = 1.0f;
+            float volume = 1.0f;
+
+            math::vec3 last_position = {};
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Source::pitch, "pitch");
+                typing::register_member(&Source::volume, "volume");
+            }
+        };
+        struct Listener
+        {
+            float volume = 1.0f;
+
+            math::vec3 last_position = {};
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Listener::volume, "volume");
+            }
+        };
+        struct Playing
+        {
+            basic::fileresource<audio::buffer> buffer;
+            bool is_playing = false;
+
+            bool play = true;
+            bool loop = true;
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Playing::buffer, "buffer");
+                typing::register_member(&Playing::play, "play");
+                typing::register_member(&Playing::loop, "loop");
             }
         };
     }
@@ -8179,6 +8365,10 @@ namespace jeecs
             type_info::of<Physics2D::Restitution>("Physics2D::Restitution");
             type_info::of<Physics2D::Friction>("Physics2D::Friction");
 
+            type_info::of<Audio::Source>("Audio::Source");
+            type_info::of<Audio::Listener>("Audio::Listener");
+            type_info::of<Audio::Playing>("Audio::Playing");
+            
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();
         }

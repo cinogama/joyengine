@@ -313,7 +313,7 @@ namespace jeecs
             }
         }
 
-        static graphic::vertex* _create_circle_vertex(math::vec3 anx)
+        static basic::resource<graphic::vertex> _create_circle_vertex(math::vec3 anx)
         {
             auto rot = 90.0f * anx;
             std::swap(rot.x, rot.y);

@@ -1087,7 +1087,7 @@ WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc
 ///////////////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_texture = jeecs::graphic::texture::load(wo_string(args + 0));
+    auto loaded_texture = jeecs::graphic::texture::load(wo_string(args + 0));
 
     if (loaded_texture != nullptr)
         return wo_ret_option_gchandle(vm,
@@ -1100,7 +1100,7 @@ WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 }
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_texture = jeecs::graphic::texture::create(
+    auto loaded_texture = jeecs::graphic::texture::create(
         (size_t)wo_int(args + 0), (size_t)wo_int(args + 1), jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
 
     return wo_ret_gchandle(vm,
@@ -1279,7 +1279,7 @@ WO_API wo_api wojeapi_font_string_texture(wo_vm vm, wo_value args, size_t argc)
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_shader = jeecs::graphic::shader::load(wo_string(args + 0));
+    auto loaded_shader = jeecs::graphic::shader::load(wo_string(args + 0));
 
     if (loaded_shader != nullptr)
     {
@@ -1294,7 +1294,7 @@ WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args, size_t argc)
 {
-    auto* loaded_shader = jeecs::graphic::shader::create(wo_string(args + 0), wo_string(args + 1));
+    auto loaded_shader = jeecs::graphic::shader::create(wo_string(args + 0), wo_string(args + 1));
     if (loaded_shader != nullptr)
     {
         return wo_ret_gchandle(vm,
@@ -2507,4 +2507,3 @@ R"(
 }
 
 )";
-

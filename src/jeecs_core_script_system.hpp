@@ -55,7 +55,7 @@ namespace jeecs
                         if (woolang._vm_failed == true)
                             return;
 
-                        if (woolang.path.path == "")
+                        if (woolang.path.has_resource())
                         {
                             woolang._vm_failed = true;
                             return;
@@ -63,19 +63,19 @@ namespace jeecs
 
                         if (woolang._vm_instance == nullptr)
                         {
-                            auto fnd = _compiled_vms.find(woolang.path.path);
+                            auto fnd = _compiled_vms.find(woolang.path.get_path());
                             const vm_info* found_base_vm_info = nullptr;
                             if (fnd == _compiled_vms.end())
                             {
-                                auto& info = _compiled_vms[woolang.path.path];
+                                auto& info = _compiled_vms[woolang.path.get_path()];
 
-                                auto* file = jeecs_file_open(woolang.path.path.c_str());
+                                auto* file = jeecs_file_open(woolang.path.get_path().c_str());
                                 if (file == nullptr)
-                                    file = jeecs_file_open((woolang.path.path.c_str() + std::string(".woo")).c_str());
+                                    file = jeecs_file_open((woolang.path.get_path().c_str() + std::string(".woo")).c_str());
                                 if (file == nullptr)
                                 {
                                     jeecs::debug::logerr("Failed to open '%s' when loading script for entity.",
-                                        woolang.path.path.c_str());
+                                        woolang.path.get_path().c_str());
 
                                     woolang._vm_failed = true;
                                     return;
@@ -88,10 +88,10 @@ namespace jeecs
                                 jeecs_file_close(file);
 
                                 wo_vm basevm = wo_create_vm();
-                                if (false == wo_load_binary(basevm, woolang.path.path.c_str(), srcdata.data(), srcdata.size()))
+                                if (false == wo_load_binary(basevm, woolang.path.get_path().c_str(), srcdata.data(), srcdata.size()))
                                 {
                                     jeecs::debug::logerr("Failed to load '%s':\n %s",
-                                        woolang.path.path.c_str(),
+                                        woolang.path.get_path().c_str(),
                                         wo_get_compile_error(basevm, WO_DEFAULT));
 
                                     wo_close_vm(basevm);
@@ -102,7 +102,7 @@ namespace jeecs
                                 if (nullptr == wo_run(basevm))
                                 {
                                     jeecs::debug::logerr("Failed to init '%s':\n %s",
-                                        woolang.path.path.c_str(),
+                                        woolang.path.get_path().c_str(),
                                         wo_get_runtime_error(basevm));
 
                                     wo_close_vm(basevm);
@@ -114,7 +114,7 @@ namespace jeecs
                                 if ((info.create_func = wo_extern_symb(basevm, "create")) == 0)
                                 {
                                     jeecs::debug::logerr("Failed to find 'create' function in '%s'.",
-                                        woolang.path.path.c_str());
+                                        woolang.path.get_path().c_str());
 
                                     wo_close_vm(basevm);
 
@@ -124,7 +124,7 @@ namespace jeecs
                                 if ((info.update_func = wo_extern_symb(basevm, "update")) == 0)
                                 {
                                     jeecs::debug::logerr("Failed to find 'update' function in '%s'.",
-                                        woolang.path.path.c_str());
+                                        woolang.path.get_path().c_str());
 
                                     wo_close_vm(basevm);
 
@@ -158,7 +158,7 @@ namespace jeecs
                             if (ctx == nullptr)
                             {
                                 jeecs::debug::logerr("Failed to create context for '%s':\n %s",
-                                    woolang.path.path.c_str(),
+                                    woolang.path.get_path().c_str(),
                                     wo_get_runtime_error(woolang._vm_instance));
 
                                 woolang._vm_failed = true;
@@ -175,7 +175,7 @@ namespace jeecs
                         if (wo_invoke_rsfunc(woolang._vm_instance, woolang._vm_update_func, 2) == nullptr)
                         {
                             jeecs::debug::logerr("Failed to update for '%s':\n %s",
-                                woolang.path.path.c_str(),
+                                woolang.path.get_path().c_str(),
                                 wo_get_runtime_error(woolang._vm_instance));
 
                             woolang._vm_failed = true;

@@ -116,20 +116,20 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
     ch.m_baseline_offset_x = x0 - (int)font->m_board_size_x;
     ch.m_baseline_offset_y = y0 - (int)font->m_board_size_y;
 
-    jeecs::graphic::texture* tex =
+    ch.m_texture =
         jeecs::graphic::texture::create(
             (size_t)pixel_w + 2 * font->m_board_size_x, 
             (size_t)pixel_h + 2 * font->m_board_size_y, 
             jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
 
-    tex->resouce()->m_raw_texture_data->m_sampling = font->m_sampling;
+    ch.m_texture->resouce()->m_raw_texture_data->m_sampling = font->m_sampling;
 
     for (size_t j = 0; j < (size_t)pixel_h; j++)
     {
         for (size_t i = 0; i < (size_t)pixel_w; i++)
         {
             float _vl = ((float)ch_tex_buffer[i + pixel_w * j]) / 255.0f;
-            tex->pix(i + font->m_board_size_x, pixel_h - j - 1 + font->m_board_size_y).set(
+            ch.m_texture->pix(i + font->m_board_size_x, pixel_h - j - 1 + font->m_board_size_y).set(
                 { 1.f, 1.f, 1.f, _vl }
             );
         }
@@ -137,7 +137,7 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 
     if (font->m_updater != nullptr)
     {
-        auto* raw_texture_data = tex->resouce()->m_raw_texture_data;
+        auto* raw_texture_data = ch.m_texture->resouce()->m_raw_texture_data;
         font->m_updater(
             raw_texture_data->m_pixels,
             raw_texture_data->m_width,
@@ -145,7 +145,6 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
     }
 
     free(ch_tex_buffer);
-    ch.m_texture = tex;
 
     return &ch;
 }
