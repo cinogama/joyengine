@@ -26,11 +26,7 @@ func copy_all_licenses()
 
                 let target_path = build_path / "licenses" / relpath;
                 do mkdir(parent(target_path));
-                match (copy(p, target_path))
-                {
-                err(e)? return err(e);
-                ok(_)?;
-                }
+                try! _ = copy(p, target_path);
             }
         }
     }
