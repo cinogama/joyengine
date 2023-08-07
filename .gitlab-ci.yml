@@ -9,7 +9,7 @@ build:
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - rm -f CMakeCache.txt
-    - cmake ..
+    - cmake .. -DINSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
     - sudo make -j 4
     - cd ..
   cache:
@@ -24,6 +24,7 @@ build_win64_release:
   stage: build
   script:
     - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
+    - baozi upgrade
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
