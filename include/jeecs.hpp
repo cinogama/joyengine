@@ -1445,16 +1445,16 @@ jegl_thread [类型]
 */
 struct jegl_thread
 {
-    std::thread* _m_thread;
-    jegl_thread_notifier* _m_thread_notifier;
-    void* _m_interface_handle;
-    void* _m_universe_instance;
+    void*/*std::thread*/        _m_thread;
+    jegl_thread_notifier*       _m_thread_notifier;
+    void*                       _m_interface_handle;
+    void*                       _m_universe_instance;
 
-    jeecs::typing::version_t m_version;
+    jeecs::typing::version_t    m_version;
 
-    jegl_interface_config m_config;
-    jegl_graphic_api* m_apis;
-    std::atomic_bool  m_stop_update;
+    jegl_interface_config       m_config;
+    jegl_graphic_api*           m_apis;
+    void*/*std::atomic_bool*/   m_stop_update;
 };
 
 /*
@@ -1838,8 +1838,10 @@ jegl_start_graphic_thread [基本接口]
 指定配置、图形库接口和帧更新函数创建一个图形绘制线程。
 图形线程的帧更新操作 jegl_update 将调用指定的帧更新函数，
 实际的绘制任务应该放在帧更新函数中
+创建出来的图形线程需要使用jegl_terminate_graphic_thread释放
 请参见：
     jegl_update
+    jegl_terminate_graphic_thread
 */
 JE_API jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
@@ -1851,6 +1853,9 @@ JE_API jegl_thread* jegl_start_graphic_thread(
 /*
 jegl_terminate_graphic_thread [基本接口]
 终止图形线程，将会阻塞直到图形线程完全退出
+创建图形线程之后，无论图形绘制工作是否终止，都需要使用此接口释放图形线程
+请参见：
+    jegl_start_graphic_thread
 */
 JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);
 

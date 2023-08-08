@@ -25,6 +25,7 @@ extern const char* jeecs_woolang_api_src;
 extern const char* jeecs_woolang_editor_api_path;
 extern const char* jeecs_woolang_editor_api_src;
 
+void je_ecs_shutdown();
 void jeal_init();
 void jeal_finish();
 
@@ -156,6 +157,7 @@ void je_finish()
 {
     jeecs::enrty::module_leave();
 
+    je_ecs_shutdown();
     jeal_finish();
     jegl_finish();
 

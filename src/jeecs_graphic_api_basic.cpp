@@ -52,7 +52,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
 
             if (!thread->m_apis->pre_update_interface(thread, custom_interface))
                 // graphic thread want to exit. mark stop update
-                thread->m_stop_update = true;
+                std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
             
             thread->_m_thread_notifier->_m_commited_rendchains.clear();
 
@@ -63,12 +63,12 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
 
             if (!thread->m_apis->update_interface(thread, custom_interface))
                 // graphic thread want to exit. mark stop update
-                thread->m_stop_update = true;
+                std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
             else
                 frame_rend_work(arg, thread);
 
             if (!thread->m_apis->late_update_interface(thread, custom_interface))
-                thread->m_stop_update = true;
+                std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
 
             auto* del_res = _destroing_graphic_resources.pick_all();
             while (del_res)
@@ -149,8 +149,8 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 
 //////////////////////////////////// API /////////////////////////////////////////
 
-std::vector<jegl_graphic_api::finish_interface_func_t> _jegl_finish_list;
-std::mutex _jegl_finish_list_mx;
+std::vector<jegl_thread*> _jegl_alive_glthread_list;
+std::mutex _jegl_alive_glthread_list_mx;
 
 jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
@@ -193,11 +193,13 @@ jegl_thread* jegl_start_graphic_thread(
     // Register finish functions
     do
     {
-        std::lock_guard g1(_jegl_finish_list_mx);
+        std::lock_guard g1(_jegl_alive_glthread_list_mx);
 
-        if (_jegl_finish_list.end() == std::find(_jegl_finish_list.begin(), _jegl_finish_list.end(), thread_handle->m_apis->finish_interface))
+        if (_jegl_alive_glthread_list.end() == 
+            std::find(_jegl_alive_glthread_list.begin(), _jegl_alive_glthread_list.end(), 
+                thread_handle))
         {
-            _jegl_finish_list.push_back(thread_handle->m_apis->finish_interface);
+            _jegl_alive_glthread_list.push_back(thread_handle);
             thread_handle->m_apis->prepare_interface();
         }
     } while (0);
@@ -209,7 +211,7 @@ jegl_thread* jegl_start_graphic_thread(
     thread_handle->_m_universe_instance = universe_instance;
     thread_handle->_m_thread_notifier->m_update_flag = false;
     thread_handle->_m_thread_notifier->m_reboot_flag = false;
-
+    thread_handle->m_stop_update = new std::atomic_bool;
     thread_handle->_m_thread =
         new std::thread(
             _graphic_work_thread,
@@ -222,15 +224,31 @@ jegl_thread* jegl_start_graphic_thread(
 
 void jegl_finish()
 {
-    std::lock_guard g1(_jegl_finish_list_mx);
-    for (auto finish_action : _jegl_finish_list)
+    std::vector<jegl_thread*> shutdown_glthreads;
+    do
     {
-        finish_action();
+        std::lock_guard g1(_jegl_alive_glthread_list_mx);
+        shutdown_glthreads = _jegl_alive_glthread_list;
+    } while (0);
+    for (auto alive_glthread : shutdown_glthreads)
+    {
+        jegl_terminate_graphic_thread(alive_glthread);
     }
 }
 
 void jegl_terminate_graphic_thread(jegl_thread* thread)
 {
+    do
+    {
+        std::lock_guard g1(_jegl_alive_glthread_list_mx);
+        auto fnd = std::find(_jegl_alive_glthread_list.begin(), _jegl_alive_glthread_list.end(), thread);
+        if (fnd == _jegl_alive_glthread_list.end())
+            return;
+        else
+            _jegl_alive_glthread_list.erase(fnd);
+
+    } while (0);
+
     assert(thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set());
     thread->_m_thread_notifier->m_graphic_terminate_flag.clear();
 
@@ -241,7 +259,8 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
         thread->_m_thread_notifier->m_update_waiter.notify_all();
     } while (0);
 
-    thread->_m_thread->join();
+    assert(std::launder(reinterpret_cast<std::thread*>(thread->_m_thread))->joinable());
+    std::launder(reinterpret_cast<std::thread*>(thread->_m_thread))->join();
 
     delete thread->_m_thread_notifier;
     delete thread;
@@ -249,7 +268,7 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
 
 bool jegl_update(jegl_thread* thread)
 {
-    if (thread->m_stop_update)
+    if (std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->load())
         return false;
 
     do

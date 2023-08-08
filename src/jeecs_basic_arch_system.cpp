@@ -1370,6 +1370,9 @@ namespace jeecs_impl
     // ecs_universe
     class ecs_universe
     {
+        inline static std::mutex _m_alive_universes_mx;
+        inline static std::list<ecs_universe*> _m_alive_universes;
+
         std::vector<ecs_world*> _m_world_list;
 
         std::mutex _m_removing_worlds_appending_mx;
@@ -1730,6 +1733,9 @@ namespace jeecs_impl
     public:
         ecs_universe()
         {
+            std::lock_guard g1(_m_alive_universes_mx);
+            _m_alive_universes.push_back(this);
+
             DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
             // Append default jobs for updating systems.
@@ -1895,6 +1901,14 @@ namespace jeecs_impl
 
         ~ecs_universe()
         {
+            do
+            {
+                std::lock_guard g1(_m_alive_universes_mx);
+                auto fnd = std::find(_m_alive_universes.begin(), _m_alive_universes.end(), this);
+                assert(fnd != _m_alive_universes.end());
+                _m_alive_universes.erase(fnd);
+            } while (0);
+
             DEBUG_ARCH_LOG("Universe: %p closing.", this);
 
             stop_universe_loop();
@@ -1931,6 +1945,33 @@ namespace jeecs_impl
         {
             // NOTE: This function is designed for editor
             return _m_world_list;
+        }
+
+    public:
+        static void _shutdown_all_universe()
+        {
+            std::lock_guard g1(_m_alive_universes_mx);
+            std::unordered_set<ecs_universe*> shutdown_universes;
+            for (;;)
+            {
+                bool all_universe_has_shutdown = true;
+
+                for (auto* u : _m_alive_universes)
+                {
+                    if (shutdown_universes.find(u) == shutdown_universes.end())
+                    {
+                        shutdown_universes.insert(u);
+                        all_universe_has_shutdown = false;
+                    }
+
+                    u->stop_universe_loop();
+                    if (u->_m_universe_update_thread.joinable())
+                        u->_m_universe_update_thread.join();
+                }
+
+                if (all_universe_has_shutdown)
+                    break;
+            }
         }
     };
 
@@ -2404,4 +2445,9 @@ void je_ecs_universe_set_time_scale(void* universe, double scale)
 double je_ecs_universe_get_time_scale(void* universe)
 {
     return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_time_scale();
+}
+
+void je_ecs_shutdown()
+{
+    jeecs_impl::ecs_universe::_shutdown_all_universe();
 }
