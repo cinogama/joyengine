@@ -1546,6 +1546,134 @@ WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args, size_
     return wo_ret_val(vm, result);
 }
 
+WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args, size_t argc)
+{
+    auto audiobuf = jeecs::audio::buffer::load(wo_string(args + 0));
+    if (audiobuf)
+        return wo_ret_option_gchandle(vm, 
+            new jeecs::basic::resource<jeecs::audio::buffer>(audiobuf), nullptr, 
+            [](void* ptr) 
+            {
+                delete std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(ptr));
+            });
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api wojeapi_audio_buffer_byte_size(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::buffer>* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args+0);
+    return wo_ret_int(vm, (wo_integer_t)buf->get()->get_byte_size());
+}
+WO_API wo_api wojeapi_audio_buffer_byte_rate(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::buffer>* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args + 0);
+    return wo_ret_int(vm, (wo_integer_t)buf->get()->get_byte_rate());
+}
+
+WO_API wo_api wojeapi_audio_source_create(wo_vm vm, wo_value args, size_t argc)
+{
+    auto audiosrc = jeecs::audio::source::create();
+    assert(audiosrc != nullptr);
+    return wo_ret_option_gchandle(vm,
+        new jeecs::basic::resource<jeecs::audio::source>(audiosrc), nullptr,
+        [](void* ptr)
+        {
+            delete std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(ptr));
+        });
+}
+WO_API wo_api wojeapi_audio_source_get_state(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    return wo_ret_int(vm, (wo_integer_t)src->get()->get_state());
+}
+WO_API wo_api wojeapi_audio_source_set_playing_buffer(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    jeecs::basic::resource<jeecs::audio::buffer>* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args + 1);
+    src->get()->set_playing_buffer(*buf);
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_play(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->play();
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_pause(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->pause();
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_stop(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->stop();
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_get_playing_offset(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    return wo_ret_int(vm, (wo_integer_t)src->get()->get_playing_offset());
+}
+WO_API wo_api wojeapi_audio_source_set_playing_offset(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->set_playing_offset((size_t)wo_int(args + 1));
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_set_pitch(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->set_pitch(wo_float(args + 1));
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_set_volume(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->set_volume(wo_float(args + 1));
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_set_position(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->set_position(jeecs::math::vec3(wo_float(args + 1), wo_float(args + 2), wo_float(args + 3)));
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_set_velocity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->set_velocity(jeecs::math::vec3(wo_float(args + 1), wo_float(args + 2), wo_float(args + 3)));
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_set_loop(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
+    src->get()->set_loop(wo_bool(args + 1));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_audio_listener_set_volume(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::audio::listener::set_volume(wo_float(args + 0));
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_listener_set_position(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::audio::listener::set_position(jeecs::math::vec3(wo_float(args + 0), wo_float(args + 1), wo_float(args + 2)));
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_listener_set_direction(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::quat rot(wo_float(args + 0), wo_float(args + 1), wo_float(args + 2));
+    jeecs::audio::listener::set_direction(rot);
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::audio::listener::set_velocity(jeecs::math::vec3(wo_float(args + 0), wo_float(args + 1), wo_float(args + 2)));
+    return wo_ret_void(vm);
+}
+
 const char* jeecs_woolang_editor_api_path = "je/editor.wo";
 const char* jeecs_woolang_editor_api_src = R"(
 import je;
@@ -1802,7 +1930,82 @@ namespace je
 
         public let texture = typeinfo::create(basic_type::TEXTURE);
     }
+    namespace audio
+    {
+        using buffer = gchandle
+        {
+            extern("libjoyecs", "wojeapi_audio_buffer_load")
+            public func load(path: string)=> option<buffer>;
 
+            extern("libjoyecs", "wojeapi_audio_buffer_byte_size")
+            public func get_byte_size(self: buffer)=> int;
+
+            extern("libjoyecs", "wojeapi_audio_buffer_byte_rate")
+            public func get_byte_rate(self: buffer)=> int;
+        }
+        using source = gchandle
+        {
+            enum state
+            {
+                STOPPED,
+                PLAYING,
+                PAUSED,
+            }
+
+            extern("libjoyecs", "wojeapi_audio_source_create")
+            public func create()=> source;
+
+            extern("libjoyecs", "wojeapi_audio_source_get_state")
+            public func get_state(self: source)=> state;
+
+            extern("libjoyecs", "wojeapi_audio_source_set_playing_buffer")
+            public func set_playing_buffer(self: source, buf: buffer)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_play")
+            public func play(self: source)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_pause")
+            public func pause(self: source)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_stop")
+            public func stop(self: source)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_get_playing_offset")
+            public func get_playing_offset(self: source)=> int;
+
+            extern("libjoyecs", "wojeapi_audio_source_set_playing_offset")
+            public func set_playing_offset(self: source, offset: int)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_set_pitch")
+            public func set_pitch(self: source, pitch: real)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_set_volume")
+            public func set_volume(self: source, volume: real)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_set_position")
+            public func set_position(self: source, x: real, y: real, z: real)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_set_velocity")
+            public func set_velocity(self: source, x: real, y: real, z: real)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_set_loop")
+            public func set_loop(self: source, loop: bool)=> void;
+        }
+        namespace listener
+        {
+            extern("libjoyecs", "wojeapi_audio_listener_set_volume")
+            public func set_volume(volume: real)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_listener_set_position")
+            public func set_position(x: real, y: real, z: real)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_listener_set_direction")
+            public func set_direction(x: real, y: real, z: real)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_listener_set_velocity")
+            public func set_velocity(x: real, y: real, z: real)=> void;
+        }
+    }
     namespace graphic
     {
         public using texture = gchandle

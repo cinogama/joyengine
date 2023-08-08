@@ -2609,10 +2609,17 @@ enum class jeal_state
 };
 
 /*
-jeal_get_all_devices [基本接口]
-获取所有可用设备
+jeal_refetch_all_devices [基本接口]
+重新获取所有可用设备，若此前使用的设备不存在，则重新使用默认设备
 */
-JE_API jeal_device** jeal_get_all_devices();
+JE_API jeal_device** jeal_refetch_all_devices(size_t* out_len);
+
+
+/*
+jeal_get_all_devices [基本接口]
+获取此前获取的所有可用设备
+*/
+JE_API jeal_device** jeal_get_all_devices(size_t* out_len);
 
 /*
 jeal_device_name [基本接口]
@@ -6911,7 +6918,7 @@ namespace jeecs
                 assert(src != nullptr);
                 return new source(src);
             }
-            inline void set_playing_source(const basic::resource<buffer>& buffer)
+            inline void set_playing_buffer(const basic::resource<buffer>& buffer)
             {
                 if (_m_playing_buffer != buffer)
                 {
@@ -6938,7 +6945,7 @@ namespace jeecs
             }
             size_t get_playing_offset() const
             {
-                jeal_source_get_byte_offset(_m_audio_source);
+                return jeal_source_get_byte_offset(_m_audio_source);
             }
             void set_playing_offset(size_t offset)
             {

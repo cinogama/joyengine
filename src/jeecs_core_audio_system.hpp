@@ -51,7 +51,7 @@ namespace jeecs
                     }
                     else
                     {
-                        source.source->set_playing_source(playing.buffer.get_resource());
+                        source.source->set_playing_buffer(playing.buffer.get_resource());
                         source.source->set_loop(playing.loop);
 
                         if (playing.is_playing && source.source->get_state() == jeal_state::STOPPED)

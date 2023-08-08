@@ -5,12 +5,14 @@
 #include <alc.h>
 
 #include <unordered_set>
+#include <vector>
+#include <mutex>
 
-static jeal_device** _jegl_device_list = nullptr;
 struct jeal_device
 {
+    bool        m_alive;
     const char* m_device_name;
-    ALCdevice* m_openal_device;
+    ALCdevice*  m_openal_device;
 };
 struct jeal_source
 {
@@ -30,93 +32,15 @@ struct jeal_buffer
     ALenum m_format;
 };
 
+std::mutex _jegl_all_devices_mx;
+jeal_device* _jegl_current_device = nullptr;
+std::vector<jeal_device*> _jegl_all_devices;
+
 std::mutex _jeal_all_sources_mx;
 std::unordered_set<jeal_source*> _jeal_all_sources;
 
 std::mutex _jeal_all_buffers_mx;
 std::unordered_set<jeal_buffer*> _jeal_all_buffers;
-
-void jeal_init()
-{
-    std::vector<jeal_device*> devices;
-
-    // 如果支持枚举所有设备，就把枚举所有设备并全部打开
-    const char* device_names = alcGetString(NULL,
-        alcIsExtensionPresent(NULL, "ALC_ENUMERATION_EXT") == AL_TRUE
-        ? ALC_DEVICE_SPECIFIER
-        : ALC_DEFAULT_ALL_DEVICES_SPECIFIER
-    );
-    const char* current_device_name = device_names;
-
-    while (current_device_name && *current_device_name != 0)
-    {
-        jeal_device* current_device = new jeal_device;
-        current_device->m_device_name = jeecs::basic::make_new_string(current_device_name);
-        current_device->m_openal_device = alcOpenDevice(current_device_name);
-
-        jeecs::debug::loginfo("Found audio device: %s.", current_device_name);
-        if (current_device->m_openal_device == nullptr)
-            jeecs::debug::logfatal("Failed to open device: '%s'.", current_device_name);
-
-        devices.push_back(current_device);
-
-        current_device_name += strlen(current_device_name) + 1;
-    }
-
-    if (devices.size() == 0)
-        jeecs::debug::logfatal("No audio device found.");
-    else
-        // Using first device as default.
-        jeal_using_device(devices.front());
-
-    _jegl_device_list = new jeal_device * [devices.size() + 1];
-    memcpy(_jegl_device_list, devices.data(), devices.size() * sizeof(jeal_device*));
-    _jegl_device_list[devices.size()] = nullptr;
-}
-
-void jeal_finish()
-{
-    // 在此检查是否有尚未关闭的声源和声音缓存，按照规矩，此处应该全部清退干净
-    std::lock_guard g1(_jeal_all_sources_mx);
-    std::lock_guard g2(_jeal_all_buffers_mx);
-    assert(_jeal_all_sources.empty());
-    assert(_jeal_all_buffers.empty());
-
-    auto** current_device_pointer = _jegl_device_list;
-    while (*current_device_pointer != nullptr)
-    {
-        alcCloseDevice((*current_device_pointer)->m_openal_device);
-
-        jeecs::debug::loginfo("Audio device: %s closed.", (*current_device_pointer)->m_device_name);
-        je_mem_free((void*)(*current_device_pointer)->m_device_name);
-
-        delete* current_device_pointer;
-        ++current_device_pointer;
-    }
-    delete[] _jegl_device_list;
-    _jegl_device_list = nullptr;
-
-    // 关闭上下文
-    ALCcontext* current_context = alcGetCurrentContext();
-    if (current_context != nullptr)
-    {
-        if (AL_FALSE == alcMakeContextCurrent(nullptr))
-            jeecs::debug::logerr("Failed to clear current context.");
-        alcDestroyContext(current_context);
-    }
-}
-
-jeal_device** jeal_get_all_devices()
-{
-    assert(_jegl_device_list != nullptr);
-    return _jegl_device_list;
-}
-
-const char* jeal_device_name(jeal_device* device)
-{
-    assert(device != nullptr);
-    return device->m_device_name;
-}
 
 void _jeal_update_buffer_instance(jeal_buffer* buffer)
 {
@@ -135,11 +59,8 @@ void _jeal_update_source(jeal_source* source)
     alGenSources(1, &source->m_openal_source);
 }
 
-void jeal_using_device(jeal_device* device)
+struct _jeal_global_context
 {
-    std::lock_guard g1(_jeal_all_sources_mx);
-    std::lock_guard g2(_jeal_all_buffers_mx);
-
     struct source_restoring_information
     {
         jeal_source* m_source;
@@ -156,28 +77,61 @@ void jeal_using_device(jeal_device* device)
     float listener_orientation[6] = { 0.0f,0.0f,1.0f, 0.0f,1.0f,0.0f };
 
     std::vector<source_restoring_information> sources_information;
+};
 
+bool _jeal_shutdown_current_device()
+{
+    _jegl_current_device = nullptr;
+    ALCcontext* current_context = alcGetCurrentContext();
+    if (current_context != nullptr)
+    {
+        if (AL_FALSE == alcMakeContextCurrent(nullptr))
+            jeecs::debug::logerr("Failed to clear current context.");
+        alcDestroyContext(current_context);
+        return true;
+    }
+    return false;
+}
+bool _jeal_startup_specify_device(jeal_device* device)
+{
     assert(device != nullptr);
+    auto* current_context = alcCreateContext(device->m_openal_device, nullptr);
+    if (current_context == nullptr)
+    {
+        jeecs::debug::logerr("Failed to create context for device: %s.", device->m_device_name);
+        return false;
+    }
+    else if (AL_FALSE == alcMakeContextCurrent(current_context))
+    {
+        jeecs::debug::logerr("Failed to active context for device: %s.", device->m_device_name);
+        return false;
+    }
+    jeecs::debug::loginfo("Audio device: %s, has been enabled.", device->m_device_name);
+    _jegl_current_device = device;
+    return true;
+}
+void _jeal_store_current_context(_jeal_global_context* out_context)
+{
     ALCcontext* current_context = alcGetCurrentContext();
     if (current_context != nullptr)
     {
         // 保存listener信息
         alGetListener3f(AL_POSITION,
-            &listener_information.m_position.x,
-            &listener_information.m_position.y,
-            &listener_information.m_position.z);
+            &out_context->listener_information.m_position.x,
+            &out_context->listener_information.m_position.y,
+            &out_context->listener_information.m_position.z);
         alGetListener3f(AL_VELOCITY,
-            &listener_information.m_velocity.x,
-            &listener_information.m_velocity.y,
-            &listener_information.m_velocity.z);
-        alGetListenerfv(AL_ORIENTATION, listener_orientation);
+            &out_context->listener_information.m_velocity.x,
+            &out_context->listener_information.m_velocity.y,
+            &out_context->listener_information.m_velocity.z);
+        alGetListenerfv(AL_ORIENTATION, out_context->listener_orientation);
         alGetListenerf(AL_GAIN,
-            &listener_information.m_volume);
+            &out_context->listener_information.m_volume);
 
         // 遍历所有 source，获取相关信息，在创建新的上下文之后恢复
         for (auto* source : _jeal_all_sources)
         {
-            source_restoring_information src_info;
+            _jeal_global_context::source_restoring_information src_info;
             src_info.m_source = source;
             alGetSource3f(source->m_openal_source, AL_POSITION,
                 &src_info.m_position.x,
@@ -197,82 +151,232 @@ void jeal_using_device(jeal_device* device)
             src_info.m_state = jeal_source_get_state(source);
             src_info.m_playing_buffer = source->m_last_played_buffer;
 
-            sources_information.emplace_back(src_info);
+            out_context->sources_information.emplace_back(src_info);
         }
-
-        if (AL_FALSE == alcMakeContextCurrent(nullptr))
-            jeecs::debug::logerr("Failed to clear current context.");
-        alcDestroyContext(current_context);
     }
     else
     {
-        listener_information.m_volume = 1.0f;
+        out_context->listener_information.m_volume = 1.0f;
     }
-    current_context = alcCreateContext(device->m_openal_device, nullptr);
-    if (current_context == nullptr)
-        jeecs::debug::logerr("Failed to create context for device: %s.", device->m_device_name);
-    else if (AL_FALSE == alcMakeContextCurrent(current_context))
-        jeecs::debug::logerr("Failed to active context for device: %s.", device->m_device_name);
-    else
+}
+void _jeal_restore_context(const _jeal_global_context* context)
+{
+    // OK, Restore buffer, listener and source.
+    for (auto* buffer : _jeal_all_buffers)
+        _jeal_update_buffer_instance(buffer);
+
+    jeal_listener_position(
+        context->listener_information.m_position.x,
+        context->listener_information.m_position.y,
+        context->listener_information.m_position.z);
+    jeal_listener_velocity(
+        context->listener_information.m_velocity.x,
+        context->listener_information.m_velocity.y,
+        context->listener_information.m_velocity.z);
+    jeal_listener_direction(
+        context->listener_orientation[0],
+        context->listener_orientation[1],
+        context->listener_orientation[2],
+        context->listener_orientation[3],
+        context->listener_orientation[4],
+        context->listener_orientation[5]);
+    jeal_listener_volume(context->listener_information.m_volume);
+
+    for (auto& src_info : context->sources_information)
     {
-        // OK, Restore buffer, listener and source.
-        for (auto* buffer : _jeal_all_buffers)
-            _jeal_update_buffer_instance(buffer);
+        _jeal_update_source(src_info.m_source);
 
-        jeal_listener_position(
-            listener_information.m_position.x,
-            listener_information.m_position.y,
-            listener_information.m_position.z);
-        jeal_listener_velocity(
-            listener_information.m_velocity.x,
-            listener_information.m_velocity.y,
-            listener_information.m_velocity.z);
-        jeal_listener_direction(
-            listener_orientation[0],
-            listener_orientation[1], 
-            listener_orientation[2], 
-            listener_orientation[3], 
-            listener_orientation[4], 
-            listener_orientation[5]);
-        jeal_listener_volume(listener_information.m_volume);
+        jeal_source_position(
+            src_info.m_source,
+            src_info.m_position.x,
+            src_info.m_position.y,
+            src_info.m_position.z);
+        jeal_source_velocity(
+            src_info.m_source,
+            src_info.m_velocity.x,
+            src_info.m_velocity.y,
+            src_info.m_velocity.z);
+        jeal_source_pitch(
+            src_info.m_source,
+            src_info.m_pitch);
+        jeal_source_volume(
+            src_info.m_source,
+            src_info.m_volume);
+        jeal_source_loop(
+            src_info.m_source,
+            src_info.m_loop != 0);
 
-        for (auto& src_info : sources_information)
+        if (src_info.m_state != jeal_state::STOPPED)
         {
-            _jeal_update_source(src_info.m_source);
+            assert(src_info.m_playing_buffer != nullptr);
 
-            jeal_source_position(
-                src_info.m_source,
-                src_info.m_position.x,
-                src_info.m_position.y,
-                src_info.m_position.z);
-            jeal_source_velocity(
-                src_info.m_source,
-                src_info.m_velocity.x,
-                src_info.m_velocity.y,
-                src_info.m_velocity.z);
-            jeal_source_pitch(
-                src_info.m_source,
-                src_info.m_pitch);
-            jeal_source_volume(
-                src_info.m_source,
-                src_info.m_volume);
-            jeal_source_loop(
-                src_info.m_source,
-                src_info.m_loop != 0);
-
-            if (src_info.m_state != jeal_state::STOPPED)
-            {
-                assert(src_info.m_playing_buffer != nullptr);
-
-                jeal_source_set_buffer(src_info.m_source, src_info.m_playing_buffer);
-                jeal_source_set_byte_offset(src_info.m_source, src_info.m_offset);
-                if (src_info.m_state == jeal_state::PAUSED)
-                    jeal_source_pause(src_info.m_source);
-                else
-                    jeal_source_play(src_info.m_source);
-            }
+            jeal_source_set_buffer(src_info.m_source, src_info.m_playing_buffer);
+            jeal_source_set_byte_offset(src_info.m_source, src_info.m_offset);
+            if (src_info.m_state == jeal_state::PAUSED)
+                jeal_source_pause(src_info.m_source);
+            else
+                jeal_source_play(src_info.m_source);
         }
     }
+}
+jeal_device** _jeal_update_refetch_devices(size_t * out_len)
+{
+    auto old_devices = _jegl_all_devices;
+    _jegl_all_devices.clear();
+
+    // 如果支持枚举所有设备，就把枚举所有设备并全部打开
+    const char* device_names = nullptr;
+
+    if (alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT"))
+        device_names = alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER);
+    else
+        device_names = alcGetString(NULL, ALC_DEFAULT_DEVICE_SPECIFIER);
+
+    const char* current_device_name = device_names;
+
+    while (current_device_name && *current_device_name != 0)
+    {
+        jeal_device* current_device = nullptr;
+
+        auto fnd = std::find_if(old_devices.begin(), old_devices.end(), 
+            [current_device_name](jeal_device* device)
+            {
+                return 0 == strcmp(current_device_name, device->m_device_name);
+            });
+        if (fnd == old_devices.end())
+        {
+            current_device = new jeal_device;
+            current_device->m_device_name = jeecs::basic::make_new_string(current_device_name);
+            current_device->m_openal_device = alcOpenDevice(current_device_name);
+
+            jeecs::debug::loginfo("Found audio device: %s.", current_device_name);
+            if (current_device->m_openal_device == nullptr)
+                jeecs::debug::logfatal("Failed to open device: '%s'.", current_device_name);
+        }
+        else
+            current_device = *fnd;
+        
+        current_device->m_alive = true;
+
+        _jegl_all_devices.push_back(current_device);
+
+        current_device_name += strlen(current_device_name) + 1;
+    }
+
+    if (_jegl_current_device != nullptr && _jegl_current_device->m_alive == false)
+        _jeal_shutdown_current_device();
+
+
+    for (auto* closed_device : old_devices)
+    {
+        if (closed_device->m_alive == false)
+        {
+            assert(closed_device != nullptr);
+            alcCloseDevice(closed_device->m_openal_device);
+
+            jeecs::debug::loginfo("Audio device: %s closed.", closed_device->m_device_name);
+            je_mem_free((void*)closed_device->m_device_name);
+
+            delete closed_device;
+        }
+    }
+
+    if (_jegl_all_devices.size() == 0)
+        jeecs::debug::logfatal("No audio device found.");
+
+    *out_len = _jegl_all_devices.size();
+    return _jegl_all_devices.data();
+}
+
+jeal_device** jeal_get_all_devices(size_t* out_len)
+{
+    std::lock_guard g0(_jegl_all_devices_mx);
+    *out_len = _jegl_all_devices.size();
+    return _jegl_all_devices.data();
+}
+
+jeal_device** jeal_refetch_all_devices(size_t* out_len)
+{
+    std::lock_guard g0(_jegl_all_devices_mx);
+    _jeal_global_context context;
+    
+    bool need_try_restart_device = false;
+    if (_jegl_current_device != nullptr)
+    {
+        _jeal_store_current_context(&context);
+        need_try_restart_device = true;
+    }
+
+    jeal_device** result = _jeal_update_refetch_devices(out_len);
+    
+    if (need_try_restart_device && _jegl_current_device != nullptr)
+    {
+        // 之前的设备寄了，但是设备已经指定，从列表里捞一个
+        if (*out_len != 0)
+        {
+            _jeal_startup_specify_device(result[0]);
+            _jeal_restore_context(&context);
+        }
+    }
+
+    return result;
+}
+
+void jeal_init()
+{
+    std::lock_guard g0(_jegl_all_devices_mx);
+
+    size_t device_count = 0;
+    auto** devices = _jeal_update_refetch_devices(&device_count);
+    if (device_count != 0)
+        // Using first device as default.
+        jeal_using_device(devices[0]);
+}
+
+void jeal_finish()
+{
+    // 在此检查是否有尚未关闭的声源和声音缓存，按照规矩，此处应该全部清退干净
+    std::lock_guard g0(_jegl_all_devices_mx);
+    std::lock_guard g1(_jeal_all_sources_mx);
+    std::lock_guard g2(_jeal_all_buffers_mx);
+
+    assert(_jeal_all_sources.empty());
+    assert(_jeal_all_buffers.empty());
+
+    _jeal_shutdown_current_device();
+    for (auto* device : _jegl_all_devices)
+    {
+        assert(device != nullptr);
+        alcCloseDevice(device->m_openal_device);
+
+        jeecs::debug::loginfo("Audio device: %s closed.", device->m_device_name);
+        je_mem_free((void*)device->m_device_name);
+
+        delete device;
+    }
+    _jegl_all_devices.clear();
+}
+
+const char* jeal_device_name(jeal_device* device)
+{
+    std::lock_guard g0(_jegl_all_devices_mx);
+
+    assert(device != nullptr);
+    return device->m_device_name;
+}
+
+void jeal_using_device(jeal_device* device)
+{
+    std::lock_guard g1(_jeal_all_sources_mx);
+    std::lock_guard g2(_jeal_all_buffers_mx);
+
+    assert(device != nullptr);
+   
+    _jeal_global_context context;
+    _jeal_store_current_context(&context);
+    _jeal_shutdown_current_device();
+    _jeal_startup_specify_device(device);
+    _jeal_restore_context(&context);
 }
 
 jeal_source* jeal_open_source()
@@ -300,12 +404,13 @@ void jeal_close_source(jeal_source* source)
 
 jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
 {
-    struct WAVE_Data {//Wav文件数据体模块
+    //Wav文件数据体模块
+    struct WAVE_Data {
         char subChunkID[4]; //should contain the word data
         long subChunk2Size; //Stores the size of the data block
     };
-
-    struct WAVE_Format {//wav文件数据参数类型
+    //wav文件数据参数类型
+    struct WAVE_Format {
         char subChunkID[4];
         long subChunkSize;
         short audioFormat;
@@ -315,8 +420,8 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
         short blockAlign;
         short bitsPerSample;
     };
-
-    struct RIFF_Header {//RIFF块标准模型
+    //RIFF块标准模型
+    struct RIFF_Header {
         char chunkID[4];
         long chunkSize;//size not including chunkSize or chunkID
         char format[4];
@@ -346,7 +451,7 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
             riff_header.format[2] != 'V' ||
             riff_header.format[3] != 'E'))
     {
-        jeecs::debug::logerr("Invalid wav file: '%s', unknown format.", filename);
+        jeecs::debug::logerr("Invalid wav file: '%s', bad format tag.", filename);
         jeecs_file_close(wav_file);
         return nullptr;
     }
@@ -359,7 +464,7 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
         wave_format.subChunkID[2] != 't' ||
         wave_format.subChunkID[3] != ' ')
     {
-        jeecs::debug::logerr("Invalid wav file: '%s', unknown format.", filename);
+        jeecs::debug::logerr("Invalid wav file: '%s', bad format head.", filename);
         jeecs_file_close(wav_file);
         return nullptr;
     }
