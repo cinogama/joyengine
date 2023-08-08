@@ -6,15 +6,16 @@ A game engine based on ECS architecture implemented in C++ and Woolang.
 
 ## 编译说明（How to compile）
 
-编译 JoyEngine 前，需要安装OpenAL-SDK，对于Windows用户而言，SDK已经随着子模块一并拉取到 3rd 目录下了，不需要额外的配置，若运行时提示找不到 `OpenAL32.dll`，可通过安装 3rd 目录下的 `oalinst.exe` 安装所需的库。
+引擎默认使用OpenALSoft 1.23.1，因此默认情况下不需要进行其他配置，若要使用OpenAL1.1，请:
+```
+若在非Windows平台编译，需要安装SDK，以ubuntu为例，执行：
+  apt install libopenal-dev
 
-对于其他平台，需要手动安装SDK，以 Ubuntu 为例，可以执行：
-
-```shell
-apt install libopenal-dev
+稍后构建时使用CMAKE参数：
+-DUSING_OPENAL_SOFT_INSTEAD_1_1=OFF
 ```
 
-另外可能需要安装些别的东西，这里列出来方便直接使用
+另外需要安装OpenGL和其他SDK，这里列出来方便直接使用
 
 ```shell
 apt install libx11-dev libxext-dev libxtst-dev libxrender-dev libxmu-dev libxmuu-dev 
@@ -39,10 +40,11 @@ apt install libgl1-mesa-dev libglu1-mesa-dev
 
 ## 鸣谢（Acknowledgments）
 
-感谢 [OpenAL](http://www.openal.org/) 和（或）[OpenAl Soft](https://github.com/kcat/openal-soft.git)为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用的OpenAL 1.1基于LGPL协议开源（或许是吧，我在维基百科上看到了各种复杂的说法），并且使用的是官方网站上提供的原始版本的SDK，并没有做出任何修改；使用的OpenAL Soft是OpenAL的软实现，使用LGPL协议开源，可以在[这里](https://github.com/kcat/openal-soft.git)获取到OpenAL Soft的原始代码，JoyEngine使用的版本为原始的1.23.1版本。
+感谢 [OpenAL](http://www.openal.org/) 和（或）[OpenAl Soft](https://openal-soft.org/)为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用的OpenAL 1.1基于LGPL协议开源（或许是吧，我在维基百科上看到了各种复杂的说法），并且使用的是官方网站上提供的原始版本的SDK，并没有做出任何修改；使用的OpenAL Soft是OpenAL的软实现，使用LGPL协议开源，可以在[这里](https://github.com/kcat/openal-soft.git)获取到OpenAL Soft的原始代码，JoyEngine使用的版本为原始的1.23.1版本。
 > 默认情况下，引擎使用OpenAL Soft而不是OpenAL，这是为了更方便集成。
 
-Thanks to [OpenAL](http://www.openal.org/) for providing great sound support for this engine, but it needs to be additionally explained that the engine uses OpenAL 1.1 and is open source based on the LGPL protocol (maybe, I am in Wikipedia has seen various complicated statements), and used the original version of the SDK provided on the official website without any modification.
+Thanks to [OpenAL](http://www.openal.org/) and/or [OpenAl Soft](https://openal-soft.org/) for the awesome sounds of this engine Support, but what needs to be explained is that the OpenAL 1.1 used by the engine is open source based on the LGPL protocol (maybe it is, I saw various complicated statements on Wikipedia), and the original version of the SDK provided on the official website is used , and did not make any modifications; the OpenAL Soft used is the soft implementation of OpenAL, which is open-sourced using the LGPL protocol, and can be obtained from [here](https://github.com/kcat/openal-soft.git) The original code, the version used by JoyEngine is the original 1.23.1 version.
+> By default, the engine uses OpenAL Soft instead of OpenAL, which is for easier integration.
 
 感谢 [glew](https://github.com/nigels-com/glew)、[glfw](https://www.glfw.org/)为引擎的渲染提供OpenGL拓展和界面接口。
 
