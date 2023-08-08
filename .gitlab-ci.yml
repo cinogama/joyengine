@@ -8,6 +8,7 @@ build:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
+    - sudo chmod 777 ./pkg
     - rm -f CMakeCache.txt
     - cmake .. -DINSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
     - sudo make -j 4
