@@ -6985,7 +6985,7 @@ namespace jeecs
             }
             inline static void set_direction(const math::quat& rot)
             {
-                math::vec3 forward = rot * math::vec3(0.0f, 0.0f, 1.0f);
+                math::vec3 forward = rot * math::vec3(0.0f, 0.0f, -1.0f);
                 math::vec3 up = rot * math::vec3(0.0f, 1.0f, 0.0f);
 
                 jeal_listener_direction(forward.x, forward.y, forward.z, up.x, up.y, up.z);
