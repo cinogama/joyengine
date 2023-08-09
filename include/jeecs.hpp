@@ -2763,9 +2763,9 @@ JE_API void             jeal_listener_velocity(float x, float y, float z);
 
 /*
 jeal_listener_direction [基本接口]
-设置当前监听者的面朝方向
+设置当前监听者的旋转方向，接收欧拉角，默认面朝z轴正方向，头顶方向为y轴正方向
 */
-JE_API void             jeal_listener_direction(float forwardx, float forwardy, float forwardz, float upx, float upy, float upz);
+JE_API void             jeal_listener_direction(float yaw, float pitch, float roll);
 
 /*
 jeal_listener_volume [基本接口]
@@ -6988,10 +6988,8 @@ namespace jeecs
             }
             inline static void set_direction(const math::quat& rot)
             {
-                math::vec3 forward = rot * math::vec3(0.0f, 0.0f, 1.0f);
-                math::vec3 up = rot * math::vec3(0.0f, 1.0f, 0.0f);
-
-                jeal_listener_direction(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+                math::vec3 euler = rot.euler_angle();
+                jeal_listener_direction(euler.x, euler.y, euler.z);
             }
             inline static void set_volume(float volume)
             {

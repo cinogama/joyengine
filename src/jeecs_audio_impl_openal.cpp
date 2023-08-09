@@ -173,13 +173,15 @@ void _jeal_restore_context(const _jeal_global_context* context)
         context->listener_information.m_velocity.x,
         context->listener_information.m_velocity.y,
         context->listener_information.m_velocity.z);
-    jeal_listener_direction(
+    float orientation[] = { 
         context->listener_orientation[0],
         context->listener_orientation[1],
         context->listener_orientation[2],
         context->listener_orientation[3],
         context->listener_orientation[4],
-        context->listener_orientation[5]);
+        context->listener_orientation[5] 
+    };
+    alListenerfv(AL_ORIENTATION, orientation);
     jeal_listener_volume(context->listener_information.m_volume);
 
     for (auto& src_info : context->sources_information)
@@ -642,9 +644,17 @@ void jeal_listener_velocity(float x, float y, float z)
     alListener3f(AL_VELOCITY, x, y, z);
 }
 
-void jeal_listener_direction(float forwardx, float forwardy, float forwardz, float upx, float upy, float upz)
+void jeal_listener_direction(float yaw, float pitch, float roll)
 {
-    float orientation[] = { forwardx, forwardy, -forwardz, upx, upy, upz };
+    jeecs::math::quat rot(yaw, pitch, roll);
+    jeecs::math::vec3 facing = rot * jeecs::math::vec3(0.0f, 0.0f, -1.0f);
+    jeecs::math::vec3 topping = rot * jeecs::math::vec3(0.0f, 1.0f, 0.0f);
+
+    float orientation[] = {
+       facing.x, facing.y, facing.z,
+       topping.x, topping.y, topping.z,
+    };
+
     alListenerfv(AL_ORIENTATION, orientation);
 }
 
