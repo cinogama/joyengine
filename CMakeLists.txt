@@ -8,16 +8,6 @@ set(CMAKE_CXX_STANDARD 17)
 if(MSVC) 
     add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/source-charset:utf-8>")
     add_compile_options("$<$<C_COMPILER_ID:MSVC>:/source-charset:utf-8>")
-
-    # add_definitions(-D_HAS_EXCEPTIONS=0)
-    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc ")
-    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    # endif()
-    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc$")
-    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    # endif()
-else()
-    # add_compile_options(-fno-exceptions)
 endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
@@ -47,6 +37,21 @@ set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
+
+if(MSVC) 
+    ## Fuck the MSVC, you did a great job that if we disable the exception, 
+    ## the compiler boomed! FUCK!
+    
+    # add_definitions(-D_HAS_EXCEPTIONS=0)
+    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc ")
+    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # endif()
+    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc$")
+    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # endif()
+else()
+    add_compile_options(-fno-exceptions)
+endif()
 
 if (INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
