@@ -39,7 +39,7 @@ namespace jeapi::welcome
             value(show)?
                 if (show)
                 {
-                    Text("JoyEngine ECS 4.0");
+                    Text(je::editor::build_version());
                     Separator();
 
                     Text("第三方组件及开源许可");
