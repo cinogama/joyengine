@@ -644,7 +644,7 @@ void jeal_listener_velocity(float x, float y, float z)
 
 void jeal_listener_direction(float forwardx, float forwardy, float forwardz, float upx, float upy, float upz)
 {
-    float orientation[] = { forwardx, forwardy, forwardz, upx, upy, upz };
+    float orientation[] = { forwardx, forwardy, -forwardz, upx, upy, upz };
     alListenerfv(AL_ORIENTATION, orientation);
 }
 
