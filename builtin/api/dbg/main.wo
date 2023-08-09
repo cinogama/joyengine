@@ -86,22 +86,46 @@ namespace jeapi::debug
         }
     }
 
+     // 从世界中获取带有层级关系的实体
+    func get_entity_and_childs(iter: je::entity::editor::entity_iter)=> array<EntityChilds>
+    {
+        let result = []mut: vec<EntityChilds>;
+        for (let curentity : iter)
+        {                
+            result->add(EntityChilds{
+                e = curentity, 
+                uid = get_entity_editor_id(curentity),
+                childs = get_entity_and_childs(iter->childs_iter),
+                });
+        }
+        return result->unsafe::cast:<array<EntityChilds>>;
+    }
     public func get_all_entities_layer_from_world(world: je::world)
     {
-        // 从世界中获取带有层级关系的实体
-        func get_entity_and_childs(iter: je::entity::editor::entity_iter)=> array<EntityChilds>
+        return get_entity_and_childs(world->editor::top_entity_iter);
+    }
+    public func find_entity_and_child_by_instance(world: je::world, e: je::entity)
+    {
+        func find_entity(iter: je::entity::editor::entity_iter, eid: Eeid)=> option<EntityChilds>
         {
-            let result = []mut: vec<EntityChilds>;
             for (let curentity : iter)
             {                
-                result->add(EntityChilds{
-                    e = curentity, 
-                    uid = get_entity_editor_id(curentity),
-                    childs = get_entity_and_childs(iter->childs_iter),
-                    });
+                if (get_entity_editor_id(curentity) == eid)
+                    return option::value(
+                        EntityChilds{
+                            e = curentity, 
+                            uid = get_entity_editor_id(curentity),
+                            childs = get_entity_and_childs(iter->childs_iter),
+                        }
+                    );
+                match (find_entity(iter->childs_iter, eid))
+                {
+                value(e)? return value(e);
+                none?;
+                }
             }
-            return result->unsafe::cast:<array<EntityChilds>>;
+            return option::none;
         }
-        return get_entity_and_childs(world->editor::top_entity_iter);
+        return find_entity(world->editor::top_entity_iter, get_entity_editor_id(e));
     }
 }

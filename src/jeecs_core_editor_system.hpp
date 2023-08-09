@@ -36,7 +36,6 @@ namespace jeecs
                 rotation,
                 scale,
             };
-
             mover_mode mode = mover_mode::nospecify;
 
             // Editor will create a entity with EntityMoverRoot,
@@ -106,7 +105,14 @@ namespace jeecs
     {
         inline static bool _editor_enabled = true;
 
+        enum coord_mode
+        {
+            global,
+            local
+        };
+
         Editor::EntityMover::mover_mode _mode = Editor::EntityMover::mover_mode::rotation;
+        coord_mode _coord = coord_mode::global;
 
         basic::resource<graphic::vertex> axis_x;
         basic::resource<graphic::vertex> axis_y;
@@ -511,7 +517,11 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 if (auto* trans = current->get_component<Transform::Translation>())
                 {
                     position.pos = trans->world_position;
-                    rotation.rot = trans->world_rotation;
+
+                    if (_coord == coord_mode::local || _mode == Editor::EntityMover::mover_mode::scale)
+                        rotation.rot = trans->world_rotation;
+                    else
+                        rotation.rot = math::quat();
 
                     float distance =
                         _camera_ortho_porjection == nullptr
@@ -1149,13 +1159,29 @@ WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args, size_t arg
         return wo_ret_int(vm, (wo_integer_t)jeecs::Editor::EntityMover::mover_mode::nospecify);
     return wo_ret_int(vm, (wo_integer_t)sys->_mode);
 }
-
 WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_world world(wo_pointer(args + 0));
     jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
     if (sys != nullptr)
         sys->_mode = (jeecs::Editor::EntityMover::mover_mode)wo_int(args + 1);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world world(wo_pointer(args + 0));
+    jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
+    if (sys == nullptr)
+        return wo_ret_int(vm, (wo_integer_t)jeecs::DefaultEditorSystem::coord_mode::global);
+    return wo_ret_int(vm, (wo_integer_t)sys->_coord);
+}
+WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world world(wo_pointer(args + 0));
+    jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
+    if (sys != nullptr)
+        sys->_coord = (jeecs::DefaultEditorSystem::coord_mode)wo_int(args + 1);
 
     return wo_ret_void(vm);
 }

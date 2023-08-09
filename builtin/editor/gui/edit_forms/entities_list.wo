@@ -27,23 +27,23 @@ namespace editor::gui::edit_forms
         display_debug_entity = opt;
     }
 
-    func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: je::entity)
+    func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: jeapi::debug::EntityChilds)
     {
         for (let _, child: cur.childs)
         {
-            if (child.e == checking)
+            if (child.uid == checking.uid)
                 return true;
             if (child->_is_ancestor(checking))
                 return true;
         }
         return false;
     }
-    func _set_parent(child: je::entity, parent: jeapi::debug::EntityChilds)
+    func _set_parent(child: jeapi::debug::EntityChilds, parent: jeapi::debug::EntityChilds)
     {
         static let LocalToParent = je::typeinfo::load("Transform::LocalToParent")->val(),
                    LocalToWorld  = je::typeinfo::load("Transform::LocalToWorld")->val();
 
-        if (parent->_is_ancestor(child))
+        if (child->_is_ancestor(parent))
         {
             // 如果正在设置的子实体是父实体的祖先节点，需要先调整顺序
             /*
@@ -53,8 +53,8 @@ namespace editor::gui::edit_forms
             |  
             P
             */
-            // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把父节点设置为L2W
-            do child->editor::get_parent_anchor_uid()
+            // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把目标父节点设置为L2W
+            do child.e->editor::get_parent_anchor_uid()
                  ->> \uid = parent.e->editor::set_parent_with_uid(uid, true);
                  ->or(func(){
                     if (parent.e->get_component(LocalToParent)->has())
@@ -64,7 +64,7 @@ namespace editor::gui::edit_forms
                     return true;
                  });
         }
-        do child->editor::set_parent(parent.e, true);
+        do child.e->editor::set_parent(parent.e, true);
     }
     func fast_create_entity(context: EditorContext, w: je::world, name: string, cs: array<string>)
     {
@@ -395,26 +395,7 @@ namespace editor::gui::edit_forms
                         "确认？", 
                         F"即将销毁实体{e->editor::name}\n是否同时销毁其全部子实体？", 
                         func(close_child_entity){
-                            let entities = jeapi::debug::get_all_entities_layer_from_world(w);
-
-                            func find_entity_data_by_uid(elist: array<jeapi::debug::EntityChilds>, uid: jeapi::debug::Eeid)
-                            {
-                                for (let _, ec: elist)
-                                {
-                                    if (ec.uid == uid)
-                                        return option::value(ec);
-                                    
-                                    match (find_entity_data_by_uid(ec.childs, uid))
-                                    {
-                                    value(ecc)?
-                                        return value(ecc);
-                                    none?;
-                                    }
-                                }
-                                return option::none;
-                            }
-
-                            let edata = find_entity_data_by_uid(entities, uid);
+                            let edata = jeapi::debug::find_entity_and_child_by_instance(w, e);
                             func close_entity_impl(e, close_all)
                             {
                                 e.uid->justdo(\e = e->close(););
@@ -472,7 +453,7 @@ namespace editor::gui::edit_forms
                 {
                     // 自己拖到自己身上肯定就寄了，只处理不同的实体。
                     drag_uid as string: handle: jeapi::debug::Eeid->justdo(
-                        \c = _set_parent(c, e);
+                        \c = do jeapi::debug::find_entity_and_child_by_instance(w, c)->>\ce = _set_parent(ce, e);;
                     );
                 }
             none?

@@ -1782,6 +1782,16 @@ namespace je::editor
 
     extern("libjoyecs", "wojeapi_set_editing_mover_mode")
     public func set_editing_mover_mode(w: je::world, m: mover_mode)=> void;
+
+    public enum coord_mode
+    {
+        global,
+        local
+    }
+    extern("libjoyecs", "wojeapi_get_editing_coord_mode")
+    public func get_editing_coord_mode(w: je::world)=> coord_mode;
+    extern("libjoyecs", "wojeapi_set_editing_coord_mode")
+    public func set_editing_coord_mode(w: je::world, a: coord_mode)=> void;
 }
 )";
 

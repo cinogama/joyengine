@@ -129,8 +129,13 @@ namespace editor::gui::edit_forms
                             [je::editor::mover_mode::rotation] = "旋转",
                             [je::editor::mover_mode::scale] = "缩放",
                             };
-                        static let mut mover_mode = je::editor::mover_mode::selection;
-                        do debug_world->>\w = je::editor::set_editing_mover_mode(w, mover_mode);;
+                        static let COORD_MODE = {
+                            [je::editor::coord_mode::global] = "全局坐标系",
+                            [je::editor::coord_mode::local] = "局部坐标系",
+                            };
+
+                        let mut mover_mode = debug_world->>\w = je::editor::get_editing_mover_mode(w);->valor(je::editor::mover_mode::selection);
+                        let mut coord_mode = debug_world->>\w = je::editor::get_editing_coord_mode(w);->valor(je::editor::coord_mode::global);
 
                         if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::C]))
                             mover_mode = je::editor::mover_mode::selection;
@@ -140,6 +145,10 @@ namespace editor::gui::edit_forms
                             mover_mode = je::editor::mover_mode::rotation;
                         else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::S]))
                             mover_mode = je::editor::mover_mode::scale;
+                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::G]))
+                            coord_mode = je::editor::coord_mode::global;
+                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::L]))
+                            coord_mode = je::editor::coord_mode::local;
                         else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB]))
                         {
                             static let mut last_click_time = 0.;
@@ -151,7 +160,7 @@ namespace editor::gui::edit_forms
                             last_click_time = std::time();
                         }
 
-                        if (BeginMenuEnabled(MOVER_MODE[mover_mode], debug_camera_entity->has))
+                        if (BeginMenuEnabled(F"{MOVER_MODE[mover_mode]}|{COORD_MODE[coord_mode]}", debug_camera_entity->has))
                         {   
                             if (MenuItemShortcutSelectedEnabled("仅选中", "Tab + C", mover_mode == je::editor::mover_mode::selection, debug_camera_entity->has)->has)
                                 mover_mode = je::editor::mover_mode::selection;
@@ -161,8 +170,21 @@ namespace editor::gui::edit_forms
                                 mover_mode = je::editor::mover_mode::rotation;
                             if (MenuItemShortcutSelectedEnabled("缩放", "Tab + S", mover_mode == je::editor::mover_mode::scale, debug_camera_entity->has)->has)
                                 mover_mode = je::editor::mover_mode::scale;
+                            Separator();
+                            if (MenuItemShortcutSelectedEnabled("全局坐标系", "Tab + G", coord_mode == je::editor::coord_mode::global, debug_camera_entity->has)->has)
+                                coord_mode = je::editor::coord_mode::global;
+                            if (MenuItemShortcutSelectedEnabled("局部坐标系", "Tab + L", coord_mode == je::editor::coord_mode::local, debug_camera_entity->has)->has)
+                                coord_mode = je::editor::coord_mode::local;
                             EndMenu();
                         }
+
+                        do debug_world->>
+                            func(w)
+                            {
+                                je::editor::set_editing_mover_mode(w, mover_mode);
+                                je::editor::set_editing_coord_mode(w, coord_mode);
+                            };
+
                         EndMenuBar();
                     }
 
