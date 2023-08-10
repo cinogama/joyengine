@@ -55,7 +55,7 @@ namespace jeecs
                         if (woolang._vm_failed == true)
                             return;
 
-                        if (woolang.path.has_resource())
+                        if (!woolang.path.has_resource())
                         {
                             woolang._vm_failed = true;
                             return;
