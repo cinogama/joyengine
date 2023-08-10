@@ -519,12 +519,14 @@ namespace editor::gui::drawpannel
                                     drawlist->AddLine(
                                         (lux + draw_context.offset_x, luy + draw_context.offset_y + yoffset), 
                                         (lux + draw_context.offset_x + tex_width:real * draw_context.scale, luy + draw_context.offset_y + yoffset), 
-                                        (0, 0, 0, 20));
+                                        (0, 0, 0, 20),
+                                        1.0);
                                 for (let mut xoffset = 0.; xoffset <= tex_width:real * draw_context.scale; xoffset += draw_context.scale)
                                     drawlist->AddLine(
                                         (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y), 
                                         (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y + tex_height:real * draw_context.scale), 
-                                        (0, 0, 0, 20));
+                                        (0, 0, 0, 20),
+                                        1.0);
                             }
 
                             // 获取鼠标所在的像素位置，高亮这一块儿

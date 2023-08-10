@@ -418,9 +418,6 @@ R"(
 
     using DrawListT = handle
     {
-        extern("libjoyecs", "je_gui_draw_list_add_rect_filled")
-        public func AddRectFilled(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA)=> void;
-
         extern("libjoyecs", "je_gui_draw_list_add_text")
         public func AddText(self: DrawListT, pos: ImVec2, color: Color32RGBA, text: string)=> void;
 
@@ -428,7 +425,31 @@ R"(
         public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture)=> void;
 
         extern("libjoyecs", "je_gui_draw_list_add_line")
-        public func AddLine(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA)=> void;
+        public func AddLine(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_rect")
+        public func AddRect(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_rect_filled")
+        public func AddRectFilled(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_triangle")
+        public func AddTriangle(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA, board: real)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_triangle_filled")
+        public func AddTriangleFilled(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA)=> void;
+        
+        extern("libjoyecs", "je_gui_draw_list_add_circle")
+        public func AddCircle(self: DrawListT, center: ImVec2, r: real, color: Color32RGBA, board: real)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_filled_circle")
+        public func AddCircleFilled(self: DrawListT, center: ImVec2, r: real, color: Color32RGBA)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_bezier_quad")
+        public func AddBezierQuadratic(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA, board: real)=> void;
+
+        extern("libjoyecs", "je_gui_draw_list_add_bezier_cubic")
+        public func AddBezierCubic(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, p4: ImVec2, color: Color32RGBA, board: real)=> void;
     }
     extern("libjoyecs", "je_gui_get_window_draw_list")
     public func GetWindowDrawList()=> DrawListT;
@@ -891,12 +912,32 @@ WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_pointer(vm, ImGui::GetWindowDrawList());
 }
 
+WO_API wo_api je_gui_draw_list_add_rect(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddRect(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3), 0.f, 0, wo_float(args + 4));
+    return wo_ret_void(vm);
+}
 WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args, size_t argc)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddRectFilled(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3));
     return wo_ret_void(vm);
 }
+
+WO_API wo_api je_gui_draw_list_add_triangle(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddTriangle(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4), wo_float(args + 5));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_draw_list_add_triangle_filled(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddTriangleFilled(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4));
+    return wo_ret_void(vm);
+}
+
 
 WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args, size_t argc)
 {
@@ -919,7 +960,32 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_draw_list_add_line(wo_vm vm, wo_value args, size_t argc)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
-    list->AddLine(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3));
+    list->AddLine(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3), wo_float(args + 4));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_draw_list_add_circle(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddCircle(val2vec2(args + 1), wo_float(args + 2), val2color32(args + 3), 0, wo_float(args + 4));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_draw_list_add_filled_circle(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddCircleFilled(val2vec2(args + 1), wo_float(args + 2), val2color32(args + 3));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_draw_list_add_bezier_quad(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddBezierQuadratic(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4), wo_float(args + 5));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_draw_list_add_bezier_cubic(wo_vm vm, wo_value args, size_t argc)
+{
+    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    list->AddBezierCubic(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2vec2(args + 4), val2color32(args + 5), wo_float(args + 6));
     return wo_ret_void(vm);
 }
 
