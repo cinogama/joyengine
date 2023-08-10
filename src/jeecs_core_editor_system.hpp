@@ -111,7 +111,7 @@ namespace jeecs
             local
         };
 
-        Editor::EntityMover::mover_mode _mode = Editor::EntityMover::mover_mode::rotation;
+        Editor::EntityMover::mover_mode _mode = Editor::EntityMover::mover_mode::selection;
         coord_mode _coord = coord_mode::global;
 
         basic::resource<graphic::vertex> axis_x;
