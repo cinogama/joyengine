@@ -3,6 +3,7 @@
 
 
 import woo::std;
+import woo::shell;
 import je::gui;
 
 import pkg::process;

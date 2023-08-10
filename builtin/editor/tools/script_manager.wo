@@ -7,7 +7,7 @@ namespace editor::tools
     {
         return _available_tool_scripts->unmapping->>\kv = kv[0];;
     }
-    public func run_tool_script(script: string, proj: Project)
+    public func run_tool_script(ctx: gui::EditorContext, script: string, proj: Project)
     {
         match (_available_tool_scripts->get(script))
         {
@@ -21,9 +21,22 @@ namespace editor::tools
                     return result::err(F"运行脚本失败：{msg}");
                 ok(vmm)?
                     {
-                        do vmm->run();
-                        do vmm->invoke("main", [proj: dynamic]);
-                        do vmm->close();
+                        let invoke_script = 
+                            func(opentity: option<je::entity>)
+                            {
+                                do vmm->run();
+                                do vmm->invoke("main", [
+                                    proj->get_env->get_universe as je::universe: dynamic,
+                                    proj->get_editing_world as option<je::world>: dynamic,
+                                    opentity as option<je::entity>: dynamic,
+                                    ]);
+                                do vmm->close();
+                            };
+                        match (ctx->get_editing_entity)
+                        {
+                        value(euid)? euid->dosth(invoke_script);
+                        none? invoke_script(none);
+                        }
                         return result::ok(nil: void);
                     }
                 }             

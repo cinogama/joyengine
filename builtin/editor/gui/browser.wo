@@ -417,6 +417,28 @@ extern func update(_: Context, _: entity)
                                 | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = filesys::normalize(current_work_path) / (filename + ".wo"););
                 }
+                 if (MenuItem(F"编辑器工具脚本"))
+                {
+                    let default_empty_script = 
+@"import woo::std;
+import je;
+
+using std;
+using je;
+
+extern func main(_: universe, _: option<world>, _: option<entity>)
+{
+
+}
+"@;
+                    jeapi::gui::form::input("新建编辑器工具脚本", F"在{current_work_path}新建编辑器工具脚本", "NewScript",
+                        \filename: string = filesys::exist(file_path)
+                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.jewo\n{default_empty_script}") 
+                                ? force_update()
+                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                        where file_path = filesys::normalize(current_work_path) / (filename + ".jewo"););
+                }
                 Separator();
                 if (MenuItem(F"世界"))
                 {
