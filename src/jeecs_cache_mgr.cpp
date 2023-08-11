@@ -4,8 +4,6 @@
 
 #include <string>
 
-
-
 // WARNING!!!!
 // DO NOT USE SIZE_T!!!!
 
