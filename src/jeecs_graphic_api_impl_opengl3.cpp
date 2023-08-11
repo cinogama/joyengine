@@ -10,21 +10,11 @@
 // Here is low-level-graphic-api impl.
 // OpenGL version.
 
-constexpr size_t MAX_MOUSE_BUTTON_COUNT = 16;
-constexpr size_t MAX_KEYBOARD_BUTTON_COUNT = 65535;
-
 thread_local size_t WINDOWS_SIZE_WIDTH = 0;
 thread_local size_t WINDOWS_SIZE_HEIGHT = 0;
 thread_local const char* WINDOWS_TITLE = nullptr;
 thread_local GLFWwindow* WINDOWS_HANDLE = nullptr;
 thread_local std::thread::id GRAPHIC_THREAD_ID;
-
-thread_local float MOUSE_POS_X = 0;
-thread_local float MOUSE_POS_Y = 0;
-thread_local int MOUSE_KEY_STATE[MAX_MOUSE_BUTTON_COUNT];
-thread_local float MOUSE_SCROLL_X_COUNT = 0.f;
-thread_local float MOUSE_SCROLL_Y_COUNT = 0.f;
-thread_local int KEYBOARD_STATE[MAX_KEYBOARD_BUTTON_COUNT];
 
 void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
 {
@@ -303,8 +293,6 @@ bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
     }
     return true;
 }
-
-thread_local double _last_swap_buffer_tpoint = 0.;
 
 bool gl_lateupdate(jegl_thread* thread_context, jegl_graphic_api::custom_interface_info_t)
 {

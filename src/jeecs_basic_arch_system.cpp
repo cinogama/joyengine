@@ -45,22 +45,15 @@
 * 一个实体的组件被添加或删除，它就会在某个时机从一个ArchType迁移到另一个ArchType
 * 一切都会被回收，只有数据被保留。
 * 
-* 一个ArchType由一系列ArchChunk组成，ArchChunk保持有一片内存空间。写下这些的时候
-* 这个空间的长度是 CHUNK_SIZE = 64KB，一个Chunk能储存若干个实体——具体的数量
-* 取决于实体的大小——或者说组件们的大小。一个ArchType只被用于储存拥有某一组件
-* 组的组件们——我知道这样说话很拗口，但确实如此；ArchType被ArchManager统一管理。
-* 并属于某个世界。世界销毁时一切也将被一起回收。
+* 一个ArchType由一系列ArchChunk组成，ArchChunk保持有一片内存空间。这个空间的
+* 长度是 CHUNK_SIZE = 16KB，一个Chunk能储存若干个实体——具体的数量取决于实体的
+* 大小——或者说组件们的大小。一个ArchType只被用于储存拥有某一组件组的组件们——
+* 我知道这样说话很拗口，但确实如此；ArchType被ArchManager统一管理。并属于某个
+* 世界。世界销毁时一切也将被一起回收。
 * 
 * 世界是组件和系统的集合，世界之间的工作周期是独立的，每个世界会按照自己的工作
 * 节奏，在独立的线程中运作。而所有的世界最终属于这个宇宙（Universe）：它是
 * 引擎的全部上下文的总和。
-* 
-* 实际上，Universe应该能够被创建复数个，Universe之间亦是互相独立的。尽管引擎自带
-* 的图形系统对此兼容性不佳——但确实可以，JoyEngine已经默许开发者将数据保存在系
-* 统的实例中，尽管在原教旨主义的ECS下这不该发生，但是我只想说，尽量远离静态生命
-* 周期——哪怕把数据放在系统上也好。
-* 
-*                                                               ——混乱制造者
 *                                                                   mr_cino
 */
 
@@ -123,16 +116,16 @@ namespace jeecs_impl
             using byte_t = uint8_t;
             static_assert(sizeof(byte_t) == 1, "sizeof(uint8_t) should be 1.");
 
-            byte_t _m_chunk_buffer[CHUNK_SIZE];
+            byte_t                  _m_chunk_buffer[CHUNK_SIZE];
 
-            const types_set& _m_types;
-            const archtypes_map& _m_arch_typeinfo_mapping;
-            const size_t _m_entity_count;
-            const size_t _m_entity_size;
+            const types_set*        _m_types;
+            const archtypes_map*    _m_arch_typeinfo_mapping;
+            const size_t            _m_entity_count;
+            const size_t            _m_entity_size;
 
-            entity_meta* _m_entities_meta;
-            std::atomic_size_t _m_free_count;
-            arch_type* _m_arch_type;
+            entity_meta*            _m_entities_meta;
+            arch_type*              _m_arch_type;
+            std::atomic_size_t      _m_free_count;
         public:
             arch_chunk* last; // for atomic_list;
         public:
@@ -140,8 +133,8 @@ namespace jeecs_impl
                 : _m_entity_count(_arch_type->_m_entity_count_per_chunk)
                 , _m_entity_size(_arch_type->_m_entity_size)
                 , _m_free_count(_arch_type->_m_entity_count_per_chunk)
-                , _m_arch_typeinfo_mapping(_arch_type->_m_arch_typeinfo_mapping)
-                , _m_types(_arch_type->_m_types_set)
+                , _m_arch_typeinfo_mapping(&_arch_type->_m_arch_typeinfo_mapping)
+                , _m_types(&_arch_type->_m_types_set)
                 , _m_arch_type(_arch_type)
             {
                 assert(jeoffsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
@@ -161,7 +154,7 @@ namespace jeecs_impl
             //          it again.
             inline void move_component_from(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid, void* from_component)const
             {
-                const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
+                const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping->at(tid);
                 void* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
                 arch_typeinfo.m_typeinfo->move(component_addr, from_component);
                 arch_typeinfo.m_typeinfo->destruct(from_component);
@@ -209,8 +202,8 @@ namespace jeecs_impl
             }
             inline void* get_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
             {
-                auto fnd = _m_arch_typeinfo_mapping.find(tid);
-                if (fnd == _m_arch_typeinfo_mapping.end())
+                auto fnd = _m_arch_typeinfo_mapping->find(tid);
+                if (fnd == _m_arch_typeinfo_mapping->end())
                     return nullptr;
                 const arch_type_info& arch_typeinfo = fnd->second;
                 return get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
@@ -218,13 +211,13 @@ namespace jeecs_impl
             }
             inline void destruct_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
             {
-                const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping.at(tid);
+                const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping->at(tid);
                 auto* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
 
                 arch_typeinfo.m_typeinfo->destruct(component_addr);
 
             }
-            inline const types_set& types()const noexcept
+            inline const types_set* types()const noexcept
             {
                 return _m_types;
             }
@@ -1179,8 +1172,7 @@ namespace jeecs_impl
                         }
 
                         // Remove all component
-                        types_set origin_chunk_types = current_entity.chunk()->types();
-                        for (jeecs::typing::typeid_t type_id : origin_chunk_types)
+                        for (jeecs::typing::typeid_t type_id : *current_entity.chunk()->types())
                         {
                             current_entity.chunk()->destruct_component_addr_with_typeid(
                                 current_entity._m_id,
@@ -1196,7 +1188,7 @@ namespace jeecs_impl
                         // 1. Mark entity as active..
                         current_entity.chunk()->command_active_entity(current_entity._m_id);
 
-                        types_set new_chunk_types = current_entity.chunk()->types();
+                        types_set new_chunk_types = *current_entity.chunk()->types();
 
                         // 2. Apply modify!
                         std::unordered_map<jeecs::typing::typeid_t, void*> append_component_type_addr_map;

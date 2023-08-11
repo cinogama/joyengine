@@ -1448,7 +1448,7 @@ jegl_thread [类型]
 */
 struct jegl_thread
 {
-    void*/*std::thread*/        _m_thread;
+    void*                       _m_thread; // std::thread
     jegl_thread_notifier*       _m_thread_notifier;
     void*                       _m_interface_handle;
     void*                       _m_universe_instance;
@@ -1457,7 +1457,8 @@ struct jegl_thread
 
     jegl_interface_config       m_config;
     jegl_graphic_api*           m_apis;
-    void*/*std::atomic_bool*/   m_stop_update;
+    void*                       m_stop_update; // std::atomic_bool
+    void*                       m_custom_data;
 };
 
 /*

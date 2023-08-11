@@ -29,21 +29,6 @@ else()
     add_definitions(-DJEECS_USE_OPENAL_SOFT=0)
 endif()
 
-if(MSVC) 
-    ## Fuck the MSVC, you did a great job that if we disable the exception, 
-    ## the compiler boomed! FUCK!
-
-    add_definitions(-D_HAS_EXCEPTIONS=0)
-    if(CMAKE_CXX_FLAGS MATCHES "/EHsc ")
-        string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    endif()
-    if(CMAKE_CXX_FLAGS MATCHES "/EHsc$")
-        string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    endif()
-else()
-    add_compile_options(-fno-exceptions)
-endif()
-
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
@@ -54,9 +39,25 @@ add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
 
+if(MSVC) 
+    ## Fuck the MSVC, you did a great job that if we disable the exception, 
+    ## the compiler boomed! FUCK!
+    
+    # add_definitions(-D_HAS_EXCEPTIONS=0)
+    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc ")
+    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # endif()
+    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc$")
+    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # endif()
+else()
+    add_compile_options(-fno-exceptions)
+endif()
+
 if (INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     add_custom_target(COPYING_LICENCES_SCRIPT COMMAND woodriver ./script/copylicences.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    add_dependencies(COPYING_LICENCES_SCRIPT INSTALL_PKG)
     add_dependencies(COPYING_LICENCES_SCRIPT woodriver)
 else()
     add_custom_target(INSTALL_PKG COMMAND echo "INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
