@@ -12,7 +12,7 @@ A game engine based on ECS architecture implemented in C++ and Woolang.
   apt install libopenal-dev
 
 稍后构建时使用CMAKE参数：
--DUSING_OPENAL_SOFT_INSTEAD_1_1=OFF
+-DJE4_USING_OPENAL_SOFT_INSTEAD_1_1=OFF
 ```
 
 另外需要安装OpenGL和其他SDK，这里列出来方便直接使用
@@ -28,7 +28,7 @@ apt install libgl1-mesa-dev libglu1-mesa-dev
 
 **安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行**
 
-编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`INSTALL_PKG_BY_BAOZI_WHEN_BUILD ` 设置为 OFF 关闭安装操作
+编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD` 设置为 OFF 关闭安装操作
 
 > 推荐CMake版本至少达到 3.20，以保证baozi和编辑器的编译流程能够正常进行
 

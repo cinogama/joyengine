@@ -1430,12 +1430,20 @@ struct jegl_interface_config
         FULLSCREEN,
         BOARDLESS,
     };
-    size_t m_width;
-    size_t m_height;
-    size_t m_fps;
-    const char* m_title;
-    display_mode m_displaymode;
-    bool m_enable_resize;
+
+    display_mode    m_displaymode;
+    bool            m_enable_resize;
+
+    // 若MSAA值为0，则说明关闭超采样抗锯齿，
+    // MSAA配置应该是2的整数次幂
+    size_t          m_msaa; 
+
+    size_t          m_width;
+    size_t          m_height;
+
+    size_t          m_fps;
+
+    const char*     m_title;
 };
 
 struct jegl_thread_notifier;
@@ -1458,7 +1466,6 @@ struct jegl_thread
     jegl_interface_config       m_config;
     jegl_graphic_api*           m_apis;
     void*                       m_stop_update; // std::atomic_bool
-    void*                       m_custom_data;
 };
 
 /*

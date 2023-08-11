@@ -151,8 +151,12 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     WINDOWS_SIZE_WIDTH = config->m_width == 0 ? primary_monitor_video_mode->width : config->m_width;
     WINDOWS_SIZE_HEIGHT = config->m_height == 0 ? primary_monitor_video_mode->height : config->m_height;
 
-    glfwWindowHint(GLFW_REFRESH_RATE, config->m_fps == 0 ? primary_monitor_video_mode->refreshRate : (int)config->m_fps);
+    glfwWindowHint(GLFW_REFRESH_RATE, 
+        config->m_fps == 0 
+        ? primary_monitor_video_mode->refreshRate 
+        : (int)config->m_fps);
     glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
+    glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
 
     je_io_set_windowsize((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT);
 
@@ -247,6 +251,11 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glDebugMessageCallback(glDebugOutput, nullptr);
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
 #endif
+
+    if (config->m_msaa > 0)
+        glEnable(GL_MULTISAMPLE);
+    else
+        glDisable(GL_MULTISAMPLE);
 
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);

@@ -12,7 +12,7 @@ include_directories("../3rd/imgui/backends")
 include_directories("../3rd/imgui/misc/cpp")
 include_directories("../3rd/box2d/include")
 
-if (USING_OPENAL_SOFT_INSTEAD_1_1)
+if (JE4_USING_OPENAL_SOFT_INSTEAD_1_1)
 	include_directories("../3rd/openal-soft/include")
 	set(OPENAL_LIBRARY OpenAL)
 else()

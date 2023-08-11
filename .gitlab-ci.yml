@@ -9,7 +9,7 @@ build:
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - rm -f CMakeCache.txt
-    - cmake .. -DINSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF -DCOPYING_BUILTIN_FILES=OFF
+    - cmake .. -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF -DJE4_COPYING_BUILTIN_FILES=OFF
     - make -j 4
     - cd ..
   cache:
