@@ -315,8 +315,9 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
 
 /.export/*
 /.runtime/*
-imgui.ini
-*.dmp
+/imgui.ini
+/*.dmp
+/project.jeproj4.lock
 "@);
                             do filesys::writeall(p.m_path / ".gitattributes", 
 @"# JoyEngine ECS
