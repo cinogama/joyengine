@@ -5,16 +5,12 @@ void jegl_using_vulkan_apis(jegl_graphic_api* write_to_apis)
 {
     jeecs::debug::logfatal("Vulkan Graphic API not support now.");
 
-    //write_to_apis->prepare_interface = gl_prepare;
-    //write_to_apis->finish_interface = gl_finish;
-
     //write_to_apis->init_interface = gl_startup;
+    //write_to_apis->shutdown_interface = gl_shutdown;
+    
     //write_to_apis->pre_update_interface = gl_pre_update;
     //write_to_apis->update_interface = gl_update;
     //write_to_apis->late_update_interface = gl_lateupdate;
-    //write_to_apis->shutdown_interface = gl_shutdown;
-
-    //write_to_apis->get_windows_size = gl_get_windows_size;
 
     //write_to_apis->init_resource = gl_init_resource;
     //write_to_apis->using_resource = gl_using_resource;

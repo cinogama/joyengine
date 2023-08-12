@@ -42,6 +42,7 @@ namespace editor
         m_modules: map<filesys::path_t, CxxProject>, 
         m_editing_world: mut option<je::world>,
         m_debug_context: mut option<DebugContext>,
+        m_proj_file_lock: mut option<process::flock>
     }
     {
         public func make_path_normalize(self: Project, path: filesys::path_t)
@@ -299,6 +300,37 @@ namespace editor
                 )),
             }mut;
         }
+        func try_lock_this_project(self: Project)
+        {
+            match (self.m_proj_file_lock)
+            {
+            value(flock)?
+                return flock->trylock();
+            none?
+                {
+                    let projfile = self.m_path / "project.jeproj4.lock";
+                    // 不可以锁定目录
+                    if (filesys::isdir(projfile) == true)
+                        return false;
+                    let flock = process::flock::create(projfile->tostring);
+                    let result = flock->>\fl = fl->trylock();->valor(false);
+                    if (result)
+                    {
+                        self.m_proj_file_lock = flock;
+                        return true;
+                    }
+                    return false;
+                }
+            }
+        }
+        func unlock_this_project(self: Project)
+        {
+            match (self.m_proj_file_lock)
+            {
+            value(flock)? flock->unlock();
+            none? je::logerr("未找到项目的文件锁，可能是未能创建或打开文件，请检查权限");
+            }
+        }
         public func create(name: string, path: filesys::path_t)
         {
             let env = Environment::create();
@@ -314,12 +346,19 @@ namespace editor
                 m_modules = {}mut,
                 m_debug_context = mut option::none,
                 m_editing_world = mut option::none,
+                m_proj_file_lock = mut option::none,
             };
+
+            if (proj->try_lock_this_project() == false)
+            {
+                proj->close();
+                return result::err("锁定项目失败，请检查相同项目是否已经重复打开");
+            }
 
             tools::update_tool_scripts(proj);
             gui::drawpannel::update_and_get_scripts(proj);
 
-            return proj;
+            return result::ok(proj);
         }
         public func active_module(self: Project, module: CxxProject)
         {
@@ -337,7 +376,7 @@ namespace editor
         }
         public func load(path: filesys::path_t, dat: dict<string, dynamic>)
         {
-            let self = create(dat["name"] as string, path);
+            try! self = create(dat["name"] as string, path);
 
             // 先加载配置！这非常重要！
             for (let name, val : dat["configs"] as dict ->> \k, v = (k as string, v as string);)
@@ -390,7 +429,7 @@ namespace editor
 
             self->restore_dump();
 
-            return self;
+            return result::ok(self);
         }
         public func save_project(self: Project)
         {
@@ -448,6 +487,7 @@ namespace editor
         {  
             // 关闭env, 稍后释放模块
             self.m_env->close;          
+            self->unlock_this_project();
         }
         public func free_modules_after_close(self: Project)
         {

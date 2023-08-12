@@ -104,10 +104,7 @@ namespace jeecs
             for (auto* gpipe : m_rendchain_branchs)
                 gpipe->_commit_frame(glthread);
 
-            size_t WINDOWS_WIDTH, WINDOWS_HEIGHT;
-            jegl_get_windows_size(&WINDOWS_WIDTH, &WINDOWS_HEIGHT);
-
-            jegl_rend_to_framebuffer(nullptr, 0, 0, WINDOWS_WIDTH, WINDOWS_HEIGHT);
+            jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
         }
 
         graphic_uhost(jeecs::game_universe _universe)

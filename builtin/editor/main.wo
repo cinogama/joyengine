@@ -21,7 +21,7 @@ jeapi::welcome::display_copyright_msg();
 
 using je::gui;
 
-let mut action_after_guide_form_closed = \ = do nil;;
+let mut action_after_guide_form_closed = \ = result::ok(do nil); as ()=>result<void, string>;
 
 using Path = struct {
     name: string,       // 仅用于显示
@@ -295,9 +295,9 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
 
                     action_after_guide_form_closed = 
                         func(){
-                            apply_editor_data_when_start_up_project(editordat);
+                            try! p = editor::Project::create(projname, regular_path);
 
-                            let p = editor::Project::create(projname, regular_path);
+                            apply_editor_data_when_start_up_project(editordat);
                             assert(p->save_project());
 
                             // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
@@ -331,6 +331,8 @@ config.jeinf text eol=lf
                             editor::gui::edit_project(p);
                             save_editor_data_after_exit(editordat, p.m_name, p.m_path);
                             je::gui::unregister_exit_callback();
+
+                            return result::ok(do nil);
                         }
                     ;
                 }
@@ -359,14 +361,16 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
             action_after_guide_form_closed = 
                 func()
                 {
-                    apply_editor_data_when_start_up_project(editordat);
+                    try! p = editor::Project::load(path, dat);
 
-                    let p = editor::Project::load(path, dat);
+                    apply_editor_data_when_start_up_project(editordat);
 
                     je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
                     editor::gui::edit_project(p);
                     save_editor_data_after_exit(editordat, p.m_name, p.m_path);
                     je::gui::unregister_exit_callback();
+
+                    return result::ok(do nil);
                 }
             ;
         }
@@ -376,154 +380,173 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
 
 }
 
-let u = editor::Environment::create();
+for (;;)
 {
-    let editor_configs = read_editor_data();
-    let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< vec<array<string>> >;
+    let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val;
+    let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP.png")->val;
+    let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
+    
+    action_after_guide_form_closed = \ = result::ok(do nil);;
 
-    match (editor_configs->get("specify_vs_version": dynamic))
+    let u = editor::Environment::create();
     {
-    value(ver)?
-        editor::CxxProject::specify_cmake_msvc_target_version(ver as int);
-    none?;
+        let editor_configs = read_editor_data();
+        let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< vec<array<string>> >;
+
+        match (editor_configs->get("specify_vs_version": dynamic))
+        {
+        value(ver)?
+            editor::CxxProject::specify_cmake_msvc_target_version(ver as int);
+        none?;
+        }
+
+        let w = u->create_world;
+        do w->add_system(je::typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->val);
+
+        if (editor::CxxProject::is_builder_ready())
+            launch(func(){
+                let open = mutable::create(true);
+
+                if (BeginAttr("JoyEngineECS 项目导航", 
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus))
+                {
+                    Text("欢迎使用JoyEngine，请选择一项以开始");
+
+                    Separator();
+
+                    if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
+                    {
+                        launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
+                    }
+                    if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
+                    {
+                        launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
+                    }
+
+                    TextDisabled("历史项目");
+                    do BeginChildSize("##history", 0., 100.);
+
+                    for (let index, dat : historys)
+                    {
+                        let context_menu_func = func()
+                        {
+                            if (MenuItem("加载此项目"))
+                                open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
+                            if (MenuItem("打开项目所在路径"))
+                                do std::shell(F"explorer \"{filesys::normalize(dat[1])->tostring->replace("/", "\\")}\"");
+                            Separator();
+                            if (MenuItem("从历史记录中移除"))
+                            {
+                                jeapi::gui::form::ask("确认移除？", F"确认要将项目{dat[0]} ({dat[1]})\n从历史记录中移除吗？",
+                                    func(check)
+                                    {
+                                        if (check)
+                                        {
+                                            match (historys->get(index))
+                                            {
+                                            value(removing_data)?
+                                                if (removing_data[0] == dat[0] && removing_data[1] == dat[1])
+                                                {
+                                                    do historys->remove(index);
+                                                    assert(
+                                                        filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", editor_configs->serialize->val)
+                                                    );
+                                                }
+                                            none?;
+                                            }
+                                        }
+                                    });
+                            }
+                        };
+                        if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::value(context_menu_func)))
+                            open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
+                    }
+
+                    EndChild();
+
+                    if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
+                    {
+                        u->close();
+                        open->set(false);
+                    }
+
+                    Separator();
+                    TextDisabled("(C)Cinogama project. 2022.");
+                }
+                End();
+
+                return open->get();
+            }, ());
+        else
+            launch(func(specify_vs_version: mutable<option<int>>){
+                if (BeginAttr("JoyEngineECS 项目导航", 
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus))
+                {
+                    Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
+                    Text("* 项目中的C++模块需要使用构建工具进行编译");
+                    Separator();
+                    Text("请确认以下事项已经完成，然后重启编辑器");
+
+                    do BeginChildSize("##history", 500., 300.);
+                    Text("1. 请确认已经安装 Visual Studio 的2017、2019或2022版本其中之一");
+                    Text("2. 请找到 Visual Studio 携带的 MSBuild.exe 的所在路径");
+                    Text("  * 以安装在C盘的为例，MSBuild.exe所在路径可能为:");
+                    Text("    "); SameLine();
+                    do InputText("(仅供参考)", @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin"@);
+                    Text("3. 请设置环境变量 `MSBUILD` 指向此路径");
+                    Text("4. 请确保以上路径包含 2017、2019或2022 字样");
+                    Text("  * 若没有包含，请在此指定Visual Studio的版本：");
+
+                    if (specify_vs_version->get->>\val = val != 2017 && val != 2019 && val != 2022;-> valor(false))
+                        specify_vs_version->set(option::none);
+
+                    let _set_specify_vs_version = func(version_code: option<int>)
+                    {
+                        specify_vs_version->set(version_code);
+
+                        let edit_conf = editor_configs->tomap();
+
+                        match (version_code)
+                        {
+                        value(version)?
+                            edit_conf->set("specify_vs_version": dynamic, version: dynamic);
+                        none?
+                            do edit_conf->remove("specify_vs_version": dynamic);
+                        }
+                        do filesys::writeall(
+                            filesys::normalize(std::exepath())/"editor.dat", 
+                            edit_conf->serialize->val);
+                    };
+
+                    let now_specify_version = specify_vs_version->get->valor(0);
+                    do CheckBox("未指定（默认）", now_specify_version == 0)->>func(_){_set_specify_vs_version(option::none);};
+                    do CheckBox("强制指定为 2017", now_specify_version == 2017)->> func(_){_set_specify_vs_version(option::value(2017));};
+                    do CheckBox("强制指定为 2019", now_specify_version == 2019)->> func(_){_set_specify_vs_version(option::value(2019));};
+                    do CheckBox("强制指定为 2022", now_specify_version == 2022)->> func(_){_set_specify_vs_version(option::value(2022));};
+                    
+                    EndChild();
+                    
+                    Separator();
+                    TextDisabled("(C)Cinogama project. 2022.");
+                }
+                End();
+
+                return true;
+            }, (mutable::create(option::none),));
+
+        u->wait();
+        do u->get_universe->close();
     }
 
-    let w = u->create_world;
-    do w->add_system(je::typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->val);
-
-    if (editor::CxxProject::is_builder_ready())
-        launch(func(){
-            let open = mutable::create(true);
-
-            if (BeginAttr("JoyEngineECS 项目导航", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
-            {
-                Text("欢迎使用JoyEngine，请选择一项以开始");
-
-                Separator();
-
-                static let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val;
-                static let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP.png")->val;
-                static let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
-                
-                if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
-                {
-                    launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
-                }
-                if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
-                {
-                    launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
-                }
-
-                TextDisabled("历史项目");
-                do BeginChildSize("##history", 0., 100.);
-
-                for (let index, dat : historys)
-                {
-                    let context_menu_func = func()
-                    {
-                        if (MenuItem("加载此项目"))
-                            open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
-                        if (MenuItem("打开项目所在路径"))
-                            do std::shell(F"explorer \"{filesys::normalize(dat[1])->tostring->replace("/", "\\")}\"");
-                        Separator();
-                        if (MenuItem("从历史记录中移除"))
-                        {
-                            jeapi::gui::form::ask("确认移除？", F"确认要将项目{dat[0]} ({dat[1]})\n从历史记录中移除吗？",
-                                func(check)
-                                {
-                                    if (check)
-                                    {
-                                        match (historys->get(index))
-                                        {
-                                        value(removing_data)?
-                                            if (removing_data[0] == dat[0] && removing_data[1] == dat[1])
-                                            {
-                                                do historys->remove(index);
-                                                assert(
-                                                    filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", editor_configs->serialize->val)
-                                                );
-                                            }
-                                        none?;
-                                        }
-                                    }
-                                });
-                        }
-                    };
-                    if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::value(context_menu_func)))
-                        open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
-                }
-
-                EndChild();
-
-                if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
-                {
-                    u->close();
-                    open->set(false);
-                }
-
-                Separator();
-                TextDisabled("(C)Cinogama project. 2022.");
-            }
-            End();
-
-            return open->get();
-        }, ());
-    else
-        launch(func(specify_vs_version: mutable<option<int>>){
-            if (BeginAttr("JoyEngineECS 项目导航", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
-            {
-                Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
-                Text("* 项目中的C++模块需要使用构建工具进行编译");
-                Separator();
-                Text("请确认以下事项已经完成，然后重启编辑器");
-
-                do BeginChildSize("##history", 500., 300.);
-                Text("1. 请确认已经安装 Visual Studio 的2017、2019或2022版本其中之一");
-                Text("2. 请找到 Visual Studio 携带的 MSBuild.exe 的所在路径");
-                Text("  * 以安装在C盘的为例，MSBuild.exe所在路径可能为:");
-                Text("    "); SameLine();
-                do InputText("(仅供参考)", @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin"@);
-                Text("3. 请设置环境变量 `MSBUILD` 指向此路径");
-                Text("4. 请确保以上路径包含 2017、2019或2022 字样");
-                Text("  * 若没有包含，请在此指定Visual Studio的版本：");
-
-                if (specify_vs_version->get->>\val = val != 2017 && val != 2019 && val != 2022;-> valor(false))
-                    specify_vs_version->set(option::none);
-
-                let _set_specify_vs_version = func(version_code: option<int>)
-                {
-                    specify_vs_version->set(version_code);
-
-                    let edit_conf = editor_configs->tomap();
-
-                    match (version_code)
-                    {
-                    value(version)?
-                        edit_conf->set("specify_vs_version": dynamic, version: dynamic);
-                    none?
-                        do edit_conf->remove("specify_vs_version": dynamic);
-                    }
-                    do filesys::writeall(
-                        filesys::normalize(std::exepath())/"editor.dat", 
-                        edit_conf->serialize->val);
-                };
-
-                let now_specify_version = specify_vs_version->get->valor(0);
-                do CheckBox("未指定（默认）", now_specify_version == 0)->>func(_){_set_specify_vs_version(option::none);};
-                do CheckBox("强制指定为 2017", now_specify_version == 2017)->> func(_){_set_specify_vs_version(option::value(2017));};
-                do CheckBox("强制指定为 2019", now_specify_version == 2019)->> func(_){_set_specify_vs_version(option::value(2019));};
-                do CheckBox("强制指定为 2022", now_specify_version == 2022)->> func(_){_set_specify_vs_version(option::value(2022));};
-                
-                EndChild();
-                
-                Separator();
-                TextDisabled("(C)Cinogama project. 2022.");
-            }
-            End();
-
-            return true;
-        }, (mutable::create(option::none),));
-    u->wait();
+    match (action_after_guide_form_closed())
+    {
+    ok(_)? break;
+    err(msg)? 
+        {
+            je::logerr(F"无法打开指定项目：{msg}");
+            jeapi::gui::form::msg("打开项目失败", F"无法打开指定项目：{msg}");
+        }
+    }
 }
-
-action_after_guide_form_closed();

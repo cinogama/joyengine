@@ -10,16 +10,20 @@
 // Here is low-level-graphic-api impl.
 // OpenGL version.
 
-thread_local size_t WINDOWS_SIZE_WIDTH = 0;
-thread_local size_t WINDOWS_SIZE_HEIGHT = 0;
-thread_local const char* WINDOWS_TITLE = nullptr;
-thread_local GLFWwindow* WINDOWS_HANDLE = nullptr;
-thread_local std::thread::id GRAPHIC_THREAD_ID;
+struct jegl_gl3_context
+{
+    size_t WINDOWS_SIZE_WIDTH = 0;
+    size_t WINDOWS_SIZE_HEIGHT = 0;
+    const char* WINDOWS_TITLE = nullptr;
+    GLFWwindow* WINDOWS_HANDLE = nullptr;
+};
 
 void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
 {
-    WINDOWS_SIZE_WIDTH = (size_t)x;
-    WINDOWS_SIZE_HEIGHT = (size_t)y;
+    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(glfwGetWindowUserPointer(fw)));
+
+    context->WINDOWS_SIZE_WIDTH = (size_t)x;
+    context->WINDOWS_SIZE_HEIGHT = (size_t)y;
 
     je_io_set_windowsize(x, y);
 }
@@ -77,19 +81,6 @@ void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int st
 
 }
 
-void gl_prepare()
-{
-    if (!glfwInit())
-        jeecs::debug::logfatal("Failed to init glfw.");
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-#ifndef NDEBUG
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-#endif
-}
 void APIENTRY glDebugOutput(GLenum source,
     GLenum type,
     unsigned int id,
@@ -139,17 +130,30 @@ void APIENTRY glDebugOutput(GLenum source,
     je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
 }
 
-jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
+jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
 {
-    jeecs::debug::log("Graphic thread start!");
+    jegl_gl3_context* context = new jegl_gl3_context;
+    if (!reboot)
+    {
+        jeecs::debug::log("Graphic thread start!");
 
-    GRAPHIC_THREAD_ID = std::this_thread::get_id();
+        if (!glfwInit())
+                jeecs::debug::logfatal("Failed to init glfw.");
+
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+#ifndef NDEBUG
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+#endif
+    }
 
     auto* primary_monitor = glfwGetPrimaryMonitor();
     auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
 
-    WINDOWS_SIZE_WIDTH = config->m_width == 0 ? primary_monitor_video_mode->width : config->m_width;
-    WINDOWS_SIZE_HEIGHT = config->m_height == 0 ? primary_monitor_video_mode->height : config->m_height;
+    context->WINDOWS_SIZE_WIDTH = config->m_width == 0 ? primary_monitor_video_mode->width : config->m_width;
+    context->WINDOWS_SIZE_HEIGHT = config->m_height == 0 ? primary_monitor_video_mode->height : config->m_height;
 
     glfwWindowHint(GLFW_REFRESH_RATE, 
         config->m_fps == 0 
@@ -158,26 +162,26 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
 
-    je_io_set_windowsize((int)WINDOWS_SIZE_WIDTH, (int)WINDOWS_SIZE_HEIGHT);
+    je_io_set_windowsize((int)context->WINDOWS_SIZE_WIDTH, (int)context->WINDOWS_SIZE_HEIGHT);
 
-    WINDOWS_TITLE = config->m_title ? config->m_title : WINDOWS_TITLE;
+    context->WINDOWS_TITLE = config->m_title ? config->m_title : context->WINDOWS_TITLE;
 
     switch (config->m_displaymode)
     {
     case jegl_interface_config::display_mode::FULLSCREEN:
-        WINDOWS_HANDLE = glfwCreateWindow(
-            (int)WINDOWS_SIZE_WIDTH,
-            (int)WINDOWS_SIZE_HEIGHT,
-            WINDOWS_TITLE,
+        context->WINDOWS_HANDLE = glfwCreateWindow(
+            (int)context->WINDOWS_SIZE_WIDTH,
+            (int)context->WINDOWS_SIZE_HEIGHT,
+            context->WINDOWS_TITLE,
             primary_monitor, NULL);
         break;
     case jegl_interface_config::display_mode::BOARDLESS:
         glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     case jegl_interface_config::display_mode::WINDOWED:
-        WINDOWS_HANDLE = glfwCreateWindow(
-            (int)WINDOWS_SIZE_WIDTH,
-            (int)WINDOWS_SIZE_HEIGHT,
-            WINDOWS_TITLE,
+        context->WINDOWS_HANDLE = glfwCreateWindow(
+            (int)context->WINDOWS_SIZE_WIDTH,
+            (int)context->WINDOWS_SIZE_HEIGHT,
+            context->WINDOWS_TITLE,
             NULL, NULL);
         break;
     default:
@@ -219,17 +223,18 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
             memcpy(icon_data.pixels + target_place_offset, image_pixels + origin_place_offset, (size_t)icon_data.width * 4);
         }
 
-        glfwSetWindowIcon(WINDOWS_HANDLE, 1, &icon_data);
+        glfwSetWindowIcon(context->WINDOWS_HANDLE, 1, &icon_data);
 
         je_mem_free(icon_data.pixels);
     }
 
-    glfwMakeContextCurrent(WINDOWS_HANDLE);
-    glfwSetWindowSizeCallback(WINDOWS_HANDLE, glfw_callback_windows_size_changed);
-    glfwSetCursorPosCallback(WINDOWS_HANDLE, glfw_callback_mouse_pos_changed);
-    glfwSetMouseButtonCallback(WINDOWS_HANDLE, glfw_callback_mouse_key_clicked);
-    glfwSetScrollCallback(WINDOWS_HANDLE, glfw_callback_mouse_scroll_changed);
-    glfwSetKeyCallback(WINDOWS_HANDLE, glfw_callback_keyboard_stage_changed);
+    glfwMakeContextCurrent(context->WINDOWS_HANDLE);
+    glfwSetWindowSizeCallback(context->WINDOWS_HANDLE, glfw_callback_windows_size_changed);
+    glfwSetCursorPosCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_pos_changed);
+    glfwSetMouseButtonCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_key_clicked);
+    glfwSetScrollCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_scroll_changed);
+    glfwSetKeyCallback(context->WINDOWS_HANDLE, glfw_callback_keyboard_stage_changed);
+    glfwSetWindowUserPointer(context->WINDOWS_HANDLE, context);
 
     if (config->m_fps == 0)
     {
@@ -260,73 +265,65 @@ jegl_graphic_api::custom_interface_info_t gl_startup(jegl_thread* gthread, const
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);
 
-    jegui_init(WINDOWS_HANDLE, reboot);
+    jegui_init(context->WINDOWS_HANDLE, reboot);
 
-    return nullptr;
+    return context;
 }
 
-bool gl_pre_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
+bool gl_pre_update(jegl_thread* ctx)
 {
-    assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
-
-    glfwSwapBuffers(WINDOWS_HANDLE);
+    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx->m_userdata));
+    glfwSwapBuffers(context->WINDOWS_HANDLE);
 
     return true;
 }
 
-bool gl_update(jegl_thread*, jegl_graphic_api::custom_interface_info_t)
+bool gl_update(jegl_thread* ctx)
 {
-    assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
+    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx->m_userdata));
 
     glfwPollEvents();
     int mouse_lock_x, mouse_lock_y;
     if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
-        glfwSetCursorPos(WINDOWS_HANDLE, mouse_lock_x, mouse_lock_y);
+        glfwSetCursorPos(context->WINDOWS_HANDLE, mouse_lock_x, mouse_lock_y);
 
     int window_width, window_height;
     if (je_io_should_update_windowsize(&window_width, &window_height))
-        glfwSetWindowSize(WINDOWS_HANDLE, window_width, window_height);
+        glfwSetWindowSize(context->WINDOWS_HANDLE, window_width, window_height);
 
     const char* title;
     if (je_io_should_update_windowtitle(&title))
-        glfwSetWindowTitle(WINDOWS_HANDLE, title);
+        glfwSetWindowTitle(context->WINDOWS_HANDLE, title);
 
-    if (glfwWindowShouldClose(WINDOWS_HANDLE) == GLFW_TRUE)
+    if (glfwWindowShouldClose(context->WINDOWS_HANDLE) == GLFW_TRUE)
     {
         jeecs::debug::loginfo("Graphic interface has been requested to close.");
 
         if (jegui_shutdown_callback())
             return false;
 
-        glfwSetWindowShouldClose(WINDOWS_HANDLE, GLFW_FALSE);
+        glfwSetWindowShouldClose(context->WINDOWS_HANDLE, GLFW_FALSE);
     }
     return true;
 }
 
-bool gl_lateupdate(jegl_thread* thread_context, jegl_graphic_api::custom_interface_info_t)
+bool gl_lateupdate(jegl_thread* thread_context)
 {
-    assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
-
     jegui_update(thread_context);
     return true;
 }
 
-void gl_shutdown(jegl_thread*, jegl_graphic_api::custom_interface_info_t, bool reboot)
+void gl_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, bool reboot)
 {
-    assert(GRAPHIC_THREAD_ID == std::this_thread::get_id());
-
+    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(userdata));
     jeecs::debug::log("Graphic thread shutdown!");
 
     jegui_shutdown(reboot);
-    glfwDestroyWindow(WINDOWS_HANDLE);
+    glfwDestroyWindow(context->WINDOWS_HANDLE);
+    delete context;
 }
 
-void gl_finish()
-{
-    glfwTerminate();
-}
-
-uint32_t gl_get_uniform_location(jegl_resource* shader, const char* name)
+uint32_t gl_get_uniform_location(jegl_thread*, jegl_resource* shader, const char* name)
 {
     auto loc = glGetUniformLocation(shader->m_uint1, name);
     if (loc == -1)
@@ -334,7 +331,7 @@ uint32_t gl_get_uniform_location(jegl_resource* shader, const char* name)
     return (uint32_t)loc;
 }
 
-void gl_set_uniform(jegl_resource*, uint32_t location, jegl_shader::uniform_type type, const void* val)
+void gl_set_uniform(jegl_thread*, jegl_resource*, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
     switch (type)
     {
@@ -419,23 +416,23 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             resource->m_uint1 = shader_program;
             auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
-            builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(resource, "JOYENGINE_TRANS_M");
-            builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(resource, "JOYENGINE_TRANS_V");
-            builtin_uniforms.m_builtin_uniform_p = gl_get_uniform_location(resource, "JOYENGINE_TRANS_P");
+            builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_M");
+            builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_V");
+            builtin_uniforms.m_builtin_uniform_p = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_P");
 
-            builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MVP");
-            builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(resource, "JOYENGINE_TRANS_MV");
-            builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(resource, "JOYENGINE_TRANS_VP");
+            builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_MVP");
+            builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_MV");
+            builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_VP");
 
-            builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(resource, "JOYENGINE_TEXTURE_TILING");
-            builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(resource, "JOYENGINE_TEXTURE_OFFSET");
+            builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(gthread, resource, "JOYENGINE_TEXTURE_TILING");
+            builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(gthread, resource, "JOYENGINE_TEXTURE_OFFSET");
 
-            builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(resource, "JOYENGINE_LIGHT2D_RESOLUTION");
-            builtin_uniforms.m_builtin_uniform_light2d_decay = gl_get_uniform_location(resource, "JOYENGINE_LIGHT2D_DECAY");
+            builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(gthread, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
+            builtin_uniforms.m_builtin_uniform_light2d_decay = gl_get_uniform_location(gthread, resource, "JOYENGINE_LIGHT2D_DECAY");
 
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-            builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(resource, "JOYENGINE_LOCAL_SCALE");
-            builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(resource, "JOYENGINE_MAIN_COLOR");
+            builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(gthread, resource, "JOYENGINE_LOCAL_SCALE");
+            builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(gthread, resource, "JOYENGINE_MAIN_COLOR");
 
             auto* uniform_block = resource->m_raw_shader_data->m_custom_uniform_blocks;
             while (uniform_block)
@@ -913,13 +910,13 @@ void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
         jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
 }
 
-void gl_bind_texture(jegl_resource* texture, size_t pass)
+void gl_bind_texture(jegl_thread*, jegl_resource* texture, size_t pass)
 {
     glActiveTexture(GL_TEXTURE0 + (GLint)pass);
     jegl_using_resource(texture);
 }
 
-void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_vertex::type drawtype)
+void gl_draw_vertex_with_shader(jegl_thread*, jegl_resource* vert, jegl_vertex::type drawtype)
 {
     const static GLenum DRAW_METHODS[] = {
         GL_LINES,
@@ -933,13 +930,20 @@ void gl_draw_vertex_with_shader(jegl_resource* vert, jegl_vertex::type drawtype)
     glDrawArrays(DRAW_METHODS[drawtype], 0, (GLsizei)vert->m_uint4);
 }
 
-void gl_set_rend_to_framebuffer(jegl_thread*, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+void gl_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
+    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx->m_userdata));
+
     if (nullptr == framebuffer)
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     else
         jegl_using_resource(framebuffer);
 
+    auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
+    if (w == 0)
+        w = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_width : context->WINDOWS_SIZE_WIDTH;
+    if (h == 0)
+        h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
     glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }
 void gl_clear_framebuffer_color(jegl_thread*, jegl_resource* framebuffer)
@@ -972,24 +976,14 @@ void gl_clear_framebuffer_depth(jegl_thread*, jegl_resource* framebuffer)
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
-void gl_get_windows_size(jegl_thread*, size_t* w, size_t* h)
-{
-    *w = WINDOWS_SIZE_WIDTH;
-    *h = WINDOWS_SIZE_HEIGHT;
-}
-
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
-    write_to_apis->prepare_interface = gl_prepare;
-    write_to_apis->finish_interface = gl_finish;
-
     write_to_apis->init_interface = gl_startup;
+    write_to_apis->shutdown_interface = gl_shutdown;
+
     write_to_apis->pre_update_interface = gl_pre_update;
     write_to_apis->update_interface = gl_update;
     write_to_apis->late_update_interface = gl_lateupdate;
-    write_to_apis->shutdown_interface = gl_shutdown;
-
-    write_to_apis->get_windows_size = gl_get_windows_size;
 
     write_to_apis->init_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;

@@ -1456,6 +1456,8 @@ jegl_thread [类型]
 */
 struct jegl_thread
 {
+    using custom_thread_data_t = void*;
+
     void*                       _m_thread; // std::thread
     jegl_thread_notifier*       _m_thread_notifier;
     void*                       _m_interface_handle;
@@ -1466,6 +1468,7 @@ struct jegl_thread
     jegl_interface_config       m_config;
     jegl_graphic_api*           m_apis;
     void*                       m_stop_update; // std::atomic_bool
+    custom_thread_data_t        m_userdata;
 };
 
 /*
@@ -1788,40 +1791,30 @@ jegl_graphic_api [类型]
 */
 struct jegl_graphic_api
 {
-    using custom_interface_info_t = void*;
+    using startup_interface_func_t = jegl_thread::custom_thread_data_t(*)(jegl_thread*, const jegl_interface_config*, bool);
+    using shutdown_interface_func_t = void(*)(jegl_thread*, jegl_thread::custom_thread_data_t, bool);
 
-    using prepare_interface_func_t = void(*)(void);
-    using startup_interface_func_t = custom_interface_info_t(*)(jegl_thread*, const jegl_interface_config*, bool);
-    using shutdown_interface_func_t = void(*)(jegl_thread*, custom_interface_info_t, bool);
-    using finish_interface_func_t = void(*)(void);
-    using update_interface_func_t = bool(*)(jegl_thread*, custom_interface_info_t);
-
-    using get_windows_size_func_t = void(*)(jegl_thread*, size_t*, size_t*);
-
+    using update_interface_func_t = bool(*)(jegl_thread*);
+    
     using init_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
-    using update_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
 
-    using draw_vertex_func_t = void(*)(jegl_resource*, jegl_vertex::type);
-    using bind_texture_func_t = void(*)(jegl_resource*, size_t);
+    using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*, jegl_vertex::type);
+    using bind_texture_func_t = void(*)(jegl_thread*, jegl_resource*, size_t);
 
-    using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t x, size_t y, size_t w, size_t h);
+    using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t, size_t, size_t, size_t);
     using clear_framebuf_func_t = void(*)(jegl_thread*, jegl_resource*);
-    using update_shared_uniform_func_t = void(*)(jegl_thread*, size_t offset, size_t datalen, const void* data);
 
-    using get_uniform_location_func_t = uint32_t(*)(jegl_resource*, const char*);
-    using set_uniform_func_t = void(*)(jegl_resource*, uint32_t, jegl_shader::uniform_type, const void*);
+    using get_uniform_location_func_t = uint32_t(*)(jegl_thread*, jegl_resource*, const char*);
+    using set_uniform_func_t = void(*)(jegl_thread*, jegl_resource*, uint32_t, jegl_shader::uniform_type, const void*);
 
-    prepare_interface_func_t    prepare_interface;
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
-    finish_interface_func_t     finish_interface;
+
     update_interface_func_t     pre_update_interface;
     update_interface_func_t     update_interface;
     update_interface_func_t     late_update_interface;
-
-    get_windows_size_func_t     get_windows_size;
 
     init_resource_func_t        init_resource;
     using_resource_func_t       using_resource;
@@ -1883,13 +1876,6 @@ jegl_reboot_graphic_thread [基本接口]
 JE_API void jegl_reboot_graphic_thread(
     jegl_thread* thread_handle,
     jegl_interface_config config);
-
-/*
-jegl_get_windows_size [基本接口]
-获取当前绘制窗口的大小
-    * 注意，若创建多个图形线程，则不保证此函数的可用性
-*/
-JE_API void jegl_get_windows_size(size_t* x, size_t* y);
 
 /*
 jegl_load_texture [基本接口]
