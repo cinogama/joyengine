@@ -321,6 +321,9 @@ void gl_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, bool 
     jegui_shutdown(reboot);
     glfwDestroyWindow(context->WINDOWS_HANDLE);
     delete context;
+
+    if (!reboot)
+        glfwTerminate();
 }
 
 uint32_t gl_get_uniform_location(jegl_thread*, jegl_resource* shader, const char* name)
