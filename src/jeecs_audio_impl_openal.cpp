@@ -4,6 +4,10 @@
 #include <al.h>
 #include <alc.h>
 
+#ifdef JEECS_USE_OPENAL_SOFT
+#   include <alext.h>
+#endif
+
 #include <unordered_set>
 #include <vector>
 #include <mutex>
@@ -265,9 +269,11 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
             });
         if (fnd == old_devices.end())
         {
+            auto* device_instance = alcOpenDevice(current_device_name);
+
             current_device = new jeal_device;
             current_device->m_device_name = jeecs::basic::make_new_string(current_device_name);
-            current_device->m_openal_device = alcOpenDevice(current_device_name);
+            current_device->m_openal_device = device_instance;
 
             jeecs::debug::loginfo("Found audio device: %s.", current_device_name);
             if (current_device->m_openal_device == nullptr)
@@ -278,7 +284,17 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
         
         current_device->m_alive = true;
 
+
+#ifdef JEECS_USE_OPENAL_SOFT
+        static_assert(ALC_EXT_disconnect);
+        ALCint device_connected;
+        alcGetIntegerv(current_device->m_openal_device, ALC_CONNECTED, 1, &device_connected);
+
+        if (device_connected != ALC_FALSE)
+            _jeal_all_devices.push_back(current_device);
+#else
         _jeal_all_devices.push_back(current_device);
+#endif
 
         current_device_name += strlen(current_device_name) + 1;
     }
