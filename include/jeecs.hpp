@@ -2606,23 +2606,19 @@ enum class jeal_state
 };
 
 /*
-jeal_refetch_all_devices [基本接口]
-重新获取所有可用设备，若此前使用的设备不存在，则重新使用默认设备
-*/
-JE_API jeal_device** jeal_refetch_all_devices(size_t* out_len);
-
-
-/*
 jeal_get_all_devices [基本接口]
-获取此前获取的所有可用设备
+获取所有可用设备
+    * 若正在使用中的设备不复存在，那么会重新指定默认的设备
+    * 枚举设备可能是一个耗时操作，因此请不要频繁调用
+    * 这不是线程安全函数，任何设备实例都可能在此函数调用后因为移除而失效
 */
-JE_API jeal_device** jeal_get_all_devices(size_t* out_len);
+JE_API jeal_device**    jeal_get_all_devices(size_t* out_len);
 
 /*
 jeal_device_name [基本接口]
 获取某个设备的名称
 */
-JE_API const char* jeal_device_name(jeal_device* device);
+JE_API const char*      jeal_device_name(jeal_device* device);
 
 /*
 jeal_using_device [基本接口]

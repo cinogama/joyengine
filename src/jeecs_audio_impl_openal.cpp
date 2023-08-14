@@ -3,6 +3,7 @@
 
 #include <al.h>
 #include <alc.h>
+#include <AL/alext.h>
 
 #include <unordered_set>
 #include <vector>
@@ -32,9 +33,9 @@ struct jeal_buffer
     ALenum m_format;
 };
 
-std::mutex _jegl_all_devices_mx;
-jeal_device* _jegl_current_device = nullptr;
-std::vector<jeal_device*> _jegl_all_devices;
+std::mutex _jeal_all_devices_mx;
+jeal_device* _jeal_current_device = nullptr;
+std::vector<jeal_device*> _jeal_all_devices;
 
 std::mutex _jeal_all_sources_mx;
 std::unordered_set<jeal_source*> _jeal_all_sources;
@@ -81,7 +82,7 @@ struct _jeal_global_context
 
 bool _jeal_shutdown_current_device()
 {
-    _jegl_current_device = nullptr;
+    _jeal_current_device = nullptr;
     ALCcontext* current_context = alcGetCurrentContext();
     if (current_context != nullptr)
     {
@@ -107,7 +108,7 @@ bool _jeal_startup_specify_device(jeal_device* device)
         return false;
     }
     jeecs::debug::loginfo("Audio device: %s, has been enabled.", device->m_device_name);
-    _jegl_current_device = device;
+    _jeal_current_device = device;
     return true;
 }
 void _jeal_store_current_context(_jeal_global_context* out_context)
@@ -223,8 +224,8 @@ void _jeal_restore_context(const _jeal_global_context* context)
 }
 jeal_device** _jeal_update_refetch_devices(size_t * out_len)
 {
-    auto old_devices = _jegl_all_devices;
-    _jegl_all_devices.clear();
+    auto old_devices = _jeal_all_devices;
+    _jeal_all_devices.clear();
 
     // 如果支持枚举所有设备，就把枚举所有设备并全部打开
     const char* device_names = nullptr;
@@ -260,14 +261,13 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
         
         current_device->m_alive = true;
 
-        _jegl_all_devices.push_back(current_device);
+        _jeal_all_devices.push_back(current_device);
 
         current_device_name += strlen(current_device_name) + 1;
     }
 
-    if (_jegl_current_device != nullptr && _jegl_current_device->m_alive == false)
+    if (_jeal_current_device != nullptr && _jeal_current_device->m_alive == false)
         _jeal_shutdown_current_device();
-
 
     for (auto* closed_device : old_devices)
     {
@@ -283,35 +283,30 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
         }
     }
 
-    if (_jegl_all_devices.size() == 0)
+    if (_jeal_all_devices.size() == 0)
         jeecs::debug::logfatal("No audio device found.");
 
-    *out_len = _jegl_all_devices.size();
-    return _jegl_all_devices.data();
+    *out_len = _jeal_all_devices.size();
+    return _jeal_all_devices.data();
 }
 
 jeal_device** jeal_get_all_devices(size_t* out_len)
 {
-    std::lock_guard g0(_jegl_all_devices_mx);
-    *out_len = _jegl_all_devices.size();
-    return _jegl_all_devices.data();
-}
-
-jeal_device** jeal_refetch_all_devices(size_t* out_len)
-{
-    std::lock_guard g0(_jegl_all_devices_mx);
+    std::lock_guard g0(_jeal_all_devices_mx);
     _jeal_global_context context;
     
     bool need_try_restart_device = false;
-    if (_jegl_current_device != nullptr)
+    if (_jeal_current_device != nullptr)
     {
         _jeal_store_current_context(&context);
         need_try_restart_device = true;
     }
 
+    // NOTE: 若当前设备在枚举过程中寄了，那么当前设备会被 _jeal_update_refetch_devices
+    //       负责关闭，同时_jeal_current_device被置为nullptr
     jeal_device** result = _jeal_update_refetch_devices(out_len);
     
-    if (need_try_restart_device && _jegl_current_device != nullptr)
+    if (need_try_restart_device && _jeal_current_device == nullptr)
     {
         // 之前的设备寄了，但是设备已经指定，从列表里捞一个
         if (*out_len != 0)
@@ -320,16 +315,13 @@ jeal_device** jeal_refetch_all_devices(size_t* out_len)
             _jeal_restore_context(&context);
         }
     }
-
     return result;
 }
 
 void jeal_init()
 {
-    std::lock_guard g0(_jegl_all_devices_mx);
-
     size_t device_count = 0;
-    auto** devices = _jeal_update_refetch_devices(&device_count);
+    auto** devices = jeal_get_all_devices(&device_count);
     if (device_count != 0)
         // Using first device as default.
         jeal_using_device(devices[0]);
@@ -338,7 +330,7 @@ void jeal_init()
 void jeal_finish()
 {
     // 在此检查是否有尚未关闭的声源和声音缓存，按照规矩，此处应该全部清退干净
-    std::lock_guard g0(_jegl_all_devices_mx);
+    std::lock_guard g0(_jeal_all_devices_mx);
     std::lock_guard g1(_jeal_all_sources_mx);
     std::lock_guard g2(_jeal_all_buffers_mx);
 
@@ -346,7 +338,7 @@ void jeal_finish()
     assert(_jeal_all_buffers.empty());
 
     _jeal_shutdown_current_device();
-    for (auto* device : _jegl_all_devices)
+    for (auto* device : _jeal_all_devices)
     {
         assert(device != nullptr);
         alcCloseDevice(device->m_openal_device);
@@ -356,12 +348,12 @@ void jeal_finish()
 
         delete device;
     }
-    _jegl_all_devices.clear();
+    _jeal_all_devices.clear();
 }
 
 const char* jeal_device_name(jeal_device* device)
 {
-    std::lock_guard g0(_jegl_all_devices_mx);
+    std::lock_guard g0(_jeal_all_devices_mx);
 
     assert(device != nullptr);
     return device->m_device_name;
@@ -369,6 +361,7 @@ const char* jeal_device_name(jeal_device* device)
 
 void jeal_using_device(jeal_device* device)
 {
+    std::lock_guard g0(_jeal_all_devices_mx);
     std::lock_guard g1(_jeal_all_sources_mx);
     std::lock_guard g2(_jeal_all_buffers_mx);
 
