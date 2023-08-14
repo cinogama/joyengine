@@ -281,9 +281,6 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
         }
         else
             current_device = *fnd;
-        
-        current_device->m_alive = true;
-
 
 #ifdef JEECS_USE_OPENAL_SOFT
         static_assert(ALC_EXT_disconnect);
@@ -291,7 +288,12 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
         alcGetIntegerv(current_device->m_openal_device, ALC_CONNECTED, 1, &device_connected);
 
         if (device_connected != ALC_FALSE)
+        {
+            current_device->m_alive = true;
             _jeal_all_devices.push_back(current_device);
+        }
+        else
+            jeecs::debug::logwarn("Audio device: '%s' disconnected, skip.");
 #else
         _jeal_all_devices.push_back(current_device);
 #endif
