@@ -2609,7 +2609,7 @@ enum class jeal_state
 jeal_get_all_devices [基本接口]
 获取所有可用设备
     * 若正在使用中的设备不复存在，那么会重新指定默认的设备
-    * 枚举设备可能是一个耗时操作，因此请不要频繁调用
+    * 枚举设备可能是一个耗时操作，因此请不要在性能敏感的地方频繁调用此函数
     * 这不是线程安全函数，任何设备实例都可能在此函数调用后因为移除而失效
 */
 JE_API jeal_device**    jeal_get_all_devices(size_t* out_len);
@@ -2617,14 +2617,16 @@ JE_API jeal_device**    jeal_get_all_devices(size_t* out_len);
 /*
 jeal_device_name [基本接口]
 获取某个设备的名称
+    * 仅用于调试
 */
 JE_API const char*      jeal_device_name(jeal_device* device);
 
 /*
 jeal_using_device [基本接口]
 指定声音库使用某个设备
+    * 若指定的设备不在设备列表中，则返回false
 */
-JE_API void             jeal_using_device(jeal_device* device);
+JE_API bool             jeal_using_device(jeal_device* device);
 
 /*
 jeal_load_buffer_from_wav [基本接口]

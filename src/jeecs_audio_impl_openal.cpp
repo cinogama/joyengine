@@ -3,7 +3,6 @@
 
 #include <al.h>
 #include <alc.h>
-#include <AL/alext.h>
 
 #include <unordered_set>
 #include <vector>
@@ -32,6 +31,8 @@ struct jeal_buffer
     ALsizei m_byterate;
     ALenum m_format;
 };
+
+std::shared_mutex _jeal_context_mx;
 
 std::mutex _jeal_all_devices_mx;
 jeal_device* _jeal_current_device = nullptr;
@@ -86,6 +87,12 @@ bool _jeal_shutdown_current_device()
     ALCcontext* current_context = alcGetCurrentContext();
     if (current_context != nullptr)
     {
+        for (auto* src : _jeal_all_sources)
+            alDeleteSources(1, &src->m_openal_source);
+
+        for (auto* buf : _jeal_all_buffers)
+            alDeleteBuffers(1, &buf->m_openal_buffer);
+
         if (AL_FALSE == alcMakeContextCurrent(nullptr))
             jeecs::debug::logerr("Failed to clear current context.");
         alcDestroyContext(current_context);
@@ -142,14 +149,31 @@ void _jeal_store_current_context(_jeal_global_context* out_context)
                 &src_info.m_velocity.x,
                 &src_info.m_velocity.y,
                 &src_info.m_velocity.z);
-            src_info.m_offset = jeal_source_get_byte_offset(source);
+
+            ALint byte_offset;
+            alGetSourcei(source->m_openal_source, AL_BYTE_OFFSET, &byte_offset);
+            src_info.m_offset = (size_t)byte_offset;
+
             alGetSourcef(source->m_openal_source, AL_PITCH,
                 &src_info.m_pitch);
             alGetSourcef(source->m_openal_source, AL_GAIN,
                 &src_info.m_volume);
             alGetSourcei(source->m_openal_source, AL_LOOPING,
                 &src_info.m_loop);
-            src_info.m_state = jeal_source_get_state(source);
+
+            ALint state;
+            alGetSourcei(source->m_openal_source, AL_SOURCE_STATE, &state);
+
+            switch (state)
+            {
+            case AL_PLAYING:
+                src_info.m_state = jeal_state::PLAYING; break;
+            case AL_PAUSED:
+                src_info.m_state = jeal_state::PAUSED; break;
+            default:
+                assert(state == AL_INITIAL || state == AL_STOPPED);
+                src_info.m_state = jeal_state::STOPPED; break;
+            }
             src_info.m_playing_buffer = source->m_last_played_buffer;
 
             out_context->sources_information.emplace_back(src_info);
@@ -166,11 +190,11 @@ void _jeal_restore_context(const _jeal_global_context* context)
     for (auto* buffer : _jeal_all_buffers)
         _jeal_update_buffer_instance(buffer);
 
-    jeal_listener_position(
+    alListener3f(AL_POSITION,
         context->listener_information.m_position.x,
         context->listener_information.m_position.y,
         context->listener_information.m_position.z);
-    jeal_listener_velocity(
+    alListener3f(AL_VELOCITY,
         context->listener_information.m_velocity.x,
         context->listener_information.m_velocity.y,
         context->listener_information.m_velocity.z);
@@ -183,42 +207,35 @@ void _jeal_restore_context(const _jeal_global_context* context)
         context->listener_orientation[5] 
     };
     alListenerfv(AL_ORIENTATION, orientation);
-    jeal_listener_volume(context->listener_information.m_volume);
+    alListenerf(AL_GAIN, context->listener_information.m_volume);
 
     for (auto& src_info : context->sources_information)
     {
         _jeal_update_source(src_info.m_source);
 
-        jeal_source_position(
-            src_info.m_source,
+        alSource3f(src_info.m_source->m_openal_source, AL_POSITION,
             src_info.m_position.x,
             src_info.m_position.y,
             src_info.m_position.z);
-        jeal_source_velocity(
-            src_info.m_source,
+        alSource3f(src_info.m_source->m_openal_source, AL_VELOCITY,
             src_info.m_velocity.x,
             src_info.m_velocity.y,
             src_info.m_velocity.z);
-        jeal_source_pitch(
-            src_info.m_source,
-            src_info.m_pitch);
-        jeal_source_volume(
-            src_info.m_source,
-            src_info.m_volume);
-        jeal_source_loop(
-            src_info.m_source,
-            src_info.m_loop != 0);
+        alSourcef(src_info.m_source->m_openal_source, AL_PITCH, src_info.m_pitch);
+        alSourcef(src_info.m_source->m_openal_source, AL_GAIN, src_info.m_volume);
+        alSourcei(src_info.m_source->m_openal_source, AL_LOOPING, src_info.m_loop != 0 ? 1 : 0);
 
         if (src_info.m_state != jeal_state::STOPPED)
         {
             assert(src_info.m_playing_buffer != nullptr);
 
-            jeal_source_set_buffer(src_info.m_source, src_info.m_playing_buffer);
-            jeal_source_set_byte_offset(src_info.m_source, src_info.m_offset);
+            alSourcei(src_info.m_source->m_openal_source, AL_BUFFER, src_info.m_playing_buffer->m_openal_buffer);
+            alSourcei(src_info.m_source->m_openal_source, AL_BYTE_OFFSET, (ALint)src_info.m_offset);
+
             if (src_info.m_state == jeal_state::PAUSED)
-                jeal_source_pause(src_info.m_source);
+                alSourcePause(src_info.m_source->m_openal_source);
             else
-                jeal_source_play(src_info.m_source);
+                alSourcePlay(src_info.m_source->m_openal_source);
         }
     }
 }
@@ -273,13 +290,13 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
     {
         if (closed_device->m_alive == false)
         {
-            assert(closed_device != nullptr);
-            alcCloseDevice(closed_device->m_openal_device);
+        assert(closed_device != nullptr);
+        alcCloseDevice(closed_device->m_openal_device);
 
-            jeecs::debug::loginfo("Audio device: %s closed.", closed_device->m_device_name);
-            je_mem_free((void*)closed_device->m_device_name);
+        jeecs::debug::loginfo("Audio device: %s closed.", closed_device->m_device_name);
+        je_mem_free((void*)closed_device->m_device_name);
 
-            delete closed_device;
+        delete closed_device;
         }
     }
 
@@ -293,8 +310,10 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
 jeal_device** jeal_get_all_devices(size_t* out_len)
 {
     std::lock_guard g0(_jeal_all_devices_mx);
+    std::lock_guard g3(_jeal_context_mx);
+
     _jeal_global_context context;
-    
+
     bool need_try_restart_device = false;
     if (_jeal_current_device != nullptr)
     {
@@ -305,7 +324,7 @@ jeal_device** jeal_get_all_devices(size_t* out_len)
     // NOTE: 若当前设备在枚举过程中寄了，那么当前设备会被 _jeal_update_refetch_devices
     //       负责关闭，同时_jeal_current_device被置为nullptr
     jeal_device** result = _jeal_update_refetch_devices(out_len);
-    
+
     if (need_try_restart_device && _jeal_current_device == nullptr)
     {
         // 之前的设备寄了，但是设备已经指定，从列表里捞一个
@@ -333,6 +352,7 @@ void jeal_finish()
     std::lock_guard g0(_jeal_all_devices_mx);
     std::lock_guard g1(_jeal_all_sources_mx);
     std::lock_guard g2(_jeal_all_buffers_mx);
+    std::lock_guard g3(_jeal_context_mx);
 
     assert(_jeal_all_sources.empty());
     assert(_jeal_all_buffers.empty());
@@ -359,19 +379,29 @@ const char* jeal_device_name(jeal_device* device)
     return device->m_device_name;
 }
 
-void jeal_using_device(jeal_device* device)
+bool jeal_using_device(jeal_device* device)
 {
     std::lock_guard g0(_jeal_all_devices_mx);
     std::lock_guard g1(_jeal_all_sources_mx);
     std::lock_guard g2(_jeal_all_buffers_mx);
 
-    assert(device != nullptr);
-   
-    _jeal_global_context context;
-    _jeal_store_current_context(&context);
-    _jeal_shutdown_current_device();
-    _jeal_startup_specify_device(device);
-    _jeal_restore_context(&context);
+    auto fnd = std::find(_jeal_all_devices.begin(), _jeal_all_devices.end(), device);
+    if (fnd == _jeal_all_devices.end())
+    {
+        jeecs::debug::logerr("Trying to use invalid device: %p", device);
+        return false;
+    }
+    if (device != _jeal_current_device)
+    {
+        std::lock_guard g3(_jeal_context_mx);
+
+        _jeal_global_context context;
+        _jeal_store_current_context(&context);
+        _jeal_shutdown_current_device();
+        _jeal_startup_specify_device(device);
+        _jeal_restore_context(&context);
+    }
+    return true;
 }
 
 jeal_source* jeal_open_source()
@@ -379,6 +409,8 @@ jeal_source* jeal_open_source()
     jeal_source* audio_source = new jeal_source;
 
     std::lock_guard g1(_jeal_all_sources_mx);
+    std::shared_lock g3(_jeal_context_mx);
+
     _jeal_all_sources.insert(audio_source);
 
     _jeal_update_source(audio_source);
@@ -390,6 +422,7 @@ jeal_source* jeal_open_source()
 void jeal_close_source(jeal_source* source)
 {
     std::lock_guard g1(_jeal_all_sources_mx);
+    std::shared_lock g3(_jeal_context_mx);
     {
         _jeal_all_sources.erase(source);
     }
@@ -525,6 +558,8 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
     }
 
     std::lock_guard g1(_jeal_all_buffers_mx);
+    std::shared_lock g3(_jeal_context_mx);
+
     _jeal_all_buffers.insert(audio_buffer);
 
     _jeal_update_buffer_instance(audio_buffer);
@@ -535,6 +570,7 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
 void jeal_close_buffer(jeal_buffer* buffer)
 {
     std::lock_guard g1(_jeal_all_buffers_mx);
+    std::shared_lock g3(_jeal_context_mx);
     {
         _jeal_all_buffers.erase(buffer);
     }
@@ -555,41 +591,57 @@ size_t jeal_buffer_byte_rate(jeal_buffer* buffer)
 
 void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     source->m_last_played_buffer = buffer;
     alSourcei(source->m_openal_source, AL_BUFFER, buffer->m_openal_buffer);
 }
 
 void jeal_source_loop(jeal_source* source, bool loop)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSourcei(source->m_openal_source, AL_LOOPING, loop ? 1 : 0);
 }
 
 void jeal_source_play(jeal_source* source)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSourcePlay(source->m_openal_source);
 }
 
 void jeal_source_pause(jeal_source* source)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSourcePause(source->m_openal_source);
 }
 
 void jeal_source_stop(jeal_source* source)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSourceStop(source->m_openal_source);
 }
 
 void jeal_source_position(jeal_source* source, float x, float y, float z)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSource3f(source->m_openal_source, AL_POSITION, x, y, z);
 }
 void jeal_source_velocity(jeal_source* source, float x, float y, float z)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSource3f(source->m_openal_source, AL_VELOCITY, x, y, z);
 }
 
 size_t jeal_source_get_byte_offset(jeal_source* source)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     ALint byte_offset;
     alGetSourcei(source->m_openal_source, AL_BYTE_OFFSET, &byte_offset);
     return byte_offset;
@@ -597,21 +649,29 @@ size_t jeal_source_get_byte_offset(jeal_source* source)
 
 void jeal_source_set_byte_offset(jeal_source* source, size_t byteoffset)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSourcei(source->m_openal_source, AL_BYTE_OFFSET, (ALint)byteoffset);
 }
 
 void jeal_source_pitch(jeal_source* source, float playspeed)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSourcef(source->m_openal_source, AL_PITCH, playspeed);
 }
 
 void jeal_source_volume(jeal_source* source, float volume)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alSourcef(source->m_openal_source, AL_GAIN, volume);
 }
 
 jeal_state jeal_source_get_state(jeal_source* source)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     ALint state;
     alGetSourcei(source->m_openal_source, AL_SOURCE_STATE, &state);
 
@@ -629,16 +689,22 @@ jeal_state jeal_source_get_state(jeal_source* source)
 
 void jeal_listener_position(float x, float y, float z)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alListener3f(AL_POSITION, x, y, z);
 }
 
 void jeal_listener_velocity(float x, float y, float z)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alListener3f(AL_VELOCITY, x, y, z);
 }
 
 void jeal_listener_direction(float yaw, float pitch, float roll)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     jeecs::math::quat rot(yaw, pitch, roll);
     jeecs::math::vec3 facing = rot * jeecs::math::vec3(0.0f, 0.0f, -1.0f);
     jeecs::math::vec3 topping = rot * jeecs::math::vec3(0.0f, 1.0f, 0.0f);
@@ -653,5 +719,7 @@ void jeal_listener_direction(float yaw, float pitch, float roll)
 
 void jeal_listener_volume(float volume)
 {
+    std::shared_lock g3(_jeal_context_mx);
+
     alListenerf(AL_GAIN, volume);
 }
