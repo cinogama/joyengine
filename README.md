@@ -40,7 +40,7 @@ apt install libgl1-mesa-dev libglu1-mesa-dev
 
 ## 鸣谢（Acknowledgments）
 
-感谢 [OpenAL](http://www.openal.org/) 和（或）[OpenAl Soft](https://openal-soft.org/)为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用的OpenAL 1.1基于LGPL协议开源（或许是吧，我在维基百科上看到了各种复杂的说法），并且使用的是官方网站上提供的原始版本的SDK，并没有做出任何修改；使用的OpenAL Soft是OpenAL的软实现，使用LGPL协议开源，可以在[这里](https://github.com/kcat/openal-soft.git)获取到OpenAL Soft的原始代码，JoyEngine使用的版本为原始的1.23.1版本。
+感谢 [OpenAL](http://www.openal.org/) 和（或）[OpenAl Soft](https://openal-soft.org/) 为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用的OpenAL 1.1基于LGPL协议开源（或许是吧，我在维基百科上看到了各种复杂的说法），并且使用的是官方网站上提供的原始版本的SDK，并没有做出任何修改；使用的OpenAL Soft是OpenAL的软实现，使用LGPL协议开源，可以在[这里](https://github.com/kcat/openal-soft.git)获取到OpenAL Soft的原始代码，JoyEngine使用的版本为原始的1.23.1版本。
 > 默认情况下，引擎使用OpenAL Soft而不是OpenAL，这是为了更方便集成。
 
 Thanks to [OpenAL](http://www.openal.org/) and/or [OpenAl Soft](https://openal-soft.org/) for the awesome sounds of this engine Support, but what needs to be explained is that the OpenAL 1.1 used by the engine is open source based on the LGPL protocol (maybe it is, I saw various complicated statements on Wikipedia), and the original version of the SDK provided on the official website is used , and did not make any modifications; the OpenAL Soft used is the soft implementation of OpenAL, which is open-sourced using the LGPL protocol, and can be obtained from [here](https://github.com/kcat/openal-soft.git) The original code, the version used by JoyEngine is the original 1.23.1 version.
