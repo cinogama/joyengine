@@ -6,16 +6,17 @@ A game engine based on ECS architecture implemented in C++ and Woolang.
 
 ## 编译说明（How to compile）
 
-引擎默认使用OpenALSoft 1.23.1，因此默认情况下不需要进行其他配置，若要使用OpenAL1.1，请:
-```
-若在非Windows平台编译，需要安装SDK，以ubuntu为例，执行：
-  apt install libopenal-dev
 
-稍后构建时使用CMAKE参数：
--DJE4_USING_OPENAL_SOFT_INSTEAD_1_1=OFF
-```
+在编译之前，需要安装baozi，用以获取引擎编辑器所需的一些包：
 
-另外需要安装OpenGL和其他SDK，这里列出来方便直接使用
+**安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行**
+
+编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD` 设置为 OFF 关闭安装操作
+
+> CMake版本至少达到 3.20，以保证baozi和编辑器的编译流程能够正常进行
+
+
+若在非Windows平台编译（以ubuntu为例），需要另外安装OpenGL和其他SDK，这里列出来方便直接使用
 
 ```shell
 apt install libx11-dev libxext-dev libxtst-dev libxrender-dev libxmu-dev libxmuu-dev 
@@ -24,23 +25,15 @@ apt install libgl1-mesa-dev libglu1-mesa-dev
 
 ```
 
-在编译之前，还需要安装baozi，用以获取引擎编辑器所需的一些包：
-
-**安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行**
-
-编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD` 设置为 OFF 关闭安装操作
-
-> 推荐CMake版本至少达到 3.20，以保证baozi和编辑器的编译流程能够正常进行
-
 #### 特别注意
-引擎的编辑器目前仅在windows上可以使用完整功能，并且需要配置环境 `MSBUILD` 
-此环境变量应该是MSBUILD.exe的所在目录，
+引擎的编辑器目前仅在windows上可以使用完整功能，并且需要配置环境 `MSBUILD` 和 `CMAKE`
+此环境变量应该是MSBUILD.exe的所在目录，若未配置正确的环境变量，引擎编辑器初次启动时将会提示配置。
 
 ---
 
 ## 鸣谢（Acknowledgments）
 
-感谢 [OpenAL](http://www.openal.org/) 和（或）[OpenAl Soft](https://openal-soft.org/) 为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用的OpenAL 1.1基于LGPL协议开源（或许是吧，我在维基百科上看到了各种复杂的说法），并且使用的是官方网站上提供的原始版本的SDK，并没有做出任何修改；使用的OpenAL Soft是OpenAL的软实现，使用LGPL协议开源，可以在[这里](https://github.com/kcat/openal-soft.git)获取到OpenAL Soft的原始代码，JoyEngine使用的版本为原始的1.23.1版本。
+感谢 [OpenAl Soft](https://openal-soft.org/) 为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用的OpenAL 1.1基于LGPL协议开源（或许是吧，我在维基百科上看到了各种复杂的说法），并且使用的是官方网站上提供的原始版本的SDK，并没有做出任何修改；使用的OpenAL Soft是OpenAL的软实现，使用LGPL协议开源，可以在[这里](https://github.com/kcat/openal-soft.git)获取到OpenAL Soft的原始代码，JoyEngine使用的版本为原始的1.23.1版本。
 > 默认情况下，引擎使用OpenAL Soft而不是OpenAL，这是为了更方便集成。
 
 Thanks to [OpenAL](http://www.openal.org/) and/or [OpenAl Soft](https://openal-soft.org/) for the awesome sounds of this engine Support, but what needs to be explained is that the OpenAL 1.1 used by the engine is open source based on the LGPL protocol (maybe it is, I saw various complicated statements on Wikipedia), and the original version of the SDK provided on the official website is used , and did not make any modifications; the OpenAL Soft used is the soft implementation of OpenAL, which is open-sourced using the LGPL protocol, and can be obtained from [here](https://github.com/kcat/openal-soft.git) The original code, the version used by JoyEngine is the original 1.23.1 version.

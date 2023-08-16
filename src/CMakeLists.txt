@@ -1,6 +1,6 @@
 ﻿# librscene
 #
-cmake_minimum_required (VERSION 3.8)
+cmake_minimum_required (VERSION 3.20)
 
 include_directories("../include")
 include_directories("../3rd/woolang/include")
@@ -16,7 +16,6 @@ include_directories("../3rd/openal-soft/include")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
-
 
 set(imgui_glfw_gl3_src	"../3rd/imgui/backends/imgui_impl_glfw.cpp"
 						"../3rd/imgui/backends/imgui_impl_glfw.h"
