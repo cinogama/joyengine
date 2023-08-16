@@ -16,18 +16,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD "Install pkgs by baozi when building." ON)
-option(JE4_USING_OPENAL_SOFT_INSTEAD_1_1 "Using openal-soft instead of openal 1.1." ON)
 option(JE4_COPYING_BUILTIN_FILES "Copy builtin files to build." ON)
 
-if (JE4_USING_OPENAL_SOFT_INSTEAD_1_1)
-    # openal-soft will be compiled to dynamic-libs
-    add_subdirectory("3rd/openal-soft")
-    add_definitions(-DJEECS_USE_OPENAL_SOFT=1)
-else()
-    set(ENV{OPENALDIR} "${CMAKE_CURRENT_SOURCE_DIR}/3rd/openalsdk")
-    include(FindOpenAL)
-    add_definitions(-DJEECS_USE_OPENAL_SOFT=0)
-endif()
+# openal-soft will be compiled to dynamic-libs
+add_subdirectory("3rd/openal-soft")
+add_definitions(-DJEECS_USE_OPENAL_SOFT=1)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")
