@@ -20,7 +20,6 @@ option(JE4_COPYING_BUILTIN_FILES "Copy builtin files to build." ON)
 
 # openal-soft will be compiled to dynamic-libs
 add_subdirectory("3rd/openal-soft")
-add_definitions(-DJEECS_USE_OPENAL_SOFT=1)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
 add_subdirectory("3rd/glfw")

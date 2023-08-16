@@ -4,9 +4,7 @@
 #include <al.h>
 #include <alc.h>
 
-#ifdef JEECS_USE_OPENAL_SOFT
-#   include <alext.h>
-#endif
+#include <alext.h>
 
 #include <unordered_set>
 #include <vector>
@@ -282,8 +280,8 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
         else
             current_device = *fnd;
 
-#ifdef JEECS_USE_OPENAL_SOFT
         static_assert(ALC_EXT_disconnect);
+
         ALCint device_connected;
         alcGetIntegerv(current_device->m_openal_device, ALC_CONNECTED, 1, &device_connected);
 
@@ -294,9 +292,6 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
         }
         else
             jeecs::debug::logwarn("Audio device: '%s' disconnected, skip.");
-#else
-        _jeal_all_devices.push_back(current_device);
-#endif
 
         current_device_name += strlen(current_device_name) + 1;
     }

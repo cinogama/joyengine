@@ -45,18 +45,10 @@ namespace jeapi::welcome
                     Text("第三方组件及开源许可");
                     TextDisabled("* 所有第三方组件的开源协议(或授权信息)可在 licenses 目录中找到");
                     do BeginChildSize("##copyrights", 700., 500.);
-                    if (je::editor::is_using_openal_soft())
-                    {
-                        Text("OpenAL Soft https://openal-soft.org");
-                        TextDisabled("Copyright (C) ?.");
-                        TextDisabled("OpenAL Soft is licensed under the LGPL License");
-                    }
-                    else
-                    {
-                        Text("OpenAL v1.1 https://www.openal.org");
-                        TextDisabled("Copyright (C) Creative Labs, Inc.");
-                        TextDisabled("OpenAL 1.1 is licensed under the LGPL License");
-                    }
+
+                    Text("OpenAL Soft https://openal-soft.org");
+                    TextDisabled("Copyright (C) kcat.");
+                    TextDisabled("OpenAL Soft is licensed under the LGPL License");
 
                     Text("GLEW https://github.com/nigels-com/glew");
                     TextDisabled("The OpenGL Extension Wrangler Library");
