@@ -62,38 +62,12 @@ namespace editor::Project
     }
 
     // 这是一个类接口对象，用于包装Project::Config<T>
-    public using IConfig = struct{
-        m_tostring: ()=>string,
-        m_parse: (string)=>bool,
-        m_edit: ()=>bool,
-        m_apply: ()=>string,
-    }
-    {
-        public func create<T>(config: T)
-        {
-            return IConfig{
-                m_tostring = \=config->tostring;,
-                m_parse = \str=config->parse(str);,
-                m_edit = \=config->edit;,
-                m_apply = \=config->apply;,
-            };
-        }
-        public func tostring(self: IConfig)
-        {
-            return self.m_tostring();
-        }
-        public func parse(self: IConfig, str: string)
-        {
-            return self.m_parse(str);
-        }
-        public func edit(self: IConfig)
-        {
-            return self.m_edit();
-        }
-        public func apply(self: IConfig)
-        {
-            return self.m_apply();
-        }
-    }
 
+    interface! IConfig
+    {
+        public func tostring(self: IConfig)=> string;
+        public func parse(self: IConfig, str: string)=>bool;
+        public func edit(self: IConfig)=> bool;
+        public func apply(self: IConfig)=> string;
+    }
 }

@@ -5,6 +5,7 @@ import woo::std;
 import woo::debug;
 
 import pkg::filesystem;
+import pkg::interface;
 
 import je;
 import je::editor;

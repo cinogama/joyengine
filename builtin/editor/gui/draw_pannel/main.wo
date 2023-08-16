@@ -232,7 +232,9 @@ namespace editor::gui::drawpannel
         scale:      mut real,
         offset_x:   mut real,
         offset_y:   mut real,
-        drawtool:   mut DrawToolT,
+
+        drawtoolname: mut string,
+        drawtool:   mut IDrawtool,
 
         mousedown:  mut bool,
 
@@ -262,42 +264,19 @@ namespace editor::gui::drawpannel
         return delta;
     }
 
-    using DrawToolT = struct{
-        name: string,
-        on_mouse_down: (graphic::texture, color4_t, (int, int))=>void,
-        on_mouse_hold: (graphic::texture, color4_t, (int, int))=>void,
-        on_mouse_up: (graphic::texture, color4_t, (int, int))=>void,
-    }
+    interface! IDrawtool
     {
-        func create<T>(name: string, instance: T)
-        {
-            return DrawToolT{
-                name = name,
-                on_mouse_down = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseDown(t, c, p);,
-                on_mouse_hold = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseHold(t, c, p);,
-                on_mouse_up = \t: graphic::texture, c: color4_t,p: (int, int) = instance->OnMouseUp(t, c, p);,
-            };
-        }
-        func OnMouseDown(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-            return self.on_mouse_down(target, color, pos);
-        }
-        func OnMouseHold(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-            return self.on_mouse_hold(target, color, pos);
-        }
-        func OnMouseUp(self: DrawToolT, target: graphic::texture, color: color4_t, pos: (int, int))
-        {
-            return self.on_mouse_up(target, color, pos);
-        }
+        public func OnMouseDown(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
+        public func OnMouseHold(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
+        public func OnMouseUp(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
     }
 
     let all_draw_tools = [
-        ("无", \=DrawToolT::create("无", (): tools::Nothing);),
-        ("钢笔", \=DrawToolT::create("钢笔", tools::Pen::create());),
-        ("直线", \=DrawToolT::create("直线", tools::Line::create());),
-        ("矩形", \=DrawToolT::create("矩形", tools::Rect::create());),
-        ("填充", \=DrawToolT::create("填充", (): tools::Fill);),
+        ("无", \=IDrawtool::create((): tools::Nothing);),
+        ("钢笔", \=IDrawtool::create(tools::Pen::create());),
+        ("直线", \=IDrawtool::create(tools::Line::create());),
+        ("矩形", \=IDrawtool::create(tools::Rect::create());),
+        ("填充", \=IDrawtool::create((): tools::Fill);),
     ];
 
     func edittexture(
@@ -468,11 +447,14 @@ namespace editor::gui::drawpannel
                                 EndPopup();
                             }
 
-                            Text(F"当前工具: \n {draw_context.drawtool.name}");
+                            Text(F"当前工具: \n {draw_context.drawtoolname}");
                             for (let _, (name, tool_create_method) : all_draw_tools)
                             {
                                 if (ButtonSize(name, (100., 0.)))
+                                {
                                     draw_context.drawtool = tool_create_method();
+                                    draw_context.drawtoolname = name;
+                                }
                             }
                             EndGroup();
 
@@ -689,6 +671,7 @@ namespace editor::gui::drawpannel
                 offset_x = mut 0.,
                 offset_y = mut 0.,
                 drawtool = mut all_draw_tools[0][1](),
+                drawtoolname = mut all_draw_tools[0][0],
 
                 mousedown = mut false,
 
@@ -782,6 +765,7 @@ namespace editor::gui::drawpannel
                 offset_x = mut 0.,
                 offset_y = mut 0.,
                 drawtool = mut all_draw_tools[0][1](),
+                drawtoolname = mut all_draw_tools[0][0],
 
                 mousedown = mut false,
 

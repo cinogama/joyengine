@@ -1,7 +1,7 @@
 {
     "config" : [
         "release_x64",
-        "debug_x64",
+        "debug_x64"
     ],
     "dependence" : {
         "buffer" : {
@@ -20,6 +20,11 @@
             "version" : "1.0.0"
         },
         "image" : {
+            "path" : "build/pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+            "version" : "1.0.0"
+        },
+        "interface" : {
             "path" : "build/pkg",
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "version" : "1.0.0"
