@@ -22,10 +22,6 @@
 	path = 3rd/box2d
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git
 	branch = master_v2_4_1
-[submodule "3rd/cmake"]
-	path = 3rd/cmake
-	url = https://git.cinogama.net/cinogamaproject/cmake3.20-win32x64.git
-	branch = master
 [submodule "3rd/openalsdk"]
 	path = 3rd/openalsdk
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/openalsdk.git
