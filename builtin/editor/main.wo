@@ -538,11 +538,11 @@ for (;;)
                     
                     Separator();
 
-                    Text("5. 请确认已经安装CMake 3.20或以上版本");
+                    Text("5. 请确认已经安装CMake 3.16或以上版本");
                     Text("6. 请找到CMake的 cmake.exe 所在路径");
                     TextDisabled("  * 以安装在C盘的为例，cmake.exe所在路径可能为:");
                     TextDisabled("    "); SameLine();
-                    do InputText("(仅供参考)", @"C:\Program Files\cmake-3.20.0-rc3-windows-x86_64\bin"@);
+                    do InputText("(仅供参考)", @"C:\Program Files\cmake-3.16.3-rc3-windows-x86_64\bin"@);
                     Text("7. 请设置环境变量 `CMAKE` 指向此路径");
 
                     Separator();

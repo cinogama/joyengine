@@ -1,6 +1,6 @@
 # JoyECS
 #
-cmake_minimum_required (VERSION 3.20)
+cmake_minimum_required (VERSION 3.16)
 
 project ("JoyECS")
 set(CMAKE_CXX_STANDARD 17)

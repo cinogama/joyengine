@@ -13,7 +13,7 @@ A game engine based on ECS architecture implemented in C++ and Woolang.
 
 编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD` 设置为 OFF 关闭安装操作
 
-> CMake版本至少达到 3.20，以保证baozi和编辑器的编译流程能够正常进行
+> CMake版本至少达到 3.16，以保证baozi和编辑器的编译流程能够正常进行
 
 
 若在非Windows平台编译（以ubuntu为例），需要另外安装OpenGL和其他SDK，这里列出来方便直接使用
