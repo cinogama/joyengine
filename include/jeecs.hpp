@@ -2760,6 +2760,9 @@ jeal_listener_volume [基本接口]
 */
 JE_API void             jeal_listener_volume(float volume);
 
+struct je_monobehavior;
+JE_API je_monobehavior* je_script_monobehavior_register();
+
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
 
@@ -7924,6 +7927,27 @@ namespace jeecs
     }
     namespace Script
     {
+        template<typename DerivedT>
+        struct MonoBehavior
+        {
+            // 单一行为组件，类似Unity中提供的MonoBehavior，用于提供简单行为
+            MonoBehavior()
+            {
+
+            }
+            MonoBehavior(MonoBehavior&& another)
+            {
+
+            }
+            ~MonoBehavior()
+            {
+
+            }
+            MonoBehavior(const MonoBehavior&) = delete;
+            MonoBehavior& operator = (const MonoBehavior&) = delete;
+            MonoBehavior& operator = (MonoBehavior&&&) = delete;
+        };
+
         struct Woolang
         {
             basic::fileresource<void> path;
