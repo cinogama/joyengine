@@ -1448,7 +1448,6 @@ struct jegl_interface_config
 
 struct jegl_thread_notifier;
 struct jegl_graphic_api;
-struct jegl_resource;
 
 /*
 jegl_thread [类型]
@@ -1760,18 +1759,19 @@ struct jegl_resource
     bool m_shared_resource;
     jegl_thread* m_graphic_thread;
     jeecs::typing::version_t m_graphic_thread_version;
-    union
+
+    union resource_handle
     {
         void* m_ptr;
-        size_t m_handle;
+        size_t m_hdl;
         struct
         {
             uint32_t m_uint1;
             uint32_t m_uint2;
-            uint32_t m_uint3;
-            uint32_t m_uint4;
         };
     };
+    resource_handle m_handle;
+
     const char* m_path;
     uint32_t*   m_raw_ref_count;
     union
@@ -1800,7 +1800,7 @@ struct jegl_graphic_api
     using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
 
-    using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*, jegl_vertex::type);
+    using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*);
     using bind_texture_func_t = void(*)(jegl_thread*, jegl_resource*, size_t);
 
     using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t, size_t, size_t, size_t);
@@ -1942,6 +1942,7 @@ JE_API jegl_resource* jegl_create_framebuf(
 jegl_copy_resource [基本接口]
 复制一个图形资源实例
     * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+    * jegl_copy_resource 目前仅用于复制shader实例，其他资源复制后的行为不在预料之内
 请参见：
     jegl_close_resource
 */
@@ -2086,7 +2087,7 @@ jegl_draw_vertex [基本接口]
     jegl_using_resource
     jegl_using_texture
 */
-JE_API void jegl_draw_vertex(jegl_resource* vert, jegl_vertex::type draw_type);
+JE_API void jegl_draw_vertex(jegl_resource* vert);
 
 /*
 jegl_clear_framebuffer [基本接口]
@@ -2306,12 +2307,6 @@ jegl_rchain_draw [基本接口]
     * 若绘制的物体不需要使用纹理，可以使用不绑定纹理的纹理组或传入 SIZE_MAX
 */
 JE_API jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, size_t texture_group);
-
-/*
-jegl_rchain_specify_draw_method [基本接口]
-重新指定使用的绘制方法，替代原本顶点的绘制方法
-*/
-JE_API void jegl_rchain_specify_draw_method(jegl_rendchain_rend_action* act, jegl_vertex::type drawtype);
 
 /*
 jegl_rchain_set_uniform_int [基本接口]
@@ -5946,13 +5941,6 @@ namespace jeecs
                     return new texture(res);
                 return nullptr;
             }
-            static basic::resource<texture> copy(const texture& tex)
-            {
-                jegl_resource* res = jegl_copy_resource(tex.resouce());
-                if (res != nullptr)
-                    return new texture(res);
-                return nullptr;
-            }
             static basic::resource<texture> create(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling)
             {
                 jegl_resource* res = jegl_create_texture(width, height, format, sampling);
@@ -6222,13 +6210,6 @@ namespace jeecs
                     return new vertex(res);
                 return nullptr;
             }
-            static basic::resource<vertex> copy(const vertex& vet)
-            {
-                auto* res = jegl_copy_resource(vet.resouce());
-                if (res != nullptr)
-                    return new vertex(res);
-                return nullptr;
-            }
             static basic::resource<vertex> create(jegl_vertex::type type, const std::vector<float>& pdatas, const std::vector<size_t>& formats)
             {
                 auto* res = jegl_create_vertex(type, pdatas.data(), formats.data(), pdatas.size(), formats.size());
@@ -6266,10 +6247,30 @@ namespace jeecs
             {
                 if (index < resouce()->m_raw_framebuf_data->m_attachment_count)
                 {
-                    auto* attachments = (basic::resource<graphic::texture>*)resouce()->m_raw_framebuf_data->m_output_attachments;
+                    auto* attachments = std::launder(
+                        reinterpret_cast<basic::resource<graphic::texture>*>(
+                            resouce()->m_raw_framebuf_data->m_output_attachments));
                     return attachments[index];
                 }
                 return nullptr;
+            }
+
+            inline size_t height() const noexcept
+            {
+                assert(resouce()->m_raw_framebuf_data != nullptr);
+                return resouce()->m_raw_framebuf_data->m_height;
+            }
+            inline size_t width() const noexcept
+            {
+                assert(resouce()->m_raw_framebuf_data != nullptr);
+                return resouce()->m_raw_framebuf_data->m_width;
+            }
+            inline math::ivec2 size() const noexcept
+            {
+                assert(resouce()->m_raw_framebuf_data != nullptr);
+                return math::ivec2(
+                    (int)resouce()->m_raw_framebuf_data->m_width,
+                    (int)resouce()->m_raw_framebuf_data->m_height);
             }
         };
 

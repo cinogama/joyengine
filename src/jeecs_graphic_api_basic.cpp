@@ -23,7 +23,6 @@ struct jegl_thread_notifier
 };
 
 thread_local jegl_thread* _current_graphic_thread = nullptr;
-void* const INVALID_RESOURCE = (void*)(size_t)-1;
 
 jeecs::basic::atomic_list<jegl_resource::jegl_destroy_resouce> _destroing_graphic_resources;
 bool _jegl_rchain_resource_used_by_chain(jegl_rendchain* chain, jegl_resource* resource);
@@ -118,9 +117,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             {
                 if (need_release)
                 {
-                    if (deleting_resource->m_destroy_resource->m_ptr != INVALID_RESOURCE)
-                        thread->m_apis->close_resource(thread, deleting_resource->m_destroy_resource);
-
+                    thread->m_apis->close_resource(thread, deleting_resource->m_destroy_resource);
                     delete deleting_resource->m_destroy_resource;
                     delete deleting_resource;
                 }
@@ -442,7 +439,6 @@ void jegl_close_resource(jegl_resource* resource)
 
         delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count));
         resource->m_raw_ref_count = nullptr;
-
         _jegl_free_resource_instance(resource);
     }
     else if (resource->m_shared_resource == false)
@@ -463,6 +459,7 @@ void jegl_close_resource(jegl_resource* resource)
         resource->m_custom_resource = nullptr;
         _jegl_free_resource_instance(resource);
     }
+    // 注意：jegl_close_resource有可能被用于释放
 }
 
 jegl_resource* _create_resource()
@@ -484,7 +481,7 @@ jegl_resource* jegl_copy_resource(jegl_resource* resource)
 
     jegl_resource* res = new jegl_resource(*resource);
 
-    res->m_handle = 0;
+    res->m_handle = {};
     res->m_graphic_thread = nullptr;
     res->m_graphic_thread_version = 0;
     res->m_shared_resource = false;
@@ -513,6 +510,12 @@ jegl_resource* jegl_copy_resource(jegl_resource* resource)
                 uniform_var = uniform_var->m_next;
             }
             res->m_raw_shader_data = new_shad_instance;
+        }
+        else
+        {
+            jeecs::debug::logerr("`jegl_copy_resource` is only designed to copy "
+                "shader instances, but trying to copy('%p') now.",
+                resource);
         }
     }
     return res;
@@ -1161,9 +1164,9 @@ void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t u
     }
 }
 
-void jegl_draw_vertex(jegl_resource* vert, jegl_vertex::type draw_type)
+void jegl_draw_vertex(jegl_resource* vert)
 {
-    _current_graphic_thread->m_apis->draw_vertex(_current_graphic_thread, vert, draw_type);
+    _current_graphic_thread->m_apis->draw_vertex(_current_graphic_thread, vert);
 }
 
 void jegl_clear_framebuffer(jegl_resource* framebuffer)

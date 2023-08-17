@@ -312,17 +312,18 @@ public let frag =
             float znear = clip ? clip->znear : 0.3f;
             float zfar = clip ? clip->zfar : 1000.0f;
 
-            jegl_resource* rend_aim_buffer = rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer->resouce() : nullptr;
+            graphic::framebuffer* rend_aim_buffer = 
+                rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer.get() : nullptr;
 
             size_t
                 RENDAIMBUFFER_WIDTH =
                 (size_t)llround(
                     (viewport ? viewport->viewport.z : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
+                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)),
                 RENDAIMBUFFER_HEIGHT =
                 (size_t)llround(
                     (viewport ? viewport->viewport.w : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
+                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT));
 
             if (ortho)
             {
@@ -484,29 +485,31 @@ public let frag =
 
             for (auto& current_camera : m_camera_list)
             {
-                jegl_resource* rend_aim_buffer = nullptr;
+                graphic::framebuffer* rend_aim_buffer = nullptr;
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
-                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->resouce();
+                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
                 }
 
                 size_t
-                    RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH,
-                    RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT;
+                    RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
+                    RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
 
                 jegl_rendchain* rend_chain = nullptr;
 
                 if (current_camera.viewport)
-                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                        rend_aim_buffer ==nullptr ? nullptr : rend_aim_buffer->resouce(),
                         (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                         (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                 else
-                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                        rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 // If camera rend to texture, clear the frame buffer (if need)
@@ -720,17 +723,18 @@ public let frag =
             float znear = clip ? clip->znear : 0.3f;
             float zfar = clip ? clip->zfar : 1000.0f;
 
-            jegl_resource* rend_aim_buffer = rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer->resouce() : nullptr;
+            graphic::framebuffer* rend_aim_buffer =
+                rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer.get() : nullptr;
 
             size_t
                 RENDAIMBUFFER_WIDTH =
                 (size_t)llround(
                     (viewport ? viewport->viewport.z : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
+                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)),
                 RENDAIMBUFFER_HEIGHT =
                 (size_t)llround(
                     (viewport ? viewport->viewport.w : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
+                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT));
 
             if (ortho)
             {
@@ -820,18 +824,18 @@ public let frag =
 
             for (auto& current_camera : m_camera_list)
             {
-                jegl_resource* rend_aim_buffer = nullptr;
+                graphic::framebuffer* rend_aim_buffer = nullptr;
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
-                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->resouce();
+                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
                 }
 
                 size_t
-                    RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH,
-                    RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT;
+                    RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
+                    RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
 
                 const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
                 const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
@@ -842,13 +846,15 @@ public let frag =
                 jegl_rendchain* rend_chain = nullptr;
 
                 if (current_camera.viewport)
-                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                        rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                         (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                         (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                 else
-                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
+                        rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 // If camera rend to texture, clear the frame buffer (if need)
@@ -1340,17 +1346,18 @@ public func frag(_: v2f)
             float znear = clip ? clip->znear : 0.3f;
             float zfar = clip ? clip->zfar : 1000.0f;
 
-            jegl_resource* rend_aim_buffer = rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer->resouce() : nullptr;
+            graphic::framebuffer* rend_aim_buffer =
+                rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer.get() : nullptr;
 
             size_t
                 RENDAIMBUFFER_WIDTH =
                 (size_t)llround(
                     (viewport ? viewport->viewport.z : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
+                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)),
                 RENDAIMBUFFER_HEIGHT =
                 (size_t)llround(
                     (viewport ? viewport->viewport.w : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
+                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT));
 
             if (ortho)
             {
@@ -1409,23 +1416,23 @@ public func frag(_: v2f)
 
                         if (light2dpostpass != nullptr)
                         {
-                            auto* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
-                                ? rendbuf->framebuffer->resouce()
+                            graphic::framebuffer* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
+                                ? rendbuf->framebuffer.get()
                                 : nullptr;
 
                             size_t
                                 RENDAIMBUFFER_WIDTH =
                                 (size_t)llround(
                                     (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH)),
+                                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)),
                                 RENDAIMBUFFER_HEIGHT =
                                 (size_t)llround(
                                     (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT));
+                                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT));
 
                             bool need_update = light2dpostpass->post_rend_target == nullptr
-                                || light2dpostpass->post_rend_target->resouce()->m_raw_framebuf_data->m_width != RENDAIMBUFFER_WIDTH
-                                || light2dpostpass->post_rend_target->resouce()->m_raw_framebuf_data->m_height != RENDAIMBUFFER_HEIGHT;
+                                || light2dpostpass->post_rend_target->width() != RENDAIMBUFFER_WIDTH
+                                || light2dpostpass->post_rend_target->height() != RENDAIMBUFFER_HEIGHT;
                             if (need_update && RENDAIMBUFFER_WIDTH > 0 && RENDAIMBUFFER_HEIGHT > 0)
                             {
                                 light2dpostpass->post_rend_target
@@ -1476,8 +1483,8 @@ public func frag(_: v2f)
                         {
                             bool generate_new_framebuffer =
                                 shadow->shadow_buffer == nullptr
-                                || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_width != shadow->resolution_width
-                                || shadow->shadow_buffer->resouce()->m_raw_framebuf_data->m_height != shadow->resolution_height;
+                                || shadow->shadow_buffer->width() != shadow->resolution_width
+                                || shadow->shadow_buffer->height() != shadow->resolution_height;
 
                             if (generate_new_framebuffer && shadow->resolution_width > 0 && shadow->resolution_height > 0)
                             {
@@ -1621,18 +1628,18 @@ public func frag(_: v2f)
 
             for (auto& current_camera : m_camera_list)
             {
-                jegl_resource* rend_aim_buffer = nullptr;
+                graphic::framebuffer* rend_aim_buffer = nullptr;
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
-                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->resouce();
+                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
                 }
 
                 size_t
-                    RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_width : WINDOWS_WIDTH,
-                    RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->m_raw_framebuf_data->m_height : WINDOWS_HEIGHT;
+                    RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
+                    RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
 
                 const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
                 const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
@@ -1657,12 +1664,12 @@ public func frag(_: v2f)
                     {
                         if (lightarch.shadow != nullptr)
                         {
-                            auto light2d_shadow_aim_buffer = lightarch.shadow->shadow_buffer->resouce();
+                            auto light2d_shadow_aim_buffer = lightarch.shadow->shadow_buffer.get();
                             jegl_rendchain* light2d_shadow_rend_chain = jegl_branch_new_chain(
                                 current_camera.branchPipeline,
-                                light2d_shadow_aim_buffer, 0, 0,
-                                light2d_shadow_aim_buffer->m_raw_framebuf_data->m_width,
-                                light2d_shadow_aim_buffer->m_raw_framebuf_data->m_height);
+                                light2d_shadow_aim_buffer->resouce(), 0, 0,
+                                light2d_shadow_aim_buffer->width(),
+                                light2d_shadow_aim_buffer->height());
 
                             jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain);
                             jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain);
@@ -1898,13 +1905,15 @@ public func frag(_: v2f)
                 else
                 {
                     if (current_camera.viewport)
-                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer,
+                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                            rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                             (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                             (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                     else
-                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, rend_aim_buffer, 
+                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                            rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                             0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     // If camera rend to texture, clear the frame buffer (if need)
@@ -2124,14 +2133,15 @@ public func frag(_: v2f)
                     jegl_rendchain* final_target_rend_chain = nullptr;
                     if (current_camera.viewport)
                         final_target_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
-                            rend_aim_buffer,
+                            rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                             (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                             (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                     else
                         final_target_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
-                            rend_aim_buffer, 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                            rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
+                            0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (rend_aim_buffer)
@@ -2184,8 +2194,8 @@ public func frag(_: v2f)
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
-                            (float)current_camera.light2DPostPass->post_light_target->resouce()->m_raw_framebuf_data->m_width,
-                            (float)current_camera.light2DPostPass->post_light_target->resouce()->m_raw_framebuf_data->m_height);
+                            (float)current_camera.light2DPostPass->post_light_target->width(),
+                            (float)current_camera.light2DPostPass->post_light_target->height());
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);

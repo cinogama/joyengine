@@ -31,7 +31,6 @@ struct jegl_rendchain_rend_action
     jegl_rendchain* m_chain;
     jegl_resource* m_vertex;
     jegl_resource* m_shader;
-    jegl_vertex::type m_drawmethod;
     std::vector<size_t> m_binding_uniforms;
     size_t m_binding_textures;
 };
@@ -140,13 +139,9 @@ jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resourc
     action.m_binding_uniforms.clear();
     action.m_shader = shader;
     action.m_vertex = vertex;
-    jegl_rchain_specify_draw_method(&action, (jegl_vertex::type)vertex->m_uint3);
     return &action;
 }
-void jegl_rchain_specify_draw_method(jegl_rendchain_rend_action* act, jegl_vertex::type drawtype)
-{
-    act->m_drawmethod = drawtype;
-}
+
 jegl_uniform_data_node* _jegl_rchain_get_uniform_node(jegl_rendchain_rend_action* act, int binding_place)
 {
     size_t uniform_index = act->m_chain->m_used_uniform_count++;
@@ -347,6 +342,6 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread)
                 }
             }
         }
-        jegl_draw_vertex(action.m_vertex, action.m_drawmethod);
+        jegl_draw_vertex(action.m_vertex);
     }
 }
