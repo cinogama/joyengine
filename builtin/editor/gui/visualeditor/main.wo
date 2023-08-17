@@ -31,7 +31,18 @@ namespace visualeditor
         }
     }
 
-    using InValuePort = void;
+    using Type = struct
+    {
+        m_name: string,
+    };
+    using TypedValue = struct
+    {
+        m_type: Type,
+        m_value: mut dynamic,
+    };
+    using InValuePort = struct{
+        m_typed_value: ITypedValue
+    };
     using OutValuePort = void;
     using InBehaviorPort = void;
     using OutBehaviorPort = void;
