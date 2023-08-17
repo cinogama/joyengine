@@ -841,15 +841,6 @@ namespace jeecs_impl
             _find_or_create_buffer_for(e).m_entity_removed_flag = true;
         }
 
-        // ATTENTION: 
-        /*
-        if (e.get_component<...>())
-            e.get_component<...>();
-
-        THIS OPERATION IS NOT THREAD SAFE.
-        * If need to get component and add it if this component,
-        * There is NO-WAY! for now!!!
-        */
         void* append_component(const arch_type::entity& e, const jeecs::typing::type_info* component_type)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);

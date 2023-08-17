@@ -37,5 +37,5 @@ match (copy_all_licenses())
 {
 ok(_)?;
 err(_)?
-    std::panic("Failed to get 3rd licenses");
+    std::halt("Failed to copy 3rd licenses");
 }
