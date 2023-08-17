@@ -7945,7 +7945,7 @@ namespace jeecs
             }
             MonoBehavior(const MonoBehavior&) = delete;
             MonoBehavior& operator = (const MonoBehavior&) = delete;
-            MonoBehavior& operator = (MonoBehavior&&&) = delete;
+            MonoBehavior& operator = (MonoBehavior&&) = delete;
         };
 
         struct Woolang
@@ -7960,8 +7960,6 @@ namespace jeecs
             wo_value     _vm_context = nullptr;
 
             Woolang() = default;
-            Woolang(const Woolang&) = delete;
-            Woolang& operator = (const Woolang&) = delete;
             Woolang(Woolang&& woolang)
             {
                 path = woolang.path;
@@ -7972,16 +7970,9 @@ namespace jeecs
                 _vm_context = woolang._vm_context;
                 woolang._vm_instance = nullptr;
             }
-            Woolang& operator = (Woolang&& woolang)
-            {
-                path = woolang.path;
-                _vm_failed = woolang._vm_failed;
-                _vm_instance = woolang._vm_instance;
-                _vm_create_func = woolang._vm_create_func;
-                _vm_update_func = woolang._vm_update_func;
-                _vm_context = woolang._vm_context;
-                woolang._vm_instance = nullptr;
-            }
+            Woolang(const Woolang&) = delete;
+            Woolang& operator = (const Woolang&) = delete;
+            Woolang& operator = (Woolang&& woolang) = delete;
             ~Woolang()
             {
                 if (_vm_instance != nullptr)
