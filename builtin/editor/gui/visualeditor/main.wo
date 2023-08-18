@@ -15,7 +15,7 @@
 import pkg::interface;
 
 import woo::std;
-import woo::gui;
+import je::gui;
 
 using je;
 using std;
@@ -25,56 +25,197 @@ namespace visualeditor
 {
     using uid_t = string
     {
-        func create()
+        func create()=> uid_t
         {
             return uid(): uid_t;
         }
     }
-
-    using Type = struct
+    
+    using IType = struct
     {
         m_name: string,
-    };
-    using TypedValue = struct
+        m_color: (int, int, int, int),
+        m_typeid: int,
+    }
     {
-        m_type: Type,
-        m_value: mut dynamic,
-    };
-    using InValuePort = struct{
-        m_typed_value: ITypedValue
-    };
-    using OutValuePort = void;
-    using InBehaviorPort = void;
-    using OutBehaviorPort = void;
+        func create<T>()
+        {
+            return IType{
+                m_name = typeof(declval:<T>())::name,
+                m_color = typeof(declval:<T>())::color,
+                m_typeid = typeid:<T>,
+            };
+        }
+    }
 
-    using ValueNode = struct
+    using Value<T> = struct
+    {
+        m_value: mut typeof(declval:<T>())::value_t,
+    }
+    {
+        func get_type<T>(self: Value<T>)=> IType
+        {
+            return IType::create:<T>();
+        }
+        func edit<T>(self: Value<T>)=> bool
+        {
+            return typeof(declval:<T>())::edit(self);
+        }
+    }
+
+    interface! IValue
+    {
+        func edit(self: IValue)=> bool;
+        func get_type(self: IValue)=> IType;
+    }
+    
+    using InPort = struct
+    {
+        m_uid: uid_t,
+        m_name: string,
+        m_typed_value: IValue,
+    };
+    using OutPort = struct
+    {
+        m_uid: uid_t,
+        m_name: string,
+        m_type: IType,
+    }
+    {
+        func create<OutT>(name: string)
+        {
+            return OutPort{
+                m_uid = uid_t::create(),
+                m_name = name,
+                m_type = IType::create:<OutT>(),
+            };
+        }
+    }
+
+    using Node = struct
     {
         // 值节点是值端口的集合
-        m_in_vports: array<(string, InValuePort)>,
-        m_out_vports: array<(string, OutValuePort)>,
-    };
-
-    using BehaviorNode = struct
+        m_uid: uid_t,
+        m_in_vports: vec<InPort>,
+        m_out_vports: vec<OutPort>,
+    }
     {
-        // 行为节点是值端口和行为端口的集合
-        m_in_vports: array<(string, InValuePort)>,
-        m_in_aports: array<(string, InBehaviorPort)>,
-        m_out_aports: array<(string, OutBehaviorPort)>,
-    };
+        func create()
+        {
+            return Node{
+                m_uid = uid_t::create(),
+                m_in_vports = []mut,
+                m_out_vports = []mut,
+            };
+        }
+        public func define_out<OutT>(self: Node, name: string)
+        {
+            let oport = OutPort::create:<OutT>(name);
+            self.m_out_vports->add(oport);
+            return oport;
+        }
+    }
 
     interface! INode
     {
-        func is_behavior_node(self: INode)=> bool;
-        func get_name(self: INode)=> string;
-        func get_in_value_ports(self: INode)=> array<(string, InValuePort)>;
-        func get_out_value_ports(self: INode)=> array<(string, OutValuePort)>;
-        func get_in_behavior_ports(self: INode)=> array<(string, InBehaviorPort)>;
-        func get_out_behavior_ports(self: INode)=> array<(string, OutBehaviorPort)>;
+        func serialize(self: INode)=> string;
+        func deserialize(self: INode, data: string)=> bool;
+    }
+
+    using Behavior = void
+    {
+        public let name = "Behavior";
+        public let color = (75, 75, 75, 255);
+        public alias value_t = void;
+    }
+
+    using BeginNode = struct{
+        m_next: OutPort
+    }
+    {
+        public func create(node: Node)
+        {
+            return BeginNode{
+                m_next = node->define_out :<Behavior>("next"),
+            };
+        }
+        public func serialize(_: BeginNode)
+        {
+            return "";
+        }
+        public func deserialize(_: BeginNode, _: string)
+        {
+            return true;
+        }
     }
 
     using Graph = struct
     {
         // 图是节点和链接关系的集合
-        m_nodes: dict<uid_t, INode>,
-    };
+        m_nodes: map<uid_t, (Node, INode)>,
+
+        m_scale: mut real,
+        m_center: mut (real, real),
+    }
+    {
+        func create()
+        {
+            return Graph{
+                m_nodes = {}mut,
+                m_scale = mut 1.0,
+                m_center = mut (0., 0.),
+            };
+        }
+        func add_node<NodeT>(self: Graph)
+        {
+            let node = Node::create();
+            let nodeinstance = typeof(declval:< NodeT>())::create(node);
+            self.m_nodes->set(node.m_uid, (node, INode::create(nodeinstance)));
+            return nodeinstance;
+        }
+        func edit(self: Graph, availsz: (real, real))
+        {
+            do self;
+
+            let drawlist = GetWindowDrawList();
+
+            let (avaliw, avalih) = availsz;
+
+            do InvisibleButton("##edit_range", (avaliw <= 100. ? 100. | avaliw, avalih <= 100. ? 100. | avalih));
+            let (p0, p1) = GetItemRect();
+            
+            PushClipRect(p0, p1);
+            drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+            
+            // TODO: Draw node here.
+
+            PopClipRect();
+        }
+    }
+
+    public func main()
+    {
+        let testg = Graph::create();
+        do testg->add_node :<BeginNode>();
+        launch(func()
+            {
+                match (BeginOpen("节点编辑器 测试"))
+                {
+                value(show)?
+                    {
+                        if (show)
+                        {
+                            testg->edit(GetContentRegionAvail());
+                        }
+                        End();
+                        return true;
+                    }
+                none?
+                    {
+                        End();
+                        return false;
+                    }
+                }
+            }, ());
+    }
 }

@@ -18,6 +18,9 @@ import builtin::editor::environment::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main;
 
+// TEST~
+import builtin::editor::gui::visualeditor::main;
+
 jeapi::welcome::display_copyright_msg();
 
 using je::gui;
@@ -405,7 +408,10 @@ for (;;)
         let w = u->create_world;
         do w->add_system(je::typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->val);
 
-        if (editor::CxxProject::is_builder_ready())
+        // TEST~
+        if (true)
+            visualeditor::main();
+        else if (editor::CxxProject::is_builder_ready())
             launch(func(){
                 let open = mutable::create(true);
 
