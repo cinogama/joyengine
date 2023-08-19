@@ -1025,7 +1025,7 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND   (SRC_ALPHA, ZERO);
 CULL    (BACK);
 
 VAO_STRUCT! vin 
@@ -1076,7 +1076,7 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND   (SRC_ALPHA, ZERO);
 CULL    (FRONT);
 
 VAO_STRUCT! vin
@@ -1119,7 +1119,7 @@ public func frag(_: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND   (SRC_ALPHA, ZERO);
 CULL    (BACK);
 
 VAO_STRUCT! vin 
@@ -1170,7 +1170,7 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND   (SRC_ALPHA, ZERO);
 CULL    (FRONT);
 
 VAO_STRUCT! vin
