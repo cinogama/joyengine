@@ -6,6 +6,8 @@ import je::gui;
 import je::editor;
 
 import pkg::try;
+import pkg::filesystem;
+import pkg::image;
 
 using std;
 using je;
@@ -16,13 +18,35 @@ namespace tilemap
 {
     // 由于Tilemap的特性，Tile的纹理坐标不是引擎内置的以左下角为原点，而是以左上角为原点。
     using Tile = struct{
-        texture: graphic::string,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
+        texture: graphic::texture,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
         tile_components: dict<typeinfo, dict<string/*member name*/, string /*member value*/>>,
     }
     {
-        func create(maintex: graphic::texture, crc64: int, ix: int, iy: int)
+        func _create_clip_texture(
+            path: filesys::path_t, 
+            maintex: graphic::texture, 
+            crc64: int, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
         {
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
 
+            let tileimage = image::create(tile_w, tile_h);
+            // 
+
+            std::panic("TODO");
+        }
+        func create(context: EditorContext, 
+            maintex: graphic::texture, 
+            crc64: int, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let tilemap_path = context->get_project.m_path / "resource" / "texture" / "tilemap";
+            do filesys::mkdir(tilemap_path);
+            try! tiletexture = context->get_project->make_path_normalize(tilemap_path)
+                ->  orbind(\=_create_clip_texture(tilemap_path, maintex, crc64, ix, iy, xcount, ycount););
         }
     }
 
@@ -32,7 +56,7 @@ namespace tilemap
         tiles: array<array<Tile>>,
     }
     {
-        func create(tilemaptex: graphic::texture, xcount: int, ycount: int)
+        func create(context: EditorContext, tilemaptex: graphic::texture, xcount: int, ycount: int)
         {
             try! crc64 = tilemaptex->path
                 =>> \p = crc64file(p);
@@ -46,7 +70,7 @@ namespace tilemap
                 let ytiles = []mut: vec<Tile>;
                 for (let mut iy = 0; i < ycount; iy += 1)
                 {
-                    ytiles->add(Tile::create(tilemaptex, crc64, ix, iy));
+                    ytiles->add(Tile::create(context, tilemaptex, crc64, ix, iy, xcount, ycount));
                 }
                 tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
             }
@@ -57,13 +81,9 @@ namespace tilemap
                     tiles = tiles as vec<array<Tile>>->unsafe::cast :<array<array<Tile>>>(),
                 });
         }
-        func load()
-        {
-
-        }
     }
 
-    public func main()
+    public func main(context: EditorContext)
     {
 
     }
