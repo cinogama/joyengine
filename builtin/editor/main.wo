@@ -296,6 +296,7 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
 
                     action_after_guide_form_closed = 
                         func(){
+                            je::editor::set_able_shared_glresource(true);
                             try! p = editor::Project::create(projname, regular_path);
                             
                             apply_editor_data_when_start_up_project(editordat);
@@ -363,6 +364,7 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
             action_after_guide_form_closed = 
                 func()
                 {
+                    je::editor::set_able_shared_glresource(true);
                     try! p = editor::Project::load(path, dat);
 
                     apply_editor_data_when_start_up_project(editordat);
@@ -384,6 +386,8 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
 
 for (;;)
 {
+    je::editor::set_able_shared_glresource(false);
+
     let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val;
     let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP.png")->val;
     let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
@@ -573,3 +577,6 @@ for (;;)
         }
     }
 }
+
+// 退出的时候关掉共享图形资源
+je::editor::set_able_shared_glresource(false);

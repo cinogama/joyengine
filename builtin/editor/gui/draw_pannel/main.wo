@@ -213,6 +213,11 @@ namespace editor::gui::drawpannel
             if (self->undoable())
                 self.m_history[self.m_current -:= 1]->restore;
         }
+        func reset(self: HistoryManager)
+        {
+            self.m_current = 0;
+            self.m_history[0]->restore();
+        }
         func redo(self: HistoryManager)
         {
             if (self->redoable())
@@ -377,6 +382,10 @@ namespace editor::gui::drawpannel
         
                                     if (MenuItemShortcutEnabled("重做", "Ctrl + Y", history_mgr->redoable()))
                                         history_mgr->redo();
+
+                                    if (MenuItem("重置为原始状态"))
+                                        history_mgr->reset();
+
 
                                     Separator();
                                     if (BeginMenu("从……复制"))
@@ -635,7 +644,14 @@ namespace editor::gui::drawpannel
                 {
                     draw_context.openform = false;
                     if (!ok)
+                    {
+                        // 不保存，但是因为共享纹理机制，需要把纹理reset回原始状态
+                        for (let _, (_, history) : draw_context.edited_textures)
+                        {
+                            history->reset();
+                        }
                         return;
+                    }
                         
                     for (let _, act : saving_image_action)
                         act();

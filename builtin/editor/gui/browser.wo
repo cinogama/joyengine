@@ -656,19 +656,43 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 });
         }
     }
+    func for_all_entity_in_universe_do(context: EditorContext, dowhat: (je::entity)=>bool)
+    {
+        return context->get_project->get_env->get_universe
+            ->  editor::get_all_worlds
+            =>> \w: je::world = w
+                ->  editor::get_all_entities
+                ->> dowhat
+                ;
+            ->  reduce(\l, r = l && r;)
+            ->  valor(false)
+            ;
+    }
     public func update_shader(context: EditorContext, path: string)
     {
-        // 从universe中获取所有world，更新world中所有实体的shader
-        do context->get_project->get_env->get_universe
-            ->  editor::get_all_worlds
-            ->> \w: je::world = w
-                ->  editor::get_all_entities
-                ->> \e: je::entity = 
-                    e->editor::graphic::try_reload_shaders(shader_path, shader_path)
-                        where shader_path = context->get_project->make_path_normalize(filesys::normalize(path))
-                    ;
-                ;
-            ;
+        // 从universe中获取所有world，更新world中所有实体
+        let wrapped_path = context->get_project->make_path_normalize(filesys::normalize(path));
+
+        do je::editor::mark_shared_glresource_outdated(wrapped_path);
+        if (!for_all_entity_in_universe_do(context,
+            \e: je::entity = e->editor::graphic::try_reload_shaders(wrapped_path, wrapped_path);
+        ))
+        {
+            jeapi::gui::form::errmsg("更新着色器失败", "更新着色器过程中发生了错误，请检查");
+        }
+    }
+    public func update_texture(context: EditorContext, path: string)
+    {
+        // 从universe中获取所有world，更新world中所有实体
+        let wrapped_path = context->get_project->make_path_normalize(filesys::normalize(path));
+
+        do je::editor::mark_shared_glresource_outdated(wrapped_path);
+        if (!for_all_entity_in_universe_do(context,
+            \e: je::entity = e->editor::graphic::try_reload_textures(wrapped_path, wrapped_path);
+        ))
+        {
+            jeapi::gui::form::errmsg("更新纹理失败", "更新纹理过程中发生了错误，请检查");
+        }
     }
     func file_item_menu(path: PathInfo, context: EditorContext)
     {
@@ -679,7 +703,6 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
         {
             if (MenuItem(F"更新此着色器"))
             {
-                do je::editor::mark_shared_glresource_outdated(path.path->tostring());
                 update_shader(context, path.path->tostring());
             }
             Separator();
@@ -972,6 +995,10 @@ namespace $$MODULE_NAME$$
         else if (IMAGE_FILE_EXTERN_NAMES->find(path.externname) != -1)
         {
             // 是图片，在这里编辑图片的采用方法等数据
+            if (MenuItem(F"更新此纹理"))
+            {
+                update_texture(context, path.path->tostring());
+            }
             if (MenuItem("设置采样方式"))
             {
                 using je::editor;

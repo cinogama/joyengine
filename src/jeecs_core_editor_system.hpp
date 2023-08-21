@@ -933,6 +933,31 @@ WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args, size_t arg
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    std::string old_texture_path = wo_string(args + 1);
+    std::string new_texture_path = wo_string(args + 2);
+
+    auto newtexture = jeecs::graphic::texture::load(new_texture_path);
+    if (newtexture == nullptr)
+    {
+        return wo_ret_bool(vm, false);
+    }
+
+    jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>();
+    if (textures != nullptr)
+    {
+        for (auto& texture_res : textures->textures)
+        {
+            assert(texture_res.m_texture != nullptr && texture_res.m_texture->resouce() != nullptr);
+            if (old_texture_path == texture_res.m_texture->resouce()->m_path)
+                texture_res.m_texture = newtexture;
+        }
+    }
+    return wo_ret_bool(vm, true);
+}
 WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);

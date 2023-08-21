@@ -1374,6 +1374,7 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
 }
 
 WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t argc);
+WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args, size_t argc);
 
 WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
 {
@@ -2599,6 +2600,9 @@ R"(
                 // RETURN TRUE MEANS OK
                 extern("libjoyecs", "wojeapi_reload_shader_of_entity")
                 public func try_reload_shaders(self: entity, old_shad: string, new_shad: string)=> bool;
+
+                extern("libjoyecs", "wojeapi_reload_texture_of_entity")
+                public func try_reload_textures(self: entity, old_tex: string, new_tex: string)=> bool;
 
                 public func get_shaders(self: entity)=> array<graphic::shader>
                 {

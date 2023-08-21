@@ -846,7 +846,7 @@ jegl_resource* jegl_try_update_shared_resource(jegl_resource* resource, jegl_res
         // Create new fxxking one!
         auto shared_info = std::make_unique<shared_resource_instance>();
         shared_info->m_resource = resource;
-        shared_resource_list.emplace(resource->m_path, std::move(shared_info));
+        shared_resource_list[resource->m_path] = std::move(shared_info);
         return _jegl_share_resource(resource);
 
     } while (0);
