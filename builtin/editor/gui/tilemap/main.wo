@@ -1,0 +1,70 @@
+// Tile map editor
+
+import woo::std;
+import je;
+import je::gui;
+import je::editor;
+
+import pkg::try;
+
+using std;
+using je;
+using je::gui;
+using je::editor;
+
+namespace tilemap
+{
+    // 由于Tilemap的特性，Tile的纹理坐标不是引擎内置的以左下角为原点，而是以左上角为原点。
+    using Tile = struct{
+        texture: graphic::string,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
+        tile_components: dict<typeinfo, dict<string/*member name*/, string /*member value*/>>,
+    }
+    {
+        func create(maintex: graphic::texture, crc64: int, ix: int, iy: int)
+        {
+
+        }
+    }
+
+    // tilemapset 是地图的纹理切片、组件集合设置的集合
+    using TileMapSet = struct{
+        texture: graphic::texture,
+        tiles: array<array<Tile>>,
+    }
+    {
+        func create(tilemaptex: graphic::texture, xcount: int, ycount: int)
+        {
+            try! crc64 = tilemaptex->path
+                =>> \p = crc64file(p);
+                ->> \crc = result::ok(crc);
+                ->  valor(result::err("创建TileMapSet的纹理必须是从文件加载的"))
+                ;
+
+            let tiles = []mut: vec<array<Tile>>;
+            for (let mut ix = 0; i < xcount; ix += 1)
+            {
+                let ytiles = []mut: vec<Tile>;
+                for (let mut iy = 0; i < ycount; iy += 1)
+                {
+                    ytiles->add(Tile::create(tilemaptex, crc64, ix, iy));
+                }
+                tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
+            }
+            return result::ok(
+                TileMapSet
+                {
+                    texture = tilemaptex,
+                    tiles = tiles as vec<array<Tile>>->unsafe::cast :<array<array<Tile>>>(),
+                });
+        }
+        func load()
+        {
+
+        }
+    }
+
+    public func main()
+    {
+
+    }
+}
