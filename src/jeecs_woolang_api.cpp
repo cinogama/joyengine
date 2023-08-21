@@ -40,6 +40,17 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
+WO_API wo_api wojeapi_set_able_shared_glresource(wo_vm vm, wo_value args, size_t argc)
+{
+    jegl_set_able_shared_resources(wo_bool(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm,jegl_mark_shared_resources_outdated(wo_string(args + 0)));
+}
+
 WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args, size_t argc)
 {
     jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0));
@@ -1674,6 +1685,12 @@ const char* jeecs_woolang_editor_api_src = R"(
 import je;
 namespace je::editor
 {
+    extern("libjoyecs", "wojeapi_set_able_shared_glresource")
+    public func set_able_shared_glresource(able: bool)=> void;
+
+    extern("libjoyecs", "wojeapi_mark_shared_glresource_outdated")
+    public func mark_shared_glresource_outdated(respath: string)=> bool;
+
     extern("libjoyecs", "wojeapi_init_graphic_pipeline")
     public func init_graphic_pipeline(u: universe)=> void;
 

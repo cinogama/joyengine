@@ -181,6 +181,8 @@ namespace editor::gui
         // 这又是个傻逼函数，传入一个项目实例，为这个项目实例创建基本运行环境
         // 然后启一堆编辑窗口，直到项目被关闭
 
+        je::editor::set_able_shared_glresource(true);
+
         // 创建基础运行环境
         let context = EditorContext{
             m_stopped = mut false,
@@ -202,5 +204,7 @@ namespace editor::gui
 
         // 项目退出了，将编辑器上下文置为 stop, 用于指示窗口应当关闭
         context.m_stopped = true;
+
+        je::editor::set_able_shared_glresource(false);
     }
 }

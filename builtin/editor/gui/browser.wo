@@ -679,6 +679,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
         {
             if (MenuItem(F"更新此着色器"))
             {
+                do je::editor::mark_shared_glresource_outdated(path.path->tostring());
                 update_shader(context, path.path->tostring());
             }
             Separator();

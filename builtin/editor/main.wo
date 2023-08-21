@@ -297,7 +297,7 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
                     action_after_guide_form_closed = 
                         func(){
                             try! p = editor::Project::create(projname, regular_path);
-
+                            
                             apply_editor_data_when_start_up_project(editordat);
                             assert(p->save_project());
 
@@ -402,8 +402,7 @@ for (;;)
         none?;
         }
 
-        let w = u->create_world;
-        do w->add_system(je::typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->val);
+        je::editor::init_graphic_pipeline(u->get_universe());
 
         if (editor::CxxProject::is_builder_ready())
             launch(func(){
