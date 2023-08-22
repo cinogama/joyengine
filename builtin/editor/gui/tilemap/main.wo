@@ -14,18 +14,19 @@ using je;
 using je::gui;
 using je::editor;
 
-namespace tilemap
+namespace editor::gui::tilemap
 {
     // 由于Tilemap的特性，Tile的纹理坐标不是引擎内置的以左下角为原点，而是以左上角为原点。
     using Tile = struct{
+        uid: string,                 // 当前Tile的uid，被用于跟踪Tile并进行组件更新
         texture: graphic::texture,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
         tile_components: dict<typeinfo, dict<string/*member name*/, string /*member value*/>>,
     }
     {
         func _create_clip_texture(
-            path: filesys::path_t, 
+            context: EditorContext, 
+            imgpath: filesys::path_t, 
             maintex: graphic::texture, 
-            crc64: int, 
             ix: int, iy: int, 
             xcount: int, ycount: int)
         {
@@ -35,56 +36,261 @@ namespace tilemap
             let tileimage = image::create(tile_w, tile_h);
             // 
 
-            std::panic("TODO");
+            let (lux, luy) = (ix * tile_w, (ycount - iy) * tile_h);
+            for (let mut ix = 0; ix < tile_w; ix += 1)
+            {
+                for (let mut iy = 0; iy < tile_h; iy += 1)
+                {
+                    tileimage->setpix((ix, tile_h - 1 - iy), maintex->pix((lux + ix, luy - iy))->get_color);
+                }
+            }
+            if (tileimage->save(imgpath->tostring))
+                return graphic::texture::load(context->get_project->make_path_normalize(imgpath));
+
+            return option::none;
         }
         func create(context: EditorContext, 
             maintex: graphic::texture, 
             crc64: int, 
+            tileuid: string,
             ix: int, iy: int, 
             xcount: int, ycount: int)
         {
             let tilemap_path = context->get_project.m_path / "resource" / "texture" / "tilemap";
             do filesys::mkdir(tilemap_path);
-            try! tiletexture = context->get_project->make_path_normalize(tilemap_path)
-                ->  orbind(\=_create_clip_texture(tilemap_path, maintex, crc64, ix, iy, xcount, ycount););
+
+            let imgpath = tilemap_path / F"{crc64}-{ix}-{iy}.png";
+
+            try! tiletexture = context->get_project->make_path_normalize(imgpath)
+                ->  graphic::texture::load
+                ->  orbind(\=_create_clip_texture(context, imgpath, maintex, ix, iy, xcount, ycount);)
+                ->> \t = result::ok(t): result<graphic::texture, string>;
+                ->  valor(result::err("无法加载或创建Tile纹理"))
+                ;
+            return result::ok(Tile{
+                texture = tiletexture,
+                tile_components = {},
+                uid = tileuid,
+            });
         }
     }
 
-    // tilemapset 是地图的纹理切片、组件集合设置的集合
+    // tilemapset 是一组地图的纹理切片、组件集合设置的集合
+    // 一个项目可以有多组图集
     using TileMapSet = struct{
+        name: string,
         texture: graphic::texture,
         tiles: array<array<Tile>>,
     }
     {
-        func create(context: EditorContext, tilemaptex: graphic::texture, xcount: int, ycount: int)
+        func create(context: EditorContext, name: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
         {
             try! crc64 = tilemaptex->path
-                =>> \p = crc64file(p);
-                ->> \crc = result::ok(crc);
+                =>> \p = crc64file(context->get_project->parse_path_normalize(p)->tostring);
+                ->> \crc = result::ok(crc): result<int, string>;
                 ->  valor(result::err("创建TileMapSet的纹理必须是从文件加载的"))
                 ;
 
             let tiles = []mut: vec<array<Tile>>;
-            for (let mut ix = 0; i < xcount; ix += 1)
+            for (let mut ix = 0; ix < xcount; ix += 1)
             {
                 let ytiles = []mut: vec<Tile>;
-                for (let mut iy = 0; i < ycount; iy += 1)
+                for (let mut iy = 0; iy < ycount; iy += 1)
                 {
-                    ytiles->add(Tile::create(context, tilemaptex, crc64, ix, iy, xcount, ycount));
+                    try! tile = Tile::create(context, tilemaptex, crc64, je::uid(), ix, iy, xcount, ycount);
+                    ytiles->add(tile);
                 }
                 tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
             }
             return result::ok(
                 TileMapSet
                 {
+                    name = name,
                     texture = tilemaptex,
                     tiles = tiles as vec<array<Tile>>->unsafe::cast :<array<array<Tile>>>(),
                 });
         }
     }
 
+    using TileEditContext = struct{
+        m_context: EditorContext,
+        m_editing_world: mut option<world>,
+        m_tile_sets: vec<TileMapSet>
+    }
+    {
+        func create(context: EditorContext)
+        {
+            return TileEditContext{
+                m_context = context,
+                m_editing_world = mut option::none,
+                m_tile_sets = []mut,
+            };
+        }
+        func update(self: TileEditContext)
+        {
+            let now_editing_world = self.m_context->get_project->get_editing_world;
+            if (!self.m_editing_world=>>\w = now_editing_world->>\nw = w == nw;;->valor(false))
+            {
+                match (now_editing_world)
+                {
+                value(w)?
+                    {
+                        do w;
+                    }
+                none?
+                    ;
+                }
+                self.m_editing_world = now_editing_world;
+            }
+        }
+
+        func create_tilemap_form(self: TileEditContext)
+        {
+            let create_context = struct{
+                m_name = mut "新建tilemap",
+                m_texture = mut option::none: option<graphic::texture>,
+                m_tile_x_count = mut 1,
+                m_tile_y_count = mut 1,
+            };
+            launch(func()
+                {
+                    let mut open = true;
+                    match (BeginAttrOpen("新建TileMap", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                    {
+                    value(show)?
+                        if (show)
+                        {
+                            match (jeapi::gui::widget::File("使用的TileMap纹理", 
+                                create_context.m_texture=>>\t=t->path;->valor(""))
+                                =>> \newpath = create_context.m_texture := graphic::texture::load(newpath);
+                            )
+                            {
+                            value(tex)?
+                                {
+                                    let (x, y) = tex->size;
+                                    create_context.m_tile_x_count = std::max(1, x / 16);
+                                    create_context.m_tile_y_count = std::max(1, y / 16);
+                                }
+                            none?
+                                ;
+                            }
+
+                            BeginGroup();
+                            Text("预览");
+                            
+                            match (create_context.m_texture)
+                            {
+                            value(tex)?
+                                {
+                                    ImageScale(tex, std::min(200. / tex->size[0]: real, 300. / tex->size[1]: real));
+                                } 
+                            none? Text("暂无预览");
+                            }
+                            
+                            EndGroup();
+                            
+                            SameLine();
+                            
+                            BeginGroup();
+                            do InputText("名称", create_context.m_name)->>\newname = create_context.m_name = newname;;
+                            do InputInt("X方向Tile数量", create_context.m_tile_x_count)->>\newc = create_context.m_tile_x_count = std::max(1, newc);;
+                            do InputInt("Y方向Tile数量", create_context.m_tile_y_count)->>\newc = create_context.m_tile_y_count = std::max(1, newc);;
+                            EndGroup();
+
+                            if (Button("创建"))
+                            {
+                                match (create_context.m_texture)
+                                {
+                                value(tex)?
+                                    {
+                                        match (TileMapSet::create(
+                                            self.m_context, 
+                                            create_context.m_name,
+                                            tex,
+                                            create_context.m_tile_x_count,
+                                            create_context.m_tile_y_count,
+                                            ))
+                                        {
+                                        ok(tilemap)?
+                                            {
+                                                open = false;
+                                                self.m_tile_sets->add(tilemap);
+                                            }
+                                        err(msg)?
+                                            jeapi::gui::form::errmsg("失败", msg);
+                                        }
+                                        
+                                    }
+                                none?
+                                    jeapi::gui::form::errmsg("失败", "创建TileMap时需要指定纹理");
+                                }
+                            }
+                        }
+                    none?
+                        open = false;
+                    }
+                    End();
+                    return open;
+                }, ());
+        }
+        func show_tile_sets(self: TileEditContext)
+        {
+            if (BeginChildSize("##tilemapsets", 256., 600.))
+            {
+                if (BeginTabBar("TileMap 集合"))
+                {
+                    for (let _, tset: self.m_tile_sets)
+                    {
+                        if (BeginTabItem(tset.name))
+                        {
+                            // TODO: 在此处绘制Tiles
+                            EndTabItem();
+                        }
+                    }
+                    if (self.m_tile_sets->empty())
+                    {
+                        TextDisabled("没有可用的TileMap");
+                    }
+                    EndTabBar();
+                }
+            }
+            EndChild();
+        }
+    }
+
     public func main(context: EditorContext)
     {
+        let editctx = TileEditContext::create(context);
+        launch(func(){
+            let mut open = true;
+            match (BeginAttrOpen("Tile editor test", WindowsAttribute::ImGuiWindowFlags_MenuBar))
+            {
+            value(show)?
+                if (show)
+                {
+                    editctx->update();
+                    if (BeginMenuBar())
+                    {
+                        if (BeginMenu("编辑"))
+                        {
+                            if (MenuItem("新建TileMap"))
+                                editctx->create_tilemap_form();
 
+                            EndMenu();
+                        }
+                        EndMenuBar();
+                    }
+
+                    BeginGroup();
+                    editctx->show_tile_sets();
+                    EndGroup();
+                }
+            none?
+                open = false;
+            }
+            End();
+            
+            return open;
+        }, ());
     }
 }

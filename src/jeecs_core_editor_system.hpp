@@ -399,15 +399,18 @@ using fout = struct {
 };
         
 public let vert = 
-\v: vin = v2f { pos = je_mvp * vertex_pos, 
-                color = v.color } 
-    where vertex_pos = float4::create(v.vertex, 1.);;
+    \v: vin = v2f { pos = je_mvp * vertex_pos, 
+                    color = v.color } 
+        where vertex_pos = float4::create(v.vertex, 1.)
+    ;
+;
         
 public let frag = 
-\f: v2f = fout{ color = float4::create(show_color, 1.) }
-    where show_color = lerp(f.color, float3::new(1., 1., 1.), ratio),
-                ratio = step(float::new(0.5), high_light),
-            high_light = uniform("high_light", float::new(0.));;
+    \f: v2f = fout{ color = float4::create(show_color, 1.) }
+        where show_color = lerp(f.color, float3::new(1., 1., 1.), ratio)
+            , ratio = step(float::new(0.5), je_color->x)
+    ;
+;
         
         )");
             static basic::resource<graphic::shader>
@@ -445,6 +448,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     Renderer::Shaders,
                     Renderer::Shape,
                     Renderer::Rendqueue,
+                    Renderer::Color,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
@@ -456,6 +460,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     Renderer::Shaders,
                     Renderer::Shape,
                     Renderer::Rendqueue,
+                    Renderer::Color,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
@@ -467,6 +472,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     Renderer::Shaders,
                     Renderer::Shape,
                     Renderer::Rendqueue,
+                    Renderer::Color,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
@@ -545,7 +551,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             Transform::LocalPosition& posi,
             Transform::LocalScale& scale,
             Renderer::Shape* shape,
-            Renderer::Shaders& shaders)
+            Renderer::Color& color)
         {
             if (mover.mode != _mode)
             {
@@ -676,10 +682,10 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                         _grab_last_pos = _inputs.uniform_mouse_pos;
                     }
                     if (!_inputs.l_buttom)
-                        shaders.set_uniform("high_light", 1.0f);
+                        color.color.x = 1.0f;
                 }
                 else
-                    shaders.set_uniform("high_light", 0.0f);
+                    color.color.x = 0.0f;
             }
         }
 

@@ -5300,6 +5300,20 @@ namespace jeecs
             {
                 return x != _v2.x || y != _v2.y;
             }
+
+            inline std::string to_string()const
+            {
+                std::string result;
+                std::stringstream ss;
+                ss << "(" << x << "," << y << ")";
+                ss >> result;
+
+                return result;
+            }
+            inline void parse(const std::string& str)
+            {
+                sscanf(str.c_str(), "(%d,%d)", &x, &y);
+            }
         };
 
         struct vec3 :public _basevec3
@@ -8021,6 +8035,22 @@ namespace jeecs
             }
         };
     }
+    namespace Scene
+    {
+        struct MapTile
+        {
+            math::ivec2     location = {};
+            int             layer = 0;
+            typing::uid_t   type = {};
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&MapTile::location, "location");
+                typing::register_member(&MapTile::layer, "layer");
+                typing::register_member(&MapTile::type, "type");
+            }
+        };
+    }
 
     inline typing::euid_t game_entity::get_euid() const noexcept
     {
@@ -8371,6 +8401,8 @@ namespace jeecs
             type_info::of<Audio::Source>("Audio::Source");
             type_info::of<Audio::Listener>("Audio::Listener");
             type_info::of<Audio::Playing>("Audio::Playing");
+
+            type_info::of<Scene::MapTile>("Scene::MapTile");
             
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();

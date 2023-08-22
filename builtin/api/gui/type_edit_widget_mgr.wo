@@ -214,6 +214,9 @@ namespace jeapi::gui
     register_editor_for_native_value(je::typeinfo::int, func(tag, nvalue){
         return InputInt(F"##{tag}", nvalue->int)->>\iv = nvalue->set_int(iv);->has;
     });
+    register_editor_for_native_value(je::typeinfo::int2, func(tag, nvalue){
+        return InputInt2(F"##{tag}", nvalue->int2...)->>\iv2 = nvalue->set_int2(iv2...);->has;
+    });
     register_editor_for_native_value(je::typeinfo::float, func(tag, nvalue){
         return InputFloat(F"##{tag}", nvalue->float)->>\fv = nvalue->set_float(fv);->has;
     });
