@@ -21,6 +21,7 @@ namespace editor::gui::tilemap
         uid: string,                 // 当前Tile的uid，被用于跟踪Tile并进行组件更新
         texture: graphic::texture,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
         tile_components: dict<typeinfo, dict<string/*member name*/, string /*member value*/>>,
+        location: (int, int),
     }
     {
         func _create_clip_texture(
@@ -71,6 +72,7 @@ namespace editor::gui::tilemap
                 texture = tiletexture,
                 tile_components = {},
                 uid = tileuid,
+                location = (ix, iy),
             });
         }
     }
@@ -110,12 +112,21 @@ namespace editor::gui::tilemap
                     tiles = tiles as vec<array<Tile>>->unsafe::cast :<array<array<Tile>>>(),
                 });
         }
+        func getsize(self: TileMapSet)
+        {
+            return (self.tiles->len, self.tiles->get(0)->>\a=a->len;->valor(0));
+        }
+        func gettile(self: TileMapSet, x: int, y: int)
+        {
+            return self.tiles->get(x)=>>\a = a->get(y);;
+        }
     }
 
     using TileEditContext = struct{
         m_context: EditorContext,
         m_editing_world: mut option<world>,
-        m_tile_sets: vec<TileMapSet>
+        m_tile_sets: vec<TileMapSet>,
+        m_selected_tile: mut (int, int),
     }
     {
         func create(context: EditorContext)
@@ -124,6 +135,7 @@ namespace editor::gui::tilemap
                 m_context = context,
                 m_editing_world = mut option::none,
                 m_tile_sets = []mut,
+                m_selected_tile = mut (0, 0),
             };
         }
         func update(self: TileEditContext)
@@ -150,7 +162,7 @@ namespace editor::gui::tilemap
                 m_name = mut "新建tilemap",
                 m_texture = mut option::none: option<graphic::texture>,
                 m_tile_x_count = mut 1,
-                m_tile_y_count = mut 1,
+                m_tile_y_count = mut 1, 
             };
             launch(func()
                 {
@@ -239,11 +251,59 @@ namespace editor::gui::tilemap
             {
                 if (BeginTabBar("TileMap 集合"))
                 {
-                    for (let _, tset: self.m_tile_sets)
+                    for (let index, tset: self.m_tile_sets)
                     {
-                        if (BeginTabItem(tset.name))
+                        if (BeginTabItem(F"{tset.name}##{index}"))
                         {
                             // TODO: 在此处绘制Tiles
+
+                            let drawlist = GetWindowDrawList();
+                            let (avaliw, _) = GetContentRegionAvail();
+                            let (texw, texh) = tset.texture->size;
+                            let scale = avaliw / texw: real;
+                            let (rangew, rangeh) = (avaliw <= 100. ? 100. | avaliw, texh: real * scale  <= 100. ? 100. | texh: real * scale);
+
+                            let (blockcountx, blockcounty) = tset->getsize;
+                            let (blockw, blockh) = (rangew / blockcountx: real, rangeh / blockcounty: real);
+
+                            do InvisibleButton("##tileset", (rangew, rangeh));
+                            let ismouse_hovered = IsItemHovered();
+                            let (p0, p1) = GetItemRect();
+                            let (lux, luy) = p0;
+
+                            let (mposx, mposy) = GetMousePos();
+                            let (mpblockx, mpblocky) = (
+                                ((mposx - lux) / blockw): int: real, 
+                                ((mposy - luy) / blockh): int: real
+                                );
+
+                            PushClipRect(p0, p1);
+
+                            drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+                            drawlist->AddImage(
+                                p0, p1, 
+                                tset.texture);
+
+                            if (ismouse_hovered)
+                            {
+                                if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                    self.m_selected_tile = (mpblockx: int, mpblocky: int);
+                                else
+                                    drawlist->AddRectFilled(
+                                        (lux + mpblockx * blockw, luy + mpblocky * blockh), 
+                                        (lux + mpblockx * blockw + blockw, luy + mpblocky * blockh + blockh), 
+                                        (255, 255, 255, 100));
+                            }
+
+                            let (locx, locy) = self.m_selected_tile;
+                            drawlist->AddRect(
+                                (lux + locx: real * blockw, luy + locy: real * blockh), 
+                                (lux + locx: real * blockw + blockw, luy + locy: real * blockh + blockh), 
+                                (255, 255, 255, 255), 2.);
+
+
+                            PopClipRect();
+
                             EndTabItem();
                         }
                     }
