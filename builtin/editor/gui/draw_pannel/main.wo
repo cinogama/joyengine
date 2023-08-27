@@ -501,7 +501,8 @@ namespace editor::gui::drawpannel
                                 (lux + draw_context.offset_x, luy + draw_context.offset_y), 
                                 (lux + draw_context.scale * tex_width:real + draw_context.offset_x, 
                                 luy + draw_context.scale * tex_height:real + draw_context.offset_y), 
-                                texture);
+                                texture,
+                                (255, 255, 255, 255));
                                 
                             // OK 如果缩放大于5，就顺手画一下网格
                             if (draw_context.scale >= 5.)

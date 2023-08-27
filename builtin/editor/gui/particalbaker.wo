@@ -429,7 +429,8 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     drawlist->AddImage(
                         (lux, luy), 
                         (rbx, rby), 
-                        frames[econtext.m_frame_index]);
+                        frames[econtext.m_frame_index],
+                        (255, 255, 255, 255));
 
                 EndChild();
 

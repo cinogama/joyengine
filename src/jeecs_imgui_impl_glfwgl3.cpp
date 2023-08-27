@@ -422,7 +422,7 @@ R"(
         public func AddText(self: DrawListT, pos: ImVec2, color: Color32RGBA, text: string)=> void;
 
         extern("libjoyecs", "je_gui_draw_list_add_image")
-        public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture)=> void;
+        public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture, color: Color32RGBA)=> void;
 
         extern("libjoyecs", "je_gui_draw_list_add_line")
         public func AddLine(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
@@ -953,7 +953,7 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 3);
     jegl_using_resource((*texture)->resouce());
 
-    list->AddImage((ImTextureID)(intptr_t)(*texture)->resouce()->m_handle.m_uint1, val2vec2(args + 1), val2vec2(args + 2), ImVec2(0, 1), ImVec2(1, 0));
+    list->AddImage((ImTextureID)(intptr_t)(*texture)->resouce()->m_handle.m_uint1, val2vec2(args + 1), val2vec2(args + 2), ImVec2(0, 1), ImVec2(1, 0), val2color32(args + 4));
     return wo_ret_void(vm);
 }
 

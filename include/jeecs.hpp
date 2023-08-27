@@ -1561,7 +1561,6 @@ struct jegl_vertex
     float m_size_x, m_size_y, m_size_z;
     float* m_vertex_datas;
     size_t* m_vertex_formats;
-    const char* m_path;
     size_t m_format_count;
     size_t m_point_count;
     size_t m_data_count_per_point;

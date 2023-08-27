@@ -983,7 +983,6 @@ jegl_resource* jegl_create_vertex(
     jegl_resource* vertex = _create_resource();
     vertex->m_type = jegl_resource::VERTEX;
     vertex->m_raw_vertex_data = new jegl_vertex();
-    vertex->m_raw_vertex_data->m_path = nullptr;
 
     size_t datacount_per_point = 0;
     for (size_t i = 0; i < format_length; ++i)

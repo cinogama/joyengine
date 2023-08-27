@@ -38,11 +38,11 @@ namespace editor::gui::tilemap
             // 
 
             let (lux, luy) = (ix * tile_w, (ycount - iy) * tile_h);
-            for (let mut ix = 0; ix < tile_w; ix += 1)
+            for (let mut idx = 0; idx < tile_w; idx += 1)
             {
-                for (let mut iy = 0; iy < tile_h; iy += 1)
+                for (let mut idy = 0; idy < tile_h; idy += 1)
                 {
-                    tileimage->setpix((ix, tile_h - 1 - iy), maintex->pix((lux + ix, luy - iy))->get_color);
+                    tileimage->setpix((idx, tile_h - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
                 }
             }
             if (tileimage->save(imgpath->tostring))
@@ -60,7 +60,7 @@ namespace editor::gui::tilemap
             let tilemap_path = context->get_project.m_path / "resource" / "texture" / "tilemap";
             do filesys::mkdir(tilemap_path);
 
-            let imgpath = tilemap_path / F"{crc64}-{ix}-{iy}.png";
+            let imgpath = tilemap_path / F"{crc64}-{ix}d{xcount}-{iy}d{ycount}.png";
 
             try! tiletexture = context->get_project->make_path_normalize(imgpath)
                 ->  graphic::texture::load
@@ -126,7 +126,15 @@ namespace editor::gui::tilemap
         m_context: EditorContext,
         m_editing_world: mut option<world>,
         m_tile_sets: vec<TileMapSet>,
+        m_selected_tileset_index: mut int,
         m_selected_tile: mut (int, int),
+
+        // 以下部分是绘制区域的数据
+        m_drawing_layer: mut int,
+        m_focus_on_drawing_layer: mut bool,
+        m_offset: mut(real, real),
+        m_scale: mut real,
+        m_layerd_tiles: map<int, map<int, map<int, Tile>>>
     }
     {
         func create(context: EditorContext)
@@ -135,8 +143,28 @@ namespace editor::gui::tilemap
                 m_context = context,
                 m_editing_world = mut option::none,
                 m_tile_sets = []mut,
+                m_selected_tileset_index = mut -1,
                 m_selected_tile = mut (0, 0),
+
+                m_drawing_layer = mut 0,
+                m_focus_on_drawing_layer = mut false,
+                m_offset = mut(0., 0.),
+                m_scale = mut 1.,
+                m_layerd_tiles = {}mut,
             };
+        }
+        func apply_draw_tile(self: TileEditContext, x: int, y: int)
+        {
+            match (self.m_tile_sets->get(self.m_selected_tileset_index)=>>\tileset = tileset->gettile(self.m_selected_tile...);)
+            {
+            value(tile)?
+                self.m_layerd_tiles->getorset(self.m_drawing_layer, {}mut)->getorset(x, {}mut)->set(y, tile);
+            none?;
+            }
+        }
+        func clear_draw_tile(self: TileEditContext, x: int, y: int)
+        {
+            do self.m_layerd_tiles->get(self.m_drawing_layer)=>>\tiles=tiles->get(x);->>\ytiles=ytiles->remove(y);;
         }
         func update(self: TileEditContext)
         {
@@ -155,7 +183,6 @@ namespace editor::gui::tilemap
                 self.m_editing_world = now_editing_world;
             }
         }
-
         func create_tilemap_form(self: TileEditContext)
         {
             let create_context = struct{
@@ -247,15 +274,19 @@ namespace editor::gui::tilemap
         }
         func show_tile_sets(self: TileEditContext)
         {
-            if (BeginChildSize("##tilemapsets", 256., 600.))
+            if (BeginChildSize("##tilemapsets", 400., 0.))
             {
+                do InputInt("绘制层级", self.m_drawing_layer)->>\n = self.m_drawing_layer = n;;
+                SameLine();
+                do CheckBox("着重", self.m_focus_on_drawing_layer)->>\o = self.m_focus_on_drawing_layer = o;;
+
                 if (BeginTabBar("TileMap 集合"))
                 {
                     for (let index, tset: self.m_tile_sets)
                     {
                         if (BeginTabItem(F"{tset.name}##{index}"))
                         {
-                            // TODO: 在此处绘制Tiles
+                             self.m_selected_tileset_index = index;
 
                             let drawlist = GetWindowDrawList();
                             let (avaliw, _) = GetContentRegionAvail();
@@ -282,7 +313,8 @@ namespace editor::gui::tilemap
                             drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
                             drawlist->AddImage(
                                 p0, p1, 
-                                tset.texture);
+                                tset.texture,
+                                (255, 255, 255, 255));
 
                             if (ismouse_hovered)
                             {
@@ -316,6 +348,108 @@ namespace editor::gui::tilemap
             }
             EndChild();
         }
+        func draw_tile(self: TileEditContext)
+        {
+            if (BeginChild("##drawtiles"))
+            {
+                let drawlist = GetWindowDrawList();
+
+                let (avaliw, avalih) = GetContentRegionAvail();
+                let (rangew, rangeh) = (avaliw <= 100. ? 100. | avaliw, avalih  <= 100. ? 100. | avalih);
+
+                do InvisibleButton("##tileset", (rangew, rangeh));
+                let ismouse_hovered = IsItemHovered();
+                let (p0, p1) = GetItemRect();
+                let (lux, luy) = p0;
+                let (draww, drawh) = (p1[0] - lux, p1[1] - luy);
+                PushClipRect(p0, p1);
+                
+                drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+
+                // scale = 1. 的情况下，一个Tile的大小是这么大
+                let BASE_TILE_SIZE = 50.;
+                let scaled_tile_size = self.m_scale * BASE_TILE_SIZE;
+                let (oldoffsetx, oldoffsety) = self.m_offset;
+
+                for (let layer, tiles : self.m_layerd_tiles)
+                {
+                    for (let x, ytiles: tiles)
+                    {
+                        for (let y, tile : ytiles)
+                        {
+                            // 将瓦片画出来~
+                            let mut tilealpha = 255;
+                            if (self.m_focus_on_drawing_layer && layer != self.m_drawing_layer)
+                                tilealpha = 75;
+
+                            drawlist->AddImage(
+                                (lux + x: real * scaled_tile_size + oldoffsetx, luy + y: real * scaled_tile_size + oldoffsety), 
+                                (lux + x: real * scaled_tile_size + scaled_tile_size + oldoffsetx, luy + y: real * scaled_tile_size + scaled_tile_size + oldoffsety), 
+                                tile.texture,
+                                (255, 255, 255, tilealpha));
+                        }
+                    }
+                }
+
+                if (self.m_scale >= 1.)
+                {
+                    for (let mut ix = 0.; ix < draww; ix += scaled_tile_size)
+                        drawlist->AddLine((lux + ix + oldoffsetx % scaled_tile_size, luy), (lux + ix + oldoffsetx % scaled_tile_size, p1[1]), (127, 127, 127, 255), 2.);
+                    for (let mut iy = 0.; iy < drawh; iy += scaled_tile_size)
+                        drawlist->AddLine((lux, luy + iy + oldoffsety % scaled_tile_size), (p1[0], luy + iy + oldoffsety % scaled_tile_size), (127, 127, 127, 255), 2.);
+                }
+
+                // 高亮鼠标所在的块儿
+                static let mut recored_wheel_count = input::wheel();
+                
+                if (ismouse_hovered)
+                {
+                    let new_wheel_count = input::wheel();
+                    self.m_scale *= math::pow(2., (new_wheel_count - recored_wheel_count): real);
+                    recored_wheel_count = new_wheel_count;
+
+                    let (mposx, mposy) = GetMousePos();
+
+                    let (mpblockx, mpblocky) = (
+                        math::floor((mposx - lux - oldoffsetx) / scaled_tile_size): real, 
+                        math::floor((mposy - luy - oldoffsety) / scaled_tile_size): real
+                        );
+
+                    let mut highlight_alpha = 100;
+
+                    if (input::keydown(keycode::MOUSE_L_BUTTION))
+                    {
+                        if (input::keydown(keycode::L_CTRL))
+                        {
+                            highlight_alpha = 0;
+
+                            let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
+                            self.m_offset = (oldoffsetx + mousedelta_x, oldoffsety + mousedelta_y);
+                        }
+                        else
+                        {
+                            highlight_alpha = 50;
+                            self->apply_draw_tile(mpblockx: int, mpblocky: int);
+                        }
+                    }
+                    else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                    {
+                        self->clear_draw_tile(mpblockx: int, mpblocky: int);
+                    }
+
+                    drawlist->AddRectFilled(
+                        (lux + mpblockx * scaled_tile_size + oldoffsetx, luy + mpblocky * scaled_tile_size + oldoffsety), 
+                        (lux + mpblockx * scaled_tile_size + scaled_tile_size + oldoffsetx, luy + mpblocky * scaled_tile_size + scaled_tile_size + oldoffsety), 
+                        (255, 255, 255, highlight_alpha));
+                }
+                else
+                    recored_wheel_count = input::wheel();
+
+                PopClipRect();
+
+            }
+            EndChild();
+        }
     }
 
     public func main(context: EditorContext)
@@ -343,6 +477,12 @@ namespace editor::gui::tilemap
 
                     BeginGroup();
                     editctx->show_tile_sets();
+                    EndGroup();
+
+                    SameLine();
+
+                    BeginGroup();
+                    editctx->draw_tile();
                     EndGroup();
                 }
             none?
