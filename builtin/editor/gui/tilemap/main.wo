@@ -16,12 +16,342 @@ using je::editor;
 
 namespace editor::gui::tilemap
 {
+    enum WrapingTileWay
+    {
+        UP = 0b0000_0001,
+        DOWN = 0b0000_0010,
+        LEFT = 0b0000_0100,
+        RIGHT = 0b0000_1000,
+
+        LEFTUP = 0b0001_0000,
+        LEFTDOWN = 0b0010_0000,
+        RIGHTUP = 0b0100_0000,
+        RIGHTDOWN = 0b1000_0000,
+    }
+    namespace WrapingTileWay
+    {
+        let all_wraping_way = func()
+        {
+            let v = []mut: vec<WrapingTileWay>;
+            for (let mut i = 0: WrapingTileWay; i <= UP + DOWN + LEFT + RIGHT; i += 1: WrapingTileWay)
+            {
+                v->add(i);
+            }
+            
+            for (let mut i = 0b0001_0000: WrapingTileWay; i <= 0b1111_0000: WrapingTileWay; i += 0b0001_0000: WrapingTileWay)
+            {
+                let mut vi = i;
+                if (bitand(vi: int, LEFTUP: int) != 0)
+                    vi = vi: int->bitor(LEFT: int)->bitor(UP: int): WrapingTileWay;
+                if (bitand(vi: int, LEFTDOWN: int) != 0)
+                    vi = vi: int->bitor(LEFT: int)->bitor(DOWN: int): WrapingTileWay;
+                if (bitand(vi: int, RIGHTUP: int) != 0)
+                    vi = vi: int->bitor(RIGHT: int)->bitor(UP: int): WrapingTileWay;
+                if (bitand(vi: int, RIGHTDOWN: int) != 0)
+                    vi = vi: int->bitor(RIGHT: int)->bitor(DOWN: int): WrapingTileWay;
+                v->add(vi);
+            }
+
+            return v->unsafe::cast :<array<WrapingTileWay>>();
+        }();
+
+        func get_way_name(self: WrapingTileWay)
+        {
+            using std;
+
+            let mut name = "";
+            
+            if (bitand(self: int, UP: int) != 0)
+                name += "u";
+            if (bitand(self: int, DOWN: int) != 0)
+                name += "d";
+            if (bitand(self: int, LEFT: int) != 0)
+                name += "l";
+            if (bitand(self: int, RIGHT: int) != 0)
+                name += "r";
+
+            if (bitand(self: int, LEFTUP: int) != 0)
+            {
+                assert(bitand(self: int, LEFT: int) != 0 && bitand(self: int, UP: int) != 0);
+                name += "a";
+            }
+            if (bitand(self: int, LEFTDOWN: int) != 0)
+            {
+                assert(bitand(self: int, LEFT: int) != 0 && bitand(self: int, DOWN: int) != 0);
+                name += "b";
+            }
+            if (bitand(self: int, RIGHTUP: int) != 0)
+            {
+                assert(bitand(self: int, RIGHT: int) != 0 && bitand(self: int, UP: int) != 0);
+                name += "c";
+            }
+            if (bitand(self: int, RIGHTDOWN: int) != 0)
+            {
+                assert(bitand(self: int, RIGHT: int) != 0 && bitand(self: int, DOWN: int) != 0);
+                name += "d";
+            }
+            return name == "" ? "x" | immut name;
+        }
+        
+        func get_sampling_texture_lu(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            // 左上角，顾名思义只关心坐标和上边以及左上部分的情况
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+            let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
+
+            if (bitand(self: int, UP: int) != 0)
+            {
+                if (bitand(self: int, LEFT: int) != 0)
+                {
+                    if (bitand(self: int, LEFTUP: int) != 0)
+                    {
+                        lux += tile_w / 2;
+                        luy -= tile_h + tile_h / 2;
+                    }
+                    else
+                    {
+                        lux += tile_w;
+                    }
+                }
+                else
+                {
+                    luy -= tile_h + tile_h / 2;
+                }
+            }
+            else
+            {
+                if (bitand(self: int, LEFT: int) != 0)
+                {
+                    lux += tile_w / 2;
+                    luy -= tile_h;
+                }
+                else
+                {
+                    luy -= tile_h;
+                }
+            }
+
+            for (let mut idx = 0; idx < tile_w / 2; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h / 2; idy += 1)
+                {
+                    target->setpix((idx, tile_h - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+        }
+
+        func get_sampling_texture_ld(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+            let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
+
+            // 左下角，顾名思义只关心坐标和下边以及左下部分的情况
+            if (bitand(self: int, DOWN: int) != 0)
+            {
+                if (bitand(self: int, LEFT: int) != 0)
+                {
+                    if (bitand(self: int, LEFTDOWN: int) != 0)
+                    {
+                        lux += tile_w / 2;
+                        luy -= tile_h * 2;
+                    }
+                    else
+                    {
+                        lux += tile_w;
+                        luy -= tile_h / 2;
+                    }
+                }
+                else
+                {
+                    luy -= tile_h * 2;
+                }
+            }
+            else
+            {
+                if (bitand(self: int, LEFT: int) != 0)
+                {
+                    lux += tile_w / 2;
+                    luy -= tile_h * 2 + tile_h / 2;
+                }
+                else
+                {
+                    luy -= tile_h * 2 + tile_h / 2;
+                }
+            }
+            
+            for (let mut idx = 0; idx < tile_w / 2; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h / 2; idy += 1)
+                {
+                    target->setpix((idx, tile_h / 2 - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+        }
+
+        func get_sampling_texture_ru(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+            let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
+
+            // 右上角，顾名思义只关心坐标和上边以及右上部分的情况
+            if (bitand(self: int, UP: int) != 0)
+            {
+                if (bitand(self: int, RIGHT: int) != 0)
+                {
+                    if (bitand(self: int, RIGHTUP: int) != 0)
+                    {
+                        lux += tile_w;
+                        luy -= tile_h + tile_h / 2;
+                    }
+                    else
+                    {
+                        lux += tile_w + tile_w / 2;
+                    }
+                }
+                else
+                {
+                    lux += tile_w + tile_w / 2;
+                    luy -= tile_h + tile_h / 2;
+                }
+            }
+            else
+            {
+                if (bitand(self: int, RIGHT: int) != 0)
+                {
+                    lux += tile_w;
+                    luy -= tile_h;
+                }
+                else
+                {
+                    lux += tile_w + tile_w / 2;
+                    luy -= tile_h;
+                }
+            }
+
+            for (let mut idx = 0; idx < tile_w / 2; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h / 2; idy += 1)
+                {
+                    target->setpix((idx + tile_w / 2, tile_h - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+        }
+
+        func get_sampling_texture_rd(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+            let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
+
+            // 右下角，顾名思义只关心坐标和下边以及右下部分的情况
+            if (bitand(self: int, DOWN: int) != 0)
+            {
+                if (bitand(self: int, RIGHT: int) != 0)
+                {
+                    if (bitand(self: int, RIGHTDOWN: int) != 0)
+                    {
+                        lux += tile_w;
+                        luy -= tile_h * 2;
+                    }
+                    else
+                    {
+                        lux += tile_w + tile_w / 2;
+                        luy -= tile_h / 2;
+                    }
+                }
+                else
+                {
+                    lux += tile_w + tile_w / 2;
+                    luy -= tile_h * 2;
+                }
+            }
+            else
+            {
+                if (bitand(self: int, RIGHT: int) != 0)
+                {
+                    lux += tile_w;
+                    luy -= tile_h * 2 + tile_h / 2;
+                }
+                else
+                {
+                    lux += tile_w + tile_w / 2;
+                    luy -= tile_h * 2 + tile_h / 2;
+                }
+            }
+
+            for (let mut idx = 0; idx < tile_w / 2; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h / 2; idy += 1)
+                {
+                    target->setpix((idx + tile_w / 2, tile_h / 2 - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+        }
+
+        func get_sampling_texture(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            // Tile warp 分成四小块儿，根据实际情况，分别选择不同位置
+            // 四个小块儿分别对应
+            // 1. 邻接两个方向都为TRUE，对应的斜向也为TRUE，使用中间块儿
+            // 2. 邻接两个方向都为TRUE，但对应斜向为FALSE，使用缺块儿
+            // 3. ...
+            // 不管了，排列组合不清楚了，开写！
+            
+            self->get_sampling_texture_lu(target, maintex, ix, iy, xcount, ycount);
+            self->get_sampling_texture_ld(target, maintex, ix, iy, xcount, ycount);
+            self->get_sampling_texture_ru(target, maintex, ix, iy, xcount, ycount);
+            self->get_sampling_texture_rd(target, maintex, ix, iy, xcount, ycount);
+        }
+    }
+    
     // 由于Tilemap的特性，Tile的纹理坐标不是引擎内置的以左下角为原点，而是以左上角为原点。
     using Tile = struct{
+        maintex: graphic::texture,
+
         uid: string,                 // 当前Tile的uid，被用于跟踪Tile并进行组件更新
         texture: graphic::texture,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
         tile_components: dict<typeinfo, dict<string/*member name*/, string /*member value*/>>,
         location: (int, int),
+        
+        /*
+        auto_wrap 当前地块是否需要展开，
+        若需要展开，纹理则需要提供如下种类：
+        * 首先，任何一个warptile需要遵循以下准则，Tile的形状决定于邻接位置是否有其他同类Tile
+        * 其中所有方向包含为：
+        U D L R UNR UNL DNR DNL
+        u d l r 
+        其中，UNR UNL DNR DNL 仅当UDLR中 正交两个方向的方块存在同时，斜向方块亦存在的情况下才可
+        因此共有： 16 + 15 共31张图
+        */
+        auto_wrap: mut option<dict<WrapingTileWay, graphic::texture>>,
     }
     {
         func _create_clip_texture(
@@ -50,6 +380,54 @@ namespace editor::gui::tilemap
 
             return option::none;
         }
+        func set_auto_warping(self: Tile, context: EditorContext, able: bool)
+        {
+            if (!able)
+                {
+                    self.auto_wrap = option::none;
+                    return true;
+                }
+            else
+            {
+                let texpath = context->get_project->parse_path_normalize(self.texture->path->val);
+                let purefilename = filesys::purename(texpath);
+                let (maintex_w, maintex_h) = self.maintex->size;
+                let (tile_w, tile_h) = self.texture->size;
+
+                let textures =  WrapingTileWay::all_wraping_way
+                    ->> func(way)
+                        {
+                            // 获取当前wraptile的路径名称
+                            let wayname = way->get_way_name;
+                            let saving_path = filesys::parent(texpath) / F"{purefilename}_{wayname}.png";
+
+                            match (graphic::texture::load(context->get_project->make_path_normalize(saving_path)))
+                            {
+                            value(tex)?
+                                return (way, option::value(tex));
+                            none?
+                                ;
+                            }
+
+                            let tileimage = image::create(tile_w, tile_h);
+
+                            way->get_sampling_texture(tileimage, self.maintex, self.location..., maintex_w / tile_w, maintex_h / tile_h);
+                            if (tileimage->save(saving_path->tostring))
+                                return (way, graphic::texture::load(context->get_project->make_path_normalize(saving_path)));
+                            else
+                                return (way, option::none);                  
+                        };
+
+                if (textures->>\kv=kv[1]->has == false;->reduce(\l, r = l && r;)->valor(false))
+                    return false;
+                else
+                {
+                    self.auto_wrap = option::value(textures->>\kv = (kv[0], kv[1]->val);->mapping);
+                    return true;
+                }
+            
+            }
+        }
         func create(context: EditorContext, 
             maintex: graphic::texture, 
             crc64: int, 
@@ -69,10 +447,12 @@ namespace editor::gui::tilemap
                 ->  valor(result::err("无法加载或创建Tile纹理"))
                 ;
             return result::ok(Tile{
+                maintex = maintex,
                 texture = tiletexture,
                 tile_components = {},
                 uid = tileuid,
                 location = (ix, iy),
+                auto_wrap = mut option::none,
             });
         }
     }
@@ -153,14 +533,14 @@ namespace editor::gui::tilemap
                 m_layerd_tiles = {}mut,
             };
         }
+        func get_selected_tile(self: TileEditContext)
+        {
+            return self.m_tile_sets->get(self.m_selected_tileset_index)=>>\tileset = tileset->gettile(self.m_selected_tile...);;
+        }
         func apply_draw_tile(self: TileEditContext, x: int, y: int)
         {
-            match (self.m_tile_sets->get(self.m_selected_tileset_index)=>>\tileset = tileset->gettile(self.m_selected_tile...);)
-            {
-            value(tile)?
-                self.m_layerd_tiles->getorset(self.m_drawing_layer, {}mut)->getorset(x, {}mut)->set(y, tile);
-            none?;
-            }
+            do self->get_selected_tile->> \tile = 
+                self.m_layerd_tiles->getorset(self.m_drawing_layer, {}mut)->getorset(x, {}mut)->set(y, tile);;
         }
         func clear_draw_tile(self: TileEditContext, x: int, y: int)
         {
@@ -286,7 +666,7 @@ namespace editor::gui::tilemap
                     {
                         if (BeginTabItem(F"{tset.name}##{index}"))
                         {
-                             self.m_selected_tileset_index = index;
+                            self.m_selected_tileset_index = index;
 
                             let drawlist = GetWindowDrawList();
                             let (avaliw, _) = GetContentRegionAvail();
@@ -296,6 +676,12 @@ namespace editor::gui::tilemap
 
                             let (blockcountx, blockcounty) = tset->getsize;
                             let (blockw, blockh) = (rangew / blockcountx: real, rangeh / blockcounty: real);
+
+                            do CheckBox("自动密铺", self->get_selected_tile->>\t = t.auto_wrap->has;->valor(false))
+                                ->> \opt = self->get_selected_tile
+                                    ->> \t = t->set_auto_warping(self.m_context, opt);
+                                    ;
+                                ;
 
                             do InvisibleButton("##tileset", (rangew, rangeh));
                             let ismouse_hovered = IsItemHovered();
@@ -332,7 +718,6 @@ namespace editor::gui::tilemap
                                 (lux + locx: real * blockw, luy + locy: real * blockh), 
                                 (lux + locx: real * blockw + blockw, luy + locy: real * blockh + blockh), 
                                 (255, 255, 255, 255), 2.);
-
 
                             PopClipRect();
 
