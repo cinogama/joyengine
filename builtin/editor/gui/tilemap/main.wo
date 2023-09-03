@@ -441,6 +441,35 @@ namespace editor::gui::tilemap
             none? return self.texture;
             }
         }
+        func create_entity(self: Tile, w: world, context: EditorContext, way: WrapingTileWay)
+        {
+            let e = w->add_entity(
+                [
+                    typeinfo::load("Transform::LocalPosition")->val,
+                    typeinfo::load("Transform::LocalRotation")->val,
+                    typeinfo::load("Transform::LocalScale")->val,
+                    typeinfo::load("Transform::LocalToWorld")->val,
+                    typeinfo::load("Transform::Translation")->val,
+
+                    typeinfo::load("Renderer::Shape")->val,
+                    typeinfo::load("Renderer::Shaders")->val,
+                    typeinfo::load("Renderer::Textures")->val,
+                    typeinfo::load("Renderer::Rendqueue")->val,
+                    
+                    typeinfo::load("Scene::MapTile")->val,
+
+                    typeinfo::load("Editor::Name")->val,
+                ]
+            );
+            e->editor::set_name("Tile");
+            e->editor::graphic::set_shaders([graphic::shader::load("@/resource/shader/UnlitBlend.shader")->val]);
+            e->editor::graphic::bind_texture(0, self->get_texture(context, way));
+
+            let (tile_nt, tile_nv) = e->get_component(typeinfo::load("Scene::MapTile")->val)->val
+                ->get_member("type")->val;
+            tile_nv->parse(tile_nt, self.uid);
+            return e;
+        }
     }
 
     // tilemapset 是一组地图的纹理切片、组件集合设置的集合
@@ -873,14 +902,50 @@ namespace editor::gui::tilemap
             }
             EndChild();
         }
+
+        func get_all_tile_entity(w: world)
+        {
+            return w->editor::get_all_entities
+                -> forall(\e = e->get_component(typeinfo::load("Scene::MapTile")->val)->has;)
+                ;
+        }
+        func generate_entities_for_world(self: TileEditContext, w: world)
+        {
+            for (let layer, tiles : self.m_layerd_tiles)
+            {
+                for (let x, ytiles :  tiles)
+                {
+                    for (let y, tile :  ytiles)
+                    {
+                        let e = tile->create_entity(w, self.m_context, self->get_tile_way(layer, x, y));
+                        let (_, lpos_nv) = e->get_component(typeinfo::load("Transform::LocalPosition")->val)->val
+                            ->get_member("pos")->val;
+                        lpos_nv->set_float3(x: real, -y: real, 0.1 * -layer: real);
+                        
+                        let (_, rendqueue_nv) = e->get_component(typeinfo::load("Renderer::Rendqueue")->val)->val
+                            ->get_member("rend_queue")->val;
+                        rendqueue_nv->set_int(5000 + layer);
+                        
+                        let tile_component = e->get_component(typeinfo::load("Scene::MapTile")->val)->val;
+                        let (locationnt, locationnv) = tile_component->get_member("location")->val;
+                        locationnv->parse(locationnt, F"({x},{y})");
+                        let (_, layernv) = tile_component->get_member("layer")->val;
+                        layernv->set_int(layer);
+
+                        
+                    }
+                }
+            }
+        }
     }
 
     public func main(context: EditorContext)
     {
+        let formopen = mutable::create(true);
         let editctx = TileEditContext::create(context);
         launch(func(){
             let mut open = true;
-            match (BeginAttrOpen("Tile editor test", WindowsAttribute::ImGuiWindowFlags_MenuBar))
+            match (BeginAttrOpen("TileMap 编辑器", WindowsAttribute::ImGuiWindowFlags_MenuBar))
             {
             value(show)?
                 if (show)
@@ -912,8 +977,31 @@ namespace editor::gui::tilemap
                 open = false;
             }
             End();
+
+            if (open == false)
+            {
+                match (context->get_project->get_editing_world)
+                {
+                value(w)?
+                    jeapi::gui::form::ask("是否保存", F"是否保存当前绘制结果到世界: {w->editor::name}\n是: 立即覆盖\n否: 直接关闭", 
+                        func(opt)
+                        {
+                            formopen->set(false);
+                            if (opt)
+                            {
+                                // 1. 删除已有的所有Tile
+                                do TileEditContext::get_all_tile_entity(w)
+                                    ->> \e = e->close;
+                                    ;
+                                editctx->generate_entities_for_world(w);
+                            }
+                        });
+                none?
+                    jeapi::gui::form::errmsg("失败", "没有正在编辑中的世界");
+                }
+            }
             
-            return open;
+            return formopen->get();
         }, ());
     }
 }

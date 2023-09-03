@@ -2486,6 +2486,9 @@ R"(
             extern("libjoyecs", "wojeapi_set_parent")
             public func set_parent(self: entity, parent: entity, force: bool)=> bool;
 
+            extern("libjoyecs", "wojeapi_get_entity_anchor_uuid")
+            public func get_anchor_uid(self: entity)=> option<string>;
+
             extern("libjoyecs", "wojeapi_set_parent_with_uid")
             public func set_parent_with_uid(self: entity, parent_uid: string, force: bool)=> bool;
 

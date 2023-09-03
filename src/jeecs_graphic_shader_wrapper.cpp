@@ -458,11 +458,11 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
     for (size_t i = 2; i < argc; ++i)
     {
         auto value_type = wo_valuetype(args + i);
-        if (value_type != WO_INTEGER_TYPE && value_type != WO_REAL_TYPE && value_type != WO_GCHANDLE_TYPE)
+        if (value_type != WO_INTEGER_TYPE && value_type != WO_REAL_TYPE && value_type != WO_GCHANDLE_TYPE && value_type != WO_HANDLE_TYPE)
             return wo_ret_halt(vm, "Cannot do this operations: argument type should be number or shader_value.");
 
         jegl_shader_value* sval;
-        if (value_type == WO_GCHANDLE_TYPE)
+        if (value_type == WO_GCHANDLE_TYPE || value_type == WO_HANDLE_TYPE)
             sval = (jegl_shader_value*)wo_pointer(args + i);
         else if (value_type == WO_INTEGER_TYPE)
             sval = new jegl_shader_value((int)wo_int(args + i));
@@ -554,7 +554,7 @@ WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args, size_t argc)
     if (!result)
         return wo_ret_halt(vm, ("vertex_in[" + std::to_string(pos) + "] has been used, but type didn't match.").c_str());
 
-    return wo_ret_gchandle(vm, result, nullptr, nullptr);
+    return wo_ret_pointer(vm, result);
 }
 
 WO_API wo_api jeecs_shader_set_vertex_out(wo_vm vm, wo_value args, size_t argc)

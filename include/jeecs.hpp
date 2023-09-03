@@ -8386,6 +8386,7 @@ namespace jeecs
             type_info::of<Light2D::Shadow>("Light2D::Shadow");
             type_info::of<Light2D::CameraPostPass>("Light2D::CameraPostPass");
             type_info::of<Light2D::Block>("Light2D::Block");
+
             type_info::of<Script::Woolang>("Script::Woolang");
 
             type_info::of<Physics2D::Rigidbody>("Physics2D::Rigidbody");
