@@ -18,6 +18,7 @@ namespace editor::gui::tilemap
 {
     enum WrapingTileWay
     {
+        NOTHING = 0,
         UP = 0b0000_0001,
         DOWN = 0b0000_0010,
         LEFT = 0b0000_0100,
@@ -30,31 +31,6 @@ namespace editor::gui::tilemap
     }
     namespace WrapingTileWay
     {
-        let all_wraping_way = func()
-        {
-            let v = []mut: vec<WrapingTileWay>;
-            for (let mut i = 0: WrapingTileWay; i <= UP + DOWN + LEFT + RIGHT; i += 1: WrapingTileWay)
-            {
-                v->add(i);
-            }
-            
-            for (let mut i = 0b0001_0000: WrapingTileWay; i <= 0b1111_0000: WrapingTileWay; i += 0b0001_0000: WrapingTileWay)
-            {
-                let mut vi = i;
-                if (bitand(vi: int, LEFTUP: int) != 0)
-                    vi = vi: int->bitor(LEFT: int)->bitor(UP: int): WrapingTileWay;
-                if (bitand(vi: int, LEFTDOWN: int) != 0)
-                    vi = vi: int->bitor(LEFT: int)->bitor(DOWN: int): WrapingTileWay;
-                if (bitand(vi: int, RIGHTUP: int) != 0)
-                    vi = vi: int->bitor(RIGHT: int)->bitor(UP: int): WrapingTileWay;
-                if (bitand(vi: int, RIGHTDOWN: int) != 0)
-                    vi = vi: int->bitor(RIGHT: int)->bitor(DOWN: int): WrapingTileWay;
-                v->add(vi);
-            }
-
-            return v->unsafe::cast :<array<WrapingTileWay>>();
-        }();
-
         func get_way_name(self: WrapingTileWay)
         {
             using std;
@@ -351,7 +327,7 @@ namespace editor::gui::tilemap
         其中，UNR UNL DNR DNL 仅当UDLR中 正交两个方向的方块存在同时，斜向方块亦存在的情况下才可
         因此共有： 16 + 15 共31张图
         */
-        auto_wrap: mut option<dict<WrapingTileWay, graphic::texture>>,
+        auto_wrap: mut option<map<WrapingTileWay, graphic::texture>>,
     }
     {
         func _create_clip_texture(
@@ -380,53 +356,12 @@ namespace editor::gui::tilemap
 
             return option::none;
         }
-        func set_auto_warping(self: Tile, context: EditorContext, able: bool)
+        func set_auto_warping(self: Tile, able: bool)
         {
             if (!able)
-                {
-                    self.auto_wrap = option::none;
-                    return true;
-                }
+                self.auto_wrap = option::none;
             else
-            {
-                let texpath = context->get_project->parse_path_normalize(self.texture->path->val);
-                let purefilename = filesys::purename(texpath);
-                let (maintex_w, maintex_h) = self.maintex->size;
-                let (tile_w, tile_h) = self.texture->size;
-
-                let textures =  WrapingTileWay::all_wraping_way
-                    ->> func(way)
-                        {
-                            // 获取当前wraptile的路径名称
-                            let wayname = way->get_way_name;
-                            let saving_path = filesys::parent(texpath) / F"{purefilename}_{wayname}.png";
-
-                            match (graphic::texture::load(context->get_project->make_path_normalize(saving_path)))
-                            {
-                            value(tex)?
-                                return (way, option::value(tex));
-                            none?
-                                ;
-                            }
-
-                            let tileimage = image::create(tile_w, tile_h);
-
-                            way->get_sampling_texture(tileimage, self.maintex, self.location..., maintex_w / tile_w, maintex_h / tile_h);
-                            if (tileimage->save(saving_path->tostring))
-                                return (way, graphic::texture::load(context->get_project->make_path_normalize(saving_path)));
-                            else
-                                return (way, option::none);                  
-                        };
-
-                if (textures->>\kv=kv[1]->has == false;->reduce(\l, r = l && r;)->valor(false))
-                    return false;
-                else
-                {
-                    self.auto_wrap = option::value(textures->>\kv = (kv[0], kv[1]->val);->mapping);
-                    return true;
-                }
-            
-            }
+                self.auto_wrap = option::value({}mut);
         }
         func create(context: EditorContext, 
             maintex: graphic::texture, 
@@ -454,6 +389,57 @@ namespace editor::gui::tilemap
                 location = (ix, iy),
                 auto_wrap = mut option::none,
             });
+        }
+        func get_texture(self: Tile, context: EditorContext, way: WrapingTileWay)
+        {
+            match (self.auto_wrap)
+            {
+            value(d)?
+                {
+                    if (d->contain(way))
+                        return d[way];
+                    
+                    let texpath = context->get_project->parse_path_normalize(self.texture->path->val);
+                    let purefilename = filesys::purename(texpath);
+                    let (maintex_w, maintex_h) = self.maintex->size;
+                    let (tile_w, tile_h) = self.texture->size;
+
+                    // 获取当前wraptile的路径名称
+                    let wayname = way->get_way_name;
+                    let saving_path = filesys::parent(texpath) / F"{purefilename}_{wayname}.png";
+
+                    match (graphic::texture::load(context->get_project->make_path_normalize(saving_path)))
+                    {
+                    value(tex)?
+                        {
+                            d->set(way, tex);
+                            return tex;
+                        }
+                    none?
+                        ;
+                    }
+
+                    let tileimage = image::create(tile_w, tile_h);
+
+                    way->get_sampling_texture(tileimage, self.maintex, self.location..., maintex_w / tile_w, maintex_h / tile_h);
+                    if (tileimage->save(saving_path->tostring))
+                    {
+                        match (graphic::texture::load(context->get_project->make_path_normalize(saving_path)))
+                        {
+                        value(tex)?
+                            {
+                                d->set(way, tex);
+                                return tex;
+                            }
+                        none?;
+                        }
+                    }
+
+                    jeapi::gui::form::errmsg("失败", F"无法创建{saving_path->tostring}");
+                    return self.texture;
+                }
+            none? return self.texture;
+            }
         }
     }
 
@@ -532,6 +518,10 @@ namespace editor::gui::tilemap
                 m_scale = mut 1.,
                 m_layerd_tiles = {}mut,
             };
+        }
+        func get_tile(self: TileEditContext, layer: int, x: int, y: int)
+        {
+            return self.m_layerd_tiles->get(layer)=>>\d = d->get(x);=>>\d = d->get(y);;
         }
         func get_selected_tile(self: TileEditContext)
         {
@@ -677,9 +667,9 @@ namespace editor::gui::tilemap
                             let (blockcountx, blockcounty) = tset->getsize;
                             let (blockw, blockh) = (rangew / blockcountx: real, rangeh / blockcounty: real);
 
-                            do CheckBox("自动密铺", self->get_selected_tile->>\t = t.auto_wrap->has;->valor(false))
+                            do CheckBox("自动铺开", self->get_selected_tile->>\t = t.auto_wrap->has;->valor(false))
                                 ->> \opt = self->get_selected_tile
-                                    ->> \t = t->set_auto_warping(self.m_context, opt);
+                                    ->> \t = t->set_auto_warping(opt);
                                     ;
                                 ;
 
@@ -733,6 +723,54 @@ namespace editor::gui::tilemap
             }
             EndChild();
         }
+        func get_tile_way(self: TileEditContext, layer: int, x: int, y: int)
+        {
+            match (self->get_tile(layer, x, y))
+            {
+            value(centertile)?
+                {
+                    let mut way = WrapingTileWay::NOTHING;
+                    if (self->get_tile(layer, x + 1, y)->>\t = std::issame(t, centertile);->valor(false))
+                        way += WrapingTileWay::RIGHT;
+                    if (self->get_tile(layer, x - 1, y)->>\t = std::issame(t, centertile);->valor(false))
+                        way += WrapingTileWay::LEFT;
+                    if (self->get_tile(layer, x, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                        way += WrapingTileWay::UP;
+                    if (self->get_tile(layer, x, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                        way += WrapingTileWay::DOWN;
+
+                    if (way: int->std::bitand(WrapingTileWay::UP: int) != 0)
+                    {
+                        if (way: int->std::bitand(WrapingTileWay::RIGHT: int) != 0)
+                        {
+                            if (self->get_tile(layer, x + 1, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                                way += WrapingTileWay::RIGHTUP;
+                        }
+                        if (way: int->std::bitand(WrapingTileWay::LEFT: int) != 0)
+                        {
+                            if (self->get_tile(layer, x - 1, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                                way += WrapingTileWay::LEFTUP;
+                        }
+                    }
+                    if (way: int->std::bitand(WrapingTileWay::DOWN: int) != 0)
+                    {
+                        if (way: int->std::bitand(WrapingTileWay::RIGHT: int) != 0)
+                        {
+                            if (self->get_tile(layer, x + 1, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                                way += WrapingTileWay::RIGHTDOWN;
+                        }
+                        if (way: int->std::bitand(WrapingTileWay::LEFT: int) != 0)
+                        {
+                            if (self->get_tile(layer, x - 1, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                                way += WrapingTileWay::LEFTDOWN;
+                        }
+                    }
+                    return way;
+                }
+            none?
+                return WrapingTileWay::NOTHING;
+            }
+        }
         func draw_tile(self: TileEditContext)
         {
             if (BeginChild("##drawtiles"))
@@ -770,7 +808,7 @@ namespace editor::gui::tilemap
                             drawlist->AddImage(
                                 (lux + x: real * scaled_tile_size + oldoffsetx, luy + y: real * scaled_tile_size + oldoffsety), 
                                 (lux + x: real * scaled_tile_size + scaled_tile_size + oldoffsetx, luy + y: real * scaled_tile_size + scaled_tile_size + oldoffsety), 
-                                tile.texture,
+                                tile->get_texture(self.m_context, self->get_tile_way(layer, x, y)),
                                 (255, 255, 255, tilealpha));
                         }
                     }
