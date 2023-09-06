@@ -51,7 +51,7 @@ namespace editor::gui::particalbaker
                 =>> \dat = dict::deserialize(dat);
                 ->> \dat = ParticalContext{
                         m_frame_count = mut fdata["framecount"] as int,
-                        m_frame_size = mut (fdata["framesize"] as array [0] as int, fdata["framesize"] as array [1] as int),
+                        m_frame_size = mut (fdata["framesize"] as array<dynamic>[0] as int, fdata["framesize"] as array<dynamic>[1] as int),
                         m_frame_rate = mut fdata["framerate"] as real,
                         m_repeat_round = mut fdata["repeatround"] as int,
                         m_frames_caches = mut [],

@@ -156,22 +156,24 @@ func read_editor_data()
         ;
 }
 
-func apply_editor_data_when_start_up_project(dat: dict)
+func apply_editor_data_when_start_up_project(dat: dict<dynamic, dynamic>)
 {
     let form_size = dat
-        ->  getor("form_size": dynamic, [1344, 768]: dynamic) as array
+        ->  getor("form_size": dynamic, [1344, 768]: dynamic) as array<dynamic>
         ->> \d = d as int;
         ;
     je::editor::set_window_size(form_size[0], form_size[1]);
 }
-func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesys::path_t)
+func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string, proj_path: filesys::path_t)
 {
     let (win_w, win_h) = je::input::windowsize();
-    let project_histories = dat->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
+    let project_histories = dat->getor("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< array<array<string>> >;
     
     let newdat = dat->tomap();
     newdat->set("form_size": dynamic, [win_w, win_h]: dynamic);
-    newdat->set("history": dynamic, project_histories->forall(\record = record[1] != proj_path->tostring;)->inlay(0, [proj_name, proj_path->tostring]): dynamic);
+    newdat->set("history": dynamic, project_histories
+        ->forall(\record = record[1] != proj_path->tostring;)
+        ->inlay(0, [proj_name, proj_path->tostring]): dynamic);
 
     assert(
         filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", newdat->serialize->val)
@@ -268,7 +270,7 @@ public func ask_for_saving_proj_when_exit(p: editor::Project)
     return false;
 }
 
-func create_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict, f: mutable<bool>)
+func create_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
 {
     // 确保目录存在
     if (! filesys::exist(path))
@@ -343,7 +345,7 @@ config.jeinf text eol=lf
         });
 }
 
-func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict, f: mutable<bool>)
+func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
 {
     let proj_path = path/"project.jeproj4";
 
@@ -397,7 +399,7 @@ for (;;)
     let u = editor::Environment::create();
     {
         let editor_configs = read_editor_data();
-        let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< vec<array<string>> >;
+        let historys = editor_configs->getor("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
 
         match (editor_configs->get("specify_vs_version": dynamic))
         {

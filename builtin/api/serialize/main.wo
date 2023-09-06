@@ -23,7 +23,7 @@ namespace jeapi
 
         alias shader_inform = dict<string, array<dynamic>>;
         //                          uniform_name uniform_vals
-        func get_entity_shaders_informs(saving_entity: entity)=> array<array/*(string, shader_inform)*/>
+        func get_entity_shaders_informs(saving_entity: entity)=> array<array<dynamic>/*(string, shader_inform)*/>
         {
             // 获取实体绑定的shader和uniform信息, uniform 信息仅包括int/float/float2，3，4类型的信息
             // {[shader_path] = shader_inform}
@@ -202,9 +202,9 @@ namespace jeapi
         {
             let component_types_dat = entity_dat
                 ->  get("components")
-                ->> \cs = cs as dict
+                ->> \cs = cs as dict<dynamic, dynamic>
                     ->  unmapping
-                    ->> \kv = (kv[0] as string, kv[1] as dict);
+                    ->> \kv = (kv[0] as string, kv[1] as dict<dynamic, dynamic>);
                     ->> \td = (_typeinfo_or_warning(td[0]), 
                             td[1]->unmapping
                                 ->> \p = (p[0] as string, p[1] as string);
@@ -222,12 +222,12 @@ namespace jeapi
             let shaders_and_dat = entity_dat->get("shaders")
                 ->> func(shaders: dynamic)
                     {
-                        let shads = []mut: vec<(option<graphic::shader>, string, dict)>;
-                        for (let _, shader_path_dat_pair : shaders: array)
+                        let shads = []mut: vec<(option<graphic::shader>, string, dict<dynamic, dynamic>)>;
+                        for (let _, shader_path_dat_pair : shaders: array<dynamic>)
                         {
-                            let spath = shader_path_dat_pair: array[0] as string;
+                            let spath = shader_path_dat_pair: array<dynamic>[0] as string;
                             let s = graphic::shader::load(spath);
-                            shads->add((s, spath, shader_path_dat_pair: array[1] as dict));
+                            shads->add((s, spath, shader_path_dat_pair: array<dynamic>[1] as dict<dynamic, dynamic>));
                         }
                         return shads->toarray;
                     }
@@ -292,7 +292,7 @@ namespace jeapi
             do entity_dat->get("textures")
                 ->> func(textures)
                     {
-                        for (let passid, path : textures: dict)
+                        for (let passid, path : textures: dict<dynamic, dynamic>)
                             do graphic::texture::load(path as string)
                                 ->> \tex = entity->editor::graphic::bind_texture(passid as int, tex);
                                 ;
@@ -332,7 +332,7 @@ namespace jeapi
             do dat->get("entities")
                 ->> \es = es as array<dynamic>
                     ->> \edat = deserialize::entity(w, entity_dat, in_editor)
-                        where entity_dat = edat as dict->>\k, v = (k as string, v);
+                        where entity_dat = edat as dict<dynamic, dynamic>->>\k, v = (k as string, v);
                         ;
                     ;
                 ;
