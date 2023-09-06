@@ -517,6 +517,52 @@ namespace editor::gui::tilemap
         }
     }
 
+    // 16*16个Tile是一个chunk
+    let CHUNK_TILE_SIZE = 16;
+
+    using TileChunk = struct{
+        m_chunk_texture: graphic::texture,
+        m_tile_size: (int, int),
+    }
+    {
+        func create(tilew: int, tileh: int, sample_method: graphic::texture::sampling)
+        {
+            let chunktex = graphic::texture::create(CHUNK_TILE_SIZE * tilew, CHUNK_TILE_SIZE * tileh);
+            chunktex->set_sampling_method(sample_method);
+            return TileChunk{
+                m_chunk_texture = chunktex,
+                m_tile_size = (tilew, tileh),
+            };
+        }
+        func update(self: TileChunk, tile: graphic::texture, loc: (int, int))
+        {
+            let (tilew, tileh) = self.m_tile_size;
+            let (locx, locy) = loc;
+
+            for (let mut ix = 0; ix < tilew; ix += 1)
+            {
+                for (let mut iy = 0; iy < tileh; iy += 1)
+                {
+                    let p = self.m_chunk_texture->pix((locx * tilew + ix, (CHUNK_TILE_SIZE - 1 - locy) * tileh + iy));
+                    let srcp = tile->pix((ix, iy));
+                    p->set_color(srcp->get_color);
+                }
+            }
+        }
+
+        func raw_to_chunk_location(raw_x: int, raw_y: int)
+        {
+            let mut chunk_id_x = raw_x / CHUNK_TILE_SIZE;
+            let mut chunk_id_y = raw_y / CHUNK_TILE_SIZE;
+            let chunk_x = raw_x - chunk_id_x * CHUNK_TILE_SIZE;
+            let chunk_y = raw_x - chunk_id_x * CHUNK_TILE_SIZE;
+            if (chunk_x < 0) chunk_id_x -= 1;
+            if (chunk_y < 0) chunk_id_y -= 1;
+
+            return ((chunk_id_x, chunk_id_y), (chunk_x, chunk_y));
+        }
+    }
+
     using TileEditContext = struct{
         m_context: EditorContext,
         m_editing_world: mut option<world>,
@@ -529,7 +575,9 @@ namespace editor::gui::tilemap
         m_focus_on_drawing_layer: mut bool,
         m_offset: mut(real, real),
         m_scale: mut real,
-        m_layerd_tiles: map<int, map<int, map<int, Tile>>>
+        m_layerd_tiles: map<int, map<int, map<int, Tile>>>,
+
+        m_chunks: map<int, map<int, map<int, TileChunk>>>,
     }
     {
         func create(context: EditorContext)
@@ -546,6 +594,7 @@ namespace editor::gui::tilemap
                 m_offset = mut(0., 0.),
                 m_scale = mut 1.,
                 m_layerd_tiles = {}mut,
+                m_chunks = {}mut,
             };
         }
         func get_tile(self: TileEditContext, layer: int, x: int, y: int)
@@ -556,10 +605,28 @@ namespace editor::gui::tilemap
         {
             return self.m_tile_sets->get(self.m_selected_tileset_index)=>>\tileset = tileset->gettile(self.m_selected_tile...);;
         }
+        func get_or_create_chunk(self: TileEditContext, layer: int, chunkx: int, chunky: int)
+        {
+            let ychunks = self.m_layerd_tiles->getorset(layer, {}mut)->getorset(chunkx, {}mut);
+            match (ychunks->get(chunky))
+            {
+            value(chunk)? return chunk;
+            none?
+                {
+                    std::panic("TODO");
+                    // let chunk = TileChunk::create();
+                    // ychunks->set(chunky, chunk);
+
+                }
+            }
+        }
         func apply_draw_tile(self: TileEditContext, x: int, y: int)
         {
             do self->get_selected_tile->> \tile = 
                 self.m_layerd_tiles->getorset(self.m_drawing_layer, {}mut)->getorset(x, {}mut)->set(y, tile);;
+
+            std::panic("TODO");
+            // let ((chunkx, chunky), (chunkpixx, chunkpixy)) = TileChunk::raw_to_chunk_location();
         }
         func clear_draw_tile(self: TileEditContext, x: int, y: int)
         {
@@ -570,15 +637,15 @@ namespace editor::gui::tilemap
             let now_editing_world = self.m_context->get_project->get_editing_world;
             if (!self.m_editing_world=>>\w = now_editing_world->>\nw = w == nw;;->valor(false))
             {
-                match (now_editing_world)
-                {
-                value(w)?
-                    {
-                        do w;
-                    }
-                none?
-                    ;
-                }
+                // match (now_editing_world)
+                // {
+                // value(w)?
+                //     {
+                //         do w;
+                //     }
+                // none?
+                //     ;
+                // }
                 self.m_editing_world = now_editing_world;
             }
         }
