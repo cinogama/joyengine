@@ -1561,7 +1561,6 @@ struct jegl_vertex
     float m_size_x, m_size_y, m_size_z;
     float* m_vertex_datas;
     size_t* m_vertex_formats;
-    const char* m_path;
     size_t m_format_count;
     size_t m_point_count;
     size_t m_data_count_per_point;
@@ -1755,8 +1754,8 @@ struct jegl_resource
         FRAMEBUF,       // Framebuffer
         UNIFORMBUF,     // UniformBlock
     };
+
     type m_type;
-    bool m_shared_resource;
     jegl_thread* m_graphic_thread;
     jeecs::typing::version_t m_graphic_thread_version;
 
@@ -1938,16 +1937,6 @@ JE_API jegl_resource* jegl_create_framebuf(
     const jegl_texture::sampling*   attachment_samlings,
     size_t                          attachment_count);
 
-/*
-jegl_copy_resource [基本接口]
-复制一个图形资源实例
-    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
-    * jegl_copy_resource 目前仅用于复制shader实例，其他资源复制后的行为不在预料之内
-请参见：
-    jegl_close_resource
-*/
-JE_API jegl_resource* jegl_copy_resource(jegl_resource* resource);
-
 typedef struct je_stb_font_data je_font;
 typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
 
@@ -1984,6 +1973,29 @@ je_font_get_char [基本接口]
     jeecs::graphic::character
 */
 JE_API jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode);
+
+/*
+jegl_set_able_shared_resources [基本接口]
+设置是否启用资源缓存机制
+    * 若启用，则加载相同路径的纹理和共享的着色器时，将不会创建新的实例，而总是获取同一份
+    * 若需要同时使用多个图形线程（上下文），请关闭共享以避免资源读取问题。
+    * 引擎默认关闭此机制，用于保证行为的正确性，但编辑器会默认打开此机制以节省资源
+    * 若在资源缓存启用时需要更新指定资源（即强制重新加载），请使用
+        jegl_mark_shared_resources_outdated 
+请参见：
+    jegl_mark_shared_resources_outdated
+*/
+JE_API void jegl_set_able_shared_resources(bool able);
+
+/*
+jegl_mark_shared_resources_outdated [基本接口]
+将指定路径对应的共享资源缓存标记为过时的，若成功标记，返回true
+    * 标记成功：指的是之前此资源存在，并非过时的，在此次操作之后被标记
+    * 这将使得下次加载此资源时更新资源，对于已经加载的资源没有影响
+请参见：
+    jegl_mark_shared_resources_outdated
+*/
+JE_API bool jegl_mark_shared_resources_outdated(const char* path);
 
 /*
 jegl_load_shader_source [基本接口]
@@ -5287,6 +5299,20 @@ namespace jeecs
             {
                 return x != _v2.x || y != _v2.y;
             }
+
+            inline std::string to_string()const
+            {
+                std::string result;
+                std::stringstream ss;
+                ss << "(" << x << "," << y << ")";
+                ss >> result;
+
+                return result;
+            }
+            inline void parse(const std::string& str)
+            {
+                sscanf(str.c_str(), "(%d,%d)", &x, &y);
+            }
         };
 
         struct vec3 :public _basevec3
@@ -6071,13 +6097,6 @@ namespace jeecs
             static basic::resource<shader> load(const std::string& src_path)
             {
                 jegl_resource* res = jegl_load_shader(src_path.c_str());
-                if (res != nullptr)
-                    return new shader(res);
-                return nullptr;
-            }
-            static basic::resource<shader> copy(const shader* shad)
-            {
-                jegl_resource* res = jegl_copy_resource(shad->resouce());
                 if (res != nullptr)
                     return new shader(res);
                 return nullptr;
@@ -8015,6 +8034,22 @@ namespace jeecs
             }
         };
     }
+    namespace Scene
+    {
+        struct MapTile
+        {
+            math::ivec2     location = {};
+            int             layer = 0;
+            typing::uid_t   type = {};
+
+            static void JERefRegsiter()
+            {
+                typing::register_member(&MapTile::location, "location");
+                typing::register_member(&MapTile::layer, "layer");
+                typing::register_member(&MapTile::type, "type");
+            }
+        };
+    }
 
     inline typing::euid_t game_entity::get_euid() const noexcept
     {
@@ -8351,6 +8386,7 @@ namespace jeecs
             type_info::of<Light2D::Shadow>("Light2D::Shadow");
             type_info::of<Light2D::CameraPostPass>("Light2D::CameraPostPass");
             type_info::of<Light2D::Block>("Light2D::Block");
+
             type_info::of<Script::Woolang>("Script::Woolang");
 
             type_info::of<Physics2D::Rigidbody>("Physics2D::Rigidbody");
@@ -8365,6 +8401,8 @@ namespace jeecs
             type_info::of<Audio::Source>("Audio::Source");
             type_info::of<Audio::Listener>("Audio::Listener");
             type_info::of<Audio::Playing>("Audio::Playing");
+
+            type_info::of<Scene::MapTile>("Scene::MapTile");
             
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();

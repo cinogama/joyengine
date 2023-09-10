@@ -586,7 +586,7 @@ namespace editor::gui::animation2d
                                     }
                                     End();
                                     return open;
-                                }, (mutable::create(2), mutable::create(0.1)));
+                                }, (new! mutable(2), new! mutable(0.1)));
                             }
                             if (MenuItem("重命名"))
                             {
@@ -647,17 +647,17 @@ namespace editor::gui::animation2d
                                             -> std::sort(\at, bt = at->name() < bt->name();)
                                             ;
 
-                                        let selecting_id = mutable::create(0);
-                                        let selecting_member_id = mutable::create(0);
-                                        let editing_value = mutable::create(DataValue::INT(0));
-                                        let editing_value_type = mutable::create(je::typeinfo::int);
-                                        let offset_mode = mutable::create(false);
-                                        let for_all_frame = mutable::create(false);
+                                        let selecting_id = new! mutable(0);
+                                        let selecting_member_id = new! mutable(0);
+                                        let editing_value = new! mutable(DataValue::INT(0));
+                                        let editing_value_type = new! mutable(je::typeinfo::int);
+                                        let offset_mode = new! mutable(false);
+                                        let for_all_frame = new! mutable(false);
 
-                                        let lerp_mode = mutable::create(false);
-                                        let lerp_by_ftime_mode = mutable::create(true);
-                                        let lerp_frame_count = mutable::create(1);
-                                        let lerp_end_value = mutable::create(DataValue::INT(1));
+                                        let lerp_mode = new! mutable(false);
+                                        let lerp_by_ftime_mode = new! mutable(true);
+                                        let lerp_frame_count = new! mutable(1);
+                                        let lerp_end_value = new! mutable(DataValue::INT(1));
 
                                         launch(func(){
                                             let mut open = true;
@@ -856,8 +856,8 @@ namespace editor::gui::animation2d
                                     }
                                     if (MenuItem("新建着色器变量数据"))
                                     {
-                                        let uniform_name = mutable::create("");
-                                        let uniform_type_selected = mutable::create(0);
+                                        let uniform_name = new! mutable("");
+                                        let uniform_type_selected = new! mutable(0);
                                         let uniform_types = [
                                             ("int", mut DataValue::INT(0), mut DataValue::INT(1)),
                                             ("float", mut DataValue::FLOAT(0.), mut DataValue::FLOAT(1.)),
@@ -865,11 +865,11 @@ namespace editor::gui::animation2d
                                             ("vec3", mut DataValue::VEC3((0., 0., 0.)), mut DataValue::VEC3((1., 1., 1.))),
                                             ("vec4", mut DataValue::VEC4((0., 0., 0., 0.)), mut DataValue::VEC4((1., 1., 1., 1.))),
                                         ];
-                                        let for_all_frame = mutable::create(false);
+                                        let for_all_frame = new! mutable(false);
 
-                                        let lerp_mode = mutable::create(false);
-                                        let lerp_by_ftime_mode = mutable::create(true);
-                                        let lerp_frame_count = mutable::create(1);
+                                        let lerp_mode = new! mutable(false);
+                                        let lerp_by_ftime_mode = new! mutable(true);
+                                        let lerp_frame_count = new! mutable(1);
 
                                         launch(func(){
                                             let mut open = true;
@@ -1230,6 +1230,6 @@ namespace editor::gui::animation2d
     }
     public func show(context: EditorContext, animation_context: AnimationContext)
     {
-        je::gui::launch(_animation_edit_form, (context, animation_context, mutable::create(true)));
+        je::gui::launch(_animation_edit_form, (context, animation_context, new! mutable(true)));
     }
 }

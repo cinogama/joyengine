@@ -6,6 +6,7 @@ import woo::debug;
 
 import pkg::filesystem;
 import pkg::interface;
+import pkg::makenew;
 
 import je;
 import je::editor;
@@ -156,22 +157,24 @@ func read_editor_data()
         ;
 }
 
-func apply_editor_data_when_start_up_project(dat: dict)
+func apply_editor_data_when_start_up_project(dat: dict<dynamic, dynamic>)
 {
     let form_size = dat
-        ->  getor("form_size": dynamic, [1344, 768]: dynamic) as array
+        ->  getor("form_size": dynamic, [1344, 768]: dynamic) as array<dynamic>
         ->> \d = d as int;
         ;
     je::editor::set_window_size(form_size[0], form_size[1]);
 }
-func save_editor_data_after_exit(dat: dict, proj_name: string, proj_path: filesys::path_t)
+func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string, proj_path: filesys::path_t)
 {
     let (win_w, win_h) = je::input::windowsize();
-    let project_histories = dat->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< array<array<string>> >;
+    let project_histories = dat->getor("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< array<array<string>> >;
     
     let newdat = dat->tomap();
     newdat->set("form_size": dynamic, [win_w, win_h]: dynamic);
-    newdat->set("history": dynamic, project_histories->forall(\record = record[1] != proj_path->tostring;)->inlay(0, [proj_name, proj_path->tostring]): dynamic);
+    newdat->set("history": dynamic, project_histories
+        ->forall(\record = record[1] != proj_path->tostring;)
+        ->inlay(0, [proj_name, proj_path->tostring]): dynamic);
 
     assert(
         filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", newdat->serialize->val)
@@ -268,7 +271,7 @@ public func ask_for_saving_proj_when_exit(p: editor::Project)
     return false;
 }
 
-func create_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict, f: mutable<bool>)
+func create_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
 {
     // 确保目录存在
     if (! filesys::exist(path))
@@ -296,8 +299,9 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
 
                     action_after_guide_form_closed = 
                         func(){
-                            try! p = editor::Project::create(projname, regular_path);
-
+                            je::editor::set_able_shared_glresource(true);
+                            try! p = new! editor::Project(projname, regular_path);
+                            
                             apply_editor_data_when_start_up_project(editordat);
                             assert(p->save_project());
 
@@ -342,7 +346,7 @@ config.jeinf text eol=lf
         });
 }
 
-func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict, f: mutable<bool>)
+func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
 {
     let proj_path = path/"project.jeproj4";
 
@@ -363,6 +367,7 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
             action_after_guide_form_closed = 
                 func()
                 {
+                    je::editor::set_able_shared_glresource(true);
                     try! p = editor::Project::load(path, dat);
 
                     apply_editor_data_when_start_up_project(editordat);
@@ -384,16 +389,18 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
 
 for (;;)
 {
+    je::editor::set_able_shared_glresource(false);
+
     let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val;
     let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP.png")->val;
     let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
     
     action_after_guide_form_closed = \ = result::ok(do nil);;
 
-    let u = editor::Environment::create();
+    let u = new! editor::Environment();
     {
         let editor_configs = read_editor_data();
-        let historys = editor_configs->getor("history": dynamic, []: dynamic) as array->unsafe::cast:< vec<array<string>> >;
+        let historys = editor_configs->getor("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
 
         match (editor_configs->get("specify_vs_version": dynamic))
         {
@@ -402,12 +409,11 @@ for (;;)
         none?;
         }
 
-        let w = u->create_world;
-        do w->add_system(je::typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->val);
+        je::editor::init_graphic_pipeline(u->get_universe());
 
         if (editor::CxxProject::is_builder_ready())
             launch(func(){
-                let open = mutable::create(true);
+                let open = new! mutable(true);
 
                 if (BeginAttr("JoyEngineECS 项目导航", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
@@ -557,7 +563,7 @@ for (;;)
                 End();
 
                 return true;
-            }, (mutable::create(option::none),));
+            }, (new! mutable(option::none),));
 
         u->wait();
         // 这个有点操蛋，到时候看一下怎么处理
@@ -574,3 +580,6 @@ for (;;)
         }
     }
 }
+
+// 退出的时候关掉共享图形资源
+je::editor::set_able_shared_glresource(false);

@@ -3,6 +3,7 @@
 import je::gui;
 
 import builtin::editor::gui::main;
+import builtin::editor::gui::tilemap::main;
 import builtin::api::dbg::main;
 import builtin::editor::gui::edit_forms::export_project;
 import builtin::api::gui::inputmgr;
@@ -75,7 +76,7 @@ namespace editor::gui
     func style_editor(context: EditorContext)
     {
         let origin_style = dump_current_style_color();
-        let formopen = mutable::create(true);
+        let formopen = new! mutable(true);
         launch(func()
             {
                 SetNextWindowSizeConstraints((700., 550.), (700., 550.));
@@ -219,6 +220,11 @@ namespace editor::gui
                 }
                 if (BeginMenu("工具"))
                 {
+                    if (MenuItem("TileMap编辑器"))
+                        tilemap::main(context);
+
+                    Separator();
+
                     let scripts = tools::get_available_tool_scripts();
                     if (scripts->empty())
                         do MenuItemEnabled("空", false);

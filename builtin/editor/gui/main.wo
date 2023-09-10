@@ -98,7 +98,7 @@ namespace editor::gui
                 return result::err(F"{name}已经注册");
 
             self.m_editor_form_controlor->set(name, EditorFormControlor{
-                m_open = mutable::create(true),
+                m_open = new! mutable(true),
                 m_old_state = mut option::none,
             });
             return result::ok(self.m_editor_form_controlor[name].m_open);

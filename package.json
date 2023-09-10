@@ -29,6 +29,11 @@
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
             "version" : "1.0.0"
         },
+        "makenew" : {
+            "path" : "build/pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+            "version" : "1.0.0"
+        },
         "math" : {
             "path" : "build/pkg",
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",

@@ -87,7 +87,74 @@ namespace jeapi::debug
     }
 
      // 从世界中获取带有层级关系的实体
-    func get_entity_and_childs(iter: je::entity::editor::entity_iter)=> array<EntityChilds>
+    func get_entity_and_childs(all_entities: array<je::entity>)=> array<EntityChilds>
+    {
+        // NOTE: 之前这里原本是用实体迭代器实现的，但是由于实在是太慢了，于是这儿
+        // 现在开始改成O(n)的重写一遍。
+
+        let root_entity = []mut: vec<EntityChilds>;
+        let anchored_entity = {}mut: map<string, EntityChilds>;
+        let pending_entity = []mut: vec<EntityChilds>;
+
+        for (let _, e: all_entities)
+        {
+            let ech = EntityChilds{
+                e = e, 
+                uid = get_entity_editor_id(e),
+                childs = [],
+            };
+            
+            // 将当前实体塞进anchored_entity，用于保证所有实体都能找到妈妈（bushi
+            match (e->editor::get_anchor_uid)
+            {
+            value(uid)?
+                anchored_entity->set(uid, ech);
+            none?;
+            }
+
+            // 获取当前实体的“父实体”，如果没有则将当前实体塞进root_entity
+            match (e->editor::get_parent_anchor_uid)
+            {
+            none?
+                root_entity->add(ech);
+            value(uid)?
+                {
+                    match (anchored_entity->get(uid))
+                    {
+                    value(parentech)?
+                        parentech.childs as array<EntityChilds>
+                            ->  unsafe::cast :<vec<EntityChilds>>
+                            ->  add(ech)
+                            ;
+                    none?
+                        // 在anchored_entity里面没找到uid对应的父实体，则放到待定集，最后再处理
+                        pending_entity->add(ech);
+                    }
+                }
+            }
+        }
+
+        // OK 所有实体过了一遍了，处理待定集的实体
+        for (let _, pending_ech : pending_entity)
+        {
+            match (anchored_entity->get(pending_ech.e->editor::get_parent_anchor_uid->val))
+            {
+            value(parentech)?
+                parentech.childs as array<EntityChilds>
+                    ->  unsafe::cast :<vec<EntityChilds>>
+                    ->  add(pending_ech)
+                    ;
+            none?
+                // 完全不存在！视为是根实体
+                // TODO: 直接转成普通实体？
+                root_entity->add(pending_ech);
+            }
+        }
+
+        return root_entity->unsafe::cast :<array<EntityChilds>>;
+    }
+
+    func get_entity_and_childs_by_iter(iter: je::entity::editor::entity_iter)=> array<EntityChilds>
     {
         let result = []mut: vec<EntityChilds>;
         for (let curentity : iter)
@@ -95,14 +162,14 @@ namespace jeapi::debug
             result->add(EntityChilds{
                 e = curentity, 
                 uid = get_entity_editor_id(curentity),
-                childs = get_entity_and_childs(iter->childs_iter),
+                childs = get_entity_and_childs_by_iter(iter->childs_iter),
                 });
         }
         return result->unsafe::cast:<array<EntityChilds>>;
     }
     public func get_all_entities_layer_from_world(world: je::world)
     {
-        return get_entity_and_childs(world->editor::top_entity_iter);
+        return get_entity_and_childs(world->editor::get_all_entities);
     }
     public func find_entity_and_child_by_instance(world: je::world, e: je::entity)
     {
@@ -115,7 +182,7 @@ namespace jeapi::debug
                         EntityChilds{
                             e = curentity, 
                             uid = get_entity_editor_id(curentity),
-                            childs = get_entity_and_childs(iter->childs_iter),
+                            childs = get_entity_and_childs_by_iter(iter->childs_iter),
                         }
                     );
                 match (find_entity(iter->childs_iter, eid))

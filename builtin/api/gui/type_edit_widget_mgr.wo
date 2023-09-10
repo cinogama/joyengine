@@ -24,7 +24,7 @@ namespace jeapi::gui
     
     func _str2vec2(str: string)
     {
-        let x = mutable::create(0.), y = mutable::create(0.);
+        let x = new! mutable(0.), y = new! mutable(0.);
         do str->take_token("(")
             =>> \s = s->take_real();
             =>> func(snr){x->set(snr[1]); return snr[0]->take_token(",");}
@@ -213,6 +213,9 @@ namespace jeapi::gui
 
     register_editor_for_native_value(je::typeinfo::int, func(tag, nvalue){
         return InputInt(F"##{tag}", nvalue->int)->>\iv = nvalue->set_int(iv);->has;
+    });
+    register_editor_for_native_value(je::typeinfo::int2, func(tag, nvalue){
+        return InputInt2(F"##{tag}", nvalue->int2...)->>\iv2 = nvalue->set_int2(iv2...);->has;
     });
     register_editor_for_native_value(je::typeinfo::float, func(tag, nvalue){
         return InputFloat(F"##{tag}", nvalue->float)->>\fv = nvalue->set_float(fv);->has;

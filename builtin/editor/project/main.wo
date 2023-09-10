@@ -86,7 +86,7 @@ namespace editor
                         if (opt)
                         {
                             self->close_all_world();
-                            self->restore_all_world(dat->>\wdat = wdat as dict->>\k, v = (k as string, v);;);
+                            self->restore_all_world(dat->>\wdat = wdat as dict<dynamic, dynamic>->>\k, v = (k as string, v);;);
                         }
                     });
             none?;
@@ -138,8 +138,8 @@ namespace editor
             for (let _, wdat : context.m_dumped_editing_worlds)
             {
                 let wdat_map = wdat->tomap();
-                let syss = wdat_map->getor("runtime_systems", []: dynamic) as array->connect(
-                    wdat_map->getor("systems", []: dynamic) as array
+                let syss = wdat_map->getor("runtime_systems", []: dynamic) as array<dynamic>->connect(
+                    wdat_map->getor("systems", []: dynamic) as array<dynamic>
                 );
                 wdat_map->set("systems", syss: dynamic);
                 do jeapi::deserialize::world(self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true);
@@ -196,7 +196,7 @@ namespace editor
 
             return {
                 /* 引擎的默认编辑器系统 */
-                ["JE_PROJECT_EDITOR_SYSTEM"] = IConfig::create(Config::create(
+                ["JE_PROJECT_EDITOR_SYSTEM"] = new! IConfig(new! Config(
                     typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->val,
                     func(origin_editor_system)
                     {
@@ -218,7 +218,7 @@ namespace editor
                     \_ = "// Editor-system is not needed when export.";,
                 )),
                 /* 项目的描述信息 */
-                ["JE_PROJECT_DESCRIBE"] = IConfig::create(Config::create(
+                ["JE_PROJECT_DESCRIBE"] = new! IConfig(new! Config(
                     "新项目，你可以在这里编辑项目的描述文本",
                     func(origin_text)
                     {
@@ -230,7 +230,7 @@ namespace editor
                     \str = option::value(str);,
                     \_ = "// Describe is not needed when export.";,
                 )),
-                ["JE_ENGINE_TIME_SLEEP_SUPPRESSION"] = IConfig::create(Config::create(
+                ["JE_ENGINE_TIME_SLEEP_SUPPRESSION"] = new! IConfig(new! Config(
                     do nil,
                     func(_)
                     {
@@ -250,7 +250,7 @@ namespace editor
                         where supp = je::editor::get_sleep_suppression()
                     ;,
                 )),
-                ["JE_GUI_FONT"] = IConfig::create(Config::create(
+                ["JE_GUI_FONT"] = new! IConfig(new! Config(
                     ("@/resource/font/HarmonyOS_Sans_SC_Regular.ttf", 18),
                     func(config)
                     {
@@ -277,7 +277,7 @@ namespace editor
                         where (font, size) = dat
                     ;,
                 )),
-                ["JE_ENGINE_TIME_MAX_DELTATIME"] = IConfig::create(Config::create(
+                ["JE_ENGINE_TIME_MAX_DELTATIME"] = new! IConfig(new! Config(
                     do nil,
                     func(_)
                     {
@@ -312,7 +312,7 @@ namespace editor
                     // 不可以锁定目录
                     if (filesys::isdir(projfile) == true)
                         return false;
-                    let flock = process::flock::create(projfile->tostring);
+                    let flock = new! process::flock(projfile->tostring);
                     let result = flock->>\fl = fl->trylock();->valor(false);
                     if (result)
                     {
@@ -333,7 +333,7 @@ namespace editor
         }
         public func create(name: string, path: filesys::path_t)
         {
-            let env = Environment::create();
+            let env = new! Environment();
             
             assert(filesys::setworkpath(path));
 
@@ -379,7 +379,7 @@ namespace editor
             try! self = create(dat["name"] as string, path);
 
             // 先加载配置！这非常重要！
-            for (let name, val : dat["configs"] as dict ->> \k, v = (k as string, v as string);)
+            for (let name, val : dat["configs"] as dict<dynamic, dynamic>->> \k, v = (k as string, v as string);)
             {
                 if (! self.m_configs->get(name)->> \config = config->parse(val);->valor(false))
                     je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
@@ -420,7 +420,7 @@ namespace editor
                     do je::file::readall("@/style.config")
                         =>> \style_dat = style_dat->dict::deserialize;
                         ->> \style_dat = style_dat
-                            ->> \k, v = (k as int: je::gui::ImGuiCol, v as array->>\e = e: real;);
+                            ->> \k, v = (k as int: je::gui::ImGuiCol, v as array<dynamic>->>\e = e: real;);
                             ;
                         ->> \style_dat = jeapi::gui::style::restore_config(style_dat);
                         ;
@@ -671,11 +671,17 @@ namespace editor
                     ->> func (dat)
                         {
                             let mdat = dat->tomap;
-                            mdat->set("entities", dat["entities"] as array
-                                ->  std::sort(\l, r = (l as dict->getor("euid": dynamic, 0H: dynamic) as int) < (r as dict->getor("euid": dynamic, 0H: dynamic) as int);)
-                                ->> \edat = edat as dict->erase("euid": dynamic);
+                            mdat->set("entities", dat["entities"] as array<dynamic>
+                                ->  std::sort(
+                                        \l, r = 
+                                            (l as dict<dynamic, dynamic>->getor("euid": dynamic, 0H: dynamic) as int) 
+                                            < 
+                                            (r as dict<dynamic, dynamic>->getor("euid": dynamic, 0H: dynamic) as int)
+                                        ;
+                                    )
+                                ->> \edat = edat as dict<dynamic, dynamic>->erase("euid": dynamic);
                                 : dynamic);
-                            mdat->set("systems", dat["systems"] as array->std::sort(
+                            mdat->set("systems", dat["systems"] as array<dynamic>->std::sort(
                                     \l, r = (l as string) < (r as string);
                                 ): dynamic);
                             return mdat->unsafe::cast:< typeof(dat) >;
@@ -694,7 +700,7 @@ namespace editor
                     m_world_instance = self.m_env->load_world(dat),
                     m_world_path = self.m_path / dat["path"] as string,
                     m_runtime_systems = 
-                        mut dat->getor("runtime_systems", []: dynamic) as array
+                        mut dat->getor("runtime_systems", []: dynamic) as array<dynamic>
                             =>> \elem = systype->has ? [systype->val] | []
                                 where systype = je::typeinfo::load(elem as string);,
                     m_remark_note = mut dat->getor("remark", "": dynamic) as string,

@@ -51,7 +51,7 @@ namespace editor::gui::particalbaker
                 =>> \dat = dict::deserialize(dat);
                 ->> \dat = ParticalContext{
                         m_frame_count = mut fdata["framecount"] as int,
-                        m_frame_size = mut (fdata["framesize"] as array [0] as int, fdata["framesize"] as array [1] as int),
+                        m_frame_size = mut (fdata["framesize"] as array<dynamic>[0] as int, fdata["framesize"] as array<dynamic>[1] as int),
                         m_frame_rate = mut fdata["framerate"] as real,
                         m_repeat_round = mut fdata["repeatround"] as int,
                         m_frames_caches = mut [],
@@ -304,7 +304,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                         let height = width * width >= framecount ? width | width + 1;
                                         let (w, h) = partical_context.m_frame_size;
 
-                                        let animationimg = image::create(w * width, h * height);
+                                        let animationimg = new! image(w * width, h * height);
 
                                         for (let mut i = 0; i < framecount; i += 1)
                                         {
@@ -324,7 +324,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
                                         assert(animationimg->save(outimgpath->tostring()));
 
-                                        let fanimdat = animation2d::AnimationContext::create(outanimpath);
+                                        let fanimdat = new! animation2d::AnimationContext(outanimpath);
                                         fanimdat->fast_create_for_partical(width, height, framecount, partical_context.m_frame_rate);
                                         assert(fanimdat->save);
                                     }
@@ -338,7 +338,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     {
                         if (MenuItem("烘焙"))
                         {
-                            match (vm::create("je/particalbacker/baker.wo", 
+                            match (new! vm("je/particalbacker/baker.wo", 
                                 partical_context.m_script))
                             {
                             ok(vmm)?
@@ -348,7 +348,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                     
                                     econtext.m_frame_index = 1;
 
-                                    do thread::create(func(){
+                                    do new! thread(func(){
                                         econtext.m_enable_bake = false;
                                         if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->has)
                                             jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
@@ -429,7 +429,8 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     drawlist->AddImage(
                         (lux, luy), 
                         (rbx, rby), 
-                        frames[econtext.m_frame_index]);
+                        frames[econtext.m_frame_index],
+                        (255, 255, 255, 255));
 
                 EndChild();
 
@@ -480,6 +481,6 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                 m_target_launch_count = mut 0,
                 m_solved_launch_count = mut 0,
             },
-            mutable::create(true)));
+            new! mutable(true)));
     }
 }

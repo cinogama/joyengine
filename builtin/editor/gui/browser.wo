@@ -59,7 +59,7 @@ namespace editor::gui
                             let tex = font_instance->load_string(create_context[1]);
                             // 创建image，然后保存！
                             let (tw, th) = tex->size();
-                            let img = image::create(tw, th);
+                            let img = new! image(tw, th);
                             for (let mut ix = 0; ix < tw; ix += 1)
                                 for (let mut iy = 0; iy < th; iy += 1)
                                     img->setpix((ix, iy), tex->pix((ix, iy))->get_color());
@@ -112,7 +112,7 @@ namespace editor::gui
 
                     if (Button("创建"))
                     {
-                        let img = image::create(context[0], context[1]);
+                        let img = new! image(context[0], context[1]);
 
                         generator(img);
 
@@ -258,7 +258,7 @@ namespace editor::gui
                         path = current_subpath, 
                         name = filesys::filename(current_subpath),
                         externname = filesys::extension(current_subpath),
-                        type = mutable::create(filesys::isdir(current_subpath)?
+                        type = new! mutable(filesys::isdir(current_subpath)?
                                 PathType::dir(option::none) | PathType::file),
                     };);
 
@@ -309,7 +309,7 @@ namespace editor::gui
                 ->  valor(
                     func (p, _)
                     {
-                        do thread::create(func()
+                        do new! thread(func()
                             {
                                 let result = std::shell(p.path->tostring());
                                 if (0 != result)
@@ -445,7 +445,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                     jeapi::gui::form::input("创建世界", F"将在{current_work_path}创建新世界：",
                         "Newworld",
                         \new_world_name = launch(
-                            edit_forms::show_world_creator, (context, edit_forms::WorldContext::create(
+                            edit_forms::show_world_creator, (context, new! edit_forms::WorldContext(
                                 context->get_project(), new_world_name, filesys::normalize(F"{current_work_path}/{new_world_name}.jeworld"),
                                 func (w)
                                 {
@@ -540,7 +540,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                     jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
                                 {
-                                    assert(animation2d::AnimationContext::create(path)->save);
+                                    assert(new! animation2d::AnimationContext(path)->save);
                                     force_update();
                                 }
                             });
@@ -555,7 +555,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                     jeapi::gui::form::errmsg("创建粒子动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
                                 {
-                                    assert(particalbaker::ParticalContext::create(path)->save);
+                                    assert(new! particalbaker::ParticalContext(path)->save);
                                     force_update();
                                 }
                             });
@@ -656,19 +656,43 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 });
         }
     }
+    func for_all_entity_in_universe_do(context: EditorContext, dowhat: (je::entity)=>bool)
+    {
+        return context->get_project->get_env->get_universe
+            ->  editor::get_all_worlds
+            =>> \w: je::world = w
+                ->  editor::get_all_entities
+                ->> dowhat
+                ;
+            ->  reduce(\l, r = l && r;)
+            ->  valor(false)
+            ;
+    }
     public func update_shader(context: EditorContext, path: string)
     {
-        // 从universe中获取所有world，更新world中所有实体的shader
-        do context->get_project->get_env->get_universe
-            ->  editor::get_all_worlds
-            ->> \w: je::world = w
-                ->  editor::get_all_entities
-                ->> \e: je::entity = 
-                    e->editor::graphic::try_reload_shaders(shader_path, shader_path)
-                        where shader_path = context->get_project->make_path_normalize(filesys::normalize(path))
-                    ;
-                ;
-            ;
+        // 从universe中获取所有world，更新world中所有实体
+        let wrapped_path = context->get_project->make_path_normalize(filesys::normalize(path));
+
+        do je::editor::mark_shared_glresource_outdated(wrapped_path);
+        if (!for_all_entity_in_universe_do(context,
+            \e: je::entity = e->editor::graphic::try_reload_shaders(wrapped_path, wrapped_path);
+        ))
+        {
+            jeapi::gui::form::errmsg("更新着色器失败", "更新着色器过程中发生了错误，请检查");
+        }
+    }
+    public func update_texture(context: EditorContext, path: string)
+    {
+        // 从universe中获取所有world，更新world中所有实体
+        let wrapped_path = context->get_project->make_path_normalize(filesys::normalize(path));
+
+        do je::editor::mark_shared_glresource_outdated(wrapped_path);
+        if (!for_all_entity_in_universe_do(context,
+            \e: je::entity = e->editor::graphic::try_reload_textures(wrapped_path, wrapped_path);
+        ))
+        {
+            jeapi::gui::form::errmsg("更新纹理失败", "更新纹理过程中发生了错误，请检查");
+        }
     }
     func file_item_menu(path: PathInfo, context: EditorContext)
     {
@@ -971,6 +995,10 @@ namespace $$MODULE_NAME$$
         else if (IMAGE_FILE_EXTERN_NAMES->find(path.externname) != -1)
         {
             // 是图片，在这里编辑图片的采用方法等数据
+            if (MenuItem(F"更新此纹理"))
+            {
+                update_texture(context, path.path->tostring());
+            }
             if (MenuItem("设置采样方式"))
             {
                 using je::editor;
@@ -1115,7 +1143,7 @@ namespace $$MODULE_NAME$$
                             path = subpath,
                             name = filesys::filename(subpath),
                             externname = filesys::extension(subpath),
-                            type = mutable::create(filesys::isdir(subpath)
+                            type = new! mutable(filesys::isdir(subpath)
                                 ? PathType::dir(option::none) 
                                 | PathType::file),
                         };
@@ -1178,7 +1206,7 @@ namespace $$MODULE_NAME$$
                 path = root_path,
                 name = filesys::filename(root_path),
                 externname = filesys::extension(root_path),
-                type = mutable::create(PathType::dir(option::none)),
+                type = new! mutable(PathType::dir(option::none)),
             };
 
         if (force_update_dir_tree_flag)

@@ -47,7 +47,7 @@ namespace jeapi::gui::form
             End();
             return open;
 
-        }, (mutable::create(defaultval),));
+        }, (new! mutable(defaultval),));
     }
     public func multiinput(
         title: string, 
@@ -89,6 +89,6 @@ namespace jeapi::gui::form
 
             return open;
 
-        }, (mutable::create(defaultval),));
+        }, (new! mutable(defaultval),));
     }
 }

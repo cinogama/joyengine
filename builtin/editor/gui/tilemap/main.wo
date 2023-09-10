@@ -1,0 +1,1074 @@
+// Tile map editor
+
+import woo::std;
+import je;
+import je::gui;
+import je::editor;
+
+import pkg::try;
+import pkg::filesystem;
+import pkg::image;
+
+using std;
+using je;
+using je::gui;
+using je::editor;
+
+namespace editor::gui::tilemap
+{
+    enum WrapingTileWay
+    {
+        NOTHING = 0,
+        UP = 0b0000_0001,
+        DOWN = 0b0000_0010,
+        LEFT = 0b0000_0100,
+        RIGHT = 0b0000_1000,
+
+        LEFTUP = 0b0001_0000,
+        LEFTDOWN = 0b0010_0000,
+        RIGHTUP = 0b0100_0000,
+        RIGHTDOWN = 0b1000_0000,
+    }
+    namespace WrapingTileWay
+    {
+        func get_way_name(self: WrapingTileWay)
+        {
+            using std;
+
+            let mut name = "";
+            
+            if (bitand(self: int, UP: int) != 0)
+                name += "u";
+            if (bitand(self: int, DOWN: int) != 0)
+                name += "d";
+            if (bitand(self: int, LEFT: int) != 0)
+                name += "l";
+            if (bitand(self: int, RIGHT: int) != 0)
+                name += "r";
+
+            if (bitand(self: int, LEFTUP: int) != 0)
+            {
+                assert(bitand(self: int, LEFT: int) != 0 && bitand(self: int, UP: int) != 0);
+                name += "a";
+            }
+            if (bitand(self: int, LEFTDOWN: int) != 0)
+            {
+                assert(bitand(self: int, LEFT: int) != 0 && bitand(self: int, DOWN: int) != 0);
+                name += "b";
+            }
+            if (bitand(self: int, RIGHTUP: int) != 0)
+            {
+                assert(bitand(self: int, RIGHT: int) != 0 && bitand(self: int, UP: int) != 0);
+                name += "c";
+            }
+            if (bitand(self: int, RIGHTDOWN: int) != 0)
+            {
+                assert(bitand(self: int, RIGHT: int) != 0 && bitand(self: int, DOWN: int) != 0);
+                name += "d";
+            }
+            return name == "" ? "x" | immut name;
+        }
+        
+        func get_sampling_texture_lu(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            // 左上角，顾名思义只关心坐标和上边以及左上部分的情况
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+            let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
+
+            if (bitand(self: int, UP: int) != 0)
+            {
+                if (bitand(self: int, LEFT: int) != 0)
+                {
+                    if (bitand(self: int, LEFTUP: int) != 0)
+                    {
+                        lux += tile_w / 2;
+                        luy -= tile_h + tile_h / 2;
+                    }
+                    else
+                    {
+                        lux += tile_w;
+                    }
+                }
+                else
+                {
+                    luy -= tile_h + tile_h / 2;
+                }
+            }
+            else
+            {
+                if (bitand(self: int, LEFT: int) != 0)
+                {
+                    lux += tile_w / 2;
+                    luy -= tile_h;
+                }
+                else
+                {
+                    luy -= tile_h;
+                }
+            }
+
+            for (let mut idx = 0; idx < tile_w / 2; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h / 2; idy += 1)
+                {
+                    target->setpix((idx, tile_h - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+        }
+
+        func get_sampling_texture_ld(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+            let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
+
+            // 左下角，顾名思义只关心坐标和下边以及左下部分的情况
+            if (bitand(self: int, DOWN: int) != 0)
+            {
+                if (bitand(self: int, LEFT: int) != 0)
+                {
+                    if (bitand(self: int, LEFTDOWN: int) != 0)
+                    {
+                        lux += tile_w / 2;
+                        luy -= tile_h * 2;
+                    }
+                    else
+                    {
+                        lux += tile_w;
+                        luy -= tile_h / 2;
+                    }
+                }
+                else
+                {
+                    luy -= tile_h * 2;
+                }
+            }
+            else
+            {
+                if (bitand(self: int, LEFT: int) != 0)
+                {
+                    lux += tile_w / 2;
+                    luy -= tile_h * 2 + tile_h / 2;
+                }
+                else
+                {
+                    luy -= tile_h * 2 + tile_h / 2;
+                }
+            }
+            
+            for (let mut idx = 0; idx < tile_w / 2; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h / 2; idy += 1)
+                {
+                    target->setpix((idx, tile_h / 2 - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+        }
+
+        func get_sampling_texture_ru(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+            let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
+
+            // 右上角，顾名思义只关心坐标和上边以及右上部分的情况
+            if (bitand(self: int, UP: int) != 0)
+            {
+                if (bitand(self: int, RIGHT: int) != 0)
+                {
+                    if (bitand(self: int, RIGHTUP: int) != 0)
+                    {
+                        lux += tile_w;
+                        luy -= tile_h + tile_h / 2;
+                    }
+                    else
+                    {
+                        lux += tile_w + tile_w / 2;
+                    }
+                }
+                else
+                {
+                    lux += tile_w + tile_w / 2;
+                    luy -= tile_h + tile_h / 2;
+                }
+            }
+            else
+            {
+                if (bitand(self: int, RIGHT: int) != 0)
+                {
+                    lux += tile_w;
+                    luy -= tile_h;
+                }
+                else
+                {
+                    lux += tile_w + tile_w / 2;
+                    luy -= tile_h;
+                }
+            }
+
+            for (let mut idx = 0; idx < tile_w / 2; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h / 2; idy += 1)
+                {
+                    target->setpix((idx + tile_w / 2, tile_h - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+        }
+
+        func get_sampling_texture_rd(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+            let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
+
+            // 右下角，顾名思义只关心坐标和下边以及右下部分的情况
+            if (bitand(self: int, DOWN: int) != 0)
+            {
+                if (bitand(self: int, RIGHT: int) != 0)
+                {
+                    if (bitand(self: int, RIGHTDOWN: int) != 0)
+                    {
+                        lux += tile_w;
+                        luy -= tile_h * 2;
+                    }
+                    else
+                    {
+                        lux += tile_w + tile_w / 2;
+                        luy -= tile_h / 2;
+                    }
+                }
+                else
+                {
+                    lux += tile_w + tile_w / 2;
+                    luy -= tile_h * 2;
+                }
+            }
+            else
+            {
+                if (bitand(self: int, RIGHT: int) != 0)
+                {
+                    lux += tile_w;
+                    luy -= tile_h * 2 + tile_h / 2;
+                }
+                else
+                {
+                    lux += tile_w + tile_w / 2;
+                    luy -= tile_h * 2 + tile_h / 2;
+                }
+            }
+
+            for (let mut idx = 0; idx < tile_w / 2; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h / 2; idy += 1)
+                {
+                    target->setpix((idx + tile_w / 2, tile_h / 2 - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+        }
+
+        func get_sampling_texture(
+            self: WrapingTileWay, 
+            target: image,
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            // Tile warp 分成四小块儿，根据实际情况，分别选择不同位置
+            // 四个小块儿分别对应
+            // 1. 邻接两个方向都为TRUE，对应的斜向也为TRUE，使用中间块儿
+            // 2. 邻接两个方向都为TRUE，但对应斜向为FALSE，使用缺块儿
+            // 3. ...
+            // 不管了，排列组合不清楚了，开写！
+            
+            self->get_sampling_texture_lu(target, maintex, ix, iy, xcount, ycount);
+            self->get_sampling_texture_ld(target, maintex, ix, iy, xcount, ycount);
+            self->get_sampling_texture_ru(target, maintex, ix, iy, xcount, ycount);
+            self->get_sampling_texture_rd(target, maintex, ix, iy, xcount, ycount);
+        }
+    }
+    
+    // 由于Tilemap的特性，Tile的纹理坐标不是引擎内置的以左下角为原点，而是以左上角为原点。
+    using Tile = struct{
+        maintex: graphic::texture,
+
+        uid: string,                 // 当前Tile的uid，被用于跟踪Tile并进行组件更新
+        texture: graphic::texture,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
+        tile_components: dict<typeinfo, dict<string/*member name*/, string /*member value*/>>,
+        location: (int, int),
+        
+        /*
+        auto_wrap 当前地块是否需要展开，
+        若需要展开，纹理则需要提供如下种类：
+        * 首先，任何一个warptile需要遵循以下准则，Tile的形状决定于邻接位置是否有其他同类Tile
+        * 其中所有方向包含为：
+        U D L R UNR UNL DNR DNL
+        u d l r 
+        其中，UNR UNL DNR DNL 仅当UDLR中 正交两个方向的方块存在同时，斜向方块亦存在的情况下才可
+        因此共有： 16 + 15 共31张图
+        */
+        auto_wrap: mut option<map<WrapingTileWay, graphic::texture>>,
+    }
+    {
+        func _create_clip_texture(
+            context: EditorContext, 
+            imgpath: filesys::path_t, 
+            maintex: graphic::texture, 
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let (maintex_w, maintex_h) = maintex->size;
+            let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
+
+            let tileimage = new! image(tile_w, tile_h);
+            // 
+
+            let (lux, luy) = (ix * tile_w, (ycount - iy) * tile_h);
+            for (let mut idx = 0; idx < tile_w; idx += 1)
+            {
+                for (let mut idy = 0; idy < tile_h; idy += 1)
+                {
+                    tileimage->setpix((idx, tile_h - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
+                }
+            }
+            if (tileimage->save(imgpath->tostring))
+                return graphic::texture::load(context->get_project->make_path_normalize(imgpath));
+
+            return option::none;
+        }
+        func set_auto_warping(self: Tile, able: bool)
+        {
+            if (!able)
+                self.auto_wrap = option::none;
+            else
+                self.auto_wrap = option::value({}mut);
+        }
+        func create(context: EditorContext, 
+            maintex: graphic::texture, 
+            crc64: int, 
+            tileuid: string,
+            ix: int, iy: int, 
+            xcount: int, ycount: int)
+        {
+            let tilemap_path = context->get_project.m_path / "resource" / "texture" / "tilemap";
+            do filesys::mkdir(tilemap_path);
+
+            let imgpath = tilemap_path / F"{crc64}-{ix}d{xcount}-{iy}d{ycount}.png";
+
+            try! tiletexture = context->get_project->make_path_normalize(imgpath)
+                ->  graphic::texture::load
+                ->  orbind(\=_create_clip_texture(context, imgpath, maintex, ix, iy, xcount, ycount);)
+                ->> \t = result::ok(t): result<graphic::texture, string>;
+                ->  valor(result::err("无法加载或创建Tile纹理"))
+                ;
+            return result::ok(Tile{
+                maintex = maintex,
+                texture = tiletexture,
+                tile_components = {},
+                uid = tileuid,
+                location = (ix, iy),
+                auto_wrap = mut option::none,
+            });
+        }
+        func get_texture(self: Tile, context: EditorContext, way: WrapingTileWay)
+        {
+            match (self.auto_wrap)
+            {
+            value(d)?
+                {
+                    if (d->contain(way))
+                        return d[way];
+                    
+                    let texpath = context->get_project->parse_path_normalize(self.texture->path->val);
+                    let purefilename = filesys::purename(texpath);
+                    let (maintex_w, maintex_h) = self.maintex->size;
+                    let (tile_w, tile_h) = self.texture->size;
+
+                    // 获取当前wraptile的路径名称
+                    let wayname = way->get_way_name;
+                    let saving_path = filesys::parent(texpath) / F"{purefilename}_{wayname}.png";
+
+                    match (graphic::texture::load(context->get_project->make_path_normalize(saving_path)))
+                    {
+                    value(tex)?
+                        {
+                            d->set(way, tex);
+                            return tex;
+                        }
+                    none?
+                        ;
+                    }
+
+                    let tileimage = new! image(tile_w, tile_h);
+
+                    way->get_sampling_texture(tileimage, self.maintex, self.location..., maintex_w / tile_w, maintex_h / tile_h);
+                    if (tileimage->save(saving_path->tostring))
+                    {
+                        match (graphic::texture::load(context->get_project->make_path_normalize(saving_path)))
+                        {
+                        value(tex)?
+                            {
+                                d->set(way, tex);
+                                return tex;
+                            }
+                        none?;
+                        }
+                    }
+
+                    jeapi::gui::form::errmsg("失败", F"无法创建{saving_path->tostring}");
+                    return self.texture;
+                }
+            none? return self.texture;
+            }
+        }
+        func create_entity(self: Tile, w: world, context: EditorContext, way: WrapingTileWay)
+        {
+            let e = w->add_entity(
+                [
+                    typeinfo::load("Transform::LocalPosition")->val,
+                    typeinfo::load("Transform::LocalRotation")->val,
+                    typeinfo::load("Transform::LocalScale")->val,
+                    typeinfo::load("Transform::LocalToWorld")->val,
+                    typeinfo::load("Transform::Translation")->val,
+
+                    typeinfo::load("Renderer::Shape")->val,
+                    typeinfo::load("Renderer::Shaders")->val,
+                    typeinfo::load("Renderer::Textures")->val,
+                    typeinfo::load("Renderer::Rendqueue")->val,
+                    
+                    typeinfo::load("Scene::MapTile")->val,
+
+                    typeinfo::load("Editor::Name")->val,
+                ]
+            );
+            e->editor::set_name("Tile");
+            e->editor::graphic::set_shaders([graphic::shader::load("@/resource/shader/UnlitBlend.shader")->val]);
+            e->editor::graphic::bind_texture(0, self->get_texture(context, way));
+
+            let (tile_nt, tile_nv) = e->get_component(typeinfo::load("Scene::MapTile")->val)->val
+                ->get_member("type")->val;
+            tile_nv->parse(tile_nt, self.uid);
+            return e;
+        }
+    }
+
+    // tilemapset 是一组地图的纹理切片、组件集合设置的集合
+    // 一个项目可以有多组图集
+    using TileMapSet = struct{
+        name: string,
+        texture: graphic::texture,
+        tiles: array<array<Tile>>,
+    }
+    {
+        func create(context: EditorContext, name: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
+        {
+            try! crc64 = tilemaptex->path
+                =>> \p = crc64file(context->get_project->parse_path_normalize(p)->tostring);
+                ->> \crc = result::ok(crc): result<int, string>;
+                ->  valor(result::err("创建TileMapSet的纹理必须是从文件加载的"))
+                ;
+
+            let tiles = []mut: vec<array<Tile>>;
+            for (let mut ix = 0; ix < xcount; ix += 1)
+            {
+                let ytiles = []mut: vec<Tile>;
+                for (let mut iy = 0; iy < ycount; iy += 1)
+                {
+                    try! tile = new! Tile(context, tilemaptex, crc64, je::uid(), ix, iy, xcount, ycount);
+                    ytiles->add(tile);
+                }
+                tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
+            }
+            return result::ok(
+                TileMapSet
+                {
+                    name = name,
+                    texture = tilemaptex,
+                    tiles = tiles as vec<array<Tile>>->unsafe::cast :<array<array<Tile>>>(),
+                });
+        }
+        func getsize(self: TileMapSet)
+        {
+            return (self.tiles->len, self.tiles->get(0)->>\a=a->len;->valor(0));
+        }
+        func gettile(self: TileMapSet, x: int, y: int)
+        {
+            return self.tiles->get(x)=>>\a = a->get(y);;
+        }
+    }
+
+    // 16*16个Tile是一个chunk
+    let CHUNK_TILE_SIZE = 16;
+
+    using TileChunk = struct{
+        m_chunk_texture: graphic::texture,
+        m_tile_size: (int, int),
+    }
+    {
+        func create(tilew: int, tileh: int, sample_method: graphic::texture::sampling)
+        {
+            let chunktex = new! graphic::texture(CHUNK_TILE_SIZE * tilew, CHUNK_TILE_SIZE * tileh);
+            chunktex->set_sampling_method(sample_method);
+            return TileChunk{
+                m_chunk_texture = chunktex,
+                m_tile_size = (tilew, tileh),
+            };
+        }
+        func update(self: TileChunk, tile: graphic::texture, loc: (int, int))
+        {
+            let (tilew, tileh) = self.m_tile_size;
+            let (locx, locy) = loc;
+
+            for (let mut ix = 0; ix < tilew; ix += 1)
+            {
+                for (let mut iy = 0; iy < tileh; iy += 1)
+                {
+                    let p = self.m_chunk_texture->pix((locx * tilew + ix, (CHUNK_TILE_SIZE - 1 - locy) * tileh + iy));
+                    let srcp = tile->pix((ix, iy));
+                    p->set_color(srcp->get_color);
+                }
+            }
+        }
+
+        func raw_to_chunk_location(raw_x: int, raw_y: int)
+        {
+            let mut chunk_id_x = raw_x / CHUNK_TILE_SIZE;
+            let mut chunk_id_y = raw_y / CHUNK_TILE_SIZE;
+            let chunk_x = raw_x - chunk_id_x * CHUNK_TILE_SIZE;
+            let chunk_y = raw_x - chunk_id_x * CHUNK_TILE_SIZE;
+            if (chunk_x < 0) chunk_id_x -= 1;
+            if (chunk_y < 0) chunk_id_y -= 1;
+
+            return ((chunk_id_x, chunk_id_y), (chunk_x, chunk_y));
+        }
+    }
+
+    using TileEditContext = struct{
+        m_context: EditorContext,
+        m_editing_world: mut option<world>,
+        m_tile_sets: vec<TileMapSet>,
+        m_selected_tileset_index: mut int,
+        m_selected_tile: mut (int, int),
+
+        // 以下部分是绘制区域的数据
+        m_drawing_layer: mut int,
+        m_focus_on_drawing_layer: mut bool,
+        m_offset: mut(real, real),
+        m_scale: mut real,
+        m_layerd_tiles: map<int, map<int, map<int, Tile>>>,
+
+        m_chunks: map<int, map<int, map<int, TileChunk>>>,
+    }
+    {
+        func create(context: EditorContext)
+        {
+            return TileEditContext{
+                m_context = context,
+                m_editing_world = mut option::none,
+                m_tile_sets = []mut,
+                m_selected_tileset_index = mut -1,
+                m_selected_tile = mut (0, 0),
+
+                m_drawing_layer = mut 0,
+                m_focus_on_drawing_layer = mut false,
+                m_offset = mut(0., 0.),
+                m_scale = mut 1.,
+                m_layerd_tiles = {}mut,
+                m_chunks = {}mut,
+            };
+        }
+        func get_tile(self: TileEditContext, layer: int, x: int, y: int)
+        {
+            return self.m_layerd_tiles->get(layer)=>>\d = d->get(x);=>>\d = d->get(y);;
+        }
+        func get_selected_tile(self: TileEditContext)
+        {
+            return self.m_tile_sets->get(self.m_selected_tileset_index)=>>\tileset = tileset->gettile(self.m_selected_tile...);;
+        }
+        func get_or_create_chunk(self: TileEditContext, layer: int, chunkx: int, chunky: int)
+        {
+            let ychunks = self.m_layerd_tiles->getorset(layer, {}mut)->getorset(chunkx, {}mut);
+            match (ychunks->get(chunky))
+            {
+            value(chunk)? return chunk;
+            none?
+                {
+                    std::panic("TODO");
+                    // let chunk = TileChunk::create();
+                    // ychunks->set(chunky, chunk);
+
+                }
+            }
+        }
+        func apply_draw_tile(self: TileEditContext, x: int, y: int)
+        {
+            do self->get_selected_tile->> \tile = 
+                self.m_layerd_tiles->getorset(self.m_drawing_layer, {}mut)->getorset(x, {}mut)->set(y, tile);;
+
+            std::panic("TODO");
+            // let ((chunkx, chunky), (chunkpixx, chunkpixy)) = TileChunk::raw_to_chunk_location();
+        }
+        func clear_draw_tile(self: TileEditContext, x: int, y: int)
+        {
+            do self.m_layerd_tiles->get(self.m_drawing_layer)=>>\tiles=tiles->get(x);->>\ytiles=ytiles->remove(y);;
+        }
+        func update(self: TileEditContext)
+        {
+            let now_editing_world = self.m_context->get_project->get_editing_world;
+            if (!self.m_editing_world=>>\w = now_editing_world->>\nw = w == nw;;->valor(false))
+            {
+                // match (now_editing_world)
+                // {
+                // value(w)?
+                //     {
+                //         do w;
+                //     }
+                // none?
+                //     ;
+                // }
+                self.m_editing_world = now_editing_world;
+            }
+        }
+        func create_tilemap_form(self: TileEditContext)
+        {
+            let create_context = struct{
+                m_name = mut "新建tilemap",
+                m_texture = mut option::none: option<graphic::texture>,
+                m_tile_x_count = mut 1,
+                m_tile_y_count = mut 1, 
+            };
+            launch(func()
+                {
+                    let mut open = true;
+                    match (BeginAttrOpen("新建TileMap", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                    {
+                    value(show)?
+                        if (show)
+                        {
+                            match (jeapi::gui::widget::File("使用的TileMap纹理", 
+                                create_context.m_texture=>>\t=t->path;->valor(""))
+                                =>> \newpath = create_context.m_texture := graphic::texture::load(newpath);
+                            )
+                            {
+                            value(tex)?
+                                {
+                                    let (x, y) = tex->size;
+                                    create_context.m_tile_x_count = std::max(1, x / 16);
+                                    create_context.m_tile_y_count = std::max(1, y / 16);
+                                }
+                            none?
+                                ;
+                            }
+
+                            BeginGroup();
+                            Text("预览");
+                            
+                            match (create_context.m_texture)
+                            {
+                            value(tex)?
+                                {
+                                    ImageScale(tex, std::min(200. / tex->size[0]: real, 300. / tex->size[1]: real));
+                                } 
+                            none? Text("暂无预览");
+                            }
+                            
+                            EndGroup();
+                            
+                            SameLine();
+                            
+                            BeginGroup();
+                            do InputText("名称", create_context.m_name)->>\newname = create_context.m_name = newname;;
+                            do InputInt("X方向Tile数量", create_context.m_tile_x_count)->>\newc = create_context.m_tile_x_count = std::max(1, newc);;
+                            do InputInt("Y方向Tile数量", create_context.m_tile_y_count)->>\newc = create_context.m_tile_y_count = std::max(1, newc);;
+                            EndGroup();
+
+                            if (Button("创建"))
+                            {
+                                match (create_context.m_texture)
+                                {
+                                value(tex)?
+                                    {
+                                        match (new! TileMapSet(
+                                            self.m_context, 
+                                            create_context.m_name,
+                                            tex,
+                                            create_context.m_tile_x_count,
+                                            create_context.m_tile_y_count,
+                                            ))
+                                        {
+                                        ok(tilemap)?
+                                            {
+                                                open = false;
+                                                self.m_tile_sets->add(tilemap);
+                                            }
+                                        err(msg)?
+                                            jeapi::gui::form::errmsg("失败", msg);
+                                        }
+                                        
+                                    }
+                                none?
+                                    jeapi::gui::form::errmsg("失败", "创建TileMap时需要指定纹理");
+                                }
+                            }
+                        }
+                    none?
+                        open = false;
+                    }
+                    End();
+                    return open;
+                }, ());
+        }
+        func show_tile_sets(self: TileEditContext)
+        {
+            if (BeginChildSize("##tilemapsets", 400., 0.))
+            {
+                do InputInt("绘制层级", self.m_drawing_layer)->>\n = self.m_drawing_layer = n;;
+                SameLine();
+                do CheckBox("着重", self.m_focus_on_drawing_layer)->>\o = self.m_focus_on_drawing_layer = o;;
+
+                if (BeginTabBar("TileMap 集合"))
+                {
+                    for (let index, tset: self.m_tile_sets)
+                    {
+                        if (BeginTabItem(F"{tset.name}##{index}"))
+                        {
+                            self.m_selected_tileset_index = index;
+
+                            let drawlist = GetWindowDrawList();
+                            let (avaliw, _) = GetContentRegionAvail();
+                            let (texw, texh) = tset.texture->size;
+                            let scale = avaliw / texw: real;
+                            let (rangew, rangeh) = (avaliw <= 100. ? 100. | avaliw, texh: real * scale  <= 100. ? 100. | texh: real * scale);
+
+                            let (blockcountx, blockcounty) = tset->getsize;
+                            let (blockw, blockh) = (rangew / blockcountx: real, rangeh / blockcounty: real);
+
+                            do CheckBox("自动铺开", self->get_selected_tile->>\t = t.auto_wrap->has;->valor(false))
+                                ->> \opt = self->get_selected_tile
+                                    ->> \t = t->set_auto_warping(opt);
+                                    ;
+                                ;
+
+                            do InvisibleButton("##tileset", (rangew, rangeh));
+                            let ismouse_hovered = IsItemHovered();
+                            let (p0, p1) = GetItemRect();
+                            let (lux, luy) = p0;
+
+                            let (mposx, mposy) = GetMousePos();
+                            let (mpblockx, mpblocky) = (
+                                ((mposx - lux) / blockw): int: real, 
+                                ((mposy - luy) / blockh): int: real
+                                );
+
+                            PushClipRect(p0, p1);
+
+                            drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+                            drawlist->AddImage(
+                                p0, p1, 
+                                tset.texture,
+                                (255, 255, 255, 255));
+
+                            if (ismouse_hovered)
+                            {
+                                if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                    self.m_selected_tile = (mpblockx: int, mpblocky: int);
+                                else
+                                    drawlist->AddRectFilled(
+                                        (lux + mpblockx * blockw, luy + mpblocky * blockh), 
+                                        (lux + mpblockx * blockw + blockw, luy + mpblocky * blockh + blockh), 
+                                        (255, 255, 255, 100));
+                            }
+
+                            let (locx, locy) = self.m_selected_tile;
+                            drawlist->AddRect(
+                                (lux + locx: real * blockw, luy + locy: real * blockh), 
+                                (lux + locx: real * blockw + blockw, luy + locy: real * blockh + blockh), 
+                                (255, 255, 255, 255), 2.);
+
+                            PopClipRect();
+
+                            EndTabItem();
+                        }
+                    }
+                    if (self.m_tile_sets->empty())
+                    {
+                        TextDisabled("没有可用的TileMap");
+                    }
+                    EndTabBar();
+                }
+            }
+            EndChild();
+        }
+        func get_tile_way(self: TileEditContext, layer: int, x: int, y: int)
+        {
+            match (self->get_tile(layer, x, y))
+            {
+            value(centertile)?
+                {
+                    let mut way = WrapingTileWay::NOTHING;
+                    if (self->get_tile(layer, x + 1, y)->>\t = std::issame(t, centertile);->valor(false))
+                        way += WrapingTileWay::RIGHT;
+                    if (self->get_tile(layer, x - 1, y)->>\t = std::issame(t, centertile);->valor(false))
+                        way += WrapingTileWay::LEFT;
+                    if (self->get_tile(layer, x, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                        way += WrapingTileWay::UP;
+                    if (self->get_tile(layer, x, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                        way += WrapingTileWay::DOWN;
+
+                    if (way: int->std::bitand(WrapingTileWay::UP: int) != 0)
+                    {
+                        if (way: int->std::bitand(WrapingTileWay::RIGHT: int) != 0)
+                        {
+                            if (self->get_tile(layer, x + 1, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                                way += WrapingTileWay::RIGHTUP;
+                        }
+                        if (way: int->std::bitand(WrapingTileWay::LEFT: int) != 0)
+                        {
+                            if (self->get_tile(layer, x - 1, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                                way += WrapingTileWay::LEFTUP;
+                        }
+                    }
+                    if (way: int->std::bitand(WrapingTileWay::DOWN: int) != 0)
+                    {
+                        if (way: int->std::bitand(WrapingTileWay::RIGHT: int) != 0)
+                        {
+                            if (self->get_tile(layer, x + 1, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                                way += WrapingTileWay::RIGHTDOWN;
+                        }
+                        if (way: int->std::bitand(WrapingTileWay::LEFT: int) != 0)
+                        {
+                            if (self->get_tile(layer, x - 1, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                                way += WrapingTileWay::LEFTDOWN;
+                        }
+                    }
+                    return way;
+                }
+            none?
+                return WrapingTileWay::NOTHING;
+            }
+        }
+        func draw_tile(self: TileEditContext)
+        {
+            if (BeginChild("##drawtiles"))
+            {
+                let drawlist = GetWindowDrawList();
+
+                let (avaliw, avalih) = GetContentRegionAvail();
+                let (rangew, rangeh) = (avaliw <= 100. ? 100. | avaliw, avalih  <= 100. ? 100. | avalih);
+
+                do InvisibleButton("##tileset", (rangew, rangeh));
+                let ismouse_hovered = IsItemHovered();
+                let (p0, p1) = GetItemRect();
+                let (lux, luy) = p0;
+                let (draww, drawh) = (p1[0] - lux, p1[1] - luy);
+                PushClipRect(p0, p1);
+                
+                drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+
+                // scale = 1. 的情况下，一个Tile的大小是这么大
+                let BASE_TILE_SIZE = 50.;
+                let scaled_tile_size = self.m_scale * BASE_TILE_SIZE;
+                let (oldoffsetx, oldoffsety) = self.m_offset;
+
+                for (let layer, tiles : self.m_layerd_tiles)
+                {
+                    for (let x, ytiles: tiles)
+                    {
+                        for (let y, tile : ytiles)
+                        {
+                            // 将瓦片画出来~
+                            let mut tilealpha = 255;
+                            if (self.m_focus_on_drawing_layer && layer != self.m_drawing_layer)
+                                tilealpha = 75;
+
+                            drawlist->AddImage(
+                                (lux + x: real * scaled_tile_size + oldoffsetx, luy + y: real * scaled_tile_size + oldoffsety), 
+                                (lux + x: real * scaled_tile_size + scaled_tile_size + oldoffsetx, luy + y: real * scaled_tile_size + scaled_tile_size + oldoffsety), 
+                                tile->get_texture(self.m_context, self->get_tile_way(layer, x, y)),
+                                (255, 255, 255, tilealpha));
+                        }
+                    }
+                }
+
+                if (self.m_scale >= 1.)
+                {
+                    for (let mut ix = 0.; ix < draww; ix += scaled_tile_size)
+                        drawlist->AddLine((lux + ix + oldoffsetx % scaled_tile_size, luy), (lux + ix + oldoffsetx % scaled_tile_size, p1[1]), (127, 127, 127, 255), 2.);
+                    for (let mut iy = 0.; iy < drawh; iy += scaled_tile_size)
+                        drawlist->AddLine((lux, luy + iy + oldoffsety % scaled_tile_size), (p1[0], luy + iy + oldoffsety % scaled_tile_size), (127, 127, 127, 255), 2.);
+                }
+
+                // 高亮鼠标所在的块儿
+                static let mut recored_wheel_count = input::wheel();
+                
+                if (ismouse_hovered)
+                {
+                    let new_wheel_count = input::wheel();
+                    self.m_scale *= math::pow(2., (new_wheel_count - recored_wheel_count): real);
+                    recored_wheel_count = new_wheel_count;
+
+                    let (mposx, mposy) = GetMousePos();
+
+                    let (mpblockx, mpblocky) = (
+                        math::floor((mposx - lux - oldoffsetx) / scaled_tile_size): real, 
+                        math::floor((mposy - luy - oldoffsety) / scaled_tile_size): real
+                        );
+
+                    let mut highlight_alpha = 100;
+
+                    if (input::keydown(keycode::MOUSE_L_BUTTION))
+                    {
+                        if (input::keydown(keycode::L_CTRL))
+                        {
+                            highlight_alpha = 0;
+
+                            let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
+                            self.m_offset = (oldoffsetx + mousedelta_x, oldoffsety + mousedelta_y);
+                        }
+                        else
+                        {
+                            highlight_alpha = 50;
+                            self->apply_draw_tile(mpblockx: int, mpblocky: int);
+                        }
+                    }
+                    else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                    {
+                        self->clear_draw_tile(mpblockx: int, mpblocky: int);
+                    }
+
+                    drawlist->AddRectFilled(
+                        (lux + mpblockx * scaled_tile_size + oldoffsetx, luy + mpblocky * scaled_tile_size + oldoffsety), 
+                        (lux + mpblockx * scaled_tile_size + scaled_tile_size + oldoffsetx, luy + mpblocky * scaled_tile_size + scaled_tile_size + oldoffsety), 
+                        (255, 255, 255, highlight_alpha));
+                }
+                else
+                    recored_wheel_count = input::wheel();
+
+                PopClipRect();
+
+            }
+            EndChild();
+        }
+
+        func get_all_tile_entity(w: world)
+        {
+            return w->editor::get_all_entities
+                -> forall(\e = e->get_component(typeinfo::load("Scene::MapTile")->val)->has;)
+                ;
+        }
+        func generate_entities_for_world(self: TileEditContext, w: world)
+        {
+            for (let layer, tiles : self.m_layerd_tiles)
+            {
+                for (let x, ytiles :  tiles)
+                {
+                    for (let y, tile :  ytiles)
+                    {
+                        let e = tile->create_entity(w, self.m_context, self->get_tile_way(layer, x, y));
+                        let (_, lpos_nv) = e->get_component(typeinfo::load("Transform::LocalPosition")->val)->val
+                            ->get_member("pos")->val;
+                        lpos_nv->set_float3(x: real, -y: real, 0.1 * -layer: real);
+                        
+                        let (_, rendqueue_nv) = e->get_component(typeinfo::load("Renderer::Rendqueue")->val)->val
+                            ->get_member("rend_queue")->val;
+                        rendqueue_nv->set_int(5000 + layer);
+                        
+                        let tile_component = e->get_component(typeinfo::load("Scene::MapTile")->val)->val;
+                        let (locationnt, locationnv) = tile_component->get_member("location")->val;
+                        locationnv->parse(locationnt, F"({x},{y})");
+                        let (_, layernv) = tile_component->get_member("layer")->val;
+                        layernv->set_int(layer);
+
+                        
+                    }
+                }
+            }
+        }
+    }
+
+    public func main(context: EditorContext)
+    {
+        let formopen = new! mutable(true);
+        let editctx = new! TileEditContext(context);
+        launch(func(){
+            let mut open = true;
+            match (BeginAttrOpen("TileMap 编辑器", WindowsAttribute::ImGuiWindowFlags_MenuBar))
+            {
+            value(show)?
+                if (show)
+                {
+                    editctx->update();
+                    if (BeginMenuBar())
+                    {
+                        if (BeginMenu("编辑"))
+                        {
+                            if (MenuItem("新建TileMap"))
+                                editctx->create_tilemap_form();
+
+                            EndMenu();
+                        }
+                        EndMenuBar();
+                    }
+
+                    BeginGroup();
+                    editctx->show_tile_sets();
+                    EndGroup();
+
+                    SameLine();
+
+                    BeginGroup();
+                    editctx->draw_tile();
+                    EndGroup();
+                }
+            none?
+                open = false;
+            }
+            End();
+
+            if (open == false)
+            {
+                match (context->get_project->get_editing_world)
+                {
+                value(w)?
+                    jeapi::gui::form::ask("是否保存", F"是否保存当前绘制结果到世界: {w->editor::name}\n是: 立即覆盖\n否: 直接关闭", 
+                        func(opt)
+                        {
+                            formopen->set(false);
+                            if (opt)
+                            {
+                                // 1. 删除已有的所有Tile
+                                do TileEditContext::get_all_tile_entity(w)
+                                    ->> \e = e->close;
+                                    ;
+                                editctx->generate_entities_for_world(w);
+                            }
+                        });
+                none?
+                    jeapi::gui::form::errmsg("失败", "没有正在编辑中的世界");
+                }
+            }
+            
+            return formopen->get();
+        }, ());
+    }
+}

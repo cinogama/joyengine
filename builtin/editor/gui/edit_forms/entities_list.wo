@@ -82,7 +82,7 @@ namespace editor::gui::edit_forms
     {
         let has_editing_entity = euid->has;
         if (MenuItem("创建实体"))
-            launch(show_entity_creator, (context, EntityContext::create()));
+            launch(show_entity_creator, (context, new! EntityContext()));
         if (BeginMenu("快速创建实体"))
         {
             if (MenuItem("基本渲染实体"))
@@ -207,7 +207,7 @@ namespace editor::gui::edit_forms
                                                 ->\_, v = v->set_float3(ctx.width, ctx.height, 1.);
                                                 ;
                                             ;
-                                        let tex = je::graphic::texture::create(ctx.x_pixel_count, ctx.y_pixel_count);
+                                        let tex = new! je::graphic::texture(ctx.x_pixel_count, ctx.y_pixel_count);
                                         tex->set_sampling_method(
                                             je::graphic::texture::sampling::MIN_NEAREST + 
                                             je::graphic::texture::sampling::MAG_NEAREST);
@@ -431,8 +431,14 @@ namespace editor::gui::edit_forms
                 | TreeNodeAttribute::ImGuiTreeNodeFlags_None);
             ;
 
-        if (!display_debug_entity && e.e->get_component(je::typeinfo::load("Editor::Invisable")->val)->has)
+        static let 
+            Invisable = je::typeinfo::load("Editor::Invisable")->val,
+            MapTile = je::typeinfo::load("Scene::MapTile")->val;
+
+        if (!display_debug_entity && e.e->get_component(Invisable)->has)
             // 不可见实体，不准看！
+            return;
+        if (e.e->get_component(MapTile)->has)
             return;
 
         let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->editor::chunkinfo}", 
@@ -490,7 +496,7 @@ namespace editor::gui::edit_forms
                     if (BeginMenuBar())
                     {
                         if (MenuItem("创建新实体"))
-                            launch(show_entity_creator, (context, EntityContext::create()));
+                            launch(show_entity_creator, (context, new! EntityContext()));
             
                         EndMenuBar();
                     }

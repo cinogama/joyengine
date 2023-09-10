@@ -40,6 +40,17 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
+WO_API wo_api wojeapi_set_able_shared_glresource(wo_vm vm, wo_value args, size_t argc)
+{
+    jegl_set_able_shared_resources(wo_bool(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm,jegl_mark_shared_resources_outdated(wo_string(args + 0)));
+}
+
 WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args, size_t argc)
 {
     jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0));
@@ -877,7 +888,7 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
 {
     enum basic_type
     {
-        INT, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
+        INT, INT2, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
     };
     basic_type type = (basic_type)wo_int(args + 0);
 
@@ -885,6 +896,8 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
     {
     case INT:
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<int>(nullptr));
+    case INT2:
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::ivec2>(nullptr));
     case BOOL:
         return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<bool>(nullptr));
     case FLOAT:
@@ -918,6 +931,18 @@ WO_API wo_api wojeapi_native_value_int(wo_vm vm, wo_value args, size_t argc)
     int* value = (int*)wo_pointer(args + 0);
     return wo_ret_int(vm, *value);
 }
+
+WO_API wo_api wojeapi_native_value_int2(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::ivec2* value = (jeecs::math::ivec2*)wo_pointer(args + 0);
+
+    wo_value result = wo_push_struct(vm, 2);
+    wo_set_int(wo_struct_get(result, 0), value->x);
+    wo_set_int(wo_struct_get(result, 1), value->y);
+
+    return wo_ret_val(vm, result);
+}
+
 
 WO_API wo_api wojeapi_native_value_float(wo_vm vm, wo_value args, size_t argc)
 {
@@ -994,6 +1019,16 @@ WO_API wo_api wojeapi_native_value_set_int(wo_vm vm, wo_value args, size_t argc)
     int* value = (int*)wo_pointer(args + 0);
 
     *value = (int)wo_int(args + 1);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_native_value_set_int2(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::math::ivec2* value = (jeecs::math::ivec2*)wo_pointer(args + 0);
+
+    value->x = wo_int(args + 1);
+    value->y = wo_int(args + 2);
+
     return wo_ret_void(vm);
 }
 
@@ -1363,6 +1398,7 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
 }
 
 WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t argc);
+WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args, size_t argc);
 
 WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1674,6 +1710,12 @@ const char* jeecs_woolang_editor_api_src = R"(
 import je;
 namespace je::editor
 {
+    extern("libjoyecs", "wojeapi_set_able_shared_glresource")
+    public func set_able_shared_glresource(able: bool)=> void;
+
+    extern("libjoyecs", "wojeapi_mark_shared_glresource_outdated")
+    public func mark_shared_glresource_outdated(respath: string)=> bool;
+
     extern("libjoyecs", "wojeapi_init_graphic_pipeline")
     public func init_graphic_pipeline(u: universe)=> void;
 
@@ -1913,24 +1955,24 @@ namespace je
 
         enum basic_type
         {
-            INT, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
+            INT, INT2, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
         }
         extern("libjoyecs", "wojeapi_type_basic_type")
-        private func create(tid: basic_type)=> typeinfo;
+        private func get_basic(tid: basic_type)=> typeinfo;
 
         extern("libjoyecs", "wojeapi_type_members")
         public func members(self: typeinfo)=> array<(string, typeinfo)>;
 
-        public let int = typeinfo::create(basic_type::INT);
-        public let bool = typeinfo::create(basic_type::BOOL);
-        public let float = typeinfo::create(basic_type::FLOAT);
-        public let float2 = typeinfo::create(basic_type::FLOAT2);
-        public let float3 = typeinfo::create(basic_type::FLOAT3);
-        public let float4 = typeinfo::create(basic_type::FLOAT4);
-        public let quat = typeinfo::create(basic_type::QUAT);
-        public let string = typeinfo::create(basic_type::STRING);
-
-        public let texture = typeinfo::create(basic_type::TEXTURE);
+        public let int = typeinfo::get_basic(basic_type::INT);
+        public let int2 = typeinfo::get_basic(basic_type::INT2);
+        public let bool = typeinfo::get_basic(basic_type::BOOL);
+        public let float = typeinfo::get_basic(basic_type::FLOAT);
+        public let float2 = typeinfo::get_basic(basic_type::FLOAT2);
+        public let float3 = typeinfo::get_basic(basic_type::FLOAT3);
+        public let float4 = typeinfo::get_basic(basic_type::FLOAT4);
+        public let quat = typeinfo::get_basic(basic_type::QUAT);
+        public let string = typeinfo::get_basic(basic_type::STRING);
+        public let texture = typeinfo::get_basic(basic_type::TEXTURE);
     }
     namespace audio
     {
@@ -2444,6 +2486,9 @@ R"(
             extern("libjoyecs", "wojeapi_set_parent")
             public func set_parent(self: entity, parent: entity, force: bool)=> bool;
 
+            extern("libjoyecs", "wojeapi_get_entity_anchor_uuid")
+            public func get_anchor_uid(self: entity)=> option<string>;
+
             extern("libjoyecs", "wojeapi_set_parent_with_uid")
             public func set_parent_with_uid(self: entity, parent_uid: string, force: bool)=> bool;
 
@@ -2583,6 +2628,9 @@ R"(
                 extern("libjoyecs", "wojeapi_reload_shader_of_entity")
                 public func try_reload_shaders(self: entity, old_shad: string, new_shad: string)=> bool;
 
+                extern("libjoyecs", "wojeapi_reload_texture_of_entity")
+                public func try_reload_textures(self: entity, old_tex: string, new_tex: string)=> bool;
+
                 public func get_shaders(self: entity)=> array<graphic::shader>
                 {
                     extern("libjoyecs", "wojeapi_shaders_of_entity")
@@ -2617,6 +2665,9 @@ R"(
         extern("libjoyecs", "wojeapi_native_value_int")
         public func int(self: native_value)=> int;
 
+        extern("libjoyecs", "wojeapi_native_value_int2")
+        public func int2(self: native_value)=> (int, int);
+
         extern("libjoyecs", "wojeapi_native_value_float")
         public func float(self: native_value)=> real;
 
@@ -2647,6 +2698,9 @@ R"(
 
         extern("libjoyecs", "wojeapi_native_value_set_int")
         public func set_int(self: native_value, value: int)=> void;
+
+        extern("libjoyecs", "wojeapi_native_value_set_int2")
+        public func set_int2(self: native_value, x: int, y: int)=> void;
 
         extern("libjoyecs", "wojeapi_native_value_set_float")
         public func set_float(self: native_value, value: real)=> void;

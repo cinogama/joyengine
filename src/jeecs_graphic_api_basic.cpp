@@ -369,7 +369,7 @@ void _jegl_free_resource_instance(jegl_resource* resource)
 {
     assert(resource != nullptr);
     assert(resource->m_custom_resource == nullptr);
-    assert(resource->m_shared_resource == false || resource->m_raw_ref_count == nullptr);
+    assert(resource->m_raw_ref_count == nullptr);
 
     // Send this resource to destroing list;
     auto* del_res = new jegl_resource::jegl_destroy_resouce;
@@ -383,7 +383,8 @@ void jegl_close_resource(jegl_resource* resource)
     assert(resource != nullptr);
     assert(resource->m_custom_resource != nullptr);
 
-    if (1 == std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_sub(1))
+    if (resource->m_raw_ref_count == nullptr ||
+        1 == std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_sub(1))
     {
         switch (resource->m_type)
         {
@@ -437,98 +438,20 @@ void jegl_close_resource(jegl_resource* resource)
 
         resource->m_custom_resource = nullptr;
 
-        delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count));
-        resource->m_raw_ref_count = nullptr;
-        _jegl_free_resource_instance(resource);
-    }
-    else if (resource->m_shared_resource == false)
-    {
-        if (resource->m_type == jegl_resource::type::SHADER)
+        if (resource->m_raw_ref_count != nullptr)
         {
-            // SHADER copy have raw data to free..
-            auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
-            while (uniform_var)
-            {
-                auto* cur_uniform = uniform_var;
-                uniform_var = uniform_var->m_next;
-
-                delete cur_uniform;
-            }
-            delete resource->m_raw_shader_data;
+            delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count));
+            resource->m_raw_ref_count = nullptr;
         }
-        resource->m_custom_resource = nullptr;
         _jegl_free_resource_instance(resource);
     }
-    // 注意：jegl_close_resource有可能被用于释放
 }
 
 jegl_resource* _create_resource()
 {
     jegl_resource* res = new jegl_resource();
-
     memset(res, 0, sizeof(res));
-    res->m_raw_ref_count = std::launder(reinterpret_cast<uint32_t*>(new std::atomic_uint32_t(1)));
-    static_assert(sizeof(uint32_t) == sizeof(std::atomic_uint32_t));
-    static_assert(std::atomic_uint32_t::is_always_lock_free);
-    assert(std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_raw_ref_count))->load() == 1);
-    assert(*res->m_raw_ref_count == 1);
     return res;
-}
-
-jegl_resource* jegl_copy_resource(jegl_resource* resource)
-{
-    assert(resource != nullptr);
-
-    jegl_resource* res = new jegl_resource(*resource);
-
-    res->m_handle = {};
-    res->m_graphic_thread = nullptr;
-    res->m_graphic_thread_version = 0;
-    res->m_shared_resource = false;
-
-    std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_raw_ref_count))->fetch_add(1);
-
-    if (res->m_custom_resource != nullptr)
-    {
-        // If copy a shader and current shader is a dead shader, do nothing after clone.
-        if (res->m_type == jegl_resource::type::SHADER)
-        {
-            // Copy shader raw info to make sure member chain is available for all instance.
-            jegl_shader* new_shad_instance = new jegl_shader(*res->m_raw_shader_data);
-
-            jegl_shader::unifrom_variables* uniform_var = new_shad_instance->m_custom_uniforms;
-            jegl_shader::unifrom_variables* last_var = nullptr;
-            while (uniform_var)
-            {
-                jegl_shader::unifrom_variables* cur_var = new jegl_shader::unifrom_variables(*uniform_var);
-                if (last_var)
-                    last_var->m_next = cur_var;
-                else
-                    new_shad_instance->m_custom_uniforms = last_var = cur_var;
-                last_var = cur_var;
-
-                uniform_var = uniform_var->m_next;
-            }
-            res->m_raw_shader_data = new_shad_instance;
-        }
-        else
-        {
-            jeecs::debug::logerr("`jegl_copy_resource` is only designed to copy "
-                "shader instances, but trying to copy('%p') now.",
-                resource);
-        }
-    }
-    return res;
-}
-
-jegl_resource* _jegl_share_resource(jegl_resource* resource)
-{
-    assert(resource != nullptr);
-    assert(resource->m_shared_resource == true);
-
-    std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_add(1);
-
-    return resource;
 }
 
 jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling)
@@ -580,135 +503,7 @@ bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::sampling
     return false;
 }
 
-jegl_resource* jegl_load_texture(const char* path)
-{
-    if (jeecs_file* texfile = jeecs_file_open(path))
-    {
-        jegl_resource* texture = _create_resource();
-        texture->m_type = jegl_resource::TEXTURE;
-        texture->m_raw_texture_data = new jegl_texture();
-        texture->m_path = jeecs::basic::make_new_string(path);
-
-        unsigned char* fbuf = new unsigned char[texfile->m_file_length];
-        jeecs_file_read(fbuf, sizeof(unsigned char), texfile->m_file_length, texfile);
-        int w, h, cdepth;
-
-        stbi_set_flip_vertically_on_load(true);
-        texture->m_raw_texture_data->m_pixels = stbi_load_from_memory(
-            fbuf,
-            (int)texfile->m_file_length,
-            &w, &h, &cdepth,
-            STBI_rgb_alpha
-        );
-
-        delete[] fbuf;
-        jeecs_file_close(texfile);
-
-        if (texture->m_raw_texture_data->m_pixels == nullptr)
-        {
-            jeecs::debug::logerr("Cannot load texture: Invalid image format of file: '%s'", path);
-            delete texture->m_raw_texture_data;
-            delete texture;
-            return nullptr;
-        }
-
-        texture->m_raw_texture_data->m_width = (size_t)w;
-        texture->m_raw_texture_data->m_height = (size_t)h;
-        texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
-        texture->m_raw_texture_data->m_sampling = jegl_texture::sampling::DEFAULT;
-        texture->m_raw_texture_data->m_modified = false;
-        // Read samping config from cache file...
-        if (!_jegl_read_texture_sampling_cache(path, &texture->m_raw_texture_data->m_sampling))
-            texture->m_raw_texture_data->m_sampling = jegl_texture::sampling::DEFAULT;
-
-        return texture;
-    }
-
-    jeecs::debug::logerr("Cannot load texture: Failed to open file: '%s'", path);
-    return nullptr;
-}
-
-jegl_resource* jegl_load_vertex(const char* path)
-{
-    // TODO: Not support now!
-    abort();
-}
-
-jegl_resource* jegl_create_vertex(
-    jegl_vertex::type type,
-    const float* datas,
-    const size_t* format,
-    size_t data_length,
-    size_t format_length)
-{
-    jegl_resource* vertex = _create_resource();
-    vertex->m_type = jegl_resource::VERTEX;
-    vertex->m_raw_vertex_data = new jegl_vertex();
-    vertex->m_raw_vertex_data->m_path = nullptr;
-
-    size_t datacount_per_point = 0;
-    for (size_t i = 0; i < format_length; ++i)
-        datacount_per_point += format[i];
-
-    auto point_count = data_length / datacount_per_point;
-
-    if (data_length % datacount_per_point)
-        jeecs::debug::logwarn("Vertex data & format not matched, please check.");
-
-    vertex->m_raw_vertex_data->m_type = type;
-    vertex->m_raw_vertex_data->m_format_count = format_length;
-    vertex->m_raw_vertex_data->m_point_count = point_count;
-    vertex->m_raw_vertex_data->m_data_count_per_point = datacount_per_point;
-
-    vertex->m_raw_vertex_data->m_vertex_datas
-        = (float*)je_mem_alloc(point_count * datacount_per_point * sizeof(float));
-    vertex->m_raw_vertex_data->m_vertex_formats
-        = (size_t*)je_mem_alloc(format_length * sizeof(size_t));
-
-    memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas,
-        point_count * datacount_per_point * sizeof(float));
-
-    memcpy(vertex->m_raw_vertex_data->m_vertex_formats, format,
-        format_length * sizeof(size_t));
-
-    // Calc size by default:
-    if (format[0] == 3)
-    {
-        float
-            x_min = INFINITY, x_max = -INFINITY,
-            y_min = INFINITY, y_max = -INFINITY,
-            z_min = INFINITY, z_max = -INFINITY;
-        // First data group is position(by default).
-        for (size_t i = 0; i < point_count; ++i)
-        {
-            float x = datas[0 + i * datacount_per_point];
-            float y = datas[1 + i * datacount_per_point];
-            float z = datas[2 + i * datacount_per_point];
-
-            x_min = std::min(x, x_min);
-            x_max = std::max(x, x_max);
-            y_min = std::min(y, y_min);
-            y_max = std::max(y, y_max);
-            z_min = std::min(z, z_min);
-            z_max = std::max(z, z_max);
-        }
-
-        vertex->m_raw_vertex_data->m_size_x = x_max - x_min;
-        vertex->m_raw_vertex_data->m_size_y = y_max - y_min;
-        vertex->m_raw_vertex_data->m_size_z = z_max - z_min;
-    }
-    else
-    {
-        jeecs::debug::logwarn("Position data of vertex(%p) mismatch, first data should be position and with length '3'", vertex);
-        vertex->m_raw_vertex_data->m_size_x = 1.f;
-        vertex->m_raw_vertex_data->m_size_y = 1.f;
-        vertex->m_raw_vertex_data->m_size_z = 1.f;
-    }
-
-    return vertex;
-}
-
-jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
+jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
 {
     assert(cache_file != nullptr);
 
@@ -813,6 +608,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file)
 
     jeecs_file_close(cache_file);
 
+    shader->m_path = jeecs::basic::make_new_string(path);
     return shader;
 }
 
@@ -918,12 +714,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
     if (is_virtual_file)
     {
         if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, wo_crc64_str(src)))
-        {
-            auto* shader_resource = _jegl_load_shader_cache(shader_cache);
-            shader_resource->m_path = jeecs::basic::make_new_string(path);
-
-            return shader_resource;
-        }
+            return _jegl_load_shader_cache(shader_cache, path);
     }
 
     wo_vm vmm = wo_create_vm();
@@ -970,66 +761,92 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
 
 }
 
-
-struct shared_shader_instance
+struct shared_resource_instance
 {
-    wo_integer_t m_crc64;
     jegl_resource* m_resource;
+    bool m_tobe_replace;
 
-    JECS_DISABLE_MOVE_AND_COPY(shared_shader_instance);
-    shared_shader_instance()
-        : m_crc64(0)
-        , m_resource(nullptr)
+    JECS_DISABLE_MOVE_AND_COPY(shared_resource_instance);
+    shared_resource_instance()
+        : m_resource(nullptr)
+        , m_tobe_replace(false)
     {
 
     }
-    ~shared_shader_instance()
+    ~shared_resource_instance()
     {
         jegl_close_resource(m_resource);
     }
 };
-std::unordered_map<std::string, std::unique_ptr<shared_shader_instance>> shared_shader_list;
-std::shared_mutex shared_shader_list_smx;
+std::unordered_map<std::string, std::unique_ptr<shared_resource_instance>> shared_resource_list;
+std::shared_mutex shared_resource_list_smx;
+bool enable_shared_resource_list = false;
 
-wo_integer_t _crc64_of_file(const char* filepath);
-
-jegl_resource* jegl_try_update_shared_shader(jegl_resource* resource)
+void jegl_set_able_shared_resources(bool able)
 {
-    if (resource == nullptr)
-        return nullptr;
+    std::lock_guard g1(shared_resource_list_smx);
+    enable_shared_resource_list = able;
+    if (able)
+    {
+        assert(shared_resource_list.empty());
+    }
+    else
+        shared_resource_list.clear();
+}
+bool jegl_mark_shared_resources_outdated(const char* path)
+{
+    std::lock_guard g1(shared_resource_list_smx);
+    if (enable_shared_resource_list)
+    {
+        auto fnd = shared_resource_list.find(path);
+        if (fnd != shared_resource_list.end()
+            && fnd->second->m_tobe_replace == false)
+        {
+            fnd->second->m_tobe_replace = true;
+            return true;
+        }
+    }
+    return false;
+}
 
+jegl_resource* _jegl_share_resource(jegl_resource* resource)
+{
+    assert(resource != nullptr);
+    if (resource->m_raw_ref_count == nullptr)
+    {
+        static_assert(sizeof(uint32_t) == sizeof(std::atomic_uint32_t));
+        static_assert(std::atomic_uint32_t::is_always_lock_free);
+
+        resource->m_raw_ref_count = std::launder(reinterpret_cast<uint32_t*>(new std::atomic_uint32_t(1)));
+        assert(std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->load() == 1);
+    }
+    std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_add(1);
+
+    return resource;
+}
+
+jegl_resource* jegl_try_update_shared_resource(jegl_resource* resource, jegl_resource::type aimtype)
+{
     assert(resource != nullptr && resource->m_path != nullptr);
-    if (!resource->m_raw_shader_data->m_enable_to_shared)
-        return resource;
-
-    resource->m_shared_resource = true;
     do
     {
-        std::lock_guard g1(shared_shader_list_smx);
+        std::lock_guard g1(shared_resource_list_smx);
+        if (!enable_shared_resource_list)
+            return resource;
 
-        auto fnd = shared_shader_list.find(resource->m_path);
-        if (fnd != shared_shader_list.end())
+        auto fnd = shared_resource_list.find(resource->m_path);
+        if (fnd != shared_resource_list.end() 
+            && fnd->second->m_tobe_replace == false
+            && fnd->second->m_resource->m_type == aimtype)
         {
-            auto realfile_crc64 = _crc64_of_file(resource->m_path);
-            if (fnd->second->m_crc64 == realfile_crc64)
-            {
-                jegl_close_resource(resource);
-                return _jegl_share_resource(fnd->second->m_resource);
-            }
-            else
-            {
-                // Old one need be replace!
-                jegl_close_resource(fnd->second->m_resource);
-                fnd->second->m_crc64 = realfile_crc64;
-                return fnd->second->m_resource = _jegl_share_resource(resource);
-            }
+            jegl_close_resource(resource);
+            return _jegl_share_resource(fnd->second->m_resource);
         }
-        // Create new fxxking one!
 
-        auto shared_info = std::make_unique<shared_shader_instance>();
-        shared_info->m_crc64 = _crc64_of_file(resource->m_path);
+        // Create new fxxking one!
+        auto shared_info = std::make_unique<shared_resource_instance>();
         shared_info->m_resource = resource;
-        shared_shader_list.emplace(resource->m_path, std::move(shared_info));
+        shared_resource_list[resource->m_path] = std::move(shared_info);
         return _jegl_share_resource(resource);
 
     } while (0);
@@ -1037,18 +854,19 @@ jegl_resource* jegl_try_update_shared_shader(jegl_resource* resource)
     // Cannot be here
     abort();
 }
-jegl_resource* jegl_try_load_shared_shader(const char* path)
+jegl_resource* jegl_try_load_shared_resource(const char* path)
 {
     do
     {
-        std::shared_lock sg1(shared_shader_list_smx);
+        std::shared_lock sg1(shared_resource_list_smx);
 
-        auto fnd = shared_shader_list.find(path);
-        if (fnd != shared_shader_list.end())
+        if (!enable_shared_resource_list)
+            return nullptr;
+
+        auto fnd = shared_resource_list.find(path);
+        if (fnd != shared_resource_list.end() && fnd->second->m_tobe_replace == false)
         {
-            auto realfile_crc64 = _crc64_of_file(path);
-            if (fnd->second->m_crc64 == realfile_crc64)
-                return _jegl_share_resource(fnd->second->m_resource);
+            return _jegl_share_resource(fnd->second->m_resource);
         }
 
     } while (0);
@@ -1058,16 +876,19 @@ jegl_resource* jegl_try_load_shared_shader(const char* path)
 
 jegl_resource* jegl_load_shader(const char* path)
 {
-    auto* shared_shader = jegl_try_load_shared_shader(path);
-    if (shared_shader != nullptr)
+    auto* shared_shader = jegl_try_load_shared_resource(path);
+    if (shared_shader != nullptr && shared_shader->m_type == jegl_resource::type::SHADER)
         return shared_shader;
 
     if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, 0))
     {
-        auto* shader_resource = _jegl_load_shader_cache(shader_cache);
-        shader_resource->m_path = jeecs::basic::make_new_string(path);
+        auto* shader_resource = _jegl_load_shader_cache(shader_cache, path);
 
-        return jegl_try_update_shared_shader(shader_resource);
+        assert(shader_resource != nullptr && shader_resource->m_raw_shader_data != nullptr);
+
+        if (shader_resource->m_raw_shader_data->m_enable_to_shared)
+            return jegl_try_update_shared_resource(shader_resource, jegl_resource::type::SHADER);
+        return shader_resource;
     }
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
@@ -1077,11 +898,154 @@ jegl_resource* jegl_load_shader(const char* path)
 
         jeecs_file_close(texfile);
 
-        return jegl_try_update_shared_shader(jegl_load_shader_source(path, src, false));
+        auto* shader_resource = jegl_load_shader_source(path, src, false);
+        if (shader_resource != nullptr)
+        {
+            assert(shader_resource != nullptr && shader_resource->m_raw_shader_data != nullptr);
+            if (shader_resource->m_raw_shader_data->m_enable_to_shared)
+                return jegl_try_update_shared_resource(shader_resource, jegl_resource::type::SHADER);
+            return shader_resource;
+        }
+        return nullptr;
+        
     }
     jeecs::debug::logerr("Fail to open file: '%s'", path);
     return nullptr;
 }
+
+jegl_resource* jegl_load_texture(const char* path)
+{
+    auto* shared_texture = jegl_try_load_shared_resource(path);
+    if (shared_texture != nullptr && shared_texture->m_type == jegl_resource::type::TEXTURE)
+        return shared_texture;
+
+    if (jeecs_file* texfile = jeecs_file_open(path))
+    {
+        jegl_resource* texture = _create_resource();
+        texture->m_type = jegl_resource::TEXTURE;
+        texture->m_raw_texture_data = new jegl_texture();
+        texture->m_path = jeecs::basic::make_new_string(path);
+
+        unsigned char* fbuf = new unsigned char[texfile->m_file_length];
+        jeecs_file_read(fbuf, sizeof(unsigned char), texfile->m_file_length, texfile);
+        int w, h, cdepth;
+
+        stbi_set_flip_vertically_on_load(true);
+        texture->m_raw_texture_data->m_pixels = stbi_load_from_memory(
+            fbuf,
+            (int)texfile->m_file_length,
+            &w, &h, &cdepth,
+            STBI_rgb_alpha
+        );
+
+        delete[] fbuf;
+        jeecs_file_close(texfile);
+
+        if (texture->m_raw_texture_data->m_pixels == nullptr)
+        {
+            jeecs::debug::logerr("Cannot load texture: Invalid image format of file: '%s'", path);
+            delete texture->m_raw_texture_data;
+            delete texture;
+            return nullptr;
+        }
+
+        // Read samping config from cache file...
+        jegl_texture::sampling sampling_method;
+        if (!_jegl_read_texture_sampling_cache(path, &sampling_method))
+            sampling_method = jegl_texture::sampling::DEFAULT;
+
+        texture->m_raw_texture_data->m_width = (size_t)w;
+        texture->m_raw_texture_data->m_height = (size_t)h;
+        texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
+        texture->m_raw_texture_data->m_sampling = sampling_method;
+        texture->m_raw_texture_data->m_modified = false;
+
+        return jegl_try_update_shared_resource(texture, jegl_resource::type::TEXTURE);
+    }
+
+    jeecs::debug::logerr("Cannot load texture: Failed to open file: '%s'", path);
+    return nullptr;
+}
+
+jegl_resource* jegl_load_vertex(const char* path)
+{
+    // TODO: Not support now!
+    abort();
+}
+
+jegl_resource* jegl_create_vertex(
+    jegl_vertex::type type,
+    const float* datas,
+    const size_t* format,
+    size_t data_length,
+    size_t format_length)
+{
+    jegl_resource* vertex = _create_resource();
+    vertex->m_type = jegl_resource::VERTEX;
+    vertex->m_raw_vertex_data = new jegl_vertex();
+
+    size_t datacount_per_point = 0;
+    for (size_t i = 0; i < format_length; ++i)
+        datacount_per_point += format[i];
+
+    auto point_count = data_length / datacount_per_point;
+
+    if (data_length % datacount_per_point)
+        jeecs::debug::logwarn("Vertex data & format not matched, please check.");
+
+    vertex->m_raw_vertex_data->m_type = type;
+    vertex->m_raw_vertex_data->m_format_count = format_length;
+    vertex->m_raw_vertex_data->m_point_count = point_count;
+    vertex->m_raw_vertex_data->m_data_count_per_point = datacount_per_point;
+
+    vertex->m_raw_vertex_data->m_vertex_datas
+        = (float*)je_mem_alloc(point_count * datacount_per_point * sizeof(float));
+    vertex->m_raw_vertex_data->m_vertex_formats
+        = (size_t*)je_mem_alloc(format_length * sizeof(size_t));
+
+    memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas,
+        point_count * datacount_per_point * sizeof(float));
+
+    memcpy(vertex->m_raw_vertex_data->m_vertex_formats, format,
+        format_length * sizeof(size_t));
+
+    // Calc size by default:
+    if (format[0] == 3)
+    {
+        float
+            x_min = INFINITY, x_max = -INFINITY,
+            y_min = INFINITY, y_max = -INFINITY,
+            z_min = INFINITY, z_max = -INFINITY;
+        // First data group is position(by default).
+        for (size_t i = 0; i < point_count; ++i)
+        {
+            float x = datas[0 + i * datacount_per_point];
+            float y = datas[1 + i * datacount_per_point];
+            float z = datas[2 + i * datacount_per_point];
+
+            x_min = std::min(x, x_min);
+            x_max = std::max(x, x_max);
+            y_min = std::min(y, y_min);
+            y_max = std::max(y, y_max);
+            z_min = std::min(z, z_min);
+            z_max = std::max(z, z_max);
+        }
+
+        vertex->m_raw_vertex_data->m_size_x = x_max - x_min;
+        vertex->m_raw_vertex_data->m_size_y = y_max - y_min;
+        vertex->m_raw_vertex_data->m_size_z = z_max - z_min;
+    }
+    else
+    {
+        jeecs::debug::logwarn("Position data of vertex(%p) mismatch, first data should be position and with length '3'", vertex);
+        vertex->m_raw_vertex_data->m_size_x = 1.f;
+        vertex->m_raw_vertex_data->m_size_y = 1.f;
+        vertex->m_raw_vertex_data->m_size_z = 1.f;
+    }
+
+    return vertex;
+}
+
 
 jegl_resource* jegl_create_framebuf(
     size_t width, size_t height, 

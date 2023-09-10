@@ -399,15 +399,18 @@ using fout = struct {
 };
         
 public let vert = 
-\v: vin = v2f { pos = je_mvp * vertex_pos, 
-                color = v.color } 
-    where vertex_pos = float4::create(v.vertex, 1.);;
+    \v: vin = v2f { pos = je_mvp * vertex_pos, 
+                    color = v.color } 
+        where vertex_pos = float4::create(v.vertex, 1.)
+    ;
+;
         
 public let frag = 
-\f: v2f = fout{ color = float4::create(show_color, 1.) }
-    where show_color = lerp(f.color, float3::new(1., 1., 1.), ratio),
-                ratio = step(float::new(0.5), high_light),
-            high_light = uniform("high_light", float::new(0.));;
+    \f: v2f = fout{ color = float4::create(show_color, 1.) }
+        where show_color = lerp(f.color, float3::new(1., 1., 1.), ratio)
+            , ratio = step(float::new(0.5), je_color->x)
+    ;
+;
         
         )");
             static basic::resource<graphic::shader>
@@ -445,6 +448,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     Renderer::Shaders,
                     Renderer::Shape,
                     Renderer::Rendqueue,
+                    Renderer::Color,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
@@ -456,6 +460,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     Renderer::Shaders,
                     Renderer::Shape,
                     Renderer::Rendqueue,
+                    Renderer::Color,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
@@ -467,6 +472,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     Renderer::Shaders,
                     Renderer::Shape,
                     Renderer::Rendqueue,
+                    Renderer::Color,
                     Editor::Invisable,
                     Editor::EntityMover
                 >();
@@ -483,10 +489,10 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     Editor::EntitySelectBox
                 >();
 
-                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader.get()));
-                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader.get()));
-                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(axis_shader.get()));
-                select_box.get_component<Renderer::Shaders>()->shaders.push_back(graphic::shader::copy(select_box_shader.get()));
+                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader);
 
                 axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1, 0, 0);
                 axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1, 0);
@@ -545,7 +551,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
             Transform::LocalPosition& posi,
             Transform::LocalScale& scale,
             Renderer::Shape* shape,
-            Renderer::Shaders& shaders)
+            Renderer::Color& color)
         {
             if (mover.mode != _mode)
             {
@@ -676,10 +682,10 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                         _grab_last_pos = _inputs.uniform_mouse_pos;
                     }
                     if (!_inputs.l_buttom)
-                        shaders.set_uniform("high_light", 1.0f);
+                        color.color.x = 1.0f;
                 }
                 else
-                    shaders.set_uniform("high_light", 0.0f);
+                    color.color.x = 0.0f;
             }
         }
 
@@ -933,6 +939,31 @@ WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args, size_t arg
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    std::string old_texture_path = wo_string(args + 1);
+    std::string new_texture_path = wo_string(args + 2);
+
+    auto newtexture = jeecs::graphic::texture::load(new_texture_path);
+    if (newtexture == nullptr)
+    {
+        return wo_ret_bool(vm, false);
+    }
+
+    jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>();
+    if (textures != nullptr)
+    {
+        for (auto& texture_res : textures->textures)
+        {
+            assert(texture_res.m_texture != nullptr && texture_res.m_texture->resouce() != nullptr);
+            if (old_texture_path == texture_res.m_texture->resouce()->m_path)
+                texture_res.m_texture = newtexture;
+        }
+    }
+    return wo_ret_bool(vm, true);
+}
 WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -955,9 +986,13 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
         return bad_shader;
     };
     auto copy_shader_generator = [](
-        const jeecs::basic::resource<jeecs::graphic::shader>& newshader, auto oldshader)
+        jeecs::basic::resource<jeecs::graphic::shader>* newshader, auto oldshader)
     {
-        jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = jeecs::graphic::shader::copy(newshader.get());
+        assert(newshader != nullptr && (*newshader)->resouce()->m_path != nullptr);
+
+        jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = *newshader;
+        *newshader = jeecs::graphic::shader::load(new_shader_instance->resouce()->m_path);
+
         if constexpr (std::is_same<decltype(oldshader), jeecs::basic::resource<jeecs::graphic::shader>>::value)
         {
             auto* uniform_var = oldshader->resouce()->m_raw_shader_data->m_custom_uniforms;
@@ -1095,7 +1130,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
                 {
                     assert(shader != nullptr);
                     if (shader->resouce()->m_path != nullptr && old_shader_path == shader->resouce()->m_path)
-                        shader = copy_shader_generator(new_shader, shader);
+                        shader = copy_shader_generator(&new_shader, shader);
                 }
             }
             else
@@ -1106,10 +1141,10 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
                     {
                         auto& ok_shader = ok_or_bad_shader.get_ok();
                         if (ok_shader->resouce()->m_path != nullptr && old_shader_path == ok_shader->resouce()->m_path)
-                            ok_or_bad_shader = copy_shader_generator(new_shader, ok_shader);
+                            ok_or_bad_shader = copy_shader_generator(&new_shader, ok_shader);
                     }
                     else if (ok_or_bad_shader.get_bad().m_path == old_shader_path)
-                        ok_or_bad_shader = copy_shader_generator(new_shader, ok_or_bad_shader.get_bad());
+                        ok_or_bad_shader = copy_shader_generator(&new_shader, ok_or_bad_shader.get_bad());
                 }
 
                 // Ok, check for update!
