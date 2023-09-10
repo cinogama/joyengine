@@ -119,7 +119,7 @@ namespace editor::gui::edit_forms
                 
                 // 0. 重新编译所有C++项目，只编译到输出目录中
                 // P.S. 这个序号真牛逼，人家都是1 2 3，这里是1 2 0 哈哈哈
-                do thread::create(func()
+                do new! thread(func()
                     {
                         config.m_pack_output_log->add("正在编译模块");
                         let compile_results = proj->get_all_modules->>\k, v = (k, (v, v->compile(je::platform(), option::none)));;
@@ -147,7 +147,7 @@ namespace editor::gui::edit_forms
                             // 1.2 创建路径，准备打包
                             let export_path = normalized_path/".export";
                             do filesys::mkdir(export_path);
-                            let fimg = je::editor::fimage_packer::create(export_path->tostring, config.m_image_size * 1024 * 1024);
+                            let fimg = new! je::editor::fimage_packer(export_path->tostring, config.m_image_size * 1024 * 1024);
      
                             let copy_origin = func(opath: filesys::path_t, ppath: string)
                             {
@@ -203,7 +203,7 @@ namespace editor::gui::edit_forms
 
                             if (filesys::isfile(filesys::workpath() / "icon.ico"))
                             {
-                                do process::create(F"{std::exepath()}/builtin/rcedit-x64.exe", 
+                                do new! process(F"{std::exepath()}/builtin/rcedit-x64.exe", 
                                     [
                                         F"{std::exepath()}/builtin/rcedit-x64.exe",
                                         (export_path / F"{proj.m_name}.exe")->tostring, 
@@ -310,7 +310,7 @@ namespace editor::gui::edit_forms
                             let load_entry_script = "";
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
-                                vm::create("@/builtin/main.wo", 
+                                new! vm("@/builtin/main.wo", 
                                     boot_up_script
                                         ->replace("$LOAD_DYLIB_MODULES$", dylib_loader)
                                         ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
@@ -344,10 +344,10 @@ namespace editor::gui::edit_forms
             ->> \p = (context->get_project->make_path_normalize(p), mut false);
             ;
             
-        let pack_image_file_size = mutable::create(128);
-        let reso_option_index = mutable::create(1);
-        let reso_config = mutable::create((1366, 768));
-        let pack_config_instance = mutable::create(option::none: option<pack_config>);
+        let pack_image_file_size = new! mutable(128);
+        let reso_option_index = new! mutable(1);
+        let reso_config = new! mutable((1366, 768));
+        let pack_config_instance = new! mutable(option::none: option<pack_config>);
 
         context->launch_editor_form(func(step: mutable<int>){
             let mut open = true;
@@ -523,6 +523,6 @@ namespace editor::gui::edit_forms
             }
             End();
             return open;
-        }, (mutable::create(0),));
+        }, (new! mutable(0),));
     }
 }

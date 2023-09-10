@@ -196,7 +196,7 @@ namespace editor
 
             return {
                 /* 引擎的默认编辑器系统 */
-                ["JE_PROJECT_EDITOR_SYSTEM"] = IConfig::create(Config::create(
+                ["JE_PROJECT_EDITOR_SYSTEM"] = new! IConfig(new! Config(
                     typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->val,
                     func(origin_editor_system)
                     {
@@ -218,7 +218,7 @@ namespace editor
                     \_ = "// Editor-system is not needed when export.";,
                 )),
                 /* 项目的描述信息 */
-                ["JE_PROJECT_DESCRIBE"] = IConfig::create(Config::create(
+                ["JE_PROJECT_DESCRIBE"] = new! IConfig(new! Config(
                     "新项目，你可以在这里编辑项目的描述文本",
                     func(origin_text)
                     {
@@ -230,7 +230,7 @@ namespace editor
                     \str = option::value(str);,
                     \_ = "// Describe is not needed when export.";,
                 )),
-                ["JE_ENGINE_TIME_SLEEP_SUPPRESSION"] = IConfig::create(Config::create(
+                ["JE_ENGINE_TIME_SLEEP_SUPPRESSION"] = new! IConfig(new! Config(
                     do nil,
                     func(_)
                     {
@@ -250,7 +250,7 @@ namespace editor
                         where supp = je::editor::get_sleep_suppression()
                     ;,
                 )),
-                ["JE_GUI_FONT"] = IConfig::create(Config::create(
+                ["JE_GUI_FONT"] = new! IConfig(new! Config(
                     ("@/resource/font/HarmonyOS_Sans_SC_Regular.ttf", 18),
                     func(config)
                     {
@@ -277,7 +277,7 @@ namespace editor
                         where (font, size) = dat
                     ;,
                 )),
-                ["JE_ENGINE_TIME_MAX_DELTATIME"] = IConfig::create(Config::create(
+                ["JE_ENGINE_TIME_MAX_DELTATIME"] = new! IConfig(new! Config(
                     do nil,
                     func(_)
                     {
@@ -312,7 +312,7 @@ namespace editor
                     // 不可以锁定目录
                     if (filesys::isdir(projfile) == true)
                         return false;
-                    let flock = process::flock::create(projfile->tostring);
+                    let flock = new! process::flock(projfile->tostring);
                     let result = flock->>\fl = fl->trylock();->valor(false);
                     if (result)
                     {
@@ -333,7 +333,7 @@ namespace editor
         }
         public func create(name: string, path: filesys::path_t)
         {
-            let env = Environment::create();
+            let env = new! Environment();
             
             assert(filesys::setworkpath(path));
 

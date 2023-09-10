@@ -145,7 +145,7 @@ namespace editor::gui::drawpannel::tools
         }
         public func OnMouseDown(self: Line, target: graphic::texture, color: color4_t, pos: (int, int))
         {
-            self.m_snapshot = option::value(TextureSnapshot::create(target));
+            self.m_snapshot = option::value(new! TextureSnapshot(target));
             self.m_first_pos = pos;
             self.m_last_pos = pos;
             target->pix(pos)->set_color(color);
@@ -182,7 +182,7 @@ namespace editor::gui::drawpannel::tools
         }
         public func OnMouseDown(self: Rect, target: graphic::texture, color: color4_t, pos: (int, int))
         {
-            self.m_snapshot = option::value(TextureSnapshot::create(target));
+            self.m_snapshot = option::value(new! TextureSnapshot(target));
             self.m_first_pos = pos;
             self.m_last_pos = pos;
             target->pix(pos)->set_color(color);

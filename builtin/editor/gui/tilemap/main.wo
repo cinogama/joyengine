@@ -340,7 +340,7 @@ namespace editor::gui::tilemap
             let (maintex_w, maintex_h) = maintex->size;
             let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
 
-            let tileimage = image::create(tile_w, tile_h);
+            let tileimage = new! image(tile_w, tile_h);
             // 
 
             let (lux, luy) = (ix * tile_w, (ycount - iy) * tile_h);
@@ -419,7 +419,7 @@ namespace editor::gui::tilemap
                         ;
                     }
 
-                    let tileimage = image::create(tile_w, tile_h);
+                    let tileimage = new! image(tile_w, tile_h);
 
                     way->get_sampling_texture(tileimage, self.maintex, self.location..., maintex_w / tile_w, maintex_h / tile_h);
                     if (tileimage->save(saving_path->tostring))
@@ -494,7 +494,7 @@ namespace editor::gui::tilemap
                 let ytiles = []mut: vec<Tile>;
                 for (let mut iy = 0; iy < ycount; iy += 1)
                 {
-                    try! tile = Tile::create(context, tilemaptex, crc64, je::uid(), ix, iy, xcount, ycount);
+                    try! tile = new! Tile(context, tilemaptex, crc64, je::uid(), ix, iy, xcount, ycount);
                     ytiles->add(tile);
                 }
                 tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
@@ -527,7 +527,7 @@ namespace editor::gui::tilemap
     {
         func create(tilew: int, tileh: int, sample_method: graphic::texture::sampling)
         {
-            let chunktex = graphic::texture::create(CHUNK_TILE_SIZE * tilew, CHUNK_TILE_SIZE * tileh);
+            let chunktex = new! graphic::texture(CHUNK_TILE_SIZE * tilew, CHUNK_TILE_SIZE * tileh);
             chunktex->set_sampling_method(sample_method);
             return TileChunk{
                 m_chunk_texture = chunktex,
@@ -708,7 +708,7 @@ namespace editor::gui::tilemap
                                 {
                                 value(tex)?
                                     {
-                                        match (TileMapSet::create(
+                                        match (new! TileMapSet(
                                             self.m_context, 
                                             create_context.m_name,
                                             tex,
@@ -1008,8 +1008,8 @@ namespace editor::gui::tilemap
 
     public func main(context: EditorContext)
     {
-        let formopen = mutable::create(true);
-        let editctx = TileEditContext::create(context);
+        let formopen = new! mutable(true);
+        let editctx = new! TileEditContext(context);
         launch(func(){
             let mut open = true;
             match (BeginAttrOpen("TileMap 编辑器", WindowsAttribute::ImGuiWindowFlags_MenuBar))

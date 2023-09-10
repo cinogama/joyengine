@@ -24,7 +24,7 @@ namespace jeapi::gui
     
     func _str2vec2(str: string)
     {
-        let x = mutable::create(0.), y = mutable::create(0.);
+        let x = new! mutable(0.), y = new! mutable(0.);
         do str->take_token("(")
             =>> \s = s->take_real();
             =>> func(snr){x->set(snr[1]); return snr[0]->take_token(",");}

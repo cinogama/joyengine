@@ -13,7 +13,7 @@ namespace editor
         public func create()
         {
             return Environment{
-                m_universe = je::universe::create(),
+                m_universe = new! je::universe(),
             };
         }
         public func close(self: Environment)

@@ -59,7 +59,7 @@ namespace editor::gui
                             let tex = font_instance->load_string(create_context[1]);
                             // 创建image，然后保存！
                             let (tw, th) = tex->size();
-                            let img = image::create(tw, th);
+                            let img = new! image(tw, th);
                             for (let mut ix = 0; ix < tw; ix += 1)
                                 for (let mut iy = 0; iy < th; iy += 1)
                                     img->setpix((ix, iy), tex->pix((ix, iy))->get_color());
@@ -112,7 +112,7 @@ namespace editor::gui
 
                     if (Button("创建"))
                     {
-                        let img = image::create(context[0], context[1]);
+                        let img = new! image(context[0], context[1]);
 
                         generator(img);
 
@@ -258,7 +258,7 @@ namespace editor::gui
                         path = current_subpath, 
                         name = filesys::filename(current_subpath),
                         externname = filesys::extension(current_subpath),
-                        type = mutable::create(filesys::isdir(current_subpath)?
+                        type = new! mutable(filesys::isdir(current_subpath)?
                                 PathType::dir(option::none) | PathType::file),
                     };);
 
@@ -309,7 +309,7 @@ namespace editor::gui
                 ->  valor(
                     func (p, _)
                     {
-                        do thread::create(func()
+                        do new! thread(func()
                             {
                                 let result = std::shell(p.path->tostring());
                                 if (0 != result)
@@ -445,7 +445,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                     jeapi::gui::form::input("创建世界", F"将在{current_work_path}创建新世界：",
                         "Newworld",
                         \new_world_name = launch(
-                            edit_forms::show_world_creator, (context, edit_forms::WorldContext::create(
+                            edit_forms::show_world_creator, (context, new! edit_forms::WorldContext(
                                 context->get_project(), new_world_name, filesys::normalize(F"{current_work_path}/{new_world_name}.jeworld"),
                                 func (w)
                                 {
@@ -540,7 +540,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                     jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
                                 {
-                                    assert(animation2d::AnimationContext::create(path)->save);
+                                    assert(new! animation2d::AnimationContext(path)->save);
                                     force_update();
                                 }
                             });
@@ -555,7 +555,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                     jeapi::gui::form::errmsg("创建粒子动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
                                 {
-                                    assert(particalbaker::ParticalContext::create(path)->save);
+                                    assert(new! particalbaker::ParticalContext(path)->save);
                                     force_update();
                                 }
                             });
@@ -1143,7 +1143,7 @@ namespace $$MODULE_NAME$$
                             path = subpath,
                             name = filesys::filename(subpath),
                             externname = filesys::extension(subpath),
-                            type = mutable::create(filesys::isdir(subpath)
+                            type = new! mutable(filesys::isdir(subpath)
                                 ? PathType::dir(option::none) 
                                 | PathType::file),
                         };
@@ -1206,7 +1206,7 @@ namespace $$MODULE_NAME$$
                 path = root_path,
                 name = filesys::filename(root_path),
                 externname = filesys::extension(root_path),
-                type = mutable::create(PathType::dir(option::none)),
+                type = new! mutable(PathType::dir(option::none)),
             };
 
         if (force_update_dir_tree_flag)

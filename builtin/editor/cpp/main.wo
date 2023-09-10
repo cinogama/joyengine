@@ -20,7 +20,7 @@ namespace editor
     // 启动个进程，等待进程结束，如果进程成功执行并以0作为退出码，则返回true
     func start_process(process: string, args: array<string>)
     {
-        return process::create(process, args)
+        return new! process(process, args)
             =>> \pid = pid->wait->okay;
             ->> \status = status == 0: process::status_t ? true | false;
             ->  valor(false);
@@ -827,7 +827,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             }, ());
 
             context.compile_thread = 
-                option::value(thread::create(func ()
+                option::value(new! thread(func ()
                 {
                     match (self->compile(config, option::value(context)))
                     {

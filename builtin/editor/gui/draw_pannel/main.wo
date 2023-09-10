@@ -19,7 +19,7 @@ namespace editor::gui::drawpannel
     func save_texture_to_path(context: EditorContext, tex: graphic::texture, path: string)
     {
         let (w, h) = tex->size();
-        let saving_img = image::create(w, h);
+        let saving_img = new! image(w, h);
 
         for (let mut x = 0; x < w; x += 1)
             for (let mut y = 0; y < h; y += 1)
@@ -141,7 +141,7 @@ namespace editor::gui::drawpannel
             
             return open;
         
-        }, (mutable::create(method), /**/));
+        }, (new! mutable(method), /**/));
     }
     public using TextureSnapshot = struct
     {   
@@ -154,7 +154,7 @@ namespace editor::gui::drawpannel
         public func create(tex: graphic::texture)
         {
             let (w, h) = tex->size;
-            let pxs = array::create(w * h, mut (0., 0., 0., 0.));
+            let pxs = new! array(w * h, mut (0., 0., 0., 0.));
 
             for (let mut x = 0; x < w; x += 1)
                 for (let mut y = 0; y < h; y += 1)
@@ -187,7 +187,7 @@ namespace editor::gui::drawpannel
             return HistoryManager{
                 m_texture = tex,
                 m_current = mut 0,
-                m_history = [TextureSnapshot::create(tex)]mut,
+                m_history = [new! TextureSnapshot(tex)]mut,
                 m_edited_mark = mut false,
             };  
         }
@@ -201,7 +201,7 @@ namespace editor::gui::drawpannel
         }
         func save_step(self: HistoryManager)
         {
-            let snapshot = TextureSnapshot::create(self.m_texture);
+            let snapshot = new! TextureSnapshot(self.m_texture);
             self.m_current += 1;
             if (self.m_current < self.m_history->len)
                 // 新添加快照将覆盖后续所有
@@ -254,8 +254,8 @@ namespace editor::gui::drawpannel
         func update_edit_textures_history(self: DrawContextT, passid: int, oldtex: graphic::texture, newtex: graphic::texture)
         {
             do self.edited_textures->remove(oldtex);
-            let history = HistoryManager::create(newtex);
-            self.edited_textures->set(newtex, (passid, HistoryManager::create(newtex)));
+            let history = new! HistoryManager(newtex);
+            self.edited_textures->set(newtex, (passid, new! HistoryManager(newtex)));
             history->mark_as_edited();
         }
     }
@@ -277,11 +277,11 @@ namespace editor::gui::drawpannel
     }
 
     let all_draw_tools = [
-        ("无", \=IDrawtool::create((): tools::Nothing);),
-        ("钢笔", \=IDrawtool::create(tools::Pen::create());),
-        ("直线", \=IDrawtool::create(tools::Line::create());),
-        ("矩形", \=IDrawtool::create(tools::Rect::create());),
-        ("填充", \=IDrawtool::create((): tools::Fill);),
+        ("无", \=new! IDrawtool((): tools::Nothing);),
+        ("钢笔", \=new! IDrawtool(new! tools::Pen());),
+        ("直线", \=new! IDrawtool(new! tools::Line());),
+        ("矩形", \=new! IDrawtool(new! tools::Rect());),
+        ("填充", \=new! IDrawtool((): tools::Fill);),
     ];
 
     func edittexture(
@@ -346,7 +346,7 @@ namespace editor::gui::drawpannel
                                                     if (Button("应用"))
                                                     {
                                                         open = false;
-                                                        let new_texture = je::graphic::texture::create(image_new_sz...);
+                                                        let new_texture = new! je::graphic::texture(image_new_sz...);
                                                         for (let mut ix = 0; ix < std::min(image_new_sz[0], image_old_sz[0]); ix += 1)
                                                             for (let mut iy = 0; iy < std::min(image_new_sz[1], image_old_sz[1]); iy += 1)
                                                                 new_texture->pix((ix, iy))->set_color(texture->pix((ix, iy))->get_color());
@@ -665,7 +665,7 @@ namespace editor::gui::drawpannel
     func create_and_copy_texture(t: je::graphic::texture)
     {
         let (w, h) = t->size();
-        let nt = je::graphic::texture::create(w, h);
+        let nt = new! je::graphic::texture(w, h);
         for (let mut x = 0; x < w; x += 1)
         {
             for (let mut y = 0; y < h; y += 1)
@@ -696,7 +696,7 @@ namespace editor::gui::drawpannel
                 maincolor = mut (1., 1., 1., 1.),
                 subcolor = mut (0., 0., 0., 0.),
 
-                edited_textures = {[t] = (0, HistoryManager::create(t))}mut,
+                edited_textures = {[t] = (0, new! HistoryManager(t))}mut,
                 openform = mut true,
             }
         ));
@@ -756,7 +756,7 @@ namespace editor::gui::drawpannel
             match (textures->get(0))
             {
             value(t)? return create_and_copy_texture(t);
-            none? return je::graphic::texture::create(math::round(16. * size_x), math::round(16. * size_y));
+            none? return new! je::graphic::texture(math::round(16. * size_x), math::round(16. * size_y));
             }
         };
 
@@ -791,7 +791,7 @@ namespace editor::gui::drawpannel
                 subcolor = mut (0., 0., 0., 0.),
 
                 edited_textures = id_tex_list
-                    ->> \id_text = (id_text[1], (id_text[0], HistoryManager::create(id_text[1])));
+                    ->> \id_text = (id_text[1], (id_text[0], new! HistoryManager(id_text[1])));
                     ->  mapping
                     ->  tomap
                     ,

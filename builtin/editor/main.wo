@@ -6,6 +6,7 @@ import woo::debug;
 
 import pkg::filesystem;
 import pkg::interface;
+import pkg::makenew;
 
 import je;
 import je::editor;
@@ -299,7 +300,7 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
                     action_after_guide_form_closed = 
                         func(){
                             je::editor::set_able_shared_glresource(true);
-                            try! p = editor::Project::create(projname, regular_path);
+                            try! p = new! editor::Project(projname, regular_path);
                             
                             apply_editor_data_when_start_up_project(editordat);
                             assert(p->save_project());
@@ -396,7 +397,7 @@ for (;;)
     
     action_after_guide_form_closed = \ = result::ok(do nil);;
 
-    let u = editor::Environment::create();
+    let u = new! editor::Environment();
     {
         let editor_configs = read_editor_data();
         let historys = editor_configs->getor("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
@@ -412,7 +413,7 @@ for (;;)
 
         if (editor::CxxProject::is_builder_ready())
             launch(func(){
-                let open = mutable::create(true);
+                let open = new! mutable(true);
 
                 if (BeginAttr("JoyEngineECS 项目导航", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
@@ -562,7 +563,7 @@ for (;;)
                 End();
 
                 return true;
-            }, (mutable::create(option::none),));
+            }, (new! mutable(option::none),));
 
         u->wait();
         // 这个有点操蛋，到时候看一下怎么处理
