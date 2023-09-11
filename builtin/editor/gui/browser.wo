@@ -659,9 +659,9 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
     func for_all_entity_in_universe_do(context: EditorContext, dowhat: (je::entity)=>bool)
     {
         return context->get_project->get_env->get_universe
-            ->  editor::get_all_worlds
+            ->  get_all_worlds
             =>> \w: je::world = w
-                ->  editor::get_all_entities
+                ->  get_all_entities
                 ->> dowhat
                 ;
             ->  reduce(\l, r = l && r;)

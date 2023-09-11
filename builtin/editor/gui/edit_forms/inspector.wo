@@ -50,7 +50,7 @@ namespace editor::gui::edit_forms
             + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
             + TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf;
 
-        let textures = entity->editor::graphic::get_textures();
+        let textures = entity->get_textures();
 
         SetNextItemOpen(true);
 
@@ -114,7 +114,7 @@ namespace editor::gui::edit_forms
                         do jeapi::gui::widget::File(name, texture_path)
                             ->> \path = context->get_project->make_path_normalize(filesys::normalize(path));
                             ->> \path =  je::graphic::texture::load(path)
-                                ->> \tex = entity->editor::graphic::bind_texture(id, tex);
+                                ->> \tex = entity->bind_texture(id, tex);
                                 ->  or(\= path != "" 
                                         ? jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理")
                                         | jeapi::gui::form::errmsg("清空纹理失败", "纹理文件不允许被清空");)
@@ -232,7 +232,7 @@ namespace editor::gui::edit_forms
                                             }
                                         });
 
-                                        for (let _, (mname, mtype, mvalue): component->editor::members)
+                                        for (let _, (mname, mtype, mvalue): component->get_members)
                                         {
                                             do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
                                             SameLine();
@@ -293,7 +293,7 @@ namespace editor::gui::edit_forms
                                     }
                                     else
                                     {
-                                        let mut shaders = cur_e->editor::graphic::get_shaders();
+                                        let mut shaders = cur_e->get_shaders();
 
                                         let mut index = 0, mut shaders_has_updated = false;
                                         for (let _, shader : shaders->dup())
@@ -383,7 +383,7 @@ namespace editor::gui::edit_forms
                                         }
 
                                         if (shaders_has_updated)
-                                        cur_e->editor::graphic::set_shaders(shaders);
+                                        cur_e->set_shaders(shaders);
                                     }
                                 }
                             none?

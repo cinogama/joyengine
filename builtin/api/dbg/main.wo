@@ -67,8 +67,8 @@ namespace jeapi::debug
         current_request->swap(request_list);
 
         // 获取所有的世界，并从中获取所有的实体
-        do universe->editor::get_all_worlds
-            =>> \w = w->editor::get_all_entities;
+        do universe->get_all_worlds
+            =>> \w = w->get_all_entities;
             ->> func(e)
             {
                 let euid = get_entity_editor_id(e);
@@ -154,38 +154,19 @@ namespace jeapi::debug
         return root_entity->unsafe::cast :<array<EntityChilds>>;
     }
 
-    func get_entity_and_childs_by_iter(iter: je::entity::editor::entity_iter)=> array<EntityChilds>
-    {
-        let result = []mut: vec<EntityChilds>;
-        for (let curentity : iter)
-        {                
-            result->add(EntityChilds{
-                e = curentity, 
-                uid = get_entity_editor_id(curentity),
-                childs = get_entity_and_childs_by_iter(iter->childs_iter),
-                });
-        }
-        return result->unsafe::cast:<array<EntityChilds>>;
-    }
     public func get_all_entities_layer_from_world(world: je::world)
     {
-        return get_entity_and_childs(world->editor::get_all_entities);
+        return get_entity_and_childs(world->get_all_entities);
     }
     public func find_entity_and_child_by_instance(world: je::world, e: je::entity)
     {
-        func find_entity(iter: je::entity::editor::entity_iter, eid: Eeid)=> option<EntityChilds>
+        func find_entity(es: array<EntityChilds>, eid: Eeid)=> option<EntityChilds>
         {
-            for (let curentity : iter)
+            for (let _, e : es)
             {                
-                if (get_entity_editor_id(curentity) == eid)
-                    return option::value(
-                        EntityChilds{
-                            e = curentity, 
-                            uid = get_entity_editor_id(curentity),
-                            childs = get_entity_and_childs_by_iter(iter->childs_iter),
-                        }
-                    );
-                match (find_entity(iter->childs_iter, eid))
+                if (e.uid == eid)
+                    return option::value(e);
+                match (find_entity(e.childs, eid))
                 {
                 value(e)? return value(e);
                 none?;
@@ -193,6 +174,6 @@ namespace jeapi::debug
             }
             return option::none;
         }
-        return find_entity(world->editor::top_entity_iter, get_entity_editor_id(e));
+        return find_entity(get_all_entities_layer_from_world(world), get_entity_editor_id(e));
     }
 }

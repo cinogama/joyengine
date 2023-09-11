@@ -30,10 +30,10 @@ namespace editor::gui::edit_forms
                     {
                         let editing_world = context->get_project->get_editing_world;
                         let is_debugging = context->get_project->is_debugging;
-                        for (let _, world : context->get_project->get_env->get_universe->editor::get_all_worlds)
+                        for (let _, world : context->get_project->get_env->get_universe->get_all_worlds)
                         {
                             let current_world_is_editing = editing_world->>\w = w == world;->valor(false);
-                            let is_selected = SelectableSelected(F"{world->editor::name}##{world as je::world: handle}", 
+                            let is_selected = SelectableSelected(F"{world->name}##{world as je::world: handle}", 
                                 current_world_is_editing);
                             let is_hovered = IsItemHovered();
                             if (is_selected)
@@ -44,7 +44,7 @@ namespace editor::gui::edit_forms
                             if (is_hovered)
                             {
                                 BeginTooltip();
-                                Text(world->editor::name);
+                                Text(world->name);
                                 match (context->get_project->get_world_path(world))
                                 {
                                 value(p)? Text(p->tostring);
@@ -67,11 +67,11 @@ namespace editor::gui::edit_forms
                                     jeapi::gui::form::input(
                                         "重命名", 
                                         "请输入世界的新名称", 
-                                        world->editor::name, 
+                                        world->name, 
                                         func(newname){
                                             if (context->get_project->validate_world_or_warning(world))
                                             {
-                                                world->editor::set_name(newname);
+                                                world->set_name(newname);
                                             }
                                         });
                                 }
@@ -79,7 +79,7 @@ namespace editor::gui::edit_forms
                                 {
                                     jeapi::gui::form::multiinput(
                                         "编辑世界注释", 
-                                        F"请输入世界'{world->editor::name}'的注释说明", 
+                                        F"请输入世界'{world->name}'的注释说明", 
                                         context->get_project->get_world_remark(world)->valor("(无)"), 
                                         func(newremark){
                                             if (!context->get_project->set_world_remark(world, newremark))

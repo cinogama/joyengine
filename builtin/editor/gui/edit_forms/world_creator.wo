@@ -26,7 +26,7 @@ namespace editor::gui::edit_forms
                 current_project = proj,
                 has_append_types = []mut,
                 has_active_types = []mut,
-                not_append_types = je::typeinfo::editor::get_all_systems_types()->tovec,
+                not_append_types = je::typeinfo::get_all_systems_types()->tovec,
 
                 target_path = path,
                 callback = option::value(callback),
@@ -59,12 +59,12 @@ namespace editor::gui::edit_forms
         public func edit(proj: Project, world: je::world)=> option<WorldContext>
         {
             let context = WorldContext{
-                name = mut world->editor::name(),
+                name = mut world->name(),
                 edit_world = option::value(world),
                 current_project = proj,
                 has_append_types = []mut,
                 has_active_types = []mut,
-                not_append_types = je::typeinfo::editor::get_all_systems_types()->tovec,
+                not_append_types = je::typeinfo::get_all_systems_types()->tovec,
 
                 target_path = proj->get_world_path(world)->val,
                 callback = option::none,
@@ -79,7 +79,7 @@ namespace editor::gui::edit_forms
                     context.not_append_types->add(sys);
     
             // 处理一下已经创建/添加的系统
-            for (let _, actived_sys : world->editor::get_systems_types())
+            for (let _, actived_sys : world->get_all_systems())
                 if (!actived_sys->name()->beginwith("Editor::"))
                     context->active(actived_sys->name());
     
@@ -273,7 +273,7 @@ namespace editor::gui::edit_forms
                         {
                             let created_world = world_context.current_project->create_new_world(world_context.target_path);
 
-                            created_world->editor::set_name(world_context.name);
+                            created_world->set_name(world_context.name);
 
                             for (let _, active_sys : world_context.has_active_types)
                                 do created_world->add_system(active_sys);
@@ -307,7 +307,7 @@ namespace editor::gui::edit_forms
                                 je::logfatal("无法添加运行时激活的系统，未知的错误");
                             }
                             
-                            let active_systems = world->editor::get_systems_types();
+                            let active_systems = world->get_all_systems();
 
                             // 当前世界中还没有这个系统，立即添加
                             do world_context.has_active_types
@@ -319,7 +319,7 @@ namespace editor::gui::edit_forms
                                 ->forall(\t: je::typeinfo = world_context.not_append_types->find(t) != -1 
                                                         || world_context.has_append_types->find(t) != -1;)
                                 ->map(\t: je::typeinfo=world->remove_system(t););
-                            world->editor::set_name(world_context.name);
+                            world->set_name(world_context.name);
                         }
                     }
                     open = false;

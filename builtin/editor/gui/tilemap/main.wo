@@ -462,8 +462,8 @@ namespace editor::gui::tilemap
                 ]
             );
             e->editor::set_name("Tile");
-            e->editor::graphic::set_shaders([graphic::shader::load("@/resource/shader/UnlitBlend.shader")->val]);
-            e->editor::graphic::bind_texture(0, self->get_texture(context, way));
+            e->set_shaders([graphic::shader::load("@/resource/shader/UnlitBlend.shader")->val]);
+            e->bind_texture(0, self->get_texture(context, way));
 
             let (tile_nt, tile_nv) = e->get_component(typeinfo::load("Scene::MapTile")->val)->val
                 ->get_member("type")->val;
@@ -972,7 +972,7 @@ namespace editor::gui::tilemap
 
         func get_all_tile_entity(w: world)
         {
-            return w->editor::get_all_entities
+            return w->get_all_entities
                 -> forall(\e = e->get_component(typeinfo::load("Scene::MapTile")->val)->has;)
                 ;
         }
@@ -1050,7 +1050,7 @@ namespace editor::gui::tilemap
                 match (context->get_project->get_editing_world)
                 {
                 value(w)?
-                    jeapi::gui::form::ask("是否保存", F"是否保存当前绘制结果到世界: {w->editor::name}\n是: 立即覆盖\n否: 直接关闭", 
+                    jeapi::gui::form::ask("是否保存", F"是否保存当前绘制结果到世界: {w->name}\n是: 立即覆盖\n否: 直接关闭", 
                         func(opt)
                         {
                             formopen->set(false);

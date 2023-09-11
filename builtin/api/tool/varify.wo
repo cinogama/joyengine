@@ -58,7 +58,7 @@ namespace jeapi::varify
     {
         // 检查所有世界中所有实体是否有非法的shader？
         // 返回所有shader非法的实体
-        return w->editor::get_all_entities
+        return w->get_all_entities
             -> forall(\e = has_bad_shader(e);)
             ;
     }

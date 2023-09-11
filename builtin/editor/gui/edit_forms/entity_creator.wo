@@ -18,7 +18,7 @@ namespace editor::gui::edit_forms
                 name = mut "新实体",
                 edit_entity = option::none,
                 has_append_types = []mut,
-                not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
+                not_append_types = je::typeinfo::get_all_components_types()->tovec,
             };
     
             let comps = []mut: typeof(context.not_append_types);
@@ -37,7 +37,7 @@ namespace editor::gui::edit_forms
                 name = mut "PENDING",
                 edit_entity = option::value(entity),
                 has_append_types = []mut,
-                not_append_types = je::typeinfo::editor::get_all_components_types()->tovec,
+                not_append_types = je::typeinfo::get_all_components_types()->tovec,
             };
 
             entity->justdo(func(e){

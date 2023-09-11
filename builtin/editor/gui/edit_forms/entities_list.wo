@@ -211,11 +211,11 @@ namespace editor::gui::edit_forms
                                         tex->set_sampling_method(
                                             je::graphic::texture::sampling::MIN_NEAREST + 
                                             je::graphic::texture::sampling::MAG_NEAREST);
-                                        einst->editor::graphic::bind_texture(0, tex);
+                                        einst->bind_texture(0, tex);
 
                                         let default_shader_path = "@/resource/shader/Unlit.shader";
                                         do je::graphic::shader::load(default_shader_path)
-                                            ->> \s = einst->editor::graphic::set_shaders([s]);
+                                            ->> \s = einst->set_shaders([s]);
                                             ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
                                             ;
                                         
@@ -259,7 +259,7 @@ namespace editor::gui::edit_forms
                             ;
                         let default_shader_path = "@/resource/shader/Light2DPoint.shader";
                         do je::graphic::shader::load(default_shader_path)
-                            ->> \s = e->editor::graphic::set_shaders([s]);
+                            ->> \s = e->set_shaders([s]);
                             ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
                             ;
                     };
@@ -287,7 +287,7 @@ namespace editor::gui::edit_forms
                             ;
                         let default_shader_path = "@/resource/shader/Light2DParallel.shader";
                         do je::graphic::shader::load(default_shader_path)
-                            ->> \s = e->editor::graphic::set_shaders([s]);
+                            ->> \s = e->set_shaders([s]);
                             ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
                             ;
                     };

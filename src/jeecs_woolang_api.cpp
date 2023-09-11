@@ -661,39 +661,27 @@ WO_API wo_api wojeapi_is_child_of_entity(wo_vm vm, wo_value args, size_t argc)
 
 // ECS COMPONENT
 
-struct component_member_iter
+WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args, size_t argc)
 {
-    void* component_addr;
-    const jeecs::typing::member_info* iter;
+    void* component_addr = wo_pointer(wo_struct_get(args + 0, 0));
+    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(wo_struct_get(args + 0, 1));
 
-};
-WO_API wo_api wojeapi_iter_components_member(wo_vm vm, wo_value args, size_t argc)
-{
-    void* component_addr = wo_pointer(args + 0);
-    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+    wo_value result = wo_push_arr(vm, 0);
 
-    component_member_iter* iter = new component_member_iter;
-    iter->component_addr = component_addr;
-    iter->iter = component_type->m_member_types;
+    auto* member_type = component_type->m_member_types;
+    while (member_type)
+    {
+        wo_value st = wo_arr_add(result, nullptr);
 
-    return wo_ret_gchandle(vm, iter, nullptr, [](void* ptr) {delete (component_member_iter*)ptr; });
-}
-WO_API wo_api wojeapi_member_iterator_next(wo_vm vm, wo_value args, size_t argc)
-{
-    //func next(self: member_iterator, ref out_name: string, ref out_type: typeinfo, ref out_addr: native_value)=> bool;
-    component_member_iter* iter = (component_member_iter*)wo_pointer(args + 0);
+        wo_set_struct(st, 3);
 
-    if (nullptr == iter->iter)
-        return wo_ret_option_none(vm);
+        wo_set_string(wo_struct_get(st, 0), member_type->m_member_name);
+        wo_set_pointer(wo_struct_get(st, 1), (void*)member_type->m_member_type);
+        wo_set_handle(wo_struct_get(st, 2), (wo_handle_t)(member_type->m_member_offset + (intptr_t)component_addr));
 
-    wo_value result = wo_push_struct(vm, 3);
-
-    wo_set_string(wo_struct_get(result, 0), iter->iter->m_member_name);
-    wo_set_pointer(wo_struct_get(result, 1), (void*)iter->iter->m_member_type);
-    wo_set_handle(wo_struct_get(result, 2), (wo_handle_t)(iter->iter->m_member_offset + (intptr_t)iter->component_addr));
-    iter->iter = iter->iter->m_next_member;
-
-    return wo_ret_option_val(vm, result);
+        member_type = member_type->m_next_member;
+    }
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args, size_t argc)
@@ -1098,18 +1086,18 @@ WO_API wo_api wojeapi_native_value_set_rot_euler3(wo_vm vm, wo_value args, size_
 WO_API wo_api wojeapi_native_value_je_to_string(wo_vm vm, wo_value args, size_t argc)
 {
     void* native_val = wo_pointer(args + 0);
-    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+    const jeecs::typing::type_info* value_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
 
-    return wo_ret_string(vm, jeecs::basic::make_cpp_string(component_type->m_to_string(native_val)).c_str());
+    return wo_ret_string(vm, jeecs::basic::make_cpp_string(value_type->m_to_string(native_val)).c_str());
 }
 
 WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc)
 {
     void* native_val = wo_pointer(args + 0);
-    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+    const jeecs::typing::type_info* value_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
     wo_string_t str = wo_string(args + 2);
 
-    component_type->m_parse(native_val, str);
+    value_type->m_parse(native_val, str);
 
     return wo_ret_void(vm);
 }
@@ -1707,125 +1695,225 @@ WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args, size_
 
 const char* jeecs_woolang_editor_api_path = "je/editor.wo";
 const char* jeecs_woolang_editor_api_src = R"(
+import woo::std;
 import je;
-namespace je::editor
+
+namespace je
 {
-    extern("libjoyecs", "wojeapi_set_able_shared_glresource")
-    public func set_able_shared_glresource(able: bool)=> void;
-
-    extern("libjoyecs", "wojeapi_mark_shared_glresource_outdated")
-    public func mark_shared_glresource_outdated(respath: string)=> bool;
-
-    extern("libjoyecs", "wojeapi_init_graphic_pipeline")
-    public func init_graphic_pipeline(u: universe)=> void;
-
-    extern("libjoyecs", "wojeapi_set_runtime_path")
-    public func set_runtime_path(path: string)=> void;
-
-    extern("libjoyecs", "wojeapi_input_update_window_size")
-    public func set_window_size(x: int, y: int)=> void;
-
-    extern("libjoyecs", "wojeapi_input_update_window_title")
-    public func set_window_title(title: string)=> void;
-
-    public using fimage_packer = handle
+    namespace graphic
     {
-        extern("libjoyecs", "wojeapi_create_fimg_packer")
-        public func create(saving_path: string, max_img_size: int)=> fimage_packer;
+        namespace texture
+        {
+            namespace editor
+            {
+                public using snapshot_t = gchandle;
 
-        extern("libjoyecs", "wojeapi_pack_file_to_fimg_packer")
-        public func pack(self: fimage_packer, file_path: string, pack_path: string)=> bool;
+                extern("libjoyecs", "wojeapi_texture_take_snapshot")
+                public func snapshot(self: texture)=> option<snapshot_t>;
 
-        extern("libjoyecs", "wojeapi_pack_buffer_to_fimg_packer")
-        public func pack_buffer(self: fimage_packer, buffer: handle, len: int, pack_path: string)=> bool;
-
-        extern("libjoyecs", "wojeapi_finish_fimg_packer")
-        public func finish(self: fimage_packer)=> void;
+                extern("libjoyecs", "wojeapi_texture_restore_snapshot")
+                public func restore_snapshot(self: texture, snapshot: snapshot_t)=> bool;
+            }
+        }
     }
 
-    extern("libjoyecs", "wojeapi_get_sleep_suppression")
-    public func get_sleep_suppression()=> real;
+    namespace entity
+    {
+        namespace editor
+        {
+            using bad_shader_handle_t = handle;
 
-    extern("libjoyecs", "wojeapi_set_sleep_suppression")
-    public func set_sleep_suppression(tm: real)=> void;
+            extern("libjoyecs", "wojeapi_get_bad_shader_list_of_entity")
+                public func get_bad_shader_paths(e: entity)=> array<string>;
 
-    extern("libjoyecs", "wojeapi_build_version")
-    public func build_version()=> string;
+            extern("libjoyecs", "wojeapi_store_bad_shader_name")
+                public func store_name_for_bad_shader_update(e: entity, shad_path: string)=> bad_shader_handle_t;
 
-    extern("libjoyecs", "wojeapi_build_commit")
-    public func build_commit()=> string;
+            extern("libjoyecs", "wojeapi_remove_bad_shader_name")
+                public func remove_name_for_bad_shader_update(e: entity, shad_path: string)=> void;
+
+            namespace bad_shader_handle_t
+            {
+                public func store_uniform_dat_for_bad_shader_update<T>(shadhandle: bad_shader_handle_t, name: string, val: T)
+                    where std::declval:<T>() is int
+                           || std::declval:<T>() is real
+                           || std::declval:<T>() is (real, real)
+                           || std::declval:<T>() is (real, real, real)
+                           || std::declval:<T>() is (real, real, real, real);
+                {
+                    if (std::declval:<T>() is int)
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
+                        func _set_uniform_int(shadhandle: bad_shader_handle_t, name: string, val: int)=> void;
+
+                        _set_uniform_int(shadhandle, name, val);
+                    }
+                    else if (std::declval:<T>() is real)
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
+                        func _set_uniform_float(shadhandle: bad_shader_handle_t, name: string, val: real)=> void;
+
+                        _set_uniform_float(shadhandle, name, val);
+                    }
+                    else if (std::declval:<T>() is (real, real))
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
+                        func _set_uniform_float2(shadhandle: bad_shader_handle_t, name: string, x: real, y: real)=> void;
+                        let (x, y) = val;
+                        _set_uniform_float2(shadhandle, name, x, y);
+                    }
+                    else if (std::declval:<T>() is (real, real, real))
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
+                        func _set_uniform_float3(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real)=> void;
+                        let (x, y, z) = val;
+                        _set_uniform_float3(shadhandle, name, x, y, z);
+                    }
+                    else if (std::declval:<T>() is (real, real, real, real))
+                    {
+                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
+                        func _set_uniform_float4(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real, w: real)=> void;
+                        let (x, y, z, w) = val;
+                        _set_uniform_float4(shadhandle, name, x, y, z, w);
+                    }
+                    else
+                        std::panic("Here should not been exec.");
+                }
+            }
+            public func set_editing_uid(id: option<euid_t>)
+            {
+                extern("libjoyecs", "wojeapi_set_editing_entity_uid")
+                public func _set_editing_entity(euid: euid_t)=> void;
+                extern("libjoyecs", "wojeapi_set_editing_entity_uid")
+                public func _reset_editing_entity()=> void;
+
+                match(id)
+                {
+                value(e)? _set_editing_entity(e);
+                none? _reset_editing_entity();
+                }
+            }
+        }
+    }
+    namespace editor
+    {
+        extern("libjoyecs", "wojeapi_set_able_shared_glresource")
+        public func set_able_shared_glresource(able: bool)=> void;
+
+        extern("libjoyecs", "wojeapi_mark_shared_glresource_outdated")
+        public func mark_shared_glresource_outdated(respath: string)=> bool;
+
+        extern("libjoyecs", "wojeapi_init_graphic_pipeline")
+        public func init_graphic_pipeline(u: universe)=> void;
+
+        extern("libjoyecs", "wojeapi_set_runtime_path")
+        public func set_runtime_path(path: string)=> void;
+
+        extern("libjoyecs", "wojeapi_input_update_window_size")
+        public func set_window_size(x: int, y: int)=> void;
+
+        extern("libjoyecs", "wojeapi_input_update_window_title")
+        public func set_window_title(title: string)=> void;
+
+        public using fimage_packer = handle
+        {
+            extern("libjoyecs", "wojeapi_create_fimg_packer")
+            public func create(saving_path: string, max_img_size: int)=> fimage_packer;
+
+            extern("libjoyecs", "wojeapi_pack_file_to_fimg_packer")
+            public func pack(self: fimage_packer, file_path: string, pack_path: string)=> bool;
+
+            extern("libjoyecs", "wojeapi_pack_buffer_to_fimg_packer")
+            public func pack_buffer(self: fimage_packer, buffer: handle, len: int, pack_path: string)=> bool;
+
+            extern("libjoyecs", "wojeapi_finish_fimg_packer")
+            public func finish(self: fimage_packer)=> void;
+        }
+
+        extern("libjoyecs", "wojeapi_get_sleep_suppression")
+        public func get_sleep_suppression()=> real;
+
+        extern("libjoyecs", "wojeapi_set_sleep_suppression")
+        public func set_sleep_suppression(tm: real)=> void;
+
+        extern("libjoyecs", "wojeapi_build_version")
+        public func build_version()=> string;
+
+        extern("libjoyecs", "wojeapi_build_commit")
+        public func build_commit()=> string;
     
-    extern("libjoyecs", "wojeapi_woolang_version")
-    public func woolang_version()=> string;
+        extern("libjoyecs", "wojeapi_woolang_version")
+        public func woolang_version()=> string;
 
-    extern("libjoyecs", "wojeapi_crc64_file")
-    public func crc64file(file_path: string)=> option<int>;
+        extern("libjoyecs", "wojeapi_crc64_file")
+        public func crc64file(file_path: string)=> option<int>;
 
-    extern("libjoyecs", "wojeapi_crc64_string")
-    public func crc64str(file_path: string)=> int;
+        extern("libjoyecs", "wojeapi_crc64_string")
+        public func crc64str(file_path: string)=> int;
 
-    public enum loglevel
-    {
-        NORMAL = 0,
-        INFO,
-        WARNING,
-        ERROR,
-        FATAL,
+        public enum loglevel
+        {
+            NORMAL = 0,
+            INFO,
+            WARNING,
+            ERROR,
+            FATAL,
+        }
+
+        extern("libjoyecs", "wojeapi_register_log_callback")
+        public func hooklog()=> handle;
+
+        extern("libjoyecs", "wojeapi_unregister_log_callback")
+        public func unhooklog(i: handle)=> void;
+
+        extern("libjoyecs", "wojeapi_get_all_logs")
+        public func getlogs()=> array<(loglevel, string)>;
+
+        extern("libjoyecs", "wojeapi_update_editor_mouse_pos")
+        public func update_editor_mouse_pos(x: real, y: real, lockposx: int, lockposy: int)=> void;
+
+        extern("libjoyecs", "wojeapi_setable_editor_system")
+        public func enable_editor_system(able: bool)=> void;
+
+        extern("libjoyecs", "wojeapi_apply_camera_framebuf_setting")
+        public func apply_camera_framebuf_setting(camera: entity, width: int, height: int)=> void;
+
+        extern("libjoyecs", "wojeapi_get_framebuf_texture")
+        public func get_framebuf_texture(camera: entity, index: int)=> option<graphic::texture>;
+
+        extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
+        public func get_texture_sampling_method_by_path(path: string)=> graphic::texture::sampling;
+
+        extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
+        public func update_texture_sampling_method_by_path(path: string, method: graphic::texture::sampling)=> result<void, string>;
+
+        extern("libjoyecs", "wojeapi_get_entity_arch_information")
+        public func get_entity_arch_information(e: entity)=> (int, int, int); // chunk_size, entity_size, entity_count
+
+        public enum mover_mode
+        {
+            nospecify,
+            selection,
+            movement,
+            rotation,
+            scale,
+        }
+        extern("libjoyecs", "wojeapi_get_editing_mover_mode")
+        public func get_editing_mover_mode(w: je::world)=> mover_mode;
+
+        extern("libjoyecs", "wojeapi_set_editing_mover_mode")
+        public func set_editing_mover_mode(w: je::world, m: mover_mode)=> void;
+
+        public enum coord_mode
+        {
+            global,
+            local
+        }
+        extern("libjoyecs", "wojeapi_get_editing_coord_mode")
+        public func get_editing_coord_mode(w: je::world)=> coord_mode;
+        extern("libjoyecs", "wojeapi_set_editing_coord_mode")
+        public func set_editing_coord_mode(w: je::world, a: coord_mode)=> void;
     }
-
-    extern("libjoyecs", "wojeapi_register_log_callback")
-    public func hooklog()=> handle;
-
-    extern("libjoyecs", "wojeapi_unregister_log_callback")
-    public func unhooklog(i: handle)=> void;
-
-    extern("libjoyecs", "wojeapi_get_all_logs")
-    public func getlogs()=> array<(loglevel, string)>;
-
-    extern("libjoyecs", "wojeapi_update_editor_mouse_pos")
-    public func update_editor_mouse_pos(x: real, y: real, lockposx: int, lockposy: int)=> void;
-
-    extern("libjoyecs", "wojeapi_setable_editor_system")
-    public func enable_editor_system(able: bool)=> void;
-
-    extern("libjoyecs", "wojeapi_apply_camera_framebuf_setting")
-    public func apply_camera_framebuf_setting(camera: entity, width: int, height: int)=> void;
-
-    extern("libjoyecs", "wojeapi_get_framebuf_texture")
-    public func get_framebuf_texture(camera: entity, index: int)=> option<graphic::texture>;
-
-    extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
-    public func get_texture_sampling_method_by_path(path: string)=> graphic::texture::sampling;
-
-    extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
-    public func update_texture_sampling_method_by_path(path: string, method: graphic::texture::sampling)=> result<void, string>;
-
-    extern("libjoyecs", "wojeapi_get_entity_arch_information")
-    public func get_entity_arch_information(e: entity)=> (int, int, int); // chunk_size, entity_size, entity_count
-
-    public enum mover_mode
-    {
-        nospecify,
-        selection,
-        movement,
-        rotation,
-        scale,
-    }
-    extern("libjoyecs", "wojeapi_get_editing_mover_mode")
-    public func get_editing_mover_mode(w: je::world)=> mover_mode;
-
-    extern("libjoyecs", "wojeapi_set_editing_mover_mode")
-    public func set_editing_mover_mode(w: je::world, m: mover_mode)=> void;
-
-    public enum coord_mode
-    {
-        global,
-        local
-    }
-    extern("libjoyecs", "wojeapi_get_editing_coord_mode")
-    public func get_editing_coord_mode(w: je::world)=> coord_mode;
-    extern("libjoyecs", "wojeapi_set_editing_coord_mode")
-    public func set_editing_coord_mode(w: je::world, a: coord_mode)=> void;
 }
 )";
 
@@ -1919,28 +2007,21 @@ namespace je
         extern("libjoyecs", "wojeapi_type_is_system")
         public func is_system(self: typeinfo)=> bool;
 
-        namespace editor
+        extern("libjoyecs", "wojeapi_get_all_registed_types")
+        public func get_all_registed_types()=> array<typeinfo>;
+
+        public func get_all_components_types()
         {
-            public func get_all_registed_types()
-            {
-                extern("libjoyecs", "wojeapi_get_all_registed_types")
-                func _get_all_registed_types()=> array<typeinfo>;
-
-                return _get_all_registed_types();
-            }
-
-            public func get_all_components_types()
-            {
-                return get_all_registed_types()
-                    ->forall(\type: typeinfo = type->is_component(););
-            }
-
-            public func get_all_systems_types()
-            {
-                return get_all_registed_types()
-                    ->forall(\type: typeinfo = type->is_system(););
-            }
+            return get_all_registed_types()
+                ->forall(\type: typeinfo = type->is_component(););
         }
+
+        public func get_all_systems_types()
+        {
+            return get_all_registed_types()
+                ->forall(\type: typeinfo = type->is_system(););
+        }
+
         extern("libjoyecs", "wojeapi_type_of")
         public func load(name: string)=> option<typeinfo>;
 
@@ -1961,7 +2042,7 @@ namespace je
         private func get_basic(tid: basic_type)=> typeinfo;
 
         extern("libjoyecs", "wojeapi_type_members")
-        public func members(self: typeinfo)=> array<(string, typeinfo)>;
+        public func get_members_info(self: typeinfo)=> array<(string, typeinfo)>;
 
         public let int = typeinfo::get_basic(basic_type::INT);
         public let int2 = typeinfo::get_basic(basic_type::INT2);
@@ -2119,17 +2200,6 @@ namespace je
 
                 extern("libjoyecs", "wojeapi_texture_pixel_color")
                 public func get_color(self: pixel)=> (real, real, real, real);
-            }
-
-            namespace editor
-            {
-                public using snapshot_t = gchandle;
-
-                extern("libjoyecs", "wojeapi_texture_take_snapshot")
-                public func snapshot(self: texture)=> option<snapshot_t>;
-
-                extern("libjoyecs", "wojeapi_texture_restore_snapshot")
-                public func restore_snapshot(self: texture, snapshot: snapshot_t)=> bool;
             }
         }
 
@@ -2295,11 +2365,8 @@ R"(
         extern("libjoyecs", "wojeapi_universe_set_timescale")
         public func set_timescale(self: universe, scale: real)=> void;
 
-        namespace editor
-        {
-            extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
-            public func get_all_worlds(self: universe)=> array<world>;
-        }
+        extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
+        public func get_all_worlds(self: universe)=> array<world>;
     }
 
     public using world = handle;
@@ -2320,40 +2387,23 @@ R"(
         extern("libjoyecs", "wojeapi_remove_system_from_world")
         public func remove_system(self: world, sysinfo: typeinfo)=> void;
     
-        namespace editor
-        {
-            extern("libjoyecs", "wojeapi_get_universe_from_world")
-            public func located_universe(self: world)=> universe;
+        extern("libjoyecs", "wojeapi_get_universe_from_world")
+        public func get_universe(self: world)=> universe;
 
-            extern("libjoyecs", "wojeapi_get_system_from_world")
-            public func get_system(self: world, systype: typeinfo)=> option<handle>;
+        extern("libjoyecs", "wojeapi_get_system_from_world")
+        public func get_system(self: world, systype: typeinfo)=> option<handle>;
 
-            extern("libjoyecs", "wojeapi_get_world_name")
-            public func name(self: world)=> string;
+        extern("libjoyecs", "wojeapi_get_world_name")
+        public func name(self: world)=> string;
 
-            extern("libjoyecs", "wojeapi_set_world_name")
-            public func set_name(self: world, _name: string)=> void;
+        extern("libjoyecs", "wojeapi_set_world_name")
+        public func set_name(self: world, _name: string)=> void;
 
-            public func get_all_entities(self: world)=> array<entity>
-            {
-                extern("libjoyecs", "wojeapi_get_all_entities_from_world")
-                public func _get_all_entities_from_world(world: world)=> array<entity>;
+        extern("libjoyecs", "wojeapi_get_all_entities_from_world")
+        public func get_all_entities(self: world)=> array<entity>;
 
-                return _get_all_entities_from_world(self);
-            }
-
-            public func get_systems_types(self: world)=> array<typeinfo>
-            {
-                extern("libjoyecs", "wojeapi_get_all_systems_from_world")
-                    private public func _get_systems_from_world(self: world)=> array<typeinfo>;
-                return _get_systems_from_world(self);
-            }
-
-            public func top_entity_iter(self: world)=> entity::editor::entity_iter
-            {
-                return entity::editor::entity_iter::create(self->get_all_entities());
-            }
-        }
+        extern("libjoyecs", "wojeapi_get_all_systems_from_world")
+        public func get_all_systems(self: world)=> array<typeinfo>;
     }
     public using entity = gchandle;
     namespace entity
@@ -2367,13 +2417,8 @@ R"(
             return a->editor::chunkinfo() != b->editor::chunkinfo();
         }
 
-        public func close(self: entity)
-        {
-            extern("libjoyecs", "wojeapi_close_entity")
-            public func _close(self: entity)=> void;
-
-            _close(self);
-        }
+        extern("libjoyecs", "wojeapi_close_entity")
+        public func close(self: entity)=> void;
         
         extern("libjoyecs", "wojeapi_get_world_from_entity")
         public func get_world(self: entity)=> world;
@@ -2383,9 +2428,13 @@ R"(
             extern("libjoyecs", "wojeapi_get_component_from_entity")
             func _get_component(self: entity, type: typeinfo)=> option<handle>;
     
-            return _get_component(self, type)->map(\addr:handle = component{
-                addr = addr, type = type,
-            };);
+            return _get_component(self, type)
+                ->> \addr = component{
+                        addr = addr, 
+                        type = type,
+                    }
+                    ;
+                ;
         };
 
         public func add_component(self: entity, type: typeinfo)=> component
@@ -2401,81 +2450,7 @@ R"(
 
         namespace editor
         {
-            using bad_shader_handle_t = handle;
-
-            extern("libjoyecs", "wojeapi_get_bad_shader_list_of_entity")
-                public func get_bad_shader_paths(e: entity)=> array<string>;
-
-            extern("libjoyecs", "wojeapi_store_bad_shader_name")
-                public func store_name_for_bad_shader_update(e: entity, shad_path: string)=> bad_shader_handle_t;
-
-            extern("libjoyecs", "wojeapi_remove_bad_shader_name")
-                public func remove_name_for_bad_shader_update(e: entity, shad_path: string)=> void;
-
-            namespace bad_shader_handle_t
-            {
-                public func store_uniform_dat_for_bad_shader_update<T>(shadhandle: bad_shader_handle_t, name: string, val: T)
-                    where std::declval:<T>() is int
-                           || std::declval:<T>() is real
-                           || std::declval:<T>() is (real, real)
-                           || std::declval:<T>() is (real, real, real)
-                           || std::declval:<T>() is (real, real, real, real);
-                {
-                    if (std::declval:<T>() is int)
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
-                        func _set_uniform_int(shadhandle: bad_shader_handle_t, name: string, val: int)=> void;
-
-                        _set_uniform_int(shadhandle, name, val);
-                    }
-                    else if (std::declval:<T>() is real)
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
-                        func _set_uniform_float(shadhandle: bad_shader_handle_t, name: string, val: real)=> void;
-
-                        _set_uniform_float(shadhandle, name, val);
-                    }
-                    else if (std::declval:<T>() is (real, real))
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
-                        func _set_uniform_float2(shadhandle: bad_shader_handle_t, name: string, x: real, y: real)=> void;
-                        let (x, y) = val;
-                        _set_uniform_float2(shadhandle, name, x, y);
-                    }
-                    else if (std::declval:<T>() is (real, real, real))
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
-                        func _set_uniform_float3(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real)=> void;
-                        let (x, y, z) = val;
-                        _set_uniform_float3(shadhandle, name, x, y, z);
-                    }
-                    else if (std::declval:<T>() is (real, real, real, real))
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
-                        func _set_uniform_float4(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real, w: real)=> void;
-                        let (x, y, z, w) = val;
-                        _set_uniform_float4(shadhandle, name, x, y, z, w);
-                    }
-                    else
-                        std::panic("Here should not been exec.");
-                }
-            }
-
             public using euid_t = handle;
-
-            public func set_editing_uid(self: option<euid_t>)
-            {
-                extern("libjoyecs", "wojeapi_set_editing_entity_uid")
-                public func _set_editing_entity(euid: euid_t)=> void;
-                extern("libjoyecs", "wojeapi_set_editing_entity_uid")
-                public func _reset_editing_entity()=> void;
-
-                match(self)
-                {
-                value(e)? _set_editing_entity(e);
-                none? _reset_editing_entity();
-                }
-            }
 
             extern("libjoyecs", "wojeapi_get_editing_entity_uid")
             public func get_editing_uid()=> option<euid_t>;
@@ -2530,95 +2505,6 @@ R"(
 
             extern("libjoyecs", "wojeapi_is_child_of_entity")
             public func is_child_of(self: entity, parent: entity)=> bool;
-
-            public using entity_iter = struct {
-                m_cur_iter          : array::iterator<entity>,
-                m_judge_func        : (entity)=>bool,
-                m_current_entity    : mut option<entity>,
-
-                m_all_entity_list   : array<entity>,
-                m_not_top_entities  : vec<entity>,
-                m_outed_entities    : vec<entity>,
-            };
-            namespace entity_iter
-            {
-                private public func create(entitys: array<entity>)
-                {
-                    let not_top_entities = []mut: vec<entity>;
-                    return entity_iter{
-                        m_cur_iter = entitys->iter(),
-                        m_judge_func = func(e: entity)
-                                       {
-                                            let result = e->editor::is_top();
-                                            if (!result)
-                                                not_top_entities->add(e);
-                                            return result;
-                                       },
-                        m_current_entity = mut option::none:<entity>,
-                        m_all_entity_list = entitys,
-                        m_not_top_entities = not_top_entities,
-                        m_outed_entities = []mut: vec<entity>,
-                    };
-                }
-
-                public func childs_iter(self: entity_iter)
-                {
-                    let parent_entity = self.m_current_entity->val();
-                    return entity_iter{
-                        m_cur_iter = self.m_all_entity_list->iter(),
-                        m_judge_func = \e = e->is_child_of(parent_entity);,
-                        m_current_entity = mut option::none:<entity>,
-                        m_all_entity_list = self.m_all_entity_list,
-                        m_not_top_entities = []mut: vec<entity>,
-                        m_outed_entities = self.m_outed_entities,
-                    };
-                }
-    
-                public func iter(self: entity_iter)
-                {
-                    return self;
-                }
-                public func next(self: entity_iter)=> option<(entity)>
-                {
-                    let current_iter = self.m_cur_iter;
-
-                    for (let _, out_entity : current_iter)
-                    {
-                        if (self.m_judge_func(out_entity))
-                        {
-                            self.m_current_entity = option::value(out_entity);
-                            self.m_outed_entities->add(out_entity);
-
-                            return option::value((out_entity,));
-                        }
-                    }
-
-                continue_find_not_displayed_entity@
-                    while (!self.m_not_top_entities->empty())
-                    {
-                        let top = self.m_not_top_entities[0];
-                        do self.m_not_top_entities->remove(0);
-
-                        if (self.m_outed_entities->find(top) == -1)
-                        {
-                            for (let _, entity: self.m_all_entity_list)
-                            {
-                                if (top != entity && top->is_child_of(entity))
-                                    // Parent finded, it's not a orphan entity.
-                                    continue continue_find_not_displayed_entity;
-                            }
-
-                            // Current entity have jeecs::Transform::LocalToParent,
-                            // but it's LocalToParent donot point to any other entity;
-                            self.m_current_entity = option::value(top);
-                            self.m_outed_entities->add(top);
-
-                            return option::value((top,));
-                        }
-                    }
-                    return option::none;
-                }
-            } // end of namespace entity_iter
 )"
 R"(
             namespace graphic
@@ -2630,30 +2516,21 @@ R"(
 
                 extern("libjoyecs", "wojeapi_reload_texture_of_entity")
                 public func try_reload_textures(self: entity, old_tex: string, new_tex: string)=> bool;
-
-                public func get_shaders(self: entity)=> array<graphic::shader>
-                {
-                    extern("libjoyecs", "wojeapi_shaders_of_entity")
-                    public func get_shaders_from_entity(e: entity)=> array<graphic::shader>;
-
-                    return get_shaders_from_entity(self);
-                }
-
-                extern("libjoyecs", "wojeapi_set_shaders_of_entity")
-                public func set_shaders(self: entity, shaders: array<graphic::shader>)=> void;
-
-                public func get_textures(self: entity)=> dict<int, graphic::texture>
-                {
-                    extern("libjoyecs", "wojeapi_textures_of_entity")
-                    public func get_textures_from_entity(e: entity)=> dict<int, graphic::texture>;
-
-                    return get_textures_from_entity(self);
-                }
-
-                extern("libjoyecs", "wojeapi_bind_texture_for_entity")
-                public func bind_texture(self: entity, id: int, tex: graphic::texture)=> void;
             }
         }// end of namespace editor
+
+        extern("libjoyecs", "wojeapi_shaders_of_entity")
+        public func get_shaders(self: entity)=> array<graphic::shader>;
+
+        extern("libjoyecs", "wojeapi_set_shaders_of_entity")
+        public func set_shaders(self: entity, shaders: array<graphic::shader>)=> void;
+
+        extern("libjoyecs", "wojeapi_textures_of_entity")
+        public func get_textures(self: entity)=> dict<int, graphic::texture>;
+
+        extern("libjoyecs", "wojeapi_bind_texture_for_entity")
+        public func bind_texture(self: entity, id: int, tex: graphic::texture)=> void;
+
     } // end of namespace entity
 
     public using native_value = handle;
@@ -2730,38 +2607,8 @@ R"(
 
             return _get_member(self.addr, self.type, name);
         }
-
-        namespace editor
-        {
-            public using member_iterator = gchandle;
-            namespace member_iterator
-            {
-                public func iter(self: member_iterator)
-                {
-                    return self;
-                }
-
-                extern("libjoyecs", "wojeapi_member_iterator_next")
-                public func next(self: member_iterator)=> option<(string, typeinfo, native_value)>;
-            }
-
-            func iter_member(self: component)
-            {
-                extern("libjoyecs", "wojeapi_iter_components_member")
-                func _iter_member(self: handle, type: typeinfo) => member_iterator;
-
-                return _iter_member(self.addr, self.type);
-            }
-            
-            public func members(self: component)
-            {
-                let result = []mut: vec<(string, typeinfo, native_value)>;
-                for (let name, type, addr : self->iter_member())
-                    result->add((name, type, addr));
-
-                return result->unsafe::cast:<array<(string, typeinfo, native_value)>>; 
-            }
-        }
+        extern("libjoyecs", "wojeapi_component_get_all_members")
+        public func get_members(self: component)=> array<(string, typeinfo, native_value)>;
     }
 }
 

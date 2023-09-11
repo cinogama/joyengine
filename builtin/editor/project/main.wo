@@ -104,7 +104,7 @@ namespace editor
             assert (self.m_worlds->empty);
 
             // 关闭所有世界~~
-            do self->get_env->get_universe->editor::get_all_worlds
+            do self->get_env->get_universe->get_all_worlds
                 ->> \w = w->close();
                 ;
 
@@ -200,7 +200,7 @@ namespace editor
                     typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->val,
                     func(origin_editor_system)
                     {
-                        let USABLE_EDITOR_SYSTEMS = typeinfo::editor::get_all_systems_types()
+                        let USABLE_EDITOR_SYSTEMS = typeinfo::get_all_systems_types()
                                 ->  forall(\t = t->name->beginwith("Editor::"););
                         let USABLE_EDITOR_SYSTEM_NAMES =  USABLE_EDITOR_SYSTEMS
                                 ->> \t = t->name;;

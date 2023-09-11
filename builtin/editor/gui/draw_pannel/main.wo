@@ -624,7 +624,7 @@ namespace editor::gui::drawpannel
                             do je::editor::update_texture_sampling_method_by_path(saving_path, edited_texture->get_sampling_method());
                             do entity
                                 ->> \eid = eid->justdo(
-                                        \e = e->editor::graphic::bind_texture(passid, je::graphic::texture::load(
+                                        \e = e->bind_texture(passid, je::graphic::texture::load(
                                             // NOTE: saving_path是一个可能为规范路径 也有可能是项目路径的东西，这里直接简单处理了
                                             //       照理来说应该区分出类型再分别处理
                                             context->get_project->make_path_normalize(filesys::normalize(saving_path)))->val);
@@ -711,10 +711,10 @@ namespace editor::gui::drawpannel
             return;
         }
 
-        let textures = e->editor::graphic::get_textures();
+        let textures = e->get_textures();
 
         // 这个大大的傻逼代码作用是获取当前实体使用的所有纹理通道
-        let used_texture_id_pass = e->editor::graphic::get_shaders()
+        let used_texture_id_pass = e->get_shaders()
             =>> \shader = shader->get_uniforms()
                     ->  unmapping
                     =>> \nv = nv...

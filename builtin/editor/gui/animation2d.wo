@@ -642,7 +642,7 @@ namespace editor::gui::animation2d
                                 {
                                     if (MenuItem("新建组件数据"))
                                     {
-                                        let all_components = je::typeinfo::editor::get_all_components_types()
+                                        let all_components = je::typeinfo::get_all_components_types()
                                             -> forall(\t = ! t->name()->beginwith("Editor::");)
                                             -> std::sort(\at, bt = at->name() < bt->name();)
                                             ;
@@ -672,7 +672,7 @@ namespace editor::gui::animation2d
                                                         ;
 
                                                     let members = all_components->get(selecting_id->get)
-                                                        ->> \t = t->members;
+                                                        ->> \t = t->get_members_info;
                                                         ->  valor([]);
 
                                                     SameLine();

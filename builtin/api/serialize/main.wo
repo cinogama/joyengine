@@ -15,8 +15,7 @@ namespace jeapi
         func get_entity_texture_passes(saving_entity: entity)=> dict<int, option<texture_inform>>
         {
             // 获取实体绑定的通道和纹理信息
-            return saving_entity
-                ->  editor::graphic::get_textures
+            return saving_entity->get_textures
                 ->> \pass, tex = (pass, tex->path);
                 ;
         }
@@ -27,8 +26,7 @@ namespace jeapi
         {
             // 获取实体绑定的shader和uniform信息, uniform 信息仅包括int/float/float2，3，4类型的信息
             // {[shader_path] = shader_inform}
-            return saving_entity
-                ->  editor::graphic::get_shaders
+            return saving_entity-> get_shaders
                 ->> \shad = [shad->path: dynamic, shad_uniforms_dats(): dynamic]
                     where shad_uniforms_dats = func()
                         {
@@ -72,7 +70,7 @@ namespace jeapi
                             component = saving_entity->get_component(t);
                     ->> \tc = (t->name, collect_members)
                         where 
-                            collect_members = c->editor::members()
+                            collect_members = c->get_members()
                                 ->> \name_type_addr_pair = (name, addr->to_string(type))
                                     where (name, type, addr) = name_type_addr_pair
                                     ;
@@ -91,7 +89,7 @@ namespace jeapi
                                 =>> \k, v = used_texture_id_pass->find(k) != -1 && v->has ? {[k] = v->val} | {}; : dynamic,
                             ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
                         }
-                        where used_texture_id_pass = saving_entity->editor::graphic::get_shaders()
+                        where used_texture_id_pass = saving_entity->get_shaders()
                             =>> \shader = shader->get_uniforms()
                                     ->  unmapping
                                     =>> \nv = nv...
@@ -132,20 +130,20 @@ namespace jeapi
             alias entity_info_t = dict<string, dynamic>;
 
             let entities_json_list = 
-                w->editor::get_all_entities
+                w->get_all_entities
                     // 跳过编辑器上的不可见实体
                     ->  forall(\e = !e->get_component(INVISABLE)->has;)
                     =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e, need_euid);
                     ;
 
             let editing_systems_type_list = 
-                w->editor::get_systems_types
+                w->get_all_systems
                     ->> \st = st->name;
                     ->  forall(\n = !n->beginwith("Editor::");)
                     ;
 
             return result::ok({
-                ["name"] = w->editor::name: dynamic,
+                ["name"] = w->name: dynamic,
                 ["entities"] = entities_json_list: dynamic,
                 ["systems"] = editing_systems_type_list: dynamic,
                 // ["runtime_systems"] = runtime_systems_type_list: dynamic,
@@ -252,7 +250,7 @@ namespace jeapi
             // 开始应用数据
             do component_types_dat
                 ->> \cdata = compmaynotfound
-                        ->> \comp = comp->editor::members
+                        ->> \comp = comp->get_members
                             ->> \name_type_addr_pair = dat->get(mname)
                                 ->> \mdat = mvalue->parse(mtype, mdat);
                                 where (mname, mtype, mvalue) = name_type_addr_pair
@@ -273,7 +271,7 @@ namespace jeapi
                         for (let uname, uval: uniform_vars)
                             restore_shader_of_entity(shad, uname as string, uval as array<dynamic>);
                     }
-                    entity->editor::graphic::set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
+                    entity->set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
                 }
             err(dats)?
                 if (in_editor)
@@ -294,7 +292,7 @@ namespace jeapi
                     {
                         for (let passid, path : textures: dict<dynamic, dynamic>)
                             do graphic::texture::load(path as string)
-                                ->> \tex = entity->editor::graphic::bind_texture(passid as int, tex);
+                                ->> \tex = entity->bind_texture(passid as int, tex);
                                 ;
                     };
 
@@ -310,7 +308,7 @@ namespace jeapi
             let w = u->je::world::create;
 
             if (in_editor)
-                do dat->get("name")->>\name = w->editor::set_name(name as string);;
+                do dat->get("name")->>\name = w->set_name(name as string);;
             else
                 do dat->get("runtime_systems")
                     ->> \d = d as array<dynamic>

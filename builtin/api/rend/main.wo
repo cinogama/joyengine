@@ -5,17 +5,5 @@ import je;
 
 namespace jeapi::rend
 {
-    // public func reset_rend_world(aim_world: je::world, graphic_pipeline: je::typeinfo)
-    // {
-    //     static let GRAPHIC_PIPELINE_SYSTEMS = je::typeinfo::editor::get_all_systems_types()
-    //         -> forall(\t = t->name->beginwith("Graphic::"););
 
-    //     do je::world::rend(aim_world->editor::located_universe)
-    //         ->> \old = GRAPHIC_PIPELINE_SYSTEMS
-    //             ->  forall(\gst = old->editor::get_system(gst)->has;)
-    //             ->> \gst = old->remove_system(gst);
-    //             ;
-    //         ;
-    //     do aim_world->add_system(graphic_pipeline);
-    // }
 }

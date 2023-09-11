@@ -104,7 +104,6 @@ namespace jeecs_impl
         public:
             struct entity_meta
             {
-                std::atomic_flag m_in_used = {};
                 jeecs::typing::version_t m_version = 0;
                 size_t m_euid = 0;
 
@@ -123,6 +122,7 @@ namespace jeecs_impl
             const size_t            _m_entity_count;
             const size_t            _m_entity_size;
 
+            std::atomic_flag*       _m_entity_slot_states;
             entity_meta*            _m_entities_meta;
             arch_type*              _m_arch_type;
             std::atomic_size_t      _m_free_count;
@@ -140,12 +140,14 @@ namespace jeecs_impl
                 assert(jeoffsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
 
                 _m_entities_meta = new entity_meta[_m_entity_count];
+                _m_entity_slot_states = new std::atomic_flag[_m_entity_count];
             }
             ~arch_chunk()
             {
                 // All entity in chunk should be free.
                 assert(_m_free_count == _m_entity_count);
-                delete [] _m_entities_meta;
+                delete[] _m_entities_meta;
+                delete[] _m_entity_slot_states;
             }
         public:
             // ATTENTION: move_component_to WILL INVOKE DESTRUCT FUNCTION OF from_component
@@ -170,7 +172,7 @@ namespace jeecs_impl
                         // OK There is a usable place for entity
                         for (size_t id = 0; id < _m_entity_count; id++)
                         {
-                            if (!_m_entities_meta[id].m_in_used.test_and_set())
+                            if (!_m_entity_slot_states[id].test_and_set())
                             {
                                 assert(euid != 0);
 
@@ -233,7 +235,7 @@ namespace jeecs_impl
             {
                 for (jeecs::typing::entity_id_in_chunk_t eidx = 0; eidx < _m_entity_count; eidx++)
                 {
-                    if (_m_entities_meta[eidx].m_in_used.test_and_set())
+                    if (_m_entity_slot_states[eidx].test_and_set())
                     {
                         jeecs::game_entity gentity;
                         gentity._m_id = eidx;
@@ -265,7 +267,7 @@ namespace jeecs_impl
             {
                 _m_entities_meta[eid].m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
                 ++_m_entities_meta[eid].m_version;
-                _m_entities_meta[eid].m_in_used.clear();
+                _m_entity_slot_states[eid].clear();
 
                 ++_m_free_count;
                 ++_m_arch_type->_m_free_count;

@@ -32,7 +32,7 @@ namespace editor::gui::edit_forms
                 {
                     let debug_world = proj->get_editing_world;
                     let debug_camera_entity = debug_world
-                        =>> \w = w->editor::get_all_entities
+                        =>> \w = w->get_all_entities
                             ->forall(\e = 
                                 e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
                                 && e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
@@ -116,7 +116,7 @@ namespace editor::gui::edit_forms
                                 value(shader)? 
                                     // 注意，因为实体刚刚添加组件，因此在当前帧无法获取组件
                                     // 因此用个launch确保发配下一帧执行
-                                    launch(func(){debug_camera_eid->justdo(\e = e->editor::graphic::set_shaders([shader]);); return false;}, ());
+                                    launch(func(){debug_camera_eid->justdo(\e = e->set_shaders([shader]);); return false;}, ());
                                     
                                 none? jeapi::gui::form::errmsg("加载着色器失败", "无法加载文件@/resource/shader/Light2DCameraPass.shader作为着色器");
                                 }                 
