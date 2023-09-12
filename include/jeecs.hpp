@@ -2035,13 +2035,13 @@ JE_API void jegl_update_uniformbuf(
     size_t update_length);
 
 /*
-jegl_using_opengl3_apis [基本接口]
-加载opengl 3.0 core API集合，通常与jegl_start_graphic_thread一起使用
+jegl_using_opengl330_apis [基本接口]
+加载opengl v330 core API集合，通常与jegl_start_graphic_thread一起使用
 用于指定图形线程使用的基本图形库
 请参见：
     jegl_start_graphic_thread
 */
-JE_API void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis);
+JE_API void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_vulkan_apis [基本接口] (暂未实现)
@@ -2054,12 +2054,21 @@ JE_API void jegl_using_vulkan_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_dx11_apis [基本接口] (暂未实现)
-加载dx11 API集合，通常与jegl_start_graphic_thread一起使用
+加载directx 11 API集合，通常与jegl_start_graphic_thread一起使用
 用于指定图形线程使用的基本图形库
 请参见：
     jegl_start_graphic_thread
 */
 JE_API void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis);
+
+/*
+jegl_using_opengles320_apis [基本接口] (暂未实现)
+加载opengles v320 API集合，通常与jegl_start_graphic_thread一起使用
+用于指定图形线程使用的基本图形库
+请参见：
+    jegl_start_graphic_thread
+*/
+JE_API void jegl_using_opengles320_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_resource [基本接口]

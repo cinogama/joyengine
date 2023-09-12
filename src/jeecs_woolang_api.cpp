@@ -686,9 +686,10 @@ WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args, size_t 
 
 WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args, size_t argc)
 {
-    void* component_addr = wo_pointer(args + 0);
-    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
-    wo_string_t member_name = wo_string(args + 2);
+    void* component_addr = wo_pointer(wo_struct_get(args + 0, 0));
+    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(wo_struct_get(args + 0, 1));
+
+    wo_string_t member_name = wo_string(args + 1);
 
     if (auto* member_info = component_type->find_member_by_name(member_name))
     {
@@ -1719,8 +1720,72 @@ namespace je
 
     namespace entity
     {
-        namespace editor
+                namespace editor
         {
+            public using euid_t = handle;
+
+            extern("libjoyecs", "wojeapi_get_editing_entity_uid")
+            public func get_editing_uid()=> option<euid_t>;
+
+            extern("libjoyecs", "wojeapi_get_entity_uid")
+            public func get_entity_uid(self: entity)=> euid_t;
+
+            extern("libjoyecs", "wojeapi_set_parent")
+            public func set_parent(self: entity, parent: entity, force: bool)=> bool;
+
+            extern("libjoyecs", "wojeapi_get_entity_anchor_uuid")
+            public func get_anchor_uid(self: entity)=> option<string>;
+
+            extern("libjoyecs", "wojeapi_set_parent_with_uid")
+            public func set_parent_with_uid(self: entity, parent_uid: string, force: bool)=> bool;
+
+            extern("libjoyecs", "wojeapi_get_parent_anchor_uid")
+            public func get_parent_anchor_uid(self: entity)=> option<string>;
+
+            extern("libjoyecs", "wojeapi_get_entity_name")
+            public func name(self: entity)=> string;
+
+            extern("libjoyecs", "wojeapi_set_entity_name")
+            public func set_name(self: entity, name: string)=> void;
+
+            extern("libjoyecs", "wojeapi_find_entity_with_chunk_info")
+            public func find_entity_by_chunkinfo(chunkinfo: string)=> entity;
+
+            public func get_components(self: entity)
+            {
+                return self->get_components_types()
+                    // If current entity died, we can still get types from chunk, but 
+                    // failed to get component instance. Check here.
+                    =>> \tid = comp->has ? [(tid, comp->val)] | []
+                        where comp = self->get_component(tid);
+                    ->  mapping;
+            }
+
+            public func get_components_types(self: entity)=> array<typeinfo>
+            {
+                extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")
+                public func _get_components_types_from_entity(entity: entity)=> array<typeinfo>;
+
+                return _get_components_types_from_entity(self);
+            }
+
+            extern("libjoyecs", "wojeapi_is_top_entity")
+            public func is_top(self: entity)=> bool;
+
+            extern("libjoyecs", "wojeapi_is_child_of_entity")
+            public func is_child_of(self: entity, parent: entity)=> bool;
+
+            namespace graphic
+            {
+                // Used for reload specify shader; called when shader updated or moved;
+                // RETURN TRUE MEANS OK
+                extern("libjoyecs", "wojeapi_reload_shader_of_entity")
+                public func try_reload_shaders(self: entity, old_shad: string, new_shad: string)=> bool;
+
+                extern("libjoyecs", "wojeapi_reload_texture_of_entity")
+                public func try_reload_textures(self: entity, old_tex: string, new_tex: string)=> bool;
+            }
+
             using bad_shader_handle_t = handle;
 
             extern("libjoyecs", "wojeapi_get_bad_shader_list_of_entity")
@@ -2039,21 +2104,21 @@ namespace je
             INT, INT2, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
         }
         extern("libjoyecs", "wojeapi_type_basic_type")
-        private func get_basic(tid: basic_type)=> typeinfo;
+        private func get_basic_type(tid: basic_type)=> typeinfo;
 
         extern("libjoyecs", "wojeapi_type_members")
         public func get_members_info(self: typeinfo)=> array<(string, typeinfo)>;
 
-        public let int = typeinfo::get_basic(basic_type::INT);
-        public let int2 = typeinfo::get_basic(basic_type::INT2);
-        public let bool = typeinfo::get_basic(basic_type::BOOL);
-        public let float = typeinfo::get_basic(basic_type::FLOAT);
-        public let float2 = typeinfo::get_basic(basic_type::FLOAT2);
-        public let float3 = typeinfo::get_basic(basic_type::FLOAT3);
-        public let float4 = typeinfo::get_basic(basic_type::FLOAT4);
-        public let quat = typeinfo::get_basic(basic_type::QUAT);
-        public let string = typeinfo::get_basic(basic_type::STRING);
-        public let texture = typeinfo::get_basic(basic_type::TEXTURE);
+        public let int = typeinfo::get_basic_type(basic_type::INT);
+        public let int2 = typeinfo::get_basic_type(basic_type::INT2);
+        public let bool = typeinfo::get_basic_type(basic_type::BOOL);
+        public let float = typeinfo::get_basic_type(basic_type::FLOAT);
+        public let float2 = typeinfo::get_basic_type(basic_type::FLOAT2);
+        public let float3 = typeinfo::get_basic_type(basic_type::FLOAT3);
+        public let float4 = typeinfo::get_basic_type(basic_type::FLOAT4);
+        public let quat = typeinfo::get_basic_type(basic_type::QUAT);
+        public let string = typeinfo::get_basic_type(basic_type::STRING);
+        public let texture = typeinfo::get_basic_type(basic_type::TEXTURE);
     }
     namespace audio
     {
@@ -2410,11 +2475,11 @@ R"(
     {
         public func operator == (a: entity, b: entity)
         {
-            return a->editor::chunkinfo() == b->editor::chunkinfo();
+            return a->chunkinfo() == b->chunkinfo();
         }
         public func operator != (a: entity, b: entity)
         {
-            return a->editor::chunkinfo() != b->editor::chunkinfo();
+            return a->chunkinfo() != b->chunkinfo();
         }
 
         extern("libjoyecs", "wojeapi_close_entity")
@@ -2448,77 +2513,10 @@ R"(
         extern("libjoyecs", "wojeapi_remove_component_from_entity")
         public func remove_component(self: entity, type: typeinfo)=> void;
 
-        namespace editor
-        {
-            public using euid_t = handle;
-
-            extern("libjoyecs", "wojeapi_get_editing_entity_uid")
-            public func get_editing_uid()=> option<euid_t>;
-
-            extern("libjoyecs", "wojeapi_get_entity_uid")
-            public func get_entity_uid(self: entity)=> euid_t;
-
-            extern("libjoyecs", "wojeapi_set_parent")
-            public func set_parent(self: entity, parent: entity, force: bool)=> bool;
-
-            extern("libjoyecs", "wojeapi_get_entity_anchor_uuid")
-            public func get_anchor_uid(self: entity)=> option<string>;
-
-            extern("libjoyecs", "wojeapi_set_parent_with_uid")
-            public func set_parent_with_uid(self: entity, parent_uid: string, force: bool)=> bool;
-
-            extern("libjoyecs", "wojeapi_get_parent_anchor_uid")
-            public func get_parent_anchor_uid(self: entity)=> option<string>;
-
-            extern("libjoyecs", "wojeapi_get_entity_name")
-            public func name(self: entity)=> string;
-
-            extern("libjoyecs", "wojeapi_set_entity_name")
-            public func set_name(self: entity, name: string)=> void;
-
-            extern("libjoyecs", "wojeapi_get_entity_chunk_info")
-            public func chunkinfo(self: entity)=> string;
-
-            extern("libjoyecs", "wojeapi_find_entity_with_chunk_info")
-            public func find_entity_by_chunkinfo(chunkinfo: string)=> entity;
-
-            public func get_components(self: entity)
-            {
-                return self->get_components_types()
-                    // If current entity died, we can still get types from chunk, but 
-                    // failed to get component instance. Check here.
-                    =>> \tid = comp->has ? [(tid, comp->val)] | []
-                        where comp = self->get_component(tid);
-                    ->  mapping;
-            }
-
-            public func get_components_types(self: entity)=> array<typeinfo>
-            {
-                extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")
-                public func _get_components_types_from_entity(entity: entity)=> array<typeinfo>;
-
-                return _get_components_types_from_entity(self);
-            }
-
-            extern("libjoyecs", "wojeapi_is_top_entity")
-            public func is_top(self: entity)=> bool;
-
-            extern("libjoyecs", "wojeapi_is_child_of_entity")
-            public func is_child_of(self: entity, parent: entity)=> bool;
+        extern("libjoyecs", "wojeapi_get_entity_chunk_info")
+        public func chunkinfo(self: entity)=> string;
 )"
 R"(
-            namespace graphic
-            {
-                // Used for reload specify shader; called when shader updated or moved;
-                // RETURN TRUE MEANS OK
-                extern("libjoyecs", "wojeapi_reload_shader_of_entity")
-                public func try_reload_shaders(self: entity, old_shad: string, new_shad: string)=> bool;
-
-                extern("libjoyecs", "wojeapi_reload_texture_of_entity")
-                public func try_reload_textures(self: entity, old_tex: string, new_tex: string)=> bool;
-            }
-        }// end of namespace editor
-
         extern("libjoyecs", "wojeapi_shaders_of_entity")
         public func get_shaders(self: entity)=> array<graphic::shader>;
 
@@ -2598,15 +2596,11 @@ R"(
         public func set_string(self: native_value, val: string)=> void;
     }
 
-    public using component = struct{addr: handle, type: typeinfo}
+    using component = struct{addr: handle, type: typeinfo}
     {
-        public func get_member(self: component, name: string)
-        {
-            extern("libjoyecs", "wojeapi_get_components_member")
-            func _get_member(addr: handle, type: typeinfo, name: string)=> option<(typeinfo, native_value)>;
+        extern("libjoyecs", "wojeapi_get_components_member")
+        public func get_member(self: component, name: string)=> option<(typeinfo, native_value)>;
 
-            return _get_member(self.addr, self.type, name);
-        }
         extern("libjoyecs", "wojeapi_component_get_all_members")
         public func get_members(self: component)=> array<(string, typeinfo, native_value)>;
     }

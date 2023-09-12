@@ -441,7 +441,7 @@ namespace editor::gui::edit_forms
         if (e.e->get_component(MapTile)->has)
             return;
 
-        let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->editor::chunkinfo}", 
+        let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->chunkinfo}", 
             treenode_attribute);
 
         if (BeginDragDropSource())

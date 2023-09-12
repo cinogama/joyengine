@@ -995,7 +995,7 @@ void gl_clear_framebuffer_depth(jegl_thread*, jegl_resource* framebuffer)
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
-void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
+void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
 {
     write_to_apis->init_interface = gl_startup;
     write_to_apis->shutdown_interface = gl_shutdown;
