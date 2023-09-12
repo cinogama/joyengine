@@ -407,11 +407,19 @@ namespace jeecs
     */
     struct game_entity
     {
-        enum class entity_stat
+        enum class entity_stat: uint8_t
         {
-            UNAVAILABLE,    // Entity is destroied or just not ready,
+            UNAVAILABLE = 0,    // Entity is destroied or just not ready,
             READY,          // Entity is OK, and just work as normal.
         };
+
+        struct meta
+        {
+            size_t m_euid;
+            jeecs::typing::version_t m_version;
+            jeecs::game_entity::entity_stat m_stat;
+        };
+        static_assert(sizeof(meta) == 24);
 
         void* _m_in_chunk;
         jeecs::typing::entity_id_in_chunk_t   _m_id;
@@ -756,50 +764,8 @@ JE_API void* je_arch_next_chunk(void* chunk);
 /*
 je_arch_entity_meta_addr_in_chunk [基本接口]
 通过给定的Chunk，获取Chunk中的实体元数据起始地址。
-    * 此方法一般由selector调用，用于获取指定ArchType中的组合（实体）情况
-    * 一般配合je_arch_entity_meta_size等方法一起使用，获取指定位置的实体信息
-请参见：
-    je_arch_entity_meta_size
-    je_arch_entity_meta_state_offset
-    je_arch_entity_meta_version_offset
 */
-JE_API const void* je_arch_entity_meta_addr_in_chunk(void* chunk);
-
-/*
-je_arch_entity_meta_size [基本接口]
-返回实体元数据的大小，此函数的返回值是一个常量，在运行过程中不会改变
-    * 此方法一般由selector调用，用于获取指定ArchType中的组合（实体）情况
-    * 一般配合je_arch_entity_meta_addr_in_chunk等方法一起使用，获取指定位置的实体信息
-请参见：
-    je_arch_entity_meta_addr_in_chunk
-    je_arch_entity_meta_state_offset
-    je_arch_entity_meta_version_offset
-*/
-JE_API size_t je_arch_entity_meta_size(void);
-
-/*
-je_arch_entity_meta_state_offset [基本接口]
-返回实体状态在单个元数据结构中的位置（偏移量），此函数的返回值是一个常量，在运行过程中不会改变
-    * 此方法一般由selector调用，用于获取指定ArchType中的组合（实体）情况
-    * 一般配合je_arch_entity_meta_addr_in_chunk等方法一起使用，获取指定位置的实体信息
-请参见：
-    je_arch_entity_meta_addr_in_chunk
-    je_arch_entity_meta_size
-    je_arch_entity_meta_version_offset
-*/
-JE_API size_t je_arch_entity_meta_state_offset(void);
-
-/*
-je_arch_entity_meta_version_offset [基本接口]
-返回实体版本在单个元数据结构中的位置（偏移量），此函数的返回值是一个常量，在运行过程中不会改变
-    * 此方法一般由selector调用，用于获取指定ArchType中的组合（实体）情况
-    * 一般配合je_arch_entity_meta_addr_in_chunk等方法一起使用，获取指定位置的实体信息
-请参见：
-    je_arch_entity_meta_addr_in_chunk
-    je_arch_entity_meta_size
-    je_arch_entity_meta_state_offset
-*/
-JE_API size_t je_arch_entity_meta_version_offset(void);
+JE_API const jeecs::game_entity::meta* je_arch_entity_meta_addr_in_chunk(void* chunk);
 
 ////////////////////// ECS //////////////////////
 
@@ -4516,13 +4482,9 @@ namespace jeecs
                     return nullptr; // Only maynot/anyof can be here, no need to cast the type;
             }
 
-            inline static bool get_entity_avaliable(const void* entity_meta, size_t eid)noexcept
+            inline static bool get_entity_avaliable(const game_entity::meta* entity_meta, size_t eid)noexcept
             {
-                static const size_t meta_size = je_arch_entity_meta_size();
-                static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
-
-                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_stat_offset;
-                return jeecs::game_entity::entity_stat::READY == *(const jeecs::game_entity::entity_stat*)_addr;
+                return jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat;
             }
 
             template<typename FT>
@@ -4541,10 +4503,10 @@ namespace jeecs
                                 if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
                                     f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
                                 else
-                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)
+                                        (_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
                             }
                         }
-
                         cur_chunk = je_arch_next_chunk(cur_chunk);
                     }
                 }
@@ -4597,16 +4559,11 @@ namespace jeecs
             }
 
             // NOTE: 写在这里的唯一目的是未来为了方便编译器自动优化，暴露状态/版本核验流程和偏移量
-            inline static bool get_entity_avaliable(const void* entity_meta, size_t eid, typing::version_t* out_version)noexcept
+            inline static bool get_entity_avaliable(const game_entity::meta* entity_meta, size_t eid, typing::version_t* out_version)noexcept
             {
-                static const size_t meta_size = je_arch_entity_meta_size();
-                static const size_t meta_entity_stat_offset = je_arch_entity_meta_state_offset();
-                static const size_t meta_entity_vers_offset = je_arch_entity_meta_version_offset();
-
-                uint8_t* _addr = ((uint8_t*)entity_meta) + eid * meta_size + meta_entity_stat_offset;
-                if (jeecs::game_entity::entity_stat::READY == *(const jeecs::game_entity::entity_stat*)_addr)
+                if (jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat)
                 {
-                    *out_version = *(typing::version_t*)(((uint8_t*)entity_meta) + eid * meta_size + meta_entity_vers_offset);
+                    *out_version = entity_meta[eid].m_version;
                     return true;
                 }
                 return false;
@@ -4627,9 +4584,10 @@ namespace jeecs
                             if (get_entity_avaliable(entity_meta_addr, eid, &version))
                             {
                                 if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
-                                    f(game_entity()._set_arch_chunk_info(cur_chunk, eid, version), _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                    f(game_entity{ cur_chunk, eid, version }, _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
                                 else
-                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(game_entity()._set_arch_chunk_info(cur_chunk, eid, version), _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(
+                                        game_entity{ cur_chunk, eid, version }, _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
                             }
                         }
 

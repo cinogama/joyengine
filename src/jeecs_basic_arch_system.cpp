@@ -101,14 +101,6 @@ namespace jeecs_impl
         class arch_chunk
         {
             JECS_DISABLE_MOVE_AND_COPY(arch_chunk);
-        public:
-            struct entity_meta
-            {
-                jeecs::typing::version_t m_version = 0;
-                size_t m_euid = 0;
-
-                jeecs::game_entity::entity_stat m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
-            };
 
         private:
 
@@ -122,10 +114,10 @@ namespace jeecs_impl
             const size_t            _m_entity_count;
             const size_t            _m_entity_size;
 
-            std::atomic_flag*       _m_entity_slot_states;
-            entity_meta*            _m_entities_meta;
-            arch_type*              _m_arch_type;
-            std::atomic_size_t      _m_free_count;
+            std::atomic_flag*           _m_entity_slot_states;
+            jeecs::game_entity::meta*   _m_entities_meta;
+            arch_type*                  _m_arch_type;
+            std::atomic_size_t          _m_free_count;
         public:
             arch_chunk* last; // for atomic_list;
         public:
@@ -139,7 +131,7 @@ namespace jeecs_impl
             {
                 assert(jeoffsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
 
-                _m_entities_meta = new entity_meta[_m_entity_count];
+                _m_entities_meta = new jeecs::game_entity::meta[_m_entity_count]{};
                 _m_entity_slot_states = new std::atomic_flag[_m_entity_count];
             }
             ~arch_chunk()
@@ -227,7 +219,7 @@ namespace jeecs_impl
             {
                 return _m_arch_type;
             }
-            inline const entity_meta* get_entity_meta()const noexcept
+            inline const jeecs::game_entity::meta* get_entity_meta()const noexcept
             {
                 return _m_entities_meta;
             }
@@ -2155,19 +2147,7 @@ void je_ecs_world_entity_remove_component(
         );
 }
 
-size_t je_arch_entity_meta_size()
-{
-    return sizeof(jeecs_impl::arch_type::arch_chunk::entity_meta);
-}
-size_t je_arch_entity_meta_state_offset()
-{
-    return offsetof(jeecs_impl::arch_type::arch_chunk::entity_meta, m_stat);
-}
-size_t je_arch_entity_meta_version_offset()
-{
-    return offsetof(jeecs_impl::arch_type::arch_chunk::entity_meta, m_version);
-}
-const void* je_arch_entity_meta_addr_in_chunk(void* chunk)
+const jeecs::game_entity::meta* je_arch_entity_meta_addr_in_chunk(void* chunk)
 {
     return std::launder(reinterpret_cast<jeecs_impl::arch_type::arch_chunk*>(chunk))->get_entity_meta();
 }
