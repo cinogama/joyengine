@@ -148,7 +148,7 @@ namespace jeecs
             jegl_shader
         */
         constexpr uint32_t PENDING_UNIFORM_LOCATION = (uint32_t)-2;
-        
+
         /*
         jeecs::typing::ALLIGN_BASE [常量]
         基本对齐参数，与平台相关。一般是当前平台最大内建类型的字节数
@@ -407,7 +407,7 @@ namespace jeecs
     */
     struct game_entity
     {
-        enum class entity_stat: uint8_t
+        enum class entity_stat : uint8_t
         {
             UNAVAILABLE = 0,    // Entity is destroied or just not ready,
             READY,          // Entity is OK, and just work as normal.
@@ -671,16 +671,15 @@ typedef enum je_typing_class
 } je_typing_class;
 
 /*
-je_typing_find_or_register [基本接口]
-向引擎的类型管理器注册一个类型及其基本信息，通过out_typeid向外给出类型的id
-    若类型是第一次注册，则返回true，否则返回false
-* 类型的名称是区分的唯一标记符，不同类型必须使用不同的名字
+je_typing_register [基本接口]
+向引擎的类型管理器注册一个类型及其基本信息，返回记录当前类型的类型地址
+* 类型的名称是区分的唯一标记符，不同类型必须使用不同的名字。
+* 必须通过 je_typing_unregister 在适当时机释放
 请参见：
     jeecs::typing::typeid_t
     je_typing_unregister
 */
-JE_API bool je_typing_find_or_register(
-    jeecs::typing::typeid_t* out_typeid,
+JE_API const jeecs::typing::type_info* je_typing_register(
     const char* _name,
     jeecs::typing::typehash_t _hash,
     size_t                    _size,
@@ -719,17 +718,25 @@ JE_API const jeecs::typing::type_info* je_typing_get_info_by_name(
     const char* type_name);
 
 /*
+je_typing_get_info_by_name [基本接口]
+通过类型的哈希获取类型信息，若给定的哈希不存在，返回nullptr
+请参见：
+    jeecs::typing::type_info
+*/
+JE_API const jeecs::typing::type_info* je_typing_get_info_by_hash(
+    jeecs::typing::typehash_t type_hash);
+
+/*
 je_typing_unregister [基本接口]
-向引擎的类型管理器要求解除注册类型id指定的类型信息
+向引擎的类型管理器要求解除注册指定的类型信息
 需要注意的是，一般而言引擎推荐遵循“谁注册谁释放”原则，请确保释放的
 类型是当前模块通过 je_typing_find_or_register 成功注册的类型。
-若释放的类型id不合法，则给出级别错误的日志信息。
+若释放的类型不合法，则给出级别错误的日志信息。
 请参见：
     jeecs::typing::typeid_t
-    je_typing_find_or_register
+    je_typing_register
 */
-JE_API void je_typing_unregister(
-    jeecs::typing::typeid_t _id);
+JE_API void je_typing_unregister(const jeecs::typing::type_info* tinfo);
 
 /*
 je_register_member [基本接口]
@@ -739,7 +746,7 @@ je_register_member [基本接口]
     jeecs::typing::type_info
 */
 JE_API void je_register_member(
-    jeecs::typing::typeid_t         _classid,
+    const jeecs::typing::type_info* _classtype,
     const jeecs::typing::type_info* _membertype,
     const char* _member_name,
     ptrdiff_t                       _member_offset);
@@ -1362,7 +1369,7 @@ jeecs_create_cache_file [基本接口]
     * 若 usecrc64 被指定为 0，则自动计算 filepath 指定文件的校验值
     * 否则直接使用 usecrc64 作为校验值
     * 打开后的缓存文件需要使用 jeecs_close_cache_file 关闭
-    * 使用 jeecs_write_cache_file 写入数据 
+    * 使用 jeecs_write_cache_file 写入数据
 请参见：
     jeecs_close_cache_file
     jeecs_write_cache_file
@@ -1402,14 +1409,14 @@ struct jegl_interface_config
 
     // 若MSAA值为0，则说明关闭超采样抗锯齿，
     // MSAA配置应该是2的整数次幂
-    size_t          m_msaa; 
+    size_t          m_msaa;
 
     size_t          m_width;
     size_t          m_height;
 
     size_t          m_fps;
 
-    const char*     m_title;
+    const char* m_title;
 };
 
 struct jegl_thread_notifier;
@@ -1423,16 +1430,16 @@ struct jegl_thread
 {
     using custom_thread_data_t = void*;
 
-    void*                       _m_thread; // std::thread
-    jegl_thread_notifier*       _m_thread_notifier;
-    void*                       _m_interface_handle;
-    void*                       _m_universe_instance;
+    void* _m_thread; // std::thread
+    jegl_thread_notifier* _m_thread_notifier;
+    void* _m_interface_handle;
+    void* _m_universe_instance;
 
     jeecs::typing::version_t    m_version;
 
     jegl_interface_config       m_config;
-    jegl_graphic_api*           m_apis;
-    void*                       m_stop_update; // std::atomic_bool
+    jegl_graphic_api* m_apis;
+    void* m_stop_update; // std::atomic_bool
     custom_thread_data_t        m_userdata;
 };
 
@@ -1677,7 +1684,7 @@ struct jegl_frame_buffer
 {
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
-    attachment_t*   m_output_attachments;
+    attachment_t* m_output_attachments;
     size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
@@ -1691,7 +1698,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t*    m_buffer;
+    uint8_t* m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
@@ -1712,7 +1719,7 @@ struct jegl_resource
     };
 
     using jegl_custom_resource_t = void*;
-    enum type: uint8_t
+    enum type : uint8_t
     {
         VERTEX,         // Mesh
         TEXTURE,        // Texture
@@ -1738,7 +1745,7 @@ struct jegl_resource
     resource_handle m_handle;
 
     const char* m_path;
-    uint32_t*   m_raw_ref_count;
+    uint32_t* m_raw_ref_count;
     union
     {
         jegl_custom_resource_t m_custom_resource;
@@ -1760,7 +1767,7 @@ struct jegl_graphic_api
     using shutdown_interface_func_t = void(*)(jegl_thread*, jegl_thread::custom_thread_data_t, bool);
 
     using update_interface_func_t = bool(*)(jegl_thread*);
-    
+
     using init_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
@@ -1899,8 +1906,8 @@ jegl_create_framebuf [基本接口]
 JE_API jegl_resource* jegl_create_framebuf(
     size_t                          width,
     size_t                          height,
-    const jegl_texture::format*     attachment_formats,
-    const jegl_texture::sampling*   attachment_samlings,
+    const jegl_texture::format* attachment_formats,
+    const jegl_texture::sampling* attachment_samlings,
     size_t                          attachment_count);
 
 typedef struct je_stb_font_data je_font;
@@ -1918,10 +1925,10 @@ char_texture_updater 用于指示文字纹理创建后所需的预处理方法�
     je_font_free
 */
 JE_API je_font* je_font_load(
-    const char*             font_path,
-    float                   scalex, 
-    float                   scaley, 
-    jegl_texture::sampling  samp, 
+    const char* font_path,
+    float                   scalex,
+    float                   scaley,
+    jegl_texture::sampling  samp,
     size_t                  board_blank_size_x,
     size_t                  board_blank_size_y,
     je_font_char_updater_t  char_texture_updater);
@@ -1947,7 +1954,7 @@ jegl_set_able_shared_resources [基本接口]
     * 若需要同时使用多个图形线程（上下文），请关闭共享以避免资源读取问题。
     * 引擎默认关闭此机制，用于保证行为的正确性，但编辑器会默认打开此机制以节省资源
     * 若在资源缓存启用时需要更新指定资源（即强制重新加载），请使用
-        jegl_mark_shared_resources_outdated 
+        jegl_mark_shared_resources_outdated
 请参见：
     jegl_mark_shared_resources_outdated
 */
@@ -2594,14 +2601,14 @@ jeal_get_all_devices [基本接口]
     * 枚举设备可能是一个耗时操作，因此请不要在性能敏感的地方频繁调用此函数
     * 这不是线程安全函数，任何设备实例都可能在此函数调用后因为移除而失效
 */
-JE_API jeal_device**    jeal_get_all_devices(size_t* out_len);
+JE_API jeal_device** jeal_get_all_devices(size_t* out_len);
 
 /*
 jeal_device_name [基本接口]
 获取某个设备的名称
     * 仅用于调试
 */
-JE_API const char*      jeal_device_name(jeal_device* device);
+JE_API const char* jeal_device_name(jeal_device* device);
 
 /*
 jeal_using_device [基本接口]
@@ -2614,7 +2621,7 @@ JE_API bool             jeal_using_device(jeal_device* device);
 jeal_load_buffer_from_wav [基本接口]
 从wav文件加载一个波形
 */
-JE_API jeal_buffer*     jeal_load_buffer_from_wav(const char* filename);
+JE_API jeal_buffer* jeal_load_buffer_from_wav(const char* filename);
 
 /*
 jeal_close_buffer [基本接口]
@@ -2639,7 +2646,7 @@ JE_API size_t           jeal_buffer_byte_rate(jeal_buffer* buffer);
 jeal_open_source [基本接口]
 创建一个声源
 */
-JE_API jeal_source*     jeal_open_source();
+JE_API jeal_source* jeal_open_source();
 
 /*
 jeal_close_source [基本接口]
@@ -3420,7 +3427,7 @@ namespace jeecs
                 using _true_type = std::true_type;
 
                 template<typename V>
-                static auto _tester(int)->_true_type<decltype(new V())>;
+                static auto _tester(int) -> _true_type<decltype(new V())>;
                 template<typename V>
                 static std::false_type _tester(...);
 
@@ -3517,7 +3524,7 @@ namespace jeecs
             has_specify_function(CommitUpdate);
 
 #undef has_specify_function
-         
+
             static void state_update(void* _ptr)
             {
                 if constexpr (has_StateUpdate_function<T>::value)
@@ -3595,12 +3602,12 @@ namespace jeecs
                 delete ptr;
             }
 
-            T*                  m_resource = nullptr;
-            mutable count_t*    m_count = nullptr;
+            T* m_resource = nullptr;
+            mutable count_t* m_count = nullptr;
             free_func_t         m_freer = nullptr;
 
-            inline const static 
-            count_t*            _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
+            inline const static
+                count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
 
             static count_t* _alloc_counter()
             {
@@ -3924,21 +3931,11 @@ namespace jeecs
             {
                 friend struct type_info;
                 _type_unregister_guard() = default;
-                std::mutex            _m_self_registed_typeid_mx;
-                std::vector<typeid_t> _m_self_registed_typeid;
-
-            public:
-                ~_type_unregister_guard()
-                {
-                    std::lock_guard g1(_m_self_registed_typeid_mx);
-                    for (typeid_t typeindex : _m_self_registed_typeid)
-                        je_typing_unregister(typeindex);
-                    _m_self_registed_typeid.clear();
-                    _m_shutdown_flag = true;
-                }
+                mutable std::mutex      _m_self_registed_typeid_mx;
+                std::unordered_map<jeecs::typing::typeid_t, const jeecs::typing::type_info*> _m_self_registed_typeinfo;
 
                 template<typename T>
-                typeid_t _register_or_get_type_id(const char* _typename, bool* first_init)
+                typeid_t _register_or_get_type_id(const char* _typename)
                 {
                     bool is_basic_type = false;
                     if (nullptr == _typename)
@@ -3955,10 +3952,8 @@ namespace jeecs
                             ? je_typing_class::JE_SYSTEM
                             : je_typing_class::JE_COMPONENT);
 
-                    typeid_t id = INVALID_TYPE_ID;
-
-                    if (je_typing_find_or_register(
-                        &id,
+                    // store to list for unregister
+                    auto* local_type_info = je_typing_register(
                         _typename,
                         basic::type_hash<T>(),
                         sizeof(T),
@@ -3975,31 +3970,60 @@ namespace jeecs
                         basic::default_functions<T>::late_update,
                         basic::default_functions<T>::apply_update,
                         basic::default_functions<T>::commit_update,
-                        current_type))
+                        current_type);
+                    do
                     {
-                        *first_init = true;
-                        // store to list for unregister
                         std::lock_guard g1(_m_self_registed_typeid_mx);
-                        _m_self_registed_typeid.push_back(id);
-                    }
-                    else
-                        *first_init = false;
-                    return id;
+
+                        assert(_m_self_registed_typeinfo.find(local_type_info->m_id) == _m_self_registed_typeinfo.end());
+                        _m_self_registed_typeinfo[local_type_info->m_id] = local_type_info;
+                    
+                    } while (0);
+                    return local_type_info->m_id;
+                }
+
+            public:
+                void clear()
+                {
+                    std::lock_guard g1(_m_self_registed_typeid_mx);
+                    for (auto& [_, local_type_info] : _m_self_registed_typeinfo)
+                        je_typing_unregister(local_type_info);
+                    _m_self_registed_typeinfo.clear();
+                    _m_shutdown_flag = true;
+                }
+                ~_type_unregister_guard()
+                {
+                    clear();
+                }
+
+                const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id) const
+                {
+                    std::lock_guard g1(_m_self_registed_typeid_mx);
+                    return _m_self_registed_typeinfo.at(id);
                 }
             };
             inline static _type_unregister_guard _type_guard;
 
         public:
+            static const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id)
+            {
+                return _type_guard.get_local_type_info(id);
+            }
+
             static void unregister_all_type_in_shutdown()
             {
-                _type_guard.~_type_unregister_guard();
+                _type_guard.clear();
             }
             template<typename T>
             inline static typeid_t id(const char* _typename)
             {
                 assert(!_m_shutdown_flag);
                 bool first_init = false;
-                static typeid_t registed_typeid = _type_guard._register_or_get_type_id<T>(_typename, &first_init);
+                static typeid_t registed_typeid = [&]() {
+                    first_init = true;
+                    return _type_guard._register_or_get_type_id<T>(_typename);
+                }();
+
                 if (first_init)
                 {
                     if constexpr (sfinae_has_ref_register<T>::value)
@@ -4011,6 +4035,7 @@ namespace jeecs
                                 "T::JERefRegsiter must be static & callable with no arguments.");
                     }
                 }
+
                 return registed_typeid;
             }
 
@@ -4120,7 +4145,8 @@ namespace jeecs
 
             ptrdiff_t member_offset = reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
             je_register_member(
-                type_info::id<ClassT>(typeid(ClassT).name()),
+                jeecs::typing::type_info::get_local_type_info(
+                    type_info::id<ClassT>(typeid(ClassT).name())),
                 membt,
                 membname,
                 member_offset);
@@ -4504,7 +4530,7 @@ namespace jeecs
                                     f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
                                 else
                                     (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)
-                                        (_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                    (_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
                             }
                         }
                         cur_chunk = je_arch_next_chunk(cur_chunk);
@@ -4773,7 +4799,7 @@ namespace jeecs
         {
             return _m_universe_addr;
         }
-       
+
     public:
         static game_universe create_universe()
         {
@@ -6217,7 +6243,7 @@ namespace jeecs
                 std::vector<jegl_texture::format> formats;
                 std::vector<jegl_texture::sampling> samplings;
 
-                for (const auto & [format, sampling] : attachment)
+                for (const auto& [format, sampling] : attachment)
                 {
                     formats.push_back(format);
                     samplings.push_back(sampling);
@@ -6228,7 +6254,7 @@ namespace jeecs
                     return new framebuffer(res);
                 return nullptr;
             }
-       
+
             basic::resource<texture> get_attachment(size_t index) const
             {
                 if (index < resouce()->m_raw_framebuf_data->m_attachment_count)
@@ -6464,14 +6490,14 @@ namespace jeecs
             }
         public:
             static font* load(
-                const std::string&      fontfile, 
-                size_t                  size, 
-                jegl_texture::sampling  samp = jegl_texture::sampling::DEFAULT, 
-                size_t                  board_size = 0, 
+                const std::string& fontfile,
+                size_t                  size,
+                jegl_texture::sampling  samp = jegl_texture::sampling::DEFAULT,
+                size_t                  board_size = 0,
                 je_font_char_updater_t  char_texture_updater = nullptr)
             {
                 auto* font_res = je_font_load(
-                    fontfile.c_str(), (float)size, (float)size, 
+                    fontfile.c_str(), (float)size, (float)size,
                     samp, board_size, board_size, char_texture_updater);
 
                 if (font_res == nullptr)
@@ -6789,7 +6815,7 @@ namespace jeecs
         */
         struct BasePipelineInterface : game_system
         {
-            graphic_uhost*                  _m_graphic_host;
+            graphic_uhost* _m_graphic_host;
             std::vector<rendchain_branch*>  _m_rchain_pipeline;
             size_t                          _m_this_frame_allocate_rchain_pipeline_count;
 
@@ -6875,7 +6901,7 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(source);
 
-            jeal_source*            _m_audio_source;
+            jeal_source* _m_audio_source;
             basic::resource<buffer> _m_playing_buffer;
 
             source(jeal_source* audio_source)
@@ -6896,7 +6922,7 @@ namespace jeecs
             }
             inline static basic::resource<source> create()
             {
-                auto * src = jeal_open_source();
+                auto* src = jeal_open_source();
                 assert(src != nullptr);
                 return new source(src);
             }
@@ -8370,7 +8396,7 @@ namespace jeecs
             type_info::of<Audio::Playing>("Audio::Playing");
 
             type_info::of<Scene::MapTile>("Scene::MapTile");
-            
+
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();
         }

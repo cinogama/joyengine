@@ -256,7 +256,7 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
 
 void je_script_update_woolang_api()
 {
-    // 获取所有的BasicType，为这些类型生成对应的Woolang类型
+    // 鑾峰彇鎵�鏈夌殑BasicType锛屼负杩欎簺绫诲瀷鐢熸垚瀵瑰簲鐨刉oolang绫诲瀷
 
     // std::string wooapi_basic_type_declear = "";
     // TODO;

@@ -10,6 +10,7 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 
 namespace jeecs_impl
@@ -18,6 +19,9 @@ namespace jeecs_impl
     {
         JECS_DISABLE_MOVE_AND_COPY(type_info_holder);
         std::mutex                              _m_type_holder_mx;
+
+        std::unordered_map<jeecs::typing::type_info*, std::vector<jeecs::typing::type_info*>>
+            _m_registered_typeinfo;
 
         std::vector<jeecs::typing::type_info*>  _m_type_holder_list;
         std::unordered_map<jeecs::typing::typehash_t, jeecs::typing::typeid_t>  _m_type_hash_id_mapping;
@@ -35,9 +39,23 @@ namespace jeecs_impl
             static type_info_holder holder;
             return &holder;
         }
+
+        inline jeecs::typing::type_info* _record_typeinfo(jeecs::typing::typeid_t id, jeecs::typing::type_info* tinfo)
+        {
+            assert(id != 0);
+            auto* type_info = _m_type_holder_list[id - 1];
+            auto& registered_typeinfo_list = _m_registered_typeinfo[type_info];
+
+            assert(type_info != nullptr && 
+                std::find(
+                    registered_typeinfo_list.begin(),
+                    registered_typeinfo_list.end(), tinfo) == registered_typeinfo_list.end());
+
+            registered_typeinfo_list.push_back(tinfo);
+            return tinfo;
+        }
     public:
-        bool register_type(
-            jeecs::typing::typeid_t* out_typeid,
+        jeecs::typing::type_info* register_type(
             const char* _name,
             jeecs::typing::typehash_t _hash,
             size_t                    _size,
@@ -56,29 +74,7 @@ namespace jeecs_impl
             jeecs::typing::update_func_t    _commit_update,
             je_typing_class                 _typecls) noexcept
         {
-            std::lock_guard g1(_m_type_holder_mx);
-
-            // 1. Find typeid with hash
-            auto fnd_with_hash = _m_type_hash_id_mapping.find(_hash);
-            if (fnd_with_hash != _m_type_hash_id_mapping.end())
-            {
-                *out_typeid = fnd_with_hash->second;
-                return false;
-            }
-
-            // 2. Find typeid with name
-            auto fnd_with_name = _m_type_name_id_mapping.find(_name);
-            if (fnd_with_name != _m_type_name_id_mapping.end())
-            {
-                *out_typeid = fnd_with_name->second;
-
-                // Register alias-hash
-                _m_type_hash_id_mapping[_hash] = *out_typeid;
-                jeecs::debug::logwarn("Type '%s' with different type-hash. alias-hash has been created.");
-                return false;
-            }
-
-            // Not found! create!
+            // 0. Create type_info instance
             jeecs::typing::type_info* tinfo = new jeecs::typing::type_info();
             tinfo->m_typename = jeecs::basic::make_new_string(_name);
             tinfo->m_size = _size;
@@ -103,26 +99,41 @@ namespace jeecs_impl
             tinfo->m_commit_update = _commit_update;
             tinfo->m_member_types = nullptr;
 
-            // Ok Find a place to store~
-            auto holder_fnd = std::find(
-                _m_type_holder_list.begin(),
-                _m_type_holder_list.end(),
-                nullptr);
-            if (holder_fnd != _m_type_holder_list.end())
+            std::lock_guard g1(_m_type_holder_mx);
+
+            // 1. Find typeid with hash
+            if (auto fnd_with_hash = _m_type_hash_id_mapping.find(_hash); fnd_with_hash != _m_type_hash_id_mapping.end())
             {
-                *holder_fnd = tinfo;
-                *out_typeid = 1 + (jeecs::typing::typeid_t)(holder_fnd - _m_type_holder_list.begin());
+                tinfo->m_id = fnd_with_hash->second;
+            }
+            // 2. Find typeid with name
+            else if (auto fnd_with_name = _m_type_name_id_mapping.find(_name); fnd_with_name != _m_type_name_id_mapping.end())
+            {
+                tinfo->m_id = fnd_with_name->second;
+
+                // Register alias-hash
+                _m_type_hash_id_mapping[_hash] = tinfo->m_id;
+                jeecs::debug::logwarn("Type '%s' with different type-hash. alias-hash has been created.");
             }
             else
             {
-                _m_type_holder_list.push_back(tinfo);
-                *out_typeid = _m_type_holder_list.size();
+                // 3. No such type, append.
+                auto holder_fnd = std::find(_m_type_holder_list.begin(), _m_type_holder_list.end(), nullptr);
+                if (holder_fnd != _m_type_holder_list.end())
+                {
+                    *holder_fnd = tinfo;
+                    tinfo->m_id = 1 + (jeecs::typing::typeid_t)(holder_fnd - _m_type_holder_list.begin());
+                }
+                else
+                {
+                    _m_type_holder_list.push_back(tinfo);
+                    tinfo->m_id = _m_type_holder_list.size();
+                }
+                _m_type_hash_id_mapping[_hash] = tinfo->m_id;
+                _m_type_name_id_mapping[_name] = tinfo->m_id;
             }
-            _m_type_hash_id_mapping[_hash] = *out_typeid;
-            _m_type_name_id_mapping[_name] = *out_typeid;
-            tinfo->m_id = *out_typeid;
 
-            return true;
+            return _record_typeinfo(tinfo->m_id, tinfo);
         }
 
         jeecs::typing::type_info* get_info_by_id(jeecs::typing::typeid_t id) noexcept
@@ -135,7 +146,6 @@ namespace jeecs_impl
             }
             return nullptr;
         }
-
         jeecs::typing::type_info* get_info_by_name(const char* name) noexcept
         {
             if (name)
@@ -147,7 +157,14 @@ namespace jeecs_impl
             }
             return nullptr;
         }
-
+        jeecs::typing::type_info* get_info_by_hash(jeecs::typing::typehash_t typehash) noexcept
+        {
+            std::lock_guard g1(_m_type_holder_mx);
+            auto fnd = _m_type_hash_id_mapping.find(typehash);
+            if (fnd != _m_type_hash_id_mapping.end())
+                return _m_type_holder_list[fnd->second - 1];
+            return nullptr;
+        }
         std::vector<jeecs::typing::type_info*> get_all_registed_types() noexcept
         {
             std::lock_guard g1(_m_type_holder_mx);
@@ -155,22 +172,21 @@ namespace jeecs_impl
         }
 
         // ATTENTION: This function do not promise for thread safe for adding new member.
-        void register_member_by_id(jeecs::typing::typeid_t classid,
+        void register_member(
+            const jeecs::typing::type_info* _classtype,
             const jeecs::typing::type_info* _membertype,
             const char* _member_name,
             ptrdiff_t _member_offset) noexcept
         {
             jeecs::typing::member_info* meminfo = new jeecs::typing::member_info();
 
-            auto* classtype = get_info_by_id(classid);
-
-            meminfo->m_class_type = classtype;
+            meminfo->m_class_type = _classtype;
             meminfo->m_member_type = _membertype;
             meminfo->m_member_name = jeecs::basic::make_new_string(_member_name);
             meminfo->m_member_offset = _member_offset;
             meminfo->m_next_member = nullptr;
 
-            auto** m_new_member_ptr = const_cast<jeecs::typing::member_info**>(&classtype->m_member_types);
+            auto** m_new_member_ptr = const_cast<jeecs::typing::member_info**>(&_classtype->m_member_types);
             while (*m_new_member_ptr)
                 m_new_member_ptr = &((*m_new_member_ptr)->m_next_member);
 
@@ -191,29 +207,65 @@ namespace jeecs_impl
             }
         }
 
-        void unregister_by_id(jeecs::typing::typeid_t id) noexcept
+        void _free_type_info(jeecs::typing::type_info* typeinfo)
         {
-            if (id && id != jeecs::typing::INVALID_TYPE_ID)
+            if (typeinfo->m_typename != nullptr)
+                je_mem_free((void*)typeinfo->m_typename);
+            unregister_member_info(typeinfo);
+            delete typeinfo;
+        }
+
+        void unregister_type(const jeecs::typing::type_info* tinfo) noexcept
+        {
+            std::lock_guard g1(_m_type_holder_mx);
+
+            assert(tinfo != nullptr);
+            if (tinfo->m_id && tinfo->m_id != jeecs::typing::INVALID_TYPE_ID)
             {
-                std::lock_guard g1(_m_type_holder_mx);
-                if (id <= _m_type_holder_list.size())
+                auto id = tinfo->m_id;
+
+                assert(id != 0 && id <= _m_type_holder_list.size());
+                if (auto*& current_type_info = _m_type_holder_list[id - 1])
                 {
-                    jeecs::typing::type_info* typeinfo = nullptr;
-                    std::swap(typeinfo, _m_type_holder_list[id - 1]);
+                    // 1. Free current type info from list;
+                    auto& registered_typeinfo = _m_registered_typeinfo[current_type_info];
+                    auto fnd = std::find(
+                        registered_typeinfo.begin(),
+                        registered_typeinfo.end(),
+                        const_cast<jeecs::typing::type_info*>(tinfo));
 
-                    if (typeinfo)
+                    if (fnd == registered_typeinfo.end())
+                        jeecs::debug::logerr("Type info: '%p' is invalid, please check.", tinfo);
+                    else
                     {
-                        _m_type_hash_id_mapping.erase(typeinfo->m_hash);
-                        _m_type_name_id_mapping.erase(typeinfo->m_typename);
-                        je_mem_free((void*)typeinfo->m_typename);
+                        bool need_update_current_type_info = fnd == registered_typeinfo.begin();
 
-                        unregister_member_info(typeinfo);
-                        delete typeinfo;
-                        return;
+                        if (*fnd != current_type_info)
+                            _free_type_info(*fnd);
+
+                        registered_typeinfo.erase(fnd);
+
+                        if (registered_typeinfo.empty())
+                        {
+                            // All type info has been freed, close current type info.
+                            _m_registered_typeinfo.erase(current_type_info);
+                            _m_type_hash_id_mapping.erase(current_type_info->m_hash);
+                            _m_type_name_id_mapping.erase(current_type_info->m_typename);
+                            // current_type_info->m_typename has been freed.
+                            current_type_info->m_typename = nullptr;
+                            _free_type_info(current_type_info);
+                            current_type_info = nullptr;
+                        }
+                        else if (need_update_current_type_info)
+                        {
+                            // Update current type info.
+                            *current_type_info = *registered_typeinfo.front();
+                        }
                     }
+                    return;
                 }
             }
-            jeecs::debug::logerr("Type id: '%zu' is invalid, please check.", (size_t)id);
+            jeecs::debug::logerr("Type info: '%p' is invalid, please check.", tinfo);
         }
 
 
@@ -230,7 +282,8 @@ namespace jeecs_impl
             void(*m_unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*);
         };
 
-        std::unordered_map<const jeecs::typing::type_info*, parser_functions>
+        TODO;
+        std::unordered_map<const jeecs::typing::type_info*, const parser_functions**>
             _m_type_parsers;
 
         script_native_type_parser_holder() = default;
@@ -242,7 +295,7 @@ namespace jeecs_impl
             return &holder;
         }
 
-        inline bool try_register_type_parser(
+        inline void* register_type_parser(
             const jeecs::typing::type_info* type,
             void(*parser/* convert cpp value to woolang value */)(wo_vm, wo_value, const void*),
             void(*unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*))
@@ -264,7 +317,7 @@ namespace jeecs_impl
 
             return true;
         }
-        inline void unregister_type_parser(const jeecs::typing::type_info* type)
+        inline void unregister_type_parser(const jeecs::typing::type_info* type, void* handle)
         {
             std::lock_guard g1(_m_lock);
             auto fnd = _m_type_parsers.find(type);
@@ -278,8 +331,7 @@ namespace jeecs_impl
     };
 }
 
-bool je_typing_find_or_register(
-    jeecs::typing::typeid_t* out_typeid,
+const jeecs::typing::type_info* je_typing_register(
     const char* _name,
     jeecs::typing::typehash_t _hash,
     size_t                    _size,
@@ -300,7 +352,6 @@ bool je_typing_find_or_register(
 {
     return
         jeecs_impl::type_info_holder::holder()->register_type(
-            out_typeid,
             _name,
             _hash,
             _size,
@@ -332,20 +383,25 @@ const jeecs::typing::type_info* je_typing_get_info_by_name(
     return jeecs_impl::type_info_holder::holder()->get_info_by_name(type_name);
 }
 
-void je_typing_unregister(
-    jeecs::typing::typeid_t _id)
+const jeecs::typing::type_info* je_typing_get_info_by_hash(
+    jeecs::typing::typehash_t type_hash)
 {
-    jeecs_impl::type_info_holder::holder()->unregister_by_id(_id);
+    return jeecs_impl::type_info_holder::holder()->get_info_by_hash(type_hash);
+}
+
+void je_typing_unregister(const jeecs::typing::type_info* tinfo)
+{
+    jeecs_impl::type_info_holder::holder()->unregister_type(tinfo);
 }
 
 void je_register_member(
-    jeecs::typing::typeid_t         _classid,
+    const jeecs::typing::type_info*       _classtype,
     const jeecs::typing::type_info* _membertype,
     const char* _member_name,
     ptrdiff_t                       _member_offset)
 {
     jeecs_impl::type_info_holder::holder()
-        ->register_member_by_id(_classid, _membertype, _member_name, _member_offset);
+        ->register_member(_classtype, _membertype, _member_name, _member_offset);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -356,7 +412,7 @@ bool je_script_try_register_type_parser(
     void(*unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*))
 {
     return jeecs_impl::script_native_type_parser_holder::holder()
-        ->try_register_type_parser(type, parser, unparser);
+        ->register_type_parser(type, parser, unparser);
 }
 
 void je_script_unregister_type_parser(const jeecs::typing::type_info* type)
