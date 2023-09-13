@@ -981,7 +981,7 @@ je_ecs_world_destroy [基本接口]
         2. 销毁所有实体
         3. 执行最后命令缓冲区更新
         4. 被宇宙从世界列表中移除
-    * 向一个正在销毁中的实体中创建实体或添加世界是无效的
+    * 向一个正在销毁中的世界中创建实体或添加系统是无效的
 请参见：
     je_ecs_world_add_system_instance
     je_ecs_world_create_entity_with_components

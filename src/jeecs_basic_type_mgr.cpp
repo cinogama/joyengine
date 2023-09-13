@@ -16,6 +16,7 @@ namespace jeecs_impl
 {
     class type_info_holder
     {
+        JECS_DISABLE_MOVE_AND_COPY(type_info_holder);
         std::mutex                              _m_type_holder_mx;
 
         std::vector<jeecs::typing::type_info*>  _m_type_holder_list;
@@ -217,6 +218,64 @@ namespace jeecs_impl
 
 
     };
+    class script_native_type_parser_holder
+    {
+        JECS_DISABLE_MOVE_AND_COPY(script_native_type_parser_holder);
+
+        std::shared_mutex _m_lock;
+
+        struct parser_functions
+        {
+            void(*m_parser/* convert cpp value to woolang value */)(wo_vm, wo_value, const void*);
+            void(*m_unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*);
+        };
+
+        std::unordered_map<const jeecs::typing::type_info*, parser_functions>
+            _m_type_parsers;
+
+        script_native_type_parser_holder() = default;
+
+    public:
+        inline static script_native_type_parser_holder* holder() noexcept
+        {
+            static script_native_type_parser_holder holder;
+            return &holder;
+        }
+
+        inline bool try_register_type_parser(
+            const jeecs::typing::type_info* type,
+            void(*parser/* convert cpp value to woolang value */)(wo_vm, wo_value, const void*),
+            void(*unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*))
+        {
+            do
+            {
+                std::shared_lock sg1(_m_lock);
+                if (_m_type_parsers.find(type) != _m_type_parsers.end())
+                    return false;
+            } while (0);
+
+            std::lock_guard g1(_m_lock);
+            if (_m_type_parsers.find(type) != _m_type_parsers.end())
+                return false;
+
+            auto& parsers = _m_type_parsers[type];
+            parsers.m_parser = parser;
+            parsers.m_unparser = unparser;
+
+            return true;
+        }
+        inline void unregister_type_parser(const jeecs::typing::type_info* type)
+        {
+            std::lock_guard g1(_m_lock);
+            auto fnd = _m_type_parsers.find(type);
+            if (fnd != _m_type_parsers.end())
+            {
+                _m_type_parsers.erase(fnd);
+                return;
+            }
+            jeecs::debug::logerr("Type: '%s' has no parser, please check.", type->m_typename);
+        }
+    };
 }
 
 bool je_typing_find_or_register(
@@ -287,6 +346,23 @@ void je_register_member(
 {
     jeecs_impl::type_info_holder::holder()
         ->register_member_by_id(_classid, _membertype, _member_name, _member_offset);
+}
+
+///////////////////////////////////////////////////////////////////////////
+
+bool je_script_try_register_type_parser(
+    const jeecs::typing::type_info* type,
+    void(*parser/* convert cpp value to woolang value */)(wo_vm, wo_value, const void*),
+    void(*unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*))
+{
+    return jeecs_impl::script_native_type_parser_holder::holder()
+        ->try_register_type_parser(type, parser, unparser);
+}
+
+void je_script_unregister_type_parser(const jeecs::typing::type_info* type)
+{
+    return jeecs_impl::script_native_type_parser_holder::holder()
+        ->unregister_type_parser(type);
 }
 
 ///////////////////////////////////////////////////////////////////////////
