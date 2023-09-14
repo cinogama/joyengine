@@ -8463,7 +8463,7 @@ namespace jeecs
                 wo_set_int(value, (wo_integer_t)*v);
             };
             auto integer_uniform_parser_w2c = [](wo_vm, wo_value value, auto* v) {
-                *v = (std::remove_reference<decltype(*v)>::type)wo_int(value);
+                *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
             };
             typing::register_script_parser<int8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
             typing::register_script_parser<int16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
