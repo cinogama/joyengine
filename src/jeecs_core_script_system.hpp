@@ -253,12 +253,3 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
 
     return wo_ret_void(vm);
 }
-
-void je_script_update_woolang_api()
-{
-    // 获取所有的BasicType，为这些类型生成对应的Woolang类型
-
-    // std::string wooapi_basic_type_declear = "";
-    // TODO;
-
-}

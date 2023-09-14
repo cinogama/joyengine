@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
+#include <optional>
 
 namespace jeecs_impl
 {
@@ -98,8 +99,7 @@ namespace jeecs_impl
             tinfo->m_apply_update = _apply_update;
             tinfo->m_commit_update = _commit_update;
             tinfo->m_member_types = nullptr;
-            tinfo->m_script_parse_c2w = nullptr;
-            tinfo->m_script_parse_w2c = nullptr;
+            tinfo->m_script_parser_info = nullptr;
 
             std::lock_guard g1(_m_type_holder_mx);
 
@@ -234,8 +234,10 @@ namespace jeecs_impl
 
                         je_mem_free((void*)(*fnd)->m_typename);
                         unregister_member_info(*fnd);
+                        unregister_script_parser(*fnd);
 
                         if (*fnd != current_type_info)
+                            // First registed type info, will reuse.
                             delete (*fnd);
 
                         registered_typeinfo.erase(fnd);
@@ -262,14 +264,26 @@ namespace jeecs_impl
             }
             jeecs::debug::logerr("Type info: '%p' is invalid, please check.", tinfo);
         }
-
-        void register_script_parse_func(
+        void unregister_script_parser(jeecs::typing::type_info* classtype) noexcept
+        {
+            je_mem_free((void*)classtype->m_script_parser_info->m_woolang_typename);
+            je_mem_free((void*)classtype->m_script_parser_info->m_woolang_typedecl);
+            delete classtype->m_script_parser_info;
+        }
+        void register_script_parser(
             const jeecs::typing::type_info* tinfo,
             jeecs::typing::parse_c2w_func_t c2w,
-            jeecs::typing::parse_w2c_func_t w2c)
+            jeecs::typing::parse_w2c_func_t w2c,
+            const char* woolang_typename,
+            const char* woolang_typedecl)
         {
-            *const_cast<jeecs::typing::parse_c2w_func_t* volatile>(&tinfo->m_script_parse_c2w) = c2w;
-            *const_cast<jeecs::typing::parse_w2c_func_t* volatile>(&tinfo->m_script_parse_w2c) = w2c;
+            auto* sinfo = new jeecs::typing::script_parser_info;
+            sinfo->m_script_parse_c2w = c2w;
+            sinfo->m_script_parse_w2c = w2c;
+            sinfo->m_woolang_typename = jeecs::basic::make_new_string(woolang_typename);
+            sinfo->m_woolang_typedecl = jeecs::basic::make_new_string(woolang_typedecl);
+
+            const_cast<jeecs::typing::script_parser_info* volatile&>(tinfo->m_script_parser_info) = sinfo;
         }
     };
 }
@@ -350,10 +364,94 @@ void je_register_member(
 void je_register_script_parser(
     const jeecs::typing::type_info* _type,
     jeecs::typing::parse_c2w_func_t c2w,
-    jeecs::typing::parse_w2c_func_t w2c)
+    jeecs::typing::parse_w2c_func_t w2c,
+    const char* woolang_typename,
+    const char* woolang_typedecl)
 {
     jeecs_impl::type_info_holder::holder()
-        ->register_script_parse_func(_type, c2w, w2c);
+        ->register_script_parser(
+            _type, 
+            c2w, 
+            w2c, 
+            woolang_typename, 
+            woolang_typedecl);
+}
+
+
+void je_update_woolang_api()
+{
+    // 1. 获取所有的BasicType，为这些类型生成对应的Woolang类型
+    std::string woolang_parsing_type_decl = "// (C)Cinogama project.\n;\n";
+
+    std::unordered_set<std::string> generated_types;
+
+    auto ts = jeecs_impl::type_info_holder::holder()->get_all_registed_types();
+    for (auto* typeinfo : ts)
+    {
+        // 1. Declear type parsers
+        auto* script_parser_info = typeinfo->m_script_parser_info;
+
+        if (script_parser_info == nullptr
+            || generated_types.find(
+                script_parser_info->m_woolang_typename) != generated_types.end())
+            continue;
+
+        generated_types.insert(script_parser_info->m_woolang_typename);
+        woolang_parsing_type_decl +=
+            std::string("// Declear of '") + script_parser_info->m_woolang_typename + "'\n"
+            + script_parser_info->m_woolang_typedecl + "\n\n";
+    }
+
+    std::string woolang_component_type_decl =
+        R"(// (C)Cinogama project.
+import je;
+import je::api::type;
+
+using member<T> = handle
+{
+    extern("?", "?")
+    public func get<T>(self: member<T>, comp: je::component)=> T;
+
+    extern("?", "?")
+    public func set<T>(self: member<T>, comp: je::component, val: T)=> void;
+}
+)";
+    for (auto* typeinfo : ts)
+    {
+        // 1. Declear component
+        if (typeinfo->m_type_class == je_typing_class::JE_COMPONENT)
+        {
+            // Read namespace of typeclass
+            std::string tname = typeinfo->m_typename;
+            size_t index = tname.find_last_of(':');
+
+            std::optional<std::string> tnamespace = std::nullopt;
+            if (index + 1 < tname.size() && index >= 1)
+            {
+                tnamespace = std::make_optional(tname.substr(0, index - 1));
+                tname = tname.substr(index + 1);
+            }
+
+            woolang_component_type_decl += std::string("// Declear of '") + typeinfo->m_typename + "'\n";
+            if (tnamespace)
+                woolang_component_type_decl += "namespace " + tnamespace.value() + "{";
+            
+            woolang_component_type_decl += "using " + tname + " = struct{};";
+
+            if (tnamespace)
+                woolang_component_type_decl += "}\n";
+            woolang_component_type_decl += "\n";
+            /*
+            public using Component = struct{
+                member: interface<Type>,
+                ...
+            };
+            */
+        }
+    }
+
+    wo_virtual_source("je/api/type.wo", woolang_parsing_type_decl.c_str(), true);
+    wo_virtual_source("je/api/components.wo", woolang_component_type_decl.c_str(), true);
 }
 
 ///////////////////////////////////////////////////////////////////////////

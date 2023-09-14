@@ -764,7 +764,17 @@ je_register_script_parser [基本接口]
 JE_API void je_register_script_parser(
     const jeecs::typing::type_info* _type,
     jeecs::typing::parse_c2w_func_t c2w,
-    jeecs::typing::parse_w2c_func_t w2c);
+    jeecs::typing::parse_w2c_func_t w2c,
+    const char* woolang_typename,
+    const char* woolang_typedecl);
+
+/*
+je_update_woolang_api [基本接口]
+根据类型信息重新生成 je/api/* 的接口脚本
+请参见：
+    jeecs::typing::type_info
+*/
+JE_API void je_update_woolang_api();
 
 ////////////////////// ARCH //////////////////////
 
@@ -3909,6 +3919,18 @@ namespace jeecs
         };
 
         /*
+        jeecs::typing::script_parser_info [类型]
+        用于储存与woolang进行转换的方法和类型信息
+        */
+        struct script_parser_info
+        {
+            parse_c2w_func_t m_script_parse_c2w;
+            parse_w2c_func_t m_script_parse_w2c;
+            const char* m_woolang_typename;
+            const char* m_woolang_typedecl;
+        };
+
+        /*
         jeecs::typing::type_info [类型]
         用于储存类型信息和基本接口
         */
@@ -3939,9 +3961,7 @@ namespace jeecs
             je_typing_class     m_type_class;
 
             const member_info* volatile m_member_types;
-
-            volatile parse_c2w_func_t    m_script_parse_c2w;
-            volatile parse_w2c_func_t    m_script_parse_w2c;
+            const script_parser_info* volatile m_script_parser_info;
 
         private:
             inline static std::atomic_bool      _m_shutdown_flag = false;
@@ -4171,14 +4191,19 @@ namespace jeecs
                 member_offset);
         }
         template<typename T>
-        inline void register_script_parser(void(*c2w)(wo_vm, wo_value, const T*), void(*w2c)(wo_vm, wo_value, T*))
+        inline void register_script_parser(
+            void(*c2w)(wo_vm, wo_value, const T*), 
+            void(*w2c)(wo_vm, wo_value, T*),
+            const std::string& woolang_typename,
+            const std::string& woolang_typedecl)
         {
             je_register_script_parser(
                 jeecs::typing::type_info::get_local_type_info(
-                    type_info::id<T>(typeid(T).name())),
-                reinterpret_cast<jeecs::typing::parse_c2w_func_t>(c2w), 
-                reinterpret_cast<jeecs::typing::parse_w2c_func_t>(w2c)
-            );
+                    type_info::id<T>(nullptr)),
+                reinterpret_cast<jeecs::typing::parse_c2w_func_t>(c2w),
+                reinterpret_cast<jeecs::typing::parse_w2c_func_t>(w2c),
+                woolang_typename.c_str(),
+                woolang_typedecl.c_str());
         }
     }
 
@@ -8440,17 +8465,114 @@ namespace jeecs
             auto integer_uniform_parser_w2c = [](wo_vm, wo_value value, auto* v) {
                 *v = (std::remove_reference<decltype(*v)>::type)wo_int(value);
             };
-            typing::register_script_parser<int8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
-            typing::register_script_parser<int16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
-            typing::register_script_parser<int32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
-            typing::register_script_parser<int64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
-            typing::register_script_parser<uint8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
-            typing::register_script_parser<uint16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
-            typing::register_script_parser<uint32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
-            typing::register_script_parser<uint64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
+            typing::register_script_parser<int8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+            typing::register_script_parser<int16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+            typing::register_script_parser<int32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+            typing::register_script_parser<int64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+            typing::register_script_parser<uint8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+            typing::register_script_parser<uint16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+            typing::register_script_parser<uint32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+            typing::register_script_parser<uint64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+
+            typing::register_script_parser<float>(
+                [](wo_vm, wo_value value, const float* v) {
+                    wo_set_float(value, *v);
+                }, 
+                [](wo_vm, wo_value value, float* v) {
+                    *v = wo_float(value);
+                }, "real", "");
+            typing::register_script_parser<double>(
+                [](wo_vm, wo_value value, const double* v) {
+                    wo_set_real(value, *v);
+                },
+                [](wo_vm, wo_value value, double* v) {
+                    *v = wo_real(value);
+                }, "real", "");
+
+            typing::register_script_parser<std::string>(
+                [](wo_vm, wo_value value, const std::string* v) {
+                    wo_set_string(value, v->c_str());
+                },
+                [](wo_vm, wo_value value, std::string* v) {
+                    *v = wo_string(value);
+                }, "string", "");
+            typing::register_script_parser<jeecs::basic::string>(
+                [](wo_vm, wo_value value, const jeecs::basic::string* v) {
+                    wo_set_string(value, v->c_str());
+                },
+                [](wo_vm, wo_value value, jeecs::basic::string* v) {
+                    *v = wo_string(value);
+                }, "string", "");
+
+            typing::register_script_parser<jeecs::math::ivec2>(
+                [](wo_vm, wo_value value, const jeecs::math::ivec2* v) {
+                    wo_set_struct(value, 2);
+                    wo_set_int(wo_struct_get(value, 0), (wo_integer_t)v->x);
+                    wo_set_int(wo_struct_get(value, 1), (wo_integer_t)v->y);
+                },
+                [](wo_vm, wo_value value, jeecs::math::ivec2* v) {
+                    v->x = (wo_integer_t)wo_int(wo_struct_get(value, 0));
+                    v->y = (wo_integer_t)wo_int(wo_struct_get(value, 1));
+                }, "ivec2", "public using ivec2 = (int, int);");
+
+            typing::register_script_parser<jeecs::math::vec2>(
+                [](wo_vm, wo_value value, const jeecs::math::vec2* v) {
+                    wo_set_struct(value, 2);
+                    wo_set_float(wo_struct_get(value, 0), v->x);
+                    wo_set_float(wo_struct_get(value, 1), v->y);
+                },
+                [](wo_vm, wo_value value, jeecs::math::vec2* v) {
+                    v->x = wo_float(wo_struct_get(value, 0));
+                    v->y = wo_float(wo_struct_get(value, 1));
+                }, "vec2", "public using vec2 = (real, real);");
+
+            typing::register_script_parser<jeecs::math::vec3>(
+                [](wo_vm, wo_value value, const jeecs::math::vec3* v) {
+                    wo_set_struct(value, 3);
+                    wo_set_float(wo_struct_get(value, 0), v->x);
+                    wo_set_float(wo_struct_get(value, 1), v->y);
+                    wo_set_float(wo_struct_get(value, 2), v->z);
+                },
+                [](wo_vm, wo_value value, jeecs::math::vec3* v) {
+                    v->x = wo_float(wo_struct_get(value, 0));
+                    v->y = wo_float(wo_struct_get(value, 1));
+                    v->z = wo_float(wo_struct_get(value, 2));
+                }, "vec3", "public using vec3 = (real, real, real);");
+
+            typing::register_script_parser<jeecs::math::vec4>(
+                [](wo_vm, wo_value value, const jeecs::math::vec4* v) {
+                    wo_set_struct(value, 4);
+                    wo_set_float(wo_struct_get(value, 0), v->x);
+                    wo_set_float(wo_struct_get(value, 1), v->y);
+                    wo_set_float(wo_struct_get(value, 2), v->z);
+                    wo_set_float(wo_struct_get(value, 3), v->w);
+                },
+                [](wo_vm, wo_value value, jeecs::math::vec4* v) {
+                    v->x = wo_float(wo_struct_get(value, 0));
+                    v->y = wo_float(wo_struct_get(value, 1));
+                    v->z = wo_float(wo_struct_get(value, 2));
+                    v->w = wo_float(wo_struct_get(value, 3));
+                }, "vec4", "public using vec4 = (real, real, real, real);");
+
+            typing::register_script_parser<jeecs::math::quat>(
+                [](wo_vm, wo_value value, const jeecs::math::quat* v) {
+                    wo_set_struct(value, 4);
+                    wo_set_float(wo_struct_get(value, 0), v->x);
+                    wo_set_float(wo_struct_get(value, 1), v->y);
+                    wo_set_float(wo_struct_get(value, 2), v->z);
+                    wo_set_float(wo_struct_get(value, 3), v->w);
+                },
+                [](wo_vm, wo_value value, jeecs::math::quat* v) {
+                    v->x = wo_float(wo_struct_get(value, 0));
+                    v->y = wo_float(wo_struct_get(value, 1));
+                    v->z = wo_float(wo_struct_get(value, 2));
+                    v->w = wo_float(wo_struct_get(value, 3));
+                }, "quat", "public using quat = (real, real, real, real);");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();
+            
+            je_update_woolang_api();
         }
 
         inline void module_leave()
