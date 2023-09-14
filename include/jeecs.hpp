@@ -170,6 +170,9 @@ namespace jeecs
 
         using update_func_t = void(*)(void*);
 
+        using parse_c2w_func_t = void(*)(wo_vm, wo_value, const void*);
+        using parse_w2c_func_t = void(*)(wo_vm, wo_value, void*);
+
         using entity_id_in_chunk_t = size_t;
         using version_t = size_t;
 
@@ -730,19 +733,19 @@ JE_API const jeecs::typing::type_info* je_typing_get_info_by_hash(
 je_typing_unregister [基本接口]
 向引擎的类型管理器要求解除注册指定的类型信息
 需要注意的是，一般而言引擎推荐遵循“谁注册谁释放”原则，请确保释放的
-类型是当前模块通过 je_typing_find_or_register 成功注册的类型。
+类型是当前模块通过 je_typing_register 成功注册的类型。
 若释放的类型不合法，则给出级别错误的日志信息。
 请参见：
-    jeecs::typing::typeid_t
+    jeecs::typing::type_info
     je_typing_register
 */
 JE_API void je_typing_unregister(const jeecs::typing::type_info* tinfo);
 
 /*
 je_register_member [基本接口]
-向引擎的类型管理器注册指定类型id的成员信息。
+向引擎的类型管理器注册指定类型的成员信息。
+* 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    jeecs::typing::typeid_t
     jeecs::typing::type_info
 */
 JE_API void je_register_member(
@@ -750,6 +753,18 @@ JE_API void je_register_member(
     const jeecs::typing::type_info* _membertype,
     const char* _member_name,
     ptrdiff_t                       _member_offset);
+
+/*
+je_register_script_parser [基本接口]
+向引擎的类型管理器注册指定类型的脚本转换方法。
+* 使用本地typeinfo，而非全局通用typeinfo
+请参见：
+    jeecs::typing::type_info
+*/
+JE_API void je_register_script_parser(
+    const jeecs::typing::type_info* _type,
+    jeecs::typing::parse_c2w_func_t c2w,
+    jeecs::typing::parse_w2c_func_t w2c);
 
 ////////////////////// ARCH //////////////////////
 
@@ -3904,7 +3919,7 @@ namespace jeecs
             typehash_t  m_hash;
             const char* m_typename;   // will be free by je_typing_unregister
             size_t      m_size;
-            size_t      m_chunk_size; // calc by je_typing_find_or_register
+            size_t      m_chunk_size; // calc by je_typing_register
 
             construct_func_t    m_constructor;
             destruct_func_t     m_destructor;
@@ -3923,7 +3938,11 @@ namespace jeecs
 
             je_typing_class     m_type_class;
 
-            const member_info* m_member_types;
+            const member_info* volatile m_member_types;
+
+            volatile parse_c2w_func_t    m_script_parse_c2w;
+            volatile parse_w2c_func_t    m_script_parse_w2c;
+
         private:
             inline static std::atomic_bool      _m_shutdown_flag = false;
 
@@ -4150,6 +4169,16 @@ namespace jeecs
                 membt,
                 membname,
                 member_offset);
+        }
+        template<typename T>
+        inline void register_script_parser(void(*c2w)(wo_vm, wo_value, const T*), void(*w2c)(wo_vm, wo_value, T*))
+        {
+            je_register_script_parser(
+                jeecs::typing::type_info::get_local_type_info(
+                    type_info::id<T>(typeid(T).name())),
+                reinterpret_cast<jeecs::typing::parse_c2w_func_t>(c2w), 
+                reinterpret_cast<jeecs::typing::parse_w2c_func_t>(w2c)
+            );
         }
     }
 
@@ -7527,6 +7556,7 @@ namespace jeecs
                     math::vec2(-0.5f, -0.5f),
                     math::vec2(0.5f, -0.5f),
                     math::vec2(0.5f, 0.5f),
+                    math::vec2(-0.5f, 0.5f),
                 };
                 basic::resource<graphic::vertex> m_block_mesh = nullptr;
 
@@ -7566,12 +7596,18 @@ namespace jeecs
             };
 
             block_mesh mesh;
+
             float shadow = 1.0f;
+
+            bool nocover = false;
+            bool reverse = false;
 
             static void JERefRegsiter()
             {
                 typing::register_member(&Block::mesh, "mesh");
                 typing::register_member(&Block::shadow, "shadow");
+                typing::register_member(&Block::nocover, "nocover");
+                typing::register_member(&Block::reverse, "reverse");
             }
         };
     }
@@ -8396,6 +8432,22 @@ namespace jeecs
             type_info::of<Audio::Playing>("Audio::Playing");
 
             type_info::of<Scene::MapTile>("Scene::MapTile");
+
+            // 1. register basic types
+            auto integer_uniform_parser_c2w = [](wo_vm, wo_value value, const auto* v) {
+                wo_set_int(value, (wo_integer_t)*v);
+            };
+            auto integer_uniform_parser_w2c = [](wo_vm, wo_value value, auto* v) {
+                *v = (std::remove_reference<decltype(*v)>::type)wo_int(value);
+            };
+            typing::register_script_parser<int8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
+            typing::register_script_parser<int16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
+            typing::register_script_parser<int32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
+            typing::register_script_parser<int64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
+            typing::register_script_parser<uint8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
+            typing::register_script_parser<uint16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
+            typing::register_script_parser<uint32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
+            typing::register_script_parser<uint64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c);
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();

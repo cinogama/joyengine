@@ -957,6 +957,8 @@ public let frag =
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_reverse_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_reverse_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_parallel_pass;
 
@@ -1070,49 +1072,6 @@ public func frag(vf: v2f)
 }
 )") };
 
-                // 用于产生点光源的范围阴影（光在物体后）
-                _defer_light2d_shadow_point_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
-import je::shader;
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ZERO);
-CULL    (FRONT);
-
-VAO_STRUCT! vin
-{
-    vertex: float3,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
-public func vert(v: vin)
-{
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vpos = je_v * je_color;
-    let vpos = je_mv * float4::create(v.vertex, 1.);
-
-    let shadow_vdir = float3::create(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
-    
-    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
-}
-
-public func frag(_: v2f)
-{
-    // NOTE: je_local_scale->x is shadow factor here.
-    return fout{
-        shadow_factor = float4::create(float3::one, je_local_scale->x)
-    };
-}
-)") };
-
                 // 用于产生平行光源的形状阴影（光在物体前）
                 _defer_light2d_shadow_shape_parallel_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
@@ -1164,6 +1123,49 @@ public func frag(vf: v2f)
 }
 )") };
 
+                // 用于产生点光源的范围阴影（光在物体后）
+                _defer_light2d_shadow_point_pass
+                    = { shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
+import je::shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ZERO);
+CULL    (FRONT);
+
+VAO_STRUCT! vin
+{
+    vertex: float3,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    shadow_factor: float4,
+};
+
+public func vert(v: vin)
+{
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vpos = je_v * je_color;
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+
+    let shadow_vdir = float3::create(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+}
+
+public func frag(_: v2f)
+{
+    // NOTE: je_local_scale->x is shadow factor here.
+    return fout{
+        shadow_factor = float4::create(float3::one, je_local_scale->x)
+    };
+}
+)") };
+
                 // 用于产生平行光源的范围阴影（光在物体后）
                 _defer_light2d_shadow_parallel_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
@@ -1172,6 +1174,92 @@ ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ZERO);
 CULL    (FRONT);
+
+VAO_STRUCT! vin
+{
+    vertex: float3,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    shadow_factor: float4,
+};
+
+public func vert(v: vin)
+{
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vdir = (je_v * je_color)->xyz - movement(je_v);
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+
+    let shadow_vdir = float3::create(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+}
+
+public func frag(_: v2f)
+{
+    // NOTE: je_local_scale->x is shadow factor here.
+    return fout{
+        shadow_factor = float4::create(float3::one, je_local_scale->x)
+    };
+}
+)") };
+
+                // 用于产生点光源的范围阴影（光在物体后） 逆序
+                _defer_light2d_shadow_point_reverse_pass
+                    = { shader::create("!/builtin/defer_light2d_shadow_reverse_point.shader", R"(
+import je::shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ZERO);
+CULL    (BACK);
+
+VAO_STRUCT! vin
+{
+    vertex: float3,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    shadow_factor: float4,
+};
+
+public func vert(v: vin)
+{
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vpos = je_v * je_color;
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+
+    let shadow_vdir = float3::create(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+}
+
+public func frag(_: v2f)
+{
+    // NOTE: je_local_scale->x is shadow factor here.
+    return fout{
+        shadow_factor = float4::create(float3::one, je_local_scale->x)
+    };
+}
+)") };
+
+                // 用于产生平行光源的范围阴影（光在物体后）逆序
+                _defer_light2d_shadow_parallel_reverse_pass
+                    = { shader::create("!/builtin/defer_light2d_shadow_reverse_parallel.shader", R"(
+import je::shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ZERO);
+CULL    (BACK);
 
 VAO_STRUCT! vin
 {
@@ -1505,36 +1593,25 @@ public func frag(_: v2f)
                         if (block.mesh.m_block_mesh == nullptr)
                         {
                             std::vector<float> _vertex_buffer;
-                            if (!block.mesh.m_block_points.empty())
+
+                            for (auto& point : block.mesh.m_block_points)
                             {
-                                for (auto& point : block.mesh.m_block_points)
-                                {
-                                    _vertex_buffer.insert(_vertex_buffer.end(),
-                                        {
-                                            point.x, point.y, 0.f, 0.f,
-                                            point.x, point.y, 0.f, 1.f,
-                                        });
-                                }
                                 _vertex_buffer.insert(_vertex_buffer.end(),
                                     {
-                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 0.f,
-                                        block.mesh.m_block_points[0].x, block.mesh.m_block_points[0].y, 0.f, 1.f,
+                                        point.x, point.y, 0.f, 0.f,
+                                        point.x, point.y, 0.f, 1.f,
                                     });
-                                block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
-                                    jegl_vertex::type::TRIANGLESTRIP,
-                                    _vertex_buffer, { 3,1 });
                             }
+                            block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                                jegl_vertex::type::TRIANGLESTRIP,
+                                _vertex_buffer, { 3,1 });
                         }
-                        // Cannot create vertex with 0 point.
-
-                        if (block.mesh.m_block_mesh != nullptr)
-                        {
-                            m_2dblock_list.push_back(
-                                block2d_arch{
-                                        &trans, &block, texture, shape
-                                }
-                            );
-                        }
+                        assert(block.mesh.m_block_mesh != nullptr);
+                        m_2dblock_list.push_back(
+                            block2d_arch{
+                                    &trans, &block, texture, shape
+                            }
+                        );
                     }
                     );
             std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
@@ -1678,6 +1755,10 @@ public func frag(_: v2f)
                                 lightarch.color->parallel ?
                                 m_defer_light2d_host._defer_light2d_shadow_parallel_pass :
                                 m_defer_light2d_host._defer_light2d_shadow_point_pass;
+                            const auto& reverse_normal_shadow_pass =
+                                lightarch.color->parallel ?
+                                m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass :
+                                m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass;
                             const auto& shape_shadow_pass =
                                 lightarch.color->parallel ?
                                 m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass :
@@ -1779,13 +1860,16 @@ public func frag(_: v2f)
                                     else
                                     {
                                         // 物体比光源更远离摄像机，或者形状阴影被禁用
+                                        auto& using_shadow_pass_shader = blockarch.block->reverse 
+                                            ? reverse_normal_shadow_pass
+                                            : normal_shadow_pass;
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
                                             light2d_shadow_rend_chain,
-                                            normal_shadow_pass->resouce(),
+                                            using_shadow_pass_shader->resouce(),
                                             blockarch.block->mesh.m_block_mesh->resouce(),
                                             SIZE_MAX);
-                                        auto* builtin_uniform = normal_shadow_pass->m_builtin;
+                                        auto* builtin_uniform = using_shadow_pass_shader->m_builtin;
 
                                         const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
@@ -1848,43 +1932,46 @@ public func frag(_: v2f)
                                             ? m_default_resources.default_shape_quad.get()
                                             : block_in_layer->shape->vertex.get();
 
-                                        auto* rchain_draw_action = jegl_rchain_draw(
-                                            light2d_shadow_rend_chain,
-                                            sub_shadow_pass->resouce(),
-                                            using_shape->resouce(),
-                                            texture_group);
-                                        auto* builtin_uniform = sub_shadow_pass->m_builtin;
-
-                                        const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
-
-                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
-
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
-
-                                        // local_scale.x .y .z 通道预留
-                                        /*NEED_AND_SET_UNIFORM(local_scale, float3,
-                                            0.f,
-                                            0.f,
-                                            0.f);*/
-
-                                        if (block_in_layer->translation->world_position.z < lightarch.translation->world_position.z)
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 1.f, 1.f, 1.f, 1.f);
-                                        else
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
-
-                                        if (block_in_layer->textures != nullptr)
+                                        // 如果物体被指定为不需要cover，那么就不绘制
+                                        if (block_in_layer->block->nocover == false)
                                         {
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, block_in_layer->textures->tiling.x, block_in_layer->textures->tiling.y);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, block_in_layer->textures->offset.x, block_in_layer->textures->offset.y);
-                                        }
+                                            auto* rchain_draw_action = jegl_rchain_draw(
+                                                light2d_shadow_rend_chain,
+                                                sub_shadow_pass->resouce(),
+                                                using_shape->resouce(),
+                                                texture_group);
+                                            auto* builtin_uniform = sub_shadow_pass->m_builtin;
 
+                                            const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
+
+                                            math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                            math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
+
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
+
+                                            // local_scale.x .y .z 通道预留
+                                            /*NEED_AND_SET_UNIFORM(local_scale, float3,
+                                                0.f,
+                                                0.f,
+                                                0.f);*/
+
+                                            if (block_in_layer->translation->world_position.z < lightarch.translation->world_position.z)
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 1.f, 1.f, 1.f, 1.f);
+                                            else
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
+
+                                            if (block_in_layer->textures != nullptr)
+                                            {
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, block_in_layer->textures->tiling.x, block_in_layer->textures->tiling.y);
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, block_in_layer->textures->offset.x, block_in_layer->textures->offset.y);
+                                            }
+                                        }
                                     }
                                     block_in_current_layer.clear();
                                 }

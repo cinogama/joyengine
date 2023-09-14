@@ -98,6 +98,8 @@ namespace jeecs_impl
             tinfo->m_apply_update = _apply_update;
             tinfo->m_commit_update = _commit_update;
             tinfo->m_member_types = nullptr;
+            tinfo->m_script_parse_c2w = nullptr;
+            tinfo->m_script_parse_w2c = nullptr;
 
             std::lock_guard g1(_m_type_holder_mx);
 
@@ -192,7 +194,6 @@ namespace jeecs_impl
 
             *m_new_member_ptr = meminfo;
         }
-
         void unregister_member_info(jeecs::typing::type_info* classtype) noexcept
         {
             auto* meminfo = classtype->m_member_types;
@@ -206,15 +207,6 @@ namespace jeecs_impl
                 delete curmem;
             }
         }
-
-        void _free_type_info(jeecs::typing::type_info* typeinfo)
-        {
-            if (typeinfo->m_typename != nullptr)
-                je_mem_free((void*)typeinfo->m_typename);
-            unregister_member_info(typeinfo);
-            delete typeinfo;
-        }
-
         void unregister_type(const jeecs::typing::type_info* tinfo) noexcept
         {
             std::lock_guard g1(_m_type_holder_mx);
@@ -240,8 +232,11 @@ namespace jeecs_impl
                     {
                         bool need_update_current_type_info = fnd == registered_typeinfo.begin();
 
+                        je_mem_free((void*)(*fnd)->m_typename);
+                        unregister_member_info(*fnd);
+
                         if (*fnd != current_type_info)
-                            _free_type_info(*fnd);
+                            delete (*fnd);
 
                         registered_typeinfo.erase(fnd);
 
@@ -253,7 +248,7 @@ namespace jeecs_impl
                             _m_type_name_id_mapping.erase(current_type_info->m_typename);
                             // current_type_info->m_typename has been freed.
                             current_type_info->m_typename = nullptr;
-                            _free_type_info(current_type_info);
+                            delete current_type_info;
                             current_type_info = nullptr;
                         }
                         else if (need_update_current_type_info)
@@ -268,65 +263,13 @@ namespace jeecs_impl
             jeecs::debug::logerr("Type info: '%p' is invalid, please check.", tinfo);
         }
 
-
-    };
-    class script_native_type_parser_holder
-    {
-        JECS_DISABLE_MOVE_AND_COPY(script_native_type_parser_holder);
-
-        std::shared_mutex _m_lock;
-
-        struct parser_functions
+        void register_script_parse_func(
+            const jeecs::typing::type_info* tinfo,
+            jeecs::typing::parse_c2w_func_t c2w,
+            jeecs::typing::parse_w2c_func_t w2c)
         {
-            void(*m_parser/* convert cpp value to woolang value */)(wo_vm, wo_value, const void*);
-            void(*m_unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*);
-        };
-
-        TODO;
-        std::unordered_map<const jeecs::typing::type_info*, const parser_functions**>
-            _m_type_parsers;
-
-        script_native_type_parser_holder() = default;
-
-    public:
-        inline static script_native_type_parser_holder* holder() noexcept
-        {
-            static script_native_type_parser_holder holder;
-            return &holder;
-        }
-
-        inline void* register_type_parser(
-            const jeecs::typing::type_info* type,
-            void(*parser/* convert cpp value to woolang value */)(wo_vm, wo_value, const void*),
-            void(*unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*))
-        {
-            do
-            {
-                std::shared_lock sg1(_m_lock);
-                if (_m_type_parsers.find(type) != _m_type_parsers.end())
-                    return false;
-            } while (0);
-
-            std::lock_guard g1(_m_lock);
-            if (_m_type_parsers.find(type) != _m_type_parsers.end())
-                return false;
-
-            auto& parsers = _m_type_parsers[type];
-            parsers.m_parser = parser;
-            parsers.m_unparser = unparser;
-
-            return true;
-        }
-        inline void unregister_type_parser(const jeecs::typing::type_info* type, void* handle)
-        {
-            std::lock_guard g1(_m_lock);
-            auto fnd = _m_type_parsers.find(type);
-            if (fnd != _m_type_parsers.end())
-            {
-                _m_type_parsers.erase(fnd);
-                return;
-            }
-            jeecs::debug::logerr("Type: '%s' has no parser, please check.", type->m_typename);
+            *const_cast<jeecs::typing::parse_c2w_func_t* volatile>(&tinfo->m_script_parse_c2w) = c2w;
+            *const_cast<jeecs::typing::parse_w2c_func_t* volatile>(&tinfo->m_script_parse_w2c) = w2c;
         }
     };
 }
@@ -404,21 +347,13 @@ void je_register_member(
         ->register_member(_classtype, _membertype, _member_name, _member_offset);
 }
 
-///////////////////////////////////////////////////////////////////////////
-
-bool je_script_try_register_type_parser(
-    const jeecs::typing::type_info* type,
-    void(*parser/* convert cpp value to woolang value */)(wo_vm, wo_value, const void*),
-    void(*unparser/* convert woolang value to cpp value */)(wo_vm, wo_value, void*))
+void je_register_script_parser(
+    const jeecs::typing::type_info* _type,
+    jeecs::typing::parse_c2w_func_t c2w,
+    jeecs::typing::parse_w2c_func_t w2c)
 {
-    return jeecs_impl::script_native_type_parser_holder::holder()
-        ->register_type_parser(type, parser, unparser);
-}
-
-void je_script_unregister_type_parser(const jeecs::typing::type_info* type)
-{
-    return jeecs_impl::script_native_type_parser_holder::holder()
-        ->unregister_type_parser(type);
+    jeecs_impl::type_info_holder::holder()
+        ->register_script_parse_func(_type, c2w, w2c);
 }
 
 ///////////////////////////////////////////////////////////////////////////
