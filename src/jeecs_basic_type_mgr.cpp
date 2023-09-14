@@ -25,7 +25,6 @@ namespace jeecs_impl
             _m_registered_typeinfo;
 
         std::vector<jeecs::typing::type_info*>  _m_type_holder_list;
-        std::unordered_map<jeecs::typing::typehash_t, jeecs::typing::typeid_t>  _m_type_hash_id_mapping;
         std::unordered_map<std::string, jeecs::typing::typeid_t>  _m_type_name_id_mapping;
 
         type_info_holder() = default;
@@ -47,7 +46,7 @@ namespace jeecs_impl
             auto* type_info = _m_type_holder_list[id - 1];
             auto& registered_typeinfo_list = _m_registered_typeinfo[type_info];
 
-            assert(type_info != nullptr && 
+            assert(type_info != nullptr &&
                 std::find(
                     registered_typeinfo_list.begin(),
                     registered_typeinfo_list.end(), tinfo) == registered_typeinfo_list.end());
@@ -103,19 +102,10 @@ namespace jeecs_impl
 
             std::lock_guard g1(_m_type_holder_mx);
 
-            // 1. Find typeid with hash
-            if (auto fnd_with_hash = _m_type_hash_id_mapping.find(_hash); fnd_with_hash != _m_type_hash_id_mapping.end())
-            {
-                tinfo->m_id = fnd_with_hash->second;
-            }
-            // 2. Find typeid with name
-            else if (auto fnd_with_name = _m_type_name_id_mapping.find(_name); fnd_with_name != _m_type_name_id_mapping.end())
+            // 1. Find typeid with name
+            if (auto fnd_with_name = _m_type_name_id_mapping.find(_name); fnd_with_name != _m_type_name_id_mapping.end())
             {
                 tinfo->m_id = fnd_with_name->second;
-
-                // Register alias-hash
-                _m_type_hash_id_mapping[_hash] = tinfo->m_id;
-                jeecs::debug::logwarn("Type '%s' with different type-hash. alias-hash has been created.");
             }
             else
             {
@@ -131,7 +121,6 @@ namespace jeecs_impl
                     _m_type_holder_list.push_back(tinfo);
                     tinfo->m_id = _m_type_holder_list.size();
                 }
-                _m_type_hash_id_mapping[_hash] = tinfo->m_id;
                 _m_type_name_id_mapping[_name] = tinfo->m_id;
             }
 
@@ -159,17 +148,16 @@ namespace jeecs_impl
             }
             return nullptr;
         }
-        jeecs::typing::type_info* get_info_by_hash(jeecs::typing::typehash_t typehash) noexcept
-        {
-            std::lock_guard g1(_m_type_holder_mx);
-            auto fnd = _m_type_hash_id_mapping.find(typehash);
-            if (fnd != _m_type_hash_id_mapping.end())
-                return _m_type_holder_list[fnd->second - 1];
-            return nullptr;
-        }
         std::vector<jeecs::typing::type_info*> get_all_registed_types() noexcept
         {
             std::lock_guard g1(_m_type_holder_mx);
+            std::vector<jeecs::typing::type_info*> types;
+
+            for (auto* t : _m_type_holder_list)
+            {
+                if (t != nullptr)
+                    types.push_back(t);
+            }
             return _m_type_holder_list;
         }
 
@@ -232,7 +220,8 @@ namespace jeecs_impl
                     {
                         bool need_update_current_type_info = fnd == registered_typeinfo.begin();
 
-                        je_mem_free((void*)(*fnd)->m_typename);
+                        auto typename_to_free = (*fnd)->m_typename;
+
                         unregister_member_info(*fnd);
                         unregister_script_parser(*fnd);
 
@@ -245,12 +234,13 @@ namespace jeecs_impl
                         if (registered_typeinfo.empty())
                         {
                             // All type info has been freed, close current type info.
+                            _m_type_name_id_mapping.erase(typename_to_free);
                             _m_registered_typeinfo.erase(current_type_info);
-                            _m_type_hash_id_mapping.erase(current_type_info->m_hash);
-                            _m_type_name_id_mapping.erase(current_type_info->m_typename);
+
                             // current_type_info->m_typename has been freed.
-                            current_type_info->m_typename = nullptr;
                             delete current_type_info;
+
+                            // Free slot
                             current_type_info = nullptr;
                         }
                         else if (need_update_current_type_info)
@@ -258,6 +248,8 @@ namespace jeecs_impl
                             // Update current type info.
                             *current_type_info = *registered_typeinfo.front();
                         }
+
+                        je_mem_free((void*)typename_to_free);
                     }
                     return;
                 }
@@ -266,9 +258,12 @@ namespace jeecs_impl
         }
         void unregister_script_parser(jeecs::typing::type_info* classtype) noexcept
         {
-            je_mem_free((void*)classtype->m_script_parser_info->m_woolang_typename);
-            je_mem_free((void*)classtype->m_script_parser_info->m_woolang_typedecl);
-            delete classtype->m_script_parser_info;
+            if (classtype->m_script_parser_info != nullptr)
+            {
+                je_mem_free((void*)classtype->m_script_parser_info->m_woolang_typename);
+                je_mem_free((void*)classtype->m_script_parser_info->m_woolang_typedecl);
+                delete classtype->m_script_parser_info;
+            }
         }
         void register_script_parser(
             const jeecs::typing::type_info* tinfo,
@@ -340,19 +335,13 @@ const jeecs::typing::type_info* je_typing_get_info_by_name(
     return jeecs_impl::type_info_holder::holder()->get_info_by_name(type_name);
 }
 
-const jeecs::typing::type_info* je_typing_get_info_by_hash(
-    jeecs::typing::typehash_t type_hash)
-{
-    return jeecs_impl::type_info_holder::holder()->get_info_by_hash(type_hash);
-}
-
 void je_typing_unregister(const jeecs::typing::type_info* tinfo)
 {
     jeecs_impl::type_info_holder::holder()->unregister_type(tinfo);
 }
 
 void je_register_member(
-    const jeecs::typing::type_info*       _classtype,
+    const jeecs::typing::type_info* _classtype,
     const jeecs::typing::type_info* _membertype,
     const char* _member_name,
     ptrdiff_t                       _member_offset)
@@ -370,10 +359,10 @@ void je_register_script_parser(
 {
     jeecs_impl::type_info_holder::holder()
         ->register_script_parser(
-            _type, 
-            c2w, 
-            w2c, 
-            woolang_typename, 
+            _type,
+            c2w,
+            w2c,
+            woolang_typename,
             woolang_typedecl);
 }
 
@@ -388,6 +377,9 @@ void je_update_woolang_api()
     auto ts = jeecs_impl::type_info_holder::holder()->get_all_registed_types();
     for (auto* typeinfo : ts)
     {
+        if (typeinfo == nullptr)
+            continue;
+
         // 1. Declear type parsers
         auto* script_parser_info = typeinfo->m_script_parser_info;
 
@@ -418,6 +410,9 @@ using member<T> = handle
 )";
     for (auto* typeinfo : ts)
     {
+        if (typeinfo == nullptr)
+            continue;
+
         // 1. Declear component
         if (typeinfo->m_type_class == je_typing_class::JE_COMPONENT)
         {
@@ -434,9 +429,24 @@ using member<T> = handle
 
             woolang_component_type_decl += std::string("// Declear of '") + typeinfo->m_typename + "'\n";
             if (tnamespace)
-                woolang_component_type_decl += "namespace " + tnamespace.value() + "{";
-            
-            woolang_component_type_decl += "using " + tname + " = struct{};";
+                woolang_component_type_decl += "namespace " + tnamespace.value() + "{\n";
+
+            woolang_component_type_decl += "using " + tname + " = struct{\n";
+
+            auto* registed_member = typeinfo->m_member_types;
+            while (registed_member != nullptr)
+            {
+                if (registed_member->m_member_type->m_script_parser_info != nullptr)
+                {
+                    // 对于有脚本对接类型的组件成员，在这里挂上！
+                    woolang_component_type_decl +=
+                        std::string("    ") + registed_member->m_member_name + ": "
+                        + registed_member->m_member_type->m_script_parser_info->m_woolang_typename + ",\n";
+                }
+                registed_member = registed_member->m_next_member;
+            }
+
+            woolang_component_type_decl += "};\n";
 
             if (tnamespace)
                 woolang_component_type_decl += "}\n";
@@ -450,8 +460,10 @@ using member<T> = handle
         }
     }
 
-    wo_virtual_source("je/api/type.wo", woolang_parsing_type_decl.c_str(), true);
-    wo_virtual_source("je/api/components.wo", woolang_component_type_decl.c_str(), true);
+    if (!wo_virtual_source("je/api/type.wo", woolang_parsing_type_decl.c_str(), true))
+        jeecs::debug::logfatal("Unable to regenerate 'je/api/type.wo' please check.");
+    if (!wo_virtual_source("je/api/components.wo", woolang_component_type_decl.c_str(), true))
+        jeecs::debug::logfatal("Unable to regenerate 'je/api/components.wo' please check.");
 }
 
 ///////////////////////////////////////////////////////////////////////////

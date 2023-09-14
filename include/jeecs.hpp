@@ -721,15 +721,6 @@ JE_API const jeecs::typing::type_info* je_typing_get_info_by_name(
     const char* type_name);
 
 /*
-je_typing_get_info_by_name [基本接口]
-通过类型的哈希获取类型信息，若给定的哈希不存在，返回nullptr
-请参见：
-    jeecs::typing::type_info
-*/
-JE_API const jeecs::typing::type_info* je_typing_get_info_by_hash(
-    jeecs::typing::typehash_t type_hash);
-
-/*
 je_typing_unregister [基本接口]
 向引擎的类型管理器要求解除注册指定的类型信息
 需要注意的是，一般而言引擎推荐遵循“谁注册谁释放”原则，请确保释放的
@@ -8459,6 +8450,14 @@ namespace jeecs
             type_info::of<Scene::MapTile>("Scene::MapTile");
 
             // 1. register basic types
+            typing::register_script_parser<bool>(
+                [](wo_vm, wo_value value, const bool* v) {
+                    wo_set_bool(value, *v);
+                },
+                [](wo_vm, wo_value value, bool* v) {
+                    *v = wo_bool(value);
+                }, "bool", "");
+
             auto integer_uniform_parser_c2w = [](wo_vm, wo_value value, const auto* v) {
                 wo_set_int(value, (wo_integer_t)*v);
             };
@@ -8511,8 +8510,8 @@ namespace jeecs
                     wo_set_int(wo_struct_get(value, 1), (wo_integer_t)v->y);
                 },
                 [](wo_vm, wo_value value, jeecs::math::ivec2* v) {
-                    v->x = (wo_integer_t)wo_int(wo_struct_get(value, 0));
-                    v->y = (wo_integer_t)wo_int(wo_struct_get(value, 1));
+                    v->x = (int)wo_int(wo_struct_get(value, 0));
+                    v->y = (int)wo_int(wo_struct_get(value, 1));
                 }, "ivec2", "public using ivec2 = (int, int);");
 
             typing::register_script_parser<jeecs::math::vec2>(
