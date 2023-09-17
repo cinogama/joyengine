@@ -892,13 +892,15 @@ jegl_resource* jegl_load_shader(const char* path)
     }
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
-        char* src = (char*)je_mem_alloc(texfile->m_file_length + 1);
+        char* src = (char*)malloc(texfile->m_file_length + 1);
         jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
         src[texfile->m_file_length] = 0;
 
         jeecs_file_close(texfile);
 
         auto* shader_resource = jegl_load_shader_source(path, src, false);
+        free(src);
+
         if (shader_resource != nullptr)
         {
             assert(shader_resource != nullptr && shader_resource->m_raw_shader_data != nullptr);

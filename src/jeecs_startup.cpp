@@ -25,11 +25,16 @@ extern const char* jeecs_woolang_api_src;
 extern const char* jeecs_woolang_editor_api_path;
 extern const char* jeecs_woolang_editor_api_src;
 
+extern const char* jeecs_towoo_system_path;
+extern const char* jeecs_towoo_system_src;
+
 void je_ecs_shutdown();
 void jeal_init();
 void jeal_finish();
 
 void jegl_finish();
+
+void jetowoo_finish();
 
 void je_log_strat();
 void je_log_shutdown();
@@ -42,6 +47,7 @@ void je_init(int argc, char** argv)
 
     jeecs_file_set_runtime_path(wo_exe_path());
 
+    wo_virtual_source(jeecs_towoo_system_path, jeecs_towoo_system_src, false);
     wo_virtual_source(jeecs_woolang_editor_api_path, jeecs_woolang_editor_api_src, false);
     wo_virtual_source(jeecs_woolang_api_path, jeecs_woolang_api_src, false);
     wo_virtual_source(shader_wrapper_path, shader_wrapper_src, false);
@@ -160,6 +166,7 @@ void je_finish()
     je_ecs_shutdown();
     jeal_finish();
     jegl_finish();
+    jetowoo_finish();
 
     je_log_shutdown();
     wo_finish([](void*) 

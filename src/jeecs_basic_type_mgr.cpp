@@ -97,6 +97,7 @@ namespace jeecs_impl
             tinfo->m_late_update = _late_update;
             tinfo->m_apply_update = _apply_update;
             tinfo->m_commit_update = _commit_update;
+            tinfo->m_member_count = 0;
             tinfo->m_member_types = nullptr;
             tinfo->m_script_parser_info = nullptr;
 
@@ -181,6 +182,8 @@ namespace jeecs_impl
                 m_new_member_ptr = &((*m_new_member_ptr)->m_next_member);
 
             *m_new_member_ptr = meminfo;
+
+            ++*const_cast<size_t* volatile>(&_classtype->m_member_count);
         }
         void unregister_member_info(jeecs::typing::type_info* classtype) noexcept
         {

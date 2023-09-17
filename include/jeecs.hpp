@@ -161,7 +161,7 @@ namespace jeecs
         using module_entry_t = void(*)(void);
         using module_leave_t = void(*)(void);
 
-        using construct_func_t = void(*)(void*, void*);
+        using construct_func_t = void(*)(void*, void*, const jeecs::typing::type_info*);
         using destruct_func_t = void(*)(void*);
         using copy_func_t = void(*)(void*, const void*);
         using move_func_t = void(*)(void*, void*);
@@ -759,13 +759,20 @@ JE_API void je_register_script_parser(
     const char* woolang_typename,
     const char* woolang_typedecl);
 
+////////////////////// ToWoo //////////////////////
 /*
-je_update_woolang_api [基本接口]
+je_towoo_update_api [基本接口]
 根据类型信息重新生成 je/api/* 的接口脚本
 请参见：
     jeecs::typing::type_info
 */
-JE_API void je_update_woolang_api();
+JE_API void je_towoo_update_api();
+
+JE_API const jeecs::typing::type_info* je_towoo_register_system(
+    const char* system_name,
+    const char* script_path);
+
+JE_API void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo);
 
 ////////////////////// ARCH //////////////////////
 
@@ -1027,7 +1034,7 @@ JE_API size_t je_ecs_world_archmgr_updated_version(void* world);
 /*
 je_ecs_world_update_dependences_archinfo [基本接口]
 从当前世界更新类型依赖信息（即 ArchType 缓存）
-此函数一般用于selector更新 ArchType 缓存
+此函数一般用于selector更新自身某步 dependence 的 ArchType 缓存
 */
 JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
 
@@ -3436,26 +3443,71 @@ namespace jeecs
         template<typename T>
         struct default_functions
         {
+            template<typename W>
+            struct _true_type : public std::true_type {};
+
             template<typename U>
-            struct has_default_constructor
+            struct has_pointer_typeinfo_constructor_function
             {
-                template<typename W>
-                using _true_type = std::true_type;
+                template<typename V>
+                static auto _tester(int) ->
+                    _true_type<decltype(new V(std::declval<void*>(), std::declval<const jeecs::typing::type_info*>()))>;
 
                 template<typename V>
-                static auto _tester(int) -> _true_type<decltype(new V())>;
+                static std::false_type _tester(...);
+
+                constexpr static bool value = decltype(_tester<U>(0))::value;
+            };
+            template<typename U>
+            struct has_pointer_constructor_function
+            {
+                template<typename V>
+                static auto _tester(int) ->
+                    _true_type<decltype(new V(std::declval<void*>()))>;
+
+                template<typename V>
+                static std::false_type _tester(...);
+
+                constexpr static bool value = decltype(_tester<U>(0))::value;
+            };
+            template<typename U>
+            struct has_typeinfo_constructor_function
+            {
+                template<typename V>
+                static auto _tester(int) ->
+                    _true_type<decltype(new V(std::declval<const jeecs::typing::type_info*>()))>;
+
+                template<typename V>
+                static std::false_type _tester(...);
+
+                constexpr static bool value = decltype(_tester<U>(0))::value;
+            };
+            template<typename U>
+            struct has_default_constructor_function
+            {
+                template<typename V>
+                static auto _tester(int) ->
+                    _true_type<decltype(new V())>;
+
                 template<typename V>
                 static std::false_type _tester(...);
 
                 constexpr static bool value = decltype(_tester<U>(0))::value;
             };
 
-            static void constructor(void* _ptr, void* arg_ptr)
+            static void constructor(void* _ptr, void* arg_ptr, const jeecs::typing::type_info* tinfo)
             {
-                if constexpr (has_default_constructor<T>::value)
-                    new(_ptr)T;
-                else
+                if constexpr (has_pointer_typeinfo_constructor_function<T>::value)
+                    new(_ptr)T(arg_ptr, tinfo);
+                else  if constexpr (has_pointer_constructor_function<T>::value)
                     new(_ptr)T(arg_ptr);
+                else  if constexpr (has_typeinfo_constructor_function<T>::value)
+                    new(_ptr)T(tinfo);
+                else
+                {
+                    static_assert(has_default_constructor_function<T>::value);
+                    new(_ptr)T;
+                }
             }
             static void destructor(void* _ptr)
             {
@@ -3951,6 +4003,7 @@ namespace jeecs
 
             je_typing_class     m_type_class;
 
+            volatile size_t             m_member_count;
             const member_info* volatile m_member_types;
             const script_parser_info* volatile m_script_parser_info;
 
@@ -4007,7 +4060,7 @@ namespace jeecs
 
                         assert(_m_self_registed_typeinfo.find(local_type_info->m_id) == _m_self_registed_typeinfo.end());
                         _m_self_registed_typeinfo[local_type_info->m_id] = local_type_info;
-                    
+
                     } while (0);
                     return local_type_info->m_id;
                 }
@@ -4091,7 +4144,7 @@ namespace jeecs
 
             void construct(void* addr, void* arg = nullptr) const
             {
-                m_constructor(addr, arg);
+                m_constructor(addr, arg, this);
             }
             void destruct(void* addr) const
             {
@@ -4183,7 +4236,7 @@ namespace jeecs
         }
         template<typename T>
         inline void register_script_parser(
-            void(*c2w)(wo_vm, wo_value, const T*), 
+            void(*c2w)(wo_vm, wo_value, const T*),
             void(*w2c)(wo_vm, wo_value, T*),
             const std::string& woolang_typename,
             const std::string& woolang_typedecl)
@@ -4372,12 +4425,48 @@ namespace jeecs
 
         };
         basic::vector<arch_chunks_info*>       m_archs;
+        dependence() = default;
+        dependence(const dependence& d)
+            : m_requirements(d.m_requirements)
+            , m_world(d.m_world)
+            , m_current_arch_version(0)
+            , m_archs({})
+        {
 
-        void clear_archs()noexcept
+        }
+        dependence(dependence&& d)
+            : m_requirements(std::move(d.m_requirements))
+            , m_world(std::move(d.m_world))
+            , m_current_arch_version(d.m_current_arch_version)
+            , m_archs(std::move(d.m_archs))
+        {
+            d.m_current_arch_version = 0;
+        }
+        dependence& operator = (const dependence& d)
+        {
+            m_requirements = d.m_requirements;
+            m_world = d.m_world;
+            m_current_arch_version = 0;
+            m_archs = {};
+
+            return *this;
+        }
+        dependence& operator = (dependence&& d)
+        {
+            m_requirements = std::move(d.m_requirements);
+            m_world = std::move(d.m_world);
+            m_current_arch_version = d.m_current_arch_version;
+            d.m_current_arch_version = 0;
+            m_archs = std::move(d.m_archs);
+
+            return *this;
+        }
+        ~dependence()
         {
             je_ecs_clear_dependence_archinfos(this);
         }
-        bool need_update(const game_world& aim_world)noexcept
+
+        void update(const game_world& aim_world)noexcept
         {
             assert(aim_world.handle() != nullptr);
 
@@ -4385,9 +4474,9 @@ namespace jeecs
             if (m_world != aim_world || m_current_arch_version != arch_updated_ver)
             {
                 m_current_arch_version = arch_updated_ver;
-                return true;
+                m_world = aim_world;
+                je_ecs_world_update_dependences_archinfo(m_world.handle(), this);
             }
-            return false;
         }
     };
 
@@ -4427,6 +4516,7 @@ namespace jeecs
             {
                 using CurRequireT = typename f::template argument<ArgN>::type;
 
+                // NOTE: Must be here for correct order.
                 _apply_dependence<ArgN + 1, FT>(dep);
 
                 if constexpr (ArgN == 0 && std::is_same<CurRequireT, game_entity>::value)
@@ -4508,56 +4598,77 @@ namespace jeecs
         struct _executor_extracting_agent : std::false_type
         { };
 
+        template<typename ComponentT, typename ... ArgTs>
+        struct _const_type_index
+        {
+            using f_t = typing::function_traits<void(ArgTs...)>;
+            template<size_t id = 0>
+            static constexpr size_t _index()
+            {
+                if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
+                    return id;
+                else
+                    return _index<id + 1>();
+            }
+            static constexpr size_t index = _index();
+        };
+    public:
+        inline static bool get_entity_avaliable(const game_entity::meta* entity_meta, size_t eid)noexcept
+        {
+            return jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat;
+        }
+
+        inline static bool get_entity_avaliable_version(const game_entity::meta* entity_meta, size_t eid, typing::version_t* out_version)noexcept
+        {
+            if (jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat)
+            {
+                *out_version = entity_meta[eid].m_version;
+                return true;
+            }
+            return false;
+        }
+        inline static void* get_component_from_archchunk_ptr(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id, size_t cid)
+        {
+            assert(cid < archinfo->m_component_count);
+
+            if (archinfo->m_component_sizes[cid])
+            {
+                size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
+                return reinterpret_cast<void*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+            }
+            else
+                return nullptr;
+        }
+        template<typename ComponentT, typename ... ArgTs>
+        inline static ComponentT get_component_from_archchunk(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+        {
+            constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
+            auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(
+                get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
+
+            if (component_ptr != nullptr)
+            {
+                if constexpr (std::is_reference<ComponentT>::value)
+                    return *component_ptr;
+                else
+                {
+                    static_assert(std::is_pointer<ComponentT>::value);
+                    return component_ptr;
+                }
+            }
+
+            if constexpr (std::is_reference<ComponentT>::value)
+            {
+                assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
+                return *(typename typing::origin_t<ComponentT>*)nullptr;
+            }
+            else
+                return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+        }
+    private:
         template<typename RT, typename ... ArgTs>
         struct _executor_extracting_agent<RT(ArgTs...)> : std::true_type
         {
-            template<typename ComponentT>
-            struct _const_type_index
-            {
-                using f_t = typing::function_traits<RT(ArgTs...)>;
-                template<size_t id = 0>
-                static constexpr size_t _index()
-                {
-                    if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
-                        return id;
-                    else
-                        return _index<id + 1>();
-                }
-                static constexpr size_t index = _index();
-            };
-
-            template<typename ComponentT>
-            inline static ComponentT _get_component(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
-            {
-                constexpr size_t cid = _const_type_index<ComponentT>::index;
-
-                assert(cid < archinfo->m_component_count);
-                size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
-
-                if (archinfo->m_component_sizes[cid])
-                {
-                    if constexpr (std::is_reference<ComponentT>::value)
-                        return *std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset));
-                    else
-                    {
-                        static_assert(std::is_pointer<ComponentT>::value);
-                        return std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset));
-                    }
-                }
-                if constexpr (std::is_reference<ComponentT>::value)
-                {
-                    assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
-                    return *(typename typing::origin_t<ComponentT>*)nullptr;
-                }
-                else
-                    return nullptr; // Only maynot/anyof can be here, no need to cast the type;
-            }
-
-            inline static bool get_entity_avaliable(const game_entity::meta* entity_meta, size_t eid)noexcept
-            {
-                return jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat;
-            }
-
             template<typename FT>
             inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
             {
@@ -4572,10 +4683,10 @@ namespace jeecs
                             if (get_entity_avaliable(entity_meta_addr, eid))
                             {
                                 if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
-                                    f(_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                    f(get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
                                 else
                                     (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)
-                                    (_get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                    (get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
                             }
                         }
                         cur_chunk = je_arch_next_chunk(cur_chunk);
@@ -4587,59 +4698,6 @@ namespace jeecs
         template<typename RT, typename ... ArgTs>
         struct _executor_extracting_agent<RT(game_entity, ArgTs...)> : std::true_type
         {
-            template<typename ComponentT>
-            struct _const_type_index
-            {
-                using f_t = typing::function_traits<RT(ArgTs...)>;
-                template<size_t id = 0>
-                static constexpr size_t _index()
-                {
-                    if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
-                        return id;
-                    else
-                        return _index<id + 1>();
-                }
-                static constexpr size_t index = _index();
-            };
-
-            template<typename ComponentT>
-            inline static ComponentT _get_component(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
-            {
-                constexpr size_t cid = _const_type_index<ComponentT>::index;
-
-                assert(cid < archinfo->m_component_count);
-                size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
-
-                if (archinfo->m_component_sizes[cid])
-                {
-                    if constexpr (std::is_reference<ComponentT>::value)
-                        return *std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset));
-                    else
-                    {
-                        static_assert(std::is_pointer<ComponentT>::value);
-                        return std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(reinterpret_cast<intptr_t>(chunkbuf) + offset));
-                    }
-                }
-                if constexpr (std::is_reference<ComponentT>::value)
-                {
-                    assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
-                    return *(typename typing::origin_t<ComponentT>*)nullptr;
-                }
-                else
-                    return nullptr; // Only maynot/anyof can be here, no need to cast the type;
-            }
-
-            // NOTE: 写在这里的唯一目的是未来为了方便编译器自动优化，暴露状态/版本核验流程和偏移量
-            inline static bool get_entity_avaliable(const game_entity::meta* entity_meta, size_t eid, typing::version_t* out_version)noexcept
-            {
-                if (jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat)
-                {
-                    *out_version = entity_meta[eid].m_version;
-                    return true;
-                }
-                return false;
-            }
-
             template<typename FT>
             inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
             {
@@ -4652,13 +4710,13 @@ namespace jeecs
                         typing::version_t version;
                         for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
                         {
-                            if (get_entity_avaliable(entity_meta_addr, eid, &version))
+                            if (get_entity_avaliable_version(entity_meta_addr, eid, &version))
                             {
                                 if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
-                                    f(game_entity{ cur_chunk, eid, version }, _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                    f(game_entity{ cur_chunk, eid, version }, get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
                                 else
                                     (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(
-                                        game_entity{ cur_chunk, eid, version }, _get_component<ArgTs>(archinfo, cur_chunk, eid)...);
+                                        game_entity{ cur_chunk, eid, version }, get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
                             }
                         }
 
@@ -4686,12 +4744,7 @@ namespace jeecs
             }
 
             dependence& cur_dependence = m_dependence_caches[m_curstep];
-
-            if (cur_dependence.need_update(m_current_world))
-            {
-                cur_dependence.m_world = m_current_world;
-                je_ecs_world_update_dependences_archinfo(m_current_world.handle(), &cur_dependence);
-            }
+            cur_dependence.update(m_current_world);
 
             // OK! Execute step function!
             static_assert(
@@ -4713,8 +4766,6 @@ namespace jeecs
 
         ~selector()
         {
-            for (auto& step : m_dependence_caches)
-                step.clear_archs();
             m_dependence_caches.clear();
 #ifndef NDEBUG
             jeecs::debug::loginfo("Selector(%p) closed.", this);
@@ -4749,10 +4800,9 @@ namespace jeecs
         template<typename ... Ts>
         inline selector& except() noexcept
         {
-            auto& depend = m_dependence_caches[m_curstep];
-
             if (m_first_time_to_work)
             {
+                auto& depend = m_dependence_caches[m_curstep];
                 _apply_except<Ts...>(depend);
             }
             return *this;
@@ -4760,10 +4810,9 @@ namespace jeecs
         template<typename ... Ts>
         inline selector& contain() noexcept
         {
-            auto& depend = m_dependence_caches[m_curstep];
-
             if (m_first_time_to_work)
             {
+                auto& depend = m_dependence_caches[m_curstep];
                 _apply_contain<Ts...>(depend);
             }
             return *this;
@@ -4771,10 +4820,9 @@ namespace jeecs
         template<typename ... Ts>
         inline selector& anyof() noexcept
         {
-            auto& depend = m_dependence_caches[m_curstep];
-
             if (m_first_time_to_work)
             {
+                auto& depend = m_dependence_caches[m_curstep];
                 _apply_anyof<Ts...>(depend, m_any_id);
                 ++m_any_id;
             }
@@ -8464,22 +8512,30 @@ namespace jeecs
             auto integer_uniform_parser_w2c = [](wo_vm, wo_value value, auto* v) {
                 *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
             };
-            typing::register_script_parser<int8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
-            typing::register_script_parser<int16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
-            typing::register_script_parser<int32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
-            typing::register_script_parser<int64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
-            typing::register_script_parser<uint8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
-            typing::register_script_parser<uint16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
-            typing::register_script_parser<uint32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
-            typing::register_script_parser<uint64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, "int", "");
+            typing::register_script_parser<int8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, 
+                "int8", "alias int8 = int;");
+            typing::register_script_parser<int16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, 
+                "int16", "alias int16 = int;");
+            typing::register_script_parser<int32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, 
+                "int32", "alias int32 = int;");
+            typing::register_script_parser<int64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, 
+                "int64", "alias int64 = int;");
+            typing::register_script_parser<uint8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, 
+                "uint8", "alias uint8 = int;");
+            typing::register_script_parser<uint16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+                "uint16", "alias uint16 = int;");
+            typing::register_script_parser<uint32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, 
+                "uint32", "alias uint32 = int;");
+            typing::register_script_parser<uint64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c, 
+                "uint64", "alias uint64 = int;");
 
             typing::register_script_parser<float>(
                 [](wo_vm, wo_value value, const float* v) {
                     wo_set_float(value, *v);
-                }, 
+                },
                 [](wo_vm, wo_value value, float* v) {
                     *v = wo_float(value);
-                }, "real", "");
+                }, "float", "alias float = real;");
             typing::register_script_parser<double>(
                 [](wo_vm, wo_value value, const double* v) {
                     wo_set_real(value, *v);
@@ -8494,7 +8550,7 @@ namespace jeecs
                 },
                 [](wo_vm, wo_value value, std::string* v) {
                     *v = wo_string(value);
-                }, "string", "");
+                }, "cppstring", "alias cppstring = string;");
             typing::register_script_parser<jeecs::basic::string>(
                 [](wo_vm, wo_value value, const jeecs::basic::string* v) {
                     wo_set_string(value, v->c_str());
@@ -8570,8 +8626,8 @@ namespace jeecs
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems();
-            
-            je_update_woolang_api();
+
+            je_towoo_update_api();
         }
 
         inline void module_leave()

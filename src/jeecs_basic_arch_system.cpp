@@ -696,7 +696,6 @@ namespace jeecs_impl
         ecs_universe* m_universe;
         void* m_custom_data;
         void(*m_free_function)(void*);
-        std::mutex m_time_guard;
 
         ecs_job(ecs_universe* universe, job_for_worlds_t _job, void* custom_data, void(*free_function)(void*))
             : m_for_worlds_job(_job)
