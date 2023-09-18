@@ -768,7 +768,8 @@ je_towoo_update_api [基本接口]
 */
 JE_API void je_towoo_update_api();
 
-JE_API const jeecs::typing::type_info* je_towoo_register_system(
+JE_API bool je_towoo_register_system(
+    const jeecs::typing::type_info** out_system_tid,
     const char* system_name,
     const char* script_path);
 

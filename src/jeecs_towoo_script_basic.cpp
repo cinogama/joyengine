@@ -6,6 +6,8 @@
 #include <optional>
 #include <memory>
 
+#include "jeecs_core_script_system.hpp"
+
 /*
 TooWooo~
 toWoo JoyEngine generated wrap code for woolang.
@@ -58,6 +60,7 @@ namespace jeecs
                 JECS_DISABLE_MOVE_AND_COPY(towoo_system_info);
 
                 wo_vm m_base_vm;
+                bool m_is_good;
                 wo_integer_t m_create_function;
                 wo_integer_t m_close_function;
                 std::vector<towoo_step_work> m_works;
@@ -96,36 +99,55 @@ namespace jeecs
 
                 auto& base_info = _registered_towoo_base_systems.at(ty);
                 m_type = ty;
-                m_job_vm = wo_borrow_vm(base_info->m_base_vm);
-                m_create_function = base_info->m_create_function;
-                m_close_function = base_info->m_close_function;
-                m_dependences = base_info->m_works;
 
-                wo_value v = wo_invoke_rsfunc(m_job_vm, m_create_function, 0);
-                if (v == nullptr)
+                if (base_info->m_is_good)
                 {
-                    m_context = wo_push_empty(m_job_vm);
-                    jeecs::debug::logerr("Failed to invoke 'create' function for system: '%s'.",
-                        m_type->m_typename);
+                    m_job_vm = wo_borrow_vm(base_info->m_base_vm);
+                    m_create_function = base_info->m_create_function;
+                    m_close_function = base_info->m_close_function;
+                    m_dependences = base_info->m_works;
+
+                    wo_value v = wo_invoke_rsfunc(m_job_vm, m_create_function, 0);
+                    if (v == nullptr)
+                    {
+                        m_context = wo_push_empty(m_job_vm);
+                        jeecs::debug::logerr("Failed to invoke 'create' function for system: '%s'.",
+                            m_type->m_typename);
+                    }
+                    else
+                        m_context = wo_push_val(m_job_vm, v);
                 }
                 else
-                    m_context = wo_push_val(m_job_vm, v);
+                {
+                    m_job_vm = nullptr;
+                    jeecs::debug::logerr("System '%s' cannot create normally, please check the corresponding script for errors.",
+                        m_type->m_typename);
+                }
             }
             ~ToWooBaseSystem()
             {
-                wo_push_val(m_job_vm, m_context);
-                wo_value v = wo_invoke_rsfunc(m_job_vm, m_close_function, 1);
-                if (v == nullptr)
+                if (m_job_vm != nullptr)
                 {
-                    jeecs::debug::logerr("Failed to invoke 'close' function for system: '%s'.",
-                        m_type->m_typename);
-                }
+                    wo_push_val(m_job_vm, m_context);
+                    wo_value v = wo_invoke_rsfunc(m_job_vm, m_close_function, 1);
+                    if (v == nullptr)
+                    {
+                        jeecs::debug::logerr("Failed to invoke 'close' function for system: '%s'.",
+                            m_type->m_typename);
+                    }
 
-                wo_release_vm(m_job_vm);
+                    wo_release_vm(m_job_vm);
+                }
             }
 
             void Update()
             {
+                ScriptRuntimeSystem::system_instance = 
+                    get_world().get_system<ScriptRuntimeSystem>();
+
+                if (m_job_vm == nullptr)
+                    return;
+
                 for (auto& work : m_dependences)
                 {
                     work.m_dependence.update(get_world());
@@ -173,7 +195,6 @@ namespace jeecs
                                             while (member_tinfo != nullptr)
                                             {
                                                 // Set member;
-
                                                 wo_set_pointer(wo_struct_get(component_st, member_idx),
                                                     reinterpret_cast<void*>(
                                                         reinterpret_cast<intptr_t>(component)
@@ -183,17 +204,17 @@ namespace jeecs
                                                 member_tinfo = member_tinfo->m_next_member;
                                             }
                                         }
-
-                                        // Push entity
-                                        wo_push_gchandle(m_job_vm, new jeecs::game_entity{ cur_chunk , eid, version }, nullptr,
-                                            [](void* eptr) {delete std::launder(reinterpret_cast<jeecs::game_entity*>(eptr)); });
-
-                                        // Push context
-                                        wo_push_val(m_job_vm, m_context);
-
-                                        // Invoke!
-                                        wo_invoke_rsfunc(m_job_vm, work.m_function, work.m_used_components.size() + 2);
                                     }
+
+                                    // Push entity
+                                    wo_push_gchandle(m_job_vm, new jeecs::game_entity{ cur_chunk , eid, version }, nullptr,
+                                        [](void* eptr) {delete std::launder(reinterpret_cast<jeecs::game_entity*>(eptr)); });
+
+                                    // Push context
+                                    wo_push_val(m_job_vm, m_context);
+
+                                    // Invoke!
+                                    wo_invoke_rsfunc(m_job_vm, work.m_function, work.m_used_components.size() + 2);
                                 }
                             }
 
@@ -202,6 +223,8 @@ namespace jeecs
                         }
                     }
                 }
+
+                ScriptRuntimeSystem::system_instance = nullptr;
             }
         };
     }
@@ -370,6 +393,9 @@ import je::towoo::types;
 
 void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo)
 {
+    if (tinfo == nullptr)
+        return;
+
     std::lock_guard g1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
     auto registered_system_fnd = jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(tinfo);
     if (registered_system_fnd == jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.end())
@@ -382,7 +408,8 @@ void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo)
         je_typing_unregister(tinfo);
     }
 }
-const jeecs::typing::type_info* je_towoo_register_system(
+bool je_towoo_register_system(
+    const jeecs::typing::type_info** out_system_tinfo,
     const char* system_name,
     const char* script_path)
 {
@@ -392,15 +419,46 @@ const jeecs::typing::type_info* je_towoo_register_system(
     if (old_typeinfo != nullptr)
     {
         // 同名系统未解除注册，在此报错
+        *out_system_tinfo = nullptr;
         jeecs::debug::logerr("The towoo-system named: '%s' has been registered.", system_name);
+        return false;
     }
-    else if (jeecs_file* texfile = jeecs_file_open(script_path))
+
+    auto* towoo_system_tinfo = je_typing_register(
+        system_name,
+        jeecs::basic::type_hash<jeecs::towoo::ToWooBaseSystem>(),
+        sizeof(jeecs::towoo::ToWooBaseSystem),
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::to_string,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::parse,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::script_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
+        je_typing_class::JE_SYSTEM);
+
+    *out_system_tinfo = towoo_system_tinfo;
+
+    wo_vm vm = wo_create_vm();
+
+    auto info = std::make_unique<jeecs::towoo::ToWooBaseSystem::towoo_system_info>(vm);
+    auto* towoo_sys_info = info.get();
+    towoo_sys_info->m_is_good = false;
+    jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems[towoo_system_tinfo]
+        = std::move(info);
+
+    if (jeecs_file* texfile = jeecs_file_open(script_path))
     {
         char* src = (char*)malloc(texfile->m_file_length + 1);
         jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
         src[texfile->m_file_length] = 0;
 
-        wo_vm vm = wo_create_vm();
         bool result = wo_load_binary(vm, script_path, src, texfile->m_file_length);
 
         jeecs_file_close(texfile);
@@ -409,8 +467,8 @@ const jeecs::typing::type_info* je_towoo_register_system(
         if (result)
         {
             // Invoke "_init_towoo_system", if failed... boom!
-            wo_integer_t create_func = wo_extern_symb(vm, "create");
-            wo_integer_t close_func = wo_extern_symb(vm, "close");
+            towoo_sys_info->m_create_function = wo_extern_symb(vm, "create");
+            towoo_sys_info->m_close_function = wo_extern_symb(vm, "close");
             wo_integer_t initfunc = wo_extern_symb(vm, "_init_towoo_system");
             if (initfunc == 0)
             {
@@ -418,12 +476,12 @@ const jeecs::typing::type_info* je_towoo_register_system(
                     "forget to import je/towoo/system.wo ?",
                     system_name, script_path);
             }
-            else if (create_func == 0)
+            else if (towoo_sys_info->m_create_function == 0)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find 'create' function in '%s'.",
                     system_name, script_path);
             }
-            else if (close_func == 0)
+            else if (towoo_sys_info->m_close_function == 0)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find 'close' in '%s'.",
                     system_name, script_path);
@@ -437,34 +495,6 @@ const jeecs::typing::type_info* je_towoo_register_system(
                 }
                 else
                 {
-                    auto* towoo_system_tinfo = je_typing_register(
-                        system_name,
-                        jeecs::basic::type_hash<jeecs::towoo::ToWooBaseSystem>(),
-                        sizeof(jeecs::towoo::ToWooBaseSystem),
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::to_string,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::parse,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::script_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
-                        je_typing_class::JE_SYSTEM);
-
-                    auto info = std::make_unique<jeecs::towoo::ToWooBaseSystem::towoo_system_info>(vm);
-
-                    info->m_create_function = create_func;
-                    info->m_close_function = close_func;
-
-                    // Set system info.
-                    jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems[towoo_system_tinfo]
-                        = std::move(info);
-
                     ug1.unlock();
                     wo_push_pointer(vm, (void*)towoo_system_tinfo);
                     if (nullptr == wo_invoke_rsfunc(vm, initfunc, 1))
@@ -472,12 +502,12 @@ const jeecs::typing::type_info* je_towoo_register_system(
                         ug1.lock();
                         jeecs::debug::logerr("Failed to register: '%s', '_init_towoo_system' failed: '%s'.",
                             system_name, wo_get_runtime_error(vm));
-
-                        // 解除注册，不需要释放vm，erase的同时，vm已经被释放了。
-                        je_towoo_unregister_system(towoo_system_tinfo);
                     }
                     else
-                        return towoo_system_tinfo;
+                    {
+                        towoo_sys_info->m_is_good = true;
+                        return true;
+                    }
                 }
             }
         }
@@ -486,14 +516,13 @@ const jeecs::typing::type_info* je_towoo_register_system(
             jeecs::debug::logerr("Failed to register: '%s' failed to compile:\n%s",
                 system_name, wo_get_compile_error(vm, WO_NEED_COLOR));
         }
-        wo_close_vm(vm);
     }
     else
     {
         jeecs::debug::logerr("Failed to register: '%s' unable to open file '%s'.",
             system_name, script_path);
     }
-    return nullptr;
+    return false;
 }
 
 void jetowoo_finish()
@@ -587,18 +616,21 @@ namespace je::towoo::system
             self.m_require_group += 1;
             if (is_arg)
                 self.m_argument_count += 1;
+            return self;
         }
         public func maynot<CompT>(self: ToWooSystemFuncJob)
         {
             self.m_requirement->add((require_type::MAYNOT, self.m_require_group, je::towoo::tid:<CompT>()));
             self.m_require_group += 1;
             self.m_argument_count += 1;
+            return self;
         }
         public func except<CompT>(self: ToWooSystemFuncJob)
         {
             self.m_requirement->add((require_type::EXCEPT, self.m_require_group, je::towoo::tid:<CompT>()));
             self.m_require_group += 1;
             self.m_argument_count += 1;
+            return self;
         }
         public func anyof(self: ToWooSystemFuncJob, ts: array<je::typeinfo>)
         {
@@ -606,6 +638,7 @@ namespace je::towoo::system
                 self.m_requirement->add((require_type::EXCEPT, self.m_require_group, t));
             self.m_require_group += 1;
             self.m_argument_count += 1;
+            return self;
         }
     }
 
@@ -763,7 +796,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     }
 
     // OK Generate!
-    let mut result = F"je::towoo::system::register_job_function({job_func_name}\x29";
+    let mut result = F"do je::towoo::system::register_job_function({job_func_name}\x29";
     for (let _, (_, type, maynot) : arguments)
     {
         if (maynot)
@@ -790,7 +823,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         else
             result += F", {argname}: {type}";
     }
-    result += "){do e;\n";
+    result += "){do e; do context;\n";
     lexer->lex(result);
 }
 )";

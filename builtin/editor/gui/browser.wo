@@ -417,7 +417,39 @@ extern func update(_: Context, _: entity)
                                 | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = filesys::normalize(current_work_path) / (filename + ".wo"););
                 }
-                 if (MenuItem(F"编辑器工具脚本"))
+                if (MenuItem(F"ToWoo System 脚本"))
+                {
+                    let default_empty_script = 
+@"import woo::std;
+import je;
+import je::towoo::system;
+
+using std;
+using je;
+
+alias Context = void;
+
+extern func create()=> Context
+{
+}
+extern func close(_: Context)
+{
+}
+
+system! demo()
+{
+}
+
+"@;
+                    jeapi::gui::form::input("新建ToWoo System 脚本", F"在{current_work_path}新建ToWoo System 脚本", "NewToWooSystem",
+                        \filename: string = filesys::exist(file_path)
+                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.wosystem\n{default_empty_script}") 
+                                ? func(){context->get_project->try_update_towoo();force_update();}()
+                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                        where file_path = filesys::normalize(current_work_path) / (filename + ".wosystem"););
+                }
+                if (MenuItem(F"编辑器工具脚本"))
                 {
                     let default_empty_script = 
 @"import woo::std;
@@ -586,7 +618,10 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 do std::shell(F"explorer \"{filesys::normalize(current_work_path)->tostring->replace("/", "\\")}\"");
 
             if (MenuItem(F"刷新"))
+            {
+                context->get_project->try_update_towoo();
                 force_update();
+            }
 
             EndPopup();
         }

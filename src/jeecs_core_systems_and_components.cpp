@@ -9,6 +9,52 @@
 #include "jeecs_core_script_system.hpp"
 #include "jeecs_core_audio_system.hpp"
 
+WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args, size_t argc)
+{
+    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
+        return wo_ret_panic(vm, "You can only start up coroutine in Script or another Coroutine.");
+
+    return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->real_deltatimed());
+}
+
+WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args, size_t argc)
+{
+    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
+        return wo_ret_panic(vm, "You can only start up coroutine in Script or another Coroutine.");
+
+    return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->deltatimed());
+}
+
+WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
+{
+    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
+        return wo_ret_panic(vm, "You can only start up coroutine in Script or another Coroutine.");
+
+    // start_coroutine(workjob, (args))
+    wo_value cofunc = args + 0;
+    wo_value arguments = args + 1;
+    auto argument_count = wo_lengthof(arguments);
+
+    wo_vm co_vmm = wo_borrow_vm(vm);
+
+    for (auto i = argument_count; i > 0; --i)
+        wo_push_val(co_vmm, wo_struct_get(arguments, (uint16_t)(i - 1)));
+
+    if (wo_valuetype(cofunc) == WO_INTEGER_TYPE)
+        wo_dispatch_rsfunc(co_vmm, wo_int(cofunc), argument_count);
+    else
+        wo_dispatch_closure(co_vmm, cofunc, argument_count);
+
+    std::lock_guard sg1(jeecs::ScriptRuntimeSystem::system_instance
+        ->_coroutine_list_mx);
+
+    jeecs::ScriptRuntimeSystem::system_instance
+        ->_coroutine_list.push_back(co_vmm);
+
+    return wo_ret_void(vm);
+}
+
+
 const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
 {
     jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();

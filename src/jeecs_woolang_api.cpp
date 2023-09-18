@@ -1694,6 +1694,20 @@ WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args, size_
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_towoo_register_system(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* result;
+    if (je_towoo_register_system(&result, wo_string(args + 0), wo_string(args + 1)))
+        return wo_ret_ok_pointer(vm, (void*)result);
+
+    return wo_ret_err_pointer(vm, (void*)result);
+}
+WO_API wo_api wojeapi_towoo_unregister_system(wo_vm vm, wo_value args, size_t argc)
+{
+    je_towoo_unregister_system((const jeecs::typing::type_info*)wo_pointer(args + 0));
+     return wo_ret_void(vm);
+}
+
 const char* jeecs_woolang_editor_api_path = "je/editor.wo";
 const char* jeecs_woolang_editor_api_src = R"(
 import woo::std;
@@ -1720,7 +1734,7 @@ namespace je
 
     namespace entity
     {
-                namespace editor
+        namespace editor
         {
             public using euid_t = handle;
 
@@ -1987,6 +2001,15 @@ const char* jeecs_woolang_api_src = R"(
 import woo::std;
 namespace je
 {
+    namespace towoo
+    {
+        extern("libjoyecs", "wojeapi_towoo_register_system")
+        public func register(name: string, path: string)=> result<typeinfo, typeinfo>;
+
+        extern("libjoyecs", "wojeapi_towoo_unregister_system")
+        public func unregister(t: typeinfo)=> void;
+    }
+
     extern("libjoyecs", "wojeapi_deltatime")
     public func real_deltatime()=> real;
 

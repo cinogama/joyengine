@@ -15,12 +15,13 @@ import builtin::api::gui::form::ask;
 import builtin::editor::cpp::main;
 import builtin::editor::tools::script_manager;
 import builtin::editor::gui::draw_pannel::main;
+import builtin::editor::project::towoomgr;
 
 namespace editor
 {
     let DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
 
-    public using ProjectWorld = struct{
+    using ProjectWorld = struct{
         m_world_instance: je::world,
         m_world_path: filesys::path_t,
         m_runtime_systems: mut array<je::typeinfo>,
@@ -33,7 +34,7 @@ namespace editor
         m_dumped_editing_worlds: array<dict<string, dynamic>>,
     };
 
-    public using Project = struct{
+    using Project = struct{
         m_name: string,             // 项目的名称，不能更改
         m_path: filesys::path_t,    // 项目所在的目录
         m_env: Environment,         // 项目环境
@@ -42,7 +43,8 @@ namespace editor
         m_modules: map<filesys::path_t, CxxProject>, 
         m_editing_world: mut option<je::world>,
         m_debug_context: mut option<DebugContext>,
-        m_proj_file_lock: mut option<process::flock>
+        m_proj_file_lock: mut option<process::flock>,
+        m_towoo_context: ToWooContext,
     }
     {
         public func make_path_normalize(self: Project, path: filesys::path_t)
@@ -347,6 +349,7 @@ namespace editor
                 m_debug_context = mut option::none,
                 m_editing_world = mut option::none,
                 m_proj_file_lock = mut option::none,
+                m_towoo_context = new! ToWooContext(path),
             };
 
             if (proj->try_lock_this_project() == false)
@@ -374,6 +377,23 @@ namespace editor
             }
             return false;
         }
+        public func try_update_towoo(self: Project)
+        {
+            if (self.m_towoo_context->check_for_update)
+            {
+                match (self->dump_and_close_all_world())
+                {
+                ok(dat)?
+                    {
+                        self.m_towoo_context->update();
+                        self->restore_all_world(dat);
+                    }
+                err(msg)?
+                    jeapi::gui::form::errmsg("失败", F"更新towoo系统失败: {msg}");
+                }
+            }
+        }
+
         public func load(path: filesys::path_t, dat: dict<string, dynamic>)
         {
             try! self = create(dat["name"] as string, path);
@@ -396,6 +416,8 @@ namespace editor
                 ->  valor([])
                 ->> \mr = jeapi::gui::form::errmsg("加载失败", F"无法加载 '{mr[0]}'：{mr[1]}"); 
                 ;
+            
+            self->try_update_towoo();
 
             match (filesys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
             {
