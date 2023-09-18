@@ -807,7 +807,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     for (let _, type : requirements.contain)
         result += F"->contain:<{type}>(false\x29";
     for (let _, type : requirements.except)
-        result += F"->except:<{type}>(false\x29";
+        result += F"->except:<{type}>(\x29";
     for (let _, req : requirements.anyof)
     {
         result += F"->anyof([";
@@ -815,7 +815,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
             result += F"je::towoo::tid:<{t}>(),";
         result += "]\x29";
     }
-    result += F";\n func {job_func_name}(context: typeof(create()), e: je::entity";
+    result += F";\nfunc {job_func_name}(context: typeof(create()), e: je::entity";
     for (let _, (argname, type, maynot) : arguments)
     {
         if (maynot)

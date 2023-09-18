@@ -49,7 +49,8 @@ namespace editor::gui::edit_forms
                     }
                 });
             
-            if (filesys::extension(originpath)->lower == ".wo")
+            if (filesys::extension(originpath)->lower == ".wo"
+                || filesys::extension(originpath)->lower == ".wosystem")
                 return Action::ACTION(func(pconfig, fimg){
                     pconfig.m_pack_output_log->add(F"正在编译脚本：{packpath}");
                     match (vm::load(originpath->tostring))
@@ -242,9 +243,13 @@ namespace editor::gui::edit_forms
                                 }
 
                                 let LOADED_MODULE_HANDLES = []mut: vec<handle>;
+                                let LOADED_TOWOO_SYSTEM_TYPES = []mut: vec<je::typeinfo>;
 
                                 // 在此处加载模块
                                 $LOAD_DYLIB_MODULES$
+
+                                // 在此处加载ToWoo脚本
+                                $LOAD_TOWOO_SCRIPTS$
 
                                 // 在此设置分辨率
                                 $APPLY_RESOLUTION$
@@ -268,6 +273,9 @@ namespace editor::gui::edit_forms
 
                                 for (let _, libhandle : LOADED_MODULE_HANDLES)
                                     je::delay_unload_module(libhandle);
+                                
+                                for (let _, tinfo: LOADED_TOWOO_SYSTEM_TYPES)
+                                    je::towoo::unregister(tinfo);
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码
@@ -290,7 +298,16 @@ namespace editor::gui::edit_forms
                                     + "\n";
                             }
 
-                            // 1.5.2 应用项目设置
+                            // 1.5.2 加载ToWoo类型
+                            let loading_towoo_types = proj->get_all_towoo_scripts_name_and_path
+                                ->  unmapping
+                                ->> \nameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::register({
+                                        nameandpath[0]->enstring}, {nameandpath[1]->enstring})->or(\\v=v;));\n"
+                                    ;
+                                ->  reduce(\l, r = l + r;)
+                                ->  valor("");
+
+                            // 1.5.3 应用项目设置
                             config.m_pack_output_log->add(F"正在生成应用项目设置的脚本");
                             let mut proj_config = "";
                             for (let _, pconfig : proj->get_configs)
@@ -298,7 +315,7 @@ namespace editor::gui::edit_forms
                                 proj_config += pconfig->apply + "\n";
                             }
 
-                            // 1.5.3 加载和序列化世界
+                            // 1.5.4 加载和序列化世界
                             config.m_pack_output_log->add(F"正在生成加载世界的脚本");
                             let mut load_world_instance = "";
                             for (let _, startup_world_path : config.m_start_up_worlds)
@@ -306,13 +323,14 @@ namespace editor::gui::edit_forms
                                 load_world_instance += F"LOAD_WORLD({startup_world_path->enstring});\n";
                             }
   
-                            // 1.5.4 加载入口脚本
+                            // 1.5.5 加载入口脚本
                             let load_entry_script = "";
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
                                 new! vm("@/builtin/main.wo", 
                                     boot_up_script
                                         ->replace("$LOAD_DYLIB_MODULES$", dylib_loader)
+                                        ->replace("$LOAD_TOWOO_SCRIPTS$", loading_towoo_types)
                                         ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
                                         ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
                                         ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)

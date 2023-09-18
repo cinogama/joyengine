@@ -7,7 +7,31 @@ import builtin::editor::gui::edit_forms;
 
 namespace editor::gui
 {
-    public using EditorContext = struct {
+    using Timer = struct{
+        m_last_update_time: mut real,
+        m_update_intg: real,
+    }
+    {
+        public func create(intg: real)
+        {
+            return Timer{
+                m_last_update_time = mut std::time(),
+                m_update_intg = intg,
+            };
+        }
+        func update(self: Timer)
+        {
+            let cur_time = std::time();
+            if (cur_time - self.m_last_update_time >= self.m_update_intg)
+            {
+                self.m_last_update_time = cur_time;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    using EditorContext = struct {
         m_stopped: mut bool,
         m_project: Project,
 
@@ -19,6 +43,8 @@ namespace editor::gui
 
         // 这里放编辑器窗口的控制器，这样可以批量开启或关闭
         m_editor_form_controlor: map<string, EditorContext::EditorFormControlor>,
+
+        m_towoo_system_update_timer: Timer,
     }
     {
         using EditorFormControlor = struct {
@@ -126,6 +152,12 @@ namespace editor::gui
             // 更新一下对实体的请求
             jeapi::debug::update_safety_entity_operation_requests(
                 self->get_project->get_env->get_universe);
+
+            // 整个timer，定时检查一下towoo系统
+            if (self.m_towoo_system_update_timer->update)
+            {
+                self->get_project->try_update_towoo(true);
+            }
         }
         protected func is_stopped(self: EditorContext)
         {
@@ -188,6 +220,7 @@ namespace editor::gui
             m_editing_entity_euid = mut option::none,
             m_fix_update_jobs = []mut,
             m_editor_form_controlor = {}mut,
+            m_towoo_system_update_timer = new! Timer(1.),
         };
 
         // 开启主菜单

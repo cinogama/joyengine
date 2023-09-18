@@ -19,13 +19,15 @@ namespace jeecs_impl
     class type_info_holder
     {
         JECS_DISABLE_MOVE_AND_COPY(type_info_holder);
-        std::mutex                              _m_type_holder_mx;
+        mutable std::mutex  _m_type_holder_mx;
 
         std::unordered_map<jeecs::typing::type_info*, std::vector<jeecs::typing::type_info*>>
             _m_registered_typeinfo;
 
         std::vector<jeecs::typing::type_info*>  _m_type_holder_list;
         std::unordered_map<std::string, jeecs::typing::typeid_t>  _m_type_name_id_mapping;
+
+        size_t m_type_unregistered_count = 0;
 
         type_info_holder() = default;
     public:
@@ -161,6 +163,11 @@ namespace jeecs_impl
             }
             return _m_type_holder_list;
         }
+        size_t get_unregistered_count() const noexcept
+        {
+            std::lock_guard g1(_m_type_holder_mx); 
+            return m_type_unregistered_count;
+        }
 
         // ATTENTION: This function do not promise for thread safe for adding new member.
         void register_member(
@@ -201,7 +208,7 @@ namespace jeecs_impl
         void unregister_type(const jeecs::typing::type_info* tinfo) noexcept
         {
             std::lock_guard g1(_m_type_holder_mx);
-
+            ++m_type_unregistered_count;
             assert(tinfo != nullptr);
             if (tinfo->m_id && tinfo->m_id != jeecs::typing::INVALID_TYPE_ID)
             {
@@ -381,6 +388,11 @@ const jeecs::typing::type_info** jedbg_get_all_registed_types(void)
     memcpy(result, types.data(), types.size() * sizeof(const jeecs::typing::type_info**));
 
     return result;
+}
+
+size_t jedbg_get_unregister_type_count(void)
+{
+    return jeecs_impl::type_info_holder::holder()->get_unregistered_count();
 }
 
 #define JE_DECL_ATOMIC_OPERATOR_API(TYPE)\

@@ -16,6 +16,8 @@ namespace editor::gui::edit_forms
 
         target_path: filesys::path_t,
         callback: option<(je::world)=>bool>,
+
+        tversion: int,
     }
     {
         public func create(proj: Project, name: string, path: filesys::path_t, callback: (je::world)=>bool)
@@ -30,6 +32,7 @@ namespace editor::gui::edit_forms
 
                 target_path = path,
                 callback = option::value(callback),
+                tversion = je::typeinfo::get_unregister_count(),
             };
     
             let all_systems = []mut: typeof(context.not_append_types);
@@ -68,6 +71,7 @@ namespace editor::gui::edit_forms
 
                 target_path = proj->get_world_path(world)->val,
                 callback = option::none,
+                tversion = je::typeinfo::get_unregister_count(),
             };
     
             let all_systems = []mut: typeof(context.not_append_types);
@@ -257,6 +261,12 @@ namespace editor::gui::edit_forms
 
     public func show_world_creator(_: EditorContext, world_context: WorldContext)
     {
+        if (world_context.tversion != je::typeinfo::get_unregister_count())
+        {
+            jeapi::gui::form::errmsg("提示", "由于注册的类型发生变化，世界系统编辑窗口已经关闭");
+            return false;
+        }
+
         je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
         let mut open = true;
         match (BeginAttrOpen(world_context.edit_world->has() ? F"编辑世界##{JobID()}" | F"创建新世界##{JobID()}", 

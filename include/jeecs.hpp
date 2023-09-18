@@ -2801,6 +2801,8 @@ JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(con
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_registed_types(void);
 
+JE_API size_t jedbg_get_unregister_type_count(void);
+
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world);
 
@@ -8545,13 +8547,6 @@ namespace jeecs
                     *v = wo_real(value);
                 }, "real", "");
 
-            typing::register_script_parser<std::string>(
-                [](wo_vm, wo_value value, const std::string* v) {
-                    wo_set_string(value, v->c_str());
-                },
-                [](wo_vm, wo_value value, std::string* v) {
-                    *v = wo_string(value);
-                }, "cppstring", "alias cppstring = string;");
             typing::register_script_parser<jeecs::basic::string>(
                 [](wo_vm, wo_value value, const jeecs::basic::string* v) {
                     wo_set_string(value, v->c_str());

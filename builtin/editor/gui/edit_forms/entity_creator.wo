@@ -10,6 +10,7 @@ namespace editor::gui::edit_forms
         edit_entity      : option<jeapi::debug::Eeid>,
         has_append_types : vec<je::typeinfo>,
         not_append_types : vec<je::typeinfo>,
+        tversion         : int,
     }
     {
         public func create()
@@ -19,6 +20,7 @@ namespace editor::gui::edit_forms
                 edit_entity = option::none,
                 has_append_types = []mut,
                 not_append_types = je::typeinfo::get_all_components_types()->tovec,
+                tversion = je::typeinfo::get_unregister_count(),
             };
     
             let comps = []mut: typeof(context.not_append_types);
@@ -38,6 +40,7 @@ namespace editor::gui::edit_forms
                 edit_entity = option::value(entity),
                 has_append_types = []mut,
                 not_append_types = je::typeinfo::get_all_components_types()->tovec,
+                tversion = je::typeinfo::get_unregister_count(),
             };
 
             entity->justdo(func(e){
@@ -319,6 +322,12 @@ namespace editor::gui::edit_forms
 
     public func show_entity_creator(context: EditorContext, entity_context: EntityContext)
     {
+        if (entity_context.tversion != je::typeinfo::get_unregister_count())
+        {
+            jeapi::gui::form::errmsg("提示", "由于注册的类型发生变化，世界系统编辑窗口已经关闭");
+            return false;
+        }
+
         je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
         let mut open = true;
         match (BeginAttrOpen(entity_context.edit_entity->has 

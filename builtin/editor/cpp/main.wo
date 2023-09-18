@@ -119,20 +119,20 @@ namespace editor
         let ENGINE_CORE_LIBRARYS_PATHS =
             {
                 ["win32_debug_x86"] = LibraryFiles{
-                    runtime_dynamic_libs = [F"libwoo32_debug.dll", F"libjoyecs32_debug.dll",],
-                    link_static_libs = [F"libwoo32_debug.lib", F"libjoyecs32_debug.lib",]
+                    runtime_dynamic_libs = ["libwoo32_debug.dll", "libjoyecs32_debug.dll", "OpenAL32.dll",],
+                    link_static_libs = ["libwoo32_debug.lib", "libjoyecs32_debug.lib", "OpenAL32.dll",]
                 },
                 ["win32_release_x86"] = LibraryFiles{
-                    runtime_dynamic_libs = [F"libwoo32.dll", F"libjoyecs32.dll",],
-                    link_static_libs = [F"libwoo32.lib", F"libjoyecs32.lib",]
+                    runtime_dynamic_libs = ["libwoo32.dll", "libjoyecs32.dll", "OpenAL32.dll",],
+                    link_static_libs = ["libwoo32.lib", "libjoyecs32.lib", "OpenAL32.dll",]
                 },
                 ["win32_debug_x64"] = LibraryFiles{
-                    runtime_dynamic_libs = [F"libwoo_debug.dll", F"libjoyecs_debug.dll",],
-                    link_static_libs = [F"libwoo_debug.lib", F"libjoyecs_debug.lib",]
+                    runtime_dynamic_libs = [F"libwoo_debug.dll", "libjoyecs_debug.dll", "OpenAL32.dll",],
+                    link_static_libs = ["libwoo_debug.lib", "libjoyecs_debug.lib", "OpenAL32.dll",]
                 },
                 ["win32_release_x64"] = LibraryFiles{
-                    runtime_dynamic_libs = [F"libwoo.dll", F"libjoyecs.dll",],
-                    link_static_libs = [F"libwoo.lib", F"libjoyecs.lib",]
+                    runtime_dynamic_libs = ["libwoo.dll", "libjoyecs.dll", "OpenAL32.dll",],
+                    link_static_libs = ["libwoo.lib", "libjoyecs.lib", "OpenAL32.dll",]
                 },
             }: dict<string, LibraryFiles>;
 

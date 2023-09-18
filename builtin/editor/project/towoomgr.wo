@@ -58,7 +58,23 @@ namespace editor
             self.m_loaded_towoosys = new_scripts as map<path_t, (int, je::typeinfo)>
                 ->unsafe::cast :<dict<path_t, (int, je::typeinfo)>>();
         }
-
+        public func fast_check_for_update(self: ToWooContext)
+        {
+            for (let p, (c, _) : self.m_loaded_towoosys)
+            {
+                if (isfile(p))
+                {
+                    match (editor::crc64file(p->tostring))
+                    {
+                    value(crc64_code)?
+                        if (crc64_code != c)
+                            return true;
+                    none?;
+                    }
+                }
+            }
+            return false;
+        }
         public func check_for_update(self: ToWooContext)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
@@ -85,7 +101,6 @@ namespace editor
             }
             return true;
         }
-
         public func create(proj_path: path_t)
         {
             let self = ToWooContext{
