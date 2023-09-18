@@ -576,8 +576,6 @@ namespace editor::gui::tilemap
         m_offset: mut(real, real),
         m_scale: mut real,
         m_layerd_tiles: map<int, map<int, map<int, Tile>>>,
-
-        m_chunks: map<int, map<int, map<int, TileChunk>>>,
     }
     {
         func create(context: EditorContext)
@@ -594,7 +592,6 @@ namespace editor::gui::tilemap
                 m_offset = mut(0., 0.),
                 m_scale = mut 1.,
                 m_layerd_tiles = {}mut,
-                m_chunks = {}mut,
             };
         }
         func get_tile(self: TileEditContext, layer: int, x: int, y: int)
@@ -605,28 +602,10 @@ namespace editor::gui::tilemap
         {
             return self.m_tile_sets->get(self.m_selected_tileset_index)=>>\tileset = tileset->gettile(self.m_selected_tile...);;
         }
-        func get_or_create_chunk(self: TileEditContext, layer: int, chunkx: int, chunky: int)
-        {
-            let ychunks = self.m_layerd_tiles->getorset(layer, {}mut)->getorset(chunkx, {}mut);
-            match (ychunks->get(chunky))
-            {
-            value(chunk)? return chunk;
-            none?
-                {
-                    std::panic("TODO");
-                    // let chunk = TileChunk::create();
-                    // ychunks->set(chunky, chunk);
-
-                }
-            }
-        }
         func apply_draw_tile(self: TileEditContext, x: int, y: int)
         {
             do self->get_selected_tile->> \tile = 
                 self.m_layerd_tiles->getorset(self.m_drawing_layer, {}mut)->getorset(x, {}mut)->set(y, tile);;
-
-            std::panic("TODO");
-            // let ((chunkx, chunky), (chunkpixx, chunkpixy)) = TileChunk::raw_to_chunk_location();
         }
         func clear_draw_tile(self: TileEditContext, x: int, y: int)
         {
