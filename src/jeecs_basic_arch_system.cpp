@@ -132,7 +132,7 @@ namespace jeecs_impl
                 assert(jeoffsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
 
                 _m_entities_meta = new jeecs::game_entity::meta[_m_entity_count]{};
-                _m_entity_slot_states = new std::atomic_flag[_m_entity_count];
+                _m_entity_slot_states = new std::atomic_flag[_m_entity_count]{};
             }
             ~arch_chunk()
             {
