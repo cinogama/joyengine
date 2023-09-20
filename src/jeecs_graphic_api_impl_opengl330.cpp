@@ -886,7 +886,10 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
     else if (resource->m_type == jegl_resource::type::TEXTURE)
         _gl_using_texture2d(gthread, resource);
     else if (resource->m_type == jegl_resource::type::VERTEX)
-        glBindVertexArray(std::launder(reinterpret_cast<gl3_vertex_data*>(resource->m_handle.m_ptr))->m_vao);
+    {
+        if (auto vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(resource->m_handle.m_ptr)))
+            glBindVertexArray(vdata->m_vao);
+    }
     else if (resource->m_type == jegl_resource::type::FRAMEBUF)
         glBindFramebuffer(GL_FRAMEBUFFER, resource->m_handle.m_uint1);
     else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
