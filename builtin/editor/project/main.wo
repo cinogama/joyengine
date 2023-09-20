@@ -392,8 +392,12 @@ namespace editor
                 {
                 ok(dat)?
                     {
-                        self.m_towoo_context->update();
-                        self->restore_all_world(dat);
+                        je::gui::launch(func()
+                            {
+                                self.m_towoo_context->update();
+                                self->restore_all_world(dat);
+                                return false;
+                            }, ());
                     }
                 err(msg)?
                     jeapi::gui::form::errmsg("失败", F"更新towoo系统失败: {msg}");

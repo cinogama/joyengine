@@ -220,6 +220,7 @@ namespace editor::gui::edit_forms
                                         ->> \libpath = do filesys::copy(filesys::normalize(F"{std::exepath()}/{libpath}"), export_path / libpath)->unwarp;
                                     ;
                                 ;
+                            do filesys::copy(filesys::normalize(F"{std::exepath()}/OpenAL32.dll"), export_path / "OpenAL32.dll")->unwarp;
                             
                             // 1.5 将启动脚本编译后打入镜像
                             config.m_pack_output_log->add(F"正在打包启动脚本");
