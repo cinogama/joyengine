@@ -188,7 +188,7 @@ namespace jeecs
 
                                         if (component_st != nullptr)
                                         {
-                                            wo_set_struct(component_st, typeinfo->m_member_count);
+                                            wo_set_struct(component_st, m_job_vm, typeinfo->m_member_count);
 
                                             uint16_t member_idx = 0;
                                             auto* member_tinfo = typeinfo->m_member_types;

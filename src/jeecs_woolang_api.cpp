@@ -153,9 +153,9 @@ WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args, size_t argc)
     for (auto& [i, s] : logs)
     {
         wo_value a = wo_arr_add(result, nullptr);
-        wo_set_struct(a, 2);
+        wo_set_struct(a, vm, 2);
         wo_set_int(wo_struct_get(a, 0), i);
-        wo_set_string(wo_struct_get(a, 1), s.c_str());
+        wo_set_string(wo_struct_get(a, 1), vm, s.c_str());
     }
     return wo_ret_val(vm, result);
 }
@@ -673,9 +673,9 @@ WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args, size_t 
     {
         wo_value st = wo_arr_add(result, nullptr);
 
-        wo_set_struct(st, 3);
+        wo_set_struct(st, vm, 3);
 
-        wo_set_string(wo_struct_get(st, 0), member_type->m_member_name);
+        wo_set_string(wo_struct_get(st, 0), vm, member_type->m_member_name);
         wo_set_pointer(wo_struct_get(st, 1), (void*)member_type->m_member_type);
         wo_set_handle(wo_struct_get(st, 2), (wo_handle_t)(member_type->m_member_offset + (intptr_t)component_addr));
 
@@ -862,9 +862,9 @@ WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args, size_t argc)
     while (member_iter != nullptr)
     {
         wo_value v = wo_arr_add(result, nullptr);
-        wo_set_struct(v, 2);
+        wo_set_struct(v, vm, 2);
 
-        wo_set_string(wo_struct_get(v, 0), member_iter->m_member_name);
+        wo_set_string(wo_struct_get(v, 0), vm, member_iter->m_member_name);
         wo_set_pointer(wo_struct_get(v, 1), (void*)member_iter->m_member_type);
 
         member_iter = member_iter->m_next_member;
@@ -1446,14 +1446,14 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
             break;
         }
 
-        wo_set_string(key, uniforms->m_name);
+        wo_set_string(key, vm, uniforms->m_name);
 
         wo_value val_in_map = wo_map_set(out_map, key, nullptr);
-        wo_set_struct(val_in_map, 2);
+        wo_set_struct(val_in_map, vm, 2);
         wo_set_pointer(wo_struct_get(val_in_map, 0), (void*)type);
 
         wo_value uniform_value_data = wo_struct_get(val_in_map, 1);
-        wo_set_struct(uniform_value_data, 5);
+        wo_set_struct(uniform_value_data, vm, 5);
 
         wo_set_int(wo_struct_get(uniform_value_data, 0), uniforms->n);
         wo_set_float(wo_struct_get(uniform_value_data, 1), uniforms->x);

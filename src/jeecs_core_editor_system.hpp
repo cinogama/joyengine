@@ -1167,7 +1167,7 @@ WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args, siz
     for (auto& ok_or_bad_shader : bad_uniform->stored_uniforms)
     {
         if (ok_or_bad_shader.is_ok() == false)
-            wo_set_string(wo_arr_add(result, nullptr), ok_or_bad_shader.get_bad().m_path.c_str());
+            wo_set_string(wo_arr_add(result, nullptr), vm, ok_or_bad_shader.get_bad().m_path.c_str());
     }
     return wo_ret_val(vm, result);
 }

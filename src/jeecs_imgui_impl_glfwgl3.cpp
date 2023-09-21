@@ -797,8 +797,8 @@ WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args, size_t argc)
     wo_value minpos = wo_struct_get(ret, 0);
     wo_value maxpos = wo_struct_get(ret, 1);
 
-    wo_set_struct(minpos, 2);
-    wo_set_struct(maxpos, 2);
+    wo_set_struct(minpos, vm, 2);
+    wo_set_struct(maxpos, vm, 2);
 
     wo_set_float(wo_struct_get(minpos, 0), isizemin.x);
     wo_set_float(wo_struct_get(minpos, 1), isizemin.y);
