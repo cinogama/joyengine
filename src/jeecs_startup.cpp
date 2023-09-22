@@ -28,6 +28,9 @@ extern const char* jeecs_woolang_editor_api_src;
 extern const char* jeecs_towoo_system_path;
 extern const char* jeecs_towoo_system_src;
 
+extern const char* jeecs_towoo_component_path;
+extern const char* jeecs_towoo_component_src;
+
 void je_ecs_shutdown();
 void jeal_init();
 void jeal_finish();
@@ -47,6 +50,7 @@ void je_init(int argc, char** argv)
 
     jeecs_file_set_runtime_path(wo_exe_path());
 
+    wo_virtual_source(jeecs_towoo_component_path, jeecs_towoo_component_src, false);
     wo_virtual_source(jeecs_towoo_system_path, jeecs_towoo_system_src, false);
     wo_virtual_source(jeecs_woolang_editor_api_path, jeecs_woolang_editor_api_src, false);
     wo_virtual_source(jeecs_woolang_api_path, jeecs_woolang_api_src, false);

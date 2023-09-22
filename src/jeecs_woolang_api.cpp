@@ -1810,7 +1810,7 @@ WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args, size_t arg
         else
         {
             jeecs::debug::logerr("Failed to register: '%s' failed to compile:\n%s",
-                component_name, wo_get_compile_error(vm, WO_NEED_COLOR));
+                component_name, wo_get_compile_error(cvm, WO_NEED_COLOR));
             wo_close_vm(cvm);
         }
     }
@@ -1830,6 +1830,14 @@ WO_API wo_api wojeapi_towoo_unregister_component(wo_vm vm, wo_value args, size_t
 
     return wo_ret_void(vm);
 }
+
+WO_API wo_api wojeapi_towoo_update_api(wo_vm vm, wo_value args, size_t argc)
+{
+    je_towoo_update_api();
+
+    return wo_ret_void(vm);
+}
+
 
 WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args, size_t argc)
 {
@@ -2136,6 +2144,9 @@ namespace je
 {
     namespace towoo
     {
+        extern("libjoyecs", "wojeapi_towoo_update_api")
+        public func update_api()=> void;
+
         extern("libjoyecs", "wojeapi_towoo_register_system")
         public func register_system(name: string, path: string)=> result<typeinfo, typeinfo>;
 

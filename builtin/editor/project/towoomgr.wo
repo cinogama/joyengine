@@ -62,13 +62,26 @@ namespace editor
             for (let p, c : fetched_scripts)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
+                if (extension(p)->lower == ".wocomponent")
+                {
+                    match (towoo::update_component(purename(p), p->tostring)
+                        ->  orbind(
+                            \=self.m_loaded_towoo->get(p)
+                                ->> \vs=vs[1];
+                            ;))
+                    {
+                    value(t)? new_scripts->set(p, (c, t));
+                    none?; // 之前也不存在这个类型，就这样吧！
+                    }
+                    
+                }
+            }
+            towoo::update_api();
+            for (let p, c : fetched_scripts)
+            {
+                // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
                 if (extension(p)->lower == ".wosystem")
                     new_scripts->set(p, (c, towoo::register_system(purename(p), p->tostring)->or(\v=v;)));
-                else
-                {
-                    assert(extension(p)->lower == ".wocomponent");
-                    new_scripts->set(p, (c, towoo::update_component(purename(p), p->tostring)->valor(self.m_loaded_towoo[p][1])));
-                }
             }
             self.m_loaded_towoo = new_scripts as map<path_t, (int, je::typeinfo)>
                 ->unsafe::cast :<dict<path_t, (int, je::typeinfo)>>();

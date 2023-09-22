@@ -254,8 +254,8 @@ namespace jeecs
             }
             ToWooBaseComponent(const ToWooBaseComponent&) = delete;
             ToWooBaseComponent(ToWooBaseComponent&& another)
+                :m_type(another.m_type)
             {
-                assert(m_type == another.m_type);
                 auto* member = m_type->m_member_types;
                 while (member != nullptr)
                 {
@@ -375,10 +375,16 @@ import je::towoo::types;
         {
             // Read namespace of typeclass
             std::string tname = typeinfo->m_typename;
+            if (tname.empty())
+            {
+                jeecs::debug::logerr("Component type %p have an empty name, pleace check.", typeinfo);
+                continue;
+            }
+
             size_t index = tname.find_last_of(':');
 
             std::optional<std::string> tnamespace = std::nullopt;
-            if (index + 1 < tname.size() && index >= 1)
+            if (index < tname.size() - 1 && index >= 1)
             {
                 tnamespace = std::make_optional(tname.substr(0, index - 1));
                 tname = tname.substr(index + 1);
@@ -399,7 +405,8 @@ import je::towoo::types;
                     woolang_component_type_decl +=
                         std::string("    ") + registed_member->m_member_name + ": je::towoo::member<"
                         + registed_member->m_member_type->m_script_parser_info->m_woolang_typename
-                        + ", " + registed_member->m_member_type->m_script_parser_info->m_woolang_typename
+                        + ", "
+                        + registed_member->m_member_type->m_script_parser_info->m_woolang_typename
                         + "_tid>,\n";
                 }
                 registed_member = registed_member->m_next_member;
@@ -619,7 +626,7 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t 
 
 WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_t argc)
 {
-    // wojeapi_towoo_register_component(name, [(typeinfo, name)])
+    // wojeapi_towoo_register_component(name, [(name, typeinfo)])
     std::string component_name = wo_string(args + 0);
 
     auto* ty = je_typing_get_info_by_name(component_name.c_str());
@@ -682,14 +689,90 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_
     for (auto& memberinfo : member_defs)
     {
         je_register_member(
-            towoo_component_tinfo, 
-            memberinfo.m_type, 
+            towoo_component_tinfo,
+            memberinfo.m_type,
             memberinfo.m_name.c_str(),
             memberinfo.m_offset);
     }
 
     return wo_ret_pointer(vm, (void*)towoo_component_tinfo);
 }
+
+const char* jeecs_towoo_component_path = "je/towoo/component.wo";
+const char* jeecs_towoo_component_src = R"(// (C)Cinogama. 
+import je;
+import je::towoo::types;
+
+namespace je::towoo::component
+{
+    extern("libjoyecs", "wojeapi_towoo_update_component_data")
+    public func update_component_declare(name: string, members: array<(string, typeinfo)>)=> typeinfo;
+
+    let registered_member_infoms = {}mut: map<string, typeinfo>;
+    public func register_member<T>(name: string)
+    {
+       registered_member_infoms->set(name, tid:<T>());
+    }
+}
+
+extern func _init_towoo_component(name: string)
+{
+    return je::towoo::component::update_component_declare(
+        name,
+        je::towoo::component::registered_member_infoms
+            ->unmapping,
+    );
+}
+
+#macro component
+{
+    /*
+    component!
+    {
+        member_name: type,
+    }
+    */
+
+    if (lexer->next != "{")
+    {
+        lexer->error("Unexpected token, here should be '{'.");
+        return;
+    }
+
+    let decls = []mut: vec<(string, string)>;
+    for (;;)
+    {
+        let name = lexer->next;
+        if (name == "")
+            lexer->error("Unexpected EOF.");
+        else if (name == ",")
+            continue;
+        else if (name == "}")
+            break;
+        
+        if (lexer->next != ":")
+        {
+            lexer->error("Unexpected token, here should be ':'.");
+            return;
+        }
+        let mut type = "";
+        for (;;)
+        {
+            let ty = lexer->peek;
+            if (ty == "," || ty == "}" || ty == "")
+                break;
+            type += lexer->next;
+        }
+        decls->add((name, type));
+    }
+    let mut result = ";";
+    for (let _, (name, type) : decls)
+    {
+        result += F"je::towoo::component::register_member:<{type}_tid>({name->enstring});";
+    }
+    lexer->lex(result);
+}
+)";
 
 const char* jeecs_towoo_system_path = "je/towoo/system.wo";
 const char* jeecs_towoo_system_src = R"(// (C)Cinogama. 
