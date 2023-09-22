@@ -949,7 +949,8 @@ void gl_draw_vertex_with_shader(jegl_thread*, jegl_resource* vert)
     jegl_using_resource(vert);
 
     gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(vert->m_handle.m_ptr));
-    glDrawArrays(vdata->m_method, 0, vdata->m_pointcount);
+    if (vdata != nullptr)
+        glDrawArrays(vdata->m_method, 0, vdata->m_pointcount);
 }
 
 void gl_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
