@@ -142,7 +142,7 @@ namespace jeecs
 
             void Update()
             {
-                ScriptRuntimeSystem::system_instance = 
+                ScriptRuntimeSystem::system_instance =
                     get_world().get_system<ScriptRuntimeSystem>();
 
                 if (m_job_vm == nullptr)
@@ -225,6 +225,47 @@ namespace jeecs
                 }
 
                 ScriptRuntimeSystem::system_instance = nullptr;
+            }
+        };
+
+        struct ToWooBaseComponent
+        {
+            const jeecs::typing::type_info* m_type;
+            ToWooBaseComponent(void* arg, const jeecs::typing::type_info* ty)
+                : m_type(ty)
+            {
+                auto* member = m_type->m_member_types;
+                while (member != nullptr)
+                {
+                    auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
+                    member->m_member_type->construct(this_member, arg);
+                    member = member->m_next_member;
+                }
+            }
+            ~ToWooBaseComponent()
+            {
+                auto* member = m_type->m_member_types;
+                while (member != nullptr)
+                {
+                    auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
+                    member->m_member_type->destruct(this_member);
+                    member = member->m_next_member;
+                }
+            }
+            ToWooBaseComponent(const ToWooBaseComponent&) = delete;
+            ToWooBaseComponent(ToWooBaseComponent&& another)
+            {
+                assert(m_type == another.m_type);
+                auto* member = m_type->m_member_types;
+                while (member != nullptr)
+                {
+                    auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
+                    auto* other_member = (void*)((intptr_t)&another + member->m_member_offset);
+
+                    member->m_member_type->move(this_member, other_member);
+
+                    member = member->m_next_member;
+                }
             }
         };
     }
@@ -428,6 +469,7 @@ bool je_towoo_register_system(
         system_name,
         jeecs::basic::type_hash<jeecs::towoo::ToWooBaseSystem>(),
         sizeof(jeecs::towoo::ToWooBaseSystem),
+        alignof(jeecs::towoo::ToWooBaseSystem),
         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
@@ -490,7 +532,7 @@ bool je_towoo_register_system(
             {
                 if (nullptr == wo_run(vm))
                 {
-                    jeecs::debug::logerr("Failed to register: '%s', '_init_towoo_system' failed: '%s'.",
+                    jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",
                         system_name, wo_get_runtime_error(vm));
                 }
                 else
@@ -572,6 +614,79 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t 
     works->m_works.push_back(stepwork);
 
     return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_t argc)
+{
+    // wojeapi_towoo_register_component(name, [(typeinfo, name)])
+    std::string component_name = wo_string(args + 0);
+
+    auto* ty = je_typing_get_info_by_name(component_name.c_str());
+    if (ty != nullptr)
+    {
+        if (ty->m_hash == jeecs::basic::type_hash<jeecs::towoo::ToWooBaseComponent>())
+            je_typing_unregister(ty);
+        else
+            return wo_ret_halt(vm, "Invalid towoo component name, cannot same as native-components.");
+    }
+
+    wo_value members = args + 1;
+    wo_integer_t member_count = wo_lengthof(members);
+
+    size_t component_size = sizeof(jeecs::towoo::ToWooBaseComponent);
+    size_t component_allign = alignof(jeecs::towoo::ToWooBaseComponent);
+
+    struct _member_info
+    {
+        std::string m_name;
+        const jeecs::typing::type_info* m_type;
+        size_t m_offset;
+    };
+    std::vector<_member_info> member_defs;
+    for (wo_integer_t i = 0; i < member_count; ++i)
+    {
+        wo_value member_def = wo_arr_get(members, i);
+        std::string member_name = wo_string(wo_struct_get(member_def, 0));
+        auto* member_typeinfo = (const jeecs::typing::type_info*)
+            wo_pointer(wo_struct_get(member_def, 1));
+
+        component_size = jeecs::basic::allign_size(component_size, member_typeinfo->m_align);
+        member_defs.push_back(_member_info{ member_name, member_typeinfo, component_size });
+
+        component_size += member_typeinfo->m_chunk_size;
+        component_allign = std::max(component_allign, member_typeinfo->m_chunk_size);
+    }
+
+    auto* towoo_component_tinfo = je_typing_register(
+        component_name.c_str(),
+        jeecs::basic::type_hash<jeecs::towoo::ToWooBaseComponent>(),
+        component_size,
+        component_allign,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::mover,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::to_string,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::parse,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::state_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::pre_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::script_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::late_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::apply_update,
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::commit_update,
+        je_typing_class::JE_COMPONENT);
+
+    for (auto& memberinfo : member_defs)
+    {
+        je_register_member(
+            towoo_component_tinfo, 
+            memberinfo.m_type, 
+            memberinfo.m_name.c_str(),
+            memberinfo.m_offset);
+    }
+
+    return wo_ret_pointer(vm, (void*)towoo_component_tinfo);
 }
 
 const char* jeecs_towoo_system_path = "je/towoo/system.wo";

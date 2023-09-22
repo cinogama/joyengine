@@ -61,6 +61,7 @@ namespace jeecs_impl
             const char* _name,
             jeecs::typing::typehash_t _hash,
             size_t                    _size,
+            size_t                    _align,
             jeecs::typing::construct_func_t _constructor,
             jeecs::typing::destruct_func_t  _destructor,
             jeecs::typing::copy_func_t      _copier,
@@ -80,7 +81,8 @@ namespace jeecs_impl
             jeecs::typing::type_info* tinfo = new jeecs::typing::type_info();
             tinfo->m_typename = jeecs::basic::make_new_string(_name);
             tinfo->m_size = _size;
-            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, jeecs::typing::ALLIGN_BASE);
+            tinfo->m_align = _align;
+            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, _align);
 
             assert(tinfo->m_size != 0 && tinfo->m_chunk_size != 0);
 
@@ -297,6 +299,7 @@ const jeecs::typing::type_info* je_typing_register(
     const char* _name,
     jeecs::typing::typehash_t _hash,
     size_t                    _size,
+    size_t                    _align,
     jeecs::typing::construct_func_t _constructor,
     jeecs::typing::destruct_func_t  _destructor,
     jeecs::typing::copy_func_t      _copier,
@@ -317,6 +320,7 @@ const jeecs::typing::type_info* je_typing_register(
             _name,
             _hash,
             _size,
+            _align,
             _constructor,
             _destructor,
             _copier,

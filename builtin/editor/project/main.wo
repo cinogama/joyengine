@@ -407,7 +407,7 @@ namespace editor
 
         public func get_all_towoo_scripts_name_and_path(self: Project)
         {
-            return self.m_towoo_context.m_loaded_towoosys
+            return self.m_towoo_context.m_loaded_towoo
                 ->  unmapping
                 ->> \v = (filesys::purename(v[0]), self->make_path_normalize(v[0]));
                 ->  mapping

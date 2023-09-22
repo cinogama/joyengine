@@ -1708,6 +1708,85 @@ WO_API wo_api wojeapi_towoo_unregister_system(wo_vm vm, wo_value args, size_t ar
      return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_string_t component_name = wo_string(args + 0);
+    wo_string_t component_path = wo_string(args + 1);
+    if (jeecs_file* texfile = jeecs_file_open(component_path))
+    {
+        char* src = (char*)malloc(texfile->m_file_length + 1);
+        jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
+        src[texfile->m_file_length] = 0;
+
+        wo_vm cvm = wo_create_vm();
+        bool result = wo_load_binary(cvm, component_path, src, texfile->m_file_length);
+
+        jeecs_file_close(texfile);
+
+        free(src);
+        if (result)
+        {
+            // Invoke "_init_towoo_component", if failed... boom!
+            wo_integer_t initfunc = wo_extern_symb(cvm, "_init_towoo_component");
+            if (initfunc == 0)
+            {
+                jeecs::debug::logerr("Failed to register: '%s' cannot find '_init_towoo_component' in '%s', "
+                    "forget to import je/towoo/component.wo ?",
+                    component_name, component_path);
+                wo_close_vm(cvm);
+            }
+            else
+            {
+                if (nullptr == wo_run(cvm))
+                {
+                    jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",
+                        component_name, wo_get_runtime_error(cvm));
+                    wo_close_vm(cvm);
+                }
+                else
+                {
+                    wo_push_string(cvm, component_name);
+                    auto* retval = wo_invoke_rsfunc(cvm, initfunc, 1);
+
+                    if (nullptr == retval)
+                    {
+                        jeecs::debug::logerr("Failed to register: '%s', '_init_towoo_component' failed: '%s'.",
+                            component_name, wo_get_runtime_error(cvm));
+                        wo_close_vm(cvm);
+                    }
+                    else
+                    {
+                        auto result = wo_ret_option_val(vm, retval);
+                        wo_close_vm(cvm);
+                        return result;
+                    }
+                }
+            }
+        }
+        else
+        {
+            jeecs::debug::logerr("Failed to register: '%s' failed to compile:\n%s",
+                component_name, wo_get_compile_error(vm, WO_NEED_COLOR));
+            wo_close_vm(cvm);
+        }
+    }
+    else
+    {
+        jeecs::debug::logerr("Failed to register: '%s' unable to open file '%s'.",
+            component_name, component_path);
+    }
+
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_towoo_unregister_component(wo_vm vm, wo_value args, size_t argc)
+{
+    const jeecs::typing::type_info* t = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    je_typing_unregister(t);
+
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_int(vm, (wo_integer_t)jedbg_get_unregister_type_count());
@@ -2014,10 +2093,16 @@ namespace je
     namespace towoo
     {
         extern("libjoyecs", "wojeapi_towoo_register_system")
-        public func register(name: string, path: string)=> result<typeinfo, typeinfo>;
+        public func register_system(name: string, path: string)=> result<typeinfo, typeinfo>;
 
         extern("libjoyecs", "wojeapi_towoo_unregister_system")
-        public func unregister(t: typeinfo)=> void;
+        public func unregister_system(t: typeinfo)=> void;
+
+        extern("libjoyecs", "wojeapi_towoo_update_component")
+        public func update_component(name: string, path: string)=> option<typeinfo>;
+
+        extern("libjoyecs", "wojeapi_towoo_unregister_component")
+        public func unregister_component(t: typeinfo)=> void;
     }
 
     extern("libjoyecs", "wojeapi_deltatime")

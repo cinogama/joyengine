@@ -149,13 +149,6 @@ namespace jeecs
         */
         constexpr uint32_t PENDING_UNIFORM_LOCATION = (uint32_t)-2;
 
-        /*
-        jeecs::typing::ALLIGN_BASE [常量]
-        基本对齐参数，与平台相关。一般是当前平台最大内建类型的字节数
-            * ArchSystem通过此值决定ArchBlock内组件的对齐方式
-        */
-        constexpr size_t ALLIGN_BASE = alignof(std::max_align_t);
-
         struct type_info;
 
         using module_entry_t = void(*)(void);
@@ -686,6 +679,7 @@ JE_API const jeecs::typing::type_info* je_typing_register(
     const char* _name,
     jeecs::typing::typehash_t _hash,
     size_t                    _size,
+    size_t                    _align,
     jeecs::typing::construct_func_t _constructor,
     jeecs::typing::destruct_func_t  _destructor,
     jeecs::typing::copy_func_t      _copier,
@@ -3987,6 +3981,7 @@ namespace jeecs
             typehash_t  m_hash;
             const char* m_typename;   // will be free by je_typing_unregister
             size_t      m_size;
+            size_t      m_align;
             size_t      m_chunk_size; // calc by je_typing_register
 
             construct_func_t    m_constructor;
@@ -4043,6 +4038,7 @@ namespace jeecs
                         _typename,
                         basic::type_hash<T>(),
                         sizeof(T),
+                        alignof(T),
                         basic::default_functions<T>::constructor,
                         basic::default_functions<T>::destructor,
                         basic::default_functions<T>::copier,

@@ -276,7 +276,7 @@ namespace editor::gui::edit_forms
                                     je::delay_unload_module(libhandle);
                                 
                                 for (let _, tinfo: LOADED_TOWOO_SYSTEM_TYPES)
-                                    je::towoo::unregister(tinfo);
+                                    je::towoo::unregister_system(tinfo);
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码
@@ -302,7 +302,7 @@ namespace editor::gui::edit_forms
                             // 1.5.2 加载ToWoo类型
                             let loading_towoo_types = proj->get_all_towoo_scripts_name_and_path
                                 ->  unmapping
-                                ->> \nameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::register({
+                                ->> \nameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::register_system({
                                         nameandpath[0]->enstring}, {nameandpath[1]->enstring})->or(\\v=v;));\n"
                                     ;
                                 ->  reduce(\l, r = l + r;)
