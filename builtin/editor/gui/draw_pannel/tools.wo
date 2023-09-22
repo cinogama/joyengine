@@ -235,7 +235,7 @@ namespace editor::gui::drawpannel::tools
                     let filling_stack = [(x, y)]mut;
                     while (!filling_stack->empty)
                     {
-                        let (px, py) = filling_stack->pop();
+                        let (px, py) = filling_stack->popval();
                         if (px >= 0 && px < w && py >= 0 && py < h)
                         {
                             let pixel = target->pix((px, py));

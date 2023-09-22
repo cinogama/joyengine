@@ -1113,8 +1113,12 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
     int max_height_item = argc == 4 ? (int)wo_int(args + 3) : -1;
 
     std::vector<const char*> items((size_t)wo_lengthof(args + 1));
+    wo_value elem = wo_push_empty(vm);
     for (size_t i = 0; i < items.size(); i++)
-        items[i] = wo_string(wo_arr_get(args + 1, i));
+    {
+        wo_arr_get(elem, args + 1, i);
+        items[i] = wo_string(elem);
+    }
 
     bool val_changed = ImGui::ListBox(wo_string(args + 0), &selected_item, items.data(), (int)items.size(), max_height_item);
 
@@ -1129,12 +1133,16 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args, size_t argc)
     int origin_selected_index = (int)wo_int(args + 2);
     int selected_index = -1;
     bool value_updated = false;
+
+    wo_value elem = wo_push_empty(vm);
+
     if (ImGui::BeginListBox(wo_string(args + 0), ImVec2(wo_float(args + 3), wo_float(args + 4))))
     {
         size_t sz = (size_t)wo_lengthof(args + 1);
         for (size_t i = 0; i < sz; i++)
         {
-            wo_string_t item = wo_string(wo_arr_get(args + 1, i));
+            wo_arr_get(elem, args + 1, i);
+            wo_string_t item = wo_string(elem);
             if (ImGui::Selectable(item, i == origin_selected_index))
             {
                 value_updated = true;
@@ -1618,9 +1626,11 @@ WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_combo(wo_vm vm, wo_value args, size_t argc)
 {
     std::vector<const char*> combo_items;
+    wo_value elem = wo_push_empty(vm);
     for (wo_integer_t i = 0; i < wo_lengthof(args + 1); ++i)
     {
-        combo_items.push_back(wo_string(wo_arr_get(args + 1, i)));
+        wo_arr_get(elem, args + 1, i);
+        combo_items.push_back(wo_string(elem));
     }
     int current_item = (int)wo_int(args + 2);
     auto updated = ImGui::Combo(wo_string(args + 0), &current_item, combo_items.data(), (int)combo_items.size());

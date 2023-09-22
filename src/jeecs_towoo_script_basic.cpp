@@ -593,9 +593,10 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t 
 
     wo_value requirements = args + 2;
     wo_integer_t component_arg_count = wo_int(args + 3);
+    wo_value requirement_info = wo_push_empty(vm);
     for (wo_integer_t i = 0; i < wo_lengthof(requirements); ++i)
     {
-        wo_value requirement_info = wo_arr_get(requirements, i);
+        wo_arr_get(requirement_info, requirements, i);
 
         const auto* typeinfo = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(
             wo_pointer(wo_struct_get(requirement_info, 2))));
@@ -643,9 +644,10 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_
         size_t m_offset;
     };
     std::vector<_member_info> member_defs;
+    wo_value member_def = wo_push_empty(vm);
     for (wo_integer_t i = 0; i < member_count; ++i)
     {
-        wo_value member_def = wo_arr_get(members, i);
+        wo_arr_get(member_def, members, i);
         std::string member_name = wo_string(wo_struct_get(member_def, 0));
         auto* member_typeinfo = (const jeecs::typing::type_info*)
             wo_pointer(wo_struct_get(member_def, 1));

@@ -717,8 +717,12 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
     size_t ubo_count = (size_t)wo_lengthof(args + 3);
 
     ubos = new shader_struct_define * [ubo_count + 1];
+    wo_value elem = wo_push_empty(vm);
     for (size_t i = 0; i < ubo_count; ++i)
-        ubos[i] = (shader_struct_define*)wo_pointer(wo_arr_get(args + 3, i));
+    {
+        wo_arr_get(elem, args + 3, i);
+        ubos[i] = (shader_struct_define*)wo_pointer(elem);
+    }
     ubos[ubo_count] = nullptr;
 
     return wo_ret_gchandle(vm,

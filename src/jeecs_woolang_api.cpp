@@ -150,12 +150,14 @@ WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args, size_t argc)
     assert(log_buffer.empty());
     log_buffer_mx.clear();
 
+    wo_value elem = wo_push_empty(vm);
+
     for (auto& [i, s] : logs)
     {
-        wo_value a = wo_arr_add(result, nullptr);
-        wo_set_struct(a, vm, 2);
-        wo_set_int(wo_struct_get(a, 0), i);
-        wo_set_string(wo_struct_get(a, 1), vm, s.c_str());
+        wo_set_struct(elem, vm, 2);
+        wo_set_int(wo_struct_get(elem, 0), i);
+        wo_set_string(wo_struct_get(elem, 1), vm, s.c_str());
+        wo_arr_add(result, elem);
     }
     return wo_ret_val(vm, result);
 }
@@ -351,9 +353,14 @@ WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t
 
     auto result = jedbg_get_all_worlds_in_universe(universe);
     {
+        wo_value elem = wo_push_empty(vm);
+
         auto worldlist = result;
         while (*worldlist)
-            wo_set_pointer(wo_arr_add(out_array, nullptr), *(worldlist++));
+        {
+            wo_set_pointer(elem, *(worldlist++));
+            wo_arr_add(out_array, elem);
+        }
     }
     je_mem_free(result);
     return wo_ret_val(vm, out_array);
@@ -421,9 +428,14 @@ WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args, size_t
     const jeecs::typing::type_info** types = jedbg_get_all_system_attached_in_world(wo_pointer(args + 0));
     wo_value result = wo_push_arr(vm, 0);;
 
+    wo_value elem = wo_push_empty(vm);
+
     auto* cur_type = types;
     while (*cur_type)
-        wo_set_pointer(wo_arr_add(result, nullptr), (void*)*(cur_type++));
+    {
+        wo_set_pointer(elem, (void*)*(cur_type++));
+        wo_arr_add(result, elem);
+    }
     je_mem_free(types);
 
     return wo_ret_val(vm, result);
@@ -435,8 +447,13 @@ WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value arg
     wo_value components_list = args + 1;
 
     std::vector<jeecs::typing::typeid_t> components;
+
+    wo_value elem = wo_push_empty(vm);
     for (wo_integer_t i = 0; i < wo_lengthof(components_list); ++i)
-        components.push_back(((const jeecs::typing::type_info*)wo_pointer(wo_arr_get(components_list, i)))->m_id);
+    {
+        wo_arr_get(elem, components_list, i);
+        components.push_back(((const jeecs::typing::type_info*)wo_pointer(elem))->m_id);
+    }
 
     return wo_ret_gchandle(vm, new jeecs::game_entity(gworld._add_entity(components)),
         nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
@@ -448,12 +465,16 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
 
     auto entities = jedbg_get_all_entities_in_world(wo_pointer(args + 0));
     auto entity_iter = entities;
+
+    wo_value elem = wo_push_empty(vm);
+
     while (*entity_iter)
     {
-        wo_set_gchandle(wo_arr_add(out_arr, nullptr), vm, *(entity_iter++), nullptr,
+        wo_set_gchandle(elem, vm, *(entity_iter++), nullptr,
             [](void* entity_ptr) {
                 jedbg_free_entity((jeecs::game_entity*)entity_ptr);
             });
+        wo_arr_add(out_arr, elem);
     }
     je_mem_free(entities);
 
@@ -606,8 +627,12 @@ WO_API wo_api wojeapi_get_all_components_types_from_entity(wo_vm vm, wo_value ar
 
     auto types = jedbg_get_all_components_from_entity(entity);
     auto typeindex = types;
+    wo_value elem = wo_push_empty(vm);
     while (*typeindex)
-        wo_set_pointer(wo_arr_add(out_arr, nullptr), (void*)*(typeindex++));
+    {
+        wo_set_pointer(elem, (void*)*(typeindex++));
+        wo_arr_add(out_arr, elem);
+    }
     je_mem_free(types);
 
     return wo_ret_val(vm, out_arr);
@@ -667,17 +692,18 @@ WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args, size_t 
     const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(wo_struct_get(args + 0, 1));
 
     wo_value result = wo_push_arr(vm, 0);
+    wo_value elem = wo_push_empty(vm);
 
     auto* member_type = component_type->m_member_types;
     while (member_type)
     {
-        wo_value st = wo_arr_add(result, nullptr);
+        wo_set_struct(elem, vm, 3);
 
-        wo_set_struct(st, vm, 3);
+        wo_set_string(wo_struct_get(elem, 0), vm, member_type->m_member_name);
+        wo_set_pointer(wo_struct_get(elem, 1), (void*)member_type->m_member_type);
+        wo_set_handle(wo_struct_get(elem, 2), (wo_handle_t)(member_type->m_member_offset + (intptr_t)component_addr));
 
-        wo_set_string(wo_struct_get(st, 0), vm, member_type->m_member_name);
-        wo_set_pointer(wo_struct_get(st, 1), (void*)member_type->m_member_type);
-        wo_set_handle(wo_struct_get(st, 2), (wo_handle_t)(member_type->m_member_offset + (intptr_t)component_addr));
+        wo_arr_add(result, elem);
 
         member_type = member_type->m_next_member;
     }
@@ -820,9 +846,14 @@ WO_API wo_api wojeapi_get_all_registed_types(wo_vm vm, wo_value args, size_t arg
 
     auto** types = jedbg_get_all_registed_types();
 
+    wo_value elem = wo_push_empty(vm);
+
     auto** cur_type = types;
     while (*cur_type)
-        wo_set_pointer(wo_arr_add(out_array, nullptr), (void*)*(cur_type++));
+    {
+        wo_set_pointer(elem, (void*)*(cur_type++));
+        wo_arr_add(out_array, elem);
+    }
 
     je_mem_free(types);
     return wo_ret_val(vm, out_array);
@@ -857,15 +888,17 @@ WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args, size_t argc)
     const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
 
     wo_value result = wo_push_arr(vm, 0);
+    wo_value elem = wo_push_empty(vm);
 
     auto* member_iter = type->m_member_types;
     while (member_iter != nullptr)
     {
-        wo_value v = wo_arr_add(result, nullptr);
-        wo_set_struct(v, vm, 2);
+        wo_set_struct(elem, vm, 2);
 
-        wo_set_string(wo_struct_get(v, 0), vm, member_iter->m_member_name);
-        wo_set_pointer(wo_struct_get(v, 1), (void*)member_iter->m_member_type);
+        wo_set_string(wo_struct_get(elem, 0), vm, member_iter->m_member_name);
+        wo_set_pointer(wo_struct_get(elem, 1), (void*)member_iter->m_member_type);
+
+        wo_arr_add(result, elem);
 
         member_iter = member_iter->m_next_member;
     }
@@ -1333,17 +1366,19 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args, size_t argc)
     if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
     {
         wo_value key = wo_push_empty(vm);
+        wo_value val = wo_push_empty(vm);
 
         for (auto& texture : textures->textures)
         {
             if (!texture.m_texture)
                 return wo_ret_panic(vm, "Texture cannot be nullptr.");
             wo_set_int(key, (wo_integer_t)texture.m_pass_id);
-            wo_set_gchandle(wo_map_set(out_map, key, nullptr), vm,
+            wo_set_gchandle(val, vm,
                 new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
                 [](void* ptr) {
                     delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
                 });
+            wo_map_set(out_map, key, val);
         }
         wo_pop_stack(vm);
     }
@@ -1370,15 +1405,18 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args, size_t argc)
 
     if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
     {
+        wo_value elem = wo_push_empty(vm);
+
         for (auto& shader : shaders->shaders)
         {
             if (!shader)
                 return wo_ret_halt(vm, "Shader cannot be nullptr.");
-            wo_set_gchandle(wo_arr_add(out_array, nullptr), vm,
+            wo_set_gchandle(elem, vm,
                 new jeecs::basic::resource<jeecs::graphic::shader>(shader), nullptr,
                 [](void* ptr) {
                     delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
                 });
+            wo_arr_add(out_array, elem);
         }
     }
 
@@ -1396,12 +1434,15 @@ WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args, size_t argc
 
     if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
     {
+        wo_value elem = wo_push_empty(vm);
+
         shaders->shaders.clear();
         size_t arrsize = (size_t)wo_lengthof(shader_array);
         for (size_t i = 0; i < arrsize; ++i)
         {
+            wo_arr_get(elem, shader_array, i);
             jeecs::basic::resource<jeecs::graphic::shader>* shader =
-                (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(wo_arr_get(shader_array, i));
+                (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(elem);
             shaders->shaders.push_back(*shader);
         }
     }
@@ -1448,9 +1489,12 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
 
         wo_set_string(key, vm, uniforms->m_name);
 
-        wo_value val_in_map = wo_map_set(out_map, key, nullptr);
+        wo_value val_in_map = wo_push_empty(vm);
+
         wo_set_struct(val_in_map, vm, 2);
         wo_set_pointer(wo_struct_get(val_in_map, 0), (void*)type);
+
+        wo_map_set(out_map, key, val_in_map);
 
         wo_value uniform_value_data = wo_struct_get(val_in_map, 1);
         wo_set_struct(uniform_value_data, vm, 5);
