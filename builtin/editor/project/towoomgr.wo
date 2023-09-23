@@ -20,14 +20,12 @@ namespace editor
         m_bad_towoo_script: vec<path_t>,
     }
     {
-        public func update(self: ToWooContext)
+        public func fetch_file(self: ToWooContext, type: string)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
             for (let _, p : allsubpath(self.m_project_path)->unwarpor([]))
             {
-                if (isfile(p) && (
-                    extension(p)->lower == ".wosystem" 
-                    || extension(p)->lower == ".wocomponent"))
+                if (isfile(p) && extension(p)->lower == type)
                 {
                     match (editor::crc64file(p->tostring))
                     {
@@ -37,64 +35,88 @@ namespace editor
                     }
                 }
             }
-
-            let new_scripts = {}mut: map<path_t, (int, je::typeinfo)>;
+            return fetched_scripts;
+        }
+        public func update_system(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
+        {
+            let fetched_scripts = self->fetch_file(".wosystem");
             for (let p, (c, t) : self.m_loaded_towoo)
             {
-                if (fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
+                if (extension(p)->lower == ".wosystem")
                 {
-                    // 旧的失效，释放！
-                    if (extension(p)->lower == ".wosystem")
+                    if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
+                    {
+                        // 旧的失效，释放！
                         towoo::unregister_system(t);
+                    }
                     else
                     {
-                        assert(extension(p)->lower == ".wocomponent");
-                        // 无需卸载component，后续会直接update
+                        // 无需更新，直接继续使用
+                        new_scripts->set(p, (c, t));
+                        do fetched_scripts->remove(p);
                     }
                 }
-                else
+            }
+            return fetched_scripts;
+        }
+        public func update_component(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>)
+        {
+            let fetched_scripts = self->fetch_file(".wocomponent");
+            for (let p, (c, t) : self.m_loaded_towoo)
+            {
+                if (extension(p)->lower == ".wocomponent")
                 {
-                    // 无需更新，直接继续使用
-                    new_scripts->set(p, (c, t));
-                    do fetched_scripts->remove(p);
+                    if (fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
+                    {
+                    }
+                    else
+                    {
+                        // 无需更新，直接继续使用
+                        new_scripts->set(p, (c, t));
+                        do fetched_scripts->remove(p);
+                    }
                 }
             }
+            return fetched_scripts;
+        }
+        public func update(self: ToWooContext)
+        {
+            let new_scripts = {}mut: map<path_t, (int, je::typeinfo)>;
+
+            let fetched_components = self->update_component(new_scripts);
+            let fetched_system = self->update_system(new_scripts, !fetched_components->empty);
 
             self.m_bad_towoo_script->clear;
 
-            for (let p, c : fetched_scripts)
+            for (let p, c : fetched_components)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
-                if (extension(p)->lower == ".wocomponent")
+                assert(extension(p)->lower == ".wocomponent");
+                match (towoo::update_component(purename(p), p->tostring))
                 {
-                    match (towoo::update_component(purename(p), p->tostring))
+                value(t)?
+                    new_scripts->set(p, (c, t));
+                none?
                     {
-                    value(t)?
-                        new_scripts->set(p, (c, t));
-                    none?
-                        {
-                            self.m_bad_towoo_script->add(p);
-                            if (self.m_loaded_towoo->contain(p))
-                                new_scripts->set(p, (c, self.m_loaded_towoo[p][1]));
-                        }
-                    }                    
+                        self.m_bad_towoo_script->add(p);
+                        if (self.m_loaded_towoo->contain(p))
+                            new_scripts->set(p, (c, self.m_loaded_towoo[p][1]));
+                    }
                 }
             }
             towoo::update_api();
-            for (let p, c : fetched_scripts)
+            for (let p, c : fetched_system)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
-                if (extension(p)->lower == ".wosystem")
+                assert(extension(p)->lower == ".wosystem");
+                match (towoo::register_system(purename(p), p->tostring))
                 {
-                    match (towoo::register_system(purename(p), p->tostring))
+                ok(t)?
+                    new_scripts->set(p, (c, t));
+                err(t)?
                     {
-                    ok(t)?
+                        self.m_bad_towoo_script->add(p);
                         new_scripts->set(p, (c, t));
-                    err(t)?
-                        {
-                            self.m_bad_towoo_script->add(p);
-                            new_scripts->set(p, (c, t));
-                        }
                     }
                 }
             }
