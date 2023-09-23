@@ -409,7 +409,7 @@ namespace editor
         {
             return self.m_towoo_context.m_loaded_towoo
                 ->  unmapping
-                ->> \v = (filesys::purename(v[0]), self->make_path_normalize(v[0]));
+                ->> \v = (filesys::purename(v[0]), (v[0], self->make_path_normalize(v[0])));
                 ->  mapping
                 ;
         }
@@ -437,7 +437,7 @@ namespace editor
                 ->> \mr = jeapi::gui::form::errmsg("加载失败", F"无法加载 '{mr[0]}'：{mr[1]}"); 
                 ;
             
-            self->try_update_towoo(false);
+            self.m_towoo_context->update();
 
             match (filesys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
             {
@@ -475,6 +475,20 @@ namespace editor
         }
         public func save_project(self: Project)
         {
+            let bad_list = self.m_towoo_context.m_bad_towoo_script
+                ->> \p = p->tostring;
+                ->  reduce(\l, r = l + "\n" + r;);
+            match (bad_list)
+            {
+            value(badlist)?
+                {
+                    jeapi::gui::form::errmsg("失败", "ToWoo 有编译失败未解决：\n" + badlist);
+                    je::logwarn("ToWoo 有编译失败未解决：\n" + badlist);
+                    return false;
+                }
+            none?;
+            }
+
             let dat = {
                 ["name"] = self.m_name: dynamic,
                 ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
@@ -496,6 +510,7 @@ namespace editor
             {
                 jeapi::gui::form::errmsg("失败", "保存编辑中的世界列表失败");
                 je::logwarn("保存编辑中的世界列表失败");
+                return false;
             }
 
             // 顺手保存所有世界

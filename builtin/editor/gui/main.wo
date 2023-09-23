@@ -32,6 +32,7 @@ namespace editor::gui
     }
 
     using EditorContext = struct {
+        m_logger: handle,
         m_stopped: mut bool,
         m_project: Project,
 
@@ -206,6 +207,11 @@ namespace editor::gui
                 ->  or(\= f(option::none);)
                 ;
         }
+
+        public func get_logs(_: EditorContext)
+        {
+            return je::editor::getlogs();
+        }
     }
 
     public func edit_project(proj: Project)
@@ -215,6 +221,7 @@ namespace editor::gui
 
         // 创建基础运行环境
         let context = EditorContext{
+            m_logger = je::editor::hooklog(),
             m_stopped = mut false,
             m_project = proj,
             m_editing_entity_euid = mut option::none,
@@ -235,5 +242,6 @@ namespace editor::gui
 
         // 项目退出了，将编辑器上下文置为 stop, 用于指示窗口应当关闭
         context.m_stopped = true;
+        je::editor::unhooklog(context.m_logger);
     }
 }

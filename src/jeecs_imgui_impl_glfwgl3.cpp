@@ -416,6 +416,70 @@ R"(
     extern("libjoyecs", "je_gui_pop_clip_rect")
     public func PopClipRect()=> void;
 
+    public enum ImGuiCol
+    {
+        ImGuiCol_Text,
+        ImGuiCol_TextDisabled,
+        ImGuiCol_WindowBg,              // Background of normal windows
+        ImGuiCol_ChildBg,               // Background of child windows
+        ImGuiCol_PopupBg,               // Background of popups, menus, tooltips windows
+        ImGuiCol_Border,
+        ImGuiCol_BorderShadow,
+        ImGuiCol_FrameBg,               // Background of checkbox, radio button, plot, slider, text input
+        ImGuiCol_FrameBgHovered,
+        ImGuiCol_FrameBgActive,
+        ImGuiCol_TitleBg,
+        ImGuiCol_TitleBgActive,
+        ImGuiCol_TitleBgCollapsed,
+        ImGuiCol_MenuBarBg,
+        ImGuiCol_ScrollbarBg,
+        ImGuiCol_ScrollbarGrab,
+        ImGuiCol_ScrollbarGrabHovered,
+        ImGuiCol_ScrollbarGrabActive,
+        ImGuiCol_CheckMark,
+        ImGuiCol_SliderGrab,
+        ImGuiCol_SliderGrabActive,
+        ImGuiCol_Button,
+        ImGuiCol_ButtonHovered,
+        ImGuiCol_ButtonActive,
+        ImGuiCol_Header,                // Header* colors are used for CollapsingHeader, TreeNode, Selectable, MenuItem
+        ImGuiCol_HeaderHovered,
+        ImGuiCol_HeaderActive,
+        ImGuiCol_Separator,
+        ImGuiCol_SeparatorHovered,
+        ImGuiCol_SeparatorActive,
+        ImGuiCol_ResizeGrip,
+        ImGuiCol_ResizeGripHovered,
+        ImGuiCol_ResizeGripActive,
+        ImGuiCol_Tab,
+        ImGuiCol_TabHovered,
+        ImGuiCol_TabActive,
+        ImGuiCol_TabUnfocused,
+        ImGuiCol_TabUnfocusedActive,
+        ImGuiCol_PlotLines,
+        ImGuiCol_PlotLinesHovered,
+        ImGuiCol_PlotHistogram,
+        ImGuiCol_PlotHistogramHovered,
+        ImGuiCol_TableHeaderBg,         // Table header background
+        ImGuiCol_TableBorderStrong,     // Table outer and header borders (prefer using Alpha=1.0 here)
+        ImGuiCol_TableBorderLight,      // Table inner borders (prefer using Alpha=1.0 here)
+        ImGuiCol_TableRowBg,            // Table row background (even rows)
+        ImGuiCol_TableRowBgAlt,         // Table row background (odd rows)
+        ImGuiCol_TextSelectedBg,
+        ImGuiCol_DragDropTarget,
+        ImGuiCol_NavHighlight,          // Gamepad/keyboard: current highlighted item
+        ImGuiCol_NavWindowingHighlight, // Highlight window when using CTRL+TAB
+        ImGuiCol_NavWindowingDimBg,     // Darken/colorize entire screen behind the CTRL+TAB window list, when active
+        ImGuiCol_ModalWindowDimBg,      // Darken/colorize entire screen behind a modal window, when one is active
+        ImGuiCol_COUNT
+    };
+
+    extern("libjoyecs", "je_gui_push_style_color")
+    public func PushStyleColor(item: ImGuiCol, col: Color32RGBA)=> void;
+
+    extern("libjoyecs", "je_gui_pop_style_color")
+    public func PopStyleColor()=> void;
+
     using DrawListT = handle
     {
         extern("libjoyecs", "je_gui_draw_list_add_text")
@@ -537,64 +601,6 @@ R"(
 
     extern("libjoyecs", "je_gui_end_tool_tip")
     public func EndTooltip()=> void;
-
-    public enum ImGuiCol
-    {
-        ImGuiCol_Text,
-        ImGuiCol_TextDisabled,
-        ImGuiCol_WindowBg,              // Background of normal windows
-        ImGuiCol_ChildBg,               // Background of child windows
-        ImGuiCol_PopupBg,               // Background of popups, menus, tooltips windows
-        ImGuiCol_Border,
-        ImGuiCol_BorderShadow,
-        ImGuiCol_FrameBg,               // Background of checkbox, radio button, plot, slider, text input
-        ImGuiCol_FrameBgHovered,
-        ImGuiCol_FrameBgActive,
-        ImGuiCol_TitleBg,
-        ImGuiCol_TitleBgActive,
-        ImGuiCol_TitleBgCollapsed,
-        ImGuiCol_MenuBarBg,
-        ImGuiCol_ScrollbarBg,
-        ImGuiCol_ScrollbarGrab,
-        ImGuiCol_ScrollbarGrabHovered,
-        ImGuiCol_ScrollbarGrabActive,
-        ImGuiCol_CheckMark,
-        ImGuiCol_SliderGrab,
-        ImGuiCol_SliderGrabActive,
-        ImGuiCol_Button,
-        ImGuiCol_ButtonHovered,
-        ImGuiCol_ButtonActive,
-        ImGuiCol_Header,                // Header* colors are used for CollapsingHeader, TreeNode, Selectable, MenuItem
-        ImGuiCol_HeaderHovered,
-        ImGuiCol_HeaderActive,
-        ImGuiCol_Separator,
-        ImGuiCol_SeparatorHovered,
-        ImGuiCol_SeparatorActive,
-        ImGuiCol_ResizeGrip,
-        ImGuiCol_ResizeGripHovered,
-        ImGuiCol_ResizeGripActive,
-        ImGuiCol_Tab,
-        ImGuiCol_TabHovered,
-        ImGuiCol_TabActive,
-        ImGuiCol_TabUnfocused,
-        ImGuiCol_TabUnfocusedActive,
-        ImGuiCol_PlotLines,
-        ImGuiCol_PlotLinesHovered,
-        ImGuiCol_PlotHistogram,
-        ImGuiCol_PlotHistogramHovered,
-        ImGuiCol_TableHeaderBg,         // Table header background
-        ImGuiCol_TableBorderStrong,     // Table outer and header borders (prefer using Alpha=1.0 here)
-        ImGuiCol_TableBorderLight,      // Table inner borders (prefer using Alpha=1.0 here)
-        ImGuiCol_TableRowBg,            // Table row background (even rows)
-        ImGuiCol_TableRowBgAlt,         // Table row background (odd rows)
-        ImGuiCol_TextSelectedBg,
-        ImGuiCol_DragDropTarget,
-        ImGuiCol_NavHighlight,          // Gamepad/keyboard: current highlighted item
-        ImGuiCol_NavWindowingHighlight, // Highlight window when using CTRL+TAB
-        ImGuiCol_NavWindowingDimBg,     // Darken/colorize entire screen behind the CTRL+TAB window list, when active
-        ImGuiCol_ModalWindowDimBg,      // Darken/colorize entire screen behind a modal window, when one is active
-        ImGuiCol_COUNT
-    }
 
     extern("libjoyecs", "je_gui_style_get_config_color")
     public func GetStyleColor(item: ImGuiCol)=> (real, real, real, real);    
@@ -905,6 +911,18 @@ ImU32 val2color32(wo_value v)
         wo_int(wo_struct_get(v, 1)),
         wo_int(wo_struct_get(v, 2)),
         wo_int(wo_struct_get(v, 3)));
+}
+
+WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::PushStyleColor((ImGuiCol)wo_int(args + 0), val2color32(args + 1));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_pop_style_color(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::PopStyleColor();
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args, size_t argc)

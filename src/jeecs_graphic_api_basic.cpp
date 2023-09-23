@@ -965,7 +965,7 @@ jegl_resource* jegl_load_texture(const char* path)
         return jegl_try_update_shared_resource(texture, jegl_resource::type::TEXTURE);
     }
 
-    jeecs::debug::logerr("Cannot load texture: Failed to open file: '%s'", path);
+    jeecs::debug::loginfo("Cannot load texture: Failed to open file: '%s'", path);
     return nullptr;
 }
 

@@ -417,6 +417,23 @@ extern func update(_: Context, _: entity)
                                 | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = filesys::normalize(current_work_path) / (filename + ".wo"););
                 }
+                if (MenuItem(F"ToWoo Component 声明"))
+                {
+                    let default_empty_script = 
+@"import je::towoo::component;
+
+component!
+{
+}
+"@;
+                    jeapi::gui::form::input("新建ToWoo Component 声明", F"在{current_work_path}新建ToWoo Component 脚本", "NewToWooComponent",
+                        \filename: string = filesys::exist(file_path)
+                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.wocomponent\n{default_empty_script}") 
+                                ? func(){context->get_project->try_update_towoo(false);force_update();}()
+                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                        where file_path = filesys::normalize(current_work_path) / (filename + ".wocomponent"););
+                }
                 if (MenuItem(F"ToWoo System 脚本"))
                 {
                     let default_empty_script = 
@@ -1290,8 +1307,94 @@ namespace $$MODULE_NAME$$
         EndChild();
     }
 
+    using LogHook = struct{
+        m_logs: vec<(je::editor::loglevel, string)>,
+        m_display_setting: dict<je::editor::loglevel, (string, mut bool, (int, int, int, int), mut int)>,
+    }
+    {
+        func create()
+        {
+            return LogHook{
+                m_logs = []mut,
+                m_display_setting = {
+                    [je::editor::loglevel::NORMAL] = ("普通", mut true, (255,255,255,255), mut 0),
+                    [je::editor::loglevel::INFO] = ("信息", mut true, (0,255,255,255), mut 0),
+                    [je::editor::loglevel::WARNING] = ("警告", mut true, (255,255,0,255), mut 0),
+                    [je::editor::loglevel::ERROR] = ("错误", mut true, (255,0,0,255), mut 0),
+                    [je::editor::loglevel::FATAL] = ("致命", mut true, (255,0,255,255), mut 0),
+                },
+            };
+        }
+        func update(self: LogHook, context: EditorContext)
+        {
+            for (let _, e : context->get_logs)
+            {
+                self.m_logs->add(e);
+                self.m_display_setting[e[0]][3] += 1;
+            }
+        }
+        func clear(self: LogHook)
+        {
+            self.m_logs->clear;
+            for (let _, e: self.m_display_setting)
+            {
+                e[3] = 0;
+            }
+        }
+        func display_log(self: LogHook)
+        {
+            if (BeginChild("logbox"))
+            {
+                if (BeginChildSize("logbox_focus_loglevel", 100., 0.))
+                {
+                    if (Button("清除"))
+                        self->clear;
+
+                    for (let _, setting: self.m_display_setting)
+                    {
+                        do CheckBox(setting[0], setting[1])->>\c=setting[1] = c;;
+                    }
+                }
+                EndChild();
+
+                SameLine();
+                let (avail_width, avail_height) = GetContentRegionAvail();
+                if (BeginListBox("##", avail_width, avail_height))
+                {
+                    for (let mut i = self.m_logs->len; i > 0; i -= 1)
+                    {
+                        let (level, info) = self.m_logs[i - 1];
+                        if (self.m_display_setting[level][1])
+                        {
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, self.m_display_setting[level][2]);
+                            do Selectable(F"[{self.m_display_setting[level][0]}] {info}");
+                            PopStyleColor();
+                        }
+                    }                       
+
+                    EndListBox();
+                }
+            }
+            EndChild();
+        }
+        func get_log_abstract(self: LogHook)
+        {
+            return self.m_display_setting
+                -> forall(\_, v = v[3] > 0;)
+                -> unmapping
+                ->> \kv = F"{kv[1][0]} {kv[1][3]}";
+                -> reduce(\l, r = l + " " + r;)
+                -> valor("");
+        }
+    }
+
     public func show_browser(context: EditorContext, open: mutable<bool>)
     {
+        static let browser_context = struct{
+            m_display_log = mut false,
+            m_log_displayer = new! LogHook(),
+        };
+
         if (open->get)
         {
             je::gui::SetNextWindowSizeConstraints((500., 200.), (2000., 1100.));
@@ -1307,11 +1410,30 @@ namespace $$MODULE_NAME$$
                         do BeginChildSize("tools_bar", 0., 40.);
                             // TODO 此处放一些返回上一层之类的按钮
                             if (Button("U"))
-                                current_work_path = filesys::parent(filesys::normalize(current_work_path))->tostring;
+                            {
+                                if (browser_context.m_display_log)
+                                    browser_context.m_display_log = false;
+                                else
+                                    current_work_path = 
+                                        filesys::parent(filesys::normalize(current_work_path))->tostring;
+                            }
+                            SameLine();
+                            if (Button("L"))
+                                browser_context.m_display_log = !browser_context.m_display_log;
                             SameLine();
                             Text(current_work_path);
+                            SameLine();
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (128, 255, 67, 255));
+                            Text(browser_context.m_log_displayer->get_log_abstract);
+                            PopStyleColor();
                         EndChild();
-                        files_group(context);
+
+                        browser_context.m_log_displayer->update(context);
+
+                        if (browser_context.m_display_log)
+                            browser_context.m_log_displayer->display_log();
+                        else
+                            files_group(context);
                         
                     EndGroup();
                 }

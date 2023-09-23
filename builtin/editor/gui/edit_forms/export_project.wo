@@ -245,9 +245,15 @@ namespace editor::gui::edit_forms
 
                                 let LOADED_MODULE_HANDLES = []mut: vec<handle>;
                                 let LOADED_TOWOO_SYSTEM_TYPES = []mut: vec<je::typeinfo>;
+                                let LOADED_TOWOO_COMPONENT_TYPES = []mut: vec<je::typeinfo>;
 
                                 // 在此处加载模块
                                 $LOAD_DYLIB_MODULES$
+
+                                // 在此处加载ToWoo组件
+                                $LOAD_TOWOO_COMPONENT$
+
+                                je::towoo::update_api();
 
                                 // 在此处加载ToWoo脚本
                                 $LOAD_TOWOO_SCRIPTS$
@@ -277,6 +283,9 @@ namespace editor::gui::edit_forms
                                 
                                 for (let _, tinfo: LOADED_TOWOO_SYSTEM_TYPES)
                                     je::towoo::unregister_system(tinfo);
+
+                                for (let _, tinfo: LOADED_TOWOO_COMPONENT_TYPES)
+                                    je::towoo::unregister_component(tinfo);
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码
@@ -300,10 +309,21 @@ namespace editor::gui::edit_forms
                             }
 
                             // 1.5.2 加载ToWoo类型
-                            let loading_towoo_types = proj->get_all_towoo_scripts_name_and_path
+                            let loading_towoo_components = proj->get_all_towoo_scripts_name_and_path
+                                ->  forall(\_, paths = filesys::extension(paths[0])->lower == ".wocomponent";)
                                 ->  unmapping
-                                ->> \nameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::register_system({
-                                        nameandpath[0]->enstring}, {nameandpath[1]->enstring})->or(\\v=v;));\n"
+                                ->> \pathnameandpath = F"LOADED_TOWOO_COMPONENT_TYPES->add(je::towoo::update_component({
+                                        name->enstring}, {path->enstring})->val);\n"
+                                        where (name, (_, path)) = pathnameandpath
+                                    ;
+                                ->  reduce(\l, r = l + r;)
+                                ->  valor("");
+                            let loading_towoo_systems = proj->get_all_towoo_scripts_name_and_path
+                                ->  forall(\_, paths = filesys::extension(paths[0])->lower == ".wosystem";)
+                                ->  unmapping
+                                ->> \pathnameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::register_system({
+                                        name->enstring}, {path->enstring})->or(\\v=v;));\n"
+                                        where (name, (_, path)) = pathnameandpath
                                     ;
                                 ->  reduce(\l, r = l + r;)
                                 ->  valor("");
@@ -331,7 +351,8 @@ namespace editor::gui::edit_forms
                                 new! vm("@/builtin/main.wo", 
                                     boot_up_script
                                         ->replace("$LOAD_DYLIB_MODULES$", dylib_loader)
-                                        ->replace("$LOAD_TOWOO_SCRIPTS$", loading_towoo_types)
+                                        ->replace("$LOAD_TOWOO_COMPONENT$", loading_towoo_components)
+                                        ->replace("$LOAD_TOWOO_SCRIPTS$", loading_towoo_systems)
                                         ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
                                         ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
                                         ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
