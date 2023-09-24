@@ -413,7 +413,10 @@ namespace editor
                 ->  mapping
                 ;
         }
-    
+        public func get_towoo_context(self: Project)
+        {
+            return self.m_towoo_context;
+        }
         public func load(path: filesys::path_t, dat: dict<string, dynamic>)
         {
             try! self = create(dat["name"] as string, path);
@@ -475,7 +478,7 @@ namespace editor
         }
         public func save_project(self: Project)
         {
-            let bad_list = self.m_towoo_context.m_bad_towoo_script
+            let bad_list = self.m_towoo_context->get_bad_scripts
                 ->> \p = p->tostring;
                 ->  reduce(\l, r = l + "\n" + r;);
             match (bad_list)

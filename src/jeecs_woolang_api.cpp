@@ -1742,9 +1742,9 @@ WO_API wo_api wojeapi_towoo_register_system(wo_vm vm, wo_value args, size_t argc
 {
     const jeecs::typing::type_info* result;
     if (je_towoo_register_system(&result, wo_string(args + 0), wo_string(args + 1)))
-        return wo_ret_ok_pointer(vm, (void*)result);
+        return wo_ret_option_pointer(vm, (void*)result);
 
-    return wo_ret_err_pointer(vm, (void*)result);
+    return wo_ret_option_none(vm);
 }
 WO_API wo_api wojeapi_towoo_unregister_system(wo_vm vm, wo_value args, size_t argc)
 {
@@ -2148,7 +2148,7 @@ namespace je
         public func update_api()=> void;
 
         extern("libjoyecs", "wojeapi_towoo_register_system")
-        public func register_system(name: string, path: string)=> result<typeinfo, typeinfo>;
+        public func update_system(name: string, path: string)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_towoo_unregister_system")
         public func unregister_system(t: typeinfo)=> void;

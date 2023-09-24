@@ -192,6 +192,8 @@ func my_ask_for_get_yes_no_cancel_result(
     using je::gui;
     using jeapi::gui;
 
+    p->try_update_towoo(false);
+
     launch(func()
     {
         let mut open = true;
@@ -208,6 +210,36 @@ func my_ask_for_get_yes_no_cancel_result(
                 else
                 {
                     Text("即将退出编辑器，是否保存当前项目？");
+                    let missing_comps = p->get_towoo_context->get_removing_components;
+                    let missing_syss = p->get_towoo_context->get_removing_systems;
+                    if (!missing_comps->empty || !missing_syss->empty)
+                    {
+                        Separator();
+
+                        PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 200, 67, 255));
+                        Text("警告！");
+                        PopStyleColor();
+                        Text("以下组件和系统处于丢失状态：");
+
+                        if (!missing_comps->empty)
+                        {
+                            Text("组件：");
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (42, 255, 175, 255));
+                            for (let _, c: missing_comps)
+                                Text(c);
+                            PopStyleColor();
+                        }
+                        if (!missing_syss->empty)
+                        {
+                            Text("系统：");
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (175, 255, 42, 255));
+                            for (let _, s: missing_syss)
+                                Text(s);
+                            PopStyleColor();
+                        }
+                        Text("下次载入将丢失以上组件或系统");
+                        Separator();
+                    }
 
                     if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
                     {

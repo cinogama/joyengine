@@ -321,7 +321,7 @@ namespace editor::gui::edit_forms
                             let loading_towoo_systems = proj->get_all_towoo_scripts_name_and_path
                                 ->  forall(\_, paths = filesys::extension(paths[0])->lower == ".wosystem";)
                                 ->  unmapping
-                                ->> \pathnameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::register_system({
+                                ->> \pathnameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::update_system({
                                         name->enstring}, {path->enstring})->or(\\v=v;));\n"
                                         where (name, (_, path)) = pathnameandpath
                                     ;

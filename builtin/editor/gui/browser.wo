@@ -1091,7 +1091,10 @@ namespace $$MODULE_NAME$$
             match (filesys::copy(path, target_path))
             {
             ok(_)?
-                force_update();
+                {
+                    context->get_project->try_update_towoo(false);
+                    force_update();
+                }
             err(errid)?
                 jeapi::gui::form::errmsg("失败", F"复制文件失败({errid})");
             }
@@ -1100,7 +1103,7 @@ namespace $$MODULE_NAME$$
         {
             jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
                 \newname: string = filesys::move(path.path, filesys::parent(path.path)/newname)
-                    ->> \_ = force_update();
+                    ->> func(_){context->get_project->try_update_towoo(false);force_update();}
                     ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }
         if (MenuItemEnabled("删除", is_modifiable_file))
@@ -1110,7 +1113,7 @@ namespace $$MODULE_NAME$$
                 {
                     if (!sure) return;
                     do filesys::remove(path.path)
-                        ->> \_ = force_update();
+                        ->> func(_){context->get_project->try_update_towoo(false);force_update();}
                         ->  or(\errid = jeapi::gui::form::errmsg("失败", F"删除失败({errid})");)
                         ;
                     do filesys::remove(filesys::parent(path.path) / (filesys::filename(path.path) + ".jecache4"));

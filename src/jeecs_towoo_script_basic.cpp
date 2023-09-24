@@ -461,53 +461,13 @@ bool je_towoo_register_system(
     const char* system_name,
     const char* script_path)
 {
-    std::unique_lock ug1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
-
-    auto* old_typeinfo = je_typing_get_info_by_name(system_name);
-    if (old_typeinfo != nullptr)
-    {
-        // 同名系统未解除注册，在此报错
-        *out_system_tinfo = nullptr;
-        jeecs::debug::logerr("The towoo-system named: '%s' has been registered.", system_name);
-        return false;
-    }
-
-    auto* towoo_system_tinfo = je_typing_register(
-        system_name,
-        jeecs::basic::type_hash<jeecs::towoo::ToWooBaseSystem>(),
-        sizeof(jeecs::towoo::ToWooBaseSystem),
-        alignof(jeecs::towoo::ToWooBaseSystem),
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::to_string,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::parse,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::script_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
-        je_typing_class::JE_SYSTEM);
-
-    *out_system_tinfo = towoo_system_tinfo;
-
-    wo_vm vm = wo_create_vm();
-
-    auto info = std::make_unique<jeecs::towoo::ToWooBaseSystem::towoo_system_info>(vm);
-    auto* towoo_sys_info = info.get();
-    towoo_sys_info->m_is_good = false;
-    jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems[towoo_system_tinfo]
-        = std::move(info);
-
     if (jeecs_file* texfile = jeecs_file_open(script_path))
     {
         char* src = (char*)malloc(texfile->m_file_length + 1);
         jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
         src[texfile->m_file_length] = 0;
 
+        wo_vm vm = wo_create_vm();
         bool result = wo_load_binary(vm, script_path, src, texfile->m_file_length);
 
         jeecs_file_close(texfile);
@@ -516,24 +476,27 @@ bool je_towoo_register_system(
         if (result)
         {
             // Invoke "_init_towoo_system", if failed... boom!
-            towoo_sys_info->m_create_function = wo_extern_symb(vm, "create");
-            towoo_sys_info->m_close_function = wo_extern_symb(vm, "close");
+            wo_integer_t create_function = wo_extern_symb(vm, "create");
+            wo_integer_t close_function = wo_extern_symb(vm, "close");
             wo_integer_t initfunc = wo_extern_symb(vm, "_init_towoo_system");
             if (initfunc == 0)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find '_init_towoo_system' in '%s', "
                     "forget to import je/towoo/system.wo ?",
                     system_name, script_path);
+                wo_close_vm(vm);
             }
-            else if (towoo_sys_info->m_create_function == 0)
+            else if (create_function == 0)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find 'create' function in '%s'.",
                     system_name, script_path);
+                wo_close_vm(vm);
             }
-            else if (towoo_sys_info->m_close_function == 0)
+            else if (close_function == 0)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find 'close' in '%s'.",
                     system_name, script_path);
+                wo_close_vm(vm);
             }
             else
             {
@@ -541,22 +504,62 @@ bool je_towoo_register_system(
                 {
                     jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",
                         system_name, wo_get_runtime_error(vm));
+                    wo_close_vm(vm);
                 }
                 else
                 {
-                    ug1.unlock();
+                    je_towoo_unregister_system(je_typing_get_info_by_name(system_name));
+
+                    auto* towoo_system_tinfo = je_typing_register(
+                        system_name,
+                        jeecs::basic::type_hash<jeecs::towoo::ToWooBaseSystem>(),
+                        sizeof(jeecs::towoo::ToWooBaseSystem),
+                        alignof(jeecs::towoo::ToWooBaseSystem),
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::to_string,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::parse,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::script_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
+                        je_typing_class::JE_SYSTEM);
+
+                    assert(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(towoo_system_tinfo) ==
+                        jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.end());
+
+                    auto systinfo = std::make_unique<jeecs::towoo::ToWooBaseSystem::towoo_system_info>(vm);
+                    auto* sysinfo_ptr = systinfo.get();
+
+                    sysinfo_ptr->m_is_good = false;
+                    sysinfo_ptr->m_create_function = create_function;
+                    sysinfo_ptr->m_close_function = close_function;
+
+                    std::unique_lock ug1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
+
+                    jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems[towoo_system_tinfo]
+                        = std::move(systinfo);
+
                     wo_push_pointer(vm, (void*)towoo_system_tinfo);
+                    ug1.unlock();
                     if (nullptr == wo_invoke_rsfunc(vm, initfunc, 1))
                     {
-                        ug1.lock();
+                        // No need for locking
+                        // ug1.lock();
                         jeecs::debug::logerr("Failed to register: '%s', '_init_towoo_system' failed: '%s'.",
                             system_name, wo_get_runtime_error(vm));
                     }
                     else
                     {
-                        towoo_sys_info->m_is_good = true;
-                        return true;
+                        ug1.lock();
+                        sysinfo_ptr->m_is_good = true;
                     }
+                    return sysinfo_ptr->m_is_good;
                 }
             }
         }
@@ -564,6 +567,7 @@ bool je_towoo_register_system(
         {
             jeecs::debug::logerr("Failed to register: '%s' failed to compile:\n%s",
                 system_name, wo_get_compile_error(vm, WO_NEED_COLOR));
+            wo_close_vm(vm);
         }
     }
     else

@@ -178,6 +178,67 @@ namespace editor::gui::edit_forms
                             EndMenu();
                         }
 
+                        let towoo_context = proj->get_towoo_context();
+                        let bad_scripts = towoo_context->get_bad_scripts();
+                        let removing_comps = towoo_context->get_removing_components();
+                        let removing_syss = towoo_context->get_removing_systems();
+
+                        let mut menu_name = "ToWoo";
+
+                        if (!bad_scripts->empty)
+                            menu_name += F" {bad_scripts->len}错误";
+                        if (!removing_comps->empty)
+                            menu_name += F" {removing_comps->len}丢失组件";
+                        if (!removing_syss->empty)
+                            menu_name += F" {removing_syss->len}丢失系统";
+  
+                        if (BeginMenu(menu_name))
+                        {
+                            if (!bad_scripts->empty)
+                            {
+                                do MenuItemEnabled("编译错误", false);
+                                for (let _, p : bad_scripts)
+                                {
+                                    do MenuItem(filesys::purename(p));
+                                }
+
+                                Separator();
+                            }
+                            if (!removing_comps->empty)
+                            {
+                                do MenuItemEnabled("丢失组件", false);
+                                for (let _, p : removing_comps)
+                                {
+                                    do MenuItem(p);
+                                }
+                                Separator();
+                            }
+                            if (!removing_syss->empty)
+                            {
+                                do MenuItemEnabled("丢失系统", false);
+                                for (let _, p : removing_syss)
+                                {
+                                    do MenuItem(p);
+                                }
+                                Separator();
+                            }
+
+                            do MenuItemEnabled("组件", false);
+                            for (let p, _: towoo_context.m_loaded_towoo)
+                            {
+                                if (filesys::extension(p)->lower == ".wocomponent")
+                                    do MenuItem(filesys::purename(p));
+                            }
+                            Separator();
+                            do MenuItemEnabled("系统", false);
+                            for (let p, _: towoo_context.m_loaded_towoo)
+                            {
+                                if (filesys::extension(p)->lower == ".wosystem")
+                                    do MenuItem(filesys::purename(p));
+                            }
+                            EndMenu();
+                        }
+
                         do debug_world->>
                             func(w)
                             {

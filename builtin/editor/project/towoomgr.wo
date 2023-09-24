@@ -18,6 +18,9 @@ namespace editor
         m_project_path: path_t,
         m_loaded_towoo: mut dict<path_t, (int, je::typeinfo)>,
         m_bad_towoo_script: vec<path_t>,
+
+        m_removing_component: map<string, void>,
+        m_removing_system: map<string, void>,
     }
     {
         public func fetch_file(self: ToWooContext, type: string)
@@ -46,8 +49,10 @@ namespace editor
                 {
                     if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
-                        // 旧的失效，释放！
-                        towoo::unregister_system(t);
+                        assert(!self.m_removing_system->contain(purename(p)));
+
+                        if (fetched_scripts->contain(p) == false)
+                            self.m_removing_system->set(purename(p), do nil);
                     }
                     else
                     {
@@ -68,6 +73,10 @@ namespace editor
                 {
                     if (fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
+                        assert(!self.m_removing_component->contain(purename(p)));
+
+                        if (fetched_scripts->contain(p) == false)
+                            self.m_removing_component->set(purename(p), do nil);
                     }
                     else
                     {
@@ -92,6 +101,7 @@ namespace editor
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
                 assert(extension(p)->lower == ".wocomponent");
+                do self.m_removing_component->remove(purename(p));
                 match (towoo::update_component(purename(p), p->tostring))
                 {
                 value(t)?
@@ -109,14 +119,16 @@ namespace editor
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
                 assert(extension(p)->lower == ".wosystem");
-                match (towoo::register_system(purename(p), p->tostring))
+                do self.m_removing_system->remove(purename(p));
+                match (towoo::update_system(purename(p), p->tostring))
                 {
-                ok(t)?
+                value(t)?
                     new_scripts->set(p, (c, t));
-                err(t)?
+                none?
                     {
                         self.m_bad_towoo_script->add(p);
-                        new_scripts->set(p, (c, t));
+                        if (self.m_loaded_towoo->contain(p))
+                            new_scripts->set(p, (c, self.m_loaded_towoo[p][1]));
                     }
                 }
             }
@@ -174,8 +186,22 @@ namespace editor
                 m_project_path = proj_path,
                 m_loaded_towoo = mut {},
                 m_bad_towoo_script = []mut,
+                m_removing_component = {}mut,
+                m_removing_system = {}mut,
             };
             return self;
+        }
+        public func get_bad_scripts(self: ToWooContext)
+        {
+            return self.m_bad_towoo_script->toarray;
+        }
+        public func get_removing_components(self: ToWooContext)
+        {
+            return self.m_removing_component->unmapping->>\kv=kv[0];;
+        }
+        public func get_removing_systems(self: ToWooContext)
+        {
+            return self.m_removing_system->unmapping->>\kv=kv[0];;
         }
     }
 }
