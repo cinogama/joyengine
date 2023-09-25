@@ -47,7 +47,9 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
     wo_vm co_vmm = wo_borrow_vm(vm);
 
     for (auto i = argument_count; i > 0; --i)
-        wo_push_val(co_vmm, wo_struct_get(arguments, (uint16_t)(i - 1)));
+    {
+        wo_struct_get(wo_push_empty(co_vmm), arguments, (uint16_t)(i - 1));
+    }
 
     if (wo_valuetype(cofunc) == WO_INTEGER_TYPE)
         wo_dispatch_rsfunc(co_vmm, wo_int(cofunc), argument_count);

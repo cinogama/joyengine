@@ -148,6 +148,8 @@ namespace jeecs
                 if (m_job_vm == nullptr)
                     return;
 
+                wo_value tmp_elem = wo_push_empty(m_job_vm);
+
                 for (auto& work : m_dependences)
                 {
                     work.m_dependence.update(get_world());
@@ -172,33 +174,37 @@ namespace jeecs
                                         wo_value component_st = nullptr;
                                         if (work.m_dependence.m_requirements[argidx - 1].m_require == jeecs::requirement::type::MAYNOT)
                                         {
-                                            wo_value option_comp = wo_push_struct(m_job_vm, 2);
+                                            wo_value option_comp = wo_push_empty(m_job_vm);
                                             if (component == nullptr)
+                                            {
                                                 // option::none
-                                                wo_set_int(wo_struct_get(option_comp, 0), 2);
+                                                wo_set_option_none(option_comp, m_job_vm);
+                                            }
                                             else
                                             {
                                                 // option::value
-                                                wo_set_int(wo_struct_get(option_comp, 0), 1);
-                                                component_st = wo_struct_get(option_comp, 1);
+                                                component_st = tmp_elem;
+                                                wo_set_struct(component_st, m_job_vm, typeinfo->m_member_count);
+                                                wo_set_option_val(option_comp, m_job_vm, component_st);
                                             }
                                         }
                                         else
-                                            component_st = wo_push_empty(m_job_vm);
+                                            component_st = wo_push_struct(m_job_vm, typeinfo->m_member_count);
 
                                         if (component_st != nullptr)
                                         {
-                                            wo_set_struct(component_st, m_job_vm, typeinfo->m_member_count);
-
                                             uint16_t member_idx = 0;
                                             auto* member_tinfo = typeinfo->m_member_types;
                                             while (member_tinfo != nullptr)
                                             {
                                                 // Set member;
-                                                wo_set_pointer(wo_struct_get(component_st, member_idx),
+                                                _wo_value tmp;
+                                                wo_set_pointer(&tmp,
                                                     reinterpret_cast<void*>(
                                                         reinterpret_cast<intptr_t>(component)
                                                         + member_tinfo->m_member_offset));
+
+                                                wo_struct_set(component_st, member_idx, &tmp);
 
                                                 ++member_idx;
                                                 member_tinfo = member_tinfo->m_next_member;
@@ -223,6 +229,8 @@ namespace jeecs
                         }
                     }
                 }
+
+                wo_pop_stack(m_job_vm);
 
                 ScriptRuntimeSystem::system_instance = nullptr;
             }
@@ -605,17 +613,25 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t 
     wo_value requirements = args + 2;
     wo_integer_t component_arg_count = wo_int(args + 3);
     wo_value requirement_info = wo_push_empty(vm);
+    wo_value elem = wo_push_empty(vm);
+
     for (wo_integer_t i = 0; i < wo_lengthof(requirements); ++i)
     {
         wo_arr_get(requirement_info, requirements, i);
 
+        wo_struct_get(elem, requirement_info, 2);
         const auto* typeinfo = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(
-            wo_pointer(wo_struct_get(requirement_info, 2))));
+            wo_pointer(elem)));
+
+        wo_struct_get(elem, requirement_info, 0);
+        jeecs::requirement::type ty = (jeecs::requirement::type)wo_int(elem);
+
+        wo_struct_get(elem, requirement_info, 1);
 
         stepwork.m_dependence.m_requirements.push_back(
             jeecs::requirement(
-                (jeecs::requirement::type)wo_int(wo_struct_get(requirement_info, 0)),
-                wo_int(wo_struct_get(requirement_info, 1)),
+                ty,
+                wo_int(elem),
                 typeinfo->m_id
             ));
 
@@ -656,12 +672,16 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_
     };
     std::vector<_member_info> member_defs;
     wo_value member_def = wo_push_empty(vm);
+    wo_value member_info = wo_push_empty(vm);
     for (wo_integer_t i = 0; i < member_count; ++i)
     {
         wo_arr_get(member_def, members, i);
-        std::string member_name = wo_string(wo_struct_get(member_def, 0));
+        wo_struct_get(member_info, member_def, 0);
+        std::string member_name = wo_string(member_info);
+
+        wo_struct_get(member_info, member_def, 1);
         auto* member_typeinfo = (const jeecs::typing::type_info*)
-            wo_pointer(wo_struct_get(member_def, 1));
+            wo_pointer(member_info);
 
         component_size = jeecs::basic::allign_size(component_size, member_typeinfo->m_align);
         member_defs.push_back(_member_info{ member_name, member_typeinfo, component_size });

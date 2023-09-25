@@ -8554,66 +8554,136 @@ namespace jeecs
             typing::register_script_parser<jeecs::math::ivec2>(
                 [](wo_vm vm, wo_value value, const jeecs::math::ivec2* v) {
                     wo_set_struct(value, vm, 2);
-                    wo_set_int(wo_struct_get(value, 0), (wo_integer_t)v->x);
-                    wo_set_int(wo_struct_get(value, 1), (wo_integer_t)v->y);
+                    wo_value elem = wo_push_empty(vm);
+                    
+                    wo_set_int(elem, (wo_integer_t)v->x);
+                    wo_struct_set(value, 0, elem);
+                    
+                    wo_set_int(elem, (wo_integer_t)v->y);
+                    wo_struct_set(value, 1, elem);
                 },
-                [](wo_vm, wo_value value, jeecs::math::ivec2* v) {
-                    v->x = (int)wo_int(wo_struct_get(value, 0));
-                    v->y = (int)wo_int(wo_struct_get(value, 1));
+                [](wo_vm vm, wo_value value, jeecs::math::ivec2* v) {
+                    wo_value elem = wo_push_empty(vm);
+                    
+                    wo_struct_get(elem, value, 0);
+                    v->x = (int)wo_int(elem);
+
+                    wo_struct_get(elem, value, 1);
+                    v->y = (int)wo_int(elem);
                 }, "ivec2", "public using ivec2 = (int, int);");
 
             typing::register_script_parser<jeecs::math::vec2>(
                 [](wo_vm vm, wo_value value, const jeecs::math::vec2* v) {
                     wo_set_struct(value, vm, 2);
-                    wo_set_float(wo_struct_get(value, 0), v->x);
-                    wo_set_float(wo_struct_get(value, 1), v->y);
+                    wo_value elem = wo_push_empty(vm);
+
+                    wo_set_float(elem, v->x);
+                    wo_struct_set(value, 0, elem);
+
+                    wo_set_float(elem, v->y);
+                    wo_struct_set(value, 1, elem);
                 },
-                [](wo_vm, wo_value value, jeecs::math::vec2* v) {
-                    v->x = wo_float(wo_struct_get(value, 0));
-                    v->y = wo_float(wo_struct_get(value, 1));
+                [](wo_vm vm, wo_value value, jeecs::math::vec2* v) {
+                    wo_value elem = wo_push_empty(vm);
+
+                    wo_struct_get(elem, value, 0);
+                    v->x = wo_float(elem);
+
+                    wo_struct_get(elem, value, 1);
+                    v->y = wo_float(elem);
                 }, "vec2", "public using vec2 = (real, real);");
 
             typing::register_script_parser<jeecs::math::vec3>(
                 [](wo_vm vm, wo_value value, const jeecs::math::vec3* v) {
                     wo_set_struct(value, vm, 3);
-                    wo_set_float(wo_struct_get(value, 0), v->x);
-                    wo_set_float(wo_struct_get(value, 1), v->y);
-                    wo_set_float(wo_struct_get(value, 2), v->z);
+                    wo_value elem = wo_push_empty(vm);
+
+                    wo_set_float(elem, v->x);
+                    wo_struct_set(value, 0, elem);
+
+                    wo_set_float(elem, v->y);
+                    wo_struct_set(value, 1, elem);
+
+                    wo_set_float(elem, v->z);
+                    wo_struct_set(value, 2, elem);
                 },
-                [](wo_vm, wo_value value, jeecs::math::vec3* v) {
-                    v->x = wo_float(wo_struct_get(value, 0));
-                    v->y = wo_float(wo_struct_get(value, 1));
-                    v->z = wo_float(wo_struct_get(value, 2));
+                [](wo_vm vm, wo_value value, jeecs::math::vec3* v) {
+                    wo_value elem = wo_push_empty(vm);
+
+                    wo_struct_get(elem, value, 0);
+                    v->x = wo_float(elem);
+
+                    wo_struct_get(elem, value, 1);
+                    v->y = wo_float(elem);
+
+                    wo_struct_get(elem, value, 2);
+                    v->z = wo_float(elem);
                 }, "vec3", "public using vec3 = (real, real, real);");
 
             typing::register_script_parser<jeecs::math::vec4>(
                 [](wo_vm vm, wo_value value, const jeecs::math::vec4* v) {
                     wo_set_struct(value, vm, 4);
-                    wo_set_float(wo_struct_get(value, 0), v->x);
-                    wo_set_float(wo_struct_get(value, 1), v->y);
-                    wo_set_float(wo_struct_get(value, 2), v->z);
-                    wo_set_float(wo_struct_get(value, 3), v->w);
+                    wo_value elem = wo_push_empty(vm);
+
+                    wo_set_float(elem, v->x);
+                    wo_struct_set(value, 0, elem);
+
+                    wo_set_float(elem, v->y);
+                    wo_struct_set(value, 1, elem);
+
+                    wo_set_float(elem, v->z);
+                    wo_struct_set(value, 2, elem);
+
+                    wo_set_float(elem, v->w);
+                    wo_struct_set(value, 2, elem);
                 },
-                [](wo_vm, wo_value value, jeecs::math::vec4* v) {
-                    v->x = wo_float(wo_struct_get(value, 0));
-                    v->y = wo_float(wo_struct_get(value, 1));
-                    v->z = wo_float(wo_struct_get(value, 2));
-                    v->w = wo_float(wo_struct_get(value, 3));
+                [](wo_vm vm, wo_value value, jeecs::math::vec4* v) {
+                    wo_value elem = wo_push_empty(vm);
+
+                    wo_struct_get(elem, value, 0);
+                    v->x = wo_float(elem);
+
+                    wo_struct_get(elem, value, 1);
+                    v->y = wo_float(elem);
+
+                    wo_struct_get(elem, value, 2);
+                    v->z = wo_float(elem);
+
+                    wo_struct_get(elem, value, 3);
+                    v->w = wo_float(elem);
                 }, "vec4", "public using vec4 = (real, real, real, real);");
 
             typing::register_script_parser<jeecs::math::quat>(
                 [](wo_vm vm, wo_value value, const jeecs::math::quat* v) {
                     wo_set_struct(value, vm, 4);
-                    wo_set_float(wo_struct_get(value, 0), v->x);
-                    wo_set_float(wo_struct_get(value, 1), v->y);
-                    wo_set_float(wo_struct_get(value, 2), v->z);
-                    wo_set_float(wo_struct_get(value, 3), v->w);
+                    wo_value elem = wo_push_empty(vm);
+
+                    wo_set_float(elem, v->x);
+                    wo_struct_set(value, 0, elem);
+
+                    wo_set_float(elem, v->y);
+                    wo_struct_set(value, 1, elem);
+
+                    wo_set_float(elem, v->z);
+                    wo_struct_set(value, 2, elem);
+
+                    wo_set_float(elem, v->w);
+                    wo_struct_set(value, 2, elem);
                 },
-                [](wo_vm, wo_value value, jeecs::math::quat* v) {
-                    v->x = wo_float(wo_struct_get(value, 0));
-                    v->y = wo_float(wo_struct_get(value, 1));
-                    v->z = wo_float(wo_struct_get(value, 2));
-                    v->w = wo_float(wo_struct_get(value, 3));
+                [](wo_vm vm, wo_value value, jeecs::math::quat* v) {
+                    wo_value elem = wo_push_empty(vm);
+
+                    wo_struct_get(elem, value, 0);
+                    v->x = wo_float(elem);
+
+                    wo_struct_get(elem, value, 1);
+                    v->y = wo_float(elem);
+
+                    wo_struct_get(elem, value, 2);
+                    v->z = wo_float(elem);
+
+                    wo_struct_get(elem, value, 3);
+                    v->w = wo_float(elem);
                 }, "quat", "public using quat = (real, real, real, real);");
 
             // 1. register core&graphic systems.

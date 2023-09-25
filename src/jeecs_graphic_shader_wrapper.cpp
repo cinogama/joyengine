@@ -654,7 +654,12 @@ WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args, size_t 
     variable_member_define.name = wo_string(args + 2);
 
     if (variable_member_define.type == jegl_shader_value::type::STRUCT)
-        variable_member_define.struct_type_may_nil = (shader_struct_define*)wo_pointer(wo_struct_get(args + 3, 1));
+    {
+        wo_value elem = wo_push_empty(vm);
+
+        wo_struct_get(elem, args + 3, 1);
+        variable_member_define.struct_type_may_nil = (shader_struct_define*)wo_pointer(elem);
+    }
     else
         variable_member_define.struct_type_may_nil = nullptr;
 
@@ -666,21 +671,35 @@ WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args, size_t 
 WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size_t argc)
 {
     wo_value voutstruct = args + 1;
-    uint16_t structsz = 0;
+
+    if (wo_valuetype(voutstruct) == WO_STRUCT_TYPE)
+        return wo_ret_halt(vm, "'type' must struct when return from vext or frag.");
+
+    uint16_t structsz = (uint16_t)wo_lengthof(voutstruct);
 
     // is vertex out, check it
-    if (wo_valuetype(voutstruct) != WO_STRUCT_TYPE
-        || (structsz = (uint16_t)wo_lengthof(voutstruct)) == 0
-        || (wo_bool(args + 0)
-            ? jegl_shader_value::type::FLOAT4 != ((jegl_shader_value*)wo_pointer(wo_struct_get(voutstruct, 0)))->get_type()
-            : false))
-        return wo_ret_halt(vm, "'vert' must return a struct with first member of 'float4'.");
+    wo_value elem = wo_push_empty(vm);
 
+    // If vertext
+    if (wo_bool(args + 0))
+    {
+        jegl_shader_value* val = nullptr;
+        if (structsz > 0)
+        {
+            wo_struct_get(elem, voutstruct, 0);
+            val = (jegl_shader_value*)wo_pointer(elem);
+        }
+
+        if (val == nullptr || jegl_shader_value::type::FLOAT4 != val->get_type())
+            return wo_ret_halt(vm, "'vert' must return a struct with first member of 'float4'.");
+    }
+        
     shader_value_outs* values = new shader_value_outs;
     values->out_values.resize(structsz);
     for (uint16_t i = 0; i < structsz; i++)
     {
-        values->out_values[i] = (jegl_shader_value*)wo_pointer(wo_struct_get(voutstruct, i));
+        wo_struct_get(elem, voutstruct, i);
+        values->out_values[i] = (jegl_shader_value*)wo_pointer(elem);
         values->out_values[i]->add_useref_count();
     }
     return wo_ret_pointer(vm, values);
@@ -691,12 +710,14 @@ WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t ar
 
     uint16_t fragmentin_size = (uint16_t)values->out_values.size();
     wo_value out_struct = wo_push_struct(vm, fragmentin_size);
+    wo_value elem = wo_push_empty(vm);
 
     for (uint16_t i = 0; i < fragmentin_size; i++)
     {
         auto* val = new jegl_shader_value(values->out_values[i]->get_type());
         val->m_shader_in_index = i;
-        wo_set_gchandle(wo_struct_get(out_struct, i), vm, val, nullptr, _free_shader_value);
+        wo_set_gchandle(elem, vm, val, nullptr, _free_shader_value);
+        wo_struct_set(out_struct, i, elem);
     }
 
     return wo_ret_val(vm, out_struct);
@@ -706,18 +727,24 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
 {
     shader_configs config;
 
-    config.m_enable_shared = wo_bool(wo_struct_get(args + 2, 0));
-    config.m_depth_test = (jegl_shader::depth_test_method)wo_int(wo_struct_get(args + 2, 1));
-    config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(wo_struct_get(args + 2, 2));
-    config.m_blend_src = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 3));
-    config.m_blend_dst = (jegl_shader::blend_method)wo_int(wo_struct_get(args + 2, 4));
-    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(wo_struct_get(args + 2, 5));
+    wo_value elem = wo_push_empty(vm);
+    wo_struct_get(elem, args + 2, 0);
+    config.m_enable_shared = wo_bool(elem);
+    wo_struct_get(elem, args + 2, 1);
+    config.m_depth_test = (jegl_shader::depth_test_method)wo_int(elem);
+    wo_struct_get(elem, args + 2, 2);
+    config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(elem);
+    wo_struct_get(elem, args + 2, 3);
+    config.m_blend_src = (jegl_shader::blend_method)wo_int(elem);
+    wo_struct_get(elem, args + 2, 4);
+    config.m_blend_dst = (jegl_shader::blend_method)wo_int(elem);
+    wo_struct_get(elem, args + 2, 5);
+    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(elem);
 
     shader_struct_define** ubos = nullptr;
     size_t ubo_count = (size_t)wo_lengthof(args + 3);
 
     ubos = new shader_struct_define * [ubo_count + 1];
-    wo_value elem = wo_push_empty(vm);
     for (size_t i = 0; i < ubo_count; ++i)
     {
         wo_arr_get(elem, args + 3, i);

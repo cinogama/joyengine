@@ -738,59 +738,70 @@ WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_string(vm, t == nullptr ? "" : t);
 }
 
-//
+wo_value push_float2_to_struct(wo_vm vm, float x, float y)
+{
+    wo_value ret = wo_push_struct(vm, 2);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, x);
+    wo_struct_set(ret, 0, elem);
+    wo_set_float(elem, y);
+    wo_struct_set(ret, 1, elem);
+    return ret;
+}
+wo_value push_float3_to_struct(wo_vm vm, float x, float y, float z)
+{
+    wo_value ret = wo_push_struct(vm, 3);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, x);
+    wo_struct_set(ret, 0, elem);
+    wo_set_float(elem, y);
+    wo_struct_set(ret, 1, elem);
+    wo_set_float(elem, z);
+    wo_struct_set(ret, 2, elem);
+    return ret;
+}
+wo_value push_float4_to_struct(wo_vm vm, float x, float y, float z, float w)
+{
+    wo_value ret = wo_push_struct(vm, 4);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, x);
+    wo_struct_set(ret, 0, elem);
+    wo_set_float(elem, y);
+    wo_struct_set(ret, 1, elem);
+    wo_set_float(elem, z);
+    wo_struct_set(ret, 2, elem);
+    wo_set_float(elem, w);
+    wo_struct_set(ret, 3, elem);
+    return ret;
+}
+
 WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args, size_t argc)
 {
     auto&& wpos = ImGui::GetWindowPos();
-
-    wo_value ret = wo_push_struct(vm, 2);
-    wo_set_float(wo_struct_get(ret, 0), wpos.x);
-    wo_set_float(wo_struct_get(ret, 1), wpos.y);
-
-    return wo_ret_val(vm, ret);
+    return wo_ret_val(vm, push_float2_to_struct(vm, wpos.x, wpos.y));
 }
 
 WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args, size_t argc)
 {
     auto&& mpos = ImGui::GetMousePos();
-
-    wo_value ret = wo_push_struct(vm, 2);
-    wo_set_float(wo_struct_get(ret, 0), mpos.x);
-    wo_set_float(wo_struct_get(ret, 1), mpos.y);
-
-    return wo_ret_val(vm, ret);
+    return wo_ret_val(vm, push_float2_to_struct(vm, mpos.x, mpos.y));
 }
 
 WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args, size_t argc)
 {
     auto&& mdpos = ImGui::GetIO().MouseDelta;
-
-    wo_value ret = wo_push_struct(vm, 2);
-    wo_set_float(wo_struct_get(ret, 0), mdpos.x);
-    wo_set_float(wo_struct_get(ret, 1), mdpos.y);
-
-    return wo_ret_val(vm, ret);
+    return wo_ret_val(vm, push_float2_to_struct(vm, mdpos.x, mdpos.y));
 }
 
 WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args, size_t argc)
 {
     auto&& cpos = ImGui::GetCursorPos();
-
-    wo_value ret = wo_push_struct(vm, 2);
-    wo_set_float(wo_struct_get(ret, 0), cpos.x);
-    wo_set_float(wo_struct_get(ret, 1), cpos.y);
-
-    return wo_ret_val(vm, ret);
+    return wo_ret_val(vm, push_float2_to_struct(vm, cpos.x, cpos.y));
 }
 WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args, size_t argc)
 {
     auto&& isize = ImGui::GetItemRectSize();
-
-    wo_value ret = wo_push_struct(vm, 2);
-    wo_set_float(wo_struct_get(ret, 0), isize.x);
-    wo_set_float(wo_struct_get(ret, 1), isize.y);
-
-    return wo_ret_val(vm, ret);
+    return wo_ret_val(vm, push_float2_to_struct(vm, isize.x, isize.y));
 }
 
 WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args, size_t argc)
@@ -800,17 +811,8 @@ WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args, size_t argc)
 
     wo_value ret = wo_push_struct(vm, 2);
 
-    wo_value minpos = wo_struct_get(ret, 0);
-    wo_value maxpos = wo_struct_get(ret, 1);
-
-    wo_set_struct(minpos, vm, 2);
-    wo_set_struct(maxpos, vm, 2);
-
-    wo_set_float(wo_struct_get(minpos, 0), isizemin.x);
-    wo_set_float(wo_struct_get(minpos, 1), isizemin.y);
-
-    wo_set_float(wo_struct_get(maxpos, 0), isizemax.x);
-    wo_set_float(wo_struct_get(maxpos, 1), isizemax.y);
+    wo_struct_set(ret, 0, push_float2_to_struct(vm, isizemin.x, isizemin.y));
+    wo_struct_set(ret, 1, push_float2_to_struct(vm, isizemax.x, isizemax.y));
 
     return wo_ret_val(vm, ret);
 }
@@ -866,23 +868,36 @@ WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args, size_t argc)
     bool display = ImGui::BeginTabItem(wo_string(args + 0), &open, (ImGuiTabBarFlags)wo_int(args + 1));
 
     wo_value ret = wo_push_struct(vm, 2);
-    wo_set_bool(wo_struct_get(ret, 0), display);
-    wo_set_bool(wo_struct_get(ret, 1), open);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_bool(elem, display);
+    wo_struct_set(ret, 0, elem);
+    wo_set_bool(elem, open);
+    wo_struct_set(ret, 1, elem);
 
     return wo_ret_val(vm, ret);
 }
 
 ImVec2 val2vec2(wo_value v)
 {
-    return ImVec2(wo_float(wo_struct_get(v, 0)), wo_float(wo_struct_get(v, 1)));
+    _wo_value tmp;
+    wo_struct_get(&tmp, v, 0);
+    float x = wo_float(&tmp);
+    wo_struct_get(&tmp, v, 1);
+    float y = wo_float(&tmp);
+    return ImVec2(x, y);
 }
 ImVec4 val2vec4(wo_value v)
 {
-    return ImVec4(
-        wo_float(wo_struct_get(v, 0)),
-        wo_float(wo_struct_get(v, 1)),
-        wo_float(wo_struct_get(v, 2)),
-        wo_float(wo_struct_get(v, 3)));
+    _wo_value tmp;
+    wo_struct_get(&tmp, v, 0);
+    float x = wo_float(&tmp);
+    wo_struct_get(&tmp, v, 1);
+    float y = wo_float(&tmp);
+    wo_struct_get(&tmp, v, 2);
+    float z = wo_float(&tmp);
+    wo_struct_get(&tmp, v, 3);
+    float w = wo_float(&tmp);
+    return ImVec4(x, y, z, w);
 }
 
 WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args, size_t argc)
@@ -906,11 +921,17 @@ WO_API wo_api je_gui_pop_clip_rect(wo_vm vm, wo_value args, size_t argc)
 
 ImU32 val2color32(wo_value v)
 {
-    return IM_COL32(
-        wo_int(wo_struct_get(v, 0)),
-        wo_int(wo_struct_get(v, 1)),
-        wo_int(wo_struct_get(v, 2)),
-        wo_int(wo_struct_get(v, 3)));
+    _wo_value tmp;
+    wo_struct_get(&tmp, v, 0);
+    int x = wo_int(&tmp);
+    wo_struct_get(&tmp, v, 1);
+    int y = wo_int(&tmp);
+    wo_struct_get(&tmp, v, 2);
+    int z = wo_int(&tmp);
+    wo_struct_get(&tmp, v, 3);
+    int w = wo_int(&tmp);
+
+    return IM_COL32(x, y, z, w);
 }
 
 WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args, size_t argc)
@@ -1241,7 +1262,7 @@ WO_API wo_api je_gui_progress_bar(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_progress_bar_size(wo_vm vm, wo_value args, size_t argc)
 {
-    ImGui::ProgressBar(wo_float(args + 0), ImVec2{ wo_float(wo_struct_get(args + 1, 0)), wo_float(wo_struct_get(args + 1, 1)) });
+    ImGui::ProgressBar(wo_float(args + 0), val2vec2(args + 1));
     return wo_ret_void(vm);
 }
 
@@ -1397,13 +1418,7 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args, size_t argc)
 {
     auto&& sz = ImGui::GetContentRegionAvail();
-
-    wo_value result = wo_push_struct(vm, 2);
-
-    wo_set_float(wo_struct_get(result, 0), sz.x);
-    wo_set_float(wo_struct_get(result, 1), sz.y);
-
-    return wo_ret_val(vm, result);
+    return wo_ret_val(vm, push_float2_to_struct(vm, sz.x, sz.y));
 }
 
 WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args, size_t argc)
@@ -1418,19 +1433,30 @@ WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args, size_t argc)
 }
 WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args, size_t argc)
 {
-    float rgba[4] = {
-        wo_float(wo_struct_get(args + 1,0)),
-        wo_float(wo_struct_get(args + 1,1)),
-        wo_float(wo_struct_get(args + 1,2)),
-        wo_float(wo_struct_get(args + 1,3)), };
+   
+    float rgba[4] = {};
+
+    wo_value elem = wo_push_empty(vm);
+    wo_struct_get(elem, args + 1, 0);
+    rgba[0] = wo_float(elem);
+    wo_struct_get(elem, args + 1, 1);
+    rgba[1] = wo_float(elem);
+    wo_struct_get(elem, args + 1, 2);
+    rgba[2] = wo_float(elem);
+    wo_struct_get(elem, args + 1, 3);
+    rgba[3] = wo_float(elem);
 
     if (ImGui::ColorPicker4(wo_string(args + 0), rgba))
     {
         wo_value result = wo_push_struct(vm, 4);
-        wo_set_float(wo_struct_get(result, 0), rgba[0]);
-        wo_set_float(wo_struct_get(result, 1), rgba[1]);
-        wo_set_float(wo_struct_get(result, 2), rgba[2]);
-        wo_set_float(wo_struct_get(result, 3), rgba[3]);
+        wo_set_float(elem, rgba[0]);
+        wo_struct_set(result, 0, elem);
+        wo_set_float(elem, rgba[1]);
+        wo_struct_set(result, 1, elem);
+        wo_set_float(elem, rgba[2]);
+        wo_struct_set(result, 2, elem);
+        wo_set_float(elem, rgba[3]);
+        wo_struct_set(result, 3, elem);
         return wo_ret_option_val(vm, result);
     }
     return wo_ret_option_none(vm);
@@ -1477,8 +1503,11 @@ WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args, size_t argc)
     if (update)
     {
         wo_value result = wo_push_struct(vm, 2);
-        wo_set_int(wo_struct_get(result, 0), (int)values[0]);
-        wo_set_int(wo_struct_get(result, 1), (int)values[1]);
+        wo_value elem = wo_push_empty(vm);
+        wo_set_int(elem, (int)values[0]);
+        wo_struct_set(result, 0, elem);
+        wo_set_int(elem, (int)values[1]);
+        wo_struct_set(result, 1, elem);
         return wo_ret_ok_val(vm, result);
     }
     return wo_ret_option_none(vm);
@@ -1494,9 +1523,13 @@ WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args, size_t argc)
     if (update)
     {
         wo_value result = wo_push_struct(vm, 3);
-        wo_set_int(wo_struct_get(result, 0), (int)values[0]);
-        wo_set_int(wo_struct_get(result, 1), (int)values[1]);
-        wo_set_int(wo_struct_get(result, 2), (int)values[2]);
+        wo_value elem = wo_push_empty(vm);
+        wo_set_int(elem, (int)values[0]);
+        wo_struct_set(result, 0, elem);
+        wo_set_int(elem, (int)values[1]);
+        wo_struct_set(result, 1, elem);
+        wo_set_int(elem, (int)values[2]);
+        wo_struct_set(result, 2, elem);
         return wo_ret_ok_val(vm, result);
     }
     return wo_ret_option_none(vm);
@@ -1512,10 +1545,15 @@ WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args, size_t argc)
     if (update)
     {
         wo_value result = wo_push_struct(vm, 4);
-        wo_set_int(wo_struct_get(result, 0), (int)values[0]);
-        wo_set_int(wo_struct_get(result, 1), (int)values[1]);
-        wo_set_int(wo_struct_get(result, 2), (int)values[2]);
-        wo_set_int(wo_struct_get(result, 3), (int)values[3]);
+        wo_value elem = wo_push_empty(vm);
+        wo_set_int(elem, (int)values[0]);
+        wo_struct_set(result, 0, elem);
+        wo_set_int(elem, (int)values[1]);
+        wo_struct_set(result, 1, elem);
+        wo_set_int(elem, (int)values[2]);
+        wo_struct_set(result, 2, elem);
+        wo_set_int(elem, (int)values[3]);
+        wo_struct_set(result, 3, elem);
         return wo_ret_ok_val(vm, result);
     }
     return wo_ret_option_none(vm);
@@ -1567,11 +1605,7 @@ WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args, size_t argc)
 
     if (update)
     {
-        wo_value result = wo_push_struct(vm, 2);
-        wo_set_float(wo_struct_get(result, 0), values[0]);
-        wo_set_float(wo_struct_get(result, 1), values[1]);
-
-        return wo_ret_option_val(vm, result);
+        return wo_ret_option_val(vm, push_float2_to_struct(vm, values[0], values[1]));
     }
     return wo_ret_option_none(vm);
 }
@@ -1591,11 +1625,7 @@ WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args, size_t argc)
 
     if (update)
     {
-        wo_value result = wo_push_struct(vm, 3);
-        wo_set_float(wo_struct_get(result, 0), values[0]);
-        wo_set_float(wo_struct_get(result, 1), values[1]);
-        wo_set_float(wo_struct_get(result, 2), values[2]);
-        return wo_ret_option_val(vm, result);
+        return wo_ret_option_val(vm, push_float3_to_struct(vm, values[0], values[1], values[2]));
     }
     return wo_ret_option_none(vm);
 }
@@ -1614,12 +1644,7 @@ WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args, size_t argc)
     }
     if (update)
     {
-        wo_value result = wo_push_struct(vm, 4);
-        wo_set_float(wo_struct_get(result, 0), values[0]);
-        wo_set_float(wo_struct_get(result, 1), values[1]);
-        wo_set_float(wo_struct_get(result, 2), values[2]);
-        wo_set_float(wo_struct_get(result, 3), values[3]);
-        return wo_ret_option_val(vm, result);
+        return wo_ret_option_val(vm, push_float4_to_struct(vm, values[0], values[1], values[2], values[3]));
     }
     return wo_ret_option_none(vm);
 }
@@ -1719,8 +1744,11 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args, size_t argc)
     }
 
     wo_value v = wo_push_struct(vm, 2);
-    wo_set_bool(wo_struct_get(v, 0), fnd->second.m_last_frame_down);
-    wo_set_bool(wo_struct_get(v, 1), fnd->second.m_this_frame_down);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_bool(elem, fnd->second.m_last_frame_down);
+    wo_struct_set(v, 0, elem);
+    wo_set_bool(elem, fnd->second.m_this_frame_down);
+    wo_struct_set(v, 1, elem);
     return wo_ret_val(vm, v);
 }
 
@@ -1775,13 +1803,7 @@ WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args, size_t argc
     ImGuiStyle* style = &ImGui::GetStyle();
     auto color = style->Colors[wo_int(args + 0)];
 
-    wo_value result = wo_push_struct(vm, 4);
-    wo_set_float(wo_struct_get(result, 0), color.x);
-    wo_set_float(wo_struct_get(result, 1), color.y);
-    wo_set_float(wo_struct_get(result, 2), color.z);
-    wo_set_float(wo_struct_get(result, 3), color.w);
-
-    return wo_ret_val(vm, result);
+    return wo_ret_val(vm, push_float4_to_struct(vm, color.x, color.y, color.z, color.w));
 }
 
 WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args, size_t argc)
@@ -1789,10 +1811,15 @@ WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args, size_t argc
     ImGuiStyle* style = &ImGui::GetStyle();
     auto& color = style->Colors[wo_int(args + 0)];
 
-    color.x = wo_float(wo_struct_get(args + 1, 0));
-    color.y = wo_float(wo_struct_get(args + 1, 1));
-    color.z = wo_float(wo_struct_get(args + 1, 2));
-    color.w = wo_float(wo_struct_get(args + 1, 3));
+    wo_value elem = wo_push_empty(vm);
+    wo_struct_get(elem, args + 1, 0);
+    color.x = wo_float(elem);
+    wo_struct_get(elem, args + 1, 1);
+    color.y = wo_float(elem);
+    wo_struct_get(elem, args + 1, 2);
+    color.z = wo_float(elem);
+    wo_struct_get(elem, args + 1, 3);
+    color.w = wo_float(elem);
     return wo_ret_void(vm);
 }
 

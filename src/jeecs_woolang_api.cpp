@@ -151,12 +151,14 @@ WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args, size_t argc)
     log_buffer_mx.clear();
 
     wo_value elem = wo_push_empty(vm);
-
+    wo_value val = wo_push_empty(vm);
     for (auto& [i, s] : logs)
     {
         wo_set_struct(elem, vm, 2);
-        wo_set_int(wo_struct_get(elem, 0), i);
-        wo_set_string(wo_struct_get(elem, 1), vm, s.c_str());
+        wo_set_int(val, i);
+        wo_struct_set(elem, 0, val);
+        wo_set_string(val, vm, s.c_str());
+        wo_struct_set(elem, 1, val);
         wo_arr_add(result, elem);
     }
     return wo_ret_val(vm, result);
@@ -688,20 +690,28 @@ WO_API wo_api wojeapi_is_child_of_entity(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args, size_t argc)
 {
-    void* component_addr = wo_pointer(wo_struct_get(args + 0, 0));
-    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(wo_struct_get(args + 0, 1));
+    wo_value elem = wo_push_empty(vm);
+    wo_struct_get(elem, args + 0, 0);
+
+    void* component_addr = wo_pointer(elem);
+
+    wo_struct_get(elem, args + 0, 1);
+    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(elem);
 
     wo_value result = wo_push_arr(vm, 0);
-    wo_value elem = wo_push_empty(vm);
 
+    wo_value elem2 = wo_push_empty(vm);
     auto* member_type = component_type->m_member_types;
     while (member_type)
     {
         wo_set_struct(elem, vm, 3);
 
-        wo_set_string(wo_struct_get(elem, 0), vm, member_type->m_member_name);
-        wo_set_pointer(wo_struct_get(elem, 1), (void*)member_type->m_member_type);
-        wo_set_handle(wo_struct_get(elem, 2), (wo_handle_t)(member_type->m_member_offset + (intptr_t)component_addr));
+        wo_set_string(elem2, vm, member_type->m_member_name);
+        wo_struct_set(elem, 0, elem2);
+        wo_set_pointer(elem2, (void*)member_type->m_member_type);
+        wo_struct_set(elem, 1, elem2);
+        wo_set_handle(elem2, (wo_handle_t)(member_type->m_member_offset + (intptr_t)component_addr));
+        wo_struct_set(elem, 2, elem2);
 
         wo_arr_add(result, elem);
 
@@ -712,17 +722,24 @@ WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args, size_t 
 
 WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args, size_t argc)
 {
-    void* component_addr = wo_pointer(wo_struct_get(args + 0, 0));
-    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(wo_struct_get(args + 0, 1));
+    wo_value elem = wo_push_empty(vm);
+    wo_struct_get(elem, args + 0, 0);
+
+    void* component_addr = wo_pointer(elem);
+
+    wo_struct_get(elem, args + 0, 1);
+    const jeecs::typing::type_info* component_type = (const jeecs::typing::type_info*)wo_pointer(elem);
 
     wo_string_t member_name = wo_string(args + 1);
 
     if (auto* member_info = component_type->find_member_by_name(member_name))
     {
         wo_value result = wo_push_struct(vm, 2);
-        wo_set_pointer(wo_struct_get(result, 0), (wo_ptr_t)member_info->m_member_type);
-        wo_set_handle(wo_struct_get(result, 1),
+        wo_set_pointer(elem, (wo_ptr_t)member_info->m_member_type);
+        wo_struct_set(result, 0, elem);
+        wo_set_handle(elem,
             (wo_handle_t)(member_info->m_member_offset + (intptr_t)component_addr));
+        wo_struct_set(result, 1, elem);
         return wo_ret_option_val(vm, result);
     }
     else
@@ -745,8 +762,11 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
     auto winsz = jeecs::input::windowsize();
 
     wo_value result = wo_push_struct(vm, 2);
-    wo_set_int(wo_struct_get(result, 0), (wo_int_t)winsz.x);
-    wo_set_int(wo_struct_get(result, 1), (wo_int_t)winsz.y);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_int(elem, (wo_int_t)winsz.x);
+    wo_struct_set(result, 0, elem);
+    wo_set_int(elem, (wo_int_t)winsz.y);
+    wo_struct_set(result, 1, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -756,8 +776,11 @@ WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args, size_t argc)
     auto winsz = jeecs::input::mousepos(0);
 
     wo_value result = wo_push_struct(vm, 2);
-    wo_set_int(wo_struct_get(result, 0), (wo_int_t)winsz.x);
-    wo_set_int(wo_struct_get(result, 1), (wo_int_t)winsz.y);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_int(elem, (wo_int_t)winsz.x);
+    wo_struct_set(result, 0, elem);
+    wo_set_int(elem, (wo_int_t)winsz.y);
+    wo_struct_set(result, 1, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -889,14 +912,17 @@ WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args, size_t argc)
 
     wo_value result = wo_push_arr(vm, 0);
     wo_value elem = wo_push_empty(vm);
+    wo_value elem2 = wo_push_empty(vm);
 
     auto* member_iter = type->m_member_types;
     while (member_iter != nullptr)
     {
         wo_set_struct(elem, vm, 2);
 
-        wo_set_string(wo_struct_get(elem, 0), vm, member_iter->m_member_name);
-        wo_set_pointer(wo_struct_get(elem, 1), (void*)member_iter->m_member_type);
+        wo_set_string(elem2, vm, member_iter->m_member_name);
+        wo_struct_set(elem, 0, elem2);
+        wo_set_pointer(elem2, (void*)member_iter->m_member_type);
+        wo_struct_set(elem, 1, elem2);
 
         wo_arr_add(result, elem);
 
@@ -959,8 +985,11 @@ WO_API wo_api wojeapi_native_value_int2(wo_vm vm, wo_value args, size_t argc)
     jeecs::math::ivec2* value = (jeecs::math::ivec2*)wo_pointer(args + 0);
 
     wo_value result = wo_push_struct(vm, 2);
-    wo_set_int(wo_struct_get(result, 0), value->x);
-    wo_set_int(wo_struct_get(result, 1), value->y);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_int(elem, value->x);
+    wo_struct_set(result, 0, elem);
+    wo_set_int(elem, value->y);
+    wo_struct_set(result, 1, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -977,8 +1006,11 @@ WO_API wo_api wojeapi_native_value_float2(wo_vm vm, wo_value args, size_t argc)
     jeecs::math::vec2* value = (jeecs::math::vec2*)wo_pointer(args + 0);
 
     wo_value result = wo_push_struct(vm, 2);
-    wo_set_float(wo_struct_get(result, 0), value->x);
-    wo_set_float(wo_struct_get(result, 1), value->y);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, value->x);
+    wo_struct_set(result, 0, elem);
+    wo_set_float(elem, value->y);
+    wo_struct_set(result, 1, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -988,9 +1020,13 @@ WO_API wo_api wojeapi_native_value_float3(wo_vm vm, wo_value args, size_t argc)
     jeecs::math::vec3* value = (jeecs::math::vec3*)wo_pointer(args + 0);
 
     wo_value result = wo_push_struct(vm, 3);
-    wo_set_float(wo_struct_get(result, 0), value->x);
-    wo_set_float(wo_struct_get(result, 1), value->y);
-    wo_set_float(wo_struct_get(result, 2), value->z);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, value->x);
+    wo_struct_set(result, 0, elem);
+    wo_set_float(elem, value->y);
+    wo_struct_set(result, 1, elem);
+    wo_set_float(elem, value->z);
+    wo_struct_set(result, 2, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -1000,10 +1036,15 @@ WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args, size_t argc)
     jeecs::math::vec4* value = (jeecs::math::vec4*)wo_pointer(args + 0);
 
     wo_value result = wo_push_struct(vm, 4);
-    wo_set_float(wo_struct_get(result, 0), value->x);
-    wo_set_float(wo_struct_get(result, 1), value->y);
-    wo_set_float(wo_struct_get(result, 2), value->z);
-    wo_set_float(wo_struct_get(result, 3), value->w);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, value->x);
+    wo_struct_set(result, 0, elem);
+    wo_set_float(elem, value->y);
+    wo_struct_set(result, 1, elem);
+    wo_set_float(elem, value->z);
+    wo_struct_set(result, 2, elem);
+    wo_set_float(elem, value->w);
+    wo_struct_set(result, 3, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -1020,9 +1061,13 @@ WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t ar
     auto&& euler_v3 = value->euler_angle();
 
     wo_value result = wo_push_struct(vm, 3);
-    wo_set_float(wo_struct_get(result, 0), euler_v3.x);
-    wo_set_float(wo_struct_get(result, 1), euler_v3.y);
-    wo_set_float(wo_struct_get(result, 2), euler_v3.z);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, value->x);
+    wo_struct_set(result, 0, elem);
+    wo_set_float(elem, value->y);
+    wo_struct_set(result, 1, elem);
+    wo_set_float(elem, value->z);
+    wo_struct_set(result, 2, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -1175,10 +1220,12 @@ WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-
-    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(),
-        (size_t)wo_int(wo_struct_get(args + 1, 0)),
-        (size_t)wo_int(wo_struct_get(args + 1, 1)));
+    wo_value elem = wo_push_empty(vm);
+    wo_struct_get(elem, args + 1, 0);
+    size_t x = (size_t)wo_int(elem);
+    wo_struct_get(elem, args + 1, 1);
+    size_t y = (size_t)wo_int(elem);
+    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(), x, y);
 
     return wo_ret_gchandle(vm, pix, args + 0, [](void* ptr)
         {
@@ -1242,10 +1289,15 @@ WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args, size_t argc)
     auto color = pix->get();
 
     wo_value result = wo_push_struct(vm, 4);
-    wo_set_float(wo_struct_get(result, 0), color.x);
-    wo_set_float(wo_struct_get(result, 1), color.y);
-    wo_set_float(wo_struct_get(result, 2), color.z);
-    wo_set_float(wo_struct_get(result, 3), color.w);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, color.x);
+    wo_struct_set(result, 0, elem);
+    wo_set_float(elem, color.y);
+    wo_struct_set(result, 1, elem);
+    wo_set_float(elem, color.z);
+    wo_struct_set(result, 2, elem);
+    wo_set_float(elem, color.w);
+    wo_struct_set(result, 3, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -1254,10 +1306,15 @@ WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args, size_t ar
     auto* pix = (jeecs::graphic::texture::pixel*)wo_pointer(args + 0);
     auto color = jeecs::math::vec4();
 
-    color.x = wo_float(wo_struct_get(args + 1, 0));
-    color.y = wo_float(wo_struct_get(args + 1, 1));
-    color.z = wo_float(wo_struct_get(args + 1, 2));
-    color.w = wo_float(wo_struct_get(args + 1, 3));
+    wo_value elem = wo_push_empty(vm);
+    wo_struct_get(elem, args + 1, 0);
+    color.x = wo_float(elem);
+    wo_struct_get(elem, args + 1, 1);
+    color.y = wo_float(elem);
+    wo_struct_get(elem, args + 1, 2);
+    color.z = wo_float(elem);
+    wo_struct_get(elem, args + 1, 3);
+    color.w = wo_float(elem);
 
     pix->set(color);
 
@@ -1300,20 +1357,31 @@ WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args, size_t argc)
         };
     */
     wo_value result = wo_push_struct(vm, 8);
-    wo_set_gchandle(wo_struct_get(result, 0), vm, new jeecs::basic::resource<jeecs::graphic::texture>(ch->m_texture), nullptr,
+    wo_value elem = wo_push_empty(vm);
+
+    wo_set_gchandle(elem, vm, new jeecs::basic::resource<jeecs::graphic::texture>(ch->m_texture), nullptr,
         [](void* ptr) {
             delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
         });
-    wo_set_char(wo_struct_get(result, 1), ch->m_char);
+    wo_struct_set(result, 0, elem);
 
-    wo_set_char(wo_struct_get(result, 2), ch->m_width);
-    wo_set_char(wo_struct_get(result, 3), ch->m_height);
+    wo_set_char(elem, ch->m_char);
+    wo_struct_set(result, 1, elem);
 
-    wo_set_char(wo_struct_get(result, 4), ch->m_advised_w);
-    wo_set_char(wo_struct_get(result, 5), ch->m_advised_h);
+    wo_set_int(elem, ch->m_width);
+    wo_struct_set(result, 2, elem);
+    wo_set_int(elem, ch->m_height);
+    wo_struct_set(result, 3, elem);
 
-    wo_set_char(wo_struct_get(result, 6), ch->m_baseline_offset_x);
-    wo_set_char(wo_struct_get(result, 7), ch->m_baseline_offset_y);
+    wo_set_int(elem, ch->m_advised_w);
+    wo_struct_set(result, 4, elem);
+    wo_set_int(elem, ch->m_advised_h);
+    wo_struct_set(result, 5, elem);
+
+    wo_set_int(elem, ch->m_baseline_offset_x);
+    wo_struct_set(result, 6, elem);
+    wo_set_int(elem, ch->m_baseline_offset_y);
+    wo_struct_set(result, 7, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -1489,21 +1557,29 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
 
         wo_set_string(key, vm, uniforms->m_name);
 
-        wo_value val_in_map = wo_push_empty(vm);
+        wo_value val_in_map = wo_push_struct(vm, 2);
 
-        wo_set_struct(val_in_map, vm, 2);
-        wo_set_pointer(wo_struct_get(val_in_map, 0), (void*)type);
+        wo_value elem = wo_push_empty(vm);
+
+        wo_set_pointer(elem, (void*)type);
+        wo_struct_set(val_in_map, 0, elem);
 
         wo_map_set(out_map, key, val_in_map);
 
-        wo_value uniform_value_data = wo_struct_get(val_in_map, 1);
-        wo_set_struct(uniform_value_data, vm, 5);
+        wo_value uniform_value_data = wo_push_struct(vm, 5);
+        
+        wo_set_int(elem, uniforms->n);
+        wo_struct_set(uniform_value_data, 0, elem);
+        wo_set_float(elem, uniforms->x);
+        wo_struct_set(uniform_value_data, 1, elem);
+        wo_set_float(elem, uniforms->y);
+        wo_struct_set(uniform_value_data, 2, elem);
+        wo_set_float(elem, uniforms->z);
+        wo_struct_set(uniform_value_data, 3, elem);
+        wo_set_float(elem, uniforms->w);
+        wo_struct_set(uniform_value_data, 4, elem);
 
-        wo_set_int(wo_struct_get(uniform_value_data, 0), uniforms->n);
-        wo_set_float(wo_struct_get(uniform_value_data, 1), uniforms->x);
-        wo_set_float(wo_struct_get(uniform_value_data, 2), uniforms->y);
-        wo_set_float(wo_struct_get(uniform_value_data, 3), uniforms->z);
-        wo_set_float(wo_struct_get(uniform_value_data, 4), uniforms->w);
+        wo_struct_set(val_in_map, 1, uniform_value_data);
 
         uniforms = uniforms->m_next;
     }
@@ -1580,8 +1656,12 @@ WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args, size_t argc)
     auto sz = texture->get()->size();
 
     wo_value result = wo_push_struct(vm, 2);
-    wo_set_int(wo_struct_get(result, 0), (wo_int_t)sz.x);
-    wo_set_int(wo_struct_get(result, 1), (wo_int_t)sz.y);
+    wo_value elem = wo_push_empty(vm);
+
+    wo_set_int(elem, (wo_int_t)sz.x);
+    wo_struct_set(result, 0, elem);
+    wo_set_int(elem, (wo_int_t)sz.y);
+    wo_struct_set(result, 1, elem);
 
     return wo_ret_val(vm, result);
 }
@@ -1602,10 +1682,14 @@ WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args, size_
 
     jedbg_get_entity_arch_information(entity, &chunk_size, &entity_size, &entity_count);
     wo_value result = wo_push_struct(vm, 3);
+    wo_value elem = wo_push_empty(vm);
 
-    wo_set_int(wo_struct_get(result, 0), (wo_int_t)chunk_size);
-    wo_set_int(wo_struct_get(result, 1), (wo_int_t)entity_size);
-    wo_set_int(wo_struct_get(result, 2), (wo_int_t)entity_count);
+    wo_set_int(elem, (wo_int_t)chunk_size);
+    wo_struct_set(result, 0, elem);
+    wo_set_int(elem, (wo_int_t)entity_size);
+    wo_struct_set(result, 1, elem);
+    wo_set_int(elem, (wo_int_t)entity_count);
+    wo_struct_set(result, 2, elem);
 
     return wo_ret_val(vm, result);
 }
