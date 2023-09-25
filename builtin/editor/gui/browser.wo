@@ -1426,7 +1426,7 @@ namespace $$MODULE_NAME$$
                             SameLine();
                             Text(current_work_path);
                             SameLine();
-                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (128, 255, 67, 255));
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (75, 120, 200, 255));
                             Text(browser_context.m_log_displayer->get_log_abstract);
                             PopStyleColor();
                         EndChild();

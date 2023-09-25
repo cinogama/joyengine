@@ -147,7 +147,7 @@ namespace editor::gui::edit_forms
         let mut clicked_component = option::none: option<string>;
         for (let pscope, pnameinfos: scoped_type)
         {
-            TextDisabled(pscope);
+            TextDisabled(pscope == "" ? "<无>" | pscope);
 
             for (let _, pnameinfo: pnameinfos)
             {
@@ -164,7 +164,7 @@ namespace editor::gui::edit_forms
     {
         using je::gui;
         do BeginChildSize("append_components", width, 0.);
-        Text("新实体组件");
+        Text("已添加组件");
         do show_components(context.has_append_types->>\t = t->name;->unsafe::cast:<array<string>>)
             ->> \typename = context->add_components(typename);
             ;

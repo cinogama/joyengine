@@ -216,7 +216,7 @@ func my_ask_for_get_yes_no_cancel_result(
                     {
                         Separator();
 
-                        PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 200, 67, 255));
+                        PushStyleColor(ImGuiCol::ImGuiCol_Text, (200, 125, 40, 255));
                         Text("警告！");
                         PopStyleColor();
                         Text("以下组件和系统处于丢失状态：");
@@ -224,7 +224,7 @@ func my_ask_for_get_yes_no_cancel_result(
                         if (!missing_comps->empty)
                         {
                             Text("组件：");
-                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (42, 255, 175, 255));
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (20, 125, 175, 255));
                             for (let _, c: missing_comps)
                                 Text(c);
                             PopStyleColor();
@@ -232,7 +232,7 @@ func my_ask_for_get_yes_no_cancel_result(
                         if (!missing_syss->empty)
                         {
                             Text("系统：");
-                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (175, 255, 42, 255));
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (175, 125, 20, 255));
                             for (let _, s: missing_syss)
                                 Text(s);
                             PopStyleColor();
