@@ -2666,7 +2666,7 @@ R"(
         extern("libjoyecs", "wojeapi_stop_universe")
         public func stop(self: universe)=> void;
 
-        extern("libjoyecs", "wojeapi_wait_universe")
+        extern("libjoyecs", "wojeapi_wait_universe", slow)
         public func wait(self: universe)=> void;
 
         extern("libjoyecs", "wojeapi_universe_get_frame_deltatime")
