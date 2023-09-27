@@ -672,7 +672,7 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size
 {
     wo_value voutstruct = args + 1;
 
-    if (wo_valuetype(voutstruct) == WO_STRUCT_TYPE)
+    if (wo_valuetype(voutstruct) != WO_STRUCT_TYPE)
         return wo_ret_halt(vm, "'type' must struct when return from vext or frag.");
 
     uint16_t structsz = (uint16_t)wo_lengthof(voutstruct);
