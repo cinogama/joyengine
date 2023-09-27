@@ -322,7 +322,7 @@ namespace editor::gui::edit_forms
                                 ->  forall(\_, paths = filesys::extension(paths[0])->lower == ".wosystem";)
                                 ->  unmapping
                                 ->> \pathnameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::update_system({
-                                        name->enstring}, {path->enstring})->or(\\v=v;));\n"
+                                        name->enstring}, {path->enstring})->val);\n"
                                         where (name, (_, path)) = pathnameandpath
                                     ;
                                 ->  reduce(\l, r = l + r;)
