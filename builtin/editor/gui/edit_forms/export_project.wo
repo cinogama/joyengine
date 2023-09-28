@@ -231,6 +231,8 @@ namespace editor::gui::edit_forms
                                 import woo::std;
                                 import builtin::api::serialize::main;
 
+                                je::editor::set_able_shared_glresource(true);
+
                                 let LOADED_WORLDS_MAPPING = {}mut: map<string, je::world>;
                                 func LOAD_WORLD(path: string)
                                 {

@@ -543,6 +543,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                     static let editor_origin_shaders = [
                         ("单色", "MonoColor"),
                         ("无光", "Unlit"),
+                        ("无光混合", "UnlitBlend"),
                         ("2D光照单色", "Forward2DMono"),
                         ("2D光照", "Forward2D"),
                         ("2D光照法线", "Forward2DNormal"),
