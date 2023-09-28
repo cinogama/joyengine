@@ -3503,7 +3503,7 @@ namespace jeecs
                 else
                 {
                     static_assert(has_default_constructor_function<T>::value);
-                    new(_ptr)T;
+                    new(_ptr)T{};
                 }
             }
             static void destructor(void* _ptr)
