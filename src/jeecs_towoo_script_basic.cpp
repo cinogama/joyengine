@@ -140,6 +140,29 @@ namespace jeecs
                 }
             }
 
+            static void create_component_struct(wo_value writeval, wo_vm vm, void* component, const typing::type_info* ctype)
+            {
+                assert(component != nullptr);
+                wo_set_struct(writeval, vm, ctype->m_member_count);
+
+                uint16_t member_idx = 0;
+                auto* member_tinfo = ctype->m_member_types;
+                while (member_tinfo != nullptr)
+                {
+                    // Set member;
+                    _wo_value tmp;
+                    wo_set_pointer(&tmp,
+                        reinterpret_cast<void*>(
+                            reinterpret_cast<intptr_t>(component)
+                            + member_tinfo->m_member_offset));
+
+                    wo_struct_set(writeval, member_idx, &tmp);
+
+                    ++member_idx;
+                    member_tinfo = member_tinfo->m_next_member;
+                }
+            }
+
             void Update()
             {
                 ScriptRuntimeSystem::system_instance =
@@ -171,44 +194,24 @@ namespace jeecs
                                         void* component = selector::get_component_from_archchunk_ptr(archinfo, cur_chunk, eid, argidx - 1);
                                         const auto* typeinfo = work.m_used_components[argidx - 1];
 
-                                        wo_value component_st = nullptr;
+                                        wo_value component_st = wo_push_empty(m_job_vm);
                                         if (work.m_dependence.m_requirements[argidx - 1].m_require == jeecs::requirement::type::MAYNOT)
                                         {
-                                            wo_value option_comp = wo_push_empty(m_job_vm);
                                             if (component == nullptr)
                                             {
                                                 // option::none
-                                                wo_set_option_none(option_comp, m_job_vm);
+                                                wo_set_option_none(component_st, m_job_vm);
                                             }
                                             else
                                             {
                                                 // option::value
-                                                component_st = tmp_elem;
-                                                wo_set_struct(component_st, m_job_vm, typeinfo->m_member_count);
-                                                wo_set_option_val(option_comp, m_job_vm, component_st);
+                                                create_component_struct(tmp_elem, m_job_vm, component, typeinfo);
+                                                wo_set_option_val(component_st, m_job_vm, tmp_elem);
                                             }
                                         }
                                         else
-                                            component_st = wo_push_struct(m_job_vm, typeinfo->m_member_count);
-
-                                        if (component_st != nullptr)
                                         {
-                                            uint16_t member_idx = 0;
-                                            auto* member_tinfo = typeinfo->m_member_types;
-                                            while (member_tinfo != nullptr)
-                                            {
-                                                // Set member;
-                                                _wo_value tmp;
-                                                wo_set_pointer(&tmp,
-                                                    reinterpret_cast<void*>(
-                                                        reinterpret_cast<intptr_t>(component)
-                                                        + member_tinfo->m_member_offset));
-
-                                                wo_struct_set(component_st, member_idx, &tmp);
-
-                                                ++member_idx;
-                                                member_tinfo = member_tinfo->m_next_member;
-                                            }
+                                            create_component_struct(component_st, m_job_vm, component, typeinfo);
                                         }
                                     }
 
@@ -278,7 +281,28 @@ namespace jeecs
         };
     }
 }
+WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args, size_t argc)
+{
+    auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
+    auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
 
+    void* comp = je_ecs_world_entity_get_component(e, ty);
+    if (comp != nullptr)
+    {
+        wo_value val = wo_push_empty(vm);
+        jeecs::towoo::ToWooBaseSystem::create_component_struct(val, vm, comp, ty);
+        return wo_ret_option_val(vm, val);
+    }
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api wojeapi_towoo_remove_component(wo_vm vm, wo_value args, size_t argc)
+{
+    auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
+    auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
+
+    je_ecs_world_entity_remove_component(e, ty);
+    return wo_ret_void(vm);
+}
 WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args, size_t argc)
 {
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 0)));
@@ -371,6 +395,25 @@ namespace je::towoo
         R"(// (C)Cinogama project.
 import je;
 import je::towoo::types;
+
+namespace je::entity::towoo
+{
+    extern("libjoyecs", "wojeapi_towoo_get_component")
+        private func _get_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
+    extern("libjoyecs", "wojeapi_towoo_remove_component")
+        private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
+
+    public func get_component<T>(self: entity)=> option<T>
+        where typeof(std::declval:<T>())::id is je::typeinfo;
+    {
+        return _towoo_component:<T>(self, typeof(std::declval:<T>())::id);
+    }
+    public func remove_component<T>(self: entity)=> void
+        where typeof(std::declval:<T>())::id is je::typeinfo;
+    {
+        _remove_component:<T>(self, typeof(std::declval:<T>())::id);
+    }
+}
 
 )";
     for (auto* typeinfo : all_registed_types)
