@@ -17,16 +17,6 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
-    let mut display_debug_entity = false;
-    public func get_is_albe_to_display_debug_entity()
-    {
-        return display_debug_entity;
-    }
-    public func set_is_albe_to_display_debug_entity(opt: bool)
-    {
-        display_debug_entity = opt;
-    }
-
     func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: jeapi::debug::EntityChilds)
     {
         for (let _, child: cur.childs)
@@ -325,6 +315,7 @@ namespace editor::gui::edit_forms
             EndMenu();
         }
         Separator();
+        
         if (MenuItemEnabled("复制", has_editing_entity))
         {
             do euid
@@ -435,14 +426,22 @@ namespace editor::gui::edit_forms
             Invisable = je::typeinfo::load("Editor::Invisable")->val,
             MapTile = je::typeinfo::load("Scene::MapTile")->val;
 
-        if (!display_debug_entity && e.e->get_component(Invisable)->has)
+        if (!get_is_albe_to_display_debug_entity() && e.e->get_component(Invisable)->has)
             // 不可见实体，不准看！
             return;
         if (e.e->get_component(MapTile)->has)
             return;
 
+        let is_variant_or_prefab = e.e->towoo::get_component:<Editor::Prefab>->has;
+
+        if (is_variant_or_prefab)
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, (75, 100, 213, 255));
+
         let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->chunkinfo}", 
             treenode_attribute);
+
+        if (is_variant_or_prefab)
+            PopStyleColor();
 
         if (BeginDragDropSource())
         {

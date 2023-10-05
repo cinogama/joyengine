@@ -151,6 +151,16 @@ namespace editor::gui
             jeapi::gui::form::errmsg("失败", "项目保存未能完成");
     }
 
+    let mut display_debug_entity = false;
+    public func get_is_albe_to_display_debug_entity()
+    {
+        return display_debug_entity;
+    }
+    public func set_is_albe_to_display_debug_entity(opt: bool)
+    {
+        display_debug_entity = opt;
+    }
+
     public func show_main_menu(context: EditorContext)
     {
         context->launch_editor_form(func(){
@@ -250,8 +260,8 @@ namespace editor::gui
                     if (MenuItem("关于"))
                         jeapi::welcome::show_about();
                     Separator();
-                    do MenuItemSelected("显示隐藏实体", edit_forms::get_is_albe_to_display_debug_entity())
-                        ->> \select = edit_forms::set_is_albe_to_display_debug_entity(select);
+                    do MenuItemSelected("显示隐藏实体及组件", get_is_albe_to_display_debug_entity())
+                        ->> \select = set_is_albe_to_display_debug_entity(select);
                         ;
                     EndMenu();
                 }

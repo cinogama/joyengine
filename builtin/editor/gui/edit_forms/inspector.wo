@@ -111,7 +111,7 @@ namespace editor::gui::edit_forms
                                     ->map(\tex = tex->path->valor("<内置>");)
                                     ->valor(F"<没有绑定到通道{id}的纹理>");
                                 
-                        do jeapi::gui::widget::File(name, texture_path)
+                        do jeapi::gui::widget::File(name, texture_path, \=do nil;)
                             ->> \path = context->get_project->make_path_normalize(filesys::normalize(path));
                             ->> \path =  je::graphic::texture::load(path)
                                 ->> \tex = entity->bind_texture(id, tex);
@@ -148,7 +148,9 @@ namespace editor::gui::edit_forms
                         {
                         value(cur_e)?
                         { 
-                            do BeginChildSize("basic_info", 0., 100.);
+                            let eeid = jeapi::debug::get_entity_editor_id(cur_e);
+
+                            do BeginChildSize("basic_info", 0., 120.);
                             Text("实体名");
                             SameLine();
                             do InputText("##entity_name", cur_e->editor::name())->> func(new_name)
@@ -160,6 +162,66 @@ namespace editor::gui::edit_forms
 
                             let (chunk_size, entity_size, entity_count) = je::editor::get_entity_arch_information(cur_e);
                             Text(F"区块/实体体积: {chunk_size}/{entity_size}={entity_count}");
+
+                            let prefab = cur_e->towoo::get_component:<Editor::Prefab>;
+                            if (prefab->has)
+                            {
+                                let prefab_menu = func(){
+                                    if (MenuItem("更新到预设"))
+                                    {
+                                        let p = prefab->val.path->get;
+                                        jeapi::gui::form::ask("更新预设体？", F"是否确认覆盖并应用全部'{p}'的预设体？",
+                                            func (op)
+                                            {
+                                                if (op)
+                                                {
+                                                    match (jeapi::prefab_manager::update_prefab(cur_e))
+                                                    {
+                                                    value(updated_prefab_data)?
+                                                        {
+                                                            match (context->get_project->dump_and_close_all_world())
+                                                            {
+                                                            ok(dat)?
+                                                                {
+                                                                    je::gui::launch(func()
+                                                                        {
+                                                                            if (!updated_prefab_data->serialize
+                                                                                ->> \dat = filesys::writeall(
+                                                                                        context->get_project->parse_path_normalize(p), 
+                                                                                        dat)
+                                                                                    ;
+                                                                                ->  valor(false))
+                                                                            {
+                                                                                jeapi::gui::form::errmsg("失败", F"更新预设体失败，无法写入：{p}");
+                                                                            }
+                                                                            context->get_project->restore_all_world(dat);
+                                                                            return false;
+                                                                        }, ());
+                                                                }
+                                                            err(msg)?
+                                                                jeapi::gui::form::errmsg("失败", F"更新预设体失败: {msg}");
+                                                            }
+                                                        }
+                                                    none?
+                                                        jeapi::gui::form::errmsg("失败", 
+                                                            F"更新失败，可能是预设体'{p}'或其父预设体文件丢失");
+                                                    }
+                                                }
+                                            });
+                                    }
+                                };
+                                if (jeapi::gui::widget::File("预设体", prefab->val.path->get, prefab_menu)->>\p = p == "";->valor(false))
+                                {
+                                    jeapi::gui::form::ask("解除预设体？", F"是否确认解除'{cur_e->editor::name}'的预设体？",
+                                        func (op)
+                                        {
+                                            if (op)
+                                                eeid->justdo(\e = e->towoo::remove_component:<Editor::Prefab>;);
+                                        });
+                                    
+                                }
+                            }
+
                             EndChild();
                             
                             let (_, mut _1_3_height) = GetContentRegionAvail();
@@ -181,7 +243,7 @@ namespace editor::gui::edit_forms
 
                             for (let groupname, components: grouped_components)
                             {
-                                if (groupname == "Editor")
+                                if (!get_is_albe_to_display_debug_entity() && groupname == "Editor")
                                     // 事编辑器组件，跳过显示，不然就露馅了
                                     continue;
                                 
@@ -198,7 +260,6 @@ namespace editor::gui::edit_forms
                                         jeapi::gui::context_menu(func(){
                                             if (MenuItem(F"移除"))
                                             {
-                                                let eeid = jeapi::debug::get_entity_editor_id(cur_e);
                                                 let ename = cur_e->editor::name;
 
                                                 jeapi::gui::form::ask(
@@ -211,7 +272,7 @@ namespace editor::gui::edit_forms
                                             }
                                             if (MenuItem(F"重置"))
                                             {
-                                                let eeid = jeapi::debug::get_entity_editor_id(cur_e);
+                                                
 
                                                 jeapi::gui::form::ask(
                                                     "确认？", 
@@ -282,10 +343,9 @@ namespace editor::gui::edit_forms
                                                 }
                                                 if (MenuItem("移除这个着色器"))
                                                 {
-                                                    let eid = cur_e->jeapi::debug::get_entity_editor_id();
                                                     jeapi::gui::form::ask("确认？", F"即将移除着色器: {path}", func(opt){
                                                         if (opt)
-                                                            eid->justdo(\e = e->editor::remove_name_for_bad_shader_update(path););
+                                                            eeid->justdo(\e = e->editor::remove_name_for_bad_shader_update(path););
                                                     });
                                                 } 
                                             });

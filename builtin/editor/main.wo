@@ -18,6 +18,7 @@ import builtin::api::gui::form::input;
 import builtin::editor::environment::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main;
+import builtin::editor::components;
 
 jeapi::welcome::display_copyright_msg();
 
@@ -419,6 +420,8 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
 
 }
 
+// 在这里注册预设体组件
+
 for (;;)
 {
     je::editor::set_able_shared_glresource(false);
@@ -615,3 +618,4 @@ for (;;)
 
 // 退出的时候关掉共享图形资源
 je::editor::set_able_shared_glresource(false);
+editor::components::unregister();

@@ -1,0 +1,19 @@
+import je::towoo::component;
+import je::towoo::components;
+
+namespace editor::components
+{
+    // using Prefab = struct{
+    //     path: je::towoo::member<string, string_tid>,
+    // }
+    // {
+    //     public let id = je::towoo::component::update_component_declare("Editor::Prefab", [
+    //         ("path", string_tid::id),
+    //         ]);
+    // }
+
+    public func unregister()
+    {
+        // je::towoo::unregister_component(Prefab::id);
+    }
+}

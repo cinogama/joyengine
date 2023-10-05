@@ -281,6 +281,20 @@ namespace jeecs
         };
     }
 }
+WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args, size_t argc)
+{
+    auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
+    auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
+
+    void* comp = je_ecs_world_entity_add_component(e, ty);
+    if (comp != nullptr)
+    {
+        wo_value val = wo_push_empty(vm);
+        jeecs::towoo::ToWooBaseSystem::create_component_struct(val, vm, comp, ty);
+        return wo_ret_option_val(vm, val);
+    }
+    return wo_ret_option_none(vm);
+}
 WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args, size_t argc)
 {
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
@@ -398,15 +412,22 @@ import je::towoo::types;
 
 namespace je::entity::towoo
 {
+    extern("libjoyecs", "wojeapi_towoo_add_component")
+        private func _add_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
     extern("libjoyecs", "wojeapi_towoo_get_component")
         private func _get_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
     extern("libjoyecs", "wojeapi_towoo_remove_component")
         private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
 
+    public func add_component<T>(self: entity)=> option<T>
+        where typeof(std::declval:<T>())::id is je::typeinfo;
+    {
+        return _add_component:<T>(self, typeof(std::declval:<T>())::id);
+    }
     public func get_component<T>(self: entity)=> option<T>
         where typeof(std::declval:<T>())::id is je::typeinfo;
     {
-        return _towoo_component:<T>(self, typeof(std::declval:<T>())::id);
+        return _get_component:<T>(self, typeof(std::declval:<T>())::id);
     }
     public func remove_component<T>(self: entity)=> void
         where typeof(std::declval:<T>())::id is je::typeinfo;

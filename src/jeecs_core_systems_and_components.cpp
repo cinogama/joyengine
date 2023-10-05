@@ -87,6 +87,7 @@ const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const ch
 void jeecs_entry_register_core_systems()
 {
     jeecs::typing::type_info::of<jeecs::Editor::Name>("Editor::Name");
+    jeecs::typing::type_info::of<jeecs::Editor::Prefab>("Editor::Prefab");
     jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
     jeecs::typing::type_info::of<jeecs::Editor::Invisable>("Editor::Invisable");
     jeecs::typing::type_info::of<jeecs::Editor::EntityMover>("Editor::EntityMover");

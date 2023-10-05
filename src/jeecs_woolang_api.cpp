@@ -35,6 +35,8 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args, size_t argc)
         auto readed_len = jeecs_file_read(readed_buf.data(), sizeof(char), file->m_file_length, file);
         readed_buf.resize(readed_len);
 
+        jeecs_file_close(file);
+
         return wo_ret_option_buffer(vm, readed_buf.data(), readed_buf.size());
     }
     return wo_ret_option_none(vm);

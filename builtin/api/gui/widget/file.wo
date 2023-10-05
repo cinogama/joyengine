@@ -43,7 +43,7 @@ namespace jeapi::gui::widget
         registered_click_file_button_callback = option::value(c);
     }
 
-    public func File(name: string, path: string)
+    public func File(name: string, path: string, menu_functions: ()=> void)
     {
         using je::gui;
 
@@ -66,6 +66,8 @@ namespace jeapi::gui::widget
             Separator();
             if (MenuItem("清除"))
                 drag_result = option::value("");
+
+            menu_functions();
 
             EndPopup();
         }

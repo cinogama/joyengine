@@ -90,7 +90,7 @@ namespace jeapi::gui
     register_custom_editor("je_file", func(dat: string)
     {
         using je::gui;
-        return jeapi::gui::widget::File("文件", dat == "" ? "<无>" | dat);
+        return jeapi::gui::widget::File("文件", dat == "" ? "<无>" | dat, \=do nil;);
     });
 
     register_custom_editor("je_animation_list", func(dat: string)
@@ -125,7 +125,7 @@ namespace jeapi::gui
 
             if (dat->len != 3) continue;
 
-            match (jeapi::gui::widget::File(F"动画##{i}", dat[0]))
+            match (jeapi::gui::widget::File(F"动画##{i}", dat[0], \=do nil;))
             {
             value(path)?
                 {

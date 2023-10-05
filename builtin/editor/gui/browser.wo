@@ -345,26 +345,6 @@ namespace editor::gui
         return filesys::writeall(path, content);
     }
 
-    func write_file_and_ask_if_exist(path: filesys::path_t, content: string)
-    {
-        if (filesys::exist(path))
-        {
-            jeapi::gui::form::ask("是否覆盖", F"文件{path->tostring}已存在，是否覆盖？",
-                func(overwrite){
-                    if (overwrite)
-                    {
-                        do filesys::writeall(path, content);
-                        force_update();
-                    }
-                });
-        }
-        else
-        {
-            do filesys::writeall(path, content);
-            force_update();
-        }
-    }
-
     func context_menu(path: option<PathInfo>, context: EditorContext)
     {
         if (path
@@ -1236,7 +1216,50 @@ namespace $$MODULE_NAME$$
                         match (jeapi::serialize::entity(e, false)=>>\dat = dat->serialize;)
                         {
                         value(entity_json)?
-                            write_file_and_ask_if_exist(filesys::normalize(current_work_path) / (e->editor::name + ".jeentity"), entity_json);
+                            {
+                                let filepath = filesys::normalize(current_work_path) / (e->editor::name + ".jeentity");
+                                let prefab_data = e->towoo::get_component:<Editor::Prefab>;
+                                if (filesys::exist(filepath))
+                                {
+                                    // 如果实体已经是预设体，那么拒绝覆盖已有的预设体以规避蛋疼的循环引用问题
+                                    if (prefab_data->has)
+                                        jeapi::gui::form::errmsg("无法覆盖预设体", "不允许已经为预设体的实体保存覆盖预设体文件");
+                                    else
+                                        jeapi::gui::form::ask("是否覆盖", F"文件{filepath->tostring}已存在，是否覆盖？",
+                                            func(overwrite){
+                                                if (overwrite)
+                                                {
+                                                    do filesys::writeall(filepath, entity_json);
+                                                    eid->justdo(func(e)
+                                                    {
+                                                        let prefab = e->towoo::add_component:<Editor::Prefab>->val;
+                                                        prefab.path->set(context->get_project->make_path_normalize(filepath));
+                                                    });
+                                                    force_update();
+                                                }
+                                            });
+                                }
+                                else
+                                {
+                                    let mut create = true;
+                                    if (prefab_data->has)
+                                    {
+                                        if (prefab_data->val.path->get == context->get_project->make_path_normalize(filepath)
+                                            || false == filesys::isfile(context->get_project->parse_path_normalize(prefab_data->val.path->get)))
+                                        {
+                                            create = false;
+                                            jeapi::gui::form::errmsg("无法创建预设体", "变体原所属的预设体丢失");
+                                        }
+                                    }
+                                    if (create)
+                                    {
+                                        do filesys::writeall(filepath, entity_json);
+                                        let prefab = e->towoo::add_component:<Editor::Prefab>->val;
+                                        prefab.path->set(context->get_project->make_path_normalize(filepath));
+                                        force_update();
+                                    }
+                                }
+                            }
                         none?
                             jeapi::gui::form::errmsg("失败", F"无法序列化实体{e->editor::name}");
                         }

@@ -49,6 +49,14 @@ namespace jeecs
         {
             bool init = false;
         };
+        struct Prefab
+        {
+            jeecs::basic::string path;
+            static void JERefRegsiter()
+            {
+                typing::register_member(&Prefab::path, "path");
+            }
+        };
 
         struct NewCreatedEntity
         {

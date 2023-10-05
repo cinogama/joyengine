@@ -645,7 +645,8 @@ namespace editor::gui::tilemap
                         if (show)
                         {
                             match (jeapi::gui::widget::File("使用的TileMap纹理", 
-                                create_context.m_texture=>>\t=t->path;->valor(""))
+                                create_context.m_texture=>>\t=t->path;->valor(""),
+                                \=do nil;)
                                 =>> \newpath = create_context.m_texture := graphic::texture::load(newpath);
                             )
                             {
