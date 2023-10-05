@@ -98,6 +98,28 @@ namespace jeapi
             }
 
         }
+        func _is_same_shader(a: array<dynamic>, b: array<dynamic>)
+        {
+            if (a[0]: string == b[0]: string)
+            {
+                let am = a[1]->unsafe::cast:<dict<string, dynamic>>;
+                let bm = b[1]->unsafe::cast:<dict<string, dynamic>>;
+
+                if (am->len != bm->len)
+                    return false;
+
+                for (let m, val: am)
+                {
+                    if (bm->contain(m) == false)
+                        return false;
+                    
+                    let bval = bm[m];
+                    if (val: string != bval: string)
+                        return false;
+                }
+            }
+            return true;
+        }
         public func dump_prefab_dat(p: string, dat: dict<string, dynamic>)
         {
             let result = dat->tomap;
@@ -111,7 +133,17 @@ namespace jeapi
                     ;
                 ->  valor({}mut);
 
-            match (load_prefab(p)
+            let shaders = result->get("shaders")
+                ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
+                ->  valor([])
+                ;
+            let textures = result->get("textures")
+                ->> \d = d->unsafe::cast:<dict<int, string>>;
+                ->  valor({})
+                ;
+
+            let prefab_data = load_prefab(p);
+            match (prefab_data
                 =>> \d = d->get("components")
                     ->> \d = d->unsafe::cast:<dict<string, dict<string, string>>>;
                     ;)
@@ -140,6 +172,56 @@ namespace jeapi
                 }
             none?;
             }
+            // 比较一下纹理和着色器是否一致，若一致则无视
+            match (prefab_data
+                =>> \d = d->get("shaders")
+                ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
+                ;)
+            {
+            value(prefab_shader_dat)?
+                {
+                    let mut remove_shaders = true;
+                    if (prefab_shader_dat->len == shaders->len)
+                    {
+                        for (let idx, pshad : prefab_shader_dat)
+                        {
+                            if (!_is_same_shader(shaders[idx], pshad))
+                            {
+                                remove_shaders = false;
+                                break;
+                            }
+                        }
+                        if (remove_shaders)
+                            do result->remove("shaders");
+                    }
+                }
+            none?;
+            }
+            match (prefab_data
+                =>> \d = d->get("textures")
+                ->> \d = d->unsafe::cast:<dict<int, string>>;
+                ;)
+            {
+            value(prefab_texture_dat)?
+                {
+                    let mut remove_textures = true;
+                    if (prefab_texture_dat->len == textures->len)
+                    {
+                        for (let idx, ptex : prefab_texture_dat)
+                        {
+                            if (textures->contain(idx) == false || textures[idx] != ptex)
+                            {
+                                remove_textures = false;
+                                break;
+                            }
+                        }
+                        if (remove_textures)
+                            do result->remove("textures");
+                    }
+                }
+            none?;
+            }
+            
             return result->unsafe::cast:<dict<string, dynamic>>;
         }
         public func try_dump_prefab_dat(e: je::entity, dat: dict<string, dynamic>)
