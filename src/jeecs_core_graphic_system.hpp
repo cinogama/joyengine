@@ -986,7 +986,8 @@ import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
-CULL    (BACK);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
 
 VAO_STRUCT! vin 
 {

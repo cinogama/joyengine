@@ -140,7 +140,6 @@ namespace jeecs_impl
                 if (id <= _m_type_holder_list.size())
                     return _m_type_holder_list[id - 1];
             }
-            jeecs::debug::log("Unable to find type with id = '%zu'.", (size_t)id);
             return nullptr;
         }
         jeecs::typing::type_info* get_info_by_name(const char* name) noexcept
@@ -152,7 +151,6 @@ namespace jeecs_impl
                 if (fnd != _m_type_name_id_mapping.end())
                     return _m_type_holder_list[fnd->second - 1];
             }
-            jeecs::debug::log("Unable to find type named: '%s'.", name);
             return nullptr;
         }
         std::vector<jeecs::typing::type_info*> get_all_registed_types() noexcept
