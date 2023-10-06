@@ -419,21 +419,27 @@ component!
                     let default_empty_script = 
 @"import woo::std;
 import je;
+import je::towoo;
+
 import je::towoo::system;
 
 using std;
 using je;
+using je::towoo;
 
-alias Context = void;
+using Context = struct{
+};
 
 extern func create()=> Context
 {
+    return Context{
+    };
 }
 extern func close(_: Context)
 {
 }
 
-system! demo()
+system! step_1()
 {
 }
 

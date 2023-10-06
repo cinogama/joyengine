@@ -787,6 +787,20 @@ WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_val(vm, result);
 }
 
+WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    auto winsz = jeecs::input::mouseviewpos(0);
+
+    wo_value result = wo_push_struct(vm, 2);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, winsz.x);
+    wo_struct_set(result, 0, elem);
+    wo_set_float(elem, winsz.y);
+    wo_struct_set(result, 1, elem);
+
+    return wo_ret_val(vm, result);
+}
+
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t argc)
 {
     je_io_update_windowsize((int)wo_int(args + 0), (int)wo_int(args + 1));
@@ -1924,7 +1938,6 @@ WO_API wo_api wojeapi_towoo_update_api(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-
 WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_int(vm, (wo_integer_t)jedbg_get_unregister_type_count());
@@ -2326,6 +2339,9 @@ namespace je
 
         extern("libjoyecs", "wojeapi_input_mouse_pos")
         public func mousepos()=> (int, int);
+
+        extern("libjoyecs", "wojeapi_input_mouse_view_pos")
+        public func mouseviewpos()=> (real, real);
     }
 
     public using typeinfo = handle;
@@ -2555,7 +2571,8 @@ namespace je
             extern("libjoyecs", "wojeapi_font_string_texture")
             public func load_string(self: font, str: string)=> texture;
         }
-
+)"
+R"(
         public using shader = gchandle
         {
             extern("libjoyecs", "wojeapi_shader_open")
@@ -2658,8 +2675,7 @@ namespace je
             }
         }
     }
-)"
-R"(
+
     public using universe = gchandle;
     namespace universe
     {

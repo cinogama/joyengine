@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <optional>
 #include <memory>
+#include <cmath>
 
 #include "jeecs_core_script_system.hpp"
 
@@ -54,6 +55,7 @@ namespace jeecs
                 dependence m_dependence;
                 wo_integer_t m_function;
                 std::vector<const typing::type_info*> m_used_components;
+                bool m_is_single_work;
             };
             struct towoo_system_info
             {
@@ -143,20 +145,23 @@ namespace jeecs
             static void create_component_struct(wo_value writeval, wo_vm vm, void* component, const typing::type_info* ctype)
             {
                 assert(component != nullptr);
-                wo_set_struct(writeval, vm, ctype->m_member_count);
+                wo_set_struct(writeval, vm, ctype->m_member_count + 1);
+
+                _wo_value tmp;
+                wo_set_pointer(&tmp, component);
+                wo_struct_set(writeval, 0, &tmp);
 
                 uint16_t member_idx = 0;
                 auto* member_tinfo = ctype->m_member_types;
                 while (member_tinfo != nullptr)
                 {
                     // Set member;
-                    _wo_value tmp;
                     wo_set_pointer(&tmp,
                         reinterpret_cast<void*>(
                             reinterpret_cast<intptr_t>(component)
                             + member_tinfo->m_member_offset));
 
-                    wo_struct_set(writeval, member_idx, &tmp);
+                    wo_struct_set(writeval, member_idx + 1, &tmp);
 
                     ++member_idx;
                     member_tinfo = member_tinfo->m_next_member;
@@ -175,60 +180,69 @@ namespace jeecs
 
                 for (auto& work : m_dependences)
                 {
-                    work.m_dependence.update(get_world());
-                    for (auto* archinfo : work.m_dependence.m_archs)
+                    if (work.m_is_single_work)
                     {
-                        auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
-                        while (cur_chunk)
+                        wo_push_val(m_job_vm, m_context);
+                        // Invoke!
+                        wo_invoke_rsfunc(m_job_vm, work.m_function, 1);
+                    }
+                    else
+                    {
+                        work.m_dependence.update(get_world());
+                        for (auto* archinfo : work.m_dependence.m_archs)
                         {
-                            auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
-                            typing::version_t version;
-                            for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
+                            auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
+                            while (cur_chunk)
                             {
-                                if (selector::get_entity_avaliable_version(entity_meta_addr, eid, &version))
+                                auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
+                                typing::version_t version;
+                                for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
                                 {
-                                    // game_entity{ cur_chunk, eid, version }
-                                    // Valid! prepare to invoke!
-                                    for (size_t argidx = work.m_used_components.size(); argidx > 0; --argidx)
+                                    if (selector::get_entity_avaliable_version(entity_meta_addr, eid, &version))
                                     {
-                                        void* component = selector::get_component_from_archchunk_ptr(archinfo, cur_chunk, eid, argidx - 1);
-                                        const auto* typeinfo = work.m_used_components[argidx - 1];
-
-                                        wo_value component_st = wo_push_empty(m_job_vm);
-                                        if (work.m_dependence.m_requirements[argidx - 1].m_require == jeecs::requirement::type::MAYNOT)
+                                        // game_entity{ cur_chunk, eid, version }
+                                        // Valid! prepare to invoke!
+                                        for (size_t argidx = work.m_used_components.size(); argidx > 0; --argidx)
                                         {
-                                            if (component == nullptr)
+                                            void* component = selector::get_component_from_archchunk_ptr(archinfo, cur_chunk, eid, argidx - 1);
+                                            const auto* typeinfo = work.m_used_components[argidx - 1];
+
+                                            wo_value component_st = wo_push_empty(m_job_vm);
+                                            if (work.m_dependence.m_requirements[argidx - 1].m_require == jeecs::requirement::type::MAYNOT)
                                             {
-                                                // option::none
-                                                wo_set_option_none(component_st, m_job_vm);
+                                                if (component == nullptr)
+                                                {
+                                                    // option::none
+                                                    wo_set_option_none(component_st, m_job_vm);
+                                                }
+                                                else
+                                                {
+                                                    // option::value
+                                                    create_component_struct(tmp_elem, m_job_vm, component, typeinfo);
+                                                    wo_set_option_val(component_st, m_job_vm, tmp_elem);
+                                                }
                                             }
                                             else
                                             {
-                                                // option::value
-                                                create_component_struct(tmp_elem, m_job_vm, component, typeinfo);
-                                                wo_set_option_val(component_st, m_job_vm, tmp_elem);
+                                                create_component_struct(component_st, m_job_vm, component, typeinfo);
                                             }
                                         }
-                                        else
-                                        {
-                                            create_component_struct(component_st, m_job_vm, component, typeinfo);
-                                        }
+
+                                        // Push entity
+                                        wo_push_gchandle(m_job_vm, new jeecs::game_entity{ cur_chunk , eid, version }, nullptr,
+                                            [](void* eptr) {delete std::launder(reinterpret_cast<jeecs::game_entity*>(eptr)); });
+
+                                        // Push context
+                                        wo_push_val(m_job_vm, m_context);
+
+                                        // Invoke!
+                                        wo_invoke_rsfunc(m_job_vm, work.m_function, work.m_used_components.size() + 2);
                                     }
-
-                                    // Push entity
-                                    wo_push_gchandle(m_job_vm, new jeecs::game_entity{ cur_chunk , eid, version }, nullptr,
-                                        [](void* eptr) {delete std::launder(reinterpret_cast<jeecs::game_entity*>(eptr)); });
-
-                                    // Push context
-                                    wo_push_val(m_job_vm, m_context);
-
-                                    // Invoke!
-                                    wo_invoke_rsfunc(m_job_vm, work.m_function, work.m_used_components.size() + 2);
                                 }
-                            }
 
-                            // Update next chunk.
-                            cur_chunk = je_arch_next_chunk(cur_chunk);
+                                // Update next chunk.
+                                cur_chunk = je_arch_next_chunk(cur_chunk);
+                            }
                         }
                     }
                 }
@@ -466,7 +480,7 @@ namespace je::entity::towoo
             if (tnamespace)
                 woolang_component_type_decl += "namespace " + tnamespace.value() + "{\n";
 
-            woolang_component_type_decl += "using " + tname + " = struct{\n";
+            woolang_component_type_decl += "using " + tname + " = struct{\n    __addr: handle,\n";
 
             auto* registed_member = typeinfo->m_member_types;
             while (registed_member != nullptr)
@@ -483,7 +497,6 @@ namespace je::entity::towoo
                 }
                 registed_member = registed_member->m_next_member;
             }
-
             woolang_component_type_decl += "}\n{\n";
 
             // Generate ComponentT::id
@@ -676,32 +689,38 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t 
 
     wo_value requirements = args + 2;
     wo_integer_t component_arg_count = wo_int(args + 3);
+    bool is_single_work = wo_bool(args + 4);
     wo_value requirement_info = wo_push_empty(vm);
     wo_value elem = wo_push_empty(vm);
 
-    for (wo_integer_t i = 0; i < wo_lengthof(requirements); ++i)
+    stepwork.m_is_single_work = is_single_work;
+
+    if (!stepwork.m_is_single_work)
     {
-        wo_arr_get(requirement_info, requirements, i);
+        for (wo_integer_t i = 0; i < wo_lengthof(requirements); ++i)
+        {
+            wo_arr_get(requirement_info, requirements, i);
 
-        wo_struct_get(elem, requirement_info, 2);
-        const auto* typeinfo = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(
-            wo_pointer(elem)));
+            wo_struct_get(elem, requirement_info, 2);
+            const auto* typeinfo = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(
+                wo_pointer(elem)));
 
-        wo_struct_get(elem, requirement_info, 0);
-        jeecs::requirement::type ty = (jeecs::requirement::type)wo_int(elem);
+            wo_struct_get(elem, requirement_info, 0);
+            jeecs::requirement::type ty = (jeecs::requirement::type)wo_int(elem);
 
-        wo_struct_get(elem, requirement_info, 1);
+            wo_struct_get(elem, requirement_info, 1);
 
-        stepwork.m_dependence.m_requirements.push_back(
-            jeecs::requirement(
-                ty,
-                wo_int(elem),
-                typeinfo->m_id
-            ));
+            stepwork.m_dependence.m_requirements.push_back(
+                jeecs::requirement(
+                    ty,
+                    wo_int(elem),
+                    typeinfo->m_id
+                ));
 
-        if (i < component_arg_count)
-            stepwork.m_used_components.push_back(typeinfo);
+            if (i < component_arg_count)
+                stepwork.m_used_components.push_back(typeinfo);
 
+        }
     }
     works->m_works.push_back(stepwork);
 
@@ -887,15 +906,17 @@ namespace je::towoo::system
         m_requirement: vec<(require_type, int, je::typeinfo)>,
         m_argument_count: mut int,
         m_require_group: mut int,
+        m_is_single_work: bool,
     }
     {
-        func create(f: dynamic)
+        func create(f: dynamic, iswork: bool)
         {
             return ToWooSystemFuncJob{
                 m_function = f,
                 m_requirement = []mut,
                 m_argument_count = mut 0,
                 m_require_group = mut 0,
+                m_is_single_work = iswork,
             };
         }
         public func contain<CompT>(self: ToWooSystemFuncJob, is_arg: bool)
@@ -935,9 +956,15 @@ namespace je::towoo::system
     public func register_job_function<FT>(jobfunc: FT)
         where std::declval:<nothing>() is typeof(jobfunc([]...));
     {
-        let j = ToWooSystemFuncJob::create(jobfunc: dynamic);
+        let j = ToWooSystemFuncJob::create(jobfunc: dynamic, false);
         regitered_works->add(j);
         return j;
+    }
+    public func register_work_function<FT>(jobfunc: FT)
+        where std::declval:<nothing>() is typeof(jobfunc([]...));
+    {
+        let j = ToWooSystemFuncJob::create(jobfunc: dynamic, true);
+        regitered_works->add(j);
     }
 }
 
@@ -950,7 +977,8 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         registering_system_type: je::typeinfo,
         fn: dynamic, 
         req: array<(require_type, int, je::typeinfo)>,
-        comp_count: int)=> void;
+        comp_count: int,
+        is_single_work: bool)=> void;
 
     for (let _, workinfo : regitered_works)
     {
@@ -958,11 +986,48 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
             registering_system_type,
             workinfo.m_function,
             workinfo.m_requirement->unsafe::cast:<array<(require_type, int, je::typeinfo)>>,
-            workinfo.m_argument_count);
+            workinfo.m_argument_count,
+            workinfo.m_is_single_work);
     }
 }
+#macro work
+{
+    /*
+        work! JobName()
+        {
+            // BODY
+        }
+    */
+    let job_func_name = lexer->next;
+    if (job_func_name == "")
+    {
+        lexer->error("Unexpected EOF");
+        return;
+    }
 
-#macro system!
+    if (lexer->next != "(")
+    {
+        lexer->error("Unexpected token, here should be '('.");
+        return;
+    }
+    if (lexer->next != "\x29")
+    {
+        lexer->error("Unexpected token, here should be ')'.");
+        return;
+    }
+    if (lexer->next != "{")
+    {
+        lexer->error("Unexpected token, here should be '{'.");
+        return;
+    }
+
+    let mut result = F"do je::towoo::system::register_work_function({job_func_name});";
+    result += F"func {job_func_name}(context: typeof(create()))\{do context;";
+
+std::println(result);
+    lexer->lex(result);
+}
+#macro system
 {
     /*
         system! JobName(
@@ -1113,5 +1178,327 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     }
     result += "){do e; do context;\n";
     lexer->lex(result);
+}
+)";
+
+jeecs::math::vec2 wo_vec2(wo_value val)
+{
+    jeecs::math::vec2 result;
+    _wo_value tmp;
+    wo_struct_get(&tmp, val, 0);
+    result.x = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 1);
+    result.y = wo_float(&tmp);
+
+    return result;
+}
+jeecs::math::vec3 wo_vec3(wo_value val)
+{
+    jeecs::math::vec3 result;
+    _wo_value tmp;
+    wo_struct_get(&tmp, val, 0);
+    result.x = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 1);
+    result.y = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 2);
+    result.z = wo_float(&tmp);
+
+    return result;
+}
+jeecs::math::vec4 wo_vec4(wo_value val)
+{
+    jeecs::math::vec4 result;
+    _wo_value tmp;
+    wo_struct_get(&tmp, val, 0);
+    result.x = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 1);
+    result.y = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 2);
+    result.z = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 3);
+    result.w = wo_float(&tmp);
+
+    return result;
+}
+
+wo_value wo_push_vec2(wo_vm vm, const jeecs::math::vec2& v)
+{
+    wo_value result = wo_push_struct(vm, 2);
+    _wo_value tmp;
+    wo_set_float(&tmp, v.x);
+    wo_struct_set(result, 0, &tmp);
+    wo_set_float(&tmp, v.y);
+    wo_struct_set(result, 1, &tmp);
+    return result;
+}
+wo_value wo_push_vec3(wo_vm vm, const jeecs::math::vec3& v)
+{
+    wo_value result = wo_push_struct(vm, 3);
+    _wo_value tmp;
+    wo_set_float(&tmp, v.x);
+    wo_struct_set(result, 0, &tmp);
+    wo_set_float(&tmp, v.y);
+    wo_struct_set(result, 1, &tmp);
+    wo_set_float(&tmp, v.z);
+    wo_struct_set(result, 2, &tmp);
+    return result;
+}
+wo_value wo_push_vec4(wo_vm vm, const jeecs::math::vec4& v)
+{
+    wo_value result = wo_push_struct(vm, 4);
+    _wo_value tmp;
+    wo_set_float(&tmp, v.x);
+    wo_struct_set(result, 0, &tmp);
+    wo_set_float(&tmp, v.y);
+    wo_struct_set(result, 1, &tmp);
+    wo_set_float(&tmp, v.z);
+    wo_struct_set(result, 2, &tmp);
+    wo_set_float(&tmp, v.w);
+    wo_struct_set(result, 3, &tmp);
+    return result;
+}
+
+template<typename T>
+T& wo_component(wo_value val)
+{
+    _wo_value tmp;
+    wo_struct_get(&tmp, val, 0);
+    return *std::launder(reinterpret_cast<T*>(wo_pointer(&tmp)));
+}
+template<typename T>
+T* wo_option_component(wo_value val)
+{
+    _wo_value tmp;
+    wo_struct_get(&tmp, val, 0);
+    if (wo_int(&tmp) == 1)
+    {
+        wo_struct_get(&tmp, val, 1);
+        wo_struct_get(&tmp, &tmp, 0);
+        return std::launder(reinterpret_cast<T*>(wo_pointer(&tmp)));
+    }
+    return nullptr;
+}
+
+WO_API wo_api wojeapi_towoo_ray_create(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_gchandle(vm, 
+        new jeecs::math::ray(wo_vec3(args + 0), wo_vec3(args + 1)),
+        nullptr,
+        [](void* p) {delete(jeecs::math::ray*)p; });
+}
+WO_API wo_api wojeapi_towoo_ray_from_camera(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_gchandle(vm,
+        new jeecs::math::ray(
+            wo_component<jeecs::Transform::Translation>(args + 0),
+            wo_component<jeecs::Camera::Projection>(args + 1),
+            wo_vec2(args + 2),
+            wo_bool(args + 3)
+            ),
+        nullptr,
+        [](void* p) {delete(jeecs::math::ray*)p; });
+}
+WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
+    auto result = ray->intersect_entity(
+        wo_component<jeecs::Transform::Translation>(args + 1),
+        wo_option_component<jeecs::Renderer::Shape>(args + 2),
+        wo_float(args + 3));
+    if (result.intersected)
+    {
+        return wo_ret_option_val(vm, wo_push_vec3(vm, result.place));
+    }
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api wojeapi_towoo_ray_origin(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
+    return wo_ret_val(vm, wo_push_vec3(vm, ray->orgin));
+}
+WO_API wo_api wojeapi_towoo_ray_direction(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
+    return wo_ret_val(vm, wo_push_vec3(vm, ray->direction));
+}
+WO_API wo_api wojeapi_towoo_math_sqrt(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, sqrt(wo_real(args + 0)));
+}
+
+const char* jeecs_towoo_path = "je/towoo.wo";
+const char* jeecs_towoo_src = R"(// (C)Cinogama. 
+import je::towoo::types;
+import je::towoo::components;
+
+namespace je::math
+{
+    extern("libjoyecs", "wojeapi_towoo_math_sqrt")
+        public func sqrt(v: real)=> real;
+}
+namespace vec2
+{
+    public func operator + (a: vec2, b: vec2)
+    {
+        return (a[0] + b[0], a[1] + b[1]): vec2;
+    }
+    public func operator - (a: vec2, b: vec2)
+    {
+        return (a[0] - b[0], a[1] - b[1]): vec2;
+    }
+    public func operator * (a: vec2, b)
+        where b is vec2 || b is real;
+    {
+        if (b is vec2)
+            return (a[0] * b[0], a[1] * b[1]): vec2;
+        else
+            return (a[0] * v, a[1] * v): vec2;
+    }
+    public func operator / (a: vec2, b)
+        where b is vec2 || b is real;
+    {
+        if (b is vec2)
+            return (a[0] / b[0], a[1] / b[1]): vec2;
+        else
+            return (a[0] / v, a[1] / v): vec2;
+    }
+    public func length(self: vec2)
+    {
+        let (x, y) = self;
+        return je::math::sqrt(x*x + y*y);
+    }
+    public func unit(self: vec2)
+    {
+        let (x, y) = self;
+        let length = self->length;
+        if (length == 0.)
+            return self;
+        return (x/length, y/length): vec2;
+    }
+    public func dot(self: vec2, b: vec2)
+    {
+        return self[0] * b[0] + self[1] * b[1];
+    }
+}
+namespace vec3
+{
+    public func operator + (a: vec3, b: vec3)
+    {
+        return (a[0] + b[0], a[1] + b[1], a[2] + b[2]): vec3;
+    }
+    public func operator - (a: vec3, b: vec3)
+    {
+        return (a[0] - b[0], a[1] - b[1], a[2] - b[2]): vec3;
+    }
+    public func operator * (a: vec3, b)
+        where b is vec3 || b is real;
+    {
+        if (b is vec3)
+            return (a[0] * b[0], a[1] * b[1], a[2] * b[2]): vec3;
+        else
+            return (a[0] * v, a[1] * v, a[2] * v): vec3;
+    }
+    public func operator / (a: vec3, b)
+        where b is vec3 || b is real;
+    {
+        if (b is vec3)
+            return (a[0] / b[0], a[1] / b[1], a[2] / b[2]): vec3;
+        else
+            return (a[0] / v, a[1] / v, a[2] / v): vec3;
+    }
+
+    public func length(self: vec3)
+    {
+        let (x, y, z) = self;
+        return je::math::sqrt(x*x + y*y + z*z);
+    }
+    public func unit(self: vec3)
+    {
+        let (x, y, z) = self;
+        let length = self->length;
+        if (length == 0.)
+            return self;
+        return (x/length, y/length, z/length): vec3;
+    }
+    public func dot(self: vec3, b: vec3)
+    {
+        return self[0] * b[0] + self[1] * b[1] + self[2] * b[2];
+    }
+    public func cross(self: vec3, b: vec3)
+    {
+        return (
+            self[1] * b[2] - self[2] * b[1],
+            self[2] * b[0] - self[0] * b[2],
+            self[0] * b[1] - self[1] * b[0]
+        ): vec3;
+    }
+}
+namespace vec4
+{
+    public func operator + (a: vec4, b: vec4)
+    {
+        return (a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]): vec4;
+    }
+    public func operator - (a: vec4, b: vec4)
+    {
+        return (a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]): vec4;
+    }
+    public func operator * (a: vec4, b)
+        where b is vec4 || b is real;
+    {
+        if (b is vec4)
+            return (a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]): vec4;
+        else
+            return (a[0] * v, a[1] * v, a[2] * v, a[3] * v): vec4;
+    }
+    public func operator / (a: vec4, b)
+        where b is vec4 || b is real;
+    {
+        if (b is vec4)
+            return (a[0] / b[0], a[1] / b[1], a[2] / b[2], a[3] / b[3]): vec4;
+        else
+            return (a[0] / v, a[1] / v, a[2] / v, a[3] / v): vec4;
+    }
+
+    public func length(self: vec4)
+    {
+        let (x, y, z, w) = self;
+        return je::math::sqrt(x*x + y*y + z*z + w*w);
+    }
+    public func unit(self: vec4)
+    {
+        let (x, y, z, w) = self;
+        let length = self->length;
+        if (length == 0.)
+            return self;
+        return (x/length, y/length, z/length, w/length): vec4;
+    }
+    public func dot(self: vec4, b: vec4)
+    {
+        return self[0] * b[0] + self[1] * b[1] + self[2] * b[2] + self[3] * b[3];
+    }
+}
+namespace quat
+{
+}
+namespace je::towoo
+{
+    using ray = gchandle
+    {
+        extern("libjoyecs", "wojeapi_towoo_ray_create")
+        public func create(ori: vec3, dir: vec3)=> ray;
+
+        extern("libjoyecs", "wojeapi_towoo_ray_from_camera")
+        public func from(trans: Transform::Translation, proj: Camera::Projection, screen_pos: vec2, orth: bool)=> ray;
+
+        extern("libjoyecs", "wojeapi_towoo_ray_intersect_entity")
+        public func intersect(self: ray, trans: Transform::Translation, shap: option<Renderer::Shape>, inrange: real)=> option<vec3>;
+
+        extern("libjoyecs", "wojeapi_towoo_ray_origin")
+        public func origin(self: ray)=> vec3;
+
+        extern("libjoyecs", "wojeapi_towoo_ray_direction")
+        public func direction(self: ray)=> vec3;
+    }
 }
 )";
