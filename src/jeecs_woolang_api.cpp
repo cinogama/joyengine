@@ -1992,6 +1992,12 @@ namespace je
             extern("libjoyecs", "wojeapi_find_entity_with_chunk_info")
             public func find_entity_by_chunkinfo(chunkinfo: string)=> entity;
 
+            extern("libjoyecs", "wojeapi_entity_get_prefab_path")
+            public func get_prefab_path(self: entity)=> option<string>;
+
+            extern("libjoyecs", "wojeapi_entity_set_prefab_path")
+            public func set_prefab_path(self: entity, path: string)=> void;
+
             public func get_components(self: entity)
             {
                 return self->get_components_types()

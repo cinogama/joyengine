@@ -84,6 +84,24 @@ const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const ch
     return "";
 }
 
+WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    if (auto* prefab = entity->get_component<jeecs::Editor::Prefab>())
+        return wo_ret_option_string(vm, prefab->path.c_str());
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+    if (auto* prefab = entity->get_component<jeecs::Editor::Prefab>())
+    {
+        prefab->path = wo_string(args + 1);
+    }
+    return wo_ret_void(vm);
+}
+
 void jeecs_entry_register_core_systems()
 {
     jeecs::typing::type_info::of<jeecs::Editor::Name>("Editor::Name");

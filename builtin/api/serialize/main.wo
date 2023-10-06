@@ -2,8 +2,7 @@
 // 负责提供序列化和反序列化实体、世界的功能
 
 import je;
-import je::towoo::component;
-import je::towoo::components;
+import je::editor;
 import builtin::api::gui::form::msg;
 import builtin::api::tool::varify;
 
@@ -56,7 +55,7 @@ namespace jeapi
         }
         public func update_prefab(e: je::entity)
         {
-            match (e->towoo::get_component:<Editor::Prefab>()->>\p = p.path->get;)
+            match (e->editor::get_prefab_path)
             {
             value(path)?
                 {
@@ -228,10 +227,10 @@ namespace jeapi
         }
         public func try_dump_prefab_dat(e: je::entity, dat: dict<string, dynamic>)
         {
-            match (e->towoo::get_component:<Editor::Prefab>)
+            match (e->editor::get_prefab_path)
             {
             value(prefab)?
-                return dump_prefab_dat(prefab.path->get, dat);
+                return dump_prefab_dat(prefab, dat);
             none?
                 return dat;
             }
@@ -485,12 +484,12 @@ namespace jeapi
                             ? [je::typeinfo::load("Editor::BadShadersUniform")->val] 
                             | [])
                     ->  connect(in_editor ? [je::typeinfo::load("Editor::Name")->val] | [])
-                    ->  connect(in_editor && prefab_path->has ? [Editor::Prefab::id] | [] )
+                    ->  connect(in_editor && prefab_path->has ? [je::typeinfo::load("Editor::Prefab")->val] | [] )
                 );
 
             if (in_editor && prefab_path->has)
             {
-                entity->towoo::get_component:<Editor::Prefab>->val.path->set(prefab_path->val);
+                entity->editor::set_prefab_path(prefab_path->val);
             }
 
             // 开始应用数据
