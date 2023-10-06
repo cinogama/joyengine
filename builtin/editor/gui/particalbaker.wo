@@ -439,7 +439,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
                 BeginGroup();
                 
-                do InputTextMultilineSize("##source", partical_context.m_script, 500., GetContentRegionAvail()[0])
+                do InputTextMultilineSize("##source", partical_context.m_script, GetContentRegionAvail()...)
                     ->> \t = partical_context.m_script = t;;
 
                 EndGroup();

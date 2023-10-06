@@ -1414,14 +1414,36 @@ namespace $$MODULE_NAME$$
                 -> valor("");
         }
     }
+    public func show_logger(context: EditorContext, open: mutable<bool>)
+    {
+        if (open->get)
+        {
+            static let log_displayer = new! LogHook();
 
+            je::gui::SetNextWindowSizeConstraints((500., 200.), (2000., 1100.));
+            open->set(true);
+            match (BeginAttrOpen("日志查看器", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus))
+            {
+            value(show)?
+                if (show)
+                {
+                    PushStyleColor(ImGuiCol::ImGuiCol_Text, (75, 120, 200, 255));
+                    Text(log_displayer->get_log_abstract);
+                    PopStyleColor();
+            
+                    log_displayer->update(context);
+            
+                    log_displayer->display_log();
+                }
+            none?
+                open->set(false);
+            }
+
+            End();  
+        }
+    }
     public func show_browser(context: EditorContext, open: mutable<bool>)
     {
-        static let browser_context = struct{
-            m_display_log = mut false,
-            m_log_displayer = new! LogHook(),
-        };
-
         if (open->get)
         {
             je::gui::SetNextWindowSizeConstraints((500., 200.), (2000., 1100.));
@@ -1438,30 +1460,16 @@ namespace $$MODULE_NAME$$
                             // TODO 此处放一些返回上一层之类的按钮
                             if (Button("U"))
                             {
-                                if (browser_context.m_display_log)
-                                    browser_context.m_display_log = false;
-                                else
-                                    current_work_path = 
-                                        filesys::parent(filesys::normalize(current_work_path))->tostring;
+                                current_work_path = 
+                                    filesys::parent(filesys::normalize(current_work_path))->tostring;
                             }
-                            SameLine();
-                            if (Button("L"))
-                                browser_context.m_display_log = !browser_context.m_display_log;
                             SameLine();
                             Text(current_work_path);
                             SameLine();
-                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (75, 120, 200, 255));
-                            Text(browser_context.m_log_displayer->get_log_abstract);
-                            PopStyleColor();
+
                         EndChild();
 
-                        browser_context.m_log_displayer->update(context);
-
-                        if (browser_context.m_display_log)
-                            browser_context.m_log_displayer->display_log();
-                        else
-                            files_group(context);
-                        
+                        files_group(context);
                     EndGroup();
                 }
             none?

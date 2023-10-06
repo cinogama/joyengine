@@ -173,99 +173,101 @@ namespace editor::gui
 
             if (!context->get_project->is_debugging)
             {
-                do BeginMainMenuBar();
-                if (BeginMenu("JoyEngine"))
+                if (BeginMainMenuBar())
                 {
-                    if (MenuItem("编辑器样式"))
+                    if (BeginMenu("JoyEngine"))
                     {
-                        style_editor(context);
+                        if (MenuItem("编辑器样式"))
+                        {
+                            style_editor(context);
+                        }
+                        Separator();
+                        if (MenuItem("退出编辑器"))
+                            do ask_for_saving_proj_when_exit(context->get_project);
+
+                        EndMenu();
                     }
-                    Separator();
-                    if (MenuItem("退出编辑器"))
-                        do ask_for_saving_proj_when_exit(context->get_project);
-
-                    EndMenu();
-                }
-                if (BeginMenu("文件"))
-                {
-                    if (MenuItem("保存当前世界"))
-                        _save_world(context);
-
-                    EndMenu();
-                }
-                if (BeginMenu("项目"))
-                {
-                    if (MenuItemShortcut("保存项目", "Ctrl + S"))
-                        _save_project(context);
-
-                    if (MenuItem("项目设置"))
+                    if (BeginMenu("文件"))
                     {
-                        context->launch_editor_form(func(){
-                            je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
-                            let mut open = true;
-                            match (BeginOpen("项目设置"))
-                            {
-                            value(show)?
-                                if (show)
+                        if (MenuItem("保存当前世界"))
+                            _save_world(context);
+
+                        EndMenu();
+                    }
+                    if (BeginMenu("项目"))
+                    {
+                        if (MenuItemShortcut("保存项目", "Ctrl + S"))
+                            _save_project(context);
+
+                        if (MenuItem("项目设置"))
+                        {
+                            context->launch_editor_form(func(){
+                                je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
+                                let mut open = true;
+                                match (BeginOpen("项目设置"))
                                 {
-                                    for (let _, iconfig : context->get_project->get_configs)
+                                value(show)?
+                                    if (show)
                                     {
-                                        do iconfig->edit();
-                                        Separator();
+                                        for (let _, iconfig : context->get_project->get_configs)
+                                        {
+                                            do iconfig->edit();
+                                            Separator();
+                                        }
+                                    }
+                                none?
+                                    open = false;
+                                }
+                                End();
+                                return open;
+                            }, ());
+                        }
+                        Separator();
+                        if (MenuItem("导出"))
+                        {
+                            edit_forms::show_export_project(context);
+                        }
+                        EndMenu();
+                    }
+                    if (BeginMenu("工具"))
+                    {
+                        if (MenuItem("TileMap编辑器"))
+                            tilemap::main(context);
+
+                        Separator();
+
+                        let scripts = tools::get_available_tool_scripts();
+                        if (scripts->empty())
+                            do MenuItemEnabled("空", false);
+                        else
+                            for (let _, script_name : scripts)
+                                if (MenuItem(script_name))
+                                {
+                                    match (tools::run_tool_script(context, script_name, context->get_project))
+                                    {
+                                    err(msg)?
+                                        jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg}");
+                                    ok(_)?;
                                     }
                                 }
-                            none?
-                                open = false;
-                            }
-                            End();
-                            return open;
-                        }, ());
+                        Separator();
+                        if (MenuItem("重新获取脚本"))
+                            tools::update_tool_scripts(context->get_project);
+                            
+                        EndMenu();
                     }
-                    Separator();
-                    if (MenuItem("导出"))
+                    if (BeginMenu("帮助"))
                     {
-                        edit_forms::show_export_project(context);
+                        if (MenuItem("关于"))
+                            jeapi::welcome::show_about();
+                        Separator();
+                        do MenuItemSelected("显示隐藏实体及组件", get_is_albe_to_display_debug_entity())
+                            ->> \select = set_is_albe_to_display_debug_entity(select);
+                            ;
+                        EndMenu();
                     }
-                    EndMenu();
+                    EndMainMenuBar();
                 }
-                if (BeginMenu("工具"))
-                {
-                    if (MenuItem("TileMap编辑器"))
-                        tilemap::main(context);
-
-                    Separator();
-
-                    let scripts = tools::get_available_tool_scripts();
-                    if (scripts->empty())
-                        do MenuItemEnabled("空", false);
-                    else
-                        for (let _, script_name : scripts)
-                            if (MenuItem(script_name))
-                            {
-                                match (tools::run_tool_script(context, script_name, context->get_project))
-                                {
-                                err(msg)?
-                                    jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg}");
-                                ok(_)?;
-                                }
-                            }
-                    Separator();
-                    if (MenuItem("重新获取脚本"))
-                        tools::update_tool_scripts(context->get_project);
-                        
-                    EndMenu();
-                }
-                if (BeginMenu("帮助"))
-                {
-                    if (MenuItem("关于"))
-                        jeapi::welcome::show_about();
-                    Separator();
-                    do MenuItemSelected("显示隐藏实体及组件", get_is_albe_to_display_debug_entity())
-                        ->> \select = set_is_albe_to_display_debug_entity(select);
-                        ;
-                    EndMenu();
-                }
-                EndMainMenuBar();
 
                 if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::S]))
                     _save_project(context);

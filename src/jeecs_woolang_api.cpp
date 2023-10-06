@@ -1064,11 +1064,11 @@ WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args, size_t ar
 
     wo_value result = wo_push_struct(vm, 3);
     wo_value elem = wo_push_empty(vm);
-    wo_set_float(elem, value->x);
+    wo_set_float(elem, euler_v3.x);
     wo_struct_set(result, 0, elem);
-    wo_set_float(elem, value->y);
+    wo_set_float(elem, euler_v3.y);
     wo_struct_set(result, 1, elem);
-    wo_set_float(elem, value->z);
+    wo_set_float(elem, euler_v3.z);
     wo_struct_set(result, 2, elem);
 
     return wo_ret_val(vm, result);

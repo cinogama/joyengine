@@ -13,7 +13,7 @@
 [submodule "3rd/imgui"]
 	path = 3rd/imgui
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/imgui
-	branch = stable_v1_87
+	branch = docking
 [submodule "3rd/woolang"]
 	path = 3rd/woolang
 	url = https://git.cinogama.net/cinogamaproject/woolang.git

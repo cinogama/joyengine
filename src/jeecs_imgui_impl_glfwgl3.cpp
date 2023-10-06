@@ -46,9 +46,11 @@ namespace je::gui
         ImGuiWindowFlags_AlwaysVerticalScrollbar= 0x0000'4000,  // Always show vertical scrollbar (even if ContentSize.y < Size.y)
         ImGuiWindowFlags_AlwaysHorizontalScrollbar=0x0000'8000,  // Always show horizontal scrollbar (even if ContentSize.x < Size.x)
         ImGuiWindowFlags_AlwaysUseWindowPadding = 0x0001'0000,  // Ensure child windows without border uses style.WindowPadding (ignored by default for non-bordered child windows, because more convenient)
-        ImGuiWindowFlags_NoNavInputs            = 0x0002'0000,  // No gamepad/keyboard navigation within the window
-        ImGuiWindowFlags_NoNavFocus             = 0x0004'0000,  // No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
-        ImGuiWindowFlags_UnsavedDocument        = 0x0008'0000,  // Display a dot next to the title. When used in a tab/docking context, tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
+        
+        ImGuiWindowFlags_NoNavInputs            = 0x0004'0000,  // No gamepad/keyboard navigation within the window
+        ImGuiWindowFlags_NoNavFocus             = 0x0008'0000,  // No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
+        ImGuiWindowFlags_UnsavedDocument        = 0x0010'0000,  // Display a dot next to the title. When used in a tab/docking context, tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
+        ImGuiWindowFlags_NoDocking              = 0x0020'0000,  // Disable docking of this window
         //ImGuiWindowFlags_NoNav                  = ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
         //ImGuiWindowFlags_NoDecoration           = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse,
         //ImGuiWindowFlags_NoInputs               = ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
@@ -339,6 +341,9 @@ R"(
     extern("libjoyecs", "je_gui_pop_id")
     public func PopID()=>void;
 
+    extern("libjoyecs", "je_gui_get_id")
+    public func GetID(name: string)=>int;
+
     extern("libjoyecs", "je_gui_checkbox")
     public func CheckBox(label: string, checked: bool)=> option<bool>;
 
@@ -448,14 +453,16 @@ R"(
         ImGuiCol_Separator,
         ImGuiCol_SeparatorHovered,
         ImGuiCol_SeparatorActive,
-        ImGuiCol_ResizeGrip,
+        ImGuiCol_ResizeGrip,            // Resize grip in lower-right and lower-left corners of windows.
         ImGuiCol_ResizeGripHovered,
         ImGuiCol_ResizeGripActive,
-        ImGuiCol_Tab,
+        ImGuiCol_Tab,                   // TabItem in a TabBar
         ImGuiCol_TabHovered,
         ImGuiCol_TabActive,
         ImGuiCol_TabUnfocused,
         ImGuiCol_TabUnfocusedActive,
+        ImGuiCol_DockingPreview,        // Preview overlay color when about to docking something
+        ImGuiCol_DockingEmptyBg,        // Background color for empty node (e.g. CentralNode with no window docked into it)
         ImGuiCol_PlotLines,
         ImGuiCol_PlotLinesHovered,
         ImGuiCol_PlotHistogram,
@@ -466,7 +473,7 @@ R"(
         ImGuiCol_TableRowBg,            // Table row background (even rows)
         ImGuiCol_TableRowBgAlt,         // Table row background (odd rows)
         ImGuiCol_TextSelectedBg,
-        ImGuiCol_DragDropTarget,
+        ImGuiCol_DragDropTarget,        // Rectangle highlighting a drop target
         ImGuiCol_NavHighlight,          // Gamepad/keyboard: current highlighted item
         ImGuiCol_NavWindowingHighlight, // Highlight window when using CTRL+TAB
         ImGuiCol_NavWindowingDimBg,     // Darken/colorize entire screen behind the CTRL+TAB window list, when active
@@ -530,6 +537,12 @@ R"(
 
     extern("libjoyecs", "je_gui_set_next_window_size_constraints")
     public func SetNextWindowSizeConstraints(minsz: ImVec2, maxsz: ImVec2)=> void;
+
+    extern("libjoyecs", "je_gui_set_next_window_size")
+    public func SetNextWindowSize(sz: ImVec2)=> void;
+
+    extern("libjoyecs", "je_gui_set_next_window_pos")
+    public func SetNextWindowPos(pos: ImVec2)=> void;
 
     public enum DragAttribute
     {
@@ -616,7 +629,71 @@ R"(
 
     extern("libjoyecs", "je_gui_style_set_config_color_light")
     public func SetStyleColorLight()=>void; 
+)"
+R"(
+    public enum DockNodeFlags
+    {
+        ImGuiDockNodeFlags_None                         = 0,
+        ImGuiDockNodeFlags_KeepAliveOnly                = 0x0000'0001,   //       // Don't display the dockspace node but keep it alive. Windows docked into this dockspace node won't be undocked.
+        //ImGuiDockNodeFlags_NoCentralNode              = 0x0000'0002,   //       // Disable Central Node (the node which can stay empty)
+        ImGuiDockNodeFlags_NoDockingOverCentralNode     = 0x0000'0004,   //       // Disable docking over the Central Node, which will be always kept empty.
+        ImGuiDockNodeFlags_PassthruCentralNode          = 0x0000'0008,   //       // Enable passthru dockspace: 1) DockSpace() will render a ImGuiCol_WindowBg background covering everything excepted the Central Node when empty. Meaning the host window should probably use SetNextWindowBgAlpha(0.0f) prior to Begin() when using this. 2) When Central Node is empty: let inputs pass-through + won't display a DockingEmptyBg background. See demo for details.
+        ImGuiDockNodeFlags_NoDockingSplit               = 0x0000'0010,   //       // Disable other windows/nodes from splitting this node.
+        ImGuiDockNodeFlags_NoResize                     = 0x0000'0020,   // Saved // Disable resizing node using the splitter/separators. Useful with programmatically setup dockspaces.
+        ImGuiDockNodeFlags_AutoHideTabBar               = 0x0000'0040,   //       // Tab bar will automatically hide when there is a single window in the dock node.
+        ImGuiDockNodeFlags_NoUndocking                  = 0x0000'0080,   //       // Disable undocking this node.
+    };
 
+    extern("libjoyecs", "je_gui_dock_space")
+    public func DockSpace(id: int, size: ImVec2, attrib: DockNodeFlags)=> void;
+
+    extern("libjoyecs", "je_gui_dock_space_over_viewport")
+    public func DockSpaceOverViewport()=> void;
+
+    public enum StyleVar
+    {
+        // Enum name --------------------- // Member in ImGuiStyle structure (see ImGuiStyle for descriptions)
+        ImGuiStyleVar_Alpha,               // float     Alpha
+        ImGuiStyleVar_DisabledAlpha,       // float     DisabledAlpha
+        ImGuiStyleVar_WindowPadding,       // ImVec2    WindowPadding
+        ImGuiStyleVar_WindowRounding,      // float     WindowRounding
+        ImGuiStyleVar_WindowBorderSize,    // float     WindowBorderSize
+        ImGuiStyleVar_WindowMinSize,       // ImVec2    WindowMinSize
+        ImGuiStyleVar_WindowTitleAlign,    // ImVec2    WindowTitleAlign
+        ImGuiStyleVar_ChildRounding,       // float     ChildRounding
+        ImGuiStyleVar_ChildBorderSize,     // float     ChildBorderSize
+        ImGuiStyleVar_PopupRounding,       // float     PopupRounding
+        ImGuiStyleVar_PopupBorderSize,     // float     PopupBorderSize
+        ImGuiStyleVar_FramePadding,        // ImVec2    FramePadding
+        ImGuiStyleVar_FrameRounding,       // float     FrameRounding
+        ImGuiStyleVar_FrameBorderSize,     // float     FrameBorderSize
+        ImGuiStyleVar_ItemSpacing,         // ImVec2    ItemSpacing
+        ImGuiStyleVar_ItemInnerSpacing,    // ImVec2    ItemInnerSpacing
+        ImGuiStyleVar_IndentSpacing,       // float     IndentSpacing
+        ImGuiStyleVar_CellPadding,         // ImVec2    CellPadding
+        ImGuiStyleVar_ScrollbarSize,       // float     ScrollbarSize
+        ImGuiStyleVar_ScrollbarRounding,   // float     ScrollbarRounding
+        ImGuiStyleVar_GrabMinSize,         // float     GrabMinSize
+        ImGuiStyleVar_GrabRounding,        // float     GrabRounding
+        ImGuiStyleVar_TabRounding,         // float     TabRounding
+        ImGuiStyleVar_TabBarBorderSize,    // float     TabBarBorderSize
+        ImGuiStyleVar_ButtonTextAlign,     // ImVec2    ButtonTextAlign
+        ImGuiStyleVar_SelectableTextAlign, // ImVec2    SelectableTextAlign
+        ImGuiStyleVar_SeparatorTextBorderSize,// float  SeparatorTextBorderSize
+        ImGuiStyleVar_SeparatorTextAlign,  // ImVec2    SeparatorTextAlign
+        ImGuiStyleVar_SeparatorTextPadding,// ImVec2    SeparatorTextPadding
+        ImGuiStyleVar_DockingSeparatorSize,// float     DockingSeparatorSize
+        ImGuiStyleVar_COUNT
+    };
+
+    extern("libjoyecs", "je_gui_push_style_real")
+    public func PushStyleReal(style: StyleVar, val: real)=> void;
+    extern("libjoyecs", "je_gui_push_style_vec2")
+    public func PushStyleVec2(style: StyleVar, val: ImVec2)=> void;
+
+    extern("libjoyecs", "je_gui_pop_style_var")
+    public func PopStyleVar()=> void;
+    
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     extern("libjoyecs", "je_gui_launch")
@@ -832,6 +909,12 @@ WO_API wo_api je_gui_pop_id(wo_vm vm, wo_value args, size_t argc)
     ImGui::PopID();
     return wo_ret_void(vm);
 }
+
+WO_API wo_api je_gui_get_id(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_int(vm, (wo_integer_t)ImGui::GetID(wo_string(args + 0)));
+}
+
 WO_API wo_api je_gui_beginpopup_contextitem(wo_vm vm, wo_value args, size_t argc)
 {
     if (argc)
@@ -1427,13 +1510,25 @@ WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args, s
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_set_next_window_size(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::SetNextWindowSize(val2vec2(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_set_next_window_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::SetNextWindowPos(val2vec2(args + 0));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_bool(vm, ImGui::ColorButton(wo_string(args + 0), val2vec4(args + 1)));
 }
 WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args, size_t argc)
 {
-   
+
     float rgba[4] = {};
 
     wo_value elem = wo_push_empty(vm);
@@ -1841,6 +1936,36 @@ WO_API wo_api je_gui_style_set_config_color_light(wo_vm vm, wo_value args, size_
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_dock_space(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::DockSpace((ImGuiID)wo_int(args + 0), val2vec2(args + 1), (ImGuiDockNodeFlags)wo_int(args + 2));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_dock_space_over_viewport(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_push_style_real(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::PushStyleVar((ImGuiStyleVar)wo_int(args + 0), wo_float(args + 1));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_push_style_vec2(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::PushStyleVar((ImGuiStyleVar)wo_int(args + 0), val2vec2(args + 1));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args, size_t argc)
+{
+    ImGui::PopStyleVar();
+    return wo_ret_void(vm);
+}
+
 void jegui_init(void* window_handle, bool reboot)
 {
     _stop_work_flag = false;
@@ -1850,7 +1975,7 @@ void jegui_init(void* window_handle, bool reboot)
     ImGui::StyleColorsLight();
 
     ImGuiIO& io = ImGui::GetIO();
-
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     auto* ttf_file = specify_font_path ? jeecs_file_open(specify_font_path.value().c_str()) : nullptr;
     if (ttf_file == nullptr)
         // Default font
@@ -1878,6 +2003,27 @@ void jegui_update(jegl_thread* thread_context)
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+    auto* viewport = ImGui::GetMainViewport();
+
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowViewport(viewport->ID);
+
+    ImGuiWindowFlags host_window_flags = 0;
+    host_window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking;
+    host_window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("Main DockSpace", NULL, host_window_flags);
+    ImGui::PopStyleVar(3);
+
+    ImGuiID dockspace_id = ImGui::GetID("DockSpace");
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::End();
+
     do
     {
         std::lock_guard g1(_key_state_record_mx);
@@ -1887,7 +2033,6 @@ void jegui_update(jegl_thread* thread_context)
             v.m_this_frame_down = jeecs::input::keydown(k);
         }
     } while (0);
-
 
     if (!_stop_work_flag)
     {

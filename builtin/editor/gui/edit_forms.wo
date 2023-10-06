@@ -17,12 +17,14 @@ namespace editor::gui
         let open_inspector = context->register_editor_form_controlor("检视面板")->unwarp;
         let open_viewport = context->register_editor_form_controlor("视口")->unwarp;
         let open_browser = context->register_editor_form_controlor("资源浏览器")->unwarp;
+        let open_logger = context->register_editor_form_controlor("日志查看器")->unwarp;
 
         context->fixed_launch_editor_form(edit_forms::show_worlds_list, (context, open_worlds_list));
         context->fixed_launch_editor_form(edit_forms::show_entities_list, (context, open_entities_list));
         context->fixed_launch_editor_form(edit_forms::show_inspector, (context, open_inspector));
         context->fixed_launch_editor_form(edit_forms::show_viewport, (context, open_viewport));
         context->fixed_launch_editor_form(show_browser, (context, open_browser));
+        context->fixed_launch_editor_form(show_logger, (context, open_logger));
 
         jeapi::gui::widget::register_click_file_callback(func(path){
             let p = filesys::parent(context->get_project->parse_path_normalize(path));
