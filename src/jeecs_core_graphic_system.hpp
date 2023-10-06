@@ -1029,7 +1029,8 @@ import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ZERO);
-CULL    (BACK);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
 
 VAO_STRUCT! vin 
 {
@@ -1080,7 +1081,8 @@ import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ZERO);
-CULL    (BACK);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
 
 VAO_STRUCT! vin 
 {
@@ -1961,9 +1963,13 @@ public func frag(_: v2f)
                                                 0.f,
                                                 0.f,
                                                 0.f);*/
-
+                                           
                                             if (block_in_layer->translation->world_position.z < lightarch.translation->world_position.z)
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 1.f, 1.f, 1.f, 1.f);
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 
+                                                    block_in_layer->block->shadow, 
+                                                    block_in_layer->block->shadow, 
+                                                    block_in_layer->block->shadow, 
+                                                    block_in_layer->block->shadow);
                                             else
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
 
