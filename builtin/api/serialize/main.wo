@@ -2,6 +2,8 @@
 // 负责提供序列化和反序列化实体、世界的功能
 
 import je;
+import je::towoo::component;
+import je::towoo::components;
 import builtin::api::gui::form::msg;
 import builtin::api::tool::varify;
 
