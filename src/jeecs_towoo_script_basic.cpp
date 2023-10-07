@@ -109,12 +109,14 @@ namespace jeecs
                     m_close_function = base_info->m_close_function;
                     m_dependences = base_info->m_works;
 
-                    wo_value v = wo_invoke_rsfunc(m_job_vm, m_create_function, 0);
+                    wo_push_pointer(m_job_vm, w.handle());
+                    wo_value v = wo_invoke_rsfunc(m_job_vm, m_create_function, 1);
                     if (v == nullptr)
                     {
-                        m_context = wo_push_empty(m_job_vm);
                         jeecs::debug::logerr("Failed to invoke 'create' function for system: '%s'.",
                             m_type->m_typename);
+                        wo_release_vm(m_job_vm);
+                        m_job_vm = nullptr;
                     }
                     else
                         m_context = wo_push_val(m_job_vm, v);
@@ -277,7 +279,20 @@ namespace jeecs
                     member = member->m_next_member;
                 }
             }
-            ToWooBaseComponent(const ToWooBaseComponent&) = delete;
+            ToWooBaseComponent(const ToWooBaseComponent& another)
+                :m_type(another.m_type)
+            {
+                auto* member = m_type->m_member_types;
+                while (member != nullptr)
+                {
+                    auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
+                    auto* other_member = (void*)((intptr_t)&another + member->m_member_offset);
+
+                    member->m_member_type->copy(this_member, other_member);
+
+                    member = member->m_next_member;
+                }
+            }
             ToWooBaseComponent(ToWooBaseComponent&& another)
                 :m_type(another.m_type)
             {
@@ -1165,7 +1180,7 @@ std::println(result);
             result += F"je::towoo::tid:<{t}>(),";
         result += "]\x29";
     }
-    result += F";\nfunc {job_func_name}(context: typeof(create()), e: je::entity";
+    result += F";\nfunc {job_func_name}(context: typeof(create(std::declval:<je::world>())), e: je::entity";
     for (let _, (argname, type, maynot) : arguments)
     {
         if (maynot)
@@ -1382,8 +1397,8 @@ WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args, size_t argc
 {
     wo_value q = wo_push_quat(vm,
         jeecs::math::quat::slerp(
-            wo_quat(args + 0), 
-            wo_quat(args + 1), 
+            wo_quat(args + 0),
+            wo_quat(args + 1),
             wo_float(args + 2))
     );
     return wo_ret_val(vm, q);

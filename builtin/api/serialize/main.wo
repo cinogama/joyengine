@@ -427,7 +427,12 @@ namespace jeapi
             }
             return tinfo;
         }
-        public func entity(w: je::world, mut entity_dat: dict<string, dynamic>, in_editor: bool)=> option<je::entity>
+
+        func _load_entity_or_prefab(
+            w: je::world, 
+            mut entity_dat: dict<string, dynamic>, 
+            in_editor: bool, 
+            f: (je::world, array<je::typeinfo>)=> je::entity)=> option<je::entity>
         {
             let prefab_path = entity_dat->get("prefab")->>\path = path: string;;
             match (prefab_path=>>\path = prefab_manager::load_prefab(path);)
@@ -476,8 +481,8 @@ namespace jeapi
                     }
                 ;
 
-            let entity = w->add_entity(
-                component_types_dat
+            let entity = f(
+                w, component_types_dat
                     ->> \tp = tp[0];
                     // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
                     ->  connect(in_editor && shaders_and_dat->>\r=r->iserr;->valor(false)
@@ -548,6 +553,22 @@ namespace jeapi
 
             return option::value(entity);
         }
+
+        public func entity(
+            w: je::world, 
+            entity_dat: dict<string, dynamic>, 
+            in_editor: bool)
+        {
+            return _load_entity_or_prefab(w, entity_dat, in_editor, je::world::add_entity);
+        }
+        public func prefab(
+            w: je::world, 
+            entity_dat: dict<string, dynamic>, 
+            in_editor: bool)
+        {
+            return _load_entity_or_prefab(w, entity_dat, in_editor, je::world::add_prefab);
+        }
+
         public func world(u: je::universe, dat: dict<string, dynamic>, in_editor: bool)=> je::world
         {
             let w = u->je::world::create;

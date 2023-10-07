@@ -405,8 +405,9 @@ namespace jeecs
     {
         enum class entity_stat : uint8_t
         {
-            UNAVAILABLE = 0,    // Entity is destroied or just not ready,
+            UNAVAILABLE = 0,// Entity is destroied or just not ready,
             READY,          // Entity is OK, and just work as normal.
+            PREFAB,         // Current entity is prefab, cannot be selected from arch-system and cannot 
         };
 
         struct meta
@@ -1084,6 +1085,35 @@ JE_API void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
     jeecs::typing::typeid_t* component_ids);
+
+/*
+je_ecs_world_create_prefab_with_components [基本接口]
+向指定世界中创建一个用于指定组件集合的预设体，预设体的行为类似实体但不会被选择器获取，
+也不能添加或者删除组件。
+    * 预设体被用于快速实例化对象
+请参见：
+    je_ecs_world_create_entity_with_components
+*/
+JE_API void je_ecs_world_create_prefab_with_components(
+    void* world,
+    jeecs::game_entity* out_entity,
+    jeecs::typing::typeid_t* component_ids); 
+
+/*
+je_ecs_world_create_entity_with_prefab [基本接口]
+向指定世界中创建一个用于指定组件集合的实体，该实体的组件及数据由指定的原件实体决定，
+    * 原件实体可以由 je_ecs_world_create_entity_with_components，
+        je_ecs_world_create_prefab_with_components，或
+        je_ecs_world_create_entity_with_prefab 创建
+    * 用于快速实例化对象
+请参见：
+    je_ecs_world_create_entity_with_components
+    je_ecs_world_create_prefab_with_components
+*/
+JE_API void je_ecs_world_create_entity_with_prefab(
+    void* world,
+    jeecs::game_entity* out_entity,
+    const jeecs::game_entity* prefab);
 
 /*
 je_ecs_world_destroy_entity [基本接口]
@@ -4284,6 +4314,29 @@ namespace jeecs
 
             return gentity;
         }
+        inline game_entity add_entity(const game_entity& prefab)
+        {
+            game_entity gentity;
+            je_ecs_world_create_entity_with_prefab(
+                handle(), &gentity, &prefab);
+
+            return gentity;
+        }
+        template<typename FirstCompT, typename ... CompTs>
+        inline game_entity add_prefab()
+        {
+            static typing::typeid_t component_ids[] = {
+                typing::type_info::id<FirstCompT>(typeid(FirstCompT).name()),
+                typing::type_info::id<CompTs>(typeid(CompTs).name())...,
+                typing::INVALID_TYPE_ID
+            };
+            game_entity gentity;
+            je_ecs_world_create_prefab_with_components(
+                handle(), &gentity, component_ids);
+
+            return gentity;
+        }
+
 
         inline jeecs::game_system* add_system(const jeecs::typing::type_info* type)
         {
@@ -4333,6 +4386,17 @@ namespace jeecs
 
             game_entity gentity;
             je_ecs_world_create_entity_with_components(
+                handle(), &gentity, components.data());
+
+            return gentity;
+        }
+        // This function only used for editor.
+        inline game_entity _add_prefab(std::vector<typing::typeid_t> components)
+        {
+            components.push_back(typing::INVALID_TYPE_ID);
+
+            game_entity gentity;
+            je_ecs_world_create_prefab_with_components(
                 handle(), &gentity, components.data());
 
             return gentity;
@@ -7493,6 +7557,13 @@ namespace jeecs
             float       record_density = 0.f;
             float       record_friction = 0.f;
             float       record_restitution = 0.f;
+
+            Rigidbody() = default;
+            Rigidbody(Rigidbody&&) = default;
+            Rigidbody(const Rigidbody& other)
+            {
+                // Do nothing
+            }
         };
         struct Mass
         {
@@ -8054,9 +8125,10 @@ namespace jeecs
                 _vm_context = woolang._vm_context;
                 woolang._vm_instance = nullptr;
             }
-            Woolang(const Woolang&) = delete;
-            Woolang& operator = (const Woolang&) = delete;
-            Woolang& operator = (Woolang&& woolang) = delete;
+            Woolang(const Woolang& woolang)
+            {
+                path = woolang.path;
+            }
             ~Woolang()
             {
                 if (_vm_instance != nullptr)

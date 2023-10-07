@@ -430,7 +430,7 @@ using je::towoo;
 using Context = struct{
 };
 
-extern func create()=> Context
+extern func create(_: je::world)=> Context
 {
     return Context{
     };

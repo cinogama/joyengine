@@ -463,6 +463,33 @@ WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value arg
         nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
 }
 
+WO_API wo_api wojeapi_add_entity_to_world_with_prefab(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world gworld = wo_pointer(args + 0);
+    jeecs::game_entity* prefab_entity = (jeecs::game_entity*)wo_pointer(args + 1);
+
+    return wo_ret_gchandle(vm, new jeecs::game_entity(gworld.add_entity(*prefab_entity)),
+        nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
+}
+
+WO_API wo_api wojeapi_add_prefab_to_world_with_components(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world gworld = wo_pointer(args + 0);
+    wo_value components_list = args + 1;
+
+    std::vector<jeecs::typing::typeid_t> components;
+
+    wo_value elem = wo_push_empty(vm);
+    for (wo_integer_t i = 0; i < wo_lengthof(components_list); ++i)
+    {
+        wo_arr_get(elem, components_list, i);
+        components.push_back(((const jeecs::typing::type_info*)wo_pointer(elem))->m_id);
+    }
+
+    return wo_ret_gchandle(vm, new jeecs::game_entity(gworld._add_prefab(components)),
+        nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
+}
+
 WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_t argc)
 {
     wo_value out_arr = wo_push_arr(vm, 0);
@@ -2729,6 +2756,12 @@ R"(
 
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
         public func add_entity(self: world, components: array<typeinfo>)=> entity;
+
+        extern("libjoyecs", "wojeapi_add_entity_to_world_with_prefab")
+        public func instance(self: world, prefab: entity)=> entity;
+
+        extern("libjoyecs", "wojeapi_add_prefab_to_world_with_components")
+        public func add_prefab(self: world, components: array<typeinfo>)=> entity;
 
         extern("libjoyecs", "wojeapi_remove_system_from_world")
         public func remove_system(self: world, sysinfo: typeinfo)=> void;
