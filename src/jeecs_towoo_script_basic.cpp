@@ -1220,6 +1220,21 @@ jeecs::math::vec4 wo_vec4(wo_value val)
 
     return result;
 }
+jeecs::math::quat wo_quat(wo_value val)
+{
+    jeecs::math::quat result;
+    _wo_value tmp;
+    wo_struct_get(&tmp, val, 0);
+    result.x = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 1);
+    result.y = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 2);
+    result.z = wo_float(&tmp);
+    wo_struct_get(&tmp, val, 3);
+    result.w = wo_float(&tmp);
+
+    return result;
+}
 
 wo_value wo_push_vec2(wo_vm vm, const jeecs::math::vec2& v)
 {
@@ -1257,7 +1272,20 @@ wo_value wo_push_vec4(wo_vm vm, const jeecs::math::vec4& v)
     wo_struct_set(result, 3, &tmp);
     return result;
 }
-
+wo_value wo_push_quat(wo_vm vm, const jeecs::math::quat& v)
+{
+    wo_value result = wo_push_struct(vm, 4);
+    _wo_value tmp;
+    wo_set_float(&tmp, v.x);
+    wo_struct_set(result, 0, &tmp);
+    wo_set_float(&tmp, v.y);
+    wo_struct_set(result, 1, &tmp);
+    wo_set_float(&tmp, v.z);
+    wo_struct_set(result, 2, &tmp);
+    wo_set_float(&tmp, v.w);
+    wo_struct_set(result, 3, &tmp);
+    return result;
+}
 template<typename T>
 T& wo_component(wo_value val)
 {
@@ -1281,7 +1309,7 @@ T* wo_option_component(wo_value val)
 
 WO_API wo_api wojeapi_towoo_ray_create(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_gchandle(vm, 
+    return wo_ret_gchandle(vm,
         new jeecs::math::ray(wo_vec3(args + 0), wo_vec3(args + 1)),
         nullptr,
         [](void* p) {delete(jeecs::math::ray*)p; });
@@ -1294,7 +1322,7 @@ WO_API wo_api wojeapi_towoo_ray_from_camera(wo_vm vm, wo_value args, size_t argc
             wo_component<jeecs::Camera::Projection>(args + 1),
             wo_vec2(args + 2),
             wo_bool(args + 3)
-            ),
+        ),
         nullptr,
         [](void* p) {delete(jeecs::math::ray*)p; });
 }
@@ -1325,16 +1353,112 @@ WO_API wo_api wojeapi_towoo_math_sqrt(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_real(vm, sqrt(wo_real(args + 0)));
 }
+WO_API wo_api wojeapi_towoo_math_sin(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, sin(wo_real(args + 0)));
+}
+WO_API wo_api wojeapi_towoo_math_cos(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, cos(wo_real(args + 0)));
+}
+WO_API wo_api wojeapi_towoo_math_tan(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, tan(wo_real(args + 0)));
+}
+WO_API wo_api wojeapi_towoo_math_asin(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, asin(wo_real(args + 0)));
+}
+WO_API wo_api wojeapi_towoo_math_acos(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, acos(wo_real(args + 0)));
+}
+WO_API wo_api wojeapi_towoo_math_atan(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, atan(wo_real(args + 0)));
+}
+WO_API wo_api wojeapi_towoo_math_atan2(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_real(vm, atan2(wo_real(args + 0), wo_real(args + 1)));
+}
+WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value q = wo_push_quat(vm,
+        jeecs::math::quat::slerp(
+            wo_quat(args + 0), 
+            wo_quat(args + 1), 
+            wo_float(args + 2))
+    );
+    return wo_ret_val(vm, q);
+}
 
 const char* jeecs_towoo_path = "je/towoo.wo";
 const char* jeecs_towoo_src = R"(// (C)Cinogama. 
 import je::towoo::types;
 import je::towoo::components;
 
-namespace je::math
+namespace je::mathf
 {
     extern("libjoyecs", "wojeapi_towoo_math_sqrt")
         public func sqrt(v: real)=> real;
+
+    extern("libjoyecs", "wojeapi_towoo_math_sin")
+        public func sin(v: real)=> real;
+
+    extern("libjoyecs", "wojeapi_towoo_math_cos")
+        public func cos(v: real)=> real;
+
+    extern("libjoyecs", "wojeapi_towoo_math_tan")
+        public func tan(v: real)=> real;
+
+    extern("libjoyecs", "wojeapi_towoo_math_asin")
+        public func asin(v: real)=> real;
+
+    extern("libjoyecs", "wojeapi_towoo_math_acos")
+        public func acos(v: real)=> real;
+
+    extern("libjoyecs", "wojeapi_towoo_math_atan")
+        public func atan(v: real)=> real;
+
+    extern("libjoyecs", "wojeapi_towoo_math_atan2")
+        public func atan2(y: real, x: real)=> real;
+
+    public func abs<T>(a: T)
+        where a is int || a is real;
+    {
+        if (a < 0: T)
+            return -a;
+        return a;
+    }
+
+    public func sign(a: real)
+    {
+        if (a < 0.)
+            return -1.;
+        else if(a > 0.)
+            return 1.;
+        return 0.;
+    }
+
+    public func lerp<T>(a: T, b: T, deg: real)
+        where !((a * deg) is pending);
+    {
+        return a * (1. - deg) + b * deg;
+    }
+
+    public func clamp<T>(a: T, min: T, max: T)
+        where !((a < a) is pending);
+    {
+        if (a < min)
+            return min;
+        if (max < a)
+            return max;
+        return a;
+    }
+
+    public let PI = 3.14159265359;
+    public let RAD2DEG = 180. / PI;
+    public let DEG2RAD = PI / 180.;
 }
 namespace vec2
 {
@@ -1365,7 +1489,7 @@ namespace vec2
     public func length(self: vec2)
     {
         let (x, y) = self;
-        return je::math::sqrt(x*x + y*y);
+        return je::mathf::sqrt(x*x + y*y);
     }
     public func unit(self: vec2)
     {
@@ -1410,7 +1534,7 @@ namespace vec3
     public func length(self: vec3)
     {
         let (x, y, z) = self;
-        return je::math::sqrt(x*x + y*y + z*z);
+        return je::mathf::sqrt(x*x + y*y + z*z);
     }
     public func unit(self: vec3)
     {
@@ -1463,7 +1587,7 @@ namespace vec4
     public func length(self: vec4)
     {
         let (x, y, z, w) = self;
-        return je::math::sqrt(x*x + y*y + z*z + w*w);
+        return je::mathf::sqrt(x*x + y*y + z*z + w*w);
     }
     public func unit(self: vec4)
     {
@@ -1480,6 +1604,99 @@ namespace vec4
 }
 namespace quat
 {
+    public func euler(yaw: real, pitch: real, roll: real)
+    {
+        let yangle = 0.5 * yaw * je::mathf::DEG2RAD;
+        let pangle = 0.5 * pitch * je::mathf::DEG2RAD;
+        let rangle = 0.5 * roll * je::mathf::DEG2RAD;
+
+        let ysin = je::mathf::sin(yangle),
+            ycos = je::mathf::cos(yangle),
+            psin = je::mathf::sin(pangle),
+            pcos = je::mathf::cos(pangle),
+            rsin = je::mathf::sin(rangle),
+            rcos = je::mathf::cos(rangle);
+
+        let y = rcos * psin * ycos + rsin * pcos * ysin,
+            x = rcos * pcos * ysin - rsin * psin * ycos,
+            z = rsin * pcos * ycos - rcos * psin * ysin,
+            w = rcos * pcos * ycos + rsin * psin * ysin;
+        let mag = x*x + y*y + z*z + w*w;
+        return (x/mag, y/mag, z/mag, w/mag): quat;
+    }
+    public func axis(a: vec3, ang: real)
+    {
+        let sv = je::mathf::sin(ang * 0.5 * je::mathf::DEG2RAD);
+        let cv = je::mathf::cos(ang * 0.5 * je::mathf::DEG2RAD);
+        return (a[0] * sv, a[1] * sv, a[2] * sv, cv): quat;
+    }
+    public func rotation(a: vec3, b: vec3)
+    {
+        let axi = b->cross(a);
+        let angle = je::mathf::RAD2DEG * je::mathf::acos(b->dot(a) / (b->length * a->length));
+        return axis(axi->unit, angle);
+    }
+    public func delta_angle(a: quat, b: quat)
+    {
+        let cos_theta = a->dot(b);
+        if (cos_theta > 0.)
+            return 2. * je::mathf::RAD2DEG * je::mathf::acos(cos_theta);
+        else
+            return -2. * je::mathf::RAD2DEG * je::mathf::acos(-cos_theta);
+    }
+    public func dot(self: quat, b: quat)
+    {
+        return self[0] * b[0] + self[1] * b[1] + self[2] * b[2] + self[3] * b[3];
+    }
+    public func inverse(self: quat)
+    {
+        return (-self[0], -self[1], -self[2], self[3]): quat;
+    }
+    public func euler_angle(self: quat)
+    {
+        let (x, y, z, w) = self;
+        let yaw = je::mathf::atan2(2. * (w * x + z * y), 1. - 2. * (x * x + y * y));
+        let pitch = je::mathf::asin(je::mathf::clamp(2. * (w * y - x * z), -1., 1.));
+        let roll = je::mathf::atan2(2. * (w * z + x * y), 1. - 2. * (z * z + y * y));
+        return (je::mathf::RAD2DEG * yaw, je::mathf::RAD2DEG * pitch, je::mathf::RAD2DEG * roll): vec3;
+    }
+    public func lerp(a: quat, b: quat, t: real)
+    {
+        return (
+            je::mathf::lerp(a[0], b[0], t),
+            je::mathf::lerp(a[1], b[1], t),
+            je::mathf::lerp(a[2], b[2], t),
+            je::mathf::lerp(a[3], b[3], t),
+        ): quat;
+    }
+    
+    extern("libjoyecs", "wojeapi_towoo_math_quat_slerp")
+    public func slerp(a: quat, b: quat, t: real)=> quat;
+
+    public func operator * (self: quat, b)
+        where b is vec3 || b is quat;
+    {
+        if (b is vec3)
+        {
+            let w = self[3];
+            let u = (self[0], self[1], self[2]): vec3;
+            return u * (2. * u->dot(b))
+                + b * (w * w - u->dot(u))
+                + u->cross(b) * (2. * w);
+        }
+        else
+        {
+            let (x1, y1, z1, w1) = self;
+            let (x2, y2, z2, w2) = b;
+            
+            let v1 = (x, y, z): vec3;
+            let v2 = (x1, y1, z1): vec3;
+
+            let w3 = w1 * w2 - v1->dot(v2);
+            let v3 = v1->cross(v2) + v2 * w1 + v1 * w2;
+            return (v3[0], v3[1], v3[2], w3): quat;
+        }
+    }
 }
 namespace je::towoo
 {

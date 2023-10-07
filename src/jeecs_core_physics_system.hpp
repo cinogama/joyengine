@@ -127,7 +127,7 @@ namespace jeecs
                     auto collider_size = entity_scaled_size * boxcollider->scale;
 
                     b2PolygonShape box_shape;
-                    box_shape.SetAsBox(collider_size.x / 2.f, collider_size.y / 2.f);
+                    box_shape.SetAsBox(abs(collider_size.x / 2.f), abs(collider_size.y / 2.f));
 
                     b2FixtureDef box_shape_fixture_define;
                     box_shape_fixture_define.shape = &box_shape;
@@ -150,7 +150,7 @@ namespace jeecs
                     auto collider_size = entity_scaled_size * circlecollider->scale;
 
                     b2CircleShape circle_shape;
-                    circle_shape.m_radius = std::max(collider_size.x / 2.f, collider_size.y / 2.f);
+                    circle_shape.m_radius = std::max(abs(collider_size.x / 2.f), abs(collider_size.y / 2.f));
 
                     b2FixtureDef circle_shape_fixture_define;
                     circle_shape_fixture_define.shape = &circle_shape;

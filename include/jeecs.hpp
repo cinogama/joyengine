@@ -5025,7 +5025,10 @@ namespace jeecs
 
     namespace math
     {
-        constexpr static float RAD2DEG = 57.29578f;
+        constexpr static float PI = 3.14159265f;
+        constexpr static float RAD2DEG = 180.f / PI;
+        constexpr static float DEG2RAD = PI / 180.f;
+        constexpr static float EPSILON = FLT_EPSILON;
 
         template<typename T>
         static T clamp(T src, T min, T max)
@@ -5810,20 +5813,16 @@ namespace jeecs
             }
             inline void set_euler_angle(float yaw, float pitch, float roll) noexcept
             {
-                yaw = yaw / RAD2DEG;
-                pitch = pitch / RAD2DEG;
-                roll = roll / RAD2DEG;
-
                 float angle;
                 float sinRoll, sinPitch, sinYaw, cosRoll, cosPitch, cosYaw;
 
-                angle = yaw * 0.5f;
+                angle = yaw * DEG2RAD * 0.5f;
                 sinYaw = sin(angle);
                 cosYaw = cos(angle);
-                angle = pitch * 0.5f;
+                angle = pitch * DEG2RAD * 0.5f;
                 sinPitch = sin(angle);
                 cosPitch = cos(angle);
-                angle = roll * 0.5f;
+                angle = roll * DEG2RAD * 0.5f;
                 sinRoll = sin(angle);
                 cosRoll = cos(angle);
 
@@ -5861,17 +5860,18 @@ namespace jeecs
             }
             static inline quat axis_angle(const vec3& a, float arg) noexcept
             {
-                auto sv = sin(arg / 2.0f / RAD2DEG);
-                auto cv = cos(arg / 2.0f / RAD2DEG);
+                auto sv = sin(arg * 0.5f * DEG2RAD);
+                auto cv = cos(arg * 0.5f * DEG2RAD);
                 return quat(a.x * sv, a.y * sv, a.z * sv, cv);
             }
 
             static inline quat lerp(const quat& a, const quat& b, float t)
             {
-                return quat((1 - t) * a.x + t * b.x,
-                    (1 - t) * a.y + t * b.y,
-                    (1 - t) * a.z + t * b.z,
-                    (1 - t) * a.w + t * b.w);
+                return quat(
+                    math::lerp(a.x, b.x, t),
+                    math::lerp(a.y, b.y, t),
+                    math::lerp(a.z, b.z, t),
+                    math::lerp(a.w, b.w, t));
             }
             static inline quat slerp(const quat& a, const quat& b, float t)
             {
@@ -5886,7 +5886,7 @@ namespace jeecs
                 }
                 else sign = 1.f;
                 float c1, c2;
-                if (cos_theta > 1.f - FLT_EPSILON)
+                if (cos_theta > 1.f - EPSILON)
                 {
                     // if q2 is (within precision limits) the same as q1,
                     // just linear interpolate between A and B.
@@ -5913,13 +5913,10 @@ namespace jeecs
             static inline float delta_angle(const quat& lhs, const quat& rhs)
             {
                 float cos_theta = lhs.dot(rhs);
-                // if B is on opposite hemisphere from A, use -B instead
-                if (cos_theta < 0.f)
-                {
-                    cos_theta = -cos_theta;
-                }
-                float theta = acos(cos_theta);
-                return 2 * RAD2DEG * theta;
+                if (cos_theta > 0.f)
+                    return 2.f * RAD2DEG * acos(cos_theta);
+                else
+                    return -2.f * RAD2DEG * acos(-cos_theta);
             }
 
             static inline quat rotation(const vec3& a, const vec3& b)noexcept
