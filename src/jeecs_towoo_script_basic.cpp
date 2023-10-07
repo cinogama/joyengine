@@ -523,7 +523,6 @@ namespace je::entity::towoo
     if (!wo_virtual_source("je/towoo/components.wo", woolang_component_type_decl.c_str(), true))
         jeecs::debug::logfatal("Unable to regenerate 'je/towoo/components.wo' please check.");
 }
-
 void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo)
 {
     if (tinfo == nullptr)
@@ -668,7 +667,6 @@ void jetowoo_finish()
     std::lock_guard g1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
     jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.clear();
 }
-
 WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t argc)
 {
     // wojeapi_towoo_register_system_job(tinfo: je::typeinfo, function, requirements: array<(type, gid, typeinfo)>, arg_comp_count: int)
@@ -726,7 +724,6 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t 
 
     return wo_ret_void(vm);
 }
-
 WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_t argc)
 {
     // wojeapi_towoo_register_component(name, [(name, typeinfo)])
