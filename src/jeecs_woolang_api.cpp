@@ -2276,16 +2276,16 @@ namespace je
 {
     namespace towoo
     {
-        extern("libjoyecs", "wojeapi_towoo_update_api")
+        extern("libjoyecs", "wojeapi_towoo_update_api", slow)
         public func update_api()=> void;
 
-        extern("libjoyecs", "wojeapi_towoo_register_system")
+        extern("libjoyecs", "wojeapi_towoo_register_system", slow)
         public func update_system(name: string, path: string)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_towoo_unregister_system")
         public func unregister_system(t: typeinfo)=> void;
 
-        extern("libjoyecs", "wojeapi_towoo_update_component")
+        extern("libjoyecs", "wojeapi_towoo_update_component", slow)
         public func update_component(name: string, path: string)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_towoo_unregister_component")
