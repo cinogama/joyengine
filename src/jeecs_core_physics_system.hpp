@@ -68,6 +68,7 @@ namespace jeecs
                 && existing_alive_body_finding_result == m_all_alive_bodys.end())
             {
                 rigidbody.rigidbody_just_created = true;
+                rigidbody.native_rigidbody = nullptr;
             }
             else
             {
