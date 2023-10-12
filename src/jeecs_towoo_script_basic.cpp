@@ -1007,7 +1007,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     }
 
     let mut result = F"do je::towoo::system::register_work_function({job_func_name});";
-    result += F"func {job_func_name}(context: typeof(create()))\{do context;";
+    result += F"func {job_func_name}(context: typeof(create(std::declval:<je::world>())))\{do context;";
 
 std::println(result);
     lexer->lex(result);
