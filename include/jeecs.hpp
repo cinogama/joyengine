@@ -763,8 +763,7 @@ je_towoo_update_api [基本接口]
 */
 JE_API void je_towoo_update_api();
 
-JE_API bool je_towoo_register_system(
-    const jeecs::typing::type_info** out_system_tid,
+JE_API const jeecs::typing::type_info* je_towoo_register_system(
     const char* system_name,
     const char* script_path);
 
@@ -7314,47 +7313,41 @@ namespace jeecs
 
             // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
             // 其中位置是ui元素中心位置，而非坐标原点位置。
-            void calc_absolute_ui_layout(size_t w, size_t h, math::vec2* out_offset, math::vec2* out_size) const
+            math::vec4 get_layout(float w, float h) const
             {
-                math::vec2 abssize = size;
-                math::vec2 absoffset = global_offset;
+                math::vec2 rel2abssize = scale * math::vec2(w, h);
+                math::vec2 rel2absoffset = global_location * math::vec2(w, h);
 
-                if (w != 0 && h != 0)
+                if (keep_vertical_ratio)
                 {
-                    math::vec2 rel2abssize = scale * math::vec2((float)w, (float)h);
-                    math::vec2 rel2absoffset = global_location * math::vec2((float)w, (float)h);
-
-                    if (keep_vertical_ratio)
-                    {
-                        rel2abssize.x *= (float)h / (float)w;
-                        rel2absoffset.x *= (float)h / (float)w;
-                    }
-                    else
-                    {
-                        rel2abssize.y *= (float)w / (float)h;
-                        rel2absoffset.y *= (float)w / (float)h;
-                    }
-
-                    abssize += rel2abssize;
-                    absoffset += rel2absoffset;
+                    rel2abssize.x *= h / w;
+                    rel2absoffset.x *= h / w;
                 }
+                else
+                {
+                    rel2abssize.y *= w / h;
+                    rel2absoffset.y *= w / h;
+                }
+
+                math::vec2 abssize = size + rel2abssize;
+                math::vec2 absoffset = global_offset + rel2absoffset;
+
                 // 消除中心偏差
                 if (left_origin)
                     absoffset.x += abssize.x / 2.0f;
                 else if (right_origin)
-                    absoffset.x += (float)w - abssize.x / 2.0f;
+                    absoffset.x += w - abssize.x / 2.0f;
                 else
-                    absoffset.x += (float)w / 2.0f;
+                    absoffset.x += w / 2.0f;
 
                 if (buttom_origin)
                     absoffset.y += abssize.y / 2.0f;
                 else if (top_origin)
-                    absoffset.y += (float)h - abssize.y / 2.0f;
+                    absoffset.y += h - abssize.y / 2.0f;
                 else
-                    absoffset.y += (float)h / 2.0f;
+                    absoffset.y += h / 2.0f;
 
-                *out_size = abssize;
-                *out_offset = absoffset;
+                return math::vec4(absoffset.x, absoffset.y, abssize.x, abssize.y);
             }
 
             static void JERefRegsiter()
@@ -8166,7 +8159,7 @@ namespace jeecs
             float volume = 1.0f;
 
             math::vec3 last_position = {};
-            
+
             Source() = default;
             Source(const Source& another)
                 : pitch(another.pitch)

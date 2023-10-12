@@ -542,8 +542,8 @@ public let frag =
                         * _using_tiling = &default_tiling,
                         * _using_offset = &default_offset;
 
-                    math::vec2 uisize, uioffset;
-                    rendentity.ui_origin->calc_absolute_ui_layout(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT, &uioffset, &uisize);
+                    auto uilayout = rendentity.ui_origin->get_layout((float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT);
+                    math::vec2 uioffset = math::vec2(uilayout.x, uilayout.y), uisize = math::vec2(uilayout.z, uilayout.w);
                     uioffset.x -= (float)RENDAIMBUFFER_WIDTH / 2.0f;
                     uioffset.y -= (float)RENDAIMBUFFER_HEIGHT / 2.0f;
 

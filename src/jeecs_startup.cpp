@@ -177,6 +177,7 @@ void je_finish()
     jetowoo_finish();
 
     je_log_shutdown();
+
     wo_finish([](void*) 
         {
             std::lock_guard g1(_free_module_list_mx);
@@ -190,7 +191,7 @@ void je_finish()
 
 const char* je_build_version()
 {
-    return "JoyEngine 4.1.10 " __TIMESTAMP__;
+    return "JoyEngine 4.1.11 " __TIMESTAMP__;
 }
 
 const char* je_build_commit()

@@ -257,7 +257,7 @@ namespace editor::gui::edit_forms
 
                                 je::towoo::update_api();
 
-                                // 在此处加载ToWoo脚本
+                                // 在此处加载ToWoo系统
                                 $LOAD_TOWOO_SCRIPTS$
 
                                 // 在此设置分辨率
@@ -280,14 +280,15 @@ namespace editor::gui::edit_forms
 
                                 RUNTIME_UNIVERSE->wait();
 
-                                for (let _, libhandle : LOADED_MODULE_HANDLES)
-                                    je::delay_unload_module(libhandle);
-                                
                                 for (let _, tinfo: LOADED_TOWOO_SYSTEM_TYPES)
                                     je::towoo::unregister_system(tinfo);
 
                                 for (let _, tinfo: LOADED_TOWOO_COMPONENT_TYPES)
                                     je::towoo::unregister_component(tinfo);
+
+                                for (let _, libhandle : LOADED_MODULE_HANDLES)
+                                    je::delay_unload_module(libhandle);
+                                
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码

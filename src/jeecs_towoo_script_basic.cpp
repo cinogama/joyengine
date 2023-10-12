@@ -529,8 +529,7 @@ void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo)
         je_typing_unregister(tinfo);
     }
 }
-bool je_towoo_register_system(
-    const jeecs::typing::type_info** out_system_tinfo,
+const jeecs::typing::type_info* je_towoo_register_system(
     const char* system_name,
     const char* script_path)
 {
@@ -632,7 +631,7 @@ bool je_towoo_register_system(
                         ug1.lock();
                         sysinfo_ptr->m_is_good = true;
                     }
-                    return sysinfo_ptr->m_is_good;
+                    return towoo_system_tinfo;
                 }
             }
         }
@@ -648,7 +647,7 @@ bool je_towoo_register_system(
         jeecs::debug::logerr("Failed to register: '%s' unable to open file '%s'.",
             system_name, script_path);
     }
-    return false;
+    return nullptr;
 }
 
 void jetowoo_finish()
@@ -1532,6 +1531,22 @@ WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args, siz
         [](void* p) {delete (jeecs::basic::resource<jeecs::audio::source>*)p; });
 }
 
+WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* origin = (jeecs::UserInterface::Origin*)wo_pointer(c);
+
+    auto r = wo_vec2(args + 1);
+    auto range = origin->get_layout(r.x, r.y);
+
+    auto result = wo_push_struct(vm, 2);
+    wo_struct_set(result, 0, wo_push_vec2(vm, jeecs::math::vec2(range.x, range.y)));
+    wo_struct_set(result, 1, wo_push_vec2(vm, jeecs::math::vec2(range.z, range.w)));
+
+    return wo_ret_val(vm, result);
+}
+
 const char* jeecs_towoo_path = "je/towoo.wo";
 const char* jeecs_towoo_src = R"(// (C)Cinogama. 
 import je::towoo::types;
@@ -1893,6 +1908,14 @@ namespace Transform
 
         extern("libjoyecs", "wojeapi_towoo_transform_translation_global_rot")
             public func get_global_rot(self: Translation)=> quat;
+    }
+}
+namespace UserInterface
+{
+    namespace Origin
+    {
+        extern("libjoyecs", "wojeapi_towoo_userinterface_origin_layout")
+            public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2);
     }
 }
 namespace Renderer

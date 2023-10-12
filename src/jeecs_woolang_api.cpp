@@ -1867,8 +1867,9 @@ WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args, size_
 
 WO_API wo_api wojeapi_towoo_register_system(wo_vm vm, wo_value args, size_t argc)
 {
-    const jeecs::typing::type_info* result;
-    if (je_towoo_register_system(&result, wo_string(args + 0), wo_string(args + 1)))
+    const jeecs::typing::type_info* result = 
+        je_towoo_register_system(wo_string(args + 0), wo_string(args + 1));
+    if (result != nullptr)
         return wo_ret_option_pointer(vm, (void*)result);
 
     return wo_ret_option_none(vm);
