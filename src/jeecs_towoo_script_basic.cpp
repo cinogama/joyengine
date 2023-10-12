@@ -439,32 +439,6 @@ namespace je::towoo
 import je;
 import je::towoo::types;
 
-namespace je::entity::towoo
-{
-    extern("libjoyecs", "wojeapi_towoo_add_component")
-        private func _add_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
-    extern("libjoyecs", "wojeapi_towoo_get_component")
-        private func _get_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
-    extern("libjoyecs", "wojeapi_towoo_remove_component")
-        private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
-
-    public func add_component<T>(self: entity)=> option<T>
-        where typeof(std::declval:<T>())::id is je::typeinfo;
-    {
-        return _add_component:<T>(self, typeof(std::declval:<T>())::id);
-    }
-    public func get_component<T>(self: entity)=> option<T>
-        where typeof(std::declval:<T>())::id is je::typeinfo;
-    {
-        return _get_component:<T>(self, typeof(std::declval:<T>())::id);
-    }
-    public func remove_component<T>(self: entity)=> void
-        where typeof(std::declval:<T>())::id is je::typeinfo;
-    {
-        _remove_component:<T>(self, typeof(std::declval:<T>())::id);
-    }
-}
-
 )";
     for (auto* typeinfo : all_registed_types)
     {
@@ -1404,10 +1378,190 @@ WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args, size_t argc
     return wo_ret_val(vm, q);
 }
 
+WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* textures = (jeecs::Renderer::Textures*)wo_pointer(c);
+    size_t pass = (size_t)wo_int(args + 1);
+    auto* tex = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2);
+
+    textures->bind_texture(pass, *tex);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* textures = (jeecs::Renderer::Textures*)wo_pointer(c);
+    size_t pass = (size_t)wo_int(args + 1);
+
+    auto tex = textures->get_texture(pass);
+
+    if (tex != nullptr)
+    {
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::texture>(tex),
+            nullptr,
+            [](void* p)
+            {
+                delete (jeecs::basic::resource<jeecs::graphic::texture>*)p;
+            });
+    }
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* shaders = (jeecs::Renderer::Shaders*)wo_pointer(c);
+    const char* name = wo_string(args + 1);
+    wo_value val = args + 2;
+
+    auto valtype = wo_valuetype(val);
+    switch (valtype)
+    {
+    case WO_INTEGER_TYPE:
+        shaders->set_uniform(name, (int)wo_int(val)); break;
+    case WO_REAL_TYPE:
+        shaders->set_uniform(name, wo_float(val)); break;
+    case WO_STRUCT_TYPE:
+    {
+        wo_value v = wo_push_empty(vm);
+        switch (wo_lengthof(val))
+        {
+        case 2:
+        {
+            jeecs::math::vec2 v2;
+            wo_struct_get(v, val, 0);
+            v2.x = wo_float(v);
+            wo_struct_get(v, val, 1);
+            v2.y = wo_float(v);
+            shaders->set_uniform(name, v2);
+            break;
+        }
+        case 3:
+        {
+            jeecs::math::vec3 v3;
+            wo_struct_get(v, val, 0);
+            v3.x = wo_float(v);
+            wo_struct_get(v, val, 1);
+            v3.y = wo_float(v);
+            wo_struct_get(v, val, 2);
+            v3.z = wo_float(v);
+            shaders->set_uniform(name, v3);
+            break;
+        }
+        case 4:
+        {
+            jeecs::math::vec4 v4;
+            wo_struct_get(v, val, 0);
+            v4.x = wo_float(v);
+            wo_struct_get(v, val, 1);
+            v4.y = wo_float(v);
+            wo_struct_get(v, val, 2);
+            v4.z = wo_float(v);
+            wo_struct_get(v, val, 3);
+            v4.w = wo_float(v);
+            shaders->set_uniform(name, v4);
+            break;
+        }
+        default:
+            return wo_ret_panic(vm, "Unknown value type when set_uniform.");
+        }
+        break;
+    }
+    default:
+        return wo_ret_panic(vm, "Unknown value type when set_uniform.");
+    }
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* trans = (jeecs::Transform::Translation*)wo_pointer(c);
+
+    return wo_ret_val(vm, wo_push_vec3(vm, trans->world_position));
+}
+WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* trans = (jeecs::Transform::Translation*)wo_pointer(c);
+
+    return wo_ret_val(vm, wo_push_quat(vm, trans->world_rotation));
+}
+
+WO_API wo_api wojeapi_towoo_animation2D_frameanimation_active_animation(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* anim = (jeecs::Animation2D::FrameAnimation*)wo_pointer(c);
+
+    anim->animations.active_action(
+        (size_t)wo_int(args + 1), wo_string(args + 2), wo_bool(args + 3));
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* playing = (jeecs::Audio::Playing*)wo_pointer(c);
+
+    auto* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args + 1);
+    playing->set_buffer(*buf);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* playing = (jeecs::Audio::Source*)wo_pointer(c);
+
+    return wo_ret_gchandle(vm,
+        new jeecs::basic::resource<jeecs::audio::source>(playing->source),
+        nullptr,
+        [](void* p) {delete (jeecs::basic::resource<jeecs::audio::source>*)p; });
+}
+
 const char* jeecs_towoo_path = "je/towoo.wo";
 const char* jeecs_towoo_src = R"(// (C)Cinogama. 
 import je::towoo::types;
 import je::towoo::components;
+
+namespace je::entity::towoo
+{
+    extern("libjoyecs", "wojeapi_towoo_add_component")
+        private func _add_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
+    extern("libjoyecs", "wojeapi_towoo_get_component")
+        private func _get_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
+    extern("libjoyecs", "wojeapi_towoo_remove_component")
+        private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
+
+    public func add_component<T>(self: entity)=> option<T>
+        where typeof(std::declval:<T>())::id is je::typeinfo;
+    {
+        return _add_component:<T>(self, typeof(std::declval:<T>())::id);
+    }
+    public func get_component<T>(self: entity)=> option<T>
+        where typeof(std::declval:<T>())::id is je::typeinfo;
+    {
+        return _get_component:<T>(self, typeof(std::declval:<T>())::id);
+    }
+    public func remove_component<T>(self: entity)=> void
+        where typeof(std::declval:<T>())::id is je::typeinfo;
+    {
+        _remove_component:<T>(self, typeof(std::declval:<T>())::id);
+    }
+}
 
 namespace je::mathf
 {
@@ -1728,6 +1882,59 @@ namespace je::towoo
 
         extern("libjoyecs", "wojeapi_towoo_ray_direction")
         public func direction(self: ray)=> vec3;
+    }
+}
+namespace Transform
+{
+    namespace Translation
+    {
+        extern("libjoyecs", "wojeapi_towoo_transform_translation_global_pos")
+            public func get_global_pos(self: Translation)=> vec3;
+
+        extern("libjoyecs", "wojeapi_towoo_transform_translation_global_rot")
+            public func get_global_rot(self: Translation)=> quat;
+    }
+}
+namespace Renderer
+{
+    namespace Textures
+    {
+        extern("libjoyecs", "wojeapi_towoo_renderer_textures_bind_texture")
+            public func bind_texture(self: Textures, pass: int, text: je::graphic::texture)=> void;
+
+        extern("libjoyecs", "wojeapi_towoo_renderer_textures_get_texture")
+            public func get_texture(self: Textures, pass: int)=> option<je::graphic::texture>;
+    }
+    namespace Shaders
+    {
+        extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform")
+            public func set_uniform<T>(self: Shaders, name: string, val: T)=> void
+                where val is int
+                    || val is real
+                    || val is vec2
+                    || val is vec3
+                    || val is vec4;
+    }
+}
+namespace Animation2D
+{
+    namespace FrameAnimation
+    {
+        extern("libjoyecs", "wojeapi_towoo_animation2D_frameanimation_active_animation")
+            public func active_action(self: FrameAnimation, animation_id: int, name: string, loop: bool)=> void;
+    }
+}
+namespace Audio
+{
+    namespace Source
+    {
+        extern("libjoyecs", "wojeapi_towoo_audio_source_get_source")
+            public func set_buffer(self: Source)=> je::audio::source;
+    }
+    namespace Playing
+    {
+        extern("libjoyecs", "wojeapi_towoo_audio_playing_set_buffer")
+            public func set_buffer(self: Playing, buf: je::audio::buffer)=> void;
     }
 }
 )";
