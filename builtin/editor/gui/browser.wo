@@ -1342,7 +1342,7 @@ namespace $$MODULE_NAME$$
 
     using LogHook = struct{
         m_logs: vec<(je::editor::loglevel, string)>,
-        m_display_setting: dict<je::editor::loglevel, (string, mut bool, (int, int, int, int), mut int)>,
+        m_display_setting: dict<je::editor::loglevel, (string, mut bool, option<(int, int, int, int)>, mut int)>,
     }
     {
         func create()
@@ -1350,11 +1350,11 @@ namespace $$MODULE_NAME$$
             return LogHook{
                 m_logs = []mut,
                 m_display_setting = {
-                    [je::editor::loglevel::NORMAL] = ("普通", mut true, (255,255,255,255), mut 0),
-                    [je::editor::loglevel::INFO] = ("信息", mut true, (0,255,255,255), mut 0),
-                    [je::editor::loglevel::WARNING] = ("警告", mut true, (255,255,0,255), mut 0),
-                    [je::editor::loglevel::ERROR] = ("错误", mut true, (255,0,0,255), mut 0),
-                    [je::editor::loglevel::FATAL] = ("致命", mut true, (255,0,255,255), mut 0),
+                    [je::editor::loglevel::NORMAL] = ("普通", mut true, option::none, mut 0),
+                    [je::editor::loglevel::INFO] = ("信息", mut true, option::value((0,255,127,255)), mut 0),
+                    [je::editor::loglevel::WARNING] = ("警告", mut true, option::value((200,200,0,255)), mut 0),
+                    [je::editor::loglevel::ERROR] = ("错误", mut true, option::value((200,0,0,200)), mut 0),
+                    [je::editor::loglevel::FATAL] = ("致命", mut true, option::value((200,0,200,255)), mut 0),
                 },
             };
         }
@@ -1399,9 +1399,19 @@ namespace $$MODULE_NAME$$
                         let (level, info) = self.m_logs[i - 1];
                         if (self.m_display_setting[level][1])
                         {
-                            PushStyleColor(ImGuiCol::ImGuiCol_Text, self.m_display_setting[level][2]);
+                            match (self.m_display_setting[level][2])
+                            {
+                            value(col)? PushStyleColor(ImGuiCol::ImGuiCol_Text, col);
+                            none?;
+                            }
+         
                             do Selectable(F"[{self.m_display_setting[level][0]}] {info}");
-                            PopStyleColor();
+                           
+                            match (self.m_display_setting[level][2])
+                            {
+                            value(_)? PopStyleColor();
+                            none?;
+                            }
                         }
                     }                       
 
