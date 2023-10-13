@@ -1399,19 +1399,14 @@ namespace $$MODULE_NAME$$
                         let (level, info) = self.m_logs[i - 1];
                         if (self.m_display_setting[level][1])
                         {
-                            match (self.m_display_setting[level][2])
-                            {
-                            value(col)? PushStyleColor(ImGuiCol::ImGuiCol_Text, col);
-                            none?;
-                            }
-         
+                            let color_setted = self.m_display_setting[level][2]
+                                ->> \col = true where _ = PushStyleColor(ImGuiCol::ImGuiCol_Text, col);
+                                ->  valor(false);
+                            
                             do Selectable(F"[{self.m_display_setting[level][0]}] {info}");
                            
-                            match (self.m_display_setting[level][2])
-                            {
-                            value(_)? PopStyleColor();
-                            none?;
-                            }
+                            if (color_setted)
+                                PopStyleColor();
                         }
                     }                       
 
