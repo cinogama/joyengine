@@ -45,12 +45,15 @@ public func vert(v: vin)
         pos = je_p * vspace_position,
         vpos = vspace_position->xyz / vspace_position->w,
         uv = uvtrans(v.uv, je_tiling, je_offset),
-        vtangent_x = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(1., 0., 0.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
-        vtangent_y = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(0., 1., 0.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
-        vtangent_z = (je_v * float4::create((je_m * invscale_f3_2_f4(float3::new(0., 0., -1.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
+        vtangent_x = (je_v * float4::create((je_m * invscale_f3_2_f4(
+            je_local_scale * float3::new(1., 0., 0.)))->xyz - m_movement, 1.))
+                ->xyz - v_movement,
+        vtangent_y = (je_v * float4::create((je_m * invscale_f3_2_f4(
+            je_local_scale * float3::new(0., 1., 0.)))->xyz - m_movement, 1.))
+                ->xyz - v_movement,
+        vtangent_z = (je_v * float4::create((je_m * invscale_f3_2_f4(
+            je_local_scale * float3::new(0., 0., -1.)))->xyz - m_movement, 1.))
+                ->xyz - v_movement,
     };
 }
 
