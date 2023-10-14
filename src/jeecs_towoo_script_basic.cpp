@@ -53,7 +53,7 @@ namespace jeecs
             struct towoo_step_work
             {
                 dependence m_dependence;
-                wo_integer_t m_function;
+                _wo_value m_function;
                 std::vector<const typing::type_info*> m_used_components;
                 bool m_is_single_work;
             };
@@ -186,7 +186,7 @@ namespace jeecs
                     {
                         wo_push_val(m_job_vm, m_context);
                         // Invoke!
-                        wo_invoke_rsfunc(m_job_vm, work.m_function, 1);
+                        wo_invoke_value(m_job_vm, &work.m_function, 1);
                     }
                     else
                     {
@@ -238,7 +238,7 @@ namespace jeecs
                                         wo_push_val(m_job_vm, m_context);
 
                                         // Invoke!
-                                        wo_invoke_rsfunc(m_job_vm, work.m_function, work.m_used_components.size() + 2);
+                                        wo_invoke_value(m_job_vm, &work.m_function, work.m_used_components.size() + 2);
                                     }
                                 }
 
@@ -672,7 +672,9 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t 
     auto& works = registered_system_fnd->second;
 
     jeecs::towoo::ToWooBaseSystem::towoo_step_work stepwork;
-    stepwork.m_function = wo_int(args + 1);
+    
+    assert(wo_valuetype(args + 1) != WO_CLOSURE_TYPE);
+    wo_set_val(&stepwork.m_function, args + 1);
 
     wo_value requirements = args + 2;
     wo_integer_t component_arg_count = wo_int(args + 3);
