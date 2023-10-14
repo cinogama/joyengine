@@ -343,6 +343,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                             {
                             ok(vmm)?
                                 {
+                                    do vmm->jit;
                                     if (!vmm->run()->has)
                                         jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
                                     

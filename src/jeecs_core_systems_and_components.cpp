@@ -51,10 +51,7 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
         wo_struct_get(wo_push_empty(co_vmm), arguments, (uint16_t)(i - 1));
     }
 
-    if (wo_valuetype(cofunc) == WO_INTEGER_TYPE)
-        wo_dispatch_rsfunc(co_vmm, wo_int(cofunc), argument_count);
-    else
-        wo_dispatch_closure(co_vmm, cofunc, argument_count);
+    wo_dispatch_value(co_vmm, cofunc, argument_count);
 
     std::lock_guard sg1(jeecs::ScriptRuntimeSystem::system_instance
         ->_coroutine_list_mx);
@@ -112,7 +109,7 @@ void jeecs_entry_register_core_systems()
     jeecs::typing::type_info::of<jeecs::Editor::EntityMoverRoot>("Editor::EntityMoverRoot");
     jeecs::typing::type_info::of<jeecs::Editor::BadShadersUniform>("Editor::BadShadersUniform");
     jeecs::typing::type_info::of<jeecs::Editor::EntitySelectBox>("Editor::EntitySelectBox");
-    jeecs::typing::type_info::of<jeecs::Editor::NewCreatedEntity>("Editor::NewCreatedEntity");    
+    jeecs::typing::type_info::of<jeecs::Editor::NewCreatedEntity>("Editor::NewCreatedEntity");
 
     jeecs::typing::type_info::of<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
     jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");

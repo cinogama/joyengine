@@ -103,6 +103,7 @@ namespace jeecs
                                     woolang._vm_failed = true;
                                     return;
                                 }
+                                wo_jit(basevm);
                                 if (nullptr == wo_run(basevm))
                                 {
                                     jeecs::debug::logerr("Failed to init '%s':\n %s",

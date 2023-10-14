@@ -83,6 +83,7 @@ extern func name()
             {
             ok(vmm)?
                 {
+                    do vmm->jit;
                     assert(vmm->run->has);
                     let name = vmm->invoke("name", [])->val as string;
                     r->set(name == ""? filesys::purename(path) | name, vmm);

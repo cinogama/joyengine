@@ -48,7 +48,6 @@ void je_log_shutdown();
 void je_init(int argc, char** argv)
 {
     je_log_strat();
-
     wo_init(argc, argv);
 
     jeecs_file_set_runtime_path(wo_exe_path());
@@ -157,6 +156,7 @@ bool jedbg_main_script_entry(void)
 
     if (failed_in_start_script == false)
     {
+        wo_jit(vmm);
         wo_run(vmm);
         wo_close_vm(vmm);
     }
@@ -191,7 +191,7 @@ void je_finish()
 
 const char* je_build_version()
 {
-    return "JoyEngine 4.1.11 " __TIMESTAMP__;
+    return "JoyEngine 4.1.12 " __TIMESTAMP__;
 }
 
 const char* je_build_commit()

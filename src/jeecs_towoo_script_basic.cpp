@@ -572,6 +572,7 @@ const jeecs::typing::type_info* je_towoo_register_system(
             }
             else
             {
+                wo_jit(vm);
                 if (nullptr == wo_run(vm))
                 {
                     jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",

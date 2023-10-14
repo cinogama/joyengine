@@ -24,7 +24,8 @@ namespace editor::tools
                         let invoke_script = 
                             func(opentity: option<je::entity>)
                             {
-                                do vmm->run();
+                                do vmm->jit;
+                                do vmm->run;
                                 do vmm->invoke("main", [
                                     proj->get_env->get_universe as je::universe: dynamic,
                                     proj->get_editing_world as option<je::world>: dynamic,

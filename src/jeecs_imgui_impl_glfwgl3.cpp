@@ -1788,16 +1788,15 @@ jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
 WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
 {
-    wo_integer_t loopfunc = wo_int(args + 0);
     wo_value jobfunc = args + 1;
     wo_value argpacks = args + 2;
 
-    wo_vm vmm = wo_sub_vm(vm, 1024);
+    wo_vm vmm = wo_borrow_vm(vm);
 
     wo_push_val(vmm, argpacks);
     wo_push_val(vmm, jobfunc);
 
-    wo_dispatch_rsfunc(vmm, loopfunc, 2);
+    wo_dispatch_value(vmm, args + 0, 2);
 
     gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
     guico->work_vm = vmm;
@@ -2049,7 +2048,7 @@ void jegui_update(jegl_thread* thread_context)
                 continue;
             }
 
-            wo_close_vm(cur_job->work_vm);
+            wo_release_vm(cur_job->work_vm);
             delete cur_job;
         }
 
@@ -2077,7 +2076,7 @@ void jegui_shutdown(bool reboot)
             auto cur_job = chain;
             chain = chain->last;
 
-            wo_close_vm(cur_job->work_vm);
+            wo_release_vm(cur_job->work_vm);
             delete cur_job;
         }
 
@@ -2087,7 +2086,7 @@ void jegui_shutdown(bool reboot)
             auto cur_job = new_job_chain;
             new_job_chain = new_job_chain->last;
 
-            wo_close_vm(cur_job->work_vm);
+            wo_release_vm(cur_job->work_vm);
             delete cur_job;
         }
     }
