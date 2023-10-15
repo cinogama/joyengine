@@ -1383,7 +1383,7 @@ public func frag(_: v2f)
         DefaultResources m_default_resources;
         std::vector<camera_arch> m_camera_list;
         std::vector<renderer_arch> m_renderer_list;
-        std::list<light2d_arch> m_2dlight_list;
+        std::vector<light2d_arch> m_2dlight_list;
         std::vector<block2d_arch> m_2dblock_list;
 
         size_t WINDOWS_WIDTH = 0;
@@ -1665,58 +1665,75 @@ public func frag(_: v2f)
             std::vector<jegl_resource*> LIGHT2D_SHADOW;
 
             light2d_uniform_buffer_data_t l2dbuf = {};
-            // Update l2d buffer here.
-            size_t light_count = 0;
-            for (auto& lightarch : m_2dlight_list)
-            {
-                if (light_count >= JE_MAX_LIGHT2D_COUNT)
-                    break;
-
-                l2dbuf.l2ds[light_count].color = lightarch.color->color;
-                l2dbuf.l2ds[light_count].position = lightarch.translation->world_position;
-                l2dbuf.l2ds[light_count].direction =
-                    lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 1.f).unit();
-
-                l2dbuf.l2ds[light_count].position.w =
-                    ((lightarch.shape == nullptr || lightarch.shape->vertex == nullptr
-                        ? math::vec3(
-                            m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_x,
-                            m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_y,
-                            m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_z)
-                        : math::vec3(
-                            lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_x,
-                            lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_y,
-                            lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_z)
-                        )
-                        * lightarch.translation->local_scale).length()
-                    * lightarch.color->range
-                    / 2.0f;
-
-                l2dbuf.l2ds[light_count].factors = math::vec4(
-                    lightarch.color->parallel ? 0.f : 1.f,
-                    lightarch.color->parallel ? 1.f : 0.f,
-                    lightarch.color->decay,
-                    0.f);
-
-                if (lightarch.shadow != nullptr)
-                {
-                    assert(lightarch.shadow->shadow_buffer != nullptr);
-                    LIGHT2D_SHADOW.push_back(lightarch.shadow->shadow_buffer->get_attachment(0)->resouce());
-                }
-                else
-                    LIGHT2D_SHADOW.push_back(m_defer_light2d_host._no_shadow->resouce());
-
-                ++light_count;
-            }
-
-            m_light2d_uniform_buffer->update_buffer(
-                0,
-                sizeof(light2d_uniform_buffer_data_t),
-                &l2dbuf
-            );
 
             for (auto& current_camera : m_camera_list)
             {
+                std::sort(m_2dlight_list.begin(), m_2dlight_list.end(), 
+                    [&](const light2d_arch& a, const light2d_arch& b)
+                    {
+                        // 平行光源权重最高，然后以摄像机距离排序
+                        if (a.color->parallel || b.color->parallel)
+                            return b.color->parallel == false;
+
+                        auto adistance = a.translation->world_position 
+                            - current_camera.translation->world_position;
+                        auto bdistance = b.translation->world_position 
+                            - current_camera.translation->world_position;
+                        adistance.z = bdistance.z = 0.f;
+                        return adistance.length() < bdistance.length();
+                    });
+
+                size_t light_count = 0;
+                // Update l2d buffer here.
+                for (auto& lightarch : m_2dlight_list)
+                {
+                    if (light_count >= JE_MAX_LIGHT2D_COUNT)
+                        break;
+
+                    l2dbuf.l2ds[light_count].color = lightarch.color->color;
+                    l2dbuf.l2ds[light_count].position = lightarch.translation->world_position;
+                    l2dbuf.l2ds[light_count].direction =
+                        lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 1.f).unit();
+
+                    l2dbuf.l2ds[light_count].position.w =
+                        ((lightarch.shape == nullptr || lightarch.shape->vertex == nullptr
+                            ? math::vec3(
+                                m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_x,
+                                m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_y,
+                                m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_z)
+                            : math::vec3(
+                                lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_x,
+                                lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_y,
+                                lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_z)
+                            )
+                            * lightarch.translation->local_scale).length()
+                        * lightarch.color->range
+                        / 2.0f;
+
+                    l2dbuf.l2ds[light_count].factors = math::vec4(
+                        lightarch.color->parallel ? 0.f : 1.f,
+                        lightarch.color->parallel ? 1.f : 0.f,
+                        lightarch.color->decay,
+                        0.f);
+
+                    if (lightarch.shadow != nullptr)
+                    {
+                        assert(lightarch.shadow->shadow_buffer != nullptr);
+                        LIGHT2D_SHADOW.push_back(lightarch.shadow->shadow_buffer->get_attachment(0)->resouce());
+                    }
+                    else
+                        LIGHT2D_SHADOW.push_back(m_defer_light2d_host._no_shadow->resouce());
+
+                    ++light_count;
+                }
+
+                m_light2d_uniform_buffer->update_buffer(
+                    0,
+                    sizeof(light2d_uniform_buffer_data_t),
+                    &l2dbuf
+                );
+                //
+
                 graphic::framebuffer* rend_aim_buffer = nullptr;
                 if (current_camera.rendToFramebuffer)
                 {
