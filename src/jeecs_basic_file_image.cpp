@@ -401,7 +401,6 @@ const char* jeecs_file_get_runtime_path()
 
 jeecs_file* jeecs_file_open(const char* path)
 {
-    // TODO: Open file in work path.
     std::string path_str = path;
 
     if (path_str.empty())

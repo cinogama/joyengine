@@ -1173,6 +1173,7 @@ public func frag(_: v2f)
                 _defer_light2d_shadow_parallel_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
 import je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ZERO);
@@ -1529,15 +1530,20 @@ public func frag(_: v2f)
                                 light2dpostpass->post_rend_target
                                     = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT}, // 漫反射颜色
-                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, // 视空间坐标(RGB) Alpha通道暂时留空
-                                            {jegl_texture::format::DEPTH, jegl_texture::sampling::DEFAULT }, // 深度缓冲区
+                                            // 漫反射颜色
+                                            {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT},
+                                            // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
+                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, 
+                                            // 视空间坐标(RGB) Alpha通道暂时留空
+                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, 
+                                            // 深度缓冲区
+                                            {jegl_texture::format::DEPTH, jegl_texture::sampling::DEFAULT },
                                         });
                                 light2dpostpass->post_light_target
                                     = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
-                                            {(jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, // 光渲染结果
+                                            // 光渲染结果
+                                            {(jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT },
                                         });
                             }
                         }
@@ -1694,8 +1700,6 @@ public func frag(_: v2f)
                 }
                 else
                     LIGHT2D_SHADOW.push_back(m_defer_light2d_host._no_shadow->resouce());
-                /*jegl_using_texture(m_defer_light2d_host._no_shadow->resouce(),
-                    JE_SHADOW2D_0 + light_count);*/
 
                 ++light_count;
             }
@@ -1775,7 +1779,6 @@ public func frag(_: v2f)
                             auto block2d_iter = m_2dblock_list.begin();
                             auto block2d_end = m_2dblock_list.end();
 
-                            // 看了一圈又一圈，之前这里的代码实在是太晦气了，重写！
                             for (; block2d_iter != block2d_end; ++block2d_iter)
                             {
                                 auto& blockarch = *block2d_iter;
@@ -1789,7 +1792,6 @@ public func frag(_: v2f)
                                         && current_layer > lightarch.translation->world_position.z * 100.f)
                                     {
                                         // 物体比光源更靠近摄像机，且形状阴影工作被允许
-
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
                                         if (blockarch.textures != nullptr)
                                         {

@@ -2542,10 +2542,10 @@ namespace je
                 // DEFAULT = LINEAR | CLAMP_EDGE,
             };
 
-            extern("libjoyecs", "wojeapi_texture_open")
+            extern("libjoyecs", "wojeapi_texture_open", slow)
             public func load(path: string)=> option<texture>;
 
-            extern("libjoyecs", "wojeapi_texture_create")
+            extern("libjoyecs", "wojeapi_texture_create", slow)
             public func create(width: int, height: int)=> texture;
 
             extern("libjoyecs", "wojeapi_texture_bind_path")
@@ -2590,23 +2590,23 @@ namespace je
 
         public using font = gchandle
         {
-            extern("libjoyecs", "wojeapi_font_open")
+            extern("libjoyecs", "wojeapi_font_open", slow)
             public func load(path: string, font_width: int)=> option<font>;
 
-            extern("libjoyecs", "wojeapi_font_load_char")
+            extern("libjoyecs", "wojeapi_font_load_char", slow)
             public func load_char(self: font, ch: char)=> character;
 
-            extern("libjoyecs", "wojeapi_font_string_texture")
+            extern("libjoyecs", "wojeapi_font_string_texture", slow)
             public func load_string(self: font, str: string)=> texture;
         }
 )"
 R"(
         public using shader = gchandle
         {
-            extern("libjoyecs", "wojeapi_shader_open")
+            extern("libjoyecs", "wojeapi_shader_open", slow)
             public func load(path: string)=> option<shader>;
             
-            extern("libjoyecs", "wojeapi_shader_create")
+            extern("libjoyecs", "wojeapi_shader_create", slow)
             public func create(vpath: string, src: string)=> option<shader>;
 
             extern("libjoyecs", "wojeapi_shader_path")

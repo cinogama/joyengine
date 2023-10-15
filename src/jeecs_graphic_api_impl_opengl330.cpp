@@ -756,7 +756,6 @@ inline void _gl_update_depth_mask_method(jegl_shader::depth_mask_method mode)
             glDepthMask(GL_FALSE);
     }
 }
-
 inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
 {
     assert(src_mode != jegl_shader::blend_method::INVALID && dst_mode != jegl_shader::blend_method::INVALID);

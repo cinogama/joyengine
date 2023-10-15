@@ -29,42 +29,23 @@ public func vert(v: vin)
     };
 }
 
-func cached_samping_texture(shadow: texture2d, uv: float2, step: float2, biasx: real, biasy: real)
-{
-    let cache = {}mut: map<real, map<real, float>>;
-    return cache
-        ->getorset(biasx, {}mut)
-        ->getorset(biasy, 
-            texture(shadow, uv + step * float2::new(biasx, biasy))->x);
-}
-func samping_texture(shadow: texture2d, bias: real, step: float2, uv: float2)
-{
-    return clamp(
-        max(max(max(
-            cached_samping_texture(shadow, uv, step, bias, 0.),
-            cached_samping_texture(shadow, uv, step, -bias, 0.)),
-            cached_samping_texture(shadow, uv, step, 0., bias)),
-            cached_samping_texture(shadow, uv, step, 0., -bias))
-        , 0., 1.);
-}
 func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
 {
     let mut shadow_factor = float::zero;
     let bias = 1.;
 
     let bias_weight = [
-        (-1., 1., 0.094742),    (0., 1., 0.118318),     (1., 1., 0.094742),
-        (-1., 0., 0.118318),    (0., 0., 0.147761),     (1., 0., 0.118318),
-        (-1., -1., 0.094742),   (0., -1., 0.118318),    (1., -1., 0.094742),
+        (-1., 1., 0.5),    (0., 1., 0.95),     (1., 1., 0.5),
+        (-1., 0., 0.95),    (0., 0., 1.),     (1., 0., 0.95),
+        (-1., -1., 0.5),   (0., -1., 0.95),    (1., -1., 0.5),
     ];
 
     let reso_inv = float2::one / reso;
 
     for (let _, (x, y, weight) : bias_weight)
     {
-        shadow_factor = shadow_factor + samping_texture(
-            shadow, bias, reso_inv, uv + reso_inv * float2::create(x, y) * bias
-        ) * weight;  
+        let shadow_weight = texture(shadow, uv + reso_inv * float2::create(x, y) * bias)->x;
+        shadow_factor = max(shadow_factor, shadow_weight * weight);
     }
     return float::one - shadow_factor;
 }
