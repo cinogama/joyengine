@@ -8482,7 +8482,7 @@ namespace jeecs
 
                 //rot and transform
                 for (int i = 0; i < 8; i++)
-                    finalBoxPos[i] = mat4trans(translation.object2world, finalBoxPos[i]);
+                    finalBoxPos[i] = mat4trans(translation.object2world, translation.local_scale * finalBoxPos[i]);
 
                 {
                     //front

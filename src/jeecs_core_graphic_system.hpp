@@ -165,7 +165,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
         basic::resource<graphic::shader> default_shader;
         basic::resource<graphic::texture> default_texture;
         basic::vector<basic::resource<graphic::shader>> default_shaders_list;
-    
+
         JECS_DISABLE_MOVE_AND_COPY(DefaultResources);
 
         DefaultResources()
@@ -312,7 +312,7 @@ public let frag =
             float znear = clip ? clip->znear : 0.3f;
             float zfar = clip ? clip->zfar : 1000.0f;
 
-            graphic::framebuffer* rend_aim_buffer = 
+            graphic::framebuffer* rend_aim_buffer =
                 rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer.get() : nullptr;
 
             size_t
@@ -379,77 +379,77 @@ public let frag =
                         );
                     }
                 )
-                .exec(
-                    [this, &parent_origin_list](
-                        Transform::LocalToParent* l2p,
-                        UserInterface::Origin& origin,
-                        UserInterface::Absolute* absolute,
-                        UserInterface::Relatively* relatively
+                        .exec(
+                            [this, &parent_origin_list](
+                                Transform::LocalToParent* l2p,
+                                UserInterface::Origin& origin,
+                                UserInterface::Absolute* absolute,
+                                UserInterface::Relatively* relatively
+                                )
+                            {
+                                UserInterface::Origin* parent_origin = nullptr;
+                                if (l2p != nullptr)
+                                {
+                                    auto fnd = parent_origin_list.find(l2p->parent_uid);
+                                    if (fnd != parent_origin_list.end())
+                                        parent_origin = fnd->second;
+                                }
+
+                                if (parent_origin != nullptr)
+                                {
+                                    origin.global_offset = parent_origin->global_offset;
+                                    origin.global_location = parent_origin->global_location;
+                                    origin.keep_vertical_ratio = parent_origin->keep_vertical_ratio;
+                                }
+                                else
+                                {
+                                    origin.global_offset = {};
+                                    origin.global_location = {};
+                                }
+
+                                if (absolute != nullptr)
+                                {
+                                    origin.global_offset += absolute->offset;
+                                    origin.size = absolute->size;
+                                }
+                                else
+                                    origin.size = {};
+
+                                if (relatively != nullptr)
+                                {
+                                    origin.global_location += relatively->location;
+                                    origin.scale = relatively->scale;
+                                    origin.keep_vertical_ratio = relatively->use_vertical_ratio;
+                                }
+                                else
+                                    origin.scale = {};
+                            }
                         )
-                    {
-                        UserInterface::Origin* parent_origin = nullptr;
-                        if (l2p != nullptr)
-                        {
-                            auto fnd = parent_origin_list.find(l2p->parent_uid);
-                            if (fnd != parent_origin_list.end())
-                                parent_origin = fnd->second;
-                        }
+                        //
+                                .anyof<UserInterface::Absolute, UserInterface::Relatively>()
+                                .except<Light2D::Color>()
+                                .exec(
+                                    [this, &parent_origin_list](
+                                        Shaders& shads,
+                                        Textures* texs,
+                                        Shape& shape,
+                                        Rendqueue* rendqueue,
+                                        UserInterface::Origin& origin,
+                                        UserInterface::Distortion* distortion,
+                                        Renderer::Color* color)
+                                    {
+                                        m_renderer_list.emplace_back(
+                                            renderer_arch{
+                                                color, rendqueue, &shape, &shads, texs, &origin, distortion
+                                            });
+                                    })
+                                ;
+                                    std::sort(m_camera_list.begin(), m_camera_list.end());
+                                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
-                        if (parent_origin != nullptr)
-                        {
-                            origin.global_offset = parent_origin->global_offset;
-                            origin.global_location = parent_origin->global_location;
-                            origin.keep_vertical_ratio = parent_origin->keep_vertical_ratio;
-                        }
-                        else
-                        {
-                            origin.global_offset = {};
-                            origin.global_location = {};
-                        }
+                                    this->branch_allocate_end();
 
-                        if (absolute != nullptr)
-                        {
-                            origin.global_offset += absolute->offset;
-                            origin.size = absolute->size;
-                        }
-                        else
-                            origin.size = {};
-
-                        if (relatively != nullptr)
-                        {
-                            origin.global_location += relatively->location;
-                            origin.scale = relatively->scale;
-                            origin.keep_vertical_ratio = relatively->use_vertical_ratio;
-                        }
-                        else
-                            origin.scale = {};
-                    }
-                )
-                //
-                .anyof<UserInterface::Absolute, UserInterface::Relatively>()
-                .except<Light2D::Color>()
-                .exec(
-                    [this, &parent_origin_list](
-                        Shaders& shads,
-                        Textures* texs,
-                        Shape& shape,
-                        Rendqueue* rendqueue,
-                        UserInterface::Origin& origin,
-                        UserInterface::Distortion* distortion,
-                        Renderer::Color* color)
-                    {
-                        m_renderer_list.emplace_back(
-                            renderer_arch{
-                                color, rendqueue, &shape, &shads, texs, &origin, distortion
-                            });
-                    })
-                ;
-            std::sort(m_camera_list.begin(), m_camera_list.end());
-            std::sort(m_renderer_list.begin(), m_renderer_list.end());
-
-            this->branch_allocate_end();
-
-            DrawFrame();
+                                    DrawFrame();
         }
 
         void DrawFrame()
@@ -501,14 +501,14 @@ public let frag =
                 jegl_rendchain* rend_chain = nullptr;
 
                 if (current_camera.viewport)
-                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
-                        rend_aim_buffer ==nullptr ? nullptr : rend_aim_buffer->resouce(),
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
+                        rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                         (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                         (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                 else
-                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
@@ -613,7 +613,7 @@ public let frag =
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
 
                         if (rendentity.color != nullptr)
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
                                 rendentity.color->color.x,
                                 rendentity.color->color.y,
                                 rendentity.color->color.z,
@@ -780,24 +780,24 @@ public let frag =
                         );
                     })
                 //
-                .except<Light2D::Color, UserInterface::Origin>()
-                .exec(
-                    [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
-                    {
-                        // TODO: Need Impl AnyOf
-                            // RendOb will be input to a chain and used for swap
-                        m_renderer_list.emplace_back(
-                            renderer_arch{
-                                color, rendqueue, &trans, &shape, &shads, texs
-                            });
-                    })
+                        .except<Light2D::Color, UserInterface::Origin>()
+                        .exec(
+                            [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
+                            {
+                                // TODO: Need Impl AnyOf
+                                    // RendOb will be input to a chain and used for swap
+                                m_renderer_list.emplace_back(
+                                    renderer_arch{
+                                        color, rendqueue, &trans, &shape, &shads, texs
+                                    });
+                            })
                         ;
-                    std::sort(m_camera_list.begin(), m_camera_list.end());
-                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
+                            std::sort(m_camera_list.begin(), m_camera_list.end());
+                            std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
-                    this->branch_allocate_end();
+                            this->branch_allocate_end();
 
-                    DrawFrame();
+                            DrawFrame();
         }
 
         void DrawFrame()
@@ -846,7 +846,7 @@ public let frag =
                 jegl_rendchain* rend_chain = nullptr;
 
                 if (current_camera.viewport)
-                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                    rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                         (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                         (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
@@ -890,8 +890,13 @@ public let frag =
                     assert(rendentity.translation);
 
                     float MAT4_MVP[4][4];
-                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
-
+                    float MAT4_MODEL[4][4];
+                    float MAT4_LOCAL_SCALE[4][4] = {
+                        {rendentity.translation->local_scale.x,0.0f,0.0f,0.0f},
+                        {0.0f,rendentity.translation->local_scale.y,0.0f,0.0f},
+                        {0.0f,0.0f,rendentity.translation->local_scale.z,0.0f},
+                        {0.0f,0.0f,0.0f,1.0f} };
+                    math::mat4xmat4(MAT4_MODEL, rendentity.translation->object2world, MAT4_LOCAL_SCALE);
                     math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -1533,9 +1538,9 @@ public func frag(_: v2f)
                                             // 漫反射颜色
                                             {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT},
                                             // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, 
+                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT },
                                             // 视空间坐标(RGB) Alpha通道暂时留空
-                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT }, 
+                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT },
                                             // 深度缓冲区
                                             {jegl_texture::format::DEPTH, jegl_texture::sampling::DEFAULT },
                                         });
@@ -1549,90 +1554,90 @@ public func frag(_: v2f)
                         }
                     })
                 // 
-                .except<Light2D::Color, UserInterface::Origin>()
-                .exec(
-                    [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
-                    {
-                        // RendOb will be input to a chain and used for swap
-                        m_renderer_list.emplace_back(
-                            renderer_arch{
-                                color, rendqueue, &trans, &shape, &shads, texs
-                            });
-                    })
-                //
-                .exec(
-                    [this](Translation& trans,
-                        Light2D::Color& color,
-                        Light2D::Shadow* shadow,
-                        Shape& shape,
-                        Shaders& shads,
-                        Textures* texs)
-                    {
-                        m_2dlight_list.emplace_back(
-                            light2d_arch{
-                                &trans, &color, shadow,
-                                &shape,
-                                &shads,
-                                texs,
-                            }
-                        );
-                        if (shadow != nullptr)
-                        {
-                            bool generate_new_framebuffer =
-                                shadow->shadow_buffer == nullptr
-                                || shadow->shadow_buffer->width() != shadow->resolution_width
-                                || shadow->shadow_buffer->height() != shadow->resolution_height;
-
-                            if (generate_new_framebuffer && shadow->resolution_width > 0 && shadow->resolution_height > 0)
+                        .except<Light2D::Color, UserInterface::Origin>()
+                        .exec(
+                            [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
                             {
-                                shadow->shadow_buffer = graphic::framebuffer::create(
-                                    shadow->resolution_width, shadow->resolution_height,
-                                    {
-                                        {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT}
-                                        // Only store shadow value to R, FBO in opengl not support rend to MONO
-                                    }
-                                );
-                            }
-                        }
-                    }
-                )
-                .exec(
-                    [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
-                    {
-                        if (block.mesh.m_block_mesh == nullptr)
-                        {
-                            std::vector<float> _vertex_buffer;
-
-                            for (auto& point : block.mesh.m_block_points)
-                            {
-                                _vertex_buffer.insert(_vertex_buffer.end(),
-                                    {
-                                        point.x, point.y, 0.f, 0.f,
-                                        point.x, point.y, 0.f, 1.f,
+                                // RendOb will be input to a chain and used for swap
+                                m_renderer_list.emplace_back(
+                                    renderer_arch{
+                                        color, rendqueue, &trans, &shape, &shads, texs
                                     });
-                            }
-                            block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
-                                jegl_vertex::type::TRIANGLESTRIP,
-                                _vertex_buffer, { 3,1 });
-                        }
-                        assert(block.mesh.m_block_mesh != nullptr);
-                        m_2dblock_list.push_back(
-                            block2d_arch{
-                                    &trans, &block, texture, shape
-                            }
-                        );
-                    }
-                    );
-            std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
-                [](const block2d_arch& a, const block2d_arch& b) {
-                    return a.translation->world_position.z > b.translation->world_position.z;
-                });
-            std::sort(m_camera_list.begin(), m_camera_list.end());
-            std::sort(m_renderer_list.begin(), m_renderer_list.end());
+                            })
+                        //
+                                .exec(
+                                    [this](Translation& trans,
+                                        Light2D::Color& color,
+                                        Light2D::Shadow* shadow,
+                                        Shape& shape,
+                                        Shaders& shads,
+                                        Textures* texs)
+                                    {
+                                        m_2dlight_list.emplace_back(
+                                            light2d_arch{
+                                                &trans, &color, shadow,
+                                                &shape,
+                                                &shads,
+                                                texs,
+                                            }
+                                        );
+                                        if (shadow != nullptr)
+                                        {
+                                            bool generate_new_framebuffer =
+                                                shadow->shadow_buffer == nullptr
+                                                || shadow->shadow_buffer->width() != shadow->resolution_width
+                                                || shadow->shadow_buffer->height() != shadow->resolution_height;
 
-            this->branch_allocate_end();
+                                            if (generate_new_framebuffer && shadow->resolution_width > 0 && shadow->resolution_height > 0)
+                                            {
+                                                shadow->shadow_buffer = graphic::framebuffer::create(
+                                                    shadow->resolution_width, shadow->resolution_height,
+                                                    {
+                                                        {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT}
+                                                        // Only store shadow value to R, FBO in opengl not support rend to MONO
+                                                    }
+                                                );
+                                            }
+                                        }
+                                    }
+                                )
+                                .exec(
+                                    [this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+                                    {
+                                        if (block.mesh.m_block_mesh == nullptr)
+                                        {
+                                            std::vector<float> _vertex_buffer;
 
-            DrawFrame();
+                                            for (auto& point : block.mesh.m_block_points)
+                                            {
+                                                _vertex_buffer.insert(_vertex_buffer.end(),
+                                                    {
+                                                        point.x, point.y, 0.f, 0.f,
+                                                        point.x, point.y, 0.f, 1.f,
+                                                    });
+                                            }
+                                            block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                                                jegl_vertex::type::TRIANGLESTRIP,
+                                                _vertex_buffer, { 3,1 });
+                                        }
+                                        assert(block.mesh.m_block_mesh != nullptr);
+                                        m_2dblock_list.push_back(
+                                            block2d_arch{
+                                                    &trans, &block, texture, shape
+                                            }
+                                        );
+                                    }
+                                    );
+                                    std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
+                                        [](const block2d_arch& a, const block2d_arch& b) {
+                                            return a.translation->world_position.z > b.translation->world_position.z;
+                                        });
+                                    std::sort(m_camera_list.begin(), m_camera_list.end());
+                                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
+
+                                    this->branch_allocate_end();
+
+                                    DrawFrame();
         }
 
         void DrawFrame()
@@ -1684,7 +1689,7 @@ public func frag(_: v2f)
                             lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_z)
                         )
                         * lightarch.translation->local_scale).length()
-                        * lightarch.color->range
+                    * lightarch.color->range
                     / 2.0f;
 
                 l2dbuf.l2ds[light_count].factors = math::vec4(
@@ -1802,9 +1807,9 @@ public func frag(_: v2f)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                                         }
 
-                                        jeecs::graphic::vertex* using_shape = 
+                                        jeecs::graphic::vertex* using_shape =
                                             (blockarch.shape == nullptr
-                                            || blockarch.shape->vertex == nullptr)
+                                                || blockarch.shape->vertex == nullptr)
                                             ? m_default_resources.default_shape_quad.get()
                                             : blockarch.shape->vertex.get();
 
@@ -1815,8 +1820,13 @@ public func frag(_: v2f)
                                             texture_group);
                                         auto* builtin_uniform = shape_shadow_pass->m_builtin;
 
-                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
-
+                                        float MAT4_MODEL[4][4];
+                                        float MAT4_LOCAL_SCALE[4][4] = {
+                                            {blockarch.translation->local_scale.x,0.0f,0.0f,0.0f},
+                                            {0.0f,blockarch.translation->local_scale.y,0.0f,0.0f},
+                                            {0.0f,0.0f,blockarch.translation->local_scale.z,0.0f},
+                                            {0.0f,0.0f,0.0f,1.0f} };
+                                        math::mat4xmat4(MAT4_MODEL, blockarch.translation->object2world, MAT4_LOCAL_SCALE);
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -1865,7 +1875,7 @@ public func frag(_: v2f)
                                     else
                                     {
                                         // 物体比光源更远离摄像机，或者形状阴影被禁用
-                                        auto& using_shadow_pass_shader = blockarch.block->reverse 
+                                        auto& using_shadow_pass_shader = blockarch.block->reverse
                                             ? reverse_normal_shadow_pass
                                             : normal_shadow_pass;
 
@@ -1876,8 +1886,13 @@ public func frag(_: v2f)
                                             SIZE_MAX);
                                         auto* builtin_uniform = using_shadow_pass_shader->m_builtin;
 
-                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
-
+                                        float MAT4_MODEL[4][4];
+                                        float MAT4_LOCAL_SCALE[4][4] = {
+                                            {blockarch.translation->local_scale.x,0.0f,0.0f,0.0f},
+                                            {0.0f,blockarch.translation->local_scale.y,0.0f,0.0f},
+                                            {0.0f,0.0f,blockarch.translation->local_scale.z,0.0f},
+                                            {0.0f,0.0f,0.0f,1.0f} };
+                                        math::mat4xmat4(MAT4_MODEL, blockarch.translation->object2world, MAT4_LOCAL_SCALE);
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -1931,9 +1946,9 @@ public func frag(_: v2f)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                                         }
 
-                                        jeecs::graphic::vertex* using_shape = 
+                                        jeecs::graphic::vertex* using_shape =
                                             (block_in_layer->shape == nullptr
-                                            || block_in_layer->shape->vertex == nullptr)
+                                                || block_in_layer->shape->vertex == nullptr)
                                             ? m_default_resources.default_shape_quad.get()
                                             : block_in_layer->shape->vertex.get();
 
@@ -1947,8 +1962,13 @@ public func frag(_: v2f)
                                                 texture_group);
                                             auto* builtin_uniform = sub_shadow_pass->m_builtin;
 
-                                            const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
-
+                                            float MAT4_MODEL[4][4];
+                                            float MAT4_LOCAL_SCALE[4][4] = {
+                                                {block_in_layer->translation->local_scale.x,0.0f,0.0f,0.0f},
+                                                {0.0f,block_in_layer->translation->local_scale.y,0.0f,0.0f},
+                                                {0.0f,0.0f,block_in_layer->translation->local_scale.z,0.0f},
+                                                {0.0f,0.0f,0.0f,1.0f} };
+                                            math::mat4xmat4(MAT4_MODEL, block_in_layer->translation->object2world, MAT4_LOCAL_SCALE);
                                             math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                                             math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -1965,12 +1985,12 @@ public func frag(_: v2f)
                                                 0.f,
                                                 0.f,
                                                 0.f);*/
-                                           
+
                                             if (block_in_layer->translation->world_position.z < lightarch.translation->world_position.z)
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 
-                                                    block_in_layer->block->shadow, 
-                                                    block_in_layer->block->shadow, 
-                                                    block_in_layer->block->shadow, 
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                    block_in_layer->block->shadow,
+                                                    block_in_layer->block->shadow,
+                                                    block_in_layer->block->shadow,
                                                     block_in_layer->block->shadow);
                                             else
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
@@ -1992,7 +2012,7 @@ public func frag(_: v2f)
                     auto light2d_rend_aim_buffer = current_camera.light2DPostPass->post_rend_target->resouce();
 
                     rend_chain = jegl_branch_new_chain(
-                        current_camera.branchPipeline, 
+                        current_camera.branchPipeline,
                         light2d_rend_aim_buffer,
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
                     jegl_rchain_clear_color_buffer(rend_chain);
@@ -2001,14 +2021,14 @@ public func frag(_: v2f)
                 else
                 {
                     if (current_camera.viewport)
-                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                             (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
                             (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                     else
-                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                        rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                             0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
@@ -2037,8 +2057,13 @@ public func frag(_: v2f)
                         && rendentity.shaders != nullptr
                         && rendentity.shape != nullptr);
 
-                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
-
+                    float MAT4_MODEL[4][4];
+                    float MAT4_LOCAL_SCALE[4][4] = {
+                        {rendentity.translation->local_scale.x,0.0f,0.0f,0.0f},
+                        {0.0f,rendentity.translation->local_scale.y,0.0f,0.0f},
+                        {0.0f,0.0f,rendentity.translation->local_scale.z,0.0f},
+                        {0.0f,0.0f,0.0f,1.0f} };
+                    math::mat4xmat4(MAT4_MODEL, rendentity.translation->object2world, MAT4_LOCAL_SCALE);
                     math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -2148,8 +2173,13 @@ public func frag(_: v2f)
                             : m_defer_light2d_host._no_shadow->resouce());
 
                         // 开始渲染光照！
-                        const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
-
+                        float MAT4_MODEL[4][4];
+                        float MAT4_LOCAL_SCALE[4][4] = {
+                            {light2d.translation->local_scale.x,0.0f,0.0f,0.0f},
+                            {0.0f,light2d.translation->local_scale.y,0.0f,0.0f},
+                            {0.0f,0.0f,light2d.translation->local_scale.z,0.0f},
+                            {0.0f,0.0f,0.0f,1.0f} };
+                        math::mat4xmat4(MAT4_MODEL, light2d.translation->object2world, MAT4_LOCAL_SCALE);
                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -2228,7 +2258,7 @@ public func frag(_: v2f)
                     // Set target buffer.
                     jegl_rendchain* final_target_rend_chain = nullptr;
                     if (current_camera.viewport)
-                        final_target_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline, 
+                        final_target_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                             (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
                             (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
@@ -2576,7 +2606,7 @@ public func frag(_: v2f)
                                 // 如果没有找到对应的动画，那么终止动画
                                 animation.set_action("");
                             }
-                           
+
                             // 这个注释写在这里单纯是因为花括号写得太难看，稍微避免出现一个大于号
                         }
 

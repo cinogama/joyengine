@@ -39,16 +39,7 @@ namespace jeecs
             float temp_mat_rotation[4][4];
             local->rot.create_matrix(temp_mat_rotation);
 
-            float temp_mat_trans_rot[4][4];
-            math::mat4xmat4(temp_mat_trans_rot, temp_mat_trans, temp_mat_rotation);
-
-            float temp_mat_scale[4][4] = {};
-            temp_mat_scale[0][0] = local->scale.x;
-            temp_mat_scale[1][1] = local->scale.y;
-            temp_mat_scale[2][2] = local->scale.z;
-            temp_mat_scale[3][3] = 1.0f;
-
-            math::mat4xmat4(out_mat, temp_mat_trans_rot, temp_mat_scale);
+            math::mat4xmat4(out_mat, temp_mat_trans, temp_mat_rotation);
         }
 
         std::unordered_map<typing::uid_t, anchor> m_anchor_list;

@@ -757,12 +757,10 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                             ? 0.25f * (_camera_pos - trans.world_position).length()
                             : 1.0f / _camera_ortho_porjection->scale;
 
-                        localScale.scale = math::vec3(1.0f / distance, 1.0f / distance, 1.0f / distance);
-
                         if (_inputs.selected_entity)
                         {
                             if (auto* escale = _inputs.selected_entity.value().get_component<Transform::LocalScale>())
-                                localScale.scale = localScale.scale * escale->scale;
+                                localScale.scale = escale->scale;
 
                             if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
                                 localScale.scale = localScale.scale * (
