@@ -68,9 +68,36 @@ void je_init(int argc, char** argv)
 
 wo_integer_t crc64_of_source_and_api()
 {
-    wo_integer_t api_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/api").c_str());
-    wo_integer_t src_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/editor").c_str());
-    return src_crc64 * api_crc64;
+    /*wo_integer_t api_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/api").c_str());
+    wo_integer_t src_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/editor").c_str());*/
+
+    wo_value crc64val = wo_execute(R"(
+import woo::std;
+import pkg::filesystem;
+import je::editor;
+
+using std;
+using je::editor;
+
+let root_dir = filesys::normalize(std::exepath());
+let files = filesys::allsubpath(root_dir/"builtin/api")
+    ->  unwarpor([])
+    ->  connect(
+        filesys::allsubpath(root_dir/"builtin/editor")
+            ->unwarpor([]));
+
+let mut crc64_result = "wooscript_crc64_";
+
+for (let _, p : files)
+{   
+    let path = p->tostring;
+    crc64_result += F"{crc64file(path)->valor(0)}:{crc64str(path)};";
+}
+
+do crc64str(crc64_result);
+)");
+
+    return wo_int(crc64val);// src_crc64* api_crc64;
 }
 
 wo_vm _jewo_open_file_to_compile_vm(const char* vpath)
@@ -178,7 +205,7 @@ void je_finish()
 
     je_log_shutdown();
 
-    wo_finish([](void*) 
+    wo_finish([](void*)
         {
             std::lock_guard g1(_free_module_list_mx);
             for (auto* mod : _free_module_list)
