@@ -9,7 +9,8 @@ A game engine based on ECS architecture implemented in C++ and Woolang.
 
 在编译之前，需要安装baozi，用以获取引擎编辑器所需的一些包：
 
-**安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行**
+<del>安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行</del>
+在新版本 Chief 发布之前，请手动安装 Baozi。
 
 编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD` 设置为 OFF 关闭安装操作
 
