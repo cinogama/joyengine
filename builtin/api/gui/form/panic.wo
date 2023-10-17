@@ -71,7 +71,9 @@ namespace jeapi::gui::form
                 TextDisabled("描述：");
                 Text(F"    {native_errorno->tohex}: {reason}");
                 TextDisabled("调用堆栈：");
-                do InputTextMultilineSize("##trace", trace, 480., 160.);
+
+                let (w, _) = GetContentRegionAvail();
+                do InputTextMultilineSize("##trace", trace, w, 160.);
                 
                 if (Button("确认"))
                     open = false;

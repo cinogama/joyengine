@@ -569,10 +569,18 @@ namespace jeapi
             return _load_entity_or_prefab(w, entity_dat, in_editor, je::world::add_prefab);
         }
 
-        public func world(u: je::universe, dat: dict<string, dynamic>, in_editor: bool)=> je::world
+        public func world_entitys(w: je::world, dat: dict<string, dynamic>, in_editor: bool)
         {
-            let w = u->je::world::create;
-
+            do dat->get("entities")
+                ->> \es = es as array<dynamic>
+                    ->> \edat = deserialize::entity(w, entity_dat, in_editor)
+                        where entity_dat = edat as dict<dynamic, dynamic>->>\k, v = (k as string, v);
+                        ;
+                    ;
+                ;
+        }
+        public func world_systems(w: je::world, dat: dict<string, dynamic>, in_editor: bool)
+        {
             if (in_editor)
                 do dat->get("name")->>\name = w->set_name(name as string);;
             else
@@ -584,7 +592,6 @@ namespace jeapi
                             ;
                         ;
                     ;
-
             do dat->get("systems")
                 ->> \d = d as array<dynamic>
                     ->> \tname = type_may_none
@@ -593,13 +600,14 @@ namespace jeapi
                         ;
                     ;
                 ;
-            do dat->get("entities")
-                ->> \es = es as array<dynamic>
-                    ->> \edat = deserialize::entity(w, entity_dat, in_editor)
-                        where entity_dat = edat as dict<dynamic, dynamic>->>\k, v = (k as string, v);
-                        ;
-                    ;
-                ;
+        }
+        public func world(u: je::universe, dat: dict<string, dynamic>, in_editor: bool)=> je::world
+        {
+            let w = u->je::world::create;
+
+            world_entitys(w, dat, in_editor);
+            world_systems(w, dat, in_editor);
+            
             return w;
         }
     }
