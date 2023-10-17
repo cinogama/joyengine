@@ -2755,7 +2755,7 @@ R"(
         extern("libjoyecs", "wojeapi_close_world")
         public func close(self: world) => void;
 
-        extern("libjoyecs", "wojeapi_add_system_to_world")
+        extern("libjoyecs", "wojeapi_add_system_to_world", slow)
         public func add_system(self: world, systype: typeinfo)=> bool;
 
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
