@@ -53,7 +53,10 @@ namespace editor::gui::edit_forms
                                 launch(func(){
                                     if (proj->is_debugging)
                                     {
-                                        if (BeginAttr("调试工具", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                                        if (BeginAttr("调试工具", 
+                                            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                                            + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                                            + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                                         {
                                             do DragFloat("时间缩放", proj->get_env->get_universe->get_timescale, 0.1, 0.0, 16.0)
                                                 ->> \val = proj->get_env->get_universe->set_timescale(val);
