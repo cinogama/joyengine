@@ -1,0 +1,59 @@
+import woo::std;
+import je::gui;
+
+using je::gui;
+
+namespace jeapi::gui::form
+{
+    public func panic(
+        native_src: string,
+        native_lineno: int,
+        native_funcname: string,
+        native_errorno: int,
+        reason: string, 
+        trace: string)
+    {
+        launch(func()
+        {
+            let mut open = true;
+            if (BeginAttr(F"Woolang 致命错误##{JobID()}", 
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+            {
+                Text("在运行过程中发生了 Woolang Panic!");
+                SameLine();
+                TextDisabled("(?)");
+                if (IsItemHovered())
+                {
+                    BeginTooltip();
+                    Text("什么是 Woolang Panic?");
+                    TextDisabled("Woolang Panic 是Woolang脚本异常处理机制的一部分");
+                    TextDisabled("当一些难以恢复的错误发生时（例如尝试越界访问数组）");
+                    TextDisabled("此机制将被触发，用于呈现错误内容并终止运行");
+                    Separator();
+                    TextDisabled("可以通过检查调用堆栈信息和错误信息，检查并排除故障");
+                    EndTooltip();
+                }
+                Text("对应的Woolang虚拟机已经被终止，错误详情见以下信息：");
+                Separator();
+
+                TextDisabled("于模块：");
+                Text(F"    {native_src}: {native_lineno}");
+                Text(F"    {native_funcname}");
+                TextDisabled("描述：");
+                Text(F"    {native_errorno->tohex}: {reason}");
+                TextDisabled("调用堆栈：");
+                do InputTextMultilineSize("##trace", trace, 480., 160.);
+                
+                if (Button("确认"))
+                    open = false;
+            }
+
+            End();
+
+            return open;
+
+        }, ());
+    }
+}

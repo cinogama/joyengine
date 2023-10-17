@@ -15,6 +15,7 @@ import builtin::api::welcome::main;
 import builtin::api::gui::widget::icon_button;
 import builtin::api::gui::form::msg;
 import builtin::api::gui::form::input;
+import builtin::api::gui::form::panic;
 import builtin::editor::environment::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main;
@@ -420,8 +421,7 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
 
 }
 
-// 在这里注册预设体组件
-
+je::editor::register_panic_hook(jeapi::gui::form::panic);
 for (;;)
 {
     je::editor::set_able_shared_glresource(false);

@@ -45,6 +45,57 @@ void jetowoo_finish();
 void je_log_strat();
 void je_log_shutdown();
 
+wo_fail_handler _je_global_old_panic_handler = nullptr;
+wo_vm _je_global_panic_hooker = nullptr;
+wo_value _je_global_panic_hook_function;
+
+void _jedbg_hook_woolang_panic(
+    wo_vm vm,
+    wo_string_t src_file,
+    uint32_t lineno,
+    wo_string_t functionname,
+    uint32_t rterrcode,
+    wo_string_t reason)
+{
+    auto* trace = wo_debug_trace_callstack(vm, 32);
+    jeecs::debug::logfatal("Woolang Panic(%x):%s (%s in %s: %u):\n%s",
+        rterrcode, reason, functionname, src_file, lineno, trace);
+
+    wo_push_string(_je_global_panic_hooker, trace);
+    wo_push_string(_je_global_panic_hooker, reason);
+    wo_push_int(_je_global_panic_hooker, (wo_integer_t)rterrcode);
+    wo_push_string(_je_global_panic_hooker, functionname);
+    wo_push_int(_je_global_panic_hooker, (wo_integer_t)lineno);
+    wo_push_string(_je_global_panic_hooker, src_file);
+
+    if (wo_invoke_value(_je_global_panic_hooker, _je_global_panic_hook_function, 6) != nullptr)
+    {
+        // Abort specify vm;
+        wo_abort_vm(vm);
+    }
+    else
+    {
+        jeecs::debug::logfatal("Engine's woolang panic hook failed, try default.");
+        assert(_je_global_old_panic_handler != nullptr);
+        _je_global_old_panic_handler(vm, src_file, lineno, functionname, rterrcode, reason);
+    }
+}
+
+WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args, size_t argc)
+{
+    if (_je_global_panic_hooker != nullptr)
+        // ATTENTION: Unsafe for multi thread.
+        wo_release_vm(_je_global_panic_hooker);
+
+    _je_global_panic_hooker = wo_borrow_vm(vm);
+    _je_global_panic_hook_function = wo_push_val(_je_global_panic_hooker, args + 0);
+    
+    if (_je_global_old_panic_handler == nullptr)
+        _je_global_old_panic_handler = wo_regist_fail_handler(_jedbg_hook_woolang_panic);
+
+    return wo_ret_void(vm);
+}
+
 void je_init(int argc, char** argv)
 {
     je_log_strat();
@@ -202,6 +253,17 @@ void je_finish()
     jeal_finish();
     jegl_finish();
     jetowoo_finish();
+
+    if (_je_global_panic_hooker != nullptr)
+    {
+        wo_release_vm(_je_global_panic_hooker);
+        _je_global_panic_hooker = nullptr;
+    }
+    if (_je_global_old_panic_handler != nullptr)
+    {
+        wo_regist_fail_handler(_je_global_old_panic_handler);
+        _je_global_old_panic_handler = nullptr;
+    }
 
     je_log_shutdown();
 

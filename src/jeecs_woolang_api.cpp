@@ -2150,6 +2150,9 @@ namespace je
     }
     namespace editor
     {
+        extern("libjoyecs", "wojeapi_editor_register_panic_hook")
+        public func register_panic_hook(f: (string, int, string, int, string, string)=> void)=> void;
+
         extern("libjoyecs", "wojeapi_set_able_shared_glresource")
         public func set_able_shared_glresource(able: bool)=> void;
 
