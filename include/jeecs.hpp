@@ -7724,6 +7724,11 @@ namespace jeecs
         {
             basic::resource<graphic::framebuffer> post_rend_target = nullptr;
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
+            basic::resource<jeecs::graphic::uniformbuffer> post_light_uniform = nullptr;
+
+            CameraPostPass() = default;
+            CameraPostPass(const CameraPostPass&) {}
+            CameraPostPass(CameraPostPass&&) = default;
         };
         struct Block
         {
