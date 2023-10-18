@@ -4,7 +4,7 @@ import pkg::vm;
 namespace editor::gui::drawpannel
 {
     // 此处注册一个虚拟文件，作为图像处理函数的工具库
-    assert(vm::create_virtual_script("je/editor/graphic.wo", @"
+    do vm::create_virtual_script("je/editor/graphic.wo", @"
 // (C)Cinogama project.
 
 import je;
@@ -47,7 +47,7 @@ extern func name()
 {
     return NAME;
 }
-"@, false));
+"@, false);
 
     let mut image_effect_scripts = {}: dict<string, vm>;
 

@@ -208,7 +208,7 @@ extern public func _start_baking(context: ParticalContext, econtext: _EditorCont
         t->pix((0, 0))->set_color(t->pix((0, 0))->get_color());
 }
 "@;
-    assert(vm::create_virtual_script("je/particalbacker.wo", PARTICALBAKER, false));
+    do vm::create_virtual_script("je/particalbacker.wo", PARTICALBAKER, false);
 
     let DEFAULT_SOURCE = 
 @"// Particalbaker Script

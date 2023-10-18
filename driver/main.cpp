@@ -23,7 +23,7 @@ int main(int argc, char** argv)
         using namespace std;
         enrty::module_entry();
         {
-            jedbg_main_script_entry();
+            je_main_script_entry();
         }
         enrty::module_leave();
     }

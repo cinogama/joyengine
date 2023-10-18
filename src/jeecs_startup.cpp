@@ -192,7 +192,7 @@ wo_vm try_open_cached_binary()
     return _jewo_open_file_to_compile_vm("@/builtin/editor.woo.jecache4");
 }
 
-bool jedbg_main_script_entry(void)
+bool je_main_script_entry(void)
 {
     bool failed_in_start_script = false;
 

@@ -101,26 +101,26 @@ WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args, size_t arg
 
 void jeecs_entry_register_core_systems()
 {
-    jeecs::typing::type_info::of<jeecs::Editor::Name>("Editor::Name");
-    jeecs::typing::type_info::of<jeecs::Editor::Prefab>("Editor::Prefab");
-    jeecs::typing::type_info::of<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
-    jeecs::typing::type_info::of<jeecs::Editor::Invisable>("Editor::Invisable");
-    jeecs::typing::type_info::of<jeecs::Editor::EntityMover>("Editor::EntityMover");
-    jeecs::typing::type_info::of<jeecs::Editor::EntityMoverRoot>("Editor::EntityMoverRoot");
-    jeecs::typing::type_info::of<jeecs::Editor::BadShadersUniform>("Editor::BadShadersUniform");
-    jeecs::typing::type_info::of<jeecs::Editor::EntitySelectBox>("Editor::EntitySelectBox");
-    jeecs::typing::type_info::of<jeecs::Editor::NewCreatedEntity>("Editor::NewCreatedEntity");
+    jeecs::typing::type_info::register_type<jeecs::Editor::Name>("Editor::Name");
+    jeecs::typing::type_info::register_type<jeecs::Editor::Prefab>("Editor::Prefab");
+    jeecs::typing::type_info::register_type<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
+    jeecs::typing::type_info::register_type<jeecs::Editor::Invisable>("Editor::Invisable");
+    jeecs::typing::type_info::register_type<jeecs::Editor::EntityMover>("Editor::EntityMover");
+    jeecs::typing::type_info::register_type<jeecs::Editor::EntityMoverRoot>("Editor::EntityMoverRoot");
+    jeecs::typing::type_info::register_type<jeecs::Editor::BadShadersUniform>("Editor::BadShadersUniform");
+    jeecs::typing::type_info::register_type<jeecs::Editor::EntitySelectBox>("Editor::EntitySelectBox");
+    jeecs::typing::type_info::register_type<jeecs::Editor::NewCreatedEntity>("Editor::NewCreatedEntity");
 
-    jeecs::typing::type_info::of<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
-    jeecs::typing::type_info::of<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
-    jeecs::typing::type_info::of<jeecs::Physics2DUpdatingSystem>("Physics::Physics2DUpdatingSystem");
+    jeecs::typing::type_info::register_type<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
+    jeecs::typing::type_info::register_type<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
+    jeecs::typing::type_info::register_type<jeecs::Physics2DUpdatingSystem>("Physics::Physics2DUpdatingSystem");
 
-    jeecs::typing::type_info::of<jeecs::FrameAnimation2DSystem>("Animation2D::FrameAnimation2DSystem");
+    jeecs::typing::type_info::register_type<jeecs::FrameAnimation2DSystem>("Animation2D::FrameAnimation2DSystem");
 
-    jeecs::typing::type_info::of<jeecs::UserInterfaceGraphicPipelineSystem>("Graphic::UserInterfaceGraphicPipelineSystem");
-    jeecs::typing::type_info::of<jeecs::UnlitGraphicPipelineSystem>("Graphic::UnlitGraphicPipelineSystem");
-    jeecs::typing::type_info::of<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
+    jeecs::typing::type_info::register_type<jeecs::UserInterfaceGraphicPipelineSystem>("Graphic::UserInterfaceGraphicPipelineSystem");
+    jeecs::typing::type_info::register_type<jeecs::UnlitGraphicPipelineSystem>("Graphic::UnlitGraphicPipelineSystem");
+    jeecs::typing::type_info::register_type<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
 
-    jeecs::typing::type_info::of<jeecs::ScriptRuntimeSystem>("Script::ScriptRuntimeSystem");
-    jeecs::typing::type_info::of<jeecs::AudioUpdatingSystem>("Audio::AudioUpdatingSystem");
+    jeecs::typing::type_info::register_type<jeecs::ScriptRuntimeSystem>("Script::ScriptRuntimeSystem");
+    jeecs::typing::type_info::register_type<jeecs::AudioUpdatingSystem>("Audio::AudioUpdatingSystem");
 }

@@ -2801,6 +2801,14 @@ jeal_listener_volume [基本接口]
 */
 JE_API void             jeal_listener_volume(float volume);
 
+/*
+je_main_script_entry [基本接口]
+运行入口脚本，优先尝试带缓存地加载 @/builtin/editor/main.wo，
+若加载失败，则尝试 @/builtin/main.wo
+    * 阻塞直到入口脚本运行完毕
+*/
+JE_API bool             je_main_script_entry(void);
+
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
 
@@ -2828,8 +2836,6 @@ JE_API size_t jedbg_get_unregister_type_count(void);
 
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world);
-
-JE_API bool jedbg_main_script_entry(void);
 
 JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::euid_t uid);
 
@@ -4040,8 +4046,6 @@ namespace jeecs
             const script_parser_info* volatile m_script_parser_info;
 
         private:
-            inline static std::atomic_bool      _m_shutdown_flag = false;
-
             class _type_unregister_guard
             {
                 friend struct type_info;
@@ -4105,7 +4109,6 @@ namespace jeecs
                     for (auto& [_, local_type_info] : _m_self_registed_typeinfo)
                         je_typing_unregister(local_type_info);
                     _m_self_registed_typeinfo.clear();
-                    _m_shutdown_flag = true;
                 }
                 ~_type_unregister_guard()
                 {
@@ -4121,6 +4124,64 @@ namespace jeecs
             inline static _type_unregister_guard _type_guard;
 
         public:
+            class typeinfo_holder_base
+            {
+            protected:
+                inline static std::mutex m_list_mx;
+                inline static std::unordered_set<typeinfo_holder_base*> m_list;
+                virtual void update() = 0;
+            public:
+                static void update_all_typeinfo()
+                {
+                    std::lock_guard sg1(typeinfo_holder_base::m_list_mx);
+                    for (auto* t : m_list)
+                        t->update();
+                }
+            };
+            template<typename T>
+            class typeinfo_holder : typeinfo_holder_base
+            {
+                JECS_DISABLE_MOVE_AND_COPY(typeinfo_holder);
+
+                const char* m_typename;
+                const type_info* m_typeinfo;
+            protected:
+                virtual void update()override
+                {
+                    m_typeinfo = je_typing_get_info_by_id(
+                        _type_guard._register_or_get_type_id<T>(m_typename));
+                }
+            public:
+                const type_info* get_typeinfo()const noexcept
+                {
+                    return m_typeinfo;
+                }
+                typeinfo_holder(const char* tname)
+                {
+                    if (tname != nullptr)
+                        m_typename = jeecs::basic::make_new_string(tname);
+                    else
+                        m_typename = nullptr;
+
+                    do
+                    {
+                        std::lock_guard sg1(typeinfo_holder_base::m_list_mx);
+                        typeinfo_holder_base::m_list.insert(this);
+                    } while (0);
+
+                    update();
+                }
+                ~typeinfo_holder()
+                {
+                    std::lock_guard sg1(typeinfo_holder_base::m_list_mx);
+                    typeinfo_holder_base::m_list.erase(this);
+
+                    if (m_typename != nullptr)
+                        je_mem_free((void*)m_typename);
+                }
+            };
+
+        public:
             static const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id)
             {
                 return _type_guard.get_local_type_info(id);
@@ -4130,49 +4191,40 @@ namespace jeecs
             {
                 _type_guard.clear();
             }
-            template<typename T>
-            inline static typeid_t id(const char* _typename)
-            {
-                assert(!_m_shutdown_flag);
-                bool first_init = false;
-                static typeid_t registed_typeid = [&]() {
-                    first_init = true;
-                    return _type_guard._register_or_get_type_id<T>(_typename);
-                }();
-
-                if (first_init)
-                {
-                    if constexpr (sfinae_has_ref_register<T>::value)
-                    {
-                        if constexpr (sfinae_is_static_ref_register_function<T>::value)
-                            T::JERefRegsiter();
-                        else
-                            static_assert(sfinae_is_static_ref_register_function<T>::value,
-                                "T::JERefRegsiter must be static & callable with no arguments.");
-                    }
-                }
-
-                return registed_typeid;
-            }
 
             template<typename T>
             inline static const type_info* of(const char* _typename)
             {
-                assert(!_m_shutdown_flag);
-                static typeid_t registed_typeid = id<T>(_typename);
-                static const type_info* registed_typeinfo = je_typing_get_info_by_id(registed_typeid);
-
-                return registed_typeinfo;
+                static typeinfo_holder<T> holder(_typename);
+                return holder.get_typeinfo();
             }
             inline static const type_info* of(typeid_t _tid)
             {
-                assert(!_m_shutdown_flag);
                 return je_typing_get_info_by_id(_tid);
             }
             inline static const type_info* of(const char* name)
             {
-                assert(!_m_shutdown_flag);
                 return je_typing_get_info_by_name(name);
+            }
+
+            template<typename T>
+            inline static typeid_t id(const char* _typename)
+            {
+                return of<T>(_typename)->m_id;
+            }
+
+            template<typename T>
+            inline static void register_type(const char* _typename)
+            {
+                of<T>(_typename);
+                if constexpr (sfinae_has_ref_register<T>::value)
+                {
+                    if constexpr (sfinae_is_static_ref_register_function<T>::value)
+                        T::JERefRegsiter();
+                    else
+                        static_assert(sfinae_is_static_ref_register_function<T>::value,
+                            "T::JERefRegsiter must be static & callable with no arguments.");
+                }
             }
 
             void construct(void* addr, void* arg = nullptr) const
@@ -4307,7 +4359,7 @@ namespace jeecs
         template<typename FirstCompT, typename ... CompTs>
         inline game_entity add_entity()
         {
-            static typing::typeid_t component_ids[] = {
+            typing::typeid_t component_ids[] = {
                 typing::type_info::id<FirstCompT>(typeid(FirstCompT).name()),
                 typing::type_info::id<CompTs>(typeid(CompTs).name())...,
                 typing::INVALID_TYPE_ID
@@ -4329,7 +4381,7 @@ namespace jeecs
         template<typename FirstCompT, typename ... CompTs>
         inline game_entity add_prefab()
         {
-            static typing::typeid_t component_ids[] = {
+            typing::typeid_t component_ids[] = {
                 typing::type_info::id<FirstCompT>(typeid(FirstCompT).name()),
                 typing::type_info::id<CompTs>(typeid(CompTs).name())...,
                 typing::INVALID_TYPE_ID
@@ -5057,25 +5109,22 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::get_component()const noexcept
     {
-        static auto* type = typing::type_info::of<T>(typeid(T).name());
-        assert(type->is_component());
-        return (T*)je_ecs_world_entity_get_component(this, type);
+        return (T*)je_ecs_world_entity_get_component(this, 
+            typing::type_info::of<T>(typeid(T).name()));
     }
 
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
-        static auto* type = typing::type_info::of<T>(typeid(T).name());
-        assert(type->is_component());
-        return (T*)je_ecs_world_entity_add_component(this, type);
+        return (T*)je_ecs_world_entity_add_component(this,
+            typing::type_info::of<T>(typeid(T).name()));
     }
 
     template<typename T>
     inline void game_entity::remove_component() const noexcept
     {
-        static auto* type = typing::type_info::of<T>(typeid(T).name());
-        assert(type->is_component());
-        return je_ecs_world_entity_remove_component(this, type);
+        return je_ecs_world_entity_remove_component(this, 
+            typing::type_info::of<T>(typeid(T).name()));
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept
@@ -8534,55 +8583,57 @@ namespace jeecs
         {
             // 0. register built-in components
             using namespace typing;
-            type_info::of<Transform::LocalPosition>("Transform::LocalPosition");
-            type_info::of<Transform::LocalRotation>("Transform::LocalRotation");
-            type_info::of<Transform::LocalScale>("Transform::LocalScale");
-            type_info::of<Transform::Anchor>("Transform::Anchor");
-            type_info::of<Transform::LocalToWorld>("Transform::LocalToWorld");
-            type_info::of<Transform::LocalToParent>("Transform::LocalToParent");
-            type_info::of<Transform::Translation>("Transform::Translation");
+            type_info::typeinfo_holder_base::update_all_typeinfo();
 
-            type_info::of<UserInterface::Origin>("UserInterface::Origin");
-            type_info::of<UserInterface::Distortion>("UserInterface::Distortion");
-            type_info::of<UserInterface::Absolute>("UserInterface::Absolute");
-            type_info::of<UserInterface::Relatively>("UserInterface::Relatively");
+            type_info::register_type<Transform::LocalPosition>("Transform::LocalPosition");
+            type_info::register_type<Transform::LocalRotation>("Transform::LocalRotation");
+            type_info::register_type<Transform::LocalScale>("Transform::LocalScale");
+            type_info::register_type<Transform::Anchor>("Transform::Anchor");
+            type_info::register_type<Transform::LocalToWorld>("Transform::LocalToWorld");
+            type_info::register_type<Transform::LocalToParent>("Transform::LocalToParent");
+            type_info::register_type<Transform::Translation>("Transform::Translation");
 
-            type_info::of<Renderer::Rendqueue>("Renderer::Rendqueue");
-            type_info::of<Renderer::Shape>("Renderer::Shape");
-            type_info::of<Renderer::Shaders>("Renderer::Shaders");
-            type_info::of<Renderer::Textures>("Renderer::Textures");
-            type_info::of<Renderer::Color>("Renderer::Color");
+            type_info::register_type<UserInterface::Origin>("UserInterface::Origin");
+            type_info::register_type<UserInterface::Distortion>("UserInterface::Distortion");
+            type_info::register_type<UserInterface::Absolute>("UserInterface::Absolute");
+            type_info::register_type<UserInterface::Relatively>("UserInterface::Relatively");
 
-            type_info::of<Animation2D::FrameAnimation>("Animation2D::FrameAnimation");
+            type_info::register_type<Renderer::Rendqueue>("Renderer::Rendqueue");
+            type_info::register_type<Renderer::Shape>("Renderer::Shape");
+            type_info::register_type<Renderer::Shaders>("Renderer::Shaders");
+            type_info::register_type<Renderer::Textures>("Renderer::Textures");
+            type_info::register_type<Renderer::Color>("Renderer::Color");
 
-            type_info::of<Camera::Clip>("Camera::Clip");
-            type_info::of<Camera::Projection>("Camera::Projection");
-            type_info::of<Camera::OrthoProjection>("Camera::OrthoProjection");
-            type_info::of<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
-            type_info::of<Camera::Viewport>("Camera::Viewport");
-            type_info::of<Camera::RendToFramebuffer>("Camera::RendToFramebuffer");
+            type_info::register_type<Animation2D::FrameAnimation>("Animation2D::FrameAnimation");
 
-            type_info::of<Light2D::Color>("Light2D::Color");
-            type_info::of<Light2D::Shadow>("Light2D::Shadow");
-            type_info::of<Light2D::CameraPostPass>("Light2D::CameraPostPass");
-            type_info::of<Light2D::Block>("Light2D::Block");
+            type_info::register_type<Camera::Clip>("Camera::Clip");
+            type_info::register_type<Camera::Projection>("Camera::Projection");
+            type_info::register_type<Camera::OrthoProjection>("Camera::OrthoProjection");
+            type_info::register_type<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
+            type_info::register_type<Camera::Viewport>("Camera::Viewport");
+            type_info::register_type<Camera::RendToFramebuffer>("Camera::RendToFramebuffer");
 
-            type_info::of<Script::Woolang>("Script::Woolang");
+            type_info::register_type<Light2D::Color>("Light2D::Color");
+            type_info::register_type<Light2D::Shadow>("Light2D::Shadow");
+            type_info::register_type<Light2D::CameraPostPass>("Light2D::CameraPostPass");
+            type_info::register_type<Light2D::Block>("Light2D::Block");
 
-            type_info::of<Physics2D::Rigidbody>("Physics2D::Rigidbody");
-            type_info::of<Physics2D::Kinematics>("Physics2D::Kinematics");
-            type_info::of<Physics2D::Mass>("Physics2D::Mass");
-            type_info::of<Physics2D::Bullet>("Physics2D::Bullet");
-            type_info::of<Physics2D::BoxCollider>("Physics2D::BoxCollider");
-            type_info::of<Physics2D::CircleCollider>("Physics2D::CircleCollider");
-            type_info::of<Physics2D::Restitution>("Physics2D::Restitution");
-            type_info::of<Physics2D::Friction>("Physics2D::Friction");
+            type_info::register_type<Script::Woolang>("Script::Woolang");
 
-            type_info::of<Audio::Source>("Audio::Source");
-            type_info::of<Audio::Listener>("Audio::Listener");
-            type_info::of<Audio::Playing>("Audio::Playing");
+            type_info::register_type<Physics2D::Rigidbody>("Physics2D::Rigidbody");
+            type_info::register_type<Physics2D::Kinematics>("Physics2D::Kinematics");
+            type_info::register_type<Physics2D::Mass>("Physics2D::Mass");
+            type_info::register_type<Physics2D::Bullet>("Physics2D::Bullet");
+            type_info::register_type<Physics2D::BoxCollider>("Physics2D::BoxCollider");
+            type_info::register_type<Physics2D::CircleCollider>("Physics2D::CircleCollider");
+            type_info::register_type<Physics2D::Restitution>("Physics2D::Restitution");
+            type_info::register_type<Physics2D::Friction>("Physics2D::Friction");
 
-            type_info::of<Scene::MapTile>("Scene::MapTile");
+            type_info::register_type<Audio::Source>("Audio::Source");
+            type_info::register_type<Audio::Listener>("Audio::Listener");
+            type_info::register_type<Audio::Playing>("Audio::Playing");
+
+            type_info::register_type<Scene::MapTile>("Scene::MapTile");
 
             // 1. register basic types
             typing::register_script_parser<bool>(
