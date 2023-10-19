@@ -135,10 +135,10 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
     jegl_gl3_context* context = new jegl_gl3_context;
     if (!reboot)
     {
-        jeecs::debug::log("Graphic thread start!");
+        jeecs::debug::log("Graphic thread (OpenGL330) start!");
 
         if (!glfwInit())
-                jeecs::debug::logfatal("Failed to init glfw.");
+            jeecs::debug::logfatal("Failed to init glfw.");
 
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -155,9 +155,9 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
     context->WINDOWS_SIZE_WIDTH = config->m_width == 0 ? primary_monitor_video_mode->width : config->m_width;
     context->WINDOWS_SIZE_HEIGHT = config->m_height == 0 ? primary_monitor_video_mode->height : config->m_height;
 
-    glfwWindowHint(GLFW_REFRESH_RATE, 
-        config->m_fps == 0 
-        ? primary_monitor_video_mode->refreshRate 
+    glfwWindowHint(GLFW_REFRESH_RATE,
+        config->m_fps == 0
+        ? primary_monitor_video_mode->refreshRate
         : (int)config->m_fps);
     glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
@@ -265,7 +265,7 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);
 
-    jegui_init(context->WINDOWS_HANDLE, reboot);
+    jegui_init_gl330(context->WINDOWS_HANDLE, reboot);
 
     return context;
 }
@@ -309,16 +309,18 @@ bool gl_update(jegl_thread* ctx)
 
 bool gl_lateupdate(jegl_thread* thread_context)
 {
-    jegui_update(thread_context);
+    jegui_update_gl330(thread_context);
     return true;
 }
 
 void gl_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, bool reboot)
 {
     jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(userdata));
-    jeecs::debug::log("Graphic thread shutdown!");
 
-    jegui_shutdown(reboot);
+    if (!reboot)
+        jeecs::debug::log("Graphic thread (OpenGL330) shutdown!");
+
+    jegui_shutdown_gl330(reboot);
     glfwDestroyWindow(context->WINDOWS_HANDLE);
     delete context;
 

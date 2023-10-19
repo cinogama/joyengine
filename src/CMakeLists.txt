@@ -17,7 +17,13 @@ include_directories("../3rd/openal-soft/include")
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
 
-set(imgui_glfw_gl3_src	"../3rd/imgui/backends/imgui_impl_glfw.cpp"
+set(imgui_glfw_gl3_src	# DX11
+						"../3rd/imgui/backends/imgui_impl_win32.cpp"
+						"../3rd/imgui/backends/imgui_impl_win32.h"
+						"../3rd/imgui/backends/imgui_impl_dx11.cpp"
+						"../3rd/imgui/backends/imgui_impl_dx11.h"
+						# OPENGL330
+						"../3rd/imgui/backends/imgui_impl_glfw.cpp"
 						"../3rd/imgui/backends/imgui_impl_glfw.h"
 						"../3rd/imgui/backends/imgui_impl_opengl3.cpp"
 						"../3rd/imgui/backends/imgui_impl_opengl3.h"

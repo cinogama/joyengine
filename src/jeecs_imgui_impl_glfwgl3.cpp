@@ -11,6 +11,12 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#ifdef _WIN32
+#   include <Windows.h>
+#   include <imgui_impl_win32.h>
+#   include <imgui_impl_dx11.h>
+#endif
+
 #include <GLFW/glfw3.h>
 
 
@@ -1965,7 +1971,7 @@ WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-void jegui_init(void* window_handle, bool reboot)
+void _jegui_init_basic()
 {
     _stop_work_flag = false;
     ImGui::CreateContext();
@@ -1992,14 +1998,9 @@ void jegui_init(void* window_handle, bool reboot)
         jeecs_file_close(ttf_file);
     }
 
-    ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
-    ImGui_ImplOpenGL3_Init("#version 330 core");
 }
-
-void jegui_update(jegl_thread* thread_context)
+void _jegui_update_basic()
 {
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
     auto* viewport = ImGui::GetMainViewport();
@@ -2063,10 +2064,8 @@ void jegui_update(jegl_thread* thread_context)
     }
 
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
-
-void jegui_shutdown(bool reboot)
+void _jegui_shutdown_basic(bool reboot)
 {
     if (!reboot)
     {
@@ -2090,6 +2089,63 @@ void jegui_shutdown(bool reboot)
             delete cur_job;
         }
     }
+}
+#ifdef _WIN32
+void jegui_init_dx11(
+    void* window_handle,
+    void* d11device,
+    void* d11context,
+    bool reboot)
+{
+    _jegui_init_basic();
+    ImGui_ImplWin32_Init(window_handle);
+    ImGui_ImplDX11_Init(
+        (ID3D11Device*)d11device,
+        (ID3D11DeviceContext*)d11context);
+}
+
+void jegui_update_dx11(
+    jegl_thread* thread_context)
+{
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    _jegui_update_basic();
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+}
+
+void jegui_shutdown_dx11(bool reboot)
+{
+    _jegui_shutdown_basic(reboot);
+    ImGui_ImplDX11_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+}
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
+        return true;
+    return false;
+}
+#endif
+void jegui_init_gl330(void* window_handle, bool reboot)
+{
+    _jegui_init_basic();
+    ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
+    ImGui_ImplOpenGL3_Init("#version 330 core");
+}
+
+void jegui_update_gl330(jegl_thread* thread_context)
+{
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    _jegui_update_basic();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void jegui_shutdown_gl330(bool reboot)
+{
+    _jegui_shutdown_basic(reboot);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
