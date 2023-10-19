@@ -7256,14 +7256,14 @@ namespace jeecs
         struct LocalRotation
         {
             math::quat rot;
-            inline math::quat get_parent_world_rotation(const Translation& translation)const noexcept
+            inline math::quat get_parent_global_rotation(const Translation& translation)const noexcept
             {
                 return translation.world_rotation * rot.inverse();
             }
-            inline void set_world_rotation(const math::quat& _rot, const Translation& translation) noexcept
+            inline void set_global_rotation(const math::quat& _rot, const Translation& translation) noexcept
             {
-                auto x = get_parent_world_rotation(translation).inverse();
-                rot = _rot * get_parent_world_rotation(translation).inverse();
+                auto x = get_parent_global_rotation(translation).inverse();
+                rot = _rot * get_parent_global_rotation(translation).inverse();
             }
 
             static void JERefRegsiter()
@@ -7276,20 +7276,20 @@ namespace jeecs
         {
             math::vec3 pos;
 
-            inline math::vec3 get_parent_world_position(const Translation& translation, const LocalRotation* rotation) const noexcept
+            inline math::vec3 get_parent_global_position(const Translation& translation, const LocalRotation* rotation) const noexcept
             {
                 if (rotation)
-                    return translation.world_position - rotation->get_parent_world_rotation(translation) * pos;
+                    return translation.world_position - rotation->get_parent_global_rotation(translation) * pos;
                 else
                     return translation.world_position - translation.world_rotation * pos;
             }
 
-            void set_world_position(const math::vec3& _pos, const Translation& translation, const LocalRotation* rotation) noexcept
+            void set_global_position(const math::vec3& _pos, const Translation& translation, const LocalRotation* rotation) noexcept
             {
                 if (rotation)
-                    pos = rotation->get_parent_world_rotation(translation).inverse() * (_pos - get_parent_world_position(translation, rotation));
+                    pos = rotation->get_parent_global_rotation(translation).inverse() * (_pos - get_parent_global_position(translation, rotation));
                 else
-                    pos = translation.world_rotation.inverse() * (_pos - get_parent_world_position(translation, nullptr));
+                    pos = translation.world_rotation.inverse() * (_pos - get_parent_global_position(translation, nullptr));
             }
 
             static void JERefRegsiter()

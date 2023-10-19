@@ -644,7 +644,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
 
                     if (mover.mode == Editor::EntityMover::mover_mode::movement && editing_pos_may_null)
                     {
-                        editing_pos_may_null->set_world_position(
+                        editing_pos_may_null->set_global_position(
                             editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * (mover.axis * distance * factor)),
                             *editing_trans,
                             editing_rot_may_null

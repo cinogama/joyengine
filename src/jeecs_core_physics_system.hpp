@@ -247,7 +247,7 @@ namespace jeecs
                                     kinematics->lock_movement_x ? 0.0f : rigidbody_instance->GetLinearVelocity().x,
                                     kinematics->lock_movement_y ? 0.0f : rigidbody_instance->GetLinearVelocity().y
                                 };
-                                localposition.set_world_position(
+                                localposition.set_global_position(
                                     math::vec3(
                                         kinematics->lock_movement_x ? translation.world_position.x : new_position.x,
                                         kinematics->lock_movement_y ? translation.world_position.y : new_position.y,
@@ -258,7 +258,7 @@ namespace jeecs
 
                                 auto&& world_angle = translation.world_rotation.euler_angle();
                                 world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
-                                localrotation.set_world_rotation(math::quat::euler(world_angle), translation);
+                                localrotation.set_global_rotation(math::quat::euler(world_angle), translation);
                             }
                         }
                 }

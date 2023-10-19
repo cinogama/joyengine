@@ -1284,13 +1284,9 @@ template<typename T>
 T* wo_option_component(wo_value val)
 {
     _wo_value tmp;
-    wo_struct_get(&tmp, val, 0);
-    if (wo_int(&tmp) == 1)
-    {
-        wo_struct_get(&tmp, val, 1);
-        wo_struct_get(&tmp, &tmp, 0);
-        return std::launder(reinterpret_cast<T*>(wo_pointer(&tmp)));
-    }
+    if (wo_option_get(val, &tmp))
+        return std::launder(reinterpret_cast<T*>(
+            wo_pointer(&tmp)));
     return nullptr;
 }
 
@@ -1549,6 +1545,86 @@ WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args,
     return wo_ret_val(vm, result);
 }
 
+/*
+    namespace LocalPosition
+    {
+        extern("libjoyecs", "wojeapi_towoo_transform_localposition_get_parent_global_pos")
+            public func get_parent_global_position(self: LocalPosition, trans: Translation, rot: option<LocalRotation>)=> vec3;
+
+        extern("libjoyecs", "wojeapi_towoo_transform_localposition_set_global_pos")
+            public func set_global_position(self: LocalPosition, pos: vec3, trans: Translation, rot: option<LocalRotation>)=> void;
+    }
+    namespace LocalRotation
+    {
+        extern("libjoyecs", "wojeapi_towoo_transform_localrotation_get_parent_global_rot")
+            public func get_parent_global_rotation(self: LocalRotation, trans: Translation)=> quat;
+
+        extern("libjoyecs", "wojeapi_towoo_transform_localrotation_set_global_rot")
+            public func set_global_position(self: LocalRotation, rot: quat, trans: Translation)=> void;
+    }*/
+
+WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* lrot = (jeecs::Transform::LocalRotation*)wo_pointer(c);
+
+    wo_struct_get(c, args + 1, 0);
+    auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
+
+    return wo_ret_val(vm,
+        wo_push_quat(vm, lrot->get_parent_global_rotation(*translation)));
+}
+
+WO_API wo_api wojeapi_towoo_transform_localrotation_set_global_rot(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* lrot = (jeecs::Transform::LocalRotation*)wo_pointer(c);
+
+    auto rot = wo_quat(args + 1);
+
+    wo_struct_get(c, args + 2, 0);
+    auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
+
+    lrot->set_global_rotation(rot, *translation);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* lpos = (jeecs::Transform::LocalPosition*)wo_pointer(c);
+
+    wo_struct_get(c, args + 1, 0);
+    auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
+
+    wo_struct_get(c, args + 2, 0);
+    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(c);
+
+    return wo_ret_val(vm, 
+        wo_push_vec3(vm, lpos->get_parent_global_position(*translation, lrot)));
+}
+WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* lpos = (jeecs::Transform::LocalPosition*)wo_pointer(c);
+
+    auto pos = wo_vec3(args + 1);
+
+    wo_struct_get(c, args + 2, 0);
+    auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
+
+    wo_struct_get(c, args + 3, 0);
+    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(c);
+
+    lpos->set_global_position(pos, *translation, lrot);
+    return wo_ret_void(vm);
+}
+
 const char* jeecs_towoo_path = "je/towoo.wo";
 const char* jeecs_towoo_src = R"(// (C)Cinogama. 
 import je::towoo::types;
@@ -1785,6 +1861,33 @@ namespace vec4
         return self[0] * b[0] + self[1] * b[1] + self[2] * b[2] + self[3] * b[3];
     }
 }
+namespace ivec2
+{
+    public func operator + (a: ivec2, b: ivec2)
+    {
+        return (a[0] + b[0], a[1] + b[1]): ivec2;
+    }
+    public func operator - (a: ivec2, b: ivec2)
+    {
+        return (a[0] - b[0], a[1] - b[1]): ivec2;
+    }
+    public func operator * (a: ivec2, b)
+        where b is ivec2 || b is int;
+    {
+        if (b is ivec2)
+            return (a[0] * b[0], a[1] * b[1]): ivec2;
+        else
+            return (a[0] * v, a[1] * v): ivec2;
+    }
+    public func operator / (a: ivec2, b)
+        where b is ivec2 || b is int;
+    {
+        if (b is ivec2)
+            return (a[0] / b[0], a[1] / b[1]): ivec2;
+        else
+            return (a[0] / v, a[1] / v): ivec2;
+    }
+}
 namespace quat
 {
     public func euler(yaw: real, pitch: real, roll: real)
@@ -1910,6 +2013,22 @@ namespace Transform
 
         extern("libjoyecs", "wojeapi_towoo_transform_translation_global_rot")
             public func get_global_rot(self: Translation)=> quat;
+    }
+    namespace LocalPosition
+    {
+        extern("libjoyecs", "wojeapi_towoo_transform_localposition_get_parent_global_pos")
+            public func get_parent_global_position(self: LocalPosition, trans: Translation, rot: option<LocalRotation>)=> vec3;
+
+        extern("libjoyecs", "wojeapi_towoo_transform_localposition_set_global_pos")
+            public func set_global_position(self: LocalPosition, pos: vec3, trans: Translation, rot: option<LocalRotation>)=> void;
+    }
+    namespace LocalRotation
+    {
+        extern("libjoyecs", "wojeapi_towoo_transform_localrotation_get_parent_global_rot")
+            public func get_parent_global_rotation(self: LocalRotation, trans: Translation)=> quat;
+
+        extern("libjoyecs", "wojeapi_towoo_transform_localrotation_set_global_rot")
+            public func set_global_position(self: LocalRotation, rot: quat, trans: Translation)=> void;
     }
 }
 namespace UserInterface
