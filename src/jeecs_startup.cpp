@@ -145,7 +145,7 @@ for (let _, p : files)
     crc64_result += F"{crc64file(path)->valor(0)}:{crc64str(path)};";
 }
 
-do crc64str(crc64_result);
+return crc64str(crc64_result);
 )");
 
     return wo_int(crc64val);// src_crc64* api_crc64;

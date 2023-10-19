@@ -452,7 +452,9 @@ for (;;)
 
                 if (BeginAttr("JoyEngineECS 项目导航", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus))
+                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                    + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                 {
                     Text("欢迎使用JoyEngine，请选择一项以开始");
 
@@ -525,7 +527,9 @@ for (;;)
             launch(func(specify_vs_version: mutable<option<int>>){
                 if (BeginAttr("JoyEngineECS 项目导航", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus))
+                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                    + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                 {
                     Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
                     Text("* 项目中的C++模块需要使用构建工具进行编译");
