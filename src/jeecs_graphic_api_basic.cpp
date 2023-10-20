@@ -365,6 +365,11 @@ void jegl_using_resource(jegl_resource* resource)
     
 }
 
+void* jegl_native_resource(jegl_resource* resource)
+{
+    return _current_graphic_thread->m_apis->native_resource(_current_graphic_thread, resource);
+}
+
 void _jegl_free_resource_instance(jegl_resource* resource)
 {
     assert(resource != nullptr);

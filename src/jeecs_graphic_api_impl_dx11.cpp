@@ -3,6 +3,8 @@
 
 #ifdef JE_OS_WINDOWS
 
+#include "jeecs_imgui_api.hpp"
+
 #include <D3D11.h>
 #include <wrl/client.h>
 
@@ -12,7 +14,7 @@
 #pragma comment(lib, "D3DCompiler.lib")
 #pragma comment(lib, "winmm.lib")
 
-#include "jeecs_imgui_api.hpp"
+#define JERCHECK(RC) if (FAILED(RC)){jeecs::debug::logfatal("JoyEngine DX11 Failed: " #RC);}
 
 struct jegl_dx11_context
 {
@@ -65,21 +67,12 @@ void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, si
 
     // 重设交换链并且重新创建渲染目标视图
     jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> back_buffer;
-    if (FAILED(context->m_dx_swapchain->ResizeBuffers(
-        1, (UINT)context->WINDOWS_SIZE_WIDTH, (UINT)context->WINDOWS_SIZE_HEIGHT, DXGI_FORMAT_R8G8B8A8_UNORM, 0)))
-    {
-        jeecs::debug::logfatal("Failed to create resize buffer of swapchain.");
-    }
-    if (FAILED(context->m_dx_swapchain->GetBuffer(
-        0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(back_buffer.GetAddressOf()))))
-    {
-        jeecs::debug::logfatal("Failed to get buffer buffer of swapchain.");
-    }
-    if (FAILED(context->m_dx_device->CreateRenderTargetView(
-        back_buffer.Get(), nullptr, context->m_dx_main_renderer_target_view.GetAddressOf())))
-    {
-        jeecs::debug::logfatal("Failed to create render target view.");
-    }
+    JERCHECK(context->m_dx_swapchain->ResizeBuffers(
+        1, (UINT)context->WINDOWS_SIZE_WIDTH, (UINT)context->WINDOWS_SIZE_HEIGHT, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
+    JERCHECK(context->m_dx_swapchain->GetBuffer(
+        0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(back_buffer.GetAddressOf())));
+    JERCHECK(context->m_dx_device->CreateRenderTargetView(
+        back_buffer.Get(), nullptr, context->m_dx_main_renderer_target_view.GetAddressOf()));
 
     // 设置调试对象名
 #ifndef _NDEBUG
@@ -115,18 +108,12 @@ void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, si
     depthStencilDesc.MiscFlags = 0;
 
     // 创建深度缓冲区以及深度模板视图
-    if (FAILED(context->m_dx_device->CreateTexture2D(
+    JERCHECK(context->m_dx_device->CreateTexture2D(
         &depthStencilDesc, nullptr,
-        context->m_dx_main_renderer_target_depth_buffer.GetAddressOf())))
-    {
-        jeecs::debug::logfatal("Failed to create depth buffer.");
-    }
-    if (FAILED(context->m_dx_device->CreateDepthStencilView(
+        context->m_dx_main_renderer_target_depth_buffer.GetAddressOf()));
+    JERCHECK(context->m_dx_device->CreateDepthStencilView(
         context->m_dx_main_renderer_target_depth_buffer.Get(), nullptr,
-        context->m_dx_main_renderer_target_depth_view.GetAddressOf())))
-    {
-        jeecs::debug::logfatal("Failed to create depth view.");
-    }
+        context->m_dx_main_renderer_target_depth_view.GetAddressOf()));
 
     // 将渲染目标视图和深度/模板缓冲区结合到管线
     context->m_dx_context->OMSetRenderTargets(1,
@@ -239,7 +226,7 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
     LONG height = R.bottom - R.top;
 
     context->m_window_handle = CreateWindowA("JoyEngineDX11Form", config->m_title,
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0, 
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0,
         context->m_win32_window_class.hInstance, 0);
     if (!context->m_window_handle)
     {
@@ -308,21 +295,9 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
 
     // 为了正确创建 DXGI交换链，首先我们需要获取创建 D3D设备 的 DXGI工厂，否则会引发报错：
     // "IDXGIFactory::CreateSwapChain: This function is being called with a device from a different IDXGIFactory."
-    if (FAILED(context->m_dx_device.As(&dxgiDevice)))
-    {
-        jeecs::debug::logfatal("Failed to create IDXGIDevice.");
-        return nullptr;
-    }
-    if (FAILED(dxgiDevice->GetAdapter(dxgiAdapter.GetAddressOf())))
-    {
-        jeecs::debug::logfatal("Failed to create IDXGIAdapter.");
-        return nullptr;
-    }
-    if (FAILED(dxgiAdapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(dxgiFactory1.GetAddressOf()))))
-    {
-        jeecs::debug::logfatal("Failed to create IDXGIFactory1.");
-        return nullptr;
-    }
+    JERCHECK(context->m_dx_device.As(&dxgiDevice));
+    JERCHECK(dxgiDevice->GetAdapter(dxgiAdapter.GetAddressOf()));
+    JERCHECK(dxgiAdapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(dxgiFactory1.GetAddressOf())));
 
     // 填充DXGI_SWAP_CHAIN_DESC用以描述交换链
     DXGI_SWAP_CHAIN_DESC sd;
@@ -367,12 +342,8 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
     sd.Windowed = TRUE;
     sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     sd.Flags = 0;
-    if (FAILED(dxgiFactory1->CreateSwapChain(
-        context->m_dx_device.Get(), &sd, context->m_dx_swapchain.GetAddressOf())))
-    {
-        jeecs::debug::logfatal("Failed to create swap chain.");
-        return nullptr;
-    }
+    JERCHECK(dxgiFactory1->CreateSwapChain(
+        context->m_dx_device.Get(), &sd, context->m_dx_swapchain.GetAddressOf()));
 
 
     // 可以禁止alt+enter全屏
@@ -422,14 +393,14 @@ void dx11_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, boo
         context->m_win32_window_class.lpszClassName,
         context->m_win32_window_class.hInstance))
     {
-        jeecs::debug::logfatal("Failed to shutdown windows for dx11: UnregisterClass failed.");    
+        jeecs::debug::logfatal("Failed to shutdown windows for dx11: UnregisterClass failed.");
     }
     delete context;
 }
 
 bool dx11_update(jegl_thread* ctx)
 {
-    jegl_dx11_context* context = 
+    jegl_dx11_context* context =
         std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
 
     MSG msg = { 0 };
@@ -452,10 +423,7 @@ bool dx11_update(jegl_thread* ctx)
 bool dx11_pre_update(jegl_thread* ctx)
 {
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
-    if (FAILED(context->m_dx_swapchain->Present(0, 0)))
-    {
-        jeecs::debug::logfatal("Failed to present swapchain.");
-    }
+    JERCHECK(context->m_dx_swapchain->Present(ctx->m_config.m_fps == 0 ? 1 : 0, 0));
     return true;
 }
 bool dx11_lateupdate(jegl_thread* ctx)
@@ -464,9 +432,141 @@ bool dx11_lateupdate(jegl_thread* ctx)
     return true;
 }
 
-void dx11_resource_todo(jegl_thread* gthread, jegl_resource* resource)
+struct jedx11_texture
 {
+    jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_texture;
+    jegl_dx11_context::MSWRLComPtr<ID3D11ShaderResourceView> m_texture_view;
+};
 
+void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
+{
+    jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+        break;
+    case jegl_resource::type::TEXTURE:
+    {
+        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::MSAA_MASK) == 0);
+        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK) == jegl_texture::format::RGBA);
+        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR16) == 0);
+        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH) == 0);
+        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF) == 0);
+        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::CUBE) == 0);
+
+        D3D11_TEXTURE2D_DESC texture_describe;
+        texture_describe.Width = (UINT)resource->m_raw_texture_data->m_width;
+        texture_describe.Height = (UINT)resource->m_raw_texture_data->m_height;
+        texture_describe.MipLevels = 1;
+        texture_describe.ArraySize = 1;
+        texture_describe.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        texture_describe.SampleDesc.Count = 1;
+        texture_describe.SampleDesc.Quality = 0;
+        texture_describe.Usage = D3D11_USAGE_DEFAULT;
+        texture_describe.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        texture_describe.CPUAccessFlags = 0;
+        texture_describe.MiscFlags = 0;
+
+        D3D11_SUBRESOURCE_DATA texture_sub_data;
+        texture_sub_data.pSysMem = resource->m_raw_texture_data->m_pixels;
+        texture_sub_data.SysMemPitch =
+            (UINT)resource->m_raw_texture_data->m_width *
+            ((UINT)resource->m_raw_texture_data->m_format &
+                jegl_texture::format::COLOR_DEPTH_MASK);
+        texture_sub_data.SysMemSlicePitch =
+            (UINT)resource->m_raw_texture_data->m_width *
+            (UINT)resource->m_raw_texture_data->m_height *
+            ((UINT)resource->m_raw_texture_data->m_format &
+                jegl_texture::format::COLOR_DEPTH_MASK);
+
+        jedx11_texture* jedx11_texture_res = new jedx11_texture;
+        JERCHECK(context->m_dx_device->CreateTexture2D(
+            &texture_describe, &texture_sub_data, jedx11_texture_res->m_texture.GetAddressOf()));
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
+        texture_shader_view_describe.Format = texture_describe.Format;
+        texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        texture_shader_view_describe.Texture2D.MipLevels = 1;
+        texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
+
+        JERCHECK(context->m_dx_device->CreateShaderResourceView(
+            jedx11_texture_res->m_texture.Get(),
+            &texture_shader_view_describe,
+            jedx11_texture_res->m_texture_view.GetAddressOf()));
+
+        resource->m_handle.m_ptr = jedx11_texture_res;
+        break;
+    }
+    case jegl_resource::type::VERTEX:
+        break;
+    case jegl_resource::type::FRAMEBUF:
+        break;
+    case jegl_resource::type::UNIFORMBUF:
+        break;
+    default:
+        break;
+    }
+}
+void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
+{
+    jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+        break;
+    case jegl_resource::type::TEXTURE:
+        break;
+    case jegl_resource::type::VERTEX:
+        break;
+    case jegl_resource::type::FRAMEBUF:
+        break;
+    case jegl_resource::type::UNIFORMBUF:
+        break;
+    default:
+        break;
+    }
+}
+void dx11_close_resource(jegl_thread* ctx, jegl_resource* resource)
+{
+    jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+        break;
+    case jegl_resource::type::TEXTURE:
+        delete std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
+        break;
+    case jegl_resource::type::VERTEX:
+        break;
+    case jegl_resource::type::FRAMEBUF:
+        break;
+    case jegl_resource::type::UNIFORMBUF:
+        break;
+    default:
+        break;
+    }
+}
+void* dx11_native_resource(jegl_thread* gthread, jegl_resource* resource)
+{
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+        return nullptr;
+    case jegl_resource::type::TEXTURE:
+    {
+        auto* res = std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
+        return (void*)(intptr_t)res->m_texture_view.Get();
+    }
+    case jegl_resource::type::VERTEX:
+        return nullptr;
+    case jegl_resource::type::FRAMEBUF:
+        return nullptr;
+    case jegl_resource::type::UNIFORMBUF:
+        return nullptr;
+    default:
+        jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
+        return nullptr;
+    }
 }
 
 void dx11_draw_vertex_with_shader_todo(jegl_thread*, jegl_resource* vert)
@@ -528,9 +628,10 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_interface = dx11_update;
     write_to_apis->late_update_interface = dx11_lateupdate;
 
-    write_to_apis->init_resource = dx11_resource_todo;
-    write_to_apis->using_resource = dx11_resource_todo;
-    write_to_apis->close_resource = dx11_resource_todo;
+    write_to_apis->init_resource = dx11_init_resource;
+    write_to_apis->using_resource = dx11_using_resource;
+    write_to_apis->close_resource = dx11_close_resource;
+    write_to_apis->native_resource = dx11_native_resource;
 
     write_to_apis->draw_vertex = dx11_draw_vertex_with_shader_todo;
     write_to_apis->bind_texture = dx11_bind_texture_todo;

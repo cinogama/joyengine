@@ -1,11 +1,11 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_imgui_api.hpp"
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
-
-#include "jeecs_imgui_api.hpp"
 
 // Here is low-level-graphic-api impl.
 // OpenGL version.
@@ -378,7 +378,10 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 {
     assert(resource->m_custom_resource != nullptr);
 
-    if (resource->m_type == jegl_resource::type::SHADER)
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+
     {
         GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertex_shader, 1, &resource->m_raw_shader_data->m_vertex_glsl_src, NULL);
@@ -458,8 +461,9 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 
         glDeleteShader(vertex_shader);
         glDeleteShader(fragment_shader);
+        break;
     }
-    else if (resource->m_type == jegl_resource::type::TEXTURE)
+    case jegl_resource::type::TEXTURE:
     {
         GLuint texture;
         glGenTextures(1, &texture);
@@ -599,8 +603,10 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         resource->m_handle.m_uint1 = texture;
         resource->m_handle.m_uint2 = (uint32_t)resource->m_raw_texture_data->m_format;
         static_assert(std::is_same<decltype(resource->m_handle.m_uint2), uint32_t>::value);
+        break;
     }
-    else if (resource->m_type == jegl_resource::type::VERTEX)
+    case jegl_resource::type::VERTEX:
+
     {
         GLuint vao, vbo;
         glGenVertexArrays(1, &vao);
@@ -640,8 +646,10 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         vertex_data->m_pointcount = (GLsizei)resource->m_raw_vertex_data->m_point_count;
 
         resource->m_handle.m_ptr = vertex_data;
+        break;
     }
-    else if (resource->m_type == jegl_resource::type::FRAMEBUF)
+    case jegl_resource::type::FRAMEBUF:
+
     {
         GLuint fbo;
         glGenFramebuffers(1, &fbo);
@@ -690,8 +698,9 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
         if (status != GL_FRAMEBUFFER_COMPLETE)
             jeecs::debug::logerr("Framebuffer(%p) not complete, status: %d.", resource, (int)status);
+        break;
     }
-    else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
+    case jegl_resource::type::UNIFORMBUF:
     {
         GLuint uniform_buffer_object;
         glGenBuffers(1, &uniform_buffer_object);
@@ -704,9 +713,13 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             uniform_buffer_object, 0, resource->m_raw_uniformbuf_data->m_buffer_size);
 
         resource->m_handle.m_uint1 = uniform_buffer_object;
+        break;
     }
-    else
+    default:
         jeecs::debug::logerr("Unknown resource type when initing resource(%p), please check.", resource);
+        break;
+    }
+       
 }
 
 thread_local static jegl_shader::depth_test_method  ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
@@ -882,18 +895,24 @@ inline void _gl_using_texture2d(jegl_thread* gthread, jegl_resource* resource)
 
 void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
 {
-    if (resource->m_type == jegl_resource::type::SHADER)
-        _gl_using_shader_program(resource);
-    else if (resource->m_type == jegl_resource::type::TEXTURE)
-        _gl_using_texture2d(gthread, resource);
-    else if (resource->m_type == jegl_resource::type::VERTEX)
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+        _gl_using_shader_program(resource); 
+        break;
+    case jegl_resource::type::TEXTURE:
+        _gl_using_texture2d(gthread, resource); 
+        break;
+    case jegl_resource::type::VERTEX:
     {
         if (auto vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(resource->m_handle.m_ptr)))
             glBindVertexArray(vdata->m_vao);
+        break;
     }
-    else if (resource->m_type == jegl_resource::type::FRAMEBUF)
+    case jegl_resource::type::FRAMEBUF:
         glBindFramebuffer(GL_FRAMEBUFFER, resource->m_handle.m_uint1);
-    else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
+        break;
+    case jegl_resource::type::UNIFORMBUF:
     {
         glBindBuffer(GL_UNIFORM_BUFFER, (GLuint)resource->m_handle.m_uint1);
 
@@ -913,30 +932,65 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
                 resource->m_raw_uniformbuf_data->m_update_length = 0;
             }
         }
+        break;
     }
-    else
+    default:
         jeecs::debug::logerr("Unknown resource type(%d) when using when resource %p.", (int)resource->m_type, resource);
+        break;
+    }
 }
 
 void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
 {
-    if (resource->m_type == jegl_resource::type::SHADER)
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
         glDeleteProgram(resource->m_handle.m_uint1);
-    else if (resource->m_type == jegl_resource::type::TEXTURE)
+        break;
+    case jegl_resource::type::TEXTURE:
         glDeleteTextures(1, &resource->m_handle.m_uint1);
-    else if (resource->m_type == jegl_resource::type::VERTEX)
+        break;
+    case jegl_resource::type::VERTEX:
     {
         gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(resource->m_handle.m_ptr));
         glDeleteVertexArrays(1, &vdata->m_vao);
         glDeleteBuffers(1, &vdata->m_vbo);
         delete vdata;
+        break;
     }
-    else if (resource->m_type == jegl_resource::type::FRAMEBUF)
+    case jegl_resource::type::FRAMEBUF:
         glDeleteFramebuffers(1, &resource->m_handle.m_uint1);
-    else if (resource->m_type == jegl_resource::type::UNIFORMBUF)
+        break;
+    case jegl_resource::type::UNIFORMBUF:
         glDeleteBuffers(1, &resource->m_handle.m_uint1);
-    else
+        break;
+    default:
         jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
+        break;
+    }
+}
+
+void* gl_native_resource(jegl_thread* gthread, jegl_resource* resource)
+{
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+        return (void*)(intptr_t)resource->m_handle.m_uint1;
+    case jegl_resource::type::TEXTURE:
+        return (void*)(intptr_t)resource->m_handle.m_uint1;
+    case jegl_resource::type::VERTEX:
+    {
+        gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(resource->m_handle.m_ptr));
+        return (void*)(intptr_t)vdata->m_vao;
+    }
+    case jegl_resource::type::FRAMEBUF:
+        return (void*)(intptr_t)resource->m_handle.m_uint1;
+    case jegl_resource::type::UNIFORMBUF:
+        return (void*)(intptr_t)resource->m_handle.m_uint1;
+    default:
+        jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
+        return nullptr;
+    }
 }
 
 void gl_bind_texture(jegl_thread*, jegl_resource* texture, size_t pass)
@@ -1012,6 +1066,7 @@ void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->init_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;
     write_to_apis->close_resource = gl_close_resource;
+    write_to_apis->native_resource = gl_native_resource;
 
     write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
     write_to_apis->bind_texture = gl_bind_texture;
