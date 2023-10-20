@@ -17,26 +17,30 @@ include_directories("../3rd/openal-soft/include")
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
 
-set(imgui_glfw_gl3_src	# DX11
-						"../3rd/imgui/backends/imgui_impl_win32.cpp"
-						"../3rd/imgui/backends/imgui_impl_win32.h"
-						"../3rd/imgui/backends/imgui_impl_dx11.cpp"
-						"../3rd/imgui/backends/imgui_impl_dx11.h"
-						# OPENGL330
-						"../3rd/imgui/backends/imgui_impl_glfw.cpp"
-						"../3rd/imgui/backends/imgui_impl_glfw.h"
-						"../3rd/imgui/backends/imgui_impl_opengl3.cpp"
-						"../3rd/imgui/backends/imgui_impl_opengl3.h"
-						"../3rd/imgui/backends/imgui_impl_opengl3_loader.h"
-						"../3rd/imgui/imconfig.h"
-						"../3rd/imgui/imgui.cpp"
-						"../3rd/imgui/imgui_draw.cpp"
-						"../3rd/imgui/imgui.h"
-						"../3rd/imgui/imgui_internal.h"
-						"../3rd/imgui/imgui_tables.cpp"
-						"../3rd/imgui/imgui_widgets.cpp"
-						"../3rd/imgui/misc/cpp/imgui_stdlib.cpp"
-						"../3rd/imgui/misc/cpp/imgui_stdlib.h")
+set(imgui_srcs	"../3rd/imgui/imconfig.h"
+				"../3rd/imgui/imgui.cpp"
+				"../3rd/imgui/imgui_draw.cpp"
+				"../3rd/imgui/imgui.h"
+				"../3rd/imgui/imgui_internal.h"
+				"../3rd/imgui/imgui_tables.cpp"
+				"../3rd/imgui/imgui_widgets.cpp"
+				"../3rd/imgui/misc/cpp/imgui_stdlib.cpp"
+				"../3rd/imgui/misc/cpp/imgui_stdlib.h")
+
+list(APPEND imgui_srcs # OPENGL330
+				"../3rd/imgui/backends/imgui_impl_glfw.cpp"
+				"../3rd/imgui/backends/imgui_impl_glfw.h"
+				"../3rd/imgui/backends/imgui_impl_opengl3.cpp"
+				"../3rd/imgui/backends/imgui_impl_opengl3.h"
+				"../3rd/imgui/backends/imgui_impl_opengl3_loader.h")
+
+if (WIN32)
+	list(APPEND imgui_srcs # DX11
+				"../3rd/imgui/backends/imgui_impl_win32.cpp"
+				"../3rd/imgui/backends/imgui_impl_win32.h"
+				"../3rd/imgui/backends/imgui_impl_dx11.cpp"
+				"../3rd/imgui/backends/imgui_impl_dx11.h")
+endif()
 
 if (WIN32)
 	list(APPEND jeecs_system_libs OpenGL32)
@@ -46,13 +50,13 @@ endif()
 
 if (${BUILD_SHARED_LIBS})
 	add_definitions(-DWO_SHARED_LIB)
-	add_library(joyecs SHARED ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_glfw_gl3_src})
+	add_library(joyecs SHARED ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_srcs})
 	if(UNIX)
 		add_compile_options(-Wall -rdynamic)
 endif()
 else()
 	add_definitions(-DWO_STATIC_LIB)
-	add_library(joyecs STATIC ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_glfw_gl3_src})
+	add_library(joyecs STATIC ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_srcs})
 endif()
 
 set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)

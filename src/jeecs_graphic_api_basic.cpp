@@ -518,18 +518,26 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     shader->m_type = jegl_resource::SHADER;
     shader->m_raw_shader_data = _shader;
 
-    uint64_t vertex_glsl_src_len, fragment_glsl_src_len;
+    uint64_t vertex_glsl_src_len, fragment_glsl_src_len, vertex_hlsl_src_len, fragment_hlsl_src_len;
 
     // 1. Read generated source
     jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
     _shader->m_vertex_glsl_src = (const char*)je_mem_alloc((size_t)vertex_glsl_src_len + 1);
     jeecs_file_read(const_cast<char*>(_shader->m_vertex_glsl_src), sizeof(char), (size_t)vertex_glsl_src_len, cache_file);
     const_cast<char*>(_shader->m_vertex_glsl_src)[(size_t)vertex_glsl_src_len] = 0;
-
     jeecs_file_read(&fragment_glsl_src_len, sizeof(uint64_t), 1, cache_file);
     _shader->m_fragment_glsl_src = (const char*)je_mem_alloc((size_t)fragment_glsl_src_len + 1);
     jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsl_src), sizeof(char), (size_t)fragment_glsl_src_len, cache_file);
     const_cast<char*>(_shader->m_fragment_glsl_src)[(size_t)fragment_glsl_src_len] = 0;
+
+    jeecs_file_read(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
+    _shader->m_vertex_hlsl_src = (const char*)je_mem_alloc((size_t)vertex_hlsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_vertex_hlsl_src), sizeof(char), (size_t)vertex_hlsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_vertex_hlsl_src)[(size_t)vertex_hlsl_src_len] = 0;
+    jeecs_file_read(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
+    _shader->m_fragment_hlsl_src = (const char*)je_mem_alloc((size_t)fragment_hlsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_fragment_hlsl_src), sizeof(char), (size_t)fragment_hlsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_fragment_hlsl_src)[(size_t)fragment_hlsl_src_len] = 0;
 
     // 2. read shader config
     jeecs_file_read(&_shader->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
@@ -611,6 +619,16 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         current_block->m_next = nullptr;
     }
 
+    // 4.3 read shader vertex layout
+    uint64_t vertex_in_count;
+    jeecs_file_read(&vertex_in_count, sizeof(uint64_t), 1, cache_file);
+    
+    _shader->m_vertex_in_count = (size_t)vertex_in_count;
+    _shader->m_vertex_in = new jegl_shader::vertex_in_variables[_shader->m_vertex_in_count];
+
+    jeecs_file_read(_shader->m_vertex_in, sizeof(jegl_shader::vertex_in_variables),
+        _shader->m_vertex_in_count, cache_file);
+
     jeecs_file_close(cache_file);
 
     shader->m_path = jeecs::basic::make_new_string(path);
@@ -632,13 +650,19 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
 
         uint64_t vertex_glsl_src_len = (uint64_t)strlen(raw_shader_data->m_vertex_glsl_src);
         uint64_t fragment_glsl_src_len = (uint64_t)strlen(raw_shader_data->m_fragment_glsl_src);
+        uint64_t vertex_hlsl_src_len = (uint64_t)strlen(raw_shader_data->m_vertex_hlsl_src);
+        uint64_t fragment_hlsl_src_len = (uint64_t)strlen(raw_shader_data->m_fragment_hlsl_src);
 
         // 1. write shader generated source to cache
         jeecs_write_cache_file(&vertex_glsl_src_len, sizeof(uint64_t), 1, cachefile);
         jeecs_write_cache_file(raw_shader_data->m_vertex_glsl_src, sizeof(char), (size_t)vertex_glsl_src_len, cachefile);
-
         jeecs_write_cache_file(&fragment_glsl_src_len, sizeof(uint64_t), 1, cachefile);
         jeecs_write_cache_file(raw_shader_data->m_fragment_glsl_src, sizeof(char), (size_t)fragment_glsl_src_len, cachefile);
+
+        jeecs_write_cache_file(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_vertex_hlsl_src, sizeof(char), (size_t)vertex_hlsl_src_len, cachefile);
+        jeecs_write_cache_file(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_fragment_hlsl_src, sizeof(char), (size_t)fragment_hlsl_src_len, cachefile);
 
         // 2. write shader config to cache
         /*
@@ -710,7 +734,11 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
             custom_uniform_block = custom_uniform_block->m_next;
         }
 
-        jeecs_close_cache_file(cachefile);
+        // 4.3 write shader vertex layout
+        uint64_t vertex_in_count = (uint64_t)raw_shader_data->m_vertex_in_count;
+        jeecs_write_cache_file(&vertex_in_count, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_vertex_in, sizeof(jegl_shader::vertex_in_variables), 
+            raw_shader_data->m_vertex_in_count, cachefile);
     }
 }
 

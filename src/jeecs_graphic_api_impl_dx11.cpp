@@ -6,6 +6,7 @@
 #include "jeecs_imgui_api.hpp"
 
 #include <D3D11.h>
+#include <d3dcompiler.h>
 #include <wrl/client.h>
 
 #pragma comment(lib, "d3d11.lib")
@@ -437,6 +438,12 @@ struct jedx11_texture
     jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_texture;
     jegl_dx11_context::MSWRLComPtr<ID3D11ShaderResourceView> m_texture_view;
 };
+struct jedx11_shader
+{
+    jegl_dx11_context::MSWRLComPtr<ID3D11InputLayout> m_vao; // WTF?
+    jegl_dx11_context::MSWRLComPtr<ID3D11VertexShader> m_vertex;
+    jegl_dx11_context::MSWRLComPtr<ID3D11PixelShader> m_fragment;
+};
 
 void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
 {
@@ -444,7 +451,165 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
     switch (resource->m_type)
     {
     case jegl_resource::type::SHADER:
+    {
+        jedx11_shader* jedx11_shader_res = new jedx11_shader;
+        bool shader_load_failed = false;
+
+        std::string error_informations;
+
+        jegl_dx11_context::MSWRLComPtr<ID3DBlob> blob;
+        ID3DBlob* error_blob = nullptr;
+        auto compile_result = D3DCompile(
+            resource->m_raw_shader_data->m_vertex_hlsl_src,
+            strlen(resource->m_raw_shader_data->m_vertex_hlsl_src),
+            resource->m_path == nullptr ? "__joyengine_builtin_vshader__" : resource->m_path,
+            nullptr,
+            D3D_COMPILE_STANDARD_FILE_INCLUDE,
+            "vertex_main",
+            "vs_5_0",
+            D3DCOMPILE_ENABLE_STRICTNESS
+#ifdef _DEBUG
+            // 设置 D3DCOMPILE_DEBUG 标志用于获取着色器调试信息。该标志可以提升调试体验，
+            // 但仍然允许着色器进行优化操作
+            | D3DCOMPILE_DEBUG
+            // 在Debug环境下禁用优化以避免出现一些不合理的情况
+            | D3DCOMPILE_SKIP_OPTIMIZATION
+#endif
+            ,
+            0,
+            blob.GetAddressOf(),
+            &error_blob);
+
+        if (FAILED(compile_result))
+        {
+            shader_load_failed = true;
+            error_informations += "In vertex shader: \n";
+            if (error_blob != nullptr)
+            {
+                error_informations += reinterpret_cast<const char*>(error_blob->GetBufferPointer());
+                error_blob->Release();
+                error_blob = nullptr;
+            }
+            else
+                error_informations += "Unknown vertex shader failed.";
+        }
+        else
+        {
+            JERCHECK(context->m_dx_device->CreateVertexShader(
+                blob->GetBufferPointer(), 
+                blob->GetBufferSize(), 
+                nullptr,
+                jedx11_shader_res->m_vertex.GetAddressOf()));
+
+            UINT layout_begin_offset = 0;
+
+            std::vector<std::string> vertex_in_name(resource->m_raw_shader_data->m_vertex_in_count);
+            std::vector<D3D11_INPUT_ELEMENT_DESC> vertex_in_layout(resource->m_raw_shader_data->m_vertex_in_count);
+
+            for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
+            {
+                auto& vlayout = vertex_in_layout[i];
+
+                vertex_in_name[i] = "_HLSL_VIN_" + std::to_string(i);
+
+                vlayout.SemanticName = vertex_in_name[i].c_str();
+                vlayout.SemanticIndex = 0;
+                vlayout.InputSlot = 0;
+                vlayout.AlignedByteOffset = layout_begin_offset;
+                vlayout.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
+                vlayout.InstanceDataStepRate = 0;
+
+                switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
+                {
+                case jegl_shader::uniform_type::INT:
+                    vlayout.Format = DXGI_FORMAT_R32_SINT;
+                    layout_begin_offset += 4;
+                    break;
+                case jegl_shader::uniform_type::FLOAT:
+                    vlayout.Format = DXGI_FORMAT_R32_FLOAT;
+                    layout_begin_offset += 4;
+                    break;
+                case jegl_shader::uniform_type::FLOAT2:
+                    vlayout.Format = DXGI_FORMAT_R32G32_FLOAT;
+                    layout_begin_offset += 8;
+                    break;
+                case jegl_shader::uniform_type::FLOAT3:
+                    vlayout.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+                    layout_begin_offset += 12;
+                    break;
+                case jegl_shader::uniform_type::FLOAT4:
+                    vlayout.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+                    layout_begin_offset += 16;
+                    break;
+                default:
+                    jeecs::debug::loginfo("Unsupport DX11 vertex in layout type(%d) when init shader(%p).",
+                        (int)resource->m_raw_shader_data->m_vertex_in[i].m_type, resource);
+                    vlayout.Format = DXGI_FORMAT_R32_SINT;
+                    break;
+                }
+            }
+            JERCHECK(context->m_dx_device->CreateInputLayout(
+                vertex_in_layout.data(),
+                vertex_in_layout.size(),
+                blob->GetBufferPointer(),
+                blob->GetBufferSize(),
+                jedx11_shader_res->m_vao.GetAddressOf()));
+        }
+
+        compile_result = D3DCompile(
+            resource->m_raw_shader_data->m_fragment_hlsl_src,
+            strlen(resource->m_raw_shader_data->m_fragment_hlsl_src),
+            resource->m_path == nullptr ? "__joyengine_builtin_fshader__" : resource->m_path,
+            nullptr,
+            D3D_COMPILE_STANDARD_FILE_INCLUDE,
+            "fragment_main",
+            "ps_5_0",
+            D3DCOMPILE_ENABLE_STRICTNESS
+#ifdef _DEBUG
+            // 设置 D3DCOMPILE_DEBUG 标志用于获取着色器调试信息。该标志可以提升调试体验，
+            // 但仍然允许着色器进行优化操作
+            | D3DCOMPILE_DEBUG
+            // 在Debug环境下禁用优化以避免出现一些不合理的情况
+            | D3DCOMPILE_SKIP_OPTIMIZATION
+#endif
+            ,
+            0,
+            blob.ReleaseAndGetAddressOf(),
+            &error_blob);
+
+        if (FAILED(compile_result))
+        {
+            shader_load_failed = true;
+            error_informations += "In fragment shader: \n";
+            if (error_blob != nullptr)
+            {
+                error_informations += reinterpret_cast<const char*>(error_blob->GetBufferPointer());
+                error_blob->Release();
+                error_blob = nullptr;
+            }
+            else
+                error_informations += "Unknown fragment shader failed.";
+        }
+        else
+        {
+            JERCHECK(context->m_dx_device->CreatePixelShader(
+                blob->GetBufferPointer(),
+                blob->GetBufferSize(),
+                nullptr,
+                jedx11_shader_res->m_fragment.GetAddressOf()));
+        }
+
+        if (shader_load_failed)
+        {
+            jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
+                resource, error_informations.c_str());
+            resource->m_handle.m_ptr = nullptr;
+        }
+        else
+            resource->m_handle.m_ptr = jedx11_shader_res;
+
         break;
+    }
     case jegl_resource::type::TEXTURE:
     {
         assert((resource->m_raw_texture_data->m_format & jegl_texture::format::MSAA_MASK) == 0);
@@ -532,7 +697,7 @@ void dx11_close_resource(jegl_thread* ctx, jegl_resource* resource)
     switch (resource->m_type)
     {
     case jegl_resource::type::SHADER:
-        break;
+        delete std::launder(reinterpret_cast<jedx11_shader*>(resource->m_handle.m_ptr));
     case jegl_resource::type::TEXTURE:
         delete std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
         break;

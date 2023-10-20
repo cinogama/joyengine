@@ -393,7 +393,7 @@ calc_func_t* _get_reduce_func(action_node* cur_node, jegl_shader_value::type* ar
             return nullptr;
     }
 
-    assert(index < argc && cur_node);
+    assert(index < argc&& cur_node);
 
     for (auto* next_step : cur_node->m_next_step)
     {
@@ -608,6 +608,9 @@ struct shader_configs
 
 struct shader_wrapper
 {
+    jegl_shader_value::type* vertex_in;
+    size_t vertex_in_count;
+
     shader_value_outs* vertex_out;
     shader_value_outs* fragment_out;
     shader_configs shader_config;
@@ -627,6 +630,8 @@ struct shader_wrapper
 
         delete vertex_out;
         delete fragment_out;
+
+        delete[]vertex_in;
     }
 };
 
@@ -693,7 +698,7 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size
         if (val == nullptr || jegl_shader_value::type::FLOAT4 != val->get_type())
             return wo_ret_halt(vm, "'vert' must return a struct with first member of 'float4'.");
     }
-        
+
     shader_value_outs* values = new shader_value_outs;
     values->out_values.resize(structsz);
     for (uint16_t i = 0; i < structsz; i++)
@@ -728,26 +733,40 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
     shader_configs config;
 
     wo_value elem = wo_push_empty(vm);
-    wo_struct_get(elem, args + 2, 0);
+
+    wo_integer_t vin_size = wo_lengthof(args + 0);
+    jegl_shader_value::type* vertex_in_layouts = new jegl_shader_value::type[vin_size];
+    for (wo_integer_t i = 0; i < vin_size; ++i)
+    {
+        wo_struct_get(elem, args + 0, i);
+        auto* shader_val = (jegl_shader_value*)wo_pointer(elem);
+
+        if (shader_val->is_shader_in_value() == false)
+            return wo_ret_halt(vm, "Unsupport value source, should be vertex in.");
+
+        vertex_in_layouts[i] = shader_val->get_type();
+    }
+
+    wo_struct_get(elem, args + 3, 0);
     config.m_enable_shared = wo_bool(elem);
-    wo_struct_get(elem, args + 2, 1);
+    wo_struct_get(elem, args + 3, 1);
     config.m_depth_test = (jegl_shader::depth_test_method)wo_int(elem);
-    wo_struct_get(elem, args + 2, 2);
+    wo_struct_get(elem, args + 3, 2);
     config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(elem);
-    wo_struct_get(elem, args + 2, 3);
+    wo_struct_get(elem, args + 3, 3);
     config.m_blend_src = (jegl_shader::blend_method)wo_int(elem);
-    wo_struct_get(elem, args + 2, 4);
+    wo_struct_get(elem, args + 3, 4);
     config.m_blend_dst = (jegl_shader::blend_method)wo_int(elem);
-    wo_struct_get(elem, args + 2, 5);
+    wo_struct_get(elem, args + 3, 5);
     config.m_cull_mode = (jegl_shader::cull_mode)wo_int(elem);
 
     shader_struct_define** ubos = nullptr;
-    size_t ubo_count = (size_t)wo_lengthof(args + 3);
+    size_t ubo_count = (size_t)wo_lengthof(args + 4);
 
     ubos = new shader_struct_define * [ubo_count + 1];
     for (size_t i = 0; i < ubo_count; ++i)
     {
-        wo_arr_get(elem, args + 3, i);
+        wo_arr_get(elem, args + 4, i);
         ubos[i] = (shader_struct_define*)wo_pointer(elem);
     }
     ubos[ubo_count] = nullptr;
@@ -755,8 +774,10 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
     return wo_ret_gchandle(vm,
         new shader_wrapper
         {
-            (shader_value_outs*)wo_pointer(args + 0),
+            vertex_in_layouts,
+            (size_t)vin_size,
             (shader_value_outs*)wo_pointer(args + 1),
+            (shader_value_outs*)wo_pointer(args + 2),
             config,
             ubos
         }, nullptr,
@@ -765,16 +786,98 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
         });
 }
 
+class _shader_wrapper_contex
+{
+public:
+    std::unordered_map<jegl_shader_value*, std::string> _calced_value;
+    std::unordered_map<jegl_shader_value*, std::pair<size_t, std::string>> _in_value;
+    std::unordered_map<jegl_shader_value*, std::string> _uniform_value;
+    int _variable_count = 0;
+
+    std::unordered_set<std::string> _used_builtin_func;
+
+    bool get_var_name(jegl_shader_value* val, std::string& var_name, bool is_in_fragment)
+    {
+        if (val->is_init_value())
+            return true;
+
+        auto fnd = _calced_value.find(val);
+        if (fnd == _calced_value.end())
+        {
+            if (val->is_uniform_variable())
+            {
+                var_name = _calced_value[val] = val->m_unifrom_varname;
+                if (!val->is_block_uniform_variable())
+                    _uniform_value[val] = var_name;
+            }
+            else if (val->is_shader_in_value())
+            {
+                if (is_in_fragment)
+                    var_name = "_v2f_" + std::to_string(val->m_shader_in_index);
+                else
+                    var_name = "_in_" + std::to_string(val->m_shader_in_index);
+
+                _in_value[val] = std::pair{ val->m_shader_in_index, var_name };
+
+                _calced_value[val] = var_name;
+            }
+            else
+            {
+                var_name = "_val_" + std::to_string(_variable_count++);
+                _calced_value[val] = var_name;
+            }
+            return true;
+        }
+
+        var_name = fnd->second;
+        return false;
+    }
+
+    static jegl_shader::uniform_type get_outside_type(jegl_shader_value::type ty)
+    {
+        switch (ty)
+        {
+        case jegl_shader_value::type::INTEGER:
+            return jegl_shader::uniform_type::INT;
+        case jegl_shader_value::type::FLOAT:
+            return jegl_shader::uniform_type::FLOAT;
+        case jegl_shader_value::type::FLOAT2:
+            return jegl_shader::uniform_type::FLOAT2;
+        case jegl_shader_value::type::FLOAT3:
+            return jegl_shader::uniform_type::FLOAT3;
+        case jegl_shader_value::type::FLOAT4:
+            return jegl_shader::uniform_type::FLOAT4;
+        case jegl_shader_value::type::FLOAT4x4:
+            return jegl_shader::uniform_type::FLOAT4X4;
+        case jegl_shader_value::type::TEXTURE2D:
+        case jegl_shader_value::type::TEXTURE2D_MS:
+        case jegl_shader_value::type::TEXTURE_CUBE:
+            return jegl_shader::uniform_type::TEXTURE;
+        default:
+            jeecs::debug::logerr("Unsupport uniform variable type."); 
+            return jegl_shader::uniform_type::INT; // return as default;
+        }
+    }
+};
+
 #include "jeecs_graphic_shader_wrapper_glsl.hpp"
+#include "jeecs_graphic_shader_wrapper_hlsl.hpp"
 
 std::string _generate_glsl_vertex_by_wrapper(shader_wrapper* wrap)
 {
-    return _generate_code_for_glsl_vertex(wrap);
+    return jeecs::shader_generator::glsl::_generate_code_for_glsl_vertex(wrap);
 }
-
 std::string _generate_glsl_fragment_by_wrapper(shader_wrapper* wrap)
 {
-    return _generate_code_for_glsl_fragment(wrap);
+    return jeecs::shader_generator::glsl::_generate_code_for_glsl_fragment(wrap);
+}
+std::string _generate_hlsl_vertex_by_wrapper(shader_wrapper* wrap)
+{
+    return "";
+}
+std::string _generate_hlsl_fragment_by_wrapper(shader_wrapper* wrap)
+{
+    return "";
 }
 
 WO_API wo_api jeecs_shader_wrap_glsl_vertex(wo_vm vm, wo_value args, size_t argc)
@@ -1243,7 +1346,8 @@ namespace shader
     let struct_uniform_blocks_decls = []mut: vec<struct_define>;
 
     extern("libjoyecs", "jeecs_shader_wrap_result_pack")
-    private func _wraped_shader(
+    private func _wraped_shader<VertexInType>(
+        vertin: VertexInType,
         vertout: vertex_out, 
         fragout: fragment_out, 
         shader_config: ShaderConfig,
@@ -1251,8 +1355,10 @@ namespace shader
 
     private extern func generate()
     {
+        let v_in = _JE_BUILT_VAO_STRUCT(vertex_in::create());
+
         // 'v_out' is a struct with member of shader variable as vertex outputs.
-        let v_out = vert(_JE_BUILT_VAO_STRUCT(vertex_in::create()));
+        let v_out = vert(v_in);
         
         // 'vertex_out' will analyze struct, then 'fragment_in' will build a new struct
         let vertext_out_result = vertex_out::create(v_out);
@@ -1262,7 +1368,7 @@ namespace shader
         let f_out = frag(f_in);
         let fragment_out_result = fragment_out::create(f_out);
 
-        return _wraped_shader(vertext_out_result, fragment_out_result, configs, struct_uniform_blocks_decls->toarray);
+        return _wraped_shader(v_in, vertext_out_result, fragment_out_result, configs, struct_uniform_blocks_decls->toarray);
     }
 
     namespace debug
@@ -1860,10 +1966,22 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
     write_to_shader->m_vertex_glsl_src
         = jeecs::basic::make_new_string(
             _generate_glsl_vertex_by_wrapper(shader_wrapper_ptr).c_str());
-
     write_to_shader->m_fragment_glsl_src
         = jeecs::basic::make_new_string(
             _generate_glsl_fragment_by_wrapper(shader_wrapper_ptr).c_str());
+
+    write_to_shader->m_vertex_hlsl_src
+        = jeecs::basic::make_new_string(
+            _generate_hlsl_vertex_by_wrapper(shader_wrapper_ptr).c_str());
+    write_to_shader->m_fragment_hlsl_src
+        = jeecs::basic::make_new_string(
+            _generate_hlsl_fragment_by_wrapper(shader_wrapper_ptr).c_str());
+
+    write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in_count;
+    write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[shader_wrapper_ptr->vertex_in_count];
+    for (size_t i = 0; i < shader_wrapper_ptr->vertex_in_count; ++i)
+        write_to_shader->m_vertex_in[i].m_type =
+        _shader_wrapper_contex::get_outside_type(shader_wrapper_ptr->vertex_in[i]);
 
     std::unordered_map<std::string, shader_struct_define*> _uniform_blocks;
     auto** block_ptr = shader_wrapper_ptr->shader_struct_define_may_uniform_block;
@@ -1975,6 +2093,10 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
 {
     je_mem_free((void*)write_to_shader->m_vertex_glsl_src);
     je_mem_free((void*)write_to_shader->m_fragment_glsl_src);
+    je_mem_free((void*)write_to_shader->m_vertex_hlsl_src);
+    je_mem_free((void*)write_to_shader->m_fragment_hlsl_src);
+
+    delete []write_to_shader->m_vertex_in;
 
     auto* uniform_variable_info = write_to_shader->m_custom_uniforms;
     while (uniform_variable_info)
@@ -1991,7 +2113,7 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
     {
         auto* cur_uniform_block = uniform_block_info;
         uniform_block_info = uniform_block_info->m_next;
-        
+
         je_mem_free((void*)cur_uniform_block->m_name);
 
         delete cur_uniform_block;
