@@ -401,6 +401,47 @@ void dx11_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, boo
 
 bool dx11_update(jegl_thread* ctx)
 {
+    static auto shad = jeecs::graphic::shader::create("dx11_test.wo", R"(
+import je::shader;
+
+SHARED  (false);
+ZTEST   (LESS);
+ZWRITE  (ENABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
+
+VAO_STRUCT! vin {
+    vertex  : float3,
+    uv      : float2,
+};
+
+using v2f = struct {
+    pos     : float4,
+    uv      : float2,
+};
+
+using fout = struct {
+    color   : float4
+};
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = float4::create(v.vertex, 1.),
+        uv = v.uv,
+    };
+}
+
+public func frag(_: v2f)
+{
+    return fout{
+        color = float4::one,
+    };
+}
+    )");
+
+    jegl_using_resource(shad->resouce());
+
     jegl_dx11_context* context =
         std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
 
@@ -506,14 +547,16 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             std::vector<std::string> vertex_in_name(resource->m_raw_shader_data->m_vertex_in_count);
             std::vector<D3D11_INPUT_ELEMENT_DESC> vertex_in_layout(resource->m_raw_shader_data->m_vertex_in_count);
 
+            // VIN
+            size_t INT_COUNT = 0;
+            size_t FLOAT_COUNT = 0;
+            size_t FLOAT2_COUNT = 0;
+            size_t FLOAT3_4_COUNT = 0;
+
             for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
             {
                 auto& vlayout = vertex_in_layout[i];
 
-                vertex_in_name[i] = "_HLSL_VIN_" + std::to_string(i);
-
-                vlayout.SemanticName = vertex_in_name[i].c_str();
-                vlayout.SemanticIndex = 0;
                 vlayout.InputSlot = 0;
                 vlayout.AlignedByteOffset = layout_begin_offset;
                 vlayout.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
@@ -522,30 +565,63 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
                 switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
                 {
                 case jegl_shader::uniform_type::INT:
+                    vlayout.SemanticIndex = INT_COUNT++;
+                    vlayout.SemanticName = "BLENDINDICES";
                     vlayout.Format = DXGI_FORMAT_R32_SINT;
                     layout_begin_offset += 4;
                     break;
                 case jegl_shader::uniform_type::FLOAT:
+                    vlayout.SemanticIndex = FLOAT_COUNT++;
+                    vlayout.SemanticName = "BLENDWEIGHT";
                     vlayout.Format = DXGI_FORMAT_R32_FLOAT;
                     layout_begin_offset += 4;
                     break;
                 case jegl_shader::uniform_type::FLOAT2:
+                    vlayout.SemanticIndex = FLOAT2_COUNT++;
+                    vlayout.SemanticName = "TEXCOORD";
                     vlayout.Format = DXGI_FORMAT_R32G32_FLOAT;
                     layout_begin_offset += 8;
                     break;
                 case jegl_shader::uniform_type::FLOAT3:
+                {
+                    vlayout.SemanticIndex = FLOAT3_4_COUNT++;
+                    if (vlayout.SemanticIndex == 0)
+                        vlayout.SemanticName = "POSITION";
+                    else if (vlayout.SemanticIndex == 1)
+                    {
+                        vlayout.SemanticIndex = 0;
+                        vlayout.SemanticName = "NORMAL";
+                    }
+                    else
+                    {
+                        vlayout.SemanticIndex -= 2;
+                        vlayout.SemanticName = "COLOR";
+                    }
                     vlayout.Format = DXGI_FORMAT_R32G32B32_FLOAT;
                     layout_begin_offset += 12;
                     break;
+                }
                 case jegl_shader::uniform_type::FLOAT4:
+                {
+                    vlayout.SemanticIndex = FLOAT3_4_COUNT++;
+                    if (vlayout.SemanticIndex == 0)
+                        vlayout.SemanticName = "POSITION";
+                    else if (vlayout.SemanticIndex == 1)
+                    {
+                        vlayout.SemanticIndex = 0;
+                        vlayout.SemanticName = "NORMAL";
+                    }
+                    else
+                    {
+                        vlayout.SemanticIndex -= 2;
+                        vlayout.SemanticName = "COLOR";
+                    }
                     vlayout.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
                     layout_begin_offset += 16;
                     break;
+                }
                 default:
-                    jeecs::debug::loginfo("Unsupport DX11 vertex in layout type(%d) when init shader(%p).",
-                        (int)resource->m_raw_shader_data->m_vertex_in[i].m_type, resource);
-                    vlayout.Format = DXGI_FORMAT_R32_SINT;
-                    break;
+                    abort();
                 }
             }
             JERCHECK(context->m_dx_device->CreateInputLayout(

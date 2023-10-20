@@ -4,7 +4,7 @@ namespace jeecs
     {
         namespace glsl
         {
-            static std::string get_type_name_from_type(jegl_shader_value::type ty)
+            std::string get_type_name_from_type(jegl_shader_value::type ty)
             {
                 switch (ty)
                 {
@@ -34,7 +34,7 @@ namespace jeecs
                     break;
                 }
             }
-            static std::string get_type_name(jegl_shader_value* val)
+            std::string get_type_name(jegl_shader_value* val)
             {
                 return get_type_name_from_type(val->get_type());
             }
@@ -183,7 +183,7 @@ namespace jeecs
 
             uniform_information get_uniform_info(const std::string& name, jegl_shader_value* value)
             {
-                jegl_shader::uniform_type uniform_type = 
+                jegl_shader::uniform_type uniform_type =
                     _shader_wrapper_contex::get_outside_type(value->get_type());
 
                 auto* init_value = value->m_uniform_init_val_may_nil;
@@ -192,9 +192,9 @@ namespace jeecs
 
             std::string _generate_uniform_block_for_glsl(shader_wrapper* wrap)
             {
-                auto** block_iter = wrap->shader_struct_define_may_uniform_block;
                 std::string result;
 
+                auto** block_iter = wrap->shader_struct_define_may_uniform_block;
                 while (nullptr != *block_iter)
                 {
                     auto* block = *block_iter;

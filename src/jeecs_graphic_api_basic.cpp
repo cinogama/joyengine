@@ -739,6 +739,8 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         jeecs_write_cache_file(&vertex_in_count, sizeof(uint64_t), 1, cachefile);
         jeecs_write_cache_file(raw_shader_data->m_vertex_in, sizeof(jegl_shader::vertex_in_variables), 
             raw_shader_data->m_vertex_in_count, cachefile);
+
+        jeecs_close_cache_file(cachefile);
     }
 }
 

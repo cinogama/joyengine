@@ -393,7 +393,7 @@ calc_func_t* _get_reduce_func(action_node* cur_node, jegl_shader_value::type* ar
             return nullptr;
     }
 
-    assert(index < argc&& cur_node);
+    assert(index < argc && cur_node);
 
     for (auto* next_step : cur_node->m_next_step)
     {
@@ -854,7 +854,7 @@ public:
         case jegl_shader_value::type::TEXTURE_CUBE:
             return jegl_shader::uniform_type::TEXTURE;
         default:
-            jeecs::debug::logerr("Unsupport uniform variable type."); 
+            jeecs::debug::logerr("Unsupport uniform variable type.");
             return jegl_shader::uniform_type::INT; // return as default;
         }
     }
@@ -873,11 +873,11 @@ std::string _generate_glsl_fragment_by_wrapper(shader_wrapper* wrap)
 }
 std::string _generate_hlsl_vertex_by_wrapper(shader_wrapper* wrap)
 {
-    return "";
+    return jeecs::shader_generator::hlsl::_generate_code_for_hlsl_vertex(wrap);
 }
 std::string _generate_hlsl_fragment_by_wrapper(shader_wrapper* wrap)
 {
-    return "";
+    return jeecs::shader_generator::hlsl::_generate_code_for_hlsl_fragment(wrap);
 }
 
 WO_API wo_api jeecs_shader_wrap_glsl_vertex(wo_vm vm, wo_value args, size_t argc)
@@ -2096,7 +2096,7 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
     je_mem_free((void*)write_to_shader->m_vertex_hlsl_src);
     je_mem_free((void*)write_to_shader->m_fragment_hlsl_src);
 
-    delete []write_to_shader->m_vertex_in;
+    delete[]write_to_shader->m_vertex_in;
 
     auto* uniform_variable_info = write_to_shader->m_custom_uniforms;
     while (uniform_variable_info)
