@@ -338,6 +338,9 @@ uint32_t gl_get_uniform_location(jegl_thread*, jegl_resource* shader, const char
 
 void gl_set_uniform(jegl_thread*, jegl_resource*, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
+    if (location == jeecs::typing::INVALID_UINT32)
+        return;
+
     switch (type)
     {
     case jegl_shader::INT:
@@ -615,7 +618,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         break;
     }
     case jegl_resource::type::VERTEX:
-
     {
         GLuint vao, vbo;
         glGenVertexArrays(1, &vao);
@@ -642,7 +644,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 
         const static GLenum DRAW_METHODS[] = {
             GL_LINES,
-            GL_LINE_LOOP,
             GL_LINE_STRIP,
             GL_TRIANGLES,
             GL_TRIANGLE_STRIP,
@@ -732,7 +733,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 
 thread_local static jegl_shader::depth_test_method  ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
 thread_local static jegl_shader::depth_mask_method  ACTIVE_MASK_MODE = jegl_shader::depth_mask_method::INVALID;
-thread_local static jegl_shader::alpha_test_method  ACTIVE_ALPHA_MODE = jegl_shader::alpha_test_method::INVALID;
 thread_local static jegl_shader::blend_method       ACTIVE_BLEND_SRC_MODE = jegl_shader::blend_method::INVALID;
 thread_local static jegl_shader::blend_method       ACTIVE_BLEND_DST_MODE = jegl_shader::blend_method::INVALID;
 thread_local static jegl_shader::cull_mode          ACTIVE_CULL_MODE = jegl_shader::cull_mode::INVALID;
@@ -804,10 +804,6 @@ inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jeg
             case jegl_shader::blend_method::DST_ALPHA: src_factor = GL_DST_ALPHA; break;
             case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: src_factor = GL_ONE_MINUS_DST_ALPHA; break;
             case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: src_factor = GL_ONE_MINUS_DST_COLOR; break;
-            case jegl_shader::blend_method::CONST_COLOR: src_factor = GL_CONSTANT_COLOR; break;
-            case jegl_shader::blend_method::CONST_ALPHA: src_factor = GL_CONSTANT_ALPHA; break;
-            case jegl_shader::blend_method::ONE_MINUS_CONST_COLOR: src_factor = GL_ONE_MINUS_CONSTANT_COLOR; break;
-            case jegl_shader::blend_method::ONE_MINUS_CONST_ALPHA: src_factor = GL_ONE_MINUS_CONSTANT_ALPHA; break;
             default: jeecs::debug::logerr("Invalid blend src method."); break;
             }
             switch (dst_mode)
@@ -822,10 +818,6 @@ inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jeg
             case jegl_shader::blend_method::DST_ALPHA: dst_factor = GL_DST_ALPHA; break;
             case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: dst_factor = GL_ONE_MINUS_DST_ALPHA; break;
             case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: dst_factor = GL_ONE_MINUS_DST_COLOR; break;
-            case jegl_shader::blend_method::CONST_COLOR: dst_factor = GL_CONSTANT_COLOR; break;
-            case jegl_shader::blend_method::CONST_ALPHA: dst_factor = GL_CONSTANT_ALPHA; break;
-            case jegl_shader::blend_method::ONE_MINUS_CONST_COLOR: dst_factor = GL_ONE_MINUS_CONSTANT_COLOR; break;
-            case jegl_shader::blend_method::ONE_MINUS_CONST_ALPHA: dst_factor = GL_ONE_MINUS_CONSTANT_ALPHA; break;
             default: jeecs::debug::logerr("Invalid blend src method."); break;
             }
             glEnable(GL_BLEND);
@@ -848,8 +840,6 @@ inline void _gl_update_cull_mode_method(jegl_shader::cull_mode mode)
             glEnable(GL_CULL_FACE);
             switch (mode)
             {
-            case jegl_shader::cull_mode::ALL:
-                glCullFace(GL_FRONT_AND_BACK); break;
             case jegl_shader::cull_mode::FRONT:
                 glCullFace(GL_FRONT); break;
             case jegl_shader::cull_mode::BACK:

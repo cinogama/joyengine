@@ -93,14 +93,11 @@ namespace jeecs
                     {
                         if (value->is_shader_in_value())
                         {
-                            if (is_fragment)
-                                varname = "_v2f." + varname;
-                            else
-                                varname = "_vin." + varname;
+                            // DO NOTHING;
                         }
                         else if (value->is_uniform_variable())
                         {
-                            // TODO;
+                            // DO NOTHING;
                         }
                         else
                         {
@@ -218,6 +215,14 @@ namespace jeecs
                         /*out += apply + ";\n";*/
                         return apply;
                     }
+                }
+
+                if (value->is_shader_in_value())
+                {
+                    if (is_fragment)
+                        varname = "_v2f." + varname;
+                    else
+                        varname = "_vin." + varname;
                 }
 
                 return varname;
@@ -366,7 +371,7 @@ namespace jeecs
                     {
                         auto count = FLOAT3_4_COUNT++;
                         if (count == 0)
-                            io_declear += "POSITION0";
+                            io_declear += "SV_POSITION0";
                         else
                             io_declear += "COLOR" + std::to_string(count - 1);
                         break;
@@ -407,6 +412,10 @@ namespace jeecs
                 std::string          io_declear;
 
                 const std::string    unifrom_block = _generate_uniform_block_for_hlsl(wrap);
+
+                std::vector<jegl_shader_value*> invalue;
+                for (auto* in_val : wrap->vertex_out->out_values)
+                    invalue.push_back(in_val);
 
                 std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
                 for (auto* out_val : wrap->fragment_out->out_values)
@@ -450,7 +459,6 @@ namespace jeecs
                      }*/
                 }
 
-
                 if (!contex._uniform_value.empty())
                 {
                     io_declear += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
@@ -471,13 +479,13 @@ namespace jeecs
                 size_t FLOAT_COUNT = 0;
                 size_t FLOAT2_COUNT = 0;
                 size_t FLOAT3_4_COUNT = 0;
-                for (auto& outvarname : outvalue)
+                for (auto& inval : invalue)
                 {
                     io_declear +=
                         "    "
-                        + get_type_name(outvarname.first) + " _v2f_" + std::to_string(outid++) + ": ";
+                        + get_type_name(inval) + " _v2f_" + std::to_string(outid++) + ": ";
 
-                    switch (outvarname.first->get_type())
+                    switch (inval->get_type())
                     {
                     case jegl_shader_value::type::INTEGER:
                         io_declear += "BLENDINDICES" + std::to_string(INT_COUNT++);
@@ -493,7 +501,7 @@ namespace jeecs
                     {
                         auto count = FLOAT3_4_COUNT++;
                         if (count == 0)
-                            io_declear += "POSITION0";
+                            io_declear += "SV_POSITION0";
                         else
                             io_declear += "COLOR" + std::to_string(count - 1);
                         break;

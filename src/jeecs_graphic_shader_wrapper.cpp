@@ -1247,12 +1247,6 @@ enum BlendConfig
 
     ONE_MINUS_DST_ALPHA,
     ONE_MINUS_DST_COLOR,
-
-    CONST_COLOR,
-    ONE_MINUS_CONST_COLOR,
-
-    CONST_ALPHA,
-    ONE_MINUS_CONST_ALPHA,
 }
 
 public let ZERO = BlendConfig::ZERO;
@@ -1265,23 +1259,17 @@ public let DST_COLOR = BlendConfig::DST_COLOR;
 public let DST_ALPHA = BlendConfig::DST_ALPHA;
 public let ONE_MINUS_DST_ALPHA = BlendConfig::ONE_MINUS_DST_ALPHA;
 public let ONE_MINUS_DST_COLOR = BlendConfig::ONE_MINUS_DST_COLOR;
-public let CONST_COLOR = BlendConfig::CONST_COLOR;
-public let ONE_MINUS_CONST_COLOR = BlendConfig::ONE_MINUS_CONST_COLOR;
-public let CONST_ALPHA = BlendConfig::CONST_ALPHA;
-public let ONE_MINUS_CONST_ALPHA = BlendConfig::ONE_MINUS_CONST_ALPHA;
 
 enum CullConfig
 {
     NONE = 0,       /* DEFAULT */
     FRONT,
     BACK,
-    ALL,
 }
 
 public let NONE = CullConfig::NONE;
 public let FRONT = CullConfig::FRONT;
 public let BACK = CullConfig::BACK;
-public let ALL = CullConfig::ALL;
 
 public func SHARED(enable: bool)
 {

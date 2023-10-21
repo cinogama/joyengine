@@ -401,47 +401,6 @@ void dx11_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, boo
 
 bool dx11_update(jegl_thread* ctx)
 {
-    static auto shad = jeecs::graphic::shader::create("dx11_test.wo", R"(
-import je::shader;
-
-SHARED  (false);
-ZTEST   (LESS);
-ZWRITE  (ENABLE);
-BLEND   (ONE, ZERO);
-CULL    (NONE);
-
-VAO_STRUCT! vin {
-    vertex  : float3,
-    uv      : float2,
-};
-
-using v2f = struct {
-    pos     : float4,
-    uv      : float2,
-};
-
-using fout = struct {
-    color   : float4
-};
-
-public func vert(v: vin)
-{
-    return v2f{
-        pos = float4::create(v.vertex, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset),
-    };
-}
-
-public func frag(_: v2f)
-{
-    return fout{
-        color = float4::one,
-    };
-}
-    )");
-
-    jegl_using_resource(shad->resouce());
-
     jegl_dx11_context* context =
         std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
 
@@ -464,6 +423,57 @@ public func frag(_: v2f)
 
 bool dx11_pre_update(jegl_thread* ctx)
 {
+    static auto quad = jeecs::graphic::vertex::create(
+        jegl_vertex::TRIANGLESTRIP,
+        {
+            -0.5f, 0.5f, 0.5f,    0.0f, 1.0f, // 0.0f, 0.0f, -1.0f,
+            -0.5f, -0.5f, 0.5f,   0.0f, 0.0f,  //0.0f, 0.0f, -1.0f,
+            0.5f, 0.5f, 0.5f,     1.0f, 1.0f,  //0.0f, 0.0f, -1.0f,
+            0.5f, -0.5f, 0.5f,    1.0f, 0.0f,  //0.0f, 0.0f, -1.0f,
+        },
+        { 3, 2, /*3*/ });
+    static auto shad = jeecs::graphic::shader::create("dx11_test.wo", R"(
+import je::shader;
+
+SHARED  (false);
+ZTEST   (LESS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (NONE);
+
+VAO_STRUCT! vin {
+    vertex  : float3,
+    uv      : float2,
+};
+
+using v2f = struct {
+    pos     : float4,
+    uv      : float2,
+};
+
+using fout = struct {
+    color   : float4
+};
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = float4::create(v.vertex, 1.0),
+        uv = v.uv, //uvtrans(v.uv, je_tiling, je_offset),
+    };
+}
+
+public func frag(vf: v2f)
+{
+    return fout{
+        color = float4::create(vf.uv, 1., vf.uv->x),
+    };
+}
+    )");
+
+    jegl_using_resource(shad->resouce());
+    jegl_draw_vertex(quad->resouce());
+
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
     JERCHECK(context->m_dx_swapchain->Present(ctx->m_config.m_fps == 0 ? 1 : 0, 0));
     return true;
@@ -484,7 +494,28 @@ struct jedx11_shader
     jegl_dx11_context::MSWRLComPtr<ID3D11InputLayout> m_vao; // WTF?
     jegl_dx11_context::MSWRLComPtr<ID3D11VertexShader> m_vertex;
     jegl_dx11_context::MSWRLComPtr<ID3D11PixelShader> m_fragment;
+
+    bool m_have_uniforms;
+    void* m_uniform_updating_buffer;
+    jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniforms;
+
+    jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
+    jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilState> m_depth;
+    jegl_dx11_context::MSWRLComPtr<ID3D11BlendState> m_blend;
 };
+struct jedx11_vertex
+{
+    jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_vbo;
+    UINT m_count;
+    UINT m_strides;
+    D3D_PRIMITIVE_TOPOLOGY m_method;
+};
+struct jedx11_uniformbuf
+{
+    jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniformbuf;
+    UINT m_binding_place;
+};
+
 
 void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
 {
@@ -494,16 +525,23 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
     case jegl_resource::type::SHADER:
     {
         jedx11_shader* jedx11_shader_res = new jedx11_shader;
+        jedx11_shader_res->m_uniform_updating_buffer = nullptr;
+
         bool shader_load_failed = false;
 
         std::string error_informations;
 
         jegl_dx11_context::MSWRLComPtr<ID3DBlob> blob;
         ID3DBlob* error_blob = nullptr;
+
+        std::string string_path = resource->m_path == nullptr
+            ? "__joyengine_builtin_vshader" + std::to_string((intptr_t)resource) + "__"
+            : resource->m_path;
+
         auto compile_result = D3DCompile(
             resource->m_raw_shader_data->m_vertex_hlsl_src,
             strlen(resource->m_raw_shader_data->m_vertex_hlsl_src),
-            resource->m_path == nullptr ? "__joyengine_builtin_vshader__" : resource->m_path,
+            (string_path + ".vhlsl").c_str(),
             nullptr,
             D3D_COMPILE_STANDARD_FILE_INCLUDE,
             "vertex_main",
@@ -537,14 +575,13 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         else
         {
             JERCHECK(context->m_dx_device->CreateVertexShader(
-                blob->GetBufferPointer(), 
-                blob->GetBufferSize(), 
+                blob->GetBufferPointer(),
+                blob->GetBufferSize(),
                 nullptr,
                 jedx11_shader_res->m_vertex.GetAddressOf()));
 
             UINT layout_begin_offset = 0;
 
-            std::vector<std::string> vertex_in_name(resource->m_raw_shader_data->m_vertex_in_count);
             std::vector<D3D11_INPUT_ELEMENT_DESC> vertex_in_layout(resource->m_raw_shader_data->m_vertex_in_count);
 
             // VIN
@@ -635,7 +672,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         compile_result = D3DCompile(
             resource->m_raw_shader_data->m_fragment_hlsl_src,
             strlen(resource->m_raw_shader_data->m_fragment_hlsl_src),
-            resource->m_path == nullptr ? "__joyengine_builtin_fshader__" : resource->m_path,
+            (string_path + ".fhlsl").c_str(),
             nullptr,
             D3D_COMPILE_STANDARD_FILE_INCLUDE,
             "fragment_main",
@@ -684,7 +721,202 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         else
         {
             // Generate uniform locations here.
-            resource->m_raw_shader_data->m_custom_uniforms;
+            uint32_t last_elem_end_place = 0;
+            constexpr size_t DX11_ALLIGN_BASE = 16; // 128bit allign in dx11
+
+            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+            while (uniforms != nullptr)
+            {
+                size_t unit_size = 0;
+                switch (uniforms->m_uniform_type)
+                {
+                case jegl_shader::uniform_type::INT:
+                case jegl_shader::uniform_type::FLOAT:
+                    unit_size = 4;
+                    break;
+                case jegl_shader::uniform_type::FLOAT2:
+                    unit_size = 8;
+                    break;
+                case jegl_shader::uniform_type::FLOAT3:
+                    unit_size = 12;
+                    break;
+                case jegl_shader::uniform_type::FLOAT4:
+                    unit_size = 16;
+                    break;
+                case jegl_shader::uniform_type::FLOAT4X4:
+                    unit_size = 64;
+                    break;
+                default:
+                    unit_size = 0;
+                    break;
+                }
+
+                if (unit_size != 0)
+                {
+                    auto next_edge = last_elem_end_place / DX11_ALLIGN_BASE + DX11_ALLIGN_BASE;
+
+                    if ((last_elem_end_place + unit_size) > next_edge)
+                        last_elem_end_place = next_edge;
+
+                    uniforms->m_index = last_elem_end_place;
+                    last_elem_end_place += unit_size;
+                }
+
+                uniforms = uniforms->m_next;
+            }
+
+            if (last_elem_end_place % DX11_ALLIGN_BASE != 0)
+                last_elem_end_place = last_elem_end_place / DX11_ALLIGN_BASE + DX11_ALLIGN_BASE;
+
+            // Alloc constant buffer for this shader!
+            jedx11_shader_res->m_have_uniforms = (last_elem_end_place != 0);
+            if (jedx11_shader_res->m_have_uniforms)
+            {
+                D3D11_BUFFER_DESC const_buffer_describe;
+
+                const_buffer_describe.ByteWidth = (UINT)last_elem_end_place;
+                const_buffer_describe.Usage = D3D11_USAGE_DYNAMIC;
+                const_buffer_describe.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+                const_buffer_describe.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+                const_buffer_describe.MiscFlags = 0;
+                const_buffer_describe.StructureByteStride = 0;
+
+                // 新建常量缓冲区，不使用初始数据
+                JERCHECK(context->m_dx_device->CreateBuffer(
+                    &const_buffer_describe, nullptr,
+                    jedx11_shader_res->m_uniforms.GetAddressOf()));
+            }
+
+            D3D11_RASTERIZER_DESC rasterizer_describe;
+            switch (resource->m_raw_shader_data->m_cull_mode)
+            {
+            case jegl_shader::cull_mode::NONE:
+                rasterizer_describe.CullMode = D3D11_CULL_NONE;
+                break;
+            case jegl_shader::cull_mode::FRONT:
+                rasterizer_describe.CullMode = D3D11_CULL_FRONT;
+                break;
+            case jegl_shader::cull_mode::BACK:
+                rasterizer_describe.CullMode = D3D11_CULL_BACK;
+                break;
+            }
+            rasterizer_describe.FillMode = D3D11_FILL_SOLID;
+            rasterizer_describe.FrontCounterClockwise = TRUE;
+            rasterizer_describe.DepthBias = 0;
+            rasterizer_describe.DepthBiasClamp = 0.0f;
+            rasterizer_describe.SlopeScaledDepthBias = 0.0f;
+            rasterizer_describe.DepthClipEnable = TRUE;
+            rasterizer_describe.ScissorEnable = FALSE;
+            rasterizer_describe.MultisampleEnable = FALSE;
+            rasterizer_describe.AntialiasedLineEnable = FALSE;
+            JERCHECK(context->m_dx_device->CreateRasterizerState(
+                &rasterizer_describe, jedx11_shader_res->m_rasterizer.GetAddressOf()));
+
+            D3D11_DEPTH_STENCIL_DESC depth_describe;
+            depth_describe.DepthEnable = TRUE;
+            switch (resource->m_raw_shader_data->m_depth_test)
+            {
+            case jegl_shader::depth_test_method::OFF:
+                depth_describe.DepthEnable = FALSE;
+                break;
+            case jegl_shader::depth_test_method::NEVER:
+                depth_describe.DepthFunc = D3D11_COMPARISON_NEVER;
+                break;
+            case jegl_shader::depth_test_method::LESS:       /* DEFAULT */
+                depth_describe.DepthFunc = D3D11_COMPARISON_LESS;
+                break;
+            case jegl_shader::depth_test_method::EQUAL:
+                depth_describe.DepthFunc = D3D11_COMPARISON_EQUAL;
+                break;
+            case jegl_shader::depth_test_method::LESS_EQUAL:
+                depth_describe.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+                break;
+            case jegl_shader::depth_test_method::GREATER:
+                depth_describe.DepthFunc = D3D11_COMPARISON_GREATER;
+                break;
+            case jegl_shader::depth_test_method::NOT_EQUAL:
+                depth_describe.DepthFunc = D3D11_COMPARISON_NOT_EQUAL;
+                break;
+            case jegl_shader::depth_test_method::GREATER_EQUAL:
+                depth_describe.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
+                break;
+            case jegl_shader::depth_test_method::ALWAYS:
+                depth_describe.DepthFunc = D3D11_COMPARISON_ALWAYS;
+                break; 
+            }
+            switch (resource->m_raw_shader_data->m_depth_mask)
+            {
+            case jegl_shader::depth_mask_method::ENABLE:
+                depth_describe.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+                break;
+            case jegl_shader::depth_mask_method::DISABLE:
+                depth_describe.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+                break;
+            }
+            depth_describe.StencilEnable = FALSE;
+            depth_describe.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+            depth_describe.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+            depth_describe.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+            depth_describe.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+            depth_describe.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+            depth_describe.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+            depth_describe.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+            depth_describe.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+            depth_describe.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+            depth_describe.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+            depth_describe.BackFace;
+            JERCHECK(context->m_dx_device->CreateDepthStencilState(
+                &depth_describe, jedx11_shader_res->m_depth.GetAddressOf()));
+
+            D3D11_BLEND_DESC blend_describe;
+            blend_describe.AlphaToCoverageEnable = FALSE;
+            // OpenGL咋没这么牛逼的选项呢…… 只能含泪关掉
+            blend_describe.IndependentBlendEnable = FALSE;
+            blend_describe.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+            blend_describe.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+            blend_describe.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;        
+            if (resource->m_raw_shader_data->m_blend_src_mode == jegl_shader::blend_method::ONE &&
+                resource->m_raw_shader_data->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
+                blend_describe.RenderTarget[0].BlendEnable = FALSE;
+            else
+                blend_describe.RenderTarget[0].BlendEnable = TRUE;
+            auto parse_dx11_enum = [](jegl_shader::blend_method method)
+            {
+                switch (method)
+                {
+                case jegl_shader::blend_method::ZERO:
+                    return D3D11_BLEND_ZERO;
+                case jegl_shader::blend_method::ONE:
+                    return D3D11_BLEND_ONE;
+                case jegl_shader::blend_method::SRC_COLOR:
+                    return D3D11_BLEND_SRC_COLOR;
+                case jegl_shader::blend_method::SRC_ALPHA:
+                    return D3D11_BLEND_SRC_ALPHA;
+                case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                    return D3D11_BLEND_INV_SRC_ALPHA;
+                case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                    return D3D11_BLEND_INV_SRC_COLOR;
+                case jegl_shader::blend_method::DST_COLOR:
+                    return D3D11_BLEND_DEST_COLOR;
+                case jegl_shader::blend_method::DST_ALPHA: 
+                    return D3D11_BLEND_DEST_ALPHA;
+                case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: 
+                    return D3D11_BLEND_INV_DEST_ALPHA;
+                case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: 
+                    return D3D11_BLEND_INV_DEST_COLOR;
+                default: 
+                    jeecs::debug::logerr("Invalid blend src method."); 
+                    return D3D11_BLEND_ONE;
+                }
+            };
+            blend_describe.RenderTarget[0].SrcBlend 
+                = blend_describe.RenderTarget[0].SrcBlendAlpha 
+                = parse_dx11_enum(resource->m_raw_shader_data->m_blend_src_mode);
+            blend_describe.RenderTarget[0].DestBlend
+                = blend_describe.RenderTarget[0].DestBlendAlpha
+                = parse_dx11_enum(resource->m_raw_shader_data->m_blend_dst_mode);
+            JERCHECK(context->m_dx_device->CreateBlendState(
+                &blend_describe, jedx11_shader_res->m_blend.GetAddressOf()));
 
             resource->m_handle.m_ptr = jedx11_shader_res;
         }
@@ -744,11 +976,89 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         break;
     }
     case jegl_resource::type::VERTEX:
+    {
+        jedx11_vertex* vertex = new jedx11_vertex;
+
+        const static D3D_PRIMITIVE_TOPOLOGY DRAW_METHODS[] = {
+            D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
+            D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
+            D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        };
+        vertex->m_method =
+            DRAW_METHODS[resource->m_raw_vertex_data->m_type];
+
+        D3D11_BUFFER_DESC vertex_buffer_describe;
+
+        UINT ByteWidth;
+        D3D11_USAGE Usage;
+        UINT BindFlags;
+        UINT CPUAccessFlags;
+        UINT MiscFlags;
+        UINT StructureByteStride;
+
+        vertex->m_count = (UINT)resource->m_raw_vertex_data->m_point_count;
+        vertex->m_strides = resource->m_raw_vertex_data->m_data_count_per_point;
+
+        vertex_buffer_describe.ByteWidth =
+            (UINT)(resource->m_raw_vertex_data->m_point_count
+                * resource->m_raw_vertex_data->m_data_count_per_point
+                * sizeof(float));
+
+        vertex_buffer_describe.Usage = D3D11_USAGE_IMMUTABLE;
+        vertex_buffer_describe.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        vertex_buffer_describe.CPUAccessFlags = 0;
+        vertex_buffer_describe.MiscFlags = 0;
+        vertex_buffer_describe.StructureByteStride = 0;
+
+        // 新建顶点缓冲区
+        D3D11_SUBRESOURCE_DATA vertex_buffer_data;
+        vertex_buffer_data.pSysMem = resource->m_raw_vertex_data->m_vertex_datas;
+        vertex_buffer_data.SysMemPitch = 0;
+        vertex_buffer_data.SysMemSlicePitch = 0;
+        JERCHECK(context->m_dx_device->CreateBuffer(
+            &vertex_buffer_describe,
+            &vertex_buffer_data,
+            vertex->m_vbo.GetAddressOf()));
+
+        resource->m_handle.m_ptr = vertex;
+
         break;
+    }
     case jegl_resource::type::FRAMEBUF:
         break;
     case jegl_resource::type::UNIFORMBUF:
+    {
+        auto* jedx11_uniformbuf_res = new jedx11_uniformbuf;
+
+        D3D11_BUFFER_DESC const_buffer_describe;
+
+        const_buffer_describe.ByteWidth = 
+            (UINT)resource->m_raw_uniformbuf_data->m_buffer_size;
+        const_buffer_describe.Usage = D3D11_USAGE_DYNAMIC;
+        const_buffer_describe.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        const_buffer_describe.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        const_buffer_describe.MiscFlags = 0;
+        const_buffer_describe.StructureByteStride = 0;
+
+        D3D11_SUBRESOURCE_DATA const_buffer_resource_describe;
+        const_buffer_resource_describe.pSysMem =
+            resource->m_raw_uniformbuf_data->m_buffer;
+        const_buffer_resource_describe.SysMemPitch = 0;
+        const_buffer_resource_describe.SysMemSlicePitch = 0;
+
+        // 新建常量缓冲区，不使用初始数据
+        JERCHECK(context->m_dx_device->CreateBuffer(
+            &const_buffer_describe, &const_buffer_resource_describe,
+            jedx11_uniformbuf_res->m_uniformbuf.GetAddressOf()));
+
+        jedx11_uniformbuf_res->m_binding_place = 
+            // 0 has been used as shader uniforms
+            (UINT)resource->m_raw_uniformbuf_data->m_buffer_binding_place + 1;
+
+        resource->m_handle.m_ptr = jedx11_uniformbuf_res;
         break;
+    }
     default:
         break;
     }
@@ -759,15 +1069,70 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
     switch (resource->m_type)
     {
     case jegl_resource::type::SHADER:
+    {
+        auto* shader = std::launder(reinterpret_cast<jedx11_shader*>(resource->m_handle.m_ptr));
+        if (shader->m_have_uniforms)
+        {
+            if (shader->m_uniform_updating_buffer != nullptr)
+            {
+                context->m_dx_context->Unmap(shader->m_uniforms.Get(), 0);
+                shader->m_uniform_updating_buffer = nullptr;
+            }
+            context->m_dx_context->VSSetConstantBuffers(0, 1, shader->m_uniforms.GetAddressOf());
+            context->m_dx_context->PSSetConstantBuffers(0, 1, shader->m_uniforms.GetAddressOf());
+        }
+        context->m_dx_context->VSSetShader(shader->m_vertex.Get(), nullptr, 0);
+        context->m_dx_context->PSSetShader(shader->m_fragment.Get(), nullptr, 0);
+        context->m_dx_context->IASetInputLayout(shader->m_vao.Get());
+
+        context->m_dx_context->RSSetState(shader->m_rasterizer.Get());
+        float _useless[4] = {};
+        context->m_dx_context->OMSetBlendState(shader->m_blend.Get(), _useless, UINT_MAX);
+        context->m_dx_context->OMSetDepthStencilState(shader->m_depth.Get(), 0);
+        
         break;
+    }
     case jegl_resource::type::TEXTURE:
         break;
     case jegl_resource::type::VERTEX:
+    {
+        auto* vertex = std::launder(reinterpret_cast<jedx11_vertex*>(resource->m_handle.m_ptr));
+        const UINT offset = 0;
+        const UINT strides = vertex->m_strides * sizeof(float);
+        context->m_dx_context->IASetVertexBuffers(
+            0, 1, vertex->m_vbo.GetAddressOf(), &strides, &offset);
+        context->m_dx_context->IASetPrimitiveTopology(vertex->m_method);
         break;
+    }
     case jegl_resource::type::FRAMEBUF:
         break;
     case jegl_resource::type::UNIFORMBUF:
+    {
+        auto* uniformbuf = std::launder(reinterpret_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr));
+        if (resource->m_raw_uniformbuf_data != nullptr)
+        {
+            if (resource->m_raw_uniformbuf_data->m_update_length != 0)
+            {
+                D3D11_MAPPED_SUBRESOURCE mappedData;
+                JERCHECK(context->m_dx_context->Map(
+                    uniformbuf->m_uniformbuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+
+                memcpy((void*)((intptr_t)mappedData.pData + resource->m_raw_uniformbuf_data->m_update_begin_offset),
+                    resource->m_raw_uniformbuf_data->m_buffer + resource->m_raw_uniformbuf_data->m_update_begin_offset,
+                    resource->m_raw_uniformbuf_data->m_update_length);
+
+                context->m_dx_context->Unmap(uniformbuf->m_uniformbuf.Get(), 0);
+
+                resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
+                resource->m_raw_uniformbuf_data->m_update_length = 0;
+            }
+            context->m_dx_context->VSSetConstantBuffers(
+                uniformbuf->m_binding_place, 1, uniformbuf->m_uniformbuf.GetAddressOf());
+            context->m_dx_context->PSSetConstantBuffers(
+                uniformbuf->m_binding_place, 1, uniformbuf->m_uniformbuf.GetAddressOf());
+        }
         break;
+    }
     default:
         break;
     }
@@ -779,14 +1144,17 @@ void dx11_close_resource(jegl_thread* ctx, jegl_resource* resource)
     {
     case jegl_resource::type::SHADER:
         delete std::launder(reinterpret_cast<jedx11_shader*>(resource->m_handle.m_ptr));
+        break;
     case jegl_resource::type::TEXTURE:
         delete std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
         break;
     case jegl_resource::type::VERTEX:
+        delete std::launder(reinterpret_cast<jedx11_vertex*>(resource->m_handle.m_ptr));
         break;
     case jegl_resource::type::FRAMEBUF:
         break;
     case jegl_resource::type::UNIFORMBUF:
+        delete std::launder(reinterpret_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr));
         break;
     default:
         break;
@@ -815,9 +1183,16 @@ void* dx11_native_resource(jegl_thread* gthread, jegl_resource* resource)
     }
 }
 
-void dx11_draw_vertex_with_shader_todo(jegl_thread*, jegl_resource* vert)
+void dx11_draw_vertex_with_shader_todo(jegl_thread* ctx, jegl_resource* vert)
 {
+    jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
+
+    assert(vert->m_type == jegl_resource::type::VERTEX);
+
     jegl_using_resource(vert);
+
+    auto* vertex = std::launder(reinterpret_cast<jedx11_vertex*>(vert->m_handle.m_ptr));
+    context->m_dx_context->Draw(vertex->m_count, 0);
 }
 
 void dx11_bind_texture_todo(jegl_thread*, jegl_resource* texture, size_t pass)
@@ -857,8 +1232,46 @@ void dx11_clear_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer)
     dx11_clear_framebuffer_depth(ctx, framebuffer);
 }
 
-void dx11_set_uniform_todo(jegl_thread*, jegl_resource*, uint32_t location, jegl_shader::uniform_type type, const void* val)
+void dx11_set_uniform_todo(jegl_thread* ctx, jegl_resource* res, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
+    jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
+
+    assert(res->m_type == jegl_resource::type::SHADER);
+    auto* shader = std::launder(reinterpret_cast<jedx11_shader*>(res->m_handle.m_ptr));
+
+    if (location == jeecs::typing::INVALID_UINT32 || !shader->m_have_uniforms)
+        return;
+
+    if (shader->m_uniform_updating_buffer == nullptr)
+    {
+        D3D11_MAPPED_SUBRESOURCE mappedData;
+        JERCHECK(context->m_dx_context->Map(shader->m_uniforms.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+        shader->m_uniform_updating_buffer = mappedData.pData;
+    }
+
+    size_t data_size_byte_length = 0;
+    switch (type)
+    {
+    case jegl_shader::INT:
+    case jegl_shader::FLOAT:
+        memcpy(reinterpret_cast<void*>((intptr_t)shader->m_uniform_updating_buffer + 1), val, 4);
+        break;
+    case jegl_shader::FLOAT2:
+        memcpy(reinterpret_cast<void*>((intptr_t)shader->m_uniform_updating_buffer + 1), val, 8);
+        break;
+    case jegl_shader::FLOAT3:
+        memcpy(reinterpret_cast<void*>((intptr_t)shader->m_uniform_updating_buffer + 1), val, 12);
+        break;
+    case jegl_shader::FLOAT4:
+        memcpy(reinterpret_cast<void*>((intptr_t)shader->m_uniform_updating_buffer + 1), val, 16);
+        break;
+    case jegl_shader::FLOAT4X4:
+        memcpy(reinterpret_cast<void*>((intptr_t)shader->m_uniform_updating_buffer + 1), val, 64);
+        break;
+    default:
+        jeecs::debug::logerr("Unknown uniform variable type to set."); break;
+        break;
+    }
 }
 
 void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)

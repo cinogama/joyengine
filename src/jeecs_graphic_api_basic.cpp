@@ -321,8 +321,6 @@ void jegl_using_resource(jegl_resource* resource)
     if (need_init_resouce)
         _current_graphic_thread->m_apis->init_resource(_current_graphic_thread, resource);
 
-    _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
-
     if (resource->m_type == jegl_resource::SHADER)
     {
         auto uniform_vars = resource->m_raw_shader_data->m_custom_uniforms;
@@ -364,6 +362,7 @@ void jegl_using_resource(jegl_resource* resource)
         }
     }
 
+    _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
 }
 
 void* jegl_native_resource(jegl_resource* resource)

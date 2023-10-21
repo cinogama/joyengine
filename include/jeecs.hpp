@@ -1573,7 +1573,6 @@ struct jegl_vertex
     enum type
     {
         LINES = 0,
-        LINELOOP,
         LINESTRIP,
         TRIANGLES,
         TRIANGLESTRIP,
@@ -1672,13 +1671,6 @@ struct jegl_shader
         DISABLE,
         ENABLE,     /* DEFAULT */
     };
-    enum class alpha_test_method : int8_t
-    {
-        INVALID = -1,
-
-        DISABLE,    /* DEFAULT */
-        ENABLE,
-    };
     enum class blend_method : int8_t
     {
         INVALID = -1,
@@ -1698,11 +1690,11 @@ struct jegl_shader
         ONE_MINUS_DST_ALPHA,
         ONE_MINUS_DST_COLOR,
 
-        CONST_COLOR,
-        ONE_MINUS_CONST_COLOR,
+        //CONST_COLOR,
+        //ONE_MINUS_CONST_COLOR,
 
-        CONST_ALPHA,
-        ONE_MINUS_CONST_ALPHA,
+        //CONST_ALPHA,
+        //ONE_MINUS_CONST_ALPHA,
     };
     enum class cull_mode : int8_t
     {
@@ -1711,7 +1703,6 @@ struct jegl_shader
         NONE,       /* DEFAULT */
         FRONT,
         BACK,
-        ALL,
     };
 
     const char* m_vertex_glsl_src;
@@ -1755,7 +1746,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t* m_buffer;
+    uint8_t*    m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
