@@ -1859,8 +1859,7 @@ struct jegl_graphic_api
     clear_framebuf_func_t       clear_rend_buffer_color;
     clear_framebuf_func_t       clear_rend_buffer_depth;
 
-    get_uniform_location_func_t get_uniform_location;   // this function only used after the shader has been 'using' now.
-    set_uniform_func_t          set_uniform;            // too,
+    set_uniform_func_t          set_uniform;
 
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
@@ -2193,17 +2192,6 @@ jegl_rend_to_framebuffer [基本接口]
     jegl_using_resource
 */
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
-
-/*
-jegl_uniform_location [基本接口]
-获取指定着色器的一致变量在实例中的实际位置，以便后续操作
-jegl_uniform_location 不会初始化着色器，请在操作之前调用 jegl_using_resource
-以确保着色器完成初始化
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_using_resource
-*/
-JE_API uint32_t jegl_uniform_location(jegl_resource* shader, const char* name);
 
 /*
 jegl_uniform_int [基本接口]

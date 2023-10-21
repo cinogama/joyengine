@@ -52,7 +52,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
             if (!thread->m_apis->pre_update_interface(thread))
                 // graphic thread want to exit. mark stop update
                 std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
-            
+
             thread->_m_thread_notifier->_m_commited_rendchains.clear();
 
             // Ready for rend..
@@ -126,7 +126,7 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
         }
 
         thread->m_apis->shutdown_interface(
-            thread, 
+            thread,
             thread->m_userdata,
             thread->_m_thread_notifier->m_reboot_flag);
         thread->m_userdata = nullptr;
@@ -194,8 +194,8 @@ jegl_thread* jegl_start_graphic_thread(
     {
         std::lock_guard g1(_jegl_alive_glthread_list_mx);
 
-        if (_jegl_alive_glthread_list.end() == 
-            std::find(_jegl_alive_glthread_list.begin(), _jegl_alive_glthread_list.end(), 
+        if (_jegl_alive_glthread_list.end() ==
+            std::find(_jegl_alive_glthread_list.begin(), _jegl_alive_glthread_list.end(),
                 thread_handle))
         {
             _jegl_alive_glthread_list.push_back(thread_handle);
@@ -320,14 +320,16 @@ void jegl_using_resource(jegl_resource* resource)
 
     if (need_init_resouce)
         _current_graphic_thread->m_apis->init_resource(_current_graphic_thread, resource);
+
     _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
+
     if (resource->m_type == jegl_resource::SHADER)
     {
         auto uniform_vars = resource->m_raw_shader_data->m_custom_uniforms;
         while (uniform_vars)
         {
             if (uniform_vars->m_index == jeecs::typing::INVALID_UINT32)
-                uniform_vars->m_index = jegl_uniform_location(resource, uniform_vars->m_name);
+                printf("");
 
             if (uniform_vars->m_updated || need_init_resouce)
             {
@@ -362,7 +364,7 @@ void jegl_using_resource(jegl_resource* resource)
             uniform_vars = uniform_vars->m_next;
         }
     }
-    
+
 }
 
 void* jegl_native_resource(jegl_resource* resource)
@@ -550,7 +552,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     jeecs_file_read(&_shader->m_enable_to_shared, sizeof(bool), 1, cache_file);
 
     // 4. read and generate custom variable & uniform block informs
-    
+
     // 4.1 read and generate custom variable
     uint64_t custom_uniform_count;
     jeecs_file_read(&custom_uniform_count, sizeof(uint64_t), 1, cache_file);
@@ -622,7 +624,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     // 4.3 read shader vertex layout
     uint64_t vertex_in_count;
     jeecs_file_read(&vertex_in_count, sizeof(uint64_t), 1, cache_file);
-    
+
     _shader->m_vertex_in_count = (size_t)vertex_in_count;
     _shader->m_vertex_in = new jegl_shader::vertex_in_variables[_shader->m_vertex_in_count];
 
@@ -737,7 +739,7 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         // 4.3 write shader vertex layout
         uint64_t vertex_in_count = (uint64_t)raw_shader_data->m_vertex_in_count;
         jeecs_write_cache_file(&vertex_in_count, sizeof(uint64_t), 1, cachefile);
-        jeecs_write_cache_file(raw_shader_data->m_vertex_in, sizeof(jegl_shader::vertex_in_variables), 
+        jeecs_write_cache_file(raw_shader_data->m_vertex_in, sizeof(jegl_shader::vertex_in_variables),
             raw_shader_data->m_vertex_in_count, cachefile);
 
         jeecs_close_cache_file(cachefile);
@@ -870,7 +872,7 @@ jegl_resource* jegl_try_update_shared_resource(jegl_resource* resource, jegl_res
             return resource;
 
         auto fnd = shared_resource_list.find(resource->m_path);
-        if (fnd != shared_resource_list.end() 
+        if (fnd != shared_resource_list.end()
             && fnd->second->m_tobe_replace == false
             && fnd->second->m_resource->m_type == aimtype)
         {
@@ -905,7 +907,7 @@ jegl_resource* jegl_try_load_shared_resource(const char* path)
         }
 
     } while (0);
-   
+
     return nullptr;
 }
 
@@ -944,7 +946,7 @@ jegl_resource* jegl_load_shader(const char* path)
             return shader_resource;
         }
         return nullptr;
-        
+
     }
     jeecs::debug::logerr("Fail to open file: '%s'", path);
     return nullptr;
@@ -1085,9 +1087,9 @@ jegl_resource* jegl_create_vertex(
 
 
 jegl_resource* jegl_create_framebuf(
-    size_t width, size_t height, 
-    const jegl_texture::format* attachment_formats, 
-    const jegl_texture::sampling* attachment_samlings, 
+    size_t width, size_t height,
+    const jegl_texture::format* attachment_formats,
+    const jegl_texture::sampling* attachment_samlings,
     size_t attachment_count)
 {
     if (width == 0 || height == 0 || attachment_count == 0)
@@ -1191,12 +1193,6 @@ void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, si
 void jegl_using_texture(jegl_resource* texture, size_t pass)
 {
     _current_graphic_thread->m_apis->bind_texture(_current_graphic_thread, texture, pass);
-}
-
-uint32_t jegl_uniform_location(jegl_resource* shader, const char* name)
-{
-    // NOTE: This method designed for using after 'jegl_using_resource'
-    return _current_graphic_thread->m_apis->get_uniform_location(_current_graphic_thread, shader, name);
 }
 
 void jegl_uniform_int(jegl_resource* shader, uint32_t location, int value)

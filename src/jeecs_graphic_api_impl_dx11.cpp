@@ -428,7 +428,7 @@ public func vert(v: vin)
 {
     return v2f{
         pos = float4::create(v.vertex, 1.),
-        uv = v.uv,
+        uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
 
@@ -682,7 +682,12 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             resource->m_handle.m_ptr = nullptr;
         }
         else
+        {
+            // Generate uniform locations here.
+            resource->m_raw_shader_data->m_custom_uniforms;
+
             resource->m_handle.m_ptr = jedx11_shader_res;
+        }
 
         break;
     }
@@ -852,10 +857,6 @@ void dx11_clear_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer)
     dx11_clear_framebuffer_depth(ctx, framebuffer);
 }
 
-uint32_t dx11_get_uniform_location_todo(jegl_thread*, jegl_resource* shader, const char* name)
-{
-    return jeecs::typing::INVALID_UINT32;
-}
 void dx11_set_uniform_todo(jegl_thread*, jegl_resource*, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
 }
@@ -882,7 +883,6 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->clear_rend_buffer_color = dx11_clear_framebuffer_color;
     write_to_apis->clear_rend_buffer_depth = dx11_clear_framebuffer_depth;
 
-    write_to_apis->get_uniform_location = dx11_get_uniform_location_todo;
     write_to_apis->set_uniform = dx11_set_uniform_todo;
 }
 

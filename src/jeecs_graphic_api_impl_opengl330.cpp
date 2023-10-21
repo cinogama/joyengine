@@ -429,6 +429,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         }
         else
         {
+            glUseProgram(shader_program);
             resource->m_handle.m_uint1 = shader_program;
             auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
@@ -441,6 +442,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_VP");
 
             builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(gthread, resource, "JOYENGINE_TEXTURE_TILING");
+            auto err = glGetError();
             builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(gthread, resource, "JOYENGINE_TEXTURE_OFFSET");
 
             builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(gthread, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
@@ -449,6 +451,13 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
             builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(gthread, resource, "JOYENGINE_LOCAL_SCALE");
             builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(gthread, resource, "JOYENGINE_MAIN_COLOR");
+
+            auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
+            while (uniform_var)
+            {
+                uniform_var->m_index = gl_get_uniform_location(gthread, resource, uniform_var->m_name);
+                uniform_var = uniform_var->m_next;
+            }
 
             auto* uniform_block = resource->m_raw_shader_data->m_custom_uniform_blocks;
             while (uniform_block)
@@ -649,7 +658,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         break;
     }
     case jegl_resource::type::FRAMEBUF:
-
     {
         GLuint fbo;
         glGenFramebuffers(1, &fbo);
@@ -1076,6 +1084,5 @@ void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->clear_rend_buffer_color = gl_clear_framebuffer_color;
     write_to_apis->clear_rend_buffer_depth = gl_clear_framebuffer_depth;
 
-    write_to_apis->get_uniform_location = gl_get_uniform_location;
     write_to_apis->set_uniform = gl_set_uniform;
 }

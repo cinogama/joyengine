@@ -52,7 +52,7 @@ namespace jeecs
             {
                 std::string result;
 
-               /* auto** block_iter = wrap->shader_struct_define_may_uniform_block;
+                auto** block_iter = wrap->shader_struct_define_may_uniform_block;
                 while (nullptr != *block_iter)
                 {
                     auto* block = *block_iter;
@@ -62,7 +62,7 @@ namespace jeecs
                         std::string uniform_block_decl =
                             block->binding_place == jeecs::typing::INVALID_UINT32
                             ? "struct " + block->name + "\n{\n"
-                            : "layout (std140) uniform " + block->name + "\n{\n";
+                            : "cbuffer " + block->name + ": register(b" + std::to_string(block->binding_place + 1) + ")\n{\n";
 
                         for (auto& variable_inform : block->variables)
                             if (variable_inform.type == jegl_shader_value::type::STRUCT)
@@ -73,7 +73,7 @@ namespace jeecs
                         result += uniform_block_decl + "};\n";
                     }
                     ++block_iter;
-                }*/
+                }
 
                 return result;
             }
@@ -99,7 +99,7 @@ namespace jeecs
                         if (value->is_shader_in_value())
                         {
                             if (is_fragment)
-                                varname = "_v2f." + varname; 
+                                varname = "_v2f." + varname;
                             else
                                 varname = "_vin." + varname;
                         }
@@ -244,45 +244,49 @@ namespace jeecs
                 std::string built_in_srcs;
                 for (auto& builtin_func_name : contex._used_builtin_func)
                 {
-                   /* if (builtin_func_name == "JEBUILTIN_Movement")
-                    {
-                        const std::string unifrom_block = R"(
-vec3 JEBUILTIN_Movement(mat4 trans)
-{
-    return vec3(trans[3][0], trans[3][1], trans[3][2]);
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Negative")
-                    {
-                        const std::string unifrom_block = R"(
-float JEBUILTIN_Negative(float v)
-{
-    return -v;
-}
-vec2 JEBUILTIN_Negative(vec2 v)
-{
-    return -v;
-}
-vec3 JEBUILTIN_Negative(vec3 v)
-{
-    return -v;
-}
-vec4 JEBUILTIN_Negative(vec4 v)
-{
-    return -v;
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }*/
+                    /* if (builtin_func_name == "JEBUILTIN_Movement")
+                     {
+                         const std::string unifrom_block = R"(
+ vec3 JEBUILTIN_Movement(mat4 trans)
+ {
+     return vec3(trans[3][0], trans[3][1], trans[3][2]);
+ }
+ )";
+                         built_in_srcs += unifrom_block;
+                     }
+                     else if (builtin_func_name == "JEBUILTIN_Negative")
+                     {
+                         const std::string unifrom_block = R"(
+ float JEBUILTIN_Negative(float v)
+ {
+     return -v;
+ }
+ vec2 JEBUILTIN_Negative(vec2 v)
+ {
+     return -v;
+ }
+ vec3 JEBUILTIN_Negative(vec3 v)
+ {
+     return -v;
+ }
+ vec4 JEBUILTIN_Negative(vec4 v)
+ {
+     return -v;
+ }
+ )";
+                         built_in_srcs += unifrom_block;
+                     }*/
                 }
 
-
-                for (auto& uniformdecl : contex._uniform_value)
+                if (!contex._uniform_value.empty())
                 {
-                   /* io_declear += "uniform " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
-                    wrap->vertex_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));*/
+                    io_declear += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
+                    for (auto& uniformdecl : contex._uniform_value)
+                    {
+                        io_declear += "    " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
+                        wrap->vertex_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));
+                    }
+                    io_declear += "};\n";
                 }
                 io_declear += "\n";
 
@@ -291,7 +295,7 @@ vec4 JEBUILTIN_Negative(vec4 v)
                 size_t FLOAT2_COUNT = 0;
                 size_t FLOAT3_4_COUNT = 0;
                 std::vector<std::string> vertex_in_semantics(wrap->vertex_in_count);
-                for (size_t i = 0; i< wrap->vertex_in_count;++i)
+                for (size_t i = 0; i < wrap->vertex_in_count; ++i)
                 {
                     switch (wrap->vertex_in[i])
                     {
@@ -320,17 +324,17 @@ vec4 JEBUILTIN_Negative(vec4 v)
                         abort();
                     }
                 }
-                
+
                 io_declear += "struct vin_t\n{\n";
 
                 for (auto& indecl : contex._in_value)
                 {
-                    io_declear += 
-                        "    " 
-                        + get_type_name(indecl.first) 
-                        + " _in_" 
+                    io_declear +=
+                        "    "
+                        + get_type_name(indecl.first)
+                        + " _in_"
                         + std::to_string(indecl.second.first)
-                        + ": " 
+                        + ": "
                         + vertex_in_semantics[indecl.second.first]
                         + ";\n";
                 }
@@ -345,7 +349,7 @@ vec4 JEBUILTIN_Negative(vec4 v)
                 FLOAT3_4_COUNT = 0;
                 for (auto& outvarname : outvalue)
                 {
-                    io_declear += 
+                    io_declear +=
                         "    "
                         + get_type_name(outvarname.first) + " _v2f_" + std::to_string(outid++) + ": ";
 
@@ -377,9 +381,9 @@ vec4 JEBUILTIN_Negative(vec4 v)
                 }
                 io_declear += "};\n";
 
-                body_result = 
-                    "\nv2f_t vertex_main(vin_t _vin)\n{\n" 
-                    + body_result 
+                body_result =
+                    "\nv2f_t vertex_main(vin_t _vin)\n{\n"
+                    + body_result
                     + "\n    // value out:\n"
                     + "    v2f_t vout;\n";
 
@@ -450,10 +454,15 @@ vec4 JEBUILTIN_Negative(vec4 v)
                 }
 
 
-                for (auto& uniformdecl : contex._uniform_value)
+                if (!contex._uniform_value.empty())
                 {
-                    /* io_declear += "uniform " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
-                     wrap->vertex_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));*/
+                    io_declear += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
+                    for (auto& uniformdecl : contex._uniform_value)
+                    {
+                        io_declear += "    " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
+                        wrap->fragment_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));
+                    }
+                    io_declear += "};\n";
                 }
                 io_declear += "\n";
 
@@ -504,8 +513,8 @@ vec4 JEBUILTIN_Negative(vec4 v)
                     auto oid = outid++;
                     io_declear +=
                         "    "
-                        + get_type_name(outvarname.first) 
-                        + " _out_" 
+                        + get_type_name(outvarname.first)
+                        + " _out_"
                         + std::to_string(oid)
                         + ": SV_TARGET"
                         + std::to_string(oid)
