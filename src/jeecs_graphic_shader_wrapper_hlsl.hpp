@@ -1,3 +1,7 @@
+#pragma once
+
+#include "jeecs_graphic_shader_wrapper.hpp"
+
 namespace jeecs
 {
     namespace shader_generator

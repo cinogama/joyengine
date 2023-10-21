@@ -1,8 +1,5 @@
 #pragma once
 
-// Important:
-// Graphic is a job, not a system.
-
 #ifndef JE_IMPL
 #   define JE_IMPL
 #   define JE_ENABLE_DEBUG_API

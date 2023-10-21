@@ -1,3 +1,12 @@
+#pragma once
+
+#include "jeecs_graphic_shader_wrapper.hpp"
+
+using calc_func_t = std::function<jegl_shader_value* (size_t, jegl_shader_value**)>;
+using operation_t = std::variant<jegl_shader_value::type_base_t, calc_func_t>;
+
+#define reduce_method [](size_t argc, jegl_shader_value** args)->jegl_shader_value*
+
 const std::vector<std::pair<std::string, std::vector<operation_t>>> _operation_table =
 {
 {"+", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
@@ -358,3 +367,5 @@ reduce_method{return nullptr; }} },
 { "cross", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3,
 reduce_method{return nullptr; }} },
 };
+
+#undef reduce_method
