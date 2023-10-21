@@ -39,15 +39,6 @@ namespace jeecs
                 return get_type_name_from_type(val->get_type());
             }
 
-            uniform_information get_uniform_info(const std::string& name, jegl_shader_value* value)
-            {
-                jegl_shader::uniform_type uniform_type =
-                    _shader_wrapper_contex::get_outside_type(value->get_type());
-
-                auto* init_value = value->m_uniform_init_val_may_nil;
-                return std::make_tuple(name, uniform_type, init_value);
-            }
-
             std::string _generate_uniform_block_for_hlsl(shader_wrapper* wrap)
             {
                 std::string result;
@@ -284,7 +275,9 @@ namespace jeecs
                     for (auto& uniformdecl : contex._uniform_value)
                     {
                         io_declear += "    " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
-                        wrap->vertex_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));
+                        wrap->vertex_out->uniform_variables.push_back(
+                            _shader_wrapper_contex::get_uniform_info(
+                                uniformdecl.second, uniformdecl.first));
                     }
                     io_declear += "};\n";
                 }
@@ -460,7 +453,9 @@ namespace jeecs
                     for (auto& uniformdecl : contex._uniform_value)
                     {
                         io_declear += "    " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
-                        wrap->fragment_out->uniform_variables.push_back(get_uniform_info(uniformdecl.second, uniformdecl.first));
+                        wrap->fragment_out->uniform_variables.push_back(
+                            _shader_wrapper_contex::get_uniform_info(
+                                uniformdecl.second, uniformdecl.first));
                     }
                     io_declear += "};\n";
                 }

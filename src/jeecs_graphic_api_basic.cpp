@@ -328,39 +328,38 @@ void jegl_using_resource(jegl_resource* resource)
         auto uniform_vars = resource->m_raw_shader_data->m_custom_uniforms;
         while (uniform_vars)
         {
-            if (uniform_vars->m_index == jeecs::typing::INVALID_UINT32)
-                printf("");
-
-            if (uniform_vars->m_updated || need_init_resouce)
+            if (uniform_vars->m_index != jeecs::typing::INVALID_UINT32)
             {
-                uniform_vars->m_updated = false;
-                switch (uniform_vars->m_uniform_type)
+                if (uniform_vars->m_updated || need_init_resouce)
                 {
-                case jegl_shader::uniform_type::FLOAT:
-                    jegl_uniform_float(resource, uniform_vars->m_index, uniform_vars->x);
-                    break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    jegl_uniform_float2(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
-                    break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    jegl_uniform_float3(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
-                    break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    jegl_uniform_float4(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
-                    break;
-                case jegl_shader::uniform_type::FLOAT4X4:
-                    jegl_uniform_float4x4(resource, uniform_vars->m_index, uniform_vars->mat4x4);
-                    break;
-                case jegl_shader::uniform_type::INT:
-                case jegl_shader::uniform_type::TEXTURE:
-                    jegl_uniform_int(resource, uniform_vars->m_index, uniform_vars->n);
-                    break;
-                default:
-                    jeecs::debug::logerr("Unsupport uniform variable type."); break;
-                    break;
+                    uniform_vars->m_updated = false;
+                    switch (uniform_vars->m_uniform_type)
+                    {
+                    case jegl_shader::uniform_type::FLOAT:
+                        jegl_uniform_float(resource, uniform_vars->m_index, uniform_vars->x);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT2:
+                        jegl_uniform_float2(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT3:
+                        jegl_uniform_float3(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4:
+                        jegl_uniform_float4(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4X4:
+                        jegl_uniform_float4x4(resource, uniform_vars->m_index, uniform_vars->mat4x4);
+                        break;
+                    case jegl_shader::uniform_type::INT:
+                    case jegl_shader::uniform_type::TEXTURE:
+                        jegl_uniform_int(resource, uniform_vars->m_index, uniform_vars->n);
+                        break;
+                    default:
+                        jeecs::debug::logerr("Unsupport uniform variable type."); break;
+                        break;
+                    }
                 }
             }
-
             uniform_vars = uniform_vars->m_next;
         }
     }

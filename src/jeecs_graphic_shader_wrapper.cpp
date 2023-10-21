@@ -858,6 +858,19 @@ public:
             return jegl_shader::uniform_type::INT; // return as default;
         }
     }
+
+    static uniform_information get_uniform_info(const std::string& name, jegl_shader_value* value)
+    {
+        jegl_shader::uniform_type uniform_type =
+            _shader_wrapper_contex::get_outside_type(value->get_type());
+
+        auto* init_value =
+            uniform_type == jegl_shader::uniform_type::TEXTURE
+            ? value
+            : value->m_uniform_init_val_may_nil
+            ;
+        return std::make_tuple(name, uniform_type, init_value);
+    }
 };
 
 #include "jeecs_graphic_shader_wrapper_glsl.hpp"
