@@ -664,11 +664,13 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         bool already_has_attached_depth = false;
 
         GLenum attachment = GL_COLOR_ATTACHMENT0;
+
+        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+            std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture>*>(
+                resource->m_raw_framebuf_data->m_output_attachments));
+
         for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
         {
-            jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-                (jeecs::basic::resource<jeecs::graphic::texture>*)resource->m_raw_framebuf_data->m_output_attachments;
-
             jegl_resource* frame_texture = attachments[i]->resouce();
             assert(nullptr != frame_texture && nullptr != frame_texture->m_raw_texture_data);
 
@@ -693,11 +695,11 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 
             glFramebufferTexture2D(GL_FRAMEBUFFER, using_attachment, buffer_texture_type, frame_texture->m_handle.m_uint1, 0);
         }
-        std::vector<GLuint> attachments;
+        std::vector<GLuint> glattachments;
         for (GLenum attachment_index = GL_COLOR_ATTACHMENT0; attachment_index < attachment; ++attachment_index)
-            attachments.push_back(attachment_index);
+            glattachments.push_back(attachment_index);
 
-        glDrawBuffers((GLsizei)attachments.size(), attachments.data());
+        glDrawBuffers((GLsizei)glattachments.size(), glattachments.data());
 
         resource->m_handle.m_uint1 = fbo;
 

@@ -138,17 +138,31 @@ namespace jeecs
                                 //else if (funcname == "lerp")
                                 //    funcname = "mix";
 
-                                if (funcname.find("JEBUILTIN_") == 0)
-                                    contex->_used_builtin_func.insert(funcname);
-
-                                apply += funcname + "(";
-                                for (size_t i = 0; i < variables.size(); i++)
+                                // 此处塞函数转发，部分函数的姿势和gl不一样，为了保持上层一致性，在此转发！
+                                if (funcname == "texture")
                                 {
-                                    apply += variables[i];
-                                    if (i + 1 != variables.size())
-                                        apply += ", ";
+                                    assert(variables.size() == 2);
+                                    apply +=
+                                        variables[0]
+                                        + ".Sample("
+                                        + variables[0]
+                                        + "_sampstate, "
+                                        + variables[1]
+                                        + ")";
                                 }
-                                apply += ")";
+                                else
+                                {
+                                    if (funcname.find("JEBUILTIN_") == 0)
+                                        contex->_used_builtin_func.insert(funcname);
+                                    apply += funcname + "(";
+                                    for (size_t i = 0; i < variables.size(); i++)
+                                    {
+                                        apply += variables[i];
+                                        if (i + 1 != variables.size())
+                                            apply += ", ";
+                                    }
+                                    apply += ")";
+                                }
                             }
                             apply += ";";
 
@@ -297,13 +311,13 @@ namespace jeecs
                                 + " " 
                                 + uniformdecl.second 
                                 + ": register(t"
-                                + std::to_string(uniformdecl.first->m_uniform_init_val_may_nil->m_integer)
+                                + std::to_string(uniformdecl.first->m_uniform_texture_channel)
                                 + ");\n";
                             texture_decl 
                                 += "SamplerState "
                                 + uniformdecl.second 
-                                + ": register(s"
-                                + std::to_string(uniformdecl.first->m_uniform_init_val_may_nil->m_integer)
+                                + "_sampstate: register(s"
+                                + std::to_string(uniformdecl.first->m_uniform_texture_channel)
                                 + ");\n";
                         }
                         else
@@ -512,13 +526,13 @@ namespace jeecs
                                 + " "
                                 + uniformdecl.second
                                 + ": register(t"
-                                + std::to_string(uniformdecl.first->m_uniform_init_val_may_nil->m_integer)
+                                + std::to_string(uniformdecl.first->m_uniform_texture_channel)
                                 + ");\n";
                             texture_decl
                                 += "SamplerState "
                                 + uniformdecl.second
-                                + ": register(s"
-                                + std::to_string(uniformdecl.first->m_uniform_init_val_may_nil->m_integer)
+                                + "_sampstate: register(s"
+                                + std::to_string(uniformdecl.first->m_uniform_texture_channel)
                                 + ");\n";
                         }
                         else

@@ -39,7 +39,6 @@ struct jegl_dx11_context
     MSWRLComPtr<ID3D11Texture2D> m_dx_main_renderer_target_depth_buffer;        // 深度模板缓冲区
     MSWRLComPtr<ID3D11RenderTargetView> m_dx_main_renderer_target_view;         // 渲染目标视图
 
-    D3D11_VIEWPORT m_dx_view_port_config;
     WNDCLASS m_win32_window_class;
 
     bool m_dx_context_finished;
@@ -124,14 +123,15 @@ void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, si
         context->m_dx_main_renderer_target_depth_view.Get());
 
     // 设置视口变换
-    context->m_dx_view_port_config.TopLeftX = 0;
-    context->m_dx_view_port_config.TopLeftY = 0;
-    context->m_dx_view_port_config.Width = (float)context->WINDOWS_SIZE_WIDTH;
-    context->m_dx_view_port_config.Height = (float)context->WINDOWS_SIZE_HEIGHT;
-    context->m_dx_view_port_config.MinDepth = 0.0f;
-    context->m_dx_view_port_config.MaxDepth = 1.0f;
+    D3D11_VIEWPORT viewport;
+    viewport.TopLeftX = 0;
+    viewport.TopLeftY = 0;
+    viewport.Width = (float)context->WINDOWS_SIZE_WIDTH;
+    viewport.Height = (float)context->WINDOWS_SIZE_HEIGHT;
+    viewport.MinDepth = 0.0f;
+    viewport.MaxDepth = 1.0f;
 
-    context->m_dx_context->RSSetViewports(1, &context->m_dx_view_port_config);
+    context->m_dx_context->RSSetViewports(1, &viewport);
 }
 
 LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -324,21 +324,21 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
     if (context->MSAA_LEVEL != 0)
     {
         context->m_dx_device->CheckMultisampleQualityLevels(
-            DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality);
+            DXGI_FORMAT_R8G8B8A8_UNORM, (UINT)context->MSAA_LEVEL, &msaa_quality);
     }
 
     if (msaa_quality > 0)
     {
-        sd.SampleDesc.Quality = msaa_quality - 1;
         sd.SampleDesc.Count = (UINT)context->MSAA_LEVEL;
+        sd.SampleDesc.Quality = msaa_quality - 1;
     }
     else
     {
         sd.SampleDesc.Count = 1;
         sd.SampleDesc.Quality = 0;
     }
-
-    context->MSAA_QUALITY = msaa_quality;
+    context->MSAA_LEVEL = (size_t)sd.SampleDesc.Count;
+    context->MSAA_QUALITY = (size_t)msaa_quality;
 
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     sd.BufferCount = 1;
@@ -465,15 +465,18 @@ public func vert(v: vin)
         uv = v.uv, //uvtrans(v.uv, je_tiling, je_offset),
     };
 }
-
 public func frag(vf: v2f)
 {
+    let Albedo = uniform_texture:<texture2d>("Albedo", 0);
+    let color = texture(Albedo, vf.uv);
     return fout{
-        color = float4::create(vf.uv, 1., vf.uv->x),
+        color = float4::create(color->xyz, color->w * vf.uv->x),
     };
 }
     )");
+    static auto texture = jeecs::graphic::texture::load("@/builtin/icon/icon.png");
 
+    jegl_using_texture(texture->resouce(), 0);
     jegl_using_resource(shad->resouce());
     jegl_draw_vertex(quad->resouce());
 
@@ -519,7 +522,13 @@ struct jedx11_uniformbuf
     jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniformbuf;
     UINT m_binding_place;
 };
-
+struct jedx11_framebuffer
+{
+    std::vector<jegl_dx11_context::MSWRLComPtr<ID3D11RenderTargetView>>m_rend_views;
+    jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilView> m_depth_view;
+    std::vector<ID3D11RenderTargetView*>m_target_views;
+    UINT m_color_target_count;
+};
 
 void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
 {
@@ -929,10 +938,6 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
     }
     case jegl_resource::type::TEXTURE:
     {
-        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::MSAA_MASK) == 0);
-        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR16) == 0);
-        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH) == 0);
-        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF) == 0);
         assert((resource->m_raw_texture_data->m_format & jegl_texture::format::CUBE) == 0);
 
         D3D11_TEXTURE2D_DESC texture_describe;
@@ -941,49 +946,41 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         texture_describe.MipLevels = 1;
         texture_describe.ArraySize = 1;
 
+        bool depth16f = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR16);
+
         switch (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
         {
         case jegl_texture::format::MONO:
-            texture_describe.Format = DXGI_FORMAT_R8_UNORM;
+            texture_describe.Format = depth16f ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_R16_FLOAT;
             break;
         case jegl_texture::format::RGBA:
-            texture_describe.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            texture_describe.Format = depth16f ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_R16G16B16A16_FLOAT;
             break;
         }
-        texture_describe.SampleDesc.Count = 1;
-        texture_describe.SampleDesc.Quality = 0;
+        size_t msaa_level = (size_t)(resource->m_raw_texture_data->m_format
+            & jegl_texture::format::MSAA_MASK) >> (size_t)8;
+        UINT msaa_quality = 0;
+        if (msaa_level != 0)
+        {
+            context->m_dx_device->CheckMultisampleQualityLevels(
+                texture_describe.Format, (UINT)msaa_level, &msaa_quality);
+        }
+        if (msaa_quality > 0)
+        {
+            texture_describe.SampleDesc.Count = (UINT)msaa_level;
+            texture_describe.SampleDesc.Quality = msaa_quality - 1;
+        }
+        else
+        {
+            texture_describe.SampleDesc.Count = 1;
+            texture_describe.SampleDesc.Quality = 0;
+        }
         texture_describe.Usage = D3D11_USAGE_DEFAULT;
         texture_describe.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         texture_describe.CPUAccessFlags = 0;
         texture_describe.MiscFlags = 0;
 
-        D3D11_SUBRESOURCE_DATA texture_sub_data;
-        texture_sub_data.pSysMem = resource->m_raw_texture_data->m_pixels;
-        texture_sub_data.SysMemPitch =
-            (UINT)resource->m_raw_texture_data->m_width *
-            ((UINT)resource->m_raw_texture_data->m_format &
-                jegl_texture::format::COLOR_DEPTH_MASK);
-        texture_sub_data.SysMemSlicePitch =
-            (UINT)resource->m_raw_texture_data->m_width *
-            (UINT)resource->m_raw_texture_data->m_height *
-            ((UINT)resource->m_raw_texture_data->m_format &
-                jegl_texture::format::COLOR_DEPTH_MASK);
-
         jedx11_texture* jedx11_texture_res = new jedx11_texture;
-        JERCHECK(context->m_dx_device->CreateTexture2D(
-            &texture_describe, &texture_sub_data, 
-            jedx11_texture_res->m_texture.GetAddressOf()));
-
-        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
-        texture_shader_view_describe.Format = texture_describe.Format;
-        texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        texture_shader_view_describe.Texture2D.MipLevels = 1;
-        texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
-
-        JERCHECK(context->m_dx_device->CreateShaderResourceView(
-            jedx11_texture_res->m_texture.Get(),
-            &texture_shader_view_describe,
-            jedx11_texture_res->m_texture_view.GetAddressOf()));
 
         D3D11_SAMPLER_DESC sampler_describe;
 
@@ -1075,7 +1072,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         }
 
         if (resource->m_raw_texture_data->m_sampling)
-        sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+            sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
 
         switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_X_METHOD_MASK)
         {
@@ -1105,6 +1102,78 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             &sampler_describe,
             jedx11_texture_res->m_texture_sampler.GetAddressOf()));
 
+        if ((resource->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF)
+            == jegl_texture::format::FRAMEBUF)
+        {
+            if (resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH)
+            {
+                texture_describe.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+                size_t msaa_level = (size_t)(resource->m_raw_texture_data->m_format
+                    & jegl_texture::format::MSAA_MASK) >> (size_t)8;
+                UINT msaa_quality = 0;
+                if (msaa_level != 0)
+                {
+                    context->m_dx_device->CheckMultisampleQualityLevels(
+                        texture_describe.Format, (UINT)msaa_level, &msaa_quality);
+                }
+                if (msaa_quality > 0)
+                {
+                    texture_describe.SampleDesc.Count = (UINT)msaa_level;
+                    texture_describe.SampleDesc.Quality = msaa_quality - 1;
+                }
+                else
+                {
+                    texture_describe.SampleDesc.Count = 1;
+                    texture_describe.SampleDesc.Quality = 0;
+                }
+
+                texture_describe.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
+
+                // 创建深度缓冲区以及深度模板视图
+                JERCHECK(context->m_dx_device->CreateTexture2D(
+                    &texture_describe, nullptr,
+                    jedx11_texture_res->m_texture.GetAddressOf()));
+                JERCHECK(context->m_dx_device->CreateShaderResourceView(
+                    jedx11_texture_res->m_texture.Get(), nullptr,
+                    jedx11_texture_res->m_texture_view.GetAddressOf()));
+            }
+            else
+            {
+                texture_describe.BindFlags |= D3D11_BIND_RENDER_TARGET;
+
+                JERCHECK(context->m_dx_device->CreateTexture2D(
+                    &texture_describe, nullptr, jedx11_texture_res->m_texture.GetAddressOf()));
+            }
+        }
+        else
+        {
+            D3D11_SUBRESOURCE_DATA texture_sub_data;
+            texture_sub_data.pSysMem = resource->m_raw_texture_data->m_pixels;
+            texture_sub_data.SysMemPitch =
+                (UINT)resource->m_raw_texture_data->m_width *
+                ((UINT)resource->m_raw_texture_data->m_format &
+                    jegl_texture::format::COLOR_DEPTH_MASK);
+            texture_sub_data.SysMemSlicePitch =
+                (UINT)resource->m_raw_texture_data->m_width *
+                (UINT)resource->m_raw_texture_data->m_height *
+                ((UINT)resource->m_raw_texture_data->m_format &
+                    jegl_texture::format::COLOR_DEPTH_MASK);
+
+            JERCHECK(context->m_dx_device->CreateTexture2D(
+                &texture_describe, &texture_sub_data,
+                jedx11_texture_res->m_texture.GetAddressOf()));
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
+            texture_shader_view_describe.Format = texture_describe.Format;
+            texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            texture_shader_view_describe.Texture2D.MipLevels = 1;
+            texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
+
+            JERCHECK(context->m_dx_device->CreateShaderResourceView(
+                jedx11_texture_res->m_texture.Get(),
+                &texture_shader_view_describe,
+                jedx11_texture_res->m_texture_view.GetAddressOf()));
+        }
         resource->m_handle.m_ptr = jedx11_texture_res;
         break;
     }
@@ -1159,7 +1228,56 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         break;
     }
     case jegl_resource::type::FRAMEBUF:
+    {
+        jedx11_framebuffer* jedx11_framebuffer_res = new jedx11_framebuffer;
+
+        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+            std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture>*>(
+                resource->m_raw_framebuf_data->m_output_attachments));
+
+        size_t color_attachment_count = 0;
+        for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
+        {
+            auto& attachment = attachments[i];
+            if (0 == (attachment->resouce()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
+                ++color_attachment_count;
+        }
+
+        jedx11_framebuffer_res->m_rend_views.resize(color_attachment_count);
+        color_attachment_count = 0;
+
+        for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
+        {
+            auto& attachment = attachments[i];
+            if (0 != (attachment->resouce()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
+            {
+                if (jedx11_framebuffer_res->m_depth_view.Get() == nullptr)
+                {
+                    JERCHECK(context->m_dx_device->CreateDepthStencilView(
+                        std::launder(reinterpret_cast<jedx11_texture*>(attachment->resouce()->m_handle.m_ptr))->m_texture.Get(),
+                        nullptr, jedx11_framebuffer_res->m_depth_view.GetAddressOf()));
+                }
+                else
+                    jeecs::debug::logerr("Framebuffer(%p) attach depth buffer repeatedly.", resource);
+            }
+            else
+            {
+                JERCHECK(context->m_dx_device->CreateRenderTargetView(
+                    std::launder(reinterpret_cast<jedx11_texture*>(attachment->resouce()->m_handle.m_ptr))->m_texture.Get(),
+                    nullptr, jedx11_framebuffer_res->m_rend_views[color_attachment_count++].GetAddressOf()));
+
+            }
+        }
+        for (auto& v : jedx11_framebuffer_res->m_rend_views)
+            jedx11_framebuffer_res->m_target_views.push_back(v.Get());
+
+        jedx11_framebuffer_res->m_color_target_count = (UINT)color_attachment_count;
+        assert(jedx11_framebuffer_res->m_target_views.size() == jedx11_framebuffer_res->m_rend_views.size());
+        assert(jedx11_framebuffer_res->m_target_views.size() == color_attachment_count);
+
+        resource->m_handle.m_ptr = jedx11_framebuffer_res;
         break;
+    }
     case jegl_resource::type::UNIFORMBUF:
     {
         auto* jedx11_uniformbuf_res = new jedx11_uniformbuf;
@@ -1249,7 +1367,14 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
         break;
     }
     case jegl_resource::type::FRAMEBUF:
+    {
+        auto* framebuffer = std::launder(reinterpret_cast<jedx11_framebuffer*>(resource->m_handle.m_ptr));
+        context->m_dx_context->OMSetRenderTargets(
+            framebuffer->m_color_target_count,
+            framebuffer->m_target_views.data(),
+            framebuffer->m_depth_view.Get());
         break;
+    }
     case jegl_resource::type::UNIFORMBUF:
     {
         auto* uniformbuf = std::launder(reinterpret_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr));
@@ -1296,6 +1421,7 @@ void dx11_close_resource(jegl_thread* ctx, jegl_resource* resource)
         delete std::launder(reinterpret_cast<jedx11_vertex*>(resource->m_handle.m_ptr));
         break;
     case jegl_resource::type::FRAMEBUF:
+        delete std::launder(reinterpret_cast<jedx11_framebuffer*>(resource->m_handle.m_ptr));
         break;
     case jegl_resource::type::UNIFORMBUF:
         delete std::launder(reinterpret_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr));
@@ -1327,7 +1453,7 @@ void* dx11_native_resource(jegl_thread* gthread, jegl_resource* resource)
     }
 }
 
-void dx11_draw_vertex_with_shader_todo(jegl_thread* ctx, jegl_resource* vert)
+void dx11_draw_vertex_with_shader(jegl_thread* ctx, jegl_resource* vert)
 {
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
 
@@ -1339,15 +1465,42 @@ void dx11_draw_vertex_with_shader_todo(jegl_thread* ctx, jegl_resource* vert)
     context->m_dx_context->Draw(vertex->m_count, 0);
 }
 
-void dx11_bind_texture_todo(jegl_thread* ctx, jegl_resource* texture, size_t pass)
+void dx11_bind_texture(jegl_thread* ctx, jegl_resource* texture, size_t pass)
 {
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
     context->m_next_binding_texture_place = pass;
     jegl_using_resource(texture);
 }
 
-void dx11_set_rend_to_framebuffer_todo(jegl_thread* ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+void dx11_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
+    jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
+    if (framebuffer == nullptr)
+    {
+        context->m_dx_context->OMSetRenderTargets(1,
+            context->m_dx_main_renderer_target_view.GetAddressOf(),
+            context->m_dx_main_renderer_target_depth_view.Get());
+    }
+    else
+        jegl_using_resource(framebuffer);
+
+    auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
+    if (w == 0)
+        w = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_width : context->WINDOWS_SIZE_WIDTH;
+    if (h == 0)
+        h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
+
+    y = context->WINDOWS_SIZE_HEIGHT - y;
+
+    D3D11_VIEWPORT viewport;
+    viewport.TopLeftX = (float)x;
+    viewport.TopLeftY = (float)y;
+    viewport.Width = (float)context->WINDOWS_SIZE_WIDTH;
+    viewport.Height = (float)context->WINDOWS_SIZE_HEIGHT;
+    viewport.MinDepth = 0.0f;
+    viewport.MaxDepth = 1.0f;
+
+    context->m_dx_context->RSSetViewports(1, &viewport);
 }
 
 void dx11_clear_framebuffer_color(jegl_thread* ctx, jegl_resource* framebuffer)
@@ -1360,7 +1513,12 @@ void dx11_clear_framebuffer_color(jegl_thread* ctx, jegl_resource* framebuffer)
         context->m_dx_context->ClearRenderTargetView(
             context->m_dx_main_renderer_target_view.Get(), clear_color);
     else
-        ;//todo
+    {
+        auto* frambuf = std::launder(reinterpret_cast<jedx11_framebuffer*>(framebuffer->m_handle.m_ptr));
+        for (auto& target : frambuf->m_rend_views)
+            context->m_dx_context->ClearRenderTargetView(
+                target.Get(), clear_color);
+    }
 }
 void dx11_clear_framebuffer_depth(jegl_thread* ctx, jegl_resource* framebuffer)
 {
@@ -1371,7 +1529,12 @@ void dx11_clear_framebuffer_depth(jegl_thread* ctx, jegl_resource* framebuffer)
             context->m_dx_main_renderer_target_depth_view.Get(),
             D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     else
-        ;//todo
+    {
+        auto* frambuf = std::launder(reinterpret_cast<jedx11_framebuffer*>(framebuffer->m_handle.m_ptr));
+        context->m_dx_context->ClearDepthStencilView(
+            frambuf->m_depth_view.Get(),
+            D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+    }
 }
 void dx11_clear_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer)
 {
@@ -1435,10 +1598,10 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->close_resource = dx11_close_resource;
     write_to_apis->native_resource = dx11_native_resource;
 
-    write_to_apis->draw_vertex = dx11_draw_vertex_with_shader_todo;
-    write_to_apis->bind_texture = dx11_bind_texture_todo;
+    write_to_apis->draw_vertex = dx11_draw_vertex_with_shader;
+    write_to_apis->bind_texture = dx11_bind_texture;
 
-    write_to_apis->set_rend_buffer = dx11_set_rend_to_framebuffer_todo;
+    write_to_apis->set_rend_buffer = dx11_set_rend_to_framebuffer;
     write_to_apis->clear_rend_buffer = dx11_clear_framebuffer;
     write_to_apis->clear_rend_buffer_color = dx11_clear_framebuffer_color;
     write_to_apis->clear_rend_buffer_depth = dx11_clear_framebuffer_depth;

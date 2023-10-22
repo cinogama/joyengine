@@ -1500,7 +1500,7 @@ struct jegl_texture
     enum format : uint16_t
     {
         MONO = 0x0001,
-        RGBA = 0x0002,
+        RGBA = 0x0004,
         COLOR_DEPTH_MASK = 0x000F,
 
         COLOR16 = 0x0010,
