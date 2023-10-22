@@ -91,7 +91,9 @@ namespace jeecs
         void _frame_rend_impl()
         {
             // Clear frame buffer
-            jegl_clear_framebuffer(nullptr);
+            float clearcolor[] = { 0.,0.,0.,0. };
+            jegl_clear_framebuffer_color(clearcolor);
+            jegl_clear_framebuffer_depth();
 
             std::lock_guard g1(m_rendchain_branchs_mx);
 

@@ -1165,22 +1165,18 @@ void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t u
     }
 }
 
-void jegl_draw_vertex(jegl_resource* vert)
+void jegl_draw_vertex(jegl_resource* vert, jegl_resource* shader)
 {
-    _current_graphic_thread->m_apis->draw_vertex(_current_graphic_thread, vert);
+    _current_graphic_thread->m_apis->draw_vertex(_current_graphic_thread, vert, shader);
 }
 
-void jegl_clear_framebuffer(jegl_resource* framebuffer)
+void jegl_clear_framebuffer_color(float color[4])
 {
-    _current_graphic_thread->m_apis->clear_rend_buffer(_current_graphic_thread, framebuffer);
+    _current_graphic_thread->m_apis->clear_rend_buffer_color(_current_graphic_thread, color);
 }
-void jegl_clear_framebuffer_color(jegl_resource* framebuffer)
+void jegl_clear_framebuffer_depth()
 {
-    _current_graphic_thread->m_apis->clear_rend_buffer_color(_current_graphic_thread, framebuffer);
-}
-void jegl_clear_framebuffer_depth(jegl_resource* framebuffer)
-{
-    _current_graphic_thread->m_apis->clear_rend_buffer_depth(_current_graphic_thread, framebuffer);
+    _current_graphic_thread->m_apis->clear_rend_buffer_depth(_current_graphic_thread);
 }
 
 void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)

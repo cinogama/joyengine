@@ -225,6 +225,7 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args, siz
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
     {
+        rbf->clearcolor = jeecs::math::vec4(0.f, 0.f, 0.f, 1.f);
         rbf->framebuffer = jeecs::graphic::framebuffer::create(
             (size_t)wo_int(args + 1), (size_t)wo_int(args + 2), {
                 {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT},

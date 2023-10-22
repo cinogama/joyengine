@@ -1820,12 +1820,12 @@ struct jegl_graphic_api
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using native_resource_func_t = void* (*)(jegl_thread*, jegl_resource*);
 
-    using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*);
+    using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*, jegl_resource*);
     using bind_texture_func_t = void(*)(jegl_thread*, jegl_resource*, size_t);
 
     using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t, size_t, size_t, size_t);
-    using clear_framebuf_func_t = void(*)(jegl_thread*, jegl_resource*);
-
+    using clear_framebuf_color_func_t = void(*)(jegl_thread*, float color[4]);
+    using clear_framebuf_depth_func_t = void(*)(jegl_thread*);
     using get_uniform_location_func_t = uint32_t(*)(jegl_thread*, jegl_resource*, const char*);
     using set_uniform_func_t = void(*)(jegl_thread*, jegl_resource*, uint32_t, jegl_shader::uniform_type, const void*);
 
@@ -1845,9 +1845,9 @@ struct jegl_graphic_api
     bind_texture_func_t         bind_texture;
 
     set_rendbuf_func_t          set_rend_buffer;
-    clear_framebuf_func_t       clear_rend_buffer;
-    clear_framebuf_func_t       clear_rend_buffer_color;
-    clear_framebuf_func_t       clear_rend_buffer_depth;
+
+    clear_framebuf_color_func_t       clear_rend_buffer_color;
+    clear_framebuf_depth_func_t       clear_rend_buffer_depth;
 
     set_uniform_func_t          set_uniform;
 
@@ -2128,7 +2128,7 @@ JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
 
 /*
 jegl_draw_vertex [基本接口]
-使用当前着色器（通过jegl_using_resource指定）和纹理（通过jegl_using_texture绑定）,
+使用当前着色器和纹理（通过jegl_using_texture绑定）,
 以指定方式绘制一个模型，与jegl_using_resource类似，会根据情况是否执行资源的初始化操作
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
@@ -2136,40 +2136,27 @@ jegl_draw_vertex [基本接口]
     jegl_using_resource
     jegl_using_texture
 */
-JE_API void jegl_draw_vertex(jegl_resource* vert);
-
-/*
-jegl_clear_framebuffer [基本接口]
-清除指定帧缓冲的颜色和深度信息，若framebuffer == nullptr，则清除屏幕缓冲区，与
-jegl_using_resource类似，会根据情况是否执行资源的初始化操作
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-请参见：
-    jegl_using_resource
-*/
-JE_API void jegl_clear_framebuffer(jegl_resource* framebuffer);
+JE_API void jegl_draw_vertex(jegl_resource* vert, jegl_resource* shader);
 
 /*
 jegl_clear_framebuffer_color [基本接口]
-清除指定帧缓冲的颜色信息，若framebuffer == nullptr，则清除屏幕缓冲区，与
-jegl_using_resource类似，会根据情况是否执行资源的初始化操作
+以color指定的颜色清除当前帧缓冲的颜色信息
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_clear_framebuffer_color(jegl_resource* framebuffer);
+JE_API void jegl_clear_framebuffer_color(float color[4]);
 
 /*
 jegl_clear_framebuffer [基本接口]
-清除指定帧缓冲的深度信息，若framebuffer == nullptr，则清除屏幕缓冲区，与
-jegl_using_resource类似，会根据情况是否执行资源的初始化操作
+清除指定帧缓冲的深度信息
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_clear_framebuffer_depth(jegl_resource* framebuffer);
+JE_API void jegl_clear_framebuffer_depth();
 
 /*
 jegl_rend_to_framebuffer [基本接口]
@@ -2319,7 +2306,7 @@ JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource
 jegl_rchain_clear_color_buffer [基本接口]
 指示此链绘制开始时需要清除目标缓冲区的颜色缓存
 */
-JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain);
+JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, float *color);
 
 /*
 jegl_rchain_clear_depth_buffer [基本接口]
@@ -7582,6 +7569,11 @@ namespace jeecs
         struct RendToFramebuffer
         {
             basic::resource<graphic::framebuffer> framebuffer = nullptr;
+            math::vec4 clearcolor = {};
+            static void JERefRegsiter()
+            {
+                typing::register_member(&RendToFramebuffer::clearcolor, "clearcolor");
+            }
         };
     }
     namespace Physics2D

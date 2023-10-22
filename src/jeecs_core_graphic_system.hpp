@@ -483,12 +483,19 @@ public let frag =
             for (auto& current_camera : m_camera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
+                float clear_buffer_color[] = {0.f, 0.f, 0.f, 0.f};
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
+                    {
                         rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
+                        clear_buffer_color[0] = current_camera.rendToFramebuffer->clearcolor.x;
+                        clear_buffer_color[1] = current_camera.rendToFramebuffer->clearcolor.y;
+                        clear_buffer_color[2] = current_camera.rendToFramebuffer->clearcolor.z;
+                        clear_buffer_color[3] = current_camera.rendToFramebuffer->clearcolor.w;
+                    }
                 }
 
                 size_t
@@ -511,7 +518,7 @@ public let frag =
 
                 // If camera rend to texture, clear the frame buffer (if need)
                 if (rend_aim_buffer)
-                    jegl_rchain_clear_color_buffer(rend_chain);
+                    jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
                 // Clear depth buffer to overwrite pixels.
                 jegl_rchain_clear_depth_buffer(rend_chain);
 
@@ -822,12 +829,19 @@ public let frag =
             for (auto& current_camera : m_camera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
+                float clear_buffer_color[] = { 0.f, 0.f, 0.f, 0.f };
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
+                    {
                         rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
+                        clear_buffer_color[0] = current_camera.rendToFramebuffer->clearcolor.x;
+                        clear_buffer_color[1] = current_camera.rendToFramebuffer->clearcolor.y;
+                        clear_buffer_color[2] = current_camera.rendToFramebuffer->clearcolor.z;
+                        clear_buffer_color[3] = current_camera.rendToFramebuffer->clearcolor.w;
+                    }
                 }
 
                 size_t
@@ -856,7 +870,7 @@ public let frag =
 
                 // If camera rend to texture, clear the frame buffer (if need)
                 if (rend_aim_buffer)
-                    jegl_rchain_clear_color_buffer(rend_chain);
+                    jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
                 // Clear depth buffer to overwrite pixels.
                 jegl_rchain_clear_depth_buffer(rend_chain);
 
@@ -1666,12 +1680,19 @@ public func frag(_: v2f)
             for (auto& current_camera : m_camera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
+                float clear_buffer_color[] = { 0.f, 0.f, 0.f, 0.f };
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
+                    {
                         rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
+                        clear_buffer_color[0] = current_camera.rendToFramebuffer->clearcolor.x;
+                        clear_buffer_color[1] = current_camera.rendToFramebuffer->clearcolor.y;
+                        clear_buffer_color[2] = current_camera.rendToFramebuffer->clearcolor.z;
+                        clear_buffer_color[3] = current_camera.rendToFramebuffer->clearcolor.w;
+                    }
                 }
 
                 size_t
@@ -1777,7 +1798,7 @@ public func frag(_: v2f)
                                 light2d_shadow_aim_buffer->width(),
                                 light2d_shadow_aim_buffer->height());
 
-                            jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain);
+                            jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, nullptr);
                             jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain);
 
                             const auto& normal_shadow_pass =
@@ -2032,7 +2053,8 @@ public func frag(_: v2f)
                         current_camera.branchPipeline,
                         light2d_rend_aim_buffer,
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
-                    jegl_rchain_clear_color_buffer(rend_chain);
+
+                    jegl_rchain_clear_color_buffer(rend_chain, nullptr);
                     jegl_rchain_clear_depth_buffer(rend_chain);
 
                     jegl_rchain_bind_uniform_buffer(rend_chain, 
@@ -2054,7 +2076,7 @@ public func frag(_: v2f)
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (rend_aim_buffer)
-                        jegl_rchain_clear_color_buffer(rend_chain);
+                        jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
                     // Clear depth buffer to overwrite pixels.
                     jegl_rchain_clear_depth_buffer(rend_chain);
                 }
@@ -2159,7 +2181,7 @@ public func frag(_: v2f)
                     jegl_rendchain* light2d_light_effect_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                         current_camera.light2DPostPass->post_light_target->resouce(), 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
-                    jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain);
+                    jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain, nullptr);
                     auto lightpass_pre_bind_texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
 
                     // Bind attachment
@@ -2290,7 +2312,7 @@ public func frag(_: v2f)
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (rend_aim_buffer)
-                        jegl_rchain_clear_color_buffer(rend_chain);
+                        jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
                     // Clear depth buffer to overwrite pixels.
                     jegl_rchain_clear_depth_buffer(rend_chain);
 

@@ -336,10 +336,12 @@ uint32_t gl_get_uniform_location(jegl_thread*, jegl_resource* shader, const char
     return (uint32_t)loc;
 }
 
-void gl_set_uniform(jegl_thread*, jegl_resource*, uint32_t location, jegl_shader::uniform_type type, const void* val)
+void gl_set_uniform(jegl_thread* ctx, jegl_resource* shader, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
     if (location == jeecs::typing::INVALID_UINT32)
         return;
+
+    jegl_using_resource(shader);
 
     switch (type)
     {
@@ -996,8 +998,9 @@ void gl_bind_texture(jegl_thread*, jegl_resource* texture, size_t pass)
     jegl_using_resource(texture);
 }
 
-void gl_draw_vertex_with_shader(jegl_thread*, jegl_resource* vert)
+void gl_draw_vertex_with_shader(jegl_thread*, jegl_resource* vert, jegl_resource* shader)
 {
+    jegl_using_resource(shader);
     jegl_using_resource(vert);
 
     gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(vert->m_handle.m_ptr));
@@ -1021,32 +1024,14 @@ void gl_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, si
         h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
     glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }
-void gl_clear_framebuffer_color(jegl_thread*, jegl_resource* framebuffer)
+void gl_clear_framebuffer_color(jegl_thread*,  float color[4])
 {
-    if (nullptr == framebuffer)
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    else
-        jegl_using_resource(framebuffer);
-
+    glClearColor(color[0], color[1], color[2], color[3]);
     glClear(GL_COLOR_BUFFER_BIT);
 }
-void gl_clear_framebuffer(jegl_thread*, jegl_resource* framebuffer)
-{
-    if (nullptr == framebuffer)
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    else
-        jegl_using_resource(framebuffer);
 
-    _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-}
-void gl_clear_framebuffer_depth(jegl_thread*, jegl_resource* framebuffer)
+void gl_clear_framebuffer_depth(jegl_thread*)
 {
-    if (nullptr == framebuffer)
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    else
-        jegl_using_resource(framebuffer);
-
     _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
     glClear(GL_DEPTH_BUFFER_BIT);
 }
@@ -1069,7 +1054,6 @@ void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->bind_texture = gl_bind_texture;
 
     write_to_apis->set_rend_buffer = gl_set_rend_to_framebuffer;
-    write_to_apis->clear_rend_buffer = gl_clear_framebuffer;
     write_to_apis->clear_rend_buffer_color = gl_clear_framebuffer_color;
     write_to_apis->clear_rend_buffer_depth = gl_clear_framebuffer_depth;
 

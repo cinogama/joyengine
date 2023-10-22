@@ -109,11 +109,15 @@ namespace jeecs
 
                             if (value->m_opname == "+"s
                                 || value->m_opname == "-"s
-                                || value->m_opname == "*"s
                                 || value->m_opname == "/"s)
                             {
                                 assert(variables.size() == 2);
                                 apply += variables[0] + " " + value->m_opname + " " + variables[1];
+                            }
+                            else if (value->m_opname == "*"s)
+                            {
+                                assert(variables.size() == 2);
+                                apply += "mul(" + variables[0] + "," + variables[1] + ")";
                             }
                             else if (value->m_opname[0] == '.')
                             {

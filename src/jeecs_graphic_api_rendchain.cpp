@@ -41,6 +41,7 @@ struct jegl_rendchain
     jegl_rendchain() = default;
 
     bool m_clear_target_frame_color_buffer;
+    float m_clear_color[4];
     bool m_clear_target_frame_depth_buffer;
     jegl_resource* m_target_frame_buffer;
     size_t m_target_frame_buffer_viewport[4];
@@ -62,7 +63,7 @@ struct jegl_rendchain
 
 jegl_rendchain* jegl_rchain_create()
 {
-    jegl_rendchain* chain = new jegl_rendchain;
+    jegl_rendchain* chain = new jegl_rendchain{};
     return chain;
 }
 void jegl_rchain_close(jegl_rendchain* chain)
@@ -95,9 +96,23 @@ void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource* unifo
     assert(uniformbuffer->m_type == jegl_resource::type::UNIFORMBUF);
     chain->m_binding_uniform_buffer.push_back(uniformbuffer);
 }
-void jegl_rchain_clear_color_buffer(jegl_rendchain* chain)
+void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, float *color)
 {
     chain->m_clear_target_frame_color_buffer = true;
+    if (color == nullptr)
+    {
+        chain->m_clear_color[0] = 0.f;
+        chain->m_clear_color[1] = 0.f;
+        chain->m_clear_color[2] = 0.f;
+        chain->m_clear_color[3] = 0.f;
+    }
+    else
+    {
+        chain->m_clear_color[0] = color[0];
+        chain->m_clear_color[1] = color[1];
+        chain->m_clear_color[2] = color[2];
+        chain->m_clear_color[3] = color[3];
+    }
 }
 void jegl_rchain_clear_depth_buffer(jegl_rendchain* chain)
 {
@@ -284,9 +299,9 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread)
         chain->m_target_frame_buffer_viewport[3]);
 
     if (chain->m_clear_target_frame_color_buffer)
-        jegl_clear_framebuffer_color(chain->m_target_frame_buffer);
+        jegl_clear_framebuffer_color(chain->m_clear_color);
     if (chain->m_clear_target_frame_depth_buffer)
-        jegl_clear_framebuffer_depth(chain->m_target_frame_buffer);
+        jegl_clear_framebuffer_depth();
 
     for (auto* uniform_buffer : chain->m_binding_uniform_buffer)
         jegl_using_resource(uniform_buffer);
@@ -342,6 +357,6 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread)
                 }
             }
         }
-        jegl_draw_vertex(action.m_vertex);
+        jegl_draw_vertex(action.m_vertex, action.m_shader);
     }
 }
