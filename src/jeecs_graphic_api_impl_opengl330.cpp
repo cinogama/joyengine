@@ -336,12 +336,10 @@ uint32_t gl_get_uniform_location(jegl_thread*, jegl_resource* shader, const char
     return (uint32_t)loc;
 }
 
-void gl_set_uniform(jegl_thread* ctx, jegl_resource* shader, uint32_t location, jegl_shader::uniform_type type, const void* val)
+void gl_set_uniform(jegl_thread* ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
     if (location == jeecs::typing::INVALID_UINT32)
         return;
-
-    jegl_using_resource(shader);
 
     switch (type)
     {
@@ -447,7 +445,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_VP");
 
             builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(gthread, resource, "JOYENGINE_TEXTURE_TILING");
-            auto err = glGetError();
             builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(gthread, resource, "JOYENGINE_TEXTURE_OFFSET");
 
             builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(gthread, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
@@ -998,9 +995,8 @@ void gl_bind_texture(jegl_thread*, jegl_resource* texture, size_t pass)
     jegl_using_resource(texture);
 }
 
-void gl_draw_vertex_with_shader(jegl_thread*, jegl_resource* vert, jegl_resource* shader)
+void gl_draw_vertex_with_shader(jegl_thread*, jegl_resource* vert)
 {
-    jegl_using_resource(shader);
     jegl_using_resource(vert);
 
     gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(vert->m_handle.m_ptr));

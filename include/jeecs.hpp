@@ -1820,14 +1820,14 @@ struct jegl_graphic_api
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using native_resource_func_t = void* (*)(jegl_thread*, jegl_resource*);
 
-    using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*, jegl_resource*);
+    using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*);
     using bind_texture_func_t = void(*)(jegl_thread*, jegl_resource*, size_t);
 
     using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t, size_t, size_t, size_t);
     using clear_framebuf_color_func_t = void(*)(jegl_thread*, float color[4]);
     using clear_framebuf_depth_func_t = void(*)(jegl_thread*);
     using get_uniform_location_func_t = uint32_t(*)(jegl_thread*, jegl_resource*, const char*);
-    using set_uniform_func_t = void(*)(jegl_thread*, jegl_resource*, uint32_t, jegl_shader::uniform_type, const void*);
+    using set_uniform_func_t = void(*)(jegl_thread*, uint32_t, jegl_shader::uniform_type, const void*);
 
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
@@ -2128,7 +2128,7 @@ JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
 
 /*
 jegl_draw_vertex [基本接口]
-使用当前着色器和纹理（通过jegl_using_texture绑定）,
+使用当前着色器（通过jegl_using_texture绑定）和纹理（通过jegl_using_texture绑定）,
 以指定方式绘制一个模型，与jegl_using_resource类似，会根据情况是否执行资源的初始化操作
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
@@ -2136,7 +2136,7 @@ jegl_draw_vertex [基本接口]
     jegl_using_resource
     jegl_using_texture
 */
-JE_API void jegl_draw_vertex(jegl_resource* vert, jegl_resource* shader);
+JE_API void jegl_draw_vertex(jegl_resource* vert);
 
 /*
 jegl_clear_framebuffer_color [基本接口]
@@ -2172,69 +2172,69 @@ JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_
 
 /*
 jegl_uniform_int [基本接口]
-向着色器指定位置的一致变量设置一个整型数值
+向当前着色器指定位置的一致变量设置一个整型数值
 jegl_uniform_int 不会初始化着色器，请在操作之前调用 jegl_using_resource
 以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_uniform_int(jegl_resource* shader, uint32_t location, int value);
+JE_API void jegl_uniform_int(uint32_t location, int value);
 
 /*
 jegl_uniform_float [基本接口]
-向着色器指定位置的一致变量设置一个单精度浮点数值
+向当前着色器指定位置的一致变量设置一个单精度浮点数值
 jegl_uniform_float 不会初始化着色器，请在操作之前调用 jegl_using_resource
 以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_uniform_float(jegl_resource* shader, uint32_t location, float value);
+JE_API void jegl_uniform_float(uint32_t location, float value);
 
 /*
 jegl_uniform_float2 [基本接口]
-向着色器指定位置的一致变量设置一个二维单精度浮点矢量数值
+向当前着色器指定位置的一致变量设置一个二维单精度浮点矢量数值
 jegl_uniform_float2 不会初始化着色器，请在操作之前调用 jegl_using_resource
 以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_uniform_float2(jegl_resource* shader, uint32_t location, float x, float y);
+JE_API void jegl_uniform_float2( uint32_t location, float x, float y);
 
 /*
 jegl_uniform_float3 [基本接口]
-向着色器指定位置的一致变量设置一个三维单精度浮点矢量数值
+向当前着色器指定位置的一致变量设置一个三维单精度浮点矢量数值
 jegl_uniform_float3 不会初始化着色器，请在操作之前调用 jegl_using_resource
 以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_uniform_float3(jegl_resource* shader, uint32_t location, float x, float y, float z);
+JE_API void jegl_uniform_float3(uint32_t location, float x, float y, float z);
 
 /*
 jegl_uniform_float4 [基本接口]
-向着色器指定位置的一致变量设置一个四维单精度浮点矢量数值
+向当前着色器指定位置的一致变量设置一个四维单精度浮点矢量数值
 jegl_uniform_float4 不会初始化着色器，请在操作之前调用 jegl_using_resource
 以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_uniform_float4(jegl_resource* shader, uint32_t location, float x, float y, float z, float w);
+JE_API void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w);
 
 /*
 jegl_uniform_float4x4 [基本接口]
-向着色器指定位置的一致变量设置一个4x4单精度浮点矩阵数值
+向当前着色器指定位置的一致变量设置一个4x4单精度浮点矩阵数值
 jegl_uniform_float4x4 不会初始化着色器，请在操作之前调用 jegl_using_resource
 以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_uniform_float4x4(jegl_resource* shader, uint32_t location, const float(*mat)[4]);
+JE_API void jegl_uniform_float4x4(uint32_t location, const float(*mat)[4]);
 
 // jegl rendchain api
 

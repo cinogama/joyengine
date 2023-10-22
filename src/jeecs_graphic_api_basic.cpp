@@ -321,6 +321,8 @@ void jegl_using_resource(jegl_resource* resource)
     if (need_init_resouce)
         _current_graphic_thread->m_apis->init_resource(_current_graphic_thread, resource);
 
+    _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
+
     if (resource->m_type == jegl_resource::SHADER)
     {
         auto uniform_vars = resource->m_raw_shader_data->m_custom_uniforms;
@@ -334,23 +336,23 @@ void jegl_using_resource(jegl_resource* resource)
                     switch (uniform_vars->m_uniform_type)
                     {
                     case jegl_shader::uniform_type::FLOAT:
-                        jegl_uniform_float(resource, uniform_vars->m_index, uniform_vars->x);
+                        jegl_uniform_float(uniform_vars->m_index, uniform_vars->x);
                         break;
                     case jegl_shader::uniform_type::FLOAT2:
-                        jegl_uniform_float2(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
+                        jegl_uniform_float2(uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
                         break;
                     case jegl_shader::uniform_type::FLOAT3:
-                        jegl_uniform_float3(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
+                        jegl_uniform_float3(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
                         break;
                     case jegl_shader::uniform_type::FLOAT4:
-                        jegl_uniform_float4(resource, uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
+                        jegl_uniform_float4(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
                         break;
                     case jegl_shader::uniform_type::FLOAT4X4:
-                        jegl_uniform_float4x4(resource, uniform_vars->m_index, uniform_vars->mat4x4);
+                        jegl_uniform_float4x4(uniform_vars->m_index, uniform_vars->mat4x4);
                         break;
                     case jegl_shader::uniform_type::INT:
                     case jegl_shader::uniform_type::TEXTURE:
-                        jegl_uniform_int(resource, uniform_vars->m_index, uniform_vars->n);
+                        jegl_uniform_int(uniform_vars->m_index, uniform_vars->n);
                         break;
                     default:
                         jeecs::debug::logerr("Unsupport uniform variable type."); break;
@@ -361,8 +363,6 @@ void jegl_using_resource(jegl_resource* resource)
             uniform_vars = uniform_vars->m_next;
         }
     }
-
-    _current_graphic_thread->m_apis->using_resource(_current_graphic_thread, resource);
 }
 
 void* jegl_native_resource(jegl_resource* resource)
@@ -1165,9 +1165,9 @@ void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t u
     }
 }
 
-void jegl_draw_vertex(jegl_resource* vert, jegl_resource* shader)
+void jegl_draw_vertex(jegl_resource* vert)
 {
-    _current_graphic_thread->m_apis->draw_vertex(_current_graphic_thread, vert, shader);
+    _current_graphic_thread->m_apis->draw_vertex(_current_graphic_thread, vert);
 }
 
 void jegl_clear_framebuffer_color(float color[4])
@@ -1189,41 +1189,41 @@ void jegl_using_texture(jegl_resource* texture, size_t pass)
     _current_graphic_thread->m_apis->bind_texture(_current_graphic_thread, texture, pass);
 }
 
-void jegl_uniform_int(jegl_resource* shader, uint32_t location, int value)
+void jegl_uniform_int(uint32_t location, int value)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, shader, location, jegl_shader::INT, &value);
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, location, jegl_shader::INT, &value);
 }
 
-void jegl_uniform_float(jegl_resource* shader, uint32_t location, float value)
+void jegl_uniform_float(uint32_t location, float value)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, shader, location, jegl_shader::FLOAT, &value);
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, location, jegl_shader::FLOAT, &value);
 }
 
-void jegl_uniform_float2(jegl_resource* shader, uint32_t location, float x, float y)
+void jegl_uniform_float2(uint32_t location, float x, float y)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::math::vec2 value = { x,y };
-    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, shader, location, jegl_shader::FLOAT2, &value);
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, location, jegl_shader::FLOAT2, &value);
 }
 
-void jegl_uniform_float3(jegl_resource* shader, uint32_t location, float x, float y, float z)
+void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::math::vec3 value = { x,y,z };
-    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, shader, location, jegl_shader::FLOAT3, &value);
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, location, jegl_shader::FLOAT3, &value);
 }
 
-void jegl_uniform_float4(jegl_resource* shader, uint32_t location, float x, float y, float z, float w)
+void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::math::vec4 value = { x,y,z,w };
-    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, shader, location, jegl_shader::FLOAT4, &value);
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, location, jegl_shader::FLOAT4, &value);
 }
 
-void jegl_uniform_float4x4(jegl_resource* shader, uint32_t location, const float(*mat)[4])
+void jegl_uniform_float4x4(uint32_t location, const float(*mat)[4])
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, shader, location, jegl_shader::FLOAT4X4, mat);
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread, location, jegl_shader::FLOAT4X4, mat);
 }
