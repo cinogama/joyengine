@@ -1131,6 +1131,17 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
 
                 JERCHECK(context->m_dx_device->CreateTexture2D(
                     &texture_describe, nullptr, jedx11_texture_res->m_texture.GetAddressOf()));
+
+                D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
+                texture_shader_view_describe.Format = texture_describe.Format;
+                texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                texture_shader_view_describe.Texture2D.MipLevels = 1;
+                texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
+
+                JERCHECK(context->m_dx_device->CreateShaderResourceView(
+                    jedx11_texture_res->m_texture.Get(),
+                    &texture_shader_view_describe,
+                    jedx11_texture_res->m_texture_view.GetAddressOf()));
             }
         }
         else
