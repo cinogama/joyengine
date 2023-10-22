@@ -1500,8 +1500,7 @@ struct jegl_texture
     enum format : uint16_t
     {
         MONO = 0x0001,
-        RGB = 0x0003,
-        RGBA = 0x0004,
+        RGBA = 0x0002,
         COLOR_DEPTH_MASK = 0x000F,
 
         COLOR16 = 0x0010,
@@ -6203,8 +6202,6 @@ namespace jeecs
                     {
                     case jegl_texture::format::MONO:
                         return math::vec4{ _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f };
-                    case jegl_texture::format::RGB:
-                        return math::vec4{ _m_pixel[0] / 255.0f, _m_pixel[1] / 255.0f, _m_pixel[2] / 255.0f, 1.0f };
                     case jegl_texture::format::RGBA:
                         return math::vec4{ _m_pixel[0] / 255.0f, _m_pixel[1] / 255.0f, _m_pixel[2] / 255.0f, _m_pixel[3] / 255.0f };
                     default:
@@ -6220,11 +6217,6 @@ namespace jeecs
                     {
                     case jegl_texture::format::MONO:
                         _m_pixel[0] = math::clamp((jegl_texture::pixel_data_t)round(value.x * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
-                        break;
-                    case jegl_texture::format::RGB:
-                        _m_pixel[0] = math::clamp((jegl_texture::pixel_data_t)round(value.x * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
-                        _m_pixel[1] = math::clamp((jegl_texture::pixel_data_t)round(value.y * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
-                        _m_pixel[2] = math::clamp((jegl_texture::pixel_data_t)round(value.z * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
                         break;
                     case jegl_texture::format::RGBA:
                         _m_pixel[0] = math::clamp((jegl_texture::pixel_data_t)round(value.x * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);

@@ -27,11 +27,11 @@ namespace jeecs
                 case jegl_shader_value::type::FLOAT4x4:
                     return "float4x4";
                 case jegl_shader_value::type::TEXTURE2D:
-                    return "--";
+                    return "Texture2D";
                 case jegl_shader_value::type::TEXTURE2D_MS:
-                    return "--";
+                    return "Texture2DMS";
                 case jegl_shader_value::type::TEXTURE_CUBE:
-                    return "--";
+                    return "TextureCube";
                 default:
                     jeecs::debug::logerr("Unknown value type when generating hlsl, please check!");
                     return "unknown";
@@ -280,15 +280,49 @@ namespace jeecs
 
                 if (!contex._uniform_value.empty())
                 {
-                    io_declear += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
+                    std::string texture_decl = "";
+                    std::string uniform_decl = "";
+                    size_t uniform_count = 0;
+
+                    uniform_decl += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
                     for (auto& uniformdecl : contex._uniform_value)
                     {
-                        io_declear += "    " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
-                        wrap->vertex_out->uniform_variables.push_back(
-                            _shader_wrapper_contex::get_uniform_info(
-                                uniformdecl.second, uniformdecl.first));
+                        auto value_type = uniformdecl.first->get_type();
+                        if (value_type == jegl_shader_value::type::TEXTURE2D
+                            || value_type == jegl_shader_value::type::TEXTURE2D_MS
+                            || value_type == jegl_shader_value::type::TEXTURE_CUBE)
+                        {
+                            texture_decl 
+                                += get_type_name(uniformdecl.first) 
+                                + " " 
+                                + uniformdecl.second 
+                                + ": register(t"
+                                + std::to_string(uniformdecl.first->m_uniform_init_val_may_nil->m_integer)
+                                + ");\n";
+                            texture_decl 
+                                += "SamplerState "
+                                + uniformdecl.second 
+                                + ": register(s"
+                                + std::to_string(uniformdecl.first->m_uniform_init_val_may_nil->m_integer)
+                                + ");\n";
+                        }
+                        else
+                        {
+                            ++uniform_count;
+                            uniform_decl += "    " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
+                            wrap->vertex_out->uniform_variables.push_back(
+                                _shader_wrapper_contex::get_uniform_info(
+                                    uniformdecl.second, uniformdecl.first));
+                        }
                     }
-                    io_declear += "};\n";
+                    uniform_decl += "};";
+
+                    io_declear += texture_decl;
+                    if (uniform_count != 0)
+                    {
+                        io_declear += "\n";
+                        io_declear += uniform_decl;
+                    }
                 }
                 io_declear += "\n";
 
@@ -461,15 +495,49 @@ namespace jeecs
 
                 if (!contex._uniform_value.empty())
                 {
-                    io_declear += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
+                    std::string texture_decl = "";
+                    std::string uniform_decl = "";
+                    size_t uniform_count = 0;
+
+                    uniform_decl += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
                     for (auto& uniformdecl : contex._uniform_value)
                     {
-                        io_declear += "    " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
-                        wrap->fragment_out->uniform_variables.push_back(
-                            _shader_wrapper_contex::get_uniform_info(
-                                uniformdecl.second, uniformdecl.first));
+                        auto value_type = uniformdecl.first->get_type();
+                        if (value_type == jegl_shader_value::type::TEXTURE2D
+                            || value_type == jegl_shader_value::type::TEXTURE2D_MS
+                            || value_type == jegl_shader_value::type::TEXTURE_CUBE)
+                        {
+                            texture_decl
+                                += get_type_name(uniformdecl.first)
+                                + " "
+                                + uniformdecl.second
+                                + ": register(t"
+                                + std::to_string(uniformdecl.first->m_uniform_init_val_may_nil->m_integer)
+                                + ");\n";
+                            texture_decl
+                                += "SamplerState "
+                                + uniformdecl.second
+                                + ": register(s"
+                                + std::to_string(uniformdecl.first->m_uniform_init_val_may_nil->m_integer)
+                                + ");\n";
+                        }
+                        else
+                        {
+                            ++uniform_count;
+                            uniform_decl += "    " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
+                            wrap->vertex_out->uniform_variables.push_back(
+                                _shader_wrapper_contex::get_uniform_info(
+                                    uniformdecl.second, uniformdecl.first));
+                        }
                     }
-                    io_declear += "};\n";
+                    uniform_decl += "};";
+
+                    io_declear += texture_decl;
+                    if (uniform_count != 0)
+                    {
+                        io_declear += "\n";
+                        io_declear += uniform_decl;
+                    }
                 }
                 io_declear += "\n";
 

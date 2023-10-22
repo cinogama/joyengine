@@ -581,9 +581,6 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             case jegl_texture::format::MONO:
                 texture_src_format = GL_LUMINANCE;
                 texture_aim_format = is_16bit ? GL_LUMINANCE16F_ARB : GL_LUMINANCE; break;
-            case jegl_texture::format::RGB:
-                texture_src_format = GL_RGB;
-                texture_aim_format = is_16bit ? GL_RGB16F : GL_RGB; break;
             case jegl_texture::format::RGBA:
                 texture_src_format = GL_RGBA;
                 texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA; break;

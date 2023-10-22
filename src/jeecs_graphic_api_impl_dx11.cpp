@@ -44,6 +44,8 @@ struct jegl_dx11_context
 
     bool m_dx_context_finished;
     bool m_window_should_close;
+
+    UINT m_next_binding_texture_place;
 };
 
 thread_local jegl_dx11_context* _je_dx_current_thread_context;
@@ -197,6 +199,7 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
     context->WINDOWS_SIZE_WIDTH = config->m_width;
     context->WINDOWS_SIZE_HEIGHT = config->m_height;
     context->MSAA_LEVEL = config->m_msaa;
+    context->m_next_binding_texture_place = 0;
     if (!reboot)
     {
         jeecs::debug::log("Graphic thread (DX11) start!");
@@ -488,6 +491,7 @@ struct jedx11_texture
 {
     jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_texture;
     jegl_dx11_context::MSWRLComPtr<ID3D11ShaderResourceView> m_texture_view;
+    jegl_dx11_context::MSWRLComPtr<ID3D11SamplerState> m_texture_sampler;
 };
 struct jedx11_shader
 {
@@ -842,7 +846,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
                 break;
             case jegl_shader::depth_test_method::ALWAYS:
                 depth_describe.DepthFunc = D3D11_COMPARISON_ALWAYS;
-                break; 
+                break;
             }
             switch (resource->m_raw_shader_data->m_depth_mask)
             {
@@ -874,7 +878,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             blend_describe.IndependentBlendEnable = FALSE;
             blend_describe.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
             blend_describe.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-            blend_describe.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;        
+            blend_describe.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
             if (resource->m_raw_shader_data->m_blend_src_mode == jegl_shader::blend_method::ONE &&
                 resource->m_raw_shader_data->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
                 blend_describe.RenderTarget[0].BlendEnable = FALSE;
@@ -898,19 +902,19 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
                     return D3D11_BLEND_INV_SRC_COLOR;
                 case jegl_shader::blend_method::DST_COLOR:
                     return D3D11_BLEND_DEST_COLOR;
-                case jegl_shader::blend_method::DST_ALPHA: 
+                case jegl_shader::blend_method::DST_ALPHA:
                     return D3D11_BLEND_DEST_ALPHA;
-                case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: 
+                case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
                     return D3D11_BLEND_INV_DEST_ALPHA;
-                case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: 
+                case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
                     return D3D11_BLEND_INV_DEST_COLOR;
-                default: 
-                    jeecs::debug::logerr("Invalid blend src method."); 
+                default:
+                    jeecs::debug::logerr("Invalid blend src method.");
                     return D3D11_BLEND_ONE;
                 }
             };
-            blend_describe.RenderTarget[0].SrcBlend 
-                = blend_describe.RenderTarget[0].SrcBlendAlpha 
+            blend_describe.RenderTarget[0].SrcBlend
+                = blend_describe.RenderTarget[0].SrcBlendAlpha
                 = parse_dx11_enum(resource->m_raw_shader_data->m_blend_src_mode);
             blend_describe.RenderTarget[0].DestBlend
                 = blend_describe.RenderTarget[0].DestBlendAlpha
@@ -926,7 +930,6 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
     case jegl_resource::type::TEXTURE:
     {
         assert((resource->m_raw_texture_data->m_format & jegl_texture::format::MSAA_MASK) == 0);
-        assert((resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK) == jegl_texture::format::RGBA);
         assert((resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR16) == 0);
         assert((resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH) == 0);
         assert((resource->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF) == 0);
@@ -937,7 +940,16 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         texture_describe.Height = (UINT)resource->m_raw_texture_data->m_height;
         texture_describe.MipLevels = 1;
         texture_describe.ArraySize = 1;
-        texture_describe.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+        switch (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+        {
+        case jegl_texture::format::MONO:
+            texture_describe.Format = DXGI_FORMAT_R8_UNORM;
+            break;
+        case jegl_texture::format::RGBA:
+            texture_describe.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            break;
+        }
         texture_describe.SampleDesc.Count = 1;
         texture_describe.SampleDesc.Quality = 0;
         texture_describe.Usage = D3D11_USAGE_DEFAULT;
@@ -959,7 +971,8 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
 
         jedx11_texture* jedx11_texture_res = new jedx11_texture;
         JERCHECK(context->m_dx_device->CreateTexture2D(
-            &texture_describe, &texture_sub_data, jedx11_texture_res->m_texture.GetAddressOf()));
+            &texture_describe, &texture_sub_data, 
+            jedx11_texture_res->m_texture.GetAddressOf()));
 
         D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
         texture_shader_view_describe.Format = texture_describe.Format;
@@ -971,6 +984,126 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             jedx11_texture_res->m_texture.Get(),
             &texture_shader_view_describe,
             jedx11_texture_res->m_texture_view.GetAddressOf()));
+
+        D3D11_SAMPLER_DESC sampler_describe;
+
+        sampler_describe.MipLODBias = 0.0f;
+        sampler_describe.MaxAnisotropy = 0;
+        sampler_describe.BorderColor[0] = 0.0f;
+        sampler_describe.BorderColor[1] = 0.0f;
+        sampler_describe.BorderColor[2] = 0.0f;
+        sampler_describe.BorderColor[3] = 0.0f;
+
+        // Apply fliter setting
+        switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MIN_FILTER_MASK)
+        {
+        case jegl_texture::sampling::MIN_LINEAR:
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
+            {
+            case jegl_texture::sampling::MAG_LINEAR:
+                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR; break;
+            case jegl_texture::sampling::MAG_NEAREST:
+                sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR; break;
+            default:
+                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
+                    resource->m_raw_texture_data->m_sampling);
+            }
+            break;
+        case jegl_texture::sampling::MIN_NEAREST:
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
+            {
+            case jegl_texture::sampling::MAG_LINEAR:
+                sampler_describe.Filter = D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR; break;
+            case jegl_texture::sampling::MAG_NEAREST:
+                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT; break;
+            default:
+                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
+                    resource->m_raw_texture_data->m_sampling);
+            }
+            break;
+        case jegl_texture::sampling::MIN_LINEAR_LINEAR_MIP:
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
+            {
+            case jegl_texture::sampling::MAG_LINEAR:
+                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR; break;
+            case jegl_texture::sampling::MAG_NEAREST:
+                sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR; break;
+            default:
+                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
+                    resource->m_raw_texture_data->m_sampling);
+            }
+            break;
+        case jegl_texture::sampling::MIN_NEAREST_LINEAR_MIP:
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
+            {
+            case jegl_texture::sampling::MAG_LINEAR:
+                sampler_describe.Filter = D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR; break;
+            case jegl_texture::sampling::MAG_NEAREST:
+                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR; break;
+            default:
+                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
+                    resource->m_raw_texture_data->m_sampling);
+            }
+            break;
+        case jegl_texture::sampling::MIN_LINEAR_NEAREST_MIP:
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
+            {
+            case jegl_texture::sampling::MAG_LINEAR:
+                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT; break;
+            case jegl_texture::sampling::MAG_NEAREST:
+                sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT; break;
+            default:
+                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
+                    resource->m_raw_texture_data->m_sampling);
+            }
+            break;
+        case jegl_texture::sampling::MIN_NEAREST_NEAREST_MIP:
+            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
+            {
+            case jegl_texture::sampling::MAG_LINEAR:
+                sampler_describe.Filter = D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT; break;
+            case jegl_texture::sampling::MAG_NEAREST:
+                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT; break;
+            default:
+                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
+                    resource->m_raw_texture_data->m_sampling);
+            }
+            break;
+        default:
+            jeecs::debug::logerr("Unknown texture min filter method(%04x)",
+                resource->m_raw_texture_data->m_sampling);
+        }
+
+        if (resource->m_raw_texture_data->m_sampling)
+        sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+
+        switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_X_METHOD_MASK)
+        {
+        case jegl_texture::sampling::CLAMP_EDGE_X:
+            sampler_describe.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP; break;
+        case jegl_texture::sampling::REPEAT_X:
+            sampler_describe.AddressU = D3D11_TEXTURE_ADDRESS_WRAP; break;
+        default:
+            jeecs::debug::logerr("Unknown texture wrap method in x(%04x)",
+                resource->m_raw_texture_data->m_sampling);
+        }
+        switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_Y_METHOD_MASK)
+        {
+        case jegl_texture::sampling::CLAMP_EDGE_Y:
+            sampler_describe.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP; break;
+        case jegl_texture::sampling::REPEAT_Y:
+            sampler_describe.AddressV = D3D11_TEXTURE_ADDRESS_WRAP; break;
+        default:
+            jeecs::debug::logerr("Unknown texture wrap method in y(%04x)",
+                resource->m_raw_texture_data->m_sampling);
+        }
+        sampler_describe.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+        sampler_describe.ComparisonFunc = D3D11_COMPARISON_NEVER;
+        sampler_describe.MinLOD = 0;
+        sampler_describe.MaxLOD = D3D11_FLOAT32_MAX;
+        JERCHECK(context->m_dx_device->CreateSamplerState(
+            &sampler_describe,
+            jedx11_texture_res->m_texture_sampler.GetAddressOf()));
 
         resource->m_handle.m_ptr = jedx11_texture_res;
         break;
@@ -1033,7 +1166,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
 
         D3D11_BUFFER_DESC const_buffer_describe;
 
-        const_buffer_describe.ByteWidth = 
+        const_buffer_describe.ByteWidth =
             (UINT)resource->m_raw_uniformbuf_data->m_buffer_size;
         const_buffer_describe.Usage = D3D11_USAGE_DYNAMIC;
         const_buffer_describe.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -1052,7 +1185,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             &const_buffer_describe, &const_buffer_resource_describe,
             jedx11_uniformbuf_res->m_uniformbuf.GetAddressOf()));
 
-        jedx11_uniformbuf_res->m_binding_place = 
+        jedx11_uniformbuf_res->m_binding_place =
             // 0 has been used as shader uniforms
             (UINT)resource->m_raw_uniformbuf_data->m_buffer_binding_place + 1;
 
@@ -1089,11 +1222,22 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
         float _useless[4] = {};
         context->m_dx_context->OMSetBlendState(shader->m_blend.Get(), _useless, UINT_MAX);
         context->m_dx_context->OMSetDepthStencilState(shader->m_depth.Get(), 0);
-        
+
         break;
     }
     case jegl_resource::type::TEXTURE:
+    {
+        auto* texture = std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
+        context->m_dx_context->VSSetSamplers(
+            context->m_next_binding_texture_place, 1, texture->m_texture_sampler.GetAddressOf());
+        context->m_dx_context->VSSetShaderResources(
+            context->m_next_binding_texture_place, 1, texture->m_texture_view.GetAddressOf());
+        context->m_dx_context->PSSetSamplers(
+            context->m_next_binding_texture_place, 1, texture->m_texture_sampler.GetAddressOf());
+        context->m_dx_context->PSSetShaderResources(
+            context->m_next_binding_texture_place, 1, texture->m_texture_view.GetAddressOf());
         break;
+    }
     case jegl_resource::type::VERTEX:
     {
         auto* vertex = std::launder(reinterpret_cast<jedx11_vertex*>(resource->m_handle.m_ptr));
@@ -1195,8 +1339,11 @@ void dx11_draw_vertex_with_shader_todo(jegl_thread* ctx, jegl_resource* vert)
     context->m_dx_context->Draw(vertex->m_count, 0);
 }
 
-void dx11_bind_texture_todo(jegl_thread*, jegl_resource* texture, size_t pass)
+void dx11_bind_texture_todo(jegl_thread* ctx, jegl_resource* texture, size_t pass)
 {
+    jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
+    context->m_next_binding_texture_place = pass;
+    jegl_using_resource(texture);
 }
 
 void dx11_set_rend_to_framebuffer_todo(jegl_thread* ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
