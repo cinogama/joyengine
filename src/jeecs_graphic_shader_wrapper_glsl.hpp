@@ -104,7 +104,9 @@ namespace jeecs
                                     funcname = "mix";
 
                                 if (funcname.find("JEBUILTIN_") == 0)
+                                {
                                     contex->_used_builtin_func.insert(funcname);
+                                }
 
                                 apply += funcname + "("s;
                                 for (size_t i = 0; i < variables.size(); i++)
@@ -270,6 +272,16 @@ vec4 JEBUILTIN_Negative(vec4 v)
 )";
                         built_in_srcs += unifrom_block;
                     }
+                    else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
+                    {
+                        const std::string unifrom_block = R"(
+vec2 JEBUILTIN_Uvframebuffer(vec2 v)
+{
+    return v;
+}
+)";
+                        built_in_srcs += unifrom_block;
+                    }
                 }
 
 
@@ -393,6 +405,16 @@ vec3 JEBUILTIN_Negative(vec3 v)
 vec4 JEBUILTIN_Negative(vec4 v)
 {
     return -v;
+}
+)";
+                        built_in_srcs += unifrom_block;
+                    }
+                    else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
+                    {
+                        const std::string unifrom_block = R"(
+vec2 JEBUILTIN_Uvframebuffer(vec2 v)
+{
+    return v;
 }
 )";
                         built_in_srcs += unifrom_block;

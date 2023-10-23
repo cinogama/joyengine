@@ -269,12 +269,12 @@ namespace jeecs
                 std::string built_in_srcs;
                 for (auto& builtin_func_name : contex._used_builtin_func)
                 {
-                    /* if (builtin_func_name == "JEBUILTIN_Movement")
+                     if (builtin_func_name == "JEBUILTIN_Movement")
                      {
                          const std::string unifrom_block = R"(
- vec3 JEBUILTIN_Movement(mat4 trans)
+ float3 JEBUILTIN_Movement(float4x4 trans)
  {
-     return vec3(trans[3][0], trans[3][1], trans[3][2]);
+     return trans[3].xyz;
  }
  )";
                          built_in_srcs += unifrom_block;
@@ -286,21 +286,31 @@ namespace jeecs
  {
      return -v;
  }
- vec2 JEBUILTIN_Negative(vec2 v)
+ float2 JEBUILTIN_Negative(float2 v)
  {
      return -v;
  }
- vec3 JEBUILTIN_Negative(vec3 v)
+ float3 JEBUILTIN_Negative(float3 v)
  {
      return -v;
  }
- vec4 JEBUILTIN_Negative(vec4 v)
+ float4 JEBUILTIN_Negative(float4 v)
  {
      return -v;
  }
  )";
                          built_in_srcs += unifrom_block;
-                     }*/
+                     }
+                     else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
+                     {
+                         const std::string unifrom_block = R"(
+float2 JEBUILTIN_Uvframebuffer(float2 v)
+{
+    return float2(v.x, 1.0 - v.y);
+}
+)";
+                         built_in_srcs += unifrom_block;
+                     }
                 }
 
 
@@ -453,13 +463,11 @@ namespace jeecs
                 {
                     if (outid == 0)
                     {
-                        // body_result += "    float4 _je_position = " + outvarname.second + ";\n";
+                        body_result += "    float4 _je_position = " + outvarname.second + ";\n";
                         body_result += "    vout._v2f_" + std::to_string(outid) + " = "
-                            // + "mul("
-                            + outvarname.second
-                            // + "- float4(0.0, 0.0, 1.0 / _je_position.w, 0.0)"
-                            // + ", float4(0.0, 0.0, 0.5, 0.0))"
-                            + ";\n";
+                            + "(_je_position + float4(0.0, 0.0, _je_position.w, 0.0))"
+                            "* float4(1.0, 1.0, 0.5, 1.0)"
+                            ";\n";
                     }
                     else
                     {
@@ -509,28 +517,39 @@ namespace jeecs
  )";
                          built_in_srcs += unifrom_block;
                      }
-                     else if (builtin_func_name == "JEBUILTIN_Negative")
-                     {
-                         const std::string unifrom_block = R"(
+                     else */
+                    if (builtin_func_name == "JEBUILTIN_Negative")
+                    {
+                        const std::string unifrom_block = R"(
  float JEBUILTIN_Negative(float v)
  {
      return -v;
  }
- vec2 JEBUILTIN_Negative(vec2 v)
+ float2 JEBUILTIN_Negative(float2 v)
  {
      return -v;
  }
- vec3 JEBUILTIN_Negative(vec3 v)
+ float3 JEBUILTIN_Negative(float3 v)
  {
      return -v;
  }
- vec4 JEBUILTIN_Negative(vec4 v)
+ float4 JEBUILTIN_Negative(float4 v)
  {
      return -v;
  }
  )";
-                         built_in_srcs += unifrom_block;
-                     }*/
+                        built_in_srcs += unifrom_block;
+                    }
+                    else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
+                    {
+                        const std::string unifrom_block = R"(
+float2 JEBUILTIN_Uvframebuffer(float2 v)
+{
+    return float2(v.x, 1.0 - v.y);
+}
+)";
+                        built_in_srcs += unifrom_block;
+                    }
                 }
 
                 // Generate shaders

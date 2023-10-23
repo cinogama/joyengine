@@ -248,6 +248,9 @@ reduce_method{return nullptr; }} },
 { "JEBUILTIN_Movement", {jegl_shader_value::FLOAT4x4,
 reduce_method{return new jegl_shader_value(args[0]->m_float4x4[3][0], args[0]->m_float4x4[3][1], args[0]->m_float4x4[3][2]); }} },
 
+{ "JEBUILTIN_Uvframebuffer", {jegl_shader_value::FLOAT2,
+reduce_method{return nullptr; }} },
+
 { "sin", {jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },
 { "cos", {jegl_shader_value::FLOAT4,

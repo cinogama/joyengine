@@ -1063,6 +1063,10 @@ public func uvtrans(uv: float2, tiling: float2, offset: float2)
 {
     return uv * tiling + offset;
 }
+public func uvframebuf(uv: float2)
+{
+     return apply_operation:<float2>("JEBUILTIN_Uvframebuffer", uv);
+}
 
 // Math functions
 
