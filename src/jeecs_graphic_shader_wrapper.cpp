@@ -1741,7 +1741,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         _shader_wrapper_contex::get_outside_type(shader_wrapper_ptr->vertex_in[i]);
 
     std::unordered_map<std::string, shader_struct_define*> _uniform_blocks;
-    for(auto& struct_def : shader_wrapper_ptr->shader_struct_define_may_uniform_block)
+    for (auto& struct_def : shader_wrapper_ptr->shader_struct_define_may_uniform_block)
     {
         assert(struct_def != nullptr);
 
@@ -1765,10 +1765,17 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
 
             variable->m_index = jeecs::typing::INVALID_UINT32;
 
-            auto* init_val = uniform_info.m_value->m_uniform_init_val_may_nil;
+            auto utype = uniform_info.m_value->get_type();
+            auto* init_val = (
+                utype == jegl_shader_value::type::TEXTURE2D ||
+                utype == jegl_shader_value::type::TEXTURE2D_MS ||
+                utype == jegl_shader_value::type::TEXTURE_CUBE)
+                ? uniform_info.m_value
+                : uniform_info.m_value->m_uniform_init_val_may_nil;
+
             if (init_val != nullptr)
             {
-                switch (uniform_info.m_value->m_uniform_init_val_may_nil->get_type())
+                switch (utype)
                 {
                 case jegl_shader_value::type::FLOAT:
                     variable->x = init_val->m_float; break;
@@ -1800,8 +1807,8 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             }
             else
             {
-                variable->x = variable->y = variable->z = variable->w = 0.f;
-                variable->n = 0;
+                static_assert(sizeof(variable->mat4x4) == 16 * sizeof(float));
+                memset(variable->mat4x4, 0, sizeof(variable->mat4x4));
                 variable->m_updated = false;
             }
 
@@ -1827,6 +1834,27 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             last = &block->m_next;
         }
     } while (false);
+
+    write_to_shader->m_sampler_count = shader_wrapper_ptr->decleared_samplers.size();
+    auto * sampler_methods = new jegl_shader::sampler_method[write_to_shader->m_sampler_count];
+    for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
+    {
+        auto* sampler = shader_wrapper_ptr->decleared_samplers[i];
+        sampler_methods[i].m_min = sampler->m_min;
+        sampler_methods[i].m_mag = sampler->m_mag;
+        sampler_methods[i].m_mip = sampler->m_mip;
+        sampler_methods[i].m_uwrap = sampler->m_uwrap;
+        sampler_methods[i].m_vwrap = sampler->m_vwrap;
+
+        sampler_methods[i].m_sampler_id = sampler->m_sampler_id;
+        sampler_methods[i].m_pass_id_count = sampler->m_binded_texture_passid.size();
+        auto* passids = new uint32_t[sampler->m_binded_texture_passid.size()];
+
+        static_assert(std::is_same<decltype(sampler_methods[i].m_pass_ids), uint32_t*>::value);
+        
+        memcpy(passids, sampler->m_binded_texture_passid.data(), sampler_methods[i].m_pass_id_count * sizeof(uint32_t));
+        sampler_methods[i].m_pass_ids = passids;
+    }
 }
 
 void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
@@ -1858,4 +1886,8 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
 
         delete cur_uniform_block;
     }
+
+    for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
+        delete []write_to_shader->m_sampler_methods[i].m_pass_ids;
+    delete[]write_to_shader->m_sampler_methods;
 }

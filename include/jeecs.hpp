@@ -1612,12 +1612,14 @@ struct jegl_shader
         wrap_mode m_vwrap;
 
         uint32_t m_sampler_id;  // Used for dx11
-        uint32_t* m_pass_id;     // Used for gl330
+
+        size_t m_pass_id_count;
+        uint32_t* m_pass_ids;     // Used for gl330
     };
 #ifdef JE_PLATFORM_M64
-    static_assert(sizeof(sampler_method) == 24 + 8);
+    static_assert(sizeof(sampler_method) == 24 + 16);
 #else
-    static_assert(sizeof(sampler_method) == 24 + 4);
+    static_assert(sizeof(sampler_method) == 24 + 8);
 #endif
 
     enum uniform_type

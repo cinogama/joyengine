@@ -267,7 +267,7 @@ namespace jeecs
                 {
                     built_in_srcs += "SamplerState sampler_"
                         + std::to_string(sampler->m_sampler_id)
-                        + "_sampstate: register(s"
+                        + ": register(s"
                         + std::to_string(sampler->m_sampler_id)
                         + ");\n";
                 }
@@ -507,7 +507,7 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                 {
                     built_in_srcs += "SamplerState sampler_"
                         + std::to_string(sampler->m_sampler_id)
-                        + "_sampstate: register(s"
+                        + ": register(s"
                         + std::to_string(sampler->m_sampler_id)
                         + ");\n";
                 }
