@@ -111,6 +111,7 @@ void _jedx11_trace_debug(T& ob, const std::string& obname)
 
 void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, size_t h)
 {
+    je_io_set_windowsize((int)w, (int)h);
     if (context->m_dx_context_finished == false)
         return;
 
@@ -119,8 +120,6 @@ void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, si
 
     context->WINDOWS_SIZE_WIDTH = w;
     context->WINDOWS_SIZE_HEIGHT = h;
-
-    je_io_set_windowsize((int)w, (int)h);
 
     // 释放渲染管线输出用到的相关资源
     context->m_dx_main_renderer_target_depth_view.Reset();
@@ -190,6 +189,39 @@ void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, si
     context->m_dx_context->RSSetViewports(1, &viewport);
 }
 
+void dx11_handle_key_state(WPARAM wParam, bool down)
+{
+    jeecs::input::keycode code = jeecs::input::keycode::UNKNOWN;
+    switch (wParam)
+    {
+    case VK_SHIFT:
+        code = jeecs::input::keycode::L_SHIFT;
+        break;
+    case VK_CONTROL:
+        code = jeecs::input::keycode::L_CTRL;
+        break;
+    case VK_MENU:
+        code = jeecs::input::keycode::L_ALT;
+        break;
+    case VK_TAB:
+        code = jeecs::input::keycode::TAB;
+        break;
+    case VK_RETURN:
+        code = jeecs::input::keycode::ENTER;
+        break;
+    case VK_ESCAPE:
+        code = jeecs::input::keycode::ESC;
+        break;
+    case VK_BACK:
+        code = jeecs::input::keycode::BACKSPACE;
+        break;
+    default:
+        if (wParam >= 'A' && wParam <= 'Z' || wParam >= '0' && wParam <= '9')
+            code = (jeecs::input::keycode)wParam;
+    }
+    je_io_set_keystate(code, down);
+}
+
 LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     if (jegui_win32_proc_handler(hwnd, msg, wParam, lParam))
@@ -229,13 +261,31 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         ((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;*/
         return 0;
     case WM_LBUTTONDOWN:
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_L_BUTTION, true);
+        return 0;
     case WM_MBUTTONDOWN:
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_M_BUTTION, true);
+        return 0;
     case WM_RBUTTONDOWN:
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_R_BUTTION, true);
         return 0;
     case WM_LBUTTONUP:
-    case WM_MBUTTONUP:
-    case WM_RBUTTONUP:
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_L_BUTTION, false);
         return 0;
+    case WM_MBUTTONUP:
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_M_BUTTION, false);
+        return 0;
+    case WM_RBUTTONUP:
+        je_io_set_keystate(jeecs::input::keycode::MOUSE_R_BUTTION, false);
+        return 0;
+    case WM_SYSKEYDOWN:
+    case WM_KEYDOWN:
+        dx11_handle_key_state(wParam, true);
+        break;
+    case WM_SYSKEYUP:
+    case WM_KEYUP:
+        dx11_handle_key_state(wParam, false);
+        break;
     case WM_MOUSEMOVE:
         return 0;
     default:
@@ -471,91 +521,35 @@ bool dx11_update(jegl_thread* ctx)
             return false;
         context->m_window_should_close = false;
     }
+    
+    RECT rect;
+    GetWindowRect(context->m_window_handle, &rect);
+    je_io_set_windowsize(rect.right- rect.left, rect.bottom - rect.top);
+
+    POINT point;
+    GetCursorPos(&point);
+    je_io_set_mousepos(0, point.x - rect.left, point.y - rect.top);
+
+    int mouse_lock_x, mouse_lock_y;
+    if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
+    {
+        SetCursorPos(mouse_lock_x + rect.left, mouse_lock_y + rect.top);
+    }
+
+    //int window_width, window_height;
+    //if (je_io_should_update_windowsize(&window_width, &window_height))
+    //    glfwSetWindowSize(context->WINDOWS_HANDLE, window_width, window_height);
+
+    //const char* title;
+    //if (je_io_should_update_windowtitle(&title))
+    //    glfwSetWindowTitle(context->WINDOWS_HANDLE, title);
+
     return true;
 }
 
 bool dx11_pre_update(jegl_thread* ctx)
 {
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
-
-    static auto quad = jeecs::graphic::vertex::create(
-        jegl_vertex::TRIANGLESTRIP,
-        {
-            -0.5f, 0.5f, 0.0f,    0.0f, 1.0f, // 0.0f, 0.0f, -1.0f,
-            -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,  //0.0f, 0.0f, -1.0f,
-            0.5f, 0.5f, 0.0f,     1.0f, 1.0f,  //0.0f, 0.0f, -1.0f,
-            0.5f, -0.5f, 0.0f,    1.0f, 0.0f,  //0.0f, 0.0f, -1.0f,
-        },
-        { 3, 2, /*3*/ });
-    static auto shad = jeecs::graphic::shader::create("dx11_test.wo", R"(
-import je::shader;
-
-SHARED  (false);
-ZTEST   (LESS);
-ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (NONE);
-
-VAO_STRUCT! vin {
-    vertex  : float3,
-    uv      : float2,
-};
-
-using v2f = struct {
-    pos     : float4,
-    uv      : float2,
-};
-
-using fout = struct {
-    color   : float4
-};
-
-public func vert(v: vin)
-{
-    let v1 = je_p * je_m * float4::create(v.vertex, 1.0);
-    return v2f{
-        pos = v1, //je_m * float4::create(v.vertex, 1.0),
-        uv = v1->xy * 0. + v.uv, //uvtrans(v.uv, je_tiling, je_offset),
-    };
-}
-public func frag(vf: v2f)
-{
-    let Albedo = uniform_texture:<texture2d>("Albedo", 0);
-    let color = texture(Albedo, vf.uv);
-    return fout{
-        color = float4::create(color->xyz, color->w * vf.uv->x),
-    };
-}
-    )");
-    static auto texture = jeecs::graphic::texture::load("@/builtin/icon/icon.png");
-
-    float temp_mat_trans[4][4] = {};
-    temp_mat_trans[0][0]
-        = temp_mat_trans[1][1]
-        = temp_mat_trans[2][2]
-        = temp_mat_trans[3][3] = 1.0f;
-    temp_mat_trans[3][0] = 0.0;
-    temp_mat_trans[3][1] = 0.0f;
-    temp_mat_trans[3][2] = 10.0f;
-
-    jegl_using_texture(texture->resouce(), 0);
-    jegl_using_resource(shad->resouce());
-
-    jegl_uniform_float4x4(
-        shad->m_builtin->m_builtin_uniform_m, temp_mat_trans);
-
-    jeecs::graphic::perspective_projection(
-        temp_mat_trans,
-        context->WINDOWS_SIZE_WIDTH,
-        context->WINDOWS_SIZE_HEIGHT,
-        75.,
-        0.3,
-        1000.);
-    jegl_uniform_float4x4(
-        shad->m_builtin->m_builtin_uniform_p, temp_mat_trans);
-
-    jegl_draw_vertex(quad->resouce());
-
 
     JERCHECK(context->m_dx_swapchain->Present(ctx->m_config.m_fps == 0 ? 1 : 0, 0));
     return true;

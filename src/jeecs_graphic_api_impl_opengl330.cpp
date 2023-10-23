@@ -273,88 +273,8 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
 bool gl_pre_update(jegl_thread* ctx)
 {
     jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx->m_userdata));
-    
-    static auto quad = jeecs::graphic::vertex::create(
-        jegl_vertex::TRIANGLESTRIP,
-        {
-            -0.5f, 0.5f, 0.0f,    0.0f, 1.0f, // 0.0f, 0.0f, -1.0f,
-            -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,  //0.0f, 0.0f, -1.0f,
-            0.5f, 0.5f, 0.0f,     1.0f, 1.0f,  //0.0f, 0.0f, -1.0f,
-            0.5f, -0.5f, 0.0f,    1.0f, 0.0f,  //0.0f, 0.0f, -1.0f,
-        },
-        { 3, 2, /*3*/ });
-    static auto shad = jeecs::graphic::shader::create("dx11_test.wo", R"(
-import je::shader;
-
-SHARED  (false);
-ZTEST   (LESS);
-ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (NONE);
-
-VAO_STRUCT! vin {
-    vertex  : float3,
-    uv      : float2,
-};
-
-using v2f = struct {
-    pos     : float4,
-    uv      : float2,
-};
-
-using fout = struct {
-    color   : float4
-};
-
-public func vert(v: vin)
-{
-    let v1 = je_p * je_m * float4::create(v.vertex, 1.0);
-    return v2f{
-        pos = v1, //je_m * float4::create(v.vertex, 1.0),
-        uv = v1->xy * 0. + v.uv, //uvtrans(v.uv, je_tiling, je_offset),
-    };
-}
-public func frag(vf: v2f)
-{
-    let Albedo = uniform_texture:<texture2d>("Albedo", 0);
-    let color = texture(Albedo, vf.uv);
-    return fout{
-        color = float4::create(color->xyz, color->w * vf.uv->x),
-    };
-}
-    )");
-    static auto texture = jeecs::graphic::texture::load("@/builtin/icon/icon.png");
-
-    float temp_mat_trans[4][4] = {};
-    temp_mat_trans[0][0]
-        = temp_mat_trans[1][1]
-        = temp_mat_trans[2][2]
-        = temp_mat_trans[3][3] = 1.0f;
-    temp_mat_trans[3][0] = 0.0;
-    temp_mat_trans[3][1] = 0.0f;
-    temp_mat_trans[3][2] = 10.0f;
-
-    jegl_using_texture(texture->resouce(), 0);
-    jegl_using_resource(shad->resouce());
-
-    jegl_uniform_float4x4(
-        shad->m_builtin->m_builtin_uniform_m, temp_mat_trans);
-
-    jeecs::graphic::perspective_projection(
-        temp_mat_trans, 
-        context->WINDOWS_SIZE_WIDTH,
-        context->WINDOWS_SIZE_HEIGHT,
-        75.,
-        0.3,
-        1000.);
-    jegl_uniform_float4x4(
-        shad->m_builtin->m_builtin_uniform_p, temp_mat_trans);
-
-    jegl_draw_vertex(quad->resouce());
-
-    
+   
     glfwSwapBuffers(context->WINDOWS_HANDLE);
-
     return true;
 }
 
