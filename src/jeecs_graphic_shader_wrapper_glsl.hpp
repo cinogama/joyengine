@@ -273,11 +273,10 @@ vec4 JEBUILTIN_Negative(vec4 v)
                 }
 
 
-                for (auto& uniformdecl : contex._uniform_value)
+                for (auto& [name, uinfo] : wrap->uniform_variables)
                 {
-                    io_declear += "uniform " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
-                    wrap->vertex_out->uniform_variables.push_back(
-                        _shader_wrapper_contex::get_uniform_info(uniformdecl.second, uniformdecl.first));
+                    if (uinfo.m_used_in_vertex)
+                        io_declear += "uniform " + get_type_name(uinfo.m_value) + " " + name + ";\n";
                 }
                 io_declear += "\n";
                 for (auto& indecl : contex._in_value)
@@ -400,11 +399,10 @@ vec4 JEBUILTIN_Negative(vec4 v)
                     }
                 }
 
-                for (auto& uniformdecl : contex._uniform_value)
+                for (auto& [name, uinfo] : wrap->uniform_variables)
                 {
-                    io_declear += "uniform " + get_type_name(uniformdecl.first) + " " + uniformdecl.second + ";\n";
-                    wrap->vertex_out->uniform_variables.push_back(
-                        _shader_wrapper_contex::get_uniform_info(uniformdecl.second, uniformdecl.first));
+                    if (uinfo.m_used_in_fragment)
+                        io_declear += "uniform " + get_type_name(uinfo.m_value) + " " + name + ";\n";
                 }
                 io_declear += "\n";
                 for (auto& indecl : contex._in_value)

@@ -178,7 +178,7 @@ calc_func_t* _get_reduce_func(action_node* cur_node, jegl_shader_value::type* ar
             return nullptr;
     }
 
-    assert(index < argc && cur_node);
+    assert(index < argc&& cur_node);
 
     for (auto* next_step : cur_node->m_next_step)
     {
@@ -1579,6 +1579,54 @@ UNIFORM_BUFFER! JOYENGINE_DEFAULT = 0
 };
 )";
 
+void _scan_used_uniforms_in_vals(
+    shader_wrapper* wrap,
+    jegl_shader_value* val,
+    bool in_vertex,
+    std::unordered_set<jegl_shader_value*>* sanned)
+{
+    if (val->is_calc_value())
+    {
+        if (val->is_uniform_variable())
+        {
+            if (!val->is_block_uniform_variable())
+            {
+                if (wrap->uniform_variables.find(val->m_unifrom_varname)
+                    == wrap->uniform_variables.end())
+                {
+                    wrap->uniform_variables[val->m_unifrom_varname] =
+                        _shader_wrapper_contex::get_uniform_info(val);
+                }
+                auto& uinfo = wrap->uniform_variables.at(val->m_unifrom_varname);
+                if (in_vertex)
+                    uinfo.m_used_in_vertex = true;
+                else
+                    uinfo.m_used_in_fragment = true;
+            }
+        }
+        else if (!val->is_shader_in_value())
+        {
+            if (sanned->find(val) != sanned->end())
+                return;
+            sanned->insert(val);
+
+            for (size_t i = 0; i < val->m_opnums_count; ++i)
+            {
+                _scan_used_uniforms_in_vals(wrap, val->m_opnums[i], in_vertex, sanned);
+            }
+        }
+    }
+}
+
+void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
+{
+    std::unordered_set<jegl_shader_value*> _scanned_val;
+    for (auto* vout : wrap->vertex_out->out_values)
+        _scan_used_uniforms_in_vals(wrap, vout, true, &_scanned_val);
+    for (auto* vout : wrap->fragment_out->out_values)
+        _scan_used_uniforms_in_vals(wrap, vout, false, &_scanned_val);
+}
+
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)
 {
     shader_wrapper* shader_wrapper_ptr = (shader_wrapper*)shader_generator;
@@ -1589,6 +1637,8 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
     write_to_shader->m_blend_src_mode = shader_wrapper_ptr->shader_config.m_blend_src;
     write_to_shader->m_blend_dst_mode = shader_wrapper_ptr->shader_config.m_blend_dst;
     write_to_shader->m_cull_mode = shader_wrapper_ptr->shader_config.m_cull_mode;
+
+    scan_used_uniforms_in_wrap(shader_wrapper_ptr);
 
     write_to_shader->m_vertex_glsl_src
         = jeecs::basic::make_new_string(
@@ -1626,36 +1676,23 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         }
     }
 
-    std::unordered_map<std::string, uniform_information*> _uniforms;
-    for (auto& uniform_info : shader_wrapper_ptr->fragment_out->uniform_variables)
-    {
-        auto& [name, type, init_val] = uniform_info;
-        _uniforms[name] = &uniform_info;
-    }
-    for (auto& uniform_info : shader_wrapper_ptr->vertex_out->uniform_variables)
-    {
-        auto& [name, type, init_val] = uniform_info;
-        _uniforms[name] = &uniform_info;
-    }
-
     do
     {
         jegl_shader::unifrom_variables** last = &write_to_shader->m_custom_uniforms;
-        for (auto& [_/*useless*/, uniform_info] : _uniforms)
+        for (auto& [name, uniform_info] : shader_wrapper_ptr->uniform_variables)
         {
             jegl_shader::unifrom_variables* variable = new jegl_shader::unifrom_variables();
             variable->m_next = nullptr;
 
-            auto& [name, type, init_val] = *uniform_info;
-
             variable->m_name = jeecs::basic::make_new_string(name.c_str());
-            variable->m_uniform_type = type;
+            variable->m_uniform_type = uniform_info.m_type;
 
             variable->m_index = jeecs::typing::INVALID_UINT32;
 
-            if (init_val)
+            auto* init_val = uniform_info.m_value->m_uniform_init_val_may_nil;
+            if (init_val != nullptr)
             {
-                switch (init_val->get_type())
+                switch (uniform_info.m_value->m_uniform_init_val_may_nil->get_type())
                 {
                 case jegl_shader_value::type::FLOAT:
                     variable->x = init_val->m_float; break;
@@ -1679,7 +1716,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
                 case jegl_shader_value::type::TEXTURE2D:
                 case jegl_shader_value::type::TEXTURE2D_MS:
                 case jegl_shader_value::type::TEXTURE_CUBE:
-                    variable->n = init_val->m_uniform_texture_channel; break;
+                    variable->n = uniform_info.m_value->m_uniform_texture_channel; break;
                 default:
                     jeecs::debug::logerr("Unsupport uniform variable type."); break;
                 }

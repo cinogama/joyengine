@@ -224,15 +224,20 @@ struct jegl_shader_value
     }
 };
 
-using uniform_information = std::tuple<
-    std::string, jegl_shader::uniform_type, jegl_shader_value*>;
+struct uniform_information
+{
+    bool m_used_in_vertex;
+    bool m_used_in_fragment;
+    jegl_shader::uniform_type m_type;
+    jegl_shader_value* m_value;
+    std::string m_name;
+};
 
 class _shader_wrapper_contex
 {
 public:
     std::unordered_map<jegl_shader_value*, std::string> _calced_value;
     std::unordered_map<jegl_shader_value*, std::pair<size_t, std::string>> _in_value;
-    std::unordered_map<jegl_shader_value*, std::string> _uniform_value;
     int _variable_count = 0;
 
     std::unordered_set<std::string> _used_builtin_func;
@@ -248,8 +253,6 @@ public:
             if (val->is_uniform_variable())
             {
                 var_name = _calced_value[val] = val->m_unifrom_varname;
-                if (!val->is_block_uniform_variable())
-                    _uniform_value[val] = var_name;
             }
             else if (val->is_shader_in_value())
             {
@@ -300,17 +303,20 @@ public:
         }
     }
 
-    static uniform_information get_uniform_info(const std::string& name, jegl_shader_value* value)
+    static uniform_information get_uniform_info(jegl_shader_value* value)
     {
+        assert(value->is_uniform_variable() && !value->is_block_uniform_variable());
+
         jegl_shader::uniform_type uniform_type =
             _shader_wrapper_contex::get_outside_type(value->get_type());
 
-        auto* init_value =
-            uniform_type == jegl_shader::uniform_type::TEXTURE
-            ? value
-            : value->m_uniform_init_val_may_nil
-            ;
-        return std::make_tuple(name, uniform_type, init_value);
+        return uniform_information{
+            false,
+            false,
+            uniform_type,
+            value,
+            value->m_unifrom_varname,
+        };
     }
 };
 
@@ -319,7 +325,6 @@ void delete_shader_value(jegl_shader_value* shader_val);
 struct shader_value_outs
 {
     std::vector<jegl_shader_value*> out_values;
-    std::vector<uniform_information> uniform_variables;
     ~shader_value_outs()
     {
         for (auto* val : out_values)
@@ -363,6 +368,7 @@ struct shader_wrapper
     shader_value_outs* fragment_out;
     shader_configs shader_config;
     shader_struct_define** shader_struct_define_may_uniform_block;
+    std::unordered_map<std::string, uniform_information> uniform_variables;
 
     ~shader_wrapper()
     {
