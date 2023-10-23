@@ -145,7 +145,7 @@ namespace jeecs
                                 //else if (funcname == "lerp")
                                 //    funcname = "mix";
 
-                                // ´Ë´¦Èûº¯Êı×ª·¢£¬²¿·Öº¯ÊıµÄ×ËÊÆºÍgl²»Ò»Ñù£¬ÎªÁË±£³ÖÉÏ²ãÒ»ÖÂĞÔ£¬ÔÚ´Ë×ª·¢£¡
+                                // æ­¤å¤„å¡å‡½æ•°è½¬å‘ï¼Œéƒ¨åˆ†å‡½æ•°çš„å§¿åŠ¿å’Œglä¸ä¸€æ ·ï¼Œä¸ºäº†ä¿æŒä¸Šå±‚ä¸€è‡´æ€§ï¼Œåœ¨æ­¤è½¬å‘ï¼
                                 if (funcname == "texture")
                                 {
                                     assert(variables.size() == 2);
@@ -519,7 +519,8 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                         const std::string unifrom_block = R"(
 float4 JEBUILTIN_AlphaTest(float4 color)
 {
-    clip(-step(0.0, color.a));
+    if (color.a <= 0.0)
+        clip(-1.0);
     return color;
 }
 )";

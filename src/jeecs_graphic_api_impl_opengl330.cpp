@@ -264,7 +264,6 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
 
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);
-
     jegui_init_gl330(context->WINDOWS_HANDLE, reboot);
 
     return context;
@@ -552,6 +551,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
                     (GLsizei)resource->m_raw_texture_data->m_height,
                     GL_FALSE);
             else
+            {
                 glTexImage2D(gl_texture_type,
                     0, texture_aim_format,
                     (GLsizei)resource->m_raw_texture_data->m_width,
@@ -559,8 +559,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
                     0, texture_src_format,
                     is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
                     resource->m_raw_texture_data->m_pixels);
-
-            // glGenerateMipmap(GL_TEXTURE_2D);
+            }
         }
 
         resource->m_handle.m_uint1 = texture;
@@ -823,7 +822,7 @@ inline void _gl_using_shader_program(jegl_resource* resource)
         for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
         {
             auto& sampler = resource->m_raw_shader_data->m_sampler_methods[i];
-            for (size_t id = 0; i < sampler.m_pass_id_count; ++id)
+            for (size_t id = 0; id < sampler.m_pass_id_count; ++id)
             {
                 glActiveTexture(GL_TEXTURE0 + sampler.m_pass_ids[id]);
                 switch (sampler.m_mag)
@@ -838,16 +837,18 @@ inline void _gl_using_shader_program(jegl_resource* resource)
                 switch (sampler.m_min)
                 {
                 case jegl_shader::fliter_mode::LINEAR:
-                    if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                   /* if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
                     else
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);*/
                     break;
                 case jegl_shader::fliter_mode::NEAREST:
-                    if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    /*if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
                     else
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);*/
                     break;
                 default:
                     abort();

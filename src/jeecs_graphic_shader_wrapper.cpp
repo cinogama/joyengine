@@ -1855,6 +1855,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         memcpy(passids, sampler->m_binded_texture_passid.data(), sampler_methods[i].m_pass_id_count * sizeof(uint32_t));
         sampler_methods[i].m_pass_ids = passids;
     }
+    write_to_shader->m_sampler_methods = sampler_methods;
 }
 
 void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
