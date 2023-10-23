@@ -33,7 +33,8 @@ public func vert(v: vin)
 
 public func frag(vf: v2f)
 {
-    let tex = uniform_texture:<texture2d>("MainTexture", 0);
+    let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+    let tex = uniform_texture:<texture2d>("MainTexture", NearestRepeatSampler, 0);
     return fout{
         color = alphatest(texture(tex, vf.uv)),
     };

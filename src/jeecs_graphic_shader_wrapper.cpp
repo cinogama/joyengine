@@ -178,7 +178,7 @@ calc_func_t* _get_reduce_func(action_node* cur_node, jegl_shader_value::type* ar
             return nullptr;
     }
 
-    assert(index < argc&& cur_node);
+    assert(index < argc && cur_node);
 
     for (auto* next_step : cur_node->m_next_step)
     {
@@ -191,7 +191,6 @@ calc_func_t* _get_reduce_func(action_node* cur_node, jegl_shader_value::type* ar
     }
     return nullptr;
 }
-
 calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argts, size_t argc)
 {
     auto& _shader_operation_map = shader_operation_map();
@@ -201,7 +200,6 @@ calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argt
     auto* cur_node = fnd->second;
     return _get_reduce_func(cur_node, argts, argc, 0);
 }
-
 WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_gchandle(vm,
@@ -222,7 +220,28 @@ WO_API wo_api jeecs_shader_create_uniform_variable_with_init_value(wo_vm vm, wo_
         new jegl_shader_value(type, wo_string(args + 1), init_value, false)
         , nullptr, _free_shader_value);
 }
+WO_API wo_api jeecs_shader_create_sampler2d(wo_vm vm, wo_value args, size_t argc)
+{
+    auto* sampler = new shader_sampler;
+    sampler->m_min = (jegl_shader::fliter_mode)wo_int(args + 0);
+    sampler->m_mag = (jegl_shader::fliter_mode)wo_int(args + 1);
+    sampler->m_mip = (jegl_shader::fliter_mode)wo_int(args + 2);
+    sampler->m_uwrap = (jegl_shader::wrap_mode)wo_int(args + 3);
+    sampler->m_vwrap = (jegl_shader::wrap_mode)wo_int(args + 4);
+    sampler->m_sampler_id = (uint32_t)wo_int(args + 5);
+    return wo_ret_gchandle(vm, sampler, nullptr, [](void* p) {delete(shader_sampler*)p; });
+}
+WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args, size_t argc)
+{
+    shader_sampler* sampler = (shader_sampler*)wo_pointer(args + 0);
+    jegl_shader_value* value = (jegl_shader_value*)wo_pointer(args + 1);
 
+    assert(value->m_binded_sampler_id == jeecs::typing::INVALID_UINT32);
+    value->m_binded_sampler_id = sampler->m_sampler_id;
+
+    sampler->m_binded_texture_passid.push_back((uint32_t)value->m_uniform_texture_channel);
+    return wo_ret_void(vm);
+}
 WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
 {
     bool result_is_const = true;
@@ -446,12 +465,14 @@ WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t ar
 
 WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc)
 {
-    shader_configs config;
-
     wo_value elem = wo_push_empty(vm);
 
+    shader_wrapper* wrapper = new shader_wrapper(
+        (shader_value_outs*)wo_pointer(args + 1),
+        (shader_value_outs*)wo_pointer(args + 2));
+
     wo_integer_t vin_size = wo_lengthof(args + 0);
-    jegl_shader_value::type* vertex_in_layouts = new jegl_shader_value::type[vin_size];
+
     for (wo_integer_t i = 0; i < vin_size; ++i)
     {
         wo_struct_get(elem, args + 0, i);
@@ -460,43 +481,40 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
         if (shader_val->is_shader_in_value() == false)
             return wo_ret_halt(vm, "Unsupport value source, should be vertex in.");
 
-        vertex_in_layouts[i] = shader_val->get_type();
+        wrapper->vertex_in.push_back(shader_val->get_type());
     }
 
     wo_struct_get(elem, args + 3, 0);
-    config.m_enable_shared = wo_bool(elem);
+    wrapper->shader_config.m_enable_shared = wo_bool(elem);
     wo_struct_get(elem, args + 3, 1);
-    config.m_depth_test = (jegl_shader::depth_test_method)wo_int(elem);
+    wrapper->shader_config.m_depth_test = (jegl_shader::depth_test_method)wo_int(elem);
     wo_struct_get(elem, args + 3, 2);
-    config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(elem);
+    wrapper->shader_config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(elem);
     wo_struct_get(elem, args + 3, 3);
-    config.m_blend_src = (jegl_shader::blend_method)wo_int(elem);
+    wrapper->shader_config.m_blend_src = (jegl_shader::blend_method)wo_int(elem);
     wo_struct_get(elem, args + 3, 4);
-    config.m_blend_dst = (jegl_shader::blend_method)wo_int(elem);
+    wrapper->shader_config.m_blend_dst = (jegl_shader::blend_method)wo_int(elem);
     wo_struct_get(elem, args + 3, 5);
-    config.m_cull_mode = (jegl_shader::cull_mode)wo_int(elem);
+    wrapper->shader_config.m_cull_mode = (jegl_shader::cull_mode)wo_int(elem);
 
-    shader_struct_define** ubos = nullptr;
     size_t ubo_count = (size_t)wo_lengthof(args + 4);
-
-    ubos = new shader_struct_define * [ubo_count + 1];
     for (size_t i = 0; i < ubo_count; ++i)
     {
         wo_arr_get(elem, args + 4, i);
-        ubos[i] = (shader_struct_define*)wo_pointer(elem);
+        wrapper->shader_struct_define_may_uniform_block.push_back(
+            (shader_struct_define*)wo_pointer(elem));
     }
-    ubos[ubo_count] = nullptr;
+
+    size_t sampler_count = (size_t)wo_lengthof(args + 5);
+    for (size_t i = 0; i < sampler_count; ++i)
+    {
+        wo_arr_get(elem, args + 5, i);
+        wrapper->decleared_samplers.push_back(
+            (shader_sampler*)wo_pointer(elem));
+    }
 
     return wo_ret_gchandle(vm,
-        new shader_wrapper
-        {
-            vertex_in_layouts,
-            (size_t)vin_size,
-            (shader_value_outs*)wo_pointer(args + 1),
-            (shader_value_outs*)wo_pointer(args + 2),
-            config,
-            ubos
-        }, nullptr,
+        wrapper, nullptr,
         [](void* ptr) {
             delete (shader_wrapper*)ptr;
         });
@@ -581,6 +599,55 @@ public using integer = gchandle;
 
 public using structure = gchandle;
 
+public enum fliter
+{
+    NEAREST,
+    LINEAR,
+}
+public enum wrap
+{
+    CLAMP,
+    REPEAT,
+}
+public let NEAREST = fliter::NEAREST;
+public let LINEAR = fliter::LINEAR;
+public let CLAMP = wrap::CLAMP;
+public let REPEAT = wrap::REPEAT;
+
+using sampler2d = gchandle
+{
+    extern("libjoyecs", "jeecs_shader_create_sampler2d")
+    func _create(
+        min: fliter, 
+        mag: fliter, 
+        mip: fliter, 
+        uwarp: wrap, 
+        vwarp: wrap,
+        samplerid: int)=> sampler2d;
+
+    let mut alloc_sampler_count = 0;
+    let created_sampler2ds = []mut: vec<sampler2d>;
+
+    public func create(
+        min: fliter, 
+        mag: fliter, 
+        mip: fliter, 
+        uwarp: wrap, 
+        vwarp: wrap)
+    {
+        let s = _create(min, mag, mip, uwarp, vwarp, alloc_sampler_count);
+        
+        created_sampler2ds->add(s);
+        alloc_sampler_count += 1;
+        
+        return s;
+    }
+    
+    extern("libjoyecs", "jeecs_shader_sampler2d_bind_texture")
+    func append_bind<T>(self: sampler2d, tex: T)=> void
+        where tex is texture2d || tex is texture2dms;
+}
+
 private func _get_type_enum<ShaderValueT>()=> shader_value_type
 {
     if (std::is_same_type:<ShaderValueT, float>)
@@ -640,7 +707,7 @@ private func _uniform_with_init<ShaderResultT>(
     init_value : ShaderResultT
 )=> ShaderResultT;
 
-public func uniform_texture<ShaderResultT>(uniform_name:string, pass: int)=> ShaderResultT
+public func uniform_texture<ShaderResultT>(uniform_name:string, sampler: sampler2d, pass: int)=> ShaderResultT
     where std::declval:<ShaderResultT>() is texture2d
         || std::declval:<ShaderResultT>() is texture2dms
         || std::declval:<ShaderResultT>() is texturecube;
@@ -648,7 +715,9 @@ public func uniform_texture<ShaderResultT>(uniform_name:string, pass: int)=> Sha
     extern("libjoyecs", "jeecs_shader_texture2d_set_channel")
         public func channel<T>(self: T, pass: int)=> T;
     
-    return channel(_uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, false), pass);
+    let tex = channel(_uniform:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, false), pass);
+    sampler->append_bind(tex);
+    return tex;
 }
 
 public func uniform<ShaderResultT>(uniform_name:string, init_value: ShaderResultT)=> ShaderResultT
@@ -990,7 +1059,8 @@ namespace shader
         vertout: vertex_out, 
         fragout: fragment_out, 
         shader_config: ShaderConfig,
-        struct_or_uniform_block_decl_list: array<struct_define>)=> shader_wrapper;
+        struct_or_uniform_block_decl_list: array<struct_define>,
+        sampler_defines: array<sampler2d>)=> shader_wrapper;
 
     private extern func generate()
     {
@@ -1007,7 +1077,13 @@ namespace shader
         let f_out = frag(f_in);
         let fragment_out_result = fragment_out::create(f_out);
 
-        return _wraped_shader(v_in, vertext_out_result, fragment_out_result, configs, struct_uniform_blocks_decls->toarray);
+        return _wraped_shader(
+            v_in,
+            vertext_out_result,
+            fragment_out_result,
+            configs,
+            struct_uniform_blocks_decls->toarray,
+            sampler2d::created_sampler2ds->toarray);
     }
 
     namespace debug
@@ -1658,19 +1734,15 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         = jeecs::basic::make_new_string(
             _generate_hlsl_fragment_by_wrapper(shader_wrapper_ptr).c_str());
 
-    write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in_count;
-    write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[shader_wrapper_ptr->vertex_in_count];
-    for (size_t i = 0; i < shader_wrapper_ptr->vertex_in_count; ++i)
+    write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
+    write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[write_to_shader->m_vertex_in_count];
+    for (size_t i = 0; i < write_to_shader->m_vertex_in_count; ++i)
         write_to_shader->m_vertex_in[i].m_type =
         _shader_wrapper_contex::get_outside_type(shader_wrapper_ptr->vertex_in[i]);
 
     std::unordered_map<std::string, shader_struct_define*> _uniform_blocks;
-    auto** block_ptr = shader_wrapper_ptr->shader_struct_define_may_uniform_block;
-    while (*block_ptr != nullptr)
+    for(auto& struct_def : shader_wrapper_ptr->shader_struct_define_may_uniform_block)
     {
-        auto* const struct_def = *block_ptr;
-        ++block_ptr;
-
         assert(struct_def != nullptr);
 
         if (struct_def->binding_place != jeecs::typing::INVALID_UINT32)

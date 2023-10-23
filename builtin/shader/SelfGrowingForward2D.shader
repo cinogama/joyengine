@@ -39,7 +39,8 @@ public func vert(v: vin)
 
 public func frag(vf: v2f)
 {
-    let Albedo = uniform_texture:<texture2d>("Albedo", 0);
+    let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+    let Albedo = uniform_texture:<texture2d>("Albedo", NearestRepeatSampler, 0);
 
     let albedo_color = alphatest(texture(Albedo, vf.uv));
     let self_growing = uniform("SelfGrowing", float::one);

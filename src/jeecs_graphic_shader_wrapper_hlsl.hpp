@@ -47,11 +47,8 @@ namespace jeecs
             {
                 std::string result;
 
-                auto** block_iter = wrap->shader_struct_define_may_uniform_block;
-                while (nullptr != *block_iter)
+                for (auto* block : wrap->shader_struct_define_may_uniform_block)
                 {
-                    auto* block = *block_iter;
-
                     if (!block->variables.empty())
                     {
                         std::string uniform_block_decl =
@@ -67,7 +64,6 @@ namespace jeecs
 
                         result += uniform_block_decl + "};\n";
                     }
-                    ++block_iter;
                 }
 
                 return result;
@@ -155,9 +151,9 @@ namespace jeecs
                                     assert(variables.size() == 2);
                                     apply +=
                                         variables[0]
-                                        + ".Sample("
-                                        + variables[0]
-                                        + "_sampstate, "
+                                        + ".Sample(sampler_"
+                                        + std::to_string(value->m_opnums[0]->m_binded_sampler_id)
+                                        + ", "
                                         + variables[1]
                                         + ")";
                                 }
@@ -267,38 +263,47 @@ namespace jeecs
 
                 // Generate built function src here.
                 std::string built_in_srcs;
+                for (auto* sampler : wrap->decleared_samplers)
+                {
+                    built_in_srcs += "SamplerState sampler_"
+                        + std::to_string(sampler->m_sampler_id)
+                        + "_sampstate: register(s"
+                        + std::to_string(sampler->m_sampler_id)
+                        + ");\n";
+                }
+
                 for (auto& builtin_func_name : contex._used_builtin_func)
                 {
                      if (builtin_func_name == "JEBUILTIN_Movement")
                      {
                          const std::string unifrom_block = R"(
- float3 JEBUILTIN_Movement(float4x4 trans)
- {
-     return trans[3].xyz;
- }
- )";
+float3 JEBUILTIN_Movement(float4x4 trans)
+{
+    return trans[3].xyz;
+}
+)";
                          built_in_srcs += unifrom_block;
                      }
                      else if (builtin_func_name == "JEBUILTIN_Negative")
                      {
                          const std::string unifrom_block = R"(
- float JEBUILTIN_Negative(float v)
- {
-     return -v;
- }
- float2 JEBUILTIN_Negative(float2 v)
- {
-     return -v;
- }
- float3 JEBUILTIN_Negative(float3 v)
- {
-     return -v;
- }
- float4 JEBUILTIN_Negative(float4 v)
- {
-     return -v;
- }
- )";
+float JEBUILTIN_Negative(float v)
+{
+    return -v;
+}
+float2 JEBUILTIN_Negative(float2 v)
+{
+    return -v;
+}
+float3 JEBUILTIN_Negative(float3 v)
+{
+    return -v;
+}
+float4 JEBUILTIN_Negative(float4 v)
+{
+    return -v;
+}
+)";
                          built_in_srcs += unifrom_block;
                      }
                      else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
@@ -312,7 +317,6 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                          built_in_srcs += unifrom_block;
                      }
                 }
-
 
                 // Generate shaders
                 std::string texture_decl = "";
@@ -334,12 +338,6 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                                 + " "
                                 + name
                                 + ": register(t"
-                                + std::to_string(uinfo.m_value->m_uniform_texture_channel)
-                                + ");\n";
-                            texture_decl
-                                += "SamplerState "
-                                + name
-                                + "_sampstate: register(s"
                                 + std::to_string(uinfo.m_value->m_uniform_texture_channel)
                                 + ");\n";
                         }
@@ -365,8 +363,8 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                 size_t FLOAT_COUNT = 0;
                 size_t FLOAT2_COUNT = 0;
                 size_t FLOAT3_4_COUNT = 0;
-                std::vector<std::string> vertex_in_semantics(wrap->vertex_in_count);
-                for (size_t i = 0; i < wrap->vertex_in_count; ++i)
+                std::vector<std::string> vertex_in_semantics(wrap->vertex_in.size());
+                for (size_t i = 0; i < wrap->vertex_in.size(); ++i)
                 {
                     switch (wrap->vertex_in[i])
                     {
@@ -505,39 +503,72 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
 
                 // Generate built function src here.
                 std::string built_in_srcs;
+                for (auto* sampler : wrap->decleared_samplers)
+                {
+                    built_in_srcs += "SamplerState sampler_"
+                        + std::to_string(sampler->m_sampler_id)
+                        + "_sampstate: register(s"
+                        + std::to_string(sampler->m_sampler_id)
+                        + ");\n";
+                }
+
                 for (auto& builtin_func_name : contex._used_builtin_func)
                 {
-                    /* if (builtin_func_name == "JEBUILTIN_Movement")
-                     {
-                         const std::string unifrom_block = R"(
- vec3 JEBUILTIN_Movement(mat4 trans)
- {
-     return vec3(trans[3][0], trans[3][1], trans[3][2]);
- }
- )";
-                         built_in_srcs += unifrom_block;
-                     }
-                     else */
-                    if (builtin_func_name == "JEBUILTIN_Negative")
+                    if (builtin_func_name == "JEBUILTIN_AlphaTest")
                     {
                         const std::string unifrom_block = R"(
- float JEBUILTIN_Negative(float v)
- {
-     return -v;
- }
- float2 JEBUILTIN_Negative(float2 v)
- {
-     return -v;
- }
- float3 JEBUILTIN_Negative(float3 v)
- {
-     return -v;
- }
- float4 JEBUILTIN_Negative(float4 v)
- {
-     return -v;
- }
- )";
+float4 JEBUILTIN_AlphaTest(float4 color)
+{
+    clip(-step(0.0, color.a));
+    return color;
+}
+)";
+                        built_in_srcs += unifrom_block;
+                    }
+                    else if (builtin_func_name == "JEBUILTIN_TextureMs")
+                    {
+                        const std::string unifrom_block = R"(
+// TODO;
+)";
+                        built_in_srcs += unifrom_block;
+                    }
+                    else if (builtin_func_name == "JEBUILTIN_TextureFastMs")
+                    {
+                        const std::string unifrom_block = R"(
+// TODO;
+)";
+                        built_in_srcs += unifrom_block;
+                    }
+                    else if (builtin_func_name == "JEBUILTIN_Movement")
+                    {
+                        const std::string unifrom_block = R"(
+float3 JEBUILTIN_Movement(float4x4 trans)
+{
+    return trans[3].xyz;
+}
+)";
+                        built_in_srcs += unifrom_block;
+                    }
+                    else if (builtin_func_name == "JEBUILTIN_Negative")
+                    {
+                        const std::string unifrom_block = R"(
+float JEBUILTIN_Negative(float v)
+{
+    return -v;
+}
+float2 JEBUILTIN_Negative(float2 v)
+{
+    return -v;
+}
+float3 JEBUILTIN_Negative(float3 v)
+{
+    return -v;
+}
+float4 JEBUILTIN_Negative(float4 v)
+{
+    return -v;
+}
+)";
                         built_in_srcs += unifrom_block;
                     }
                     else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
@@ -572,12 +603,6 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                                 + " "
                                 + name
                                 + ": register(t"
-                                + std::to_string(uinfo.m_value->m_uniform_texture_channel)
-                                + ");\n";
-                            texture_decl
-                                += "SamplerState "
-                                + name
-                                + "_sampstate: register(s"
                                 + std::to_string(uinfo.m_value->m_uniform_texture_channel)
                                 + ");\n";
                         }

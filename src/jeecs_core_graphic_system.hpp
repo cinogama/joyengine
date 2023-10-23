@@ -53,11 +53,12 @@ public let je_light2ds = func(){
     return lights->toarray;
 }();
 
+let Light2DSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
 public let je_shadow2ds = func(){
     let shadows = []mut: vec<texture2d>;
 
     for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
-        shadows->add(uniform_texture:<texture2d>(F"JOYENGINE_SHADOW2D_{i}", SHADOW2D_TEX_0 + i));
+        shadows->add(uniform_texture:<texture2d>(F"JOYENGINE_SHADOW2D_{i}", Light2DSampler, SHADOW2D_TEX_0 + i));
 
     return shadows->toarray;
 }();
@@ -66,10 +67,10 @@ public let je_shadow2ds = func(){
 public let je_light2d_resolutin = uniform("JOYENGINE_LIGHT2D_RESOLUTION", float2::one);
 public let je_light2d_decay = uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
 
-public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", DEFER_TEX_0 + 0);
-public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", DEFER_TEX_0 + 1);
-public let je_light2d_defer_visual_coord = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VisualCoordinates", DEFER_TEX_0 + 2);
-public let je_light2d_defer_shadow = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", DEFER_TEX_0 + 3);
+public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", Light2DSampler, DEFER_TEX_0 + 0);
+public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", Light2DSampler, DEFER_TEX_0 + 1);
+public let je_light2d_defer_visual_coord = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VisualCoordinates", Light2DSampler, DEFER_TEX_0 + 2);
+public let je_light2d_defer_shadow = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", Light2DSampler, DEFER_TEX_0 + 3);
 )";
 
 const char* shader_pbr_path = "je/shader/pbr.wo";
@@ -1029,7 +1030,8 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
+    let SubShadowSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, REPEAT, REPEAT);
+    let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
     let final_shadow = alphatest(float4::create(je_color->xyz, texture(main_texture, vf.uv)->w));
 
     return fout{
@@ -1078,7 +1080,8 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
+    let SubShadowSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, REPEAT, REPEAT);
+    let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
     let final_shadow = alphatest(
         float4::create(
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
@@ -1130,7 +1133,8 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let main_texture = uniform_texture:<texture2d>("MainTexture", 0);
+    let SubShadowSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, REPEAT, REPEAT);
+    let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
     let final_shadow = alphatest(
         float4::create(
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.

@@ -1593,6 +1593,33 @@ jegl_shader [类型]
 */
 struct jegl_shader
 {
+    enum fliter_mode
+    {
+        NEAREST,
+        LINEAR,
+    };
+    enum wrap_mode
+    {
+        CLAMP,
+        REPEAT,
+    };
+    struct sampler_method
+    {
+        fliter_mode m_min;
+        fliter_mode m_mag;
+        fliter_mode m_mip;
+        wrap_mode m_uwrap;
+        wrap_mode m_vwrap;
+
+        uint32_t m_sampler_id;  // Used for dx11
+        uint32_t* m_pass_id;     // Used for gl330
+    };
+#ifdef JE_PLATFORM_M64
+    static_assert(sizeof(sampler_method) == 24 + 8);
+#else
+    static_assert(sizeof(sampler_method) == 24 + 4);
+#endif
+
     enum uniform_type
     {
         INT,
@@ -1723,6 +1750,9 @@ struct jegl_shader
     depth_mask_method   m_depth_mask;
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
+
+    sampler_method*     m_sampler_methods;
+    size_t              m_sampler_count;
 };
 
 /*

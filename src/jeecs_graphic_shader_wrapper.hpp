@@ -69,7 +69,8 @@ struct jegl_shader_value
         struct
         {
             const char* m_unifrom_varname;
-            int m_uniform_texture_channel;
+            uint32_t m_uniform_texture_channel;
+            uint32_t m_binded_sampler_id;
             jegl_shader_value* m_uniform_init_val_may_nil;
         };
     };
@@ -190,7 +191,8 @@ struct jegl_shader_value
     jegl_shader_value(type resulttype, const char* uniform_name, jegl_shader_value* init_val, bool is_predef)
         : m_type((type)(resulttype | type::CALC_VALUE | (is_predef ? type::UNIFORM_BLOCK_VARIABLE : type::UNIFORM_VARIABLE)))
         , m_unifrom_varname(jeecs::basic::make_new_string(uniform_name))
-        , m_uniform_texture_channel(0)
+        , m_uniform_texture_channel(jeecs::typing::INVALID_UINT32)
+        , m_binded_sampler_id(jeecs::typing::INVALID_UINT32)
         , m_ref_count(0)
         , m_uniform_init_val_may_nil(init_val)
     {
@@ -359,32 +361,45 @@ struct shader_struct_define
     std::vector<struct_variable> variables;
 };
 
+struct shader_sampler
+{
+    jegl_shader::fliter_mode m_min;
+    jegl_shader::fliter_mode m_mag;
+    jegl_shader::fliter_mode m_mip;
+    jegl_shader::wrap_mode m_uwrap;
+    jegl_shader::wrap_mode m_vwrap;
+    uint32_t m_sampler_id;
+
+    std::vector<uint32_t> m_binded_texture_passid;
+};
+
 struct shader_wrapper
 {
-    jegl_shader_value::type* vertex_in;
-    size_t vertex_in_count;
-
     shader_value_outs* vertex_out;
     shader_value_outs* fragment_out;
     shader_configs shader_config;
-    shader_struct_define** shader_struct_define_may_uniform_block;
+
+    std::vector<shader_struct_define*> shader_struct_define_may_uniform_block;
+    std::vector<jegl_shader_value::type> vertex_in;
+
+    std::vector<shader_sampler*> decleared_samplers;
+
     std::unordered_map<std::string, uniform_information> uniform_variables;
 
+    shader_wrapper(
+        shader_value_outs* vout, 
+        shader_value_outs* fout)
+        : vertex_out(vout)
+        , fragment_out(fout)
+    {
+
+    }
     ~shader_wrapper()
     {
-        assert(nullptr != shader_struct_define_may_uniform_block);
-
-        auto** block = shader_struct_define_may_uniform_block;
-        while (nullptr != *block)
-        {
-            delete (*block);
-            ++block;
-        }
-        delete[] shader_struct_define_may_uniform_block;
+        for (auto* block : shader_struct_define_may_uniform_block)
+            delete block;
 
         delete vertex_out;
         delete fragment_out;
-
-        delete[]vertex_in;
     }
 };

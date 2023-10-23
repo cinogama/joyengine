@@ -191,11 +191,8 @@ namespace jeecs
             {
                 std::string result;
 
-                auto** block_iter = wrap->shader_struct_define_may_uniform_block;
-                while (nullptr != *block_iter)
+                for (auto* block : wrap->shader_struct_define_may_uniform_block)
                 {
-                    auto* block = *block_iter;
-
                     if (!block->variables.empty())
                     {
                         std::string uniform_block_decl =
@@ -211,7 +208,6 @@ namespace jeecs
 
                         result += uniform_block_decl + "};\n";
                     }
-                    ++block_iter;
                 }
 
                 return result;

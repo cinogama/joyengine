@@ -1434,10 +1434,12 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
         auto* texture = std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
         if (texture->m_texture_view.Get() != nullptr)
         {
+            if (context->m_next_binding_texture_place < 16)
             context->m_dx_context->VSSetSamplers(
                 context->m_next_binding_texture_place, 1, texture->m_texture_sampler.GetAddressOf());
             context->m_dx_context->VSSetShaderResources(
                 context->m_next_binding_texture_place, 1, texture->m_texture_view.GetAddressOf());
+            if (context->m_next_binding_texture_place < 16)
             context->m_dx_context->PSSetSamplers(
                 context->m_next_binding_texture_place, 1, texture->m_texture_sampler.GetAddressOf());
             context->m_dx_context->PSSetShaderResources(
