@@ -273,7 +273,7 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
 bool gl_pre_update(jegl_thread* ctx)
 {
     jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx->m_userdata));
-   
+
     glfwSwapBuffers(context->WINDOWS_HANDLE);
     return true;
 }

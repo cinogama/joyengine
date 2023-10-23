@@ -117,7 +117,14 @@ namespace jeecs
                             else if (value->m_opname == "*"s)
                             {
                                 assert(variables.size() == 2);
-                                apply += "mul(" + variables[0] + "," + variables[1] + ")";
+                                if (value->m_opnums[0]->get_type() == jegl_shader_value::type::FLOAT2x2
+                                    || value->m_opnums[0]->get_type() == jegl_shader_value::type::FLOAT3x3
+                                    || value->m_opnums[0]->get_type() == jegl_shader_value::type::FLOAT4x4)
+                                    apply += "mul(" + variables[0] + "," + variables[1] + ")";
+                                else
+                                {
+                                    apply += variables[0] + " " + value->m_opname + " " + variables[1];
+                                }
                             }
                             else if (value->m_opname[0] == '.')
                             {
@@ -444,7 +451,22 @@ namespace jeecs
                 outid = 0;
                 for (auto& outvarname : outvalue)
                 {
-                    body_result += "    vout._v2f_" + std::to_string(outid++) + " = " + outvarname.second + ";\n";
+                    if (outid == 0)
+                    {
+                        // body_result += "    float4 _je_position = " + outvarname.second + ";\n";
+                        body_result += "    vout._v2f_" + std::to_string(outid) + " = "
+                            // + "mul("
+                            + outvarname.second
+                            // + "- float4(0.0, 0.0, 1.0 / _je_position.w, 0.0)"
+                            // + ", float4(0.0, 0.0, 0.5, 0.0))"
+                            + ";\n";
+                    }
+                    else
+                    {
+                        body_result += "    vout._v2f_" + std::to_string(outid) + " = " + outvarname.second + ";\n";
+                    }
+
+                    outid++;
                 }
 
                 body_result += "    return vout;\n}";

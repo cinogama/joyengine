@@ -523,26 +523,34 @@ bool dx11_update(jegl_thread* ctx)
     }
     
     RECT rect;
-    GetWindowRect(context->m_window_handle, &rect);
+    GetClientRect(context->m_window_handle, &rect);
     je_io_set_windowsize(rect.right- rect.left, rect.bottom - rect.top);
 
     POINT point;
-    GetCursorPos(&point);
-    je_io_set_mousepos(0, point.x - rect.left, point.y - rect.top);
+    ScreenToClient(context->m_window_handle, &point);
+    je_io_set_mousepos(0, point.x, point.y);
 
     int mouse_lock_x, mouse_lock_y;
     if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
     {
-        SetCursorPos(mouse_lock_x + rect.left, mouse_lock_y + rect.top);
+        point.x = mouse_lock_x;
+        point.y = mouse_lock_y;
+        ClientToScreen(context->m_window_handle, &point);
+        SetCursorPos(point.x, point.y);
     }
 
-    //int window_width, window_height;
-    //if (je_io_should_update_windowsize(&window_width, &window_height))
-    //    glfwSetWindowSize(context->WINDOWS_HANDLE, window_width, window_height);
+    int window_width, window_height;
+    if (je_io_should_update_windowsize(&window_width, &window_height))
+    {
+        RECT rect = { 0, 0, window_width, window_height };
+        SetWindowPos(context->m_window_handle, HWND_TOP,
+            0, 0, rect.right - rect.left, rect.bottom - rect.top,
+            SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE | SWP_NOZORDER);
+    }
 
-    //const char* title;
-    //if (je_io_should_update_windowtitle(&title))
-    //    glfwSetWindowTitle(context->WINDOWS_HANDLE, title);
+    const char* title;
+    if (je_io_should_update_windowtitle(&title))
+        SetWindowTextA(context->m_window_handle, title);
 
     return true;
 }
@@ -1038,7 +1046,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             texture_describe.SampleDesc.Count = 1;
             texture_describe.SampleDesc.Quality = 0;
         }
-        texture_describe.Usage = D3D11_USAGE_DEFAULT;
+        texture_describe.Usage = D3D11_USAGE_IMMUTABLE;
         texture_describe.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         texture_describe.CPUAccessFlags = 0;
         texture_describe.MiscFlags = 0;
@@ -1168,6 +1176,8 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             if (resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH)
             {
                 texture_describe.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+                texture_describe.Usage = D3D11_USAGE_DEFAULT;
+
                 size_t msaa_level = (size_t)(resource->m_raw_texture_data->m_format
                     & jegl_texture::format::MSAA_MASK) >> (size_t)8;
                 UINT msaa_quality = 0;
@@ -1199,7 +1209,6 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             }
             else
             {
-                // texture_describe.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
                 texture_describe.BindFlags |= D3D11_BIND_RENDER_TARGET;
                 texture_describe.Usage = D3D11_USAGE_DEFAULT;
 
@@ -1510,6 +1519,7 @@ void dx11_close_resource(jegl_thread* ctx, jegl_resource* resource)
         break;
     }
 }
+
 void* dx11_native_resource(jegl_thread* gthread, jegl_resource* resource)
 {
     switch (resource->m_type)
@@ -1569,6 +1579,11 @@ void dx11_bind_texture(jegl_thread* ctx, jegl_resource* texture, size_t pass)
 void dx11_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
+
+    ID3D11ShaderResourceView* null_view = nullptr;
+    context->m_dx_context->VSSetShaderResources(0, 1, &null_view);
+    context->m_dx_context->PSSetShaderResources(0, 1, &null_view);
+
     if (framebuffer == nullptr)
     {
         context->m_dx_context->OMSetRenderTargets(1,
@@ -1584,12 +1599,16 @@ void dx11_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, 
     }
 
     auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
-    if (w == 0)
-        w = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_width : context->WINDOWS_SIZE_WIDTH;
-    if (h == 0)
-        h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
+    size_t buf_w, buf_h;
+    buf_w = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_width : context->WINDOWS_SIZE_WIDTH;
+    buf_h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
 
-    y = context->WINDOWS_SIZE_HEIGHT - y - h;
+    if (w == 0)
+        w = buf_w;
+    if (h == 0)
+        h = buf_h;
+
+    y = buf_h - y - h;
 
     D3D11_VIEWPORT viewport;
     viewport.Width = (float)w;
