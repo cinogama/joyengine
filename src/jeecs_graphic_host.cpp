@@ -124,8 +124,8 @@ namespace jeecs
             glthread = jegl_start_graphic_thread(
                 config,
                 universe.handle(),
-                // jegl_using_dx11_apis,
-                jegl_using_opengl330_apis,
+                jegl_using_dx11_apis,
+                // jegl_using_opengl330_apis,
                 [](void* ptr, jegl_thread* glthread)
                 {
                     ((graphic_uhost*)ptr)->_frame_rend_impl();

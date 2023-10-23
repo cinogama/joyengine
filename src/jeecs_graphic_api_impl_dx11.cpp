@@ -63,7 +63,6 @@ struct jedx11_texture
 {
     jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_texture;
     jegl_dx11_context::MSWRLComPtr<ID3D11ShaderResourceView> m_texture_view;
-    jegl_dx11_context::MSWRLComPtr<ID3D11SamplerState> m_texture_sampler;
 };
 struct jedx11_shader
 {
@@ -78,6 +77,12 @@ struct jedx11_shader
     jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
     jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilState> m_depth;
     jegl_dx11_context::MSWRLComPtr<ID3D11BlendState> m_blend;
+    struct sampler_structs
+    {
+        uint32_t m_sampler_id;
+        jegl_dx11_context::MSWRLComPtr<ID3D11SamplerState> m_sampler;
+    };
+    std::vector<sampler_structs> m_samplers;
 };
 struct jedx11_vertex
 {
@@ -521,10 +526,10 @@ bool dx11_update(jegl_thread* ctx)
             return false;
         context->m_window_should_close = false;
     }
-    
+
     RECT rect;
     GetClientRect(context->m_window_handle, &rect);
-    je_io_set_windowsize(rect.right- rect.left, rect.bottom - rect.top);
+    je_io_set_windowsize(rect.right - rect.left, rect.bottom - rect.top);
 
     POINT point;
     ScreenToClient(context->m_window_handle, &point);
@@ -768,6 +773,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
                 resource, error_informations.c_str());
             resource->m_handle.m_ptr = nullptr;
+            delete jedx11_shader_res;
         }
         else
         {
@@ -998,6 +1004,79 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
             JERCHECK(context->m_dx_device->CreateBlendState(
                 &blend_describe, jedx11_shader_res->m_blend.GetAddressOf()));
 
+            jedx11_shader_res->m_samplers.resize(resource->m_raw_shader_data->m_sampler_count);
+            for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
+            {
+                auto& dxsampler = jedx11_shader_res->m_samplers[i];
+                auto& sampler = resource->m_raw_shader_data->m_sampler_methods[i];
+                dxsampler.m_sampler_id = sampler.m_sampler_id;
+
+                D3D11_SAMPLER_DESC sampler_describe;
+
+                sampler_describe.MipLODBias = 0.0f;
+                sampler_describe.MaxAnisotropy = 0;
+                sampler_describe.BorderColor[0] = 0.0f;
+                sampler_describe.BorderColor[1] = 0.0f;
+                sampler_describe.BorderColor[2] = 0.0f;
+                sampler_describe.BorderColor[3] = 0.0f;
+
+                // Apply fliter setting
+                if (sampler.m_min == jegl_shader::fliter_mode::LINEAR)
+                {
+                    if (sampler.m_mag == jegl_shader::fliter_mode::LINEAR)
+                    {
+                        if (sampler.m_mag == jegl_shader::fliter_mode::LINEAR)
+                            sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+                        else
+                            sampler_describe.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+                    }
+                    else
+                    {
+                        if (sampler.m_mag == jegl_shader::fliter_mode::LINEAR)
+                            sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+                        else
+                            sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+                    }
+                }
+                else
+                {
+                    if (sampler.m_mag == jegl_shader::fliter_mode::LINEAR)
+                    {
+                        if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                            sampler_describe.Filter = D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR;
+                        else
+                            sampler_describe.Filter = D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+                    }
+                    else
+                    {
+                        if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                            sampler_describe.Filter = D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+                        else
+                            sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+                    }
+                }
+
+                if (sampler.m_uwrap == jegl_shader::wrap_mode::CLAMP)
+                    sampler_describe.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+                else
+                    sampler_describe.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+
+                if (sampler.m_vwrap == jegl_shader::wrap_mode::CLAMP)
+                    sampler_describe.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+                else
+                    sampler_describe.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+
+                sampler_describe.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+                sampler_describe.ComparisonFunc = D3D11_COMPARISON_NEVER;
+                sampler_describe.MinLOD = 0;
+                sampler_describe.MaxLOD = D3D11_FLOAT32_MAX;
+                JERCHECK(context->m_dx_device->CreateSamplerState(
+                    &sampler_describe,
+                    dxsampler.m_sampler.GetAddressOf()));
+
+                dxsampler.m_sampler;
+            }
+
             _jedx11_trace_debug(jedx11_shader_res->m_uniforms, string_path + "_Uniforms");
             _jedx11_trace_debug(jedx11_shader_res->m_vertex, string_path + "_Vertex");
             _jedx11_trace_debug(jedx11_shader_res->m_fragment, string_path + "_Fragment");
@@ -1052,123 +1131,6 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         texture_describe.MiscFlags = 0;
 
         jedx11_texture* jedx11_texture_res = new jedx11_texture;
-
-        D3D11_SAMPLER_DESC sampler_describe;
-
-        sampler_describe.MipLODBias = 0.0f;
-        sampler_describe.MaxAnisotropy = 0;
-        sampler_describe.BorderColor[0] = 0.0f;
-        sampler_describe.BorderColor[1] = 0.0f;
-        sampler_describe.BorderColor[2] = 0.0f;
-        sampler_describe.BorderColor[3] = 0.0f;
-
-        // Apply fliter setting
-        switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MIN_FILTER_MASK)
-        {
-        case jegl_texture::sampling::MIN_LINEAR:
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
-            {
-            case jegl_texture::sampling::MAG_LINEAR:
-                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR; break;
-            case jegl_texture::sampling::MAG_NEAREST:
-                sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR; break;
-            default:
-                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
-            break;
-        case jegl_texture::sampling::MIN_NEAREST:
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
-            {
-            case jegl_texture::sampling::MAG_LINEAR:
-                sampler_describe.Filter = D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR; break;
-            case jegl_texture::sampling::MAG_NEAREST:
-                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT; break;
-            default:
-                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
-            break;
-        case jegl_texture::sampling::MIN_LINEAR_LINEAR_MIP:
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
-            {
-            case jegl_texture::sampling::MAG_LINEAR:
-                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR; break;
-            case jegl_texture::sampling::MAG_NEAREST:
-                sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR; break;
-            default:
-                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
-            break;
-        case jegl_texture::sampling::MIN_NEAREST_LINEAR_MIP:
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
-            {
-            case jegl_texture::sampling::MAG_LINEAR:
-                sampler_describe.Filter = D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR; break;
-            case jegl_texture::sampling::MAG_NEAREST:
-                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR; break;
-            default:
-                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
-            break;
-        case jegl_texture::sampling::MIN_LINEAR_NEAREST_MIP:
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
-            {
-            case jegl_texture::sampling::MAG_LINEAR:
-                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT; break;
-            case jegl_texture::sampling::MAG_NEAREST:
-                sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT; break;
-            default:
-                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
-            break;
-        case jegl_texture::sampling::MIN_NEAREST_NEAREST_MIP:
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
-            {
-            case jegl_texture::sampling::MAG_LINEAR:
-                sampler_describe.Filter = D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT; break;
-            case jegl_texture::sampling::MAG_NEAREST:
-                sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT; break;
-            default:
-                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
-            break;
-        default:
-            jeecs::debug::logerr("Unknown texture min filter method(%04x)",
-                resource->m_raw_texture_data->m_sampling);
-        }
-
-        switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_X_METHOD_MASK)
-        {
-        case jegl_texture::sampling::CLAMP_EDGE_X:
-            sampler_describe.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP; break;
-        case jegl_texture::sampling::REPEAT_X:
-            sampler_describe.AddressU = D3D11_TEXTURE_ADDRESS_WRAP; break;
-        default:
-            jeecs::debug::logerr("Unknown texture wrap method in x(%04x)",
-                resource->m_raw_texture_data->m_sampling);
-        }
-        switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_Y_METHOD_MASK)
-        {
-        case jegl_texture::sampling::CLAMP_EDGE_Y:
-            sampler_describe.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP; break;
-        case jegl_texture::sampling::REPEAT_Y:
-            sampler_describe.AddressV = D3D11_TEXTURE_ADDRESS_WRAP; break;
-        default:
-            jeecs::debug::logerr("Unknown texture wrap method in y(%04x)",
-                resource->m_raw_texture_data->m_sampling);
-        }
-        sampler_describe.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-        sampler_describe.ComparisonFunc = D3D11_COMPARISON_NEVER;
-        sampler_describe.MinLOD = 0;
-        sampler_describe.MaxLOD = D3D11_FLOAT32_MAX;
-        JERCHECK(context->m_dx_device->CreateSamplerState(
-            &sampler_describe,
-            jedx11_texture_res->m_texture_sampler.GetAddressOf()));
 
         if ((resource->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF)
             == jegl_texture::format::FRAMEBUF)
@@ -1427,6 +1389,14 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
         context->m_dx_context->OMSetBlendState(shader->m_blend.Get(), _useless, UINT_MAX);
         context->m_dx_context->OMSetDepthStencilState(shader->m_depth.Get(), 0);
 
+        for (auto& sampler : shader->m_samplers)
+        {
+            context->m_dx_context->VSSetSamplers(
+                sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
+            context->m_dx_context->PSSetSamplers(
+                sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
+        }
+
         break;
     }
     case jegl_resource::type::TEXTURE:
@@ -1434,14 +1404,8 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
         auto* texture = std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
         if (texture->m_texture_view.Get() != nullptr)
         {
-            if (context->m_next_binding_texture_place < 16)
-            context->m_dx_context->VSSetSamplers(
-                context->m_next_binding_texture_place, 1, texture->m_texture_sampler.GetAddressOf());
             context->m_dx_context->VSSetShaderResources(
                 context->m_next_binding_texture_place, 1, texture->m_texture_view.GetAddressOf());
-            if (context->m_next_binding_texture_place < 16)
-            context->m_dx_context->PSSetSamplers(
-                context->m_next_binding_texture_place, 1, texture->m_texture_sampler.GetAddressOf());
             context->m_dx_context->PSSetShaderResources(
                 context->m_next_binding_texture_place, 1, texture->m_texture_view.GetAddressOf());
         }

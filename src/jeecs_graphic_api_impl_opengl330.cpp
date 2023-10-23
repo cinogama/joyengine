@@ -497,57 +497,12 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
 
         if (msaa_level == 0)
         {
-            // Apply wrap setting
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_X_METHOD_MASK)
-            {
-            case jegl_texture::sampling::CLAMP_EDGE_X:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
-            case jegl_texture::sampling::REPEAT_X:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
-            default:
-                jeecs::debug::logerr("Unknown texture wrap method in x(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::WRAP_Y_METHOD_MASK)
-            {
-            case jegl_texture::sampling::CLAMP_EDGE_Y:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
-            case jegl_texture::sampling::REPEAT_Y:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
-            default:
-                jeecs::debug::logerr("Unknown texture wrap method in y(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
+            assert(GL_TEXTURE_2D == gl_texture_type);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-            // Apply fliter setting
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MIN_FILTER_MASK)
-            {
-            case jegl_texture::sampling::MIN_LINEAR:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_LINEAR); break;
-            case jegl_texture::sampling::MIN_NEAREST:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST); break;
-            case jegl_texture::sampling::MIN_LINEAR_LINEAR_MIP:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); break;
-            case jegl_texture::sampling::MIN_NEAREST_LINEAR_MIP:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR); break;
-            case jegl_texture::sampling::MIN_LINEAR_NEAREST_MIP:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST); break;
-            case jegl_texture::sampling::MIN_NEAREST_NEAREST_MIP:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST); break;
-            default:
-                jeecs::debug::logerr("Unknown texture min filter method(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
-            switch (resource->m_raw_texture_data->m_sampling & jegl_texture::sampling::MAG_FILTER_MASK)
-            {
-            case jegl_texture::sampling::MAG_LINEAR:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_MAG_FILTER, GL_LINEAR); break;
-            case jegl_texture::sampling::MAG_NEAREST:
-                glTexParameteri(gl_texture_type, GL_TEXTURE_MAG_FILTER, GL_NEAREST); break;
-            default:
-                jeecs::debug::logerr("Unknown texture mag filter method(%04x)",
-                    resource->m_raw_texture_data->m_sampling);
-            }
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         }
         if (is_depth)
         {
@@ -726,7 +681,7 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
         jeecs::debug::logerr("Unknown resource type when initing resource(%p), please check.", resource);
         break;
     }
-       
+
 }
 
 thread_local static jegl_shader::depth_test_method  ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
@@ -861,9 +816,63 @@ inline void _gl_update_shader_state(jegl_shader* shader)
 inline void _gl_using_shader_program(jegl_resource* resource)
 {
     if (resource->m_raw_shader_data != nullptr)
+    {
         // TODO; Move update shader uniforms here.
         _gl_update_shader_state(resource->m_raw_shader_data);
 
+        for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
+        {
+            auto& sampler = resource->m_raw_shader_data->m_sampler_methods[i];
+            for (size_t id = 0; i < sampler.m_pass_id_count; ++id)
+            {
+                glActiveTexture(GL_TEXTURE0 + sampler.m_pass_ids[id]);
+                switch (sampler.m_mag)
+                {
+                case jegl_shader::fliter_mode::LINEAR:
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); break;
+                case jegl_shader::fliter_mode::NEAREST:
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); break;
+                default:
+                    abort();
+                }
+                switch (sampler.m_min)
+                {
+                case jegl_shader::fliter_mode::LINEAR:
+                    if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                    else
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+                    break;
+                case jegl_shader::fliter_mode::NEAREST:
+                    if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+                    else
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+                    break;
+                default:
+                    abort();
+                }
+                switch (sampler.m_uwrap)
+                {
+                case jegl_shader::wrap_mode::CLAMP:
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
+                case jegl_shader::wrap_mode::REPEAT:
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
+                default:
+                    abort();
+                }
+                switch (sampler.m_vwrap)
+                {
+                case jegl_shader::wrap_mode::CLAMP:
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
+                case jegl_shader::wrap_mode::REPEAT:
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
+                default:
+                    abort();
+                }
+            }
+        }
+    }
     glUseProgram(resource->m_handle.m_uint1);
 }
 
@@ -894,10 +903,10 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
     switch (resource->m_type)
     {
     case jegl_resource::type::SHADER:
-        _gl_using_shader_program(resource); 
+        _gl_using_shader_program(resource);
         break;
     case jegl_resource::type::TEXTURE:
-        _gl_using_texture2d(gthread, resource); 
+        _gl_using_texture2d(gthread, resource);
         break;
     case jegl_resource::type::VERTEX:
     {
@@ -1020,7 +1029,7 @@ void gl_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, si
         h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
     glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }
-void gl_clear_framebuffer_color(jegl_thread*,  float color[4])
+void gl_clear_framebuffer_color(jegl_thread*, float color[4])
 {
     glClearColor(color[0], color[1], color[2], color[3]);
     glClear(GL_COLOR_BUFFER_BIT);
