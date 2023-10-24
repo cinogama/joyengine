@@ -750,6 +750,32 @@ R"(
 
 )";
 
+enum class BackEndType
+{
+    OPENGL330,
+    D3D11
+};
+
+bool _stop_work_flag = false;
+BackEndType _back_end_type;
+
+struct key_state
+{
+    bool m_last_frame_down;
+    bool m_this_frame_down;
+};
+
+std::mutex _key_state_record_mx;
+std::unordered_map<jeecs::input::keycode, key_state> _key_state_record;
+
+struct gui_wo_job_coroutine
+{
+    wo_vm work_vm;
+    gui_wo_job_coroutine* last;
+};
+jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
+jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
+
 WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::BeginTooltip();
@@ -1079,7 +1105,16 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 3);
     jegl_using_resource((*texture)->resouce());
 
-    list->AddImage((ImTextureID)jegl_native_resource((*texture)->resouce()), val2vec2(args + 1), val2vec2(args + 2), ImVec2(0, 1), ImVec2(1, 0), val2color32(args + 4));
+    ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
+    if (_back_end_type == BackEndType::D3D11
+        && (*texture)->resouce()->m_raw_texture_data != nullptr
+        && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    {
+        uvmin = ImVec2(0.0f, 0.0f);
+        uvmax = ImVec2(1.0f, 1.0f);
+    }
+
+    list->AddImage((ImTextureID)jegl_native_resource((*texture)->resouce()), val2vec2(args + 1), val2vec2(args + 2), uvmin, uvmax, val2color32(args + 4));
     return wo_ret_void(vm);
 }
 
@@ -1452,24 +1487,33 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
 
     jegl_using_resource((*texture)->resouce());
 
+    ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
+    if (_back_end_type == BackEndType::D3D11
+        && (*texture)->resouce()->m_raw_texture_data != nullptr
+        && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    {
+        uvmin = ImVec2(0.0f, 0.0f);
+        uvmax = ImVec2(1.0f, 1.0f);
+    }
+
     if (argc == 1)
         ImGui::Image((ImTextureID)jegl_native_resource((*texture)->resouce()),
             ImVec2(
                 (float)((*texture)->resouce())->m_raw_texture_data->m_width,
                 (float)((*texture)->resouce())->m_raw_texture_data->m_height
-            ), ImVec2(0, 1), ImVec2(1, 0));
+            ), uvmin, uvmax);
     else if (argc == 2)
         ImGui::Image((ImTextureID)jegl_native_resource((*texture)->resouce()),
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
-            ), ImVec2(0, 1), ImVec2(1, 0));
+            ), uvmin, uvmax);
     else if (argc == 3)
         ImGui::Image((ImTextureID)jegl_native_resource((*texture)->resouce()),
             ImVec2(
                 wo_float(args + 1),
                 wo_float(args + 2)
-            ), ImVec2(0, 1), ImVec2(1, 0));
+            ), uvmin, uvmax);
 
     return wo_ret_void(vm);
 }
@@ -1479,25 +1523,35 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
     jegl_using_resource((*texture)->resouce());
+
+    ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
+    if (_back_end_type == BackEndType::D3D11
+        && (*texture)->resouce()->m_raw_texture_data != nullptr
+        && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    {
+        uvmin = ImVec2(0.0f, 0.0f);
+        uvmax = ImVec2(1.0f, 1.0f);
+    }
+
     bool result = false;
     if (argc == 1)
         result = ImGui::ImageButton((ImTextureID)jegl_native_resource((*texture)->resouce()),
             ImVec2(
                 (float)((*texture)->resouce())->m_raw_texture_data->m_width,
                 (float)((*texture)->resouce())->m_raw_texture_data->m_height
-            ), ImVec2(0, 1), ImVec2(1, 0));
+            ), uvmin, uvmax);
     else if (argc == 2)
         result = ImGui::ImageButton((ImTextureID)jegl_native_resource((*texture)->resouce()),
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
-            ), ImVec2(0, 1), ImVec2(1, 0));
+            ), uvmin, uvmax);
     else if (argc == 3)
         result = ImGui::ImageButton((ImTextureID)jegl_native_resource((*texture)->resouce()),
             ImVec2(
                 wo_float(args + 1),
                 wo_float(args + 2)
-            ), ImVec2(0, 1), ImVec2(1, 0));
+            ), uvmin, uvmax);
 
     return wo_ret_bool(vm, result);
 }
@@ -1782,14 +1836,6 @@ WO_API wo_api je_gui_combo(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-struct gui_wo_job_coroutine
-{
-    wo_vm work_vm;
-    gui_wo_job_coroutine* last;
-};
-jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
-jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
-
 WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
 {
     wo_value jobfunc = args + 1;
@@ -1809,21 +1855,11 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-bool _stop_work_flag = false;
 WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args, size_t argc)
 {
     _stop_work_flag = true;
     return wo_ret_void(vm);
 }
-
-struct key_state
-{
-    bool m_last_frame_down;
-    bool m_this_frame_down;
-};
-
-std::mutex _key_state_record_mx;
-std::unordered_map<jeecs::input::keycode, key_state> _key_state_record;
 
 WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args, size_t argc)
 {
@@ -2095,6 +2131,7 @@ void jegui_init_dx11(
     void* d11context,
     bool reboot)
 {
+    _back_end_type = BackEndType::D3D11;
     _jegui_init_basic();
     ImGui_ImplWin32_Init(window_handle);
     ImGui_ImplDX11_Init(
@@ -2128,6 +2165,7 @@ bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #endif
 void jegui_init_gl330(void* window_handle, bool reboot)
 {
+    _back_end_type = BackEndType::OPENGL330;
     _jegui_init_basic();
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
     ImGui_ImplOpenGL3_Init("#version 330 core");

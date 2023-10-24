@@ -58,7 +58,7 @@ public func frag(vf: v2f)
 
     let shadow_buffer = je_light2d_defer_shadow;
 
-    let uv = (vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.;
+    let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);
     let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_light2d_resolutin, uv);
 
     let result = je_color->xyz * je_color->w * shadow_factor;
