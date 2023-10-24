@@ -178,7 +178,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     },
                     { 3, 2, 3 });
 
-            default_texture = graphic::texture::create(2, 2, jegl_texture::format::RGBA, jegl_texture::sampling::NEAREST);
+            default_texture = graphic::texture::create(2, 2, jegl_texture::format::RGBA);
             default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
             default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
             default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
@@ -984,7 +984,7 @@ public let frag =
             DeferLight2DResource()
             {
                 using namespace jeecs::graphic;
-                _no_shadow = texture::create(1, 1, jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
+                _no_shadow = texture::create(1, 1, jegl_texture::format::RGBA);
                 _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
 
                 _screen_vertex = vertex::create(jegl_vertex::type::TRIANGLESTRIP,
@@ -1553,19 +1553,19 @@ public func frag(_: v2f)
                                     = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
                                             // 漫反射颜色
-                                            {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT},
+                                            jegl_texture::format::RGBA,
                                             // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT },
+                                            jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16),
                                             // 视空间坐标(RGB) Alpha通道暂时留空
-                                            {jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT },
+                                            jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16),
                                             // 深度缓冲区
-                                            {jegl_texture::format::DEPTH, jegl_texture::sampling::DEFAULT },
+                                            jegl_texture::format::DEPTH,
                                         });
                                 light2dpostpass->post_light_target
                                     = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
                                             // 光渲染结果
-                                            {(jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::COLOR16), jegl_texture::sampling::DEFAULT },
+                                            (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::COLOR16),
                                         });
                             }
                         }
@@ -1610,7 +1610,7 @@ public func frag(_: v2f)
                                                 shadow->shadow_buffer = graphic::framebuffer::create(
                                                     shadow->resolution_width, shadow->resolution_height,
                                                     {
-                                                        {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT}
+                                                        jegl_texture::format::RGBA,
                                                         // Only store shadow value to R, FBO in opengl not support rend to MONO
                                                     }
                                                 );

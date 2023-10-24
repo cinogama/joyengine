@@ -525,10 +525,9 @@ namespace editor::gui::tilemap
         m_tile_size: (int, int),
     }
     {
-        func create(tilew: int, tileh: int, sample_method: graphic::texture::sampling)
+        func create(tilew: int, tileh: int)
         {
             let chunktex = new! graphic::texture(CHUNK_TILE_SIZE * tilew, CHUNK_TILE_SIZE * tileh);
-            chunktex->set_sampling_method(sample_method);
             return TileChunk{
                 m_chunk_texture = chunktex,
                 m_tile_size = (tilew, tileh),

@@ -200,9 +200,6 @@ namespace editor::gui::edit_forms
                                                 ;
                                             ;
                                         let tex = new! je::graphic::texture(ctx.x_pixel_count, ctx.y_pixel_count);
-                                        tex->set_sampling_method(
-                                            je::graphic::texture::sampling::MIN_NEAREST + 
-                                            je::graphic::texture::sampling::MAG_NEAREST);
                                         einst->bind_texture(0, tex);
 
                                         let default_shader_path = "@/resource/shader/Unlit.shader";

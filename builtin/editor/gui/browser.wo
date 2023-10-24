@@ -1039,14 +1039,6 @@ namespace $$MODULE_NAME$$
             {
                 update_texture(context, path.path->tostring());
             }
-            if (MenuItem("设置采样方式"))
-            {
-                using je::editor;
-                let image_samping_method = je::editor::get_texture_sampling_method_by_path(path.path->tostring);
-
-                drawpannel::modify_sampling_method(path.path->tostring, image_samping_method, 
-                    \method = do je::editor::update_texture_sampling_method_by_path(path.path->tostring, method););
-            }
             if (MenuItem("预览并编辑"))
             {
                 match (je::graphic::texture::load(path.path->tostring))

@@ -459,7 +459,7 @@ jegl_resource* _create_resource()
     return res;
 }
 
-jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling)
+jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format)
 {
     jegl_resource* texture = _create_resource();
     texture->m_type = jegl_resource::TEXTURE;
@@ -480,32 +480,9 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::fo
     texture->m_raw_texture_data->m_width = width;
     texture->m_raw_texture_data->m_height = height;
     texture->m_raw_texture_data->m_format = format;
-    texture->m_raw_texture_data->m_sampling = sampling;
     texture->m_raw_texture_data->m_modified = false;
 
     return texture;
-}
-
-bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::sampling* samp)
-{
-    if (jeecs_file* image_cache = jeecs_load_cache_file(path, IMAGE_CACHE_VERSION, -1))
-    {
-        jeecs_file_read(samp, sizeof(jegl_texture::sampling), 1, image_cache);
-        jeecs_file_close(image_cache);
-        return true;
-    }
-    return false;
-}
-
-bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::sampling samp)
-{
-    if (void* image_cache = jeecs_create_cache_file(path, IMAGE_CACHE_VERSION, 0))
-    {
-        jeecs_write_cache_file(&samp, sizeof(jegl_texture::sampling), 1, image_cache);
-        jeecs_close_cache_file(image_cache);
-        return true;
-    }
-    return false;
 }
 
 jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
@@ -1026,15 +1003,9 @@ jegl_resource* jegl_load_texture(const char* path)
             return nullptr;
         }
 
-        // Read samping config from cache file...
-        jegl_texture::sampling sampling_method;
-        if (!_jegl_read_texture_sampling_cache(path, &sampling_method))
-            sampling_method = jegl_texture::sampling::DEFAULT;
-
         texture->m_raw_texture_data->m_width = (size_t)w;
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
-        texture->m_raw_texture_data->m_sampling = sampling_method;
         texture->m_raw_texture_data->m_modified = false;
 
         return jegl_try_update_shared_resource(texture, jegl_resource::type::TEXTURE);
@@ -1127,7 +1098,6 @@ jegl_resource* jegl_create_vertex(
 jegl_resource* jegl_create_framebuf(
     size_t width, size_t height,
     const jegl_texture::format* attachment_formats,
-    const jegl_texture::sampling* attachment_samlings,
     size_t attachment_count)
 {
     if (width == 0 || height == 0 || attachment_count == 0)
@@ -1152,7 +1122,7 @@ jegl_resource* jegl_create_framebuf(
 
         for (size_t i = 0; i < attachment_count; ++i)
             attachments[i] = jeecs::graphic::texture::create(width, height,
-                jegl_texture::format(attachment_formats[i] | jegl_texture::format::FRAMEBUF), jegl_texture::sampling::DEFAULT);
+                jegl_texture::format(attachment_formats[i] | jegl_texture::format::FRAMEBUF));
     }
 
     framebuf->m_raw_framebuf_data->m_output_attachments = (jegl_frame_buffer::attachment_t*)attachments;

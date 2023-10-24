@@ -30,119 +30,6 @@ namespace editor::gui::drawpannel
             jeapi::gui::form::errmsg("图像保存失败", F"无法保存图像到{path}");
         return result;
     }
-
-    public func modify_sampling_method(path: string, method: je::graphic::texture::sampling, callback: (je::graphic::texture::sampling)=>void)
-    {
-        launch(func(method: mutable<je::graphic::texture::sampling>){
-            je::gui::SetNextWindowSizeConstraints((300., 250.), (300., 250.));
-            let mut open = true;
-            match (BeginOpen(F"编辑图片{path}"))
-            {
-            value(show)?
-                if (show)
-                {
-                    static let MIN_SAMPLING_METHODS = {
-                        ["线性采样"] = je::graphic::texture::sampling::MIN_LINEAR,
-                        ["临近采样"] = je::graphic::texture::sampling::MIN_NEAREST,
-                        ["MIN_NEAREST_NEAREST_MIP"] = je::graphic::texture::sampling::MIN_NEAREST_NEAREST_MIP,
-                        ["MIN_LINEAR_NEAREST_MIP"] = je::graphic::texture::sampling::MIN_LINEAR_NEAREST_MIP,
-                        ["MIN_NEAREST_LINEAR_MIP"] = je::graphic::texture::sampling::MIN_NEAREST_LINEAR_MIP,
-                        ["MIN_LINEAR_LINEAR_MIP"] = je::graphic::texture::sampling::MIN_LINEAR_LINEAR_MIP,
-                    };
-                    static let MAG_SAMPLING_METHODS = {
-                        ["线性采样"] = je::graphic::texture::sampling::MAG_LINEAR,
-                        ["临近采样"] = je::graphic::texture::sampling::MAG_NEAREST,
-                    };
-                    static let X_SAMPLING_METHODS = {
-                        ["截断"] = je::graphic::texture::sampling::CLAMP_EDGE_X,
-                        ["重复"] = je::graphic::texture::sampling::REPEAT_X,
-                    };
-                    static let Y_SAMPLING_METHODS = {
-                        ["截断"] = je::graphic::texture::sampling::CLAMP_EDGE_Y,
-                        ["重复"] = je::graphic::texture::sampling::REPEAT_Y,
-                    };
-
-                    static let MIN_SAMPLING_METHODS_NAMES = MIN_SAMPLING_METHODS->keys;
-                    static let MIN_SAMPLING_METHODS_VALUES = MIN_SAMPLING_METHODS->vals;
-                    static let MAG_SAMPLING_METHODS_NAMES = MAG_SAMPLING_METHODS->keys;
-                    static let MAG_SAMPLING_METHODS_VALUES = MAG_SAMPLING_METHODS->vals;
-
-                    static let X_SAMPLING_METHODS_NAMES = X_SAMPLING_METHODS->keys;
-                    static let X_SAMPLING_METHODS_VALUES = X_SAMPLING_METHODS->vals;
-                    static let Y_SAMPLING_METHODS_NAMES = Y_SAMPLING_METHODS->keys;
-                    static let Y_SAMPLING_METHODS_VALUES = Y_SAMPLING_METHODS->vals;
-
-                    Text("采样设置");
-                    Separator();
-                    match (Combo("缩小时", 
-                        MIN_SAMPLING_METHODS_NAMES, 
-                        MIN_SAMPLING_METHODS_VALUES
-                            ->find(std::bitand(method->get: int, je::graphic::texture::sampling::MIN_FILTER_MASK: int): je::graphic::texture::sampling)))
-                    {
-                    value(newselect)?
-                        method->set(std::bitnot(je::graphic::texture::sampling::MIN_FILTER_MASK: int)
-                            ->std::bitand(method->get: int)
-                            ->std::bitor(MIN_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
-                    none?
-                        ;
-                    }
-
-                    match (Combo("放大时", 
-                        MAG_SAMPLING_METHODS_NAMES, 
-                        MAG_SAMPLING_METHODS_VALUES
-                            ->find(std::bitand(method->get: int, je::graphic::texture::sampling::MAG_FILTER_MASK: int): je::graphic::texture::sampling)))
-                    {
-                    value(newselect)?
-                        method->set(std::bitnot(je::graphic::texture::sampling::MAG_FILTER_MASK: int)
-                            ->std::bitand(method->get: int)
-                            ->std::bitor(MAG_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
-                    none?
-                        ;
-                    }
-                    
-                    Separator();
-
-                    match (Combo("X方向", 
-                        X_SAMPLING_METHODS_NAMES, 
-                        X_SAMPLING_METHODS_VALUES
-                            ->find(std::bitand(method->get: int, je::graphic::texture::sampling::WRAP_X_METHOD_MASK: int): je::graphic::texture::sampling)))
-                    {
-                    value(newselect)?
-                        method->set(std::bitnot(je::graphic::texture::sampling::WRAP_X_METHOD_MASK: int)
-                            ->std::bitand(method->get: int)
-                            ->std::bitor(X_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
-                    none?
-                        ;
-                    }
-
-                    match (Combo("Y方向", 
-                        Y_SAMPLING_METHODS_NAMES, 
-                        Y_SAMPLING_METHODS_VALUES
-                            ->find(std::bitand(method->get: int, je::graphic::texture::sampling::WRAP_Y_METHOD_MASK: int): je::graphic::texture::sampling)))
-                    {
-                    value(newselect)?
-                        method->set(std::bitnot(je::graphic::texture::sampling::WRAP_Y_METHOD_MASK: int)
-                            ->std::bitand(method->get: int)
-                            ->std::bitor(Y_SAMPLING_METHODS_VALUES[newselect]: int): je::graphic::texture::sampling);
-                    none?
-                        ;
-                    }
-
-                    if (Button("确认"))
-                    {
-                        open = false;
-                        callback(method->get);
-                    }
-                }
-            none?
-                open = false;
-            }
-            End();
-            
-            return open;
-        
-        }, (new! mutable(method), /**/));
-    }
     public using TextureSnapshot = struct
     {   
         m_width: int,
@@ -364,14 +251,6 @@ namespace editor::gui::drawpannel
                                             End();
                                             return open;
                                         }, ());
-                                    }
-                                    if (MenuItem("采样方式"))
-                                    {
-                                        drawpannel::modify_sampling_method(texture_path, texture->get_sampling_method, 
-                                            func(method){
-                                                texture->set_sampling_method(method);
-                                                history_mgr->mark_as_edited();
-                                            });
                                     }
                                     EndMenu();
                                 }
@@ -621,7 +500,6 @@ namespace editor::gui::drawpannel
                     {
                         if (save_texture_to_path(context, edited_texture, saving_path))
                         {
-                            do je::editor::update_texture_sampling_method_by_path(saving_path, edited_texture->get_sampling_method());
                             do entity
                                 ->> \eid = eid->justdo(
                                         \e = e->bind_texture(passid, je::graphic::texture::load(
@@ -762,15 +640,7 @@ namespace editor::gui::drawpannel
 
         let id_tex_list = used_texture_id_pass 
             ->> \id = (id, mut textures->get(id)
-                -> or(\= create_and_copy_0pass_texture()
-                        ->  func(tex)
-                            {
-                                tex->set_sampling_method(
-                                    je::graphic::texture::sampling::MIN_NEAREST + 
-                                    je::graphic::texture::sampling::MAG_NEAREST);
-                                return tex;
-                            }
-                    ;))
+                -> or(\= create_and_copy_0pass_texture();))
                 ;
             ;
         launch(edittexture, (

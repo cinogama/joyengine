@@ -50,7 +50,7 @@ WO_API wo_api wojeapi_set_able_shared_glresource(wo_vm vm, wo_value args, size_t
 
 WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_bool(vm,jegl_mark_shared_resources_outdated(wo_string(args + 0)));
+    return wo_ret_bool(vm, jegl_mark_shared_resources_outdated(wo_string(args + 0)));
 }
 
 WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args, size_t argc)
@@ -228,8 +228,8 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args, siz
         rbf->clearcolor = jeecs::math::vec4(0.f, 0.f, 0.f, 1.f);
         rbf->framebuffer = jeecs::graphic::framebuffer::create(
             (size_t)wo_int(args + 1), (size_t)wo_int(args + 2), {
-                {jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT},
-                {jegl_texture::format::DEPTH, jegl_texture::sampling::DEFAULT},
+                jegl_texture::format::RGBA,
+                jegl_texture::format::DEPTH,
             }
         );
     }
@@ -264,29 +264,6 @@ WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args, size_t argc)
         jeecs::debug::logerr("No RendToFramebuffer in specify entity when 'wojeapi_get_framebuf_texture'.");
     return wo_ret_option_none(vm);
 }
-
-bool _jegl_read_texture_sampling_cache(const char* path, jegl_texture::sampling* samp);
-bool _jegl_write_texture_sampling_cache(const char* path, jegl_texture::sampling samp);
-
-WO_API wo_api wojeapi_get_texture_sampling_method_by_path(wo_vm vm, wo_value args, size_t argc)
-{
-    //extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
-    //public func get_texture_sampling_method_by_path(path: string)=> sampling;
-    jegl_texture::sampling samp;
-    if (_jegl_read_texture_sampling_cache(wo_string(args + 0), &samp))
-        return wo_ret_int(vm, (wo_integer_t)samp);
-    return wo_ret_int(vm, (wo_integer_t)jegl_texture::sampling::DEFAULT);
-}
-
-WO_API wo_api wojeapi_update_texture_sampling_method_by_path(wo_vm vm, wo_value args, size_t argc)
-{
-    //extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
-    //public func update_texture_sampling_method_by_path(path: string, method: sampling)=> result<void, string>;
-    if (_jegl_write_texture_sampling_cache(wo_string(args + 0), (jegl_texture::sampling)wo_int(args + 1)))
-        return wo_ret_ok_void(vm);
-    return wo_ret_err_string(vm, "Failed to write image sampling method, maybe image file not exist.");
-}
-
 
 // ECS UNIVERSE
 WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args, size_t argc)
@@ -1242,7 +1219,7 @@ WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args, size_t argc)
 {
     auto loaded_texture = jeecs::graphic::texture::create(
-        (size_t)wo_int(args + 0), (size_t)wo_int(args + 1), jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
+        (size_t)wo_int(args + 0), (size_t)wo_int(args + 1), jegl_texture::format::RGBA);
 
     return wo_ret_gchandle(vm,
         new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
@@ -1275,20 +1252,6 @@ WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args, size_t argc)
         {
             delete (jeecs::graphic::texture::pixel*)ptr;
         });
-}
-
-WO_API wo_api wojeapi_texture_get_sampling_method(wo_vm vm, wo_value args, size_t argc)
-{
-    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    return wo_ret_int(vm, (*loaded_texture)->resouce()->m_raw_texture_data->m_sampling);
-}
-
-WO_API wo_api wojeapi_texture_set_sampling_method(wo_vm vm, wo_value args, size_t argc)
-{
-    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    (*loaded_texture)->resouce()->m_raw_texture_data->m_sampling = (jegl_texture::sampling)wo_int(args + 1);
-    (*loaded_texture)->resouce()->m_raw_texture_data->m_modified = true;
-    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args, size_t argc)
@@ -1611,7 +1574,7 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
         wo_map_set(out_map, key, val_in_map);
 
         wo_value uniform_value_data = wo_push_struct(vm, 5);
-        
+
         wo_set_int(elem, uniforms->n);
         wo_struct_set(uniform_value_data, 0, elem);
         wo_set_float(elem, uniforms->x);
@@ -1742,9 +1705,9 @@ WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args, size_t argc)
 {
     auto audiobuf = jeecs::audio::buffer::load(wo_string(args + 0));
     if (audiobuf)
-        return wo_ret_option_gchandle(vm, 
-            new jeecs::basic::resource<jeecs::audio::buffer>(audiobuf), nullptr, 
-            [](void* ptr) 
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::audio::buffer>(audiobuf), nullptr,
+            [](void* ptr)
             {
                 delete std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(ptr));
             });
@@ -1752,7 +1715,7 @@ WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args, size_t argc)
 }
 WO_API wo_api wojeapi_audio_buffer_byte_size(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::basic::resource<jeecs::audio::buffer>* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args+0);
+    jeecs::basic::resource<jeecs::audio::buffer>* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args + 0);
     return wo_ret_int(vm, (wo_integer_t)buf->get()->get_byte_size());
 }
 WO_API wo_api wojeapi_audio_buffer_byte_rate(wo_vm vm, wo_value args, size_t argc)
@@ -1868,7 +1831,7 @@ WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args, size_
 
 WO_API wo_api wojeapi_towoo_register_system(wo_vm vm, wo_value args, size_t argc)
 {
-    const jeecs::typing::type_info* result = 
+    const jeecs::typing::type_info* result =
         je_towoo_register_system(wo_string(args + 0), wo_string(args + 1));
     if (result != nullptr)
         return wo_ret_option_pointer(vm, (void*)result);
@@ -1878,7 +1841,7 @@ WO_API wo_api wojeapi_towoo_register_system(wo_vm vm, wo_value args, size_t argc
 WO_API wo_api wojeapi_towoo_unregister_system(wo_vm vm, wo_value args, size_t argc)
 {
     je_towoo_unregister_system((const jeecs::typing::type_info*)wo_pointer(args + 0));
-     return wo_ret_void(vm);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args, size_t argc)
@@ -2238,12 +2201,6 @@ namespace je
         extern("libjoyecs", "wojeapi_get_framebuf_texture")
         public func get_framebuf_texture(camera: entity, index: int)=> option<graphic::texture>;
 
-        extern("libjoyecs", "wojeapi_get_texture_sampling_method_by_path")
-        public func get_texture_sampling_method_by_path(path: string)=> graphic::texture::sampling;
-
-        extern("libjoyecs", "wojeapi_update_texture_sampling_method_by_path")
-        public func update_texture_sampling_method_by_path(path: string, method: graphic::texture::sampling)=> result<void, string>;
-
         extern("libjoyecs", "wojeapi_get_entity_arch_information")
         public func get_entity_arch_information(e: entity)=> (int, int, int); // chunk_size, entity_size, entity_count
 
@@ -2513,39 +2470,6 @@ namespace je
     {
         public using texture = gchandle
         {
-            public enum sampling
-            {
-                MIN_LINEAR = 0x0000,
-                MIN_NEAREST = 0x0001,
-                MIN_NEAREST_NEAREST_MIP = 0x0002,
-                MIN_LINEAR_NEAREST_MIP = 0x0003,
-                MIN_NEAREST_LINEAR_MIP = 0x0004,
-                MIN_LINEAR_LINEAR_MIP = 0x0005,
-
-                MAG_LINEAR = 0x0000,
-                MAG_NEAREST = 0x0010,
-
-                CLAMP_EDGE_X = 0x0000,
-                REPEAT_X = 0x0100,
-                CLAMP_EDGE_Y = 0x0000,
-                REPEAT_Y = 0x1000,
-
-                FILTER_METHOD_MASK = 0x00FF,
-                MIN_FILTER_MASK = 0x000F,
-                MAG_FILTER_MASK = 0x00F0,
-
-                WRAP_METHOD_MASK = 0xFF00,
-                WRAP_X_METHOD_MASK = 0x0F00,
-                WRAP_Y_METHOD_MASK = 0xF000,
-
-                // LINEAR = MIN_LINEAR | MAG_LINEAR,
-                // NEAREST = MIN_NEAREST | MAG_NEAREST,
-                // CLAMP_EDGE = CLAMP_EDGE_X | CLAMP_EDGE_Y,
-                // REPEAT = REPEAT_X | REPEAT_Y,
-
-                // DEFAULT = LINEAR | CLAMP_EDGE,
-            };
-
             extern("libjoyecs", "wojeapi_texture_open", slow)
             public func load(path: string)=> option<texture>;
 
@@ -2563,12 +2487,6 @@ namespace je
 
             extern("libjoyecs", "wojeapi_texture_get_pixel")
             public func pix(self: texture, pos: (int, int))=> pixel;
-
-            extern("libjoyecs", "wojeapi_texture_get_sampling_method")
-            public func get_sampling_method(self: texture)=> sampling;
-
-            extern("libjoyecs", "wojeapi_texture_set_sampling_method")
-            public func set_sampling_method(self: texture, method: sampling)=> void;
 
             public using pixel = gchandle;
             namespace pixel

@@ -14,9 +14,6 @@ namespace jeapi::gui::form
         trace: string)
     {
         let boom_icon = je::graphic::texture::create(7, 7);
-        boom_icon->set_sampling_method(
-            je::graphic::texture::sampling::MIN_NEAREST +
-            je::graphic::texture::sampling::MAG_NEAREST);
         
         for (let mut ix = 0; ix < 7; ix += 1)
             for (let mut iy = 0; iy < 7; iy += 1)

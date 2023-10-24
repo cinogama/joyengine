@@ -1519,38 +1519,6 @@ struct jegl_texture
 
         FORMAT_MASK = 0xFFF0,
     };
-    enum sampling : uint16_t
-    {
-        MIN_LINEAR = 0x0000,
-        MIN_NEAREST = 0x0001,
-        MIN_NEAREST_NEAREST_MIP = 0x0002,
-        MIN_LINEAR_NEAREST_MIP = 0x0003,
-        MIN_NEAREST_LINEAR_MIP = 0x0004,
-        MIN_LINEAR_LINEAR_MIP = 0x0005,
-
-        MAG_LINEAR = 0x0000,
-        MAG_NEAREST = 0x0010,
-
-        CLAMP_EDGE_X = 0x0000,
-        REPEAT_X = 0x0100,
-        CLAMP_EDGE_Y = 0x0000,
-        REPEAT_Y = 0x1000,
-
-        FILTER_METHOD_MASK = 0x00FF,
-        MIN_FILTER_MASK = 0x000F,
-        MAG_FILTER_MASK = 0x00F0,
-
-        WRAP_METHOD_MASK = 0xFF00,
-        WRAP_X_METHOD_MASK = 0x0F00,
-        WRAP_Y_METHOD_MASK = 0xF000,
-
-        LINEAR = MIN_LINEAR | MAG_LINEAR,
-        NEAREST = MIN_NEAREST | MAG_NEAREST,
-        CLAMP_EDGE = CLAMP_EDGE_X | CLAMP_EDGE_Y,
-        REPEAT = REPEAT_X | REPEAT_Y,
-
-        DEFAULT = LINEAR | CLAMP_EDGE,
-    };
 
     // NOTE:
     // * Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
@@ -1560,7 +1528,6 @@ struct jegl_texture
     size_t          m_height;
 
     format  m_format;
-    sampling m_sampling;
 
     bool            m_modified;
 };
@@ -1951,7 +1918,7 @@ jegl_create_texture [基本接口]
 请参见：
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling);
+JE_API jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format);
 
 /*
 jegl_load_vertex [基本接口] (暂未实现)
@@ -1989,7 +1956,6 @@ JE_API jegl_resource* jegl_create_framebuf(
     size_t                          width,
     size_t                          height,
     const jegl_texture::format* attachment_formats,
-    const jegl_texture::sampling* attachment_samlings,
     size_t                          attachment_count);
 
 typedef struct je_stb_font_data je_font;
@@ -2010,7 +1976,6 @@ JE_API je_font* je_font_load(
     const char* font_path,
     float                   scalex,
     float                   scaley,
-    jegl_texture::sampling  samp,
     size_t                  board_blank_size_x,
     size_t                  board_blank_size_y,
     je_font_char_updater_t  char_texture_updater);
@@ -6184,9 +6149,9 @@ namespace jeecs
                     return new texture(res);
                 return nullptr;
             }
-            static basic::resource<texture> create(size_t width, size_t height, jegl_texture::format format, jegl_texture::sampling sampling)
+            static basic::resource<texture> create(size_t width, size_t height, jegl_texture::format format)
             {
-                jegl_resource* res = jegl_create_texture(width, height, format, sampling);
+                jegl_resource* res = jegl_create_texture(width, height, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
@@ -6455,18 +6420,9 @@ namespace jeecs
             {
             }
         public:
-            static basic::resource<framebuffer> create(size_t reso_w, size_t reso_h, const std::vector<std::pair<jegl_texture::format, jegl_texture::sampling>>& attachment)
+            static basic::resource<framebuffer> create(size_t reso_w, size_t reso_h, const std::vector<jegl_texture::format>& attachment)
             {
-                std::vector<jegl_texture::format> formats;
-                std::vector<jegl_texture::sampling> samplings;
-
-                for (const auto& [format, sampling] : attachment)
-                {
-                    formats.push_back(format);
-                    samplings.push_back(sampling);
-                }
-
-                auto* res = jegl_create_framebuf(reso_w, reso_h, formats.data(), samplings.data(), attachment.size());
+                auto* res = jegl_create_framebuf(reso_w, reso_h, attachment.data(), attachment.size());
                 if (res != nullptr)
                     return new framebuffer(res);
                 return nullptr;
@@ -6695,13 +6651,11 @@ namespace jeecs
         public:
             const size_t          m_size;
             const basic::string   m_path;
-            const jegl_texture::sampling m_sampling;
         private:
-            font(je_font* font_resource, size_t size, const char* path, jegl_texture::sampling samp)noexcept
+            font(je_font* font_resource, size_t size, const char* path)noexcept
                 : m_font(font_resource)
                 , m_size(size)
                 , m_path(path)
-                , m_sampling(samp)
             {
 
             }
@@ -6709,18 +6663,17 @@ namespace jeecs
             static font* load(
                 const std::string& fontfile,
                 size_t                  size,
-                jegl_texture::sampling  samp = jegl_texture::sampling::DEFAULT,
                 size_t                  board_size = 0,
                 je_font_char_updater_t  char_texture_updater = nullptr)
             {
                 auto* font_res = je_font_load(
                     fontfile.c_str(), (float)size, (float)size,
-                    samp, board_size, board_size, char_texture_updater);
+                    board_size, board_size, char_texture_updater);
 
                 if (font_res == nullptr)
                     return nullptr;
 
-                return new font(font_res, size, fontfile.c_str(), samp);
+                return new font(font_res, size, fontfile.c_str());
             }
 
             ~font()
@@ -6861,7 +6814,7 @@ namespace jeecs
                 TEXT_OFFSET = { 0,0 };
                 used_font = &font_base;
 
-                auto new_texture = texture::create(size_x, size_y, jegl_texture::format::RGBA, jegl_texture::sampling::DEFAULT);
+                auto new_texture = texture::create(size_x, size_y, jegl_texture::format::RGBA);
                 assert(new_texture != nullptr);
                 std::memset(new_texture->resouce()->m_raw_texture_data->m_pixels, 0, size_x * size_y * 4);
 

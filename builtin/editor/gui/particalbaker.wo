@@ -182,7 +182,6 @@ extern public func _start_baking(context: ParticalContext, econtext: _EditorCont
         using je::graphic;
 
         let new_tex_cache = texture::create(partical_context.m_frame_size...);
-        new_tex_cache->set_sampling_method(texture::sampling::MIN_NEAREST + texture::sampling::MAG_NEAREST);
         baking_cache->unsafe::cast:<vec<texture>>->add(new_tex_cache);
     }
         
