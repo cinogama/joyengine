@@ -292,6 +292,9 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_KEYUP:
         dx11_handle_key_state(wParam, false);
         break;
+    case WM_MOUSEWHEEL:
+        je_io_set_wheel(0, je_io_wheel(0) + GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA);
+        return 0;
     case WM_MOUSEMOVE:
         return 0;
     default:
@@ -533,6 +536,7 @@ bool dx11_update(jegl_thread* ctx)
     je_io_set_windowsize(rect.right - rect.left, rect.bottom - rect.top);
 
     POINT point;
+    GetCursorPos(&point);
     ScreenToClient(context->m_window_handle, &point);
     je_io_set_mousepos(0, point.x, point.y);
 

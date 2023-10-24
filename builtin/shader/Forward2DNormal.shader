@@ -100,7 +100,7 @@ public func frag(vf: v2f)
         let light_effect_factor = max(float::zero, point_light_factor + parallel_light_factor);
 
         // 获取阴影, 如果当前像素被此灯光的阴影遮盖，则得到系数 0. 否则得到 1.
-        let shadow_factor = float::one - texture(je_shadow2ds[index], (vf.pos->xy / vf.pos->w + float2::one) / 2.)->x;
+        let shadow_factor = float::one - texture(je_shadow2ds[index], uvframebuf((vf.pos->xy / vf.pos->w + float2::one) / 2.))->x;
 
         normal_effect_self_luminescence =
             shadow_factor

@@ -279,7 +279,7 @@ namespace jeecs
                          const std::string unifrom_block = R"(
 float3 JEBUILTIN_Movement(float4x4 trans)
 {
-    return trans[3].xyz;
+    return float3(trans[0].w, trans[1].w, trans[2].w);
 }
 )";
                          built_in_srcs += unifrom_block;
@@ -547,7 +547,7 @@ float4 JEBUILTIN_AlphaTest(float4 color)
                         const std::string unifrom_block = R"(
 float3 JEBUILTIN_Movement(float4x4 trans)
 {
-    return trans[3].xyz;
+    return float3(trans[0].w, trans[1].w, trans[2].w);
 }
 )";
                         built_in_srcs += unifrom_block;
