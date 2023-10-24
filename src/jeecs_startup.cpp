@@ -49,6 +49,26 @@ wo_fail_handler _je_global_old_panic_handler = nullptr;
 wo_vm _je_global_panic_hooker = nullptr;
 wo_value _je_global_panic_hook_function;
 
+jegl_graphic_api_entry _jegl_host_graphic_api = nullptr;
+
+void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
+{
+    _jegl_host_graphic_api = api;
+}
+
+jegl_graphic_api_entry jegl_get_host_graphic_api(void)
+{
+    if (_jegl_host_graphic_api == nullptr)
+    {
+#ifdef JE_OS_WINDOWS
+        return jegl_using_dx11_apis;
+#else
+        return jegl_using_opengl330_apis;
+#endif
+    }
+    return _jegl_host_graphic_api;
+}
+
 void _jedbg_hook_woolang_panic(
     wo_vm vm,
     wo_string_t src_file,
@@ -98,8 +118,29 @@ WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args, size_t
 
 void je_init(int argc, char** argv)
 {
+    _jegl_host_graphic_api = nullptr;
+
     je_log_strat();
     wo_init(argc, argv);
+
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        std::string config = argv[i];
+        std::string value = argv[i + 1];
+        if (config == "--force-using-graphic-api" || config == "-gapi")
+        {
+            if (value == "dx11")
+                jegl_set_host_graphic_api(jegl_using_dx11_apis);
+            else if (value == "gl330")
+                jegl_set_host_graphic_api(jegl_using_opengl330_apis);
+            else if (value == "gles320")
+                jegl_set_host_graphic_api(jegl_using_opengles320_apis);
+            else if (value == "vk110")
+                jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
+            else
+                jeecs::debug::logwarn("Unknown graphic api named: '%s'.", value.c_str());
+        }
+    }
 
     jeecs_file_set_runtime_path(wo_exe_path());
 
@@ -280,7 +321,7 @@ void je_finish()
 
 const char* je_build_version()
 {
-    return "JoyEngine 4.1.14 " __TIMESTAMP__;
+    return "JoyEngine 4.2.0 " __TIMESTAMP__;
 }
 
 const char* je_build_commit()

@@ -458,7 +458,7 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
     context->MSAA_QUALITY = (size_t)msaa_quality;
 
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.BufferCount = 1;
+    sd.BufferCount = 2;
     sd.OutputWindow = context->m_window_handle;
     sd.Windowed = TRUE;
     sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;

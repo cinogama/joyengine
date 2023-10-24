@@ -1030,7 +1030,7 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let SubShadowSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+    let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
     let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
     let final_shadow = alphatest(float4::create(je_color->xyz, texture(main_texture, vf.uv)->w));
 
@@ -1080,7 +1080,7 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let SubShadowSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+    let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
     let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
     let final_shadow = alphatest(
         float4::create(
@@ -1133,7 +1133,7 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let SubShadowSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+    let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
     let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
     let final_shadow = alphatest(
         float4::create(

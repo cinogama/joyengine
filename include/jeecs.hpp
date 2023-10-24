@@ -2055,6 +2055,31 @@ JE_API void jegl_update_uniformbuf(
     size_t update_length);
 
 /*
+jegl_graphic_api_entry [类型]
+基础图形库的入口类型
+指向一个用于初始化基础图形接口的入口函数
+*/
+typedef void(* jegl_graphic_api_entry)(jegl_graphic_api*);
+
+/*
+jegl_set_host_graphic_api [基本接口]
+设置使用的图形库
+    * 在图形线程启动前或结束后设置生效
+    * 若不设置或设置为 nullptr，引擎将使用默认的图形接口、
+    * 请在je_init之后设置，引擎的初始化操作将重置此设置
+*/
+JE_API void jegl_set_host_graphic_api(jegl_graphic_api_entry api);
+
+/*
+jegl_get_host_graphic_api [基本接口]
+获取使用的图形库
+    * 若尚未使用 jegl_set_host_graphic_api 设置图形库接口，
+        则返回引擎根据平台决定使用的默认使用的图形库
+    * 否则返回 jegl_set_host_graphic_api 设置的接口
+*/
+JE_API jegl_graphic_api_entry jegl_get_host_graphic_api(void);
+
+/*
 jegl_using_opengl330_apis [基本接口]
 加载opengl v330 core API集合，通常与jegl_start_graphic_thread一起使用
 用于指定图形线程使用的基本图形库
@@ -2064,13 +2089,13 @@ jegl_using_opengl330_apis [基本接口]
 JE_API void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_using_vulkan_apis [基本接口] (暂未实现)
-加载vulkan API集合，通常与jegl_start_graphic_thread一起使用
+jegl_using_vulkan110_apis [基本接口] (暂未实现)
+加载vulkan API v1.1集合，通常与jegl_start_graphic_thread一起使用
 用于指定图形线程使用的基本图形库
 请参见：
     jegl_start_graphic_thread
 */
-JE_API void jegl_using_vulkan_apis(jegl_graphic_api* write_to_apis);
+JE_API void jegl_using_vulkan110_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_dx11_apis [基本接口] (暂未实现)

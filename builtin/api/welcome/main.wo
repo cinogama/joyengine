@@ -50,22 +50,6 @@ namespace jeapi::welcome
                     TextDisabled("Copyright (C) kcat.");
                     TextDisabled("OpenAL Soft is licensed under the LGPL License");
 
-                    Text("GLEW https://github.com/nigels-com/glew");
-                    TextDisabled("The OpenGL Extension Wrangler Library");
-                    TextDisabled("Copyright (C) 2002-2007, Milan Ikits <milan ikits@ieee.org>");
-                    TextDisabled("Copyright (C) 2002-2007, Marcelo E. Magallon <mmagallo@debian.org>");
-                    TextDisabled("Copyright (C) 2002, Lev Povalahev");
-                    TextDisabled("All rights reserved.");
-                    TextDisabled(
-@"GLEW is originally derived from the EXTGL project by Lev Povalahev. 
-The source code is licensed under the Modified BSD License, the Mesa 
-3-D License (MIT) and the Khronos License (MIT)."@);
-                    
-                    Text("GLFW https://www.glfw.org");
-                    TextDisabled("Copyright (c) 2002-2006 Marcus Geelnard.");
-                    TextDisabled("Copyright (c) 2006-2019 Camilla Löwy.");
-                    TextDisabled("GLFW is licensed under the zlib/libpng license.");
-                    
                     Text("STB https://github.com/nothings/stb");
                     TextDisabled("Copyright (c) 2017 Sean Barrett.");
                     TextDisabled("STB is licensed under the MIT License");
@@ -82,6 +66,24 @@ The source code is licensed under the Modified BSD License, the Mesa
                     TextDisabled("Copyright (c) 2021-2023 Cinogama project.");
                     TextDisabled("Woolang is licensed under the Apache License v2.0");
                     
+                    Text("使用下面这些库为 OpenGL3.3提供支持：");
+
+                    Text("GLEW https://github.com/nigels-com/glew");
+                    TextDisabled("The OpenGL Extension Wrangler Library");
+                    TextDisabled("Copyright (C) 2002-2007, Milan Ikits <milan ikits@ieee.org>");
+                    TextDisabled("Copyright (C) 2002-2007, Marcelo E. Magallon <mmagallo@debian.org>");
+                    TextDisabled("Copyright (C) 2002, Lev Povalahev");
+                    TextDisabled("All rights reserved.");
+                    TextDisabled(
+@"GLEW is originally derived from the EXTGL project by Lev Povalahev. 
+The source code is licensed under the Modified BSD License, the Mesa 
+3-D License (MIT) and the Khronos License (MIT)."@);
+                    
+                    Text("GLFW https://www.glfw.org");
+                    TextDisabled("Copyright (c) 2002-2006 Marcus Geelnard.");
+                    TextDisabled("Copyright (c) 2006-2019 Camilla Löwy.");
+                    TextDisabled("GLFW is licensed under the zlib/libpng license.");
+
                     Text("编辑器环境使用一些按原样提供的第三方工具:");
                     Text("CMake https://cmake.org/");
                     Text("rcedit https://github.com/electron/rcedit");
