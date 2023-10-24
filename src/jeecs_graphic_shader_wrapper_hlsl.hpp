@@ -69,11 +69,6 @@ namespace jeecs
                 return result;
             }
 
-            std::string _hlsl_pragma()
-            {
-                return R"()";
-            }
-
             std::string _generate_code_for_hlsl_impl(
                 _shader_wrapper_contex* contex,
                 std::string& out,
@@ -249,6 +244,11 @@ namespace jeecs
                 return varname;
             }
 
+            std::string _hlsl_pragma()
+            {
+                return R"()";
+            }
+
             std::string _generate_code_for_hlsl_vertex(shader_wrapper* wrap)
             {
                 _shader_wrapper_contex contex;
@@ -410,7 +410,7 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                 io_declear += "};\n";
 
                 io_declear += "struct v2f_t\n{\n";
-
+                io_declear += "    float4 vout_position: SV_POSITION0;\n";
                 size_t outid = 0;
                 INT_COUNT = 0;
                 FLOAT_COUNT = 0;
@@ -438,7 +438,7 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                     {
                         auto count = FLOAT3_4_COUNT++;
                         if (count == 0)
-                            io_declear += "SV_POSITION0";
+                            io_declear += "POSITION0";
                         else
                             io_declear += "COLOR" + std::to_string(count - 1);
                         break;
@@ -461,11 +461,13 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                 {
                     if (outid == 0)
                     {
-                        body_result += "    float4 _je_position = " + outvarname.second + ";\n";
-                        body_result += "    vout._v2f_" + std::to_string(outid) + " = "
-                            + "(_je_position + float4(0.0, 0.0, _je_position.w, 0.0))"
-                            "* float4(1.0, 1.0, 0.5, 1.0)"
-                            ";\n";
+                        body_result += "    float4 _je_position = ("
+                            + outvarname.second
+                            + " + float4(0.0, 0.0, "
+                            + outvarname.second
+                            + ".w, 0.0)) * float4(1.0, 1.0, 0.5, 1.0);\n";
+                        body_result += "    vout.vout_position = _je_position;\n";
+                        body_result += "    vout._v2f_" + std::to_string(outid) + " = _je_position;\n";
                     }
                     else
                     {
@@ -475,7 +477,7 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                     outid++;
                 }
 
-                body_result += "    return vout;\n}";
+                body_result += "    return vout;\n}\n";
 
                 return std::move(
                     "// Vertex shader source\n"
@@ -626,6 +628,8 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                 io_declear += "\n";
 
                 io_declear += "struct v2f_t\n{\n";
+                io_declear += "    float4 vout_position: SV_POSITION0;\n";
+
                 size_t outid = 0;
                 size_t INT_COUNT = 0;
                 size_t FLOAT_COUNT = 0;
@@ -653,7 +657,7 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                     {
                         auto count = FLOAT3_4_COUNT++;
                         if (count == 0)
-                            io_declear += "SV_POSITION0";
+                            io_declear += "POSITION0";
                         else
                             io_declear += "COLOR" + std::to_string(count - 1);
                         break;
@@ -693,7 +697,7 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
                     body_result += "    fout._out_" + std::to_string(outid++) + " = " + outvarname.second + ";\n";
                 }
 
-                body_result += "    return fout;\n}";
+                body_result += "    return fout;\n}\n";
 
                 return std::move(
                     "// Fragment shader source\n"

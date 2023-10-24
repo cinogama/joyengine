@@ -70,9 +70,10 @@ struct jedx11_shader
     jegl_dx11_context::MSWRLComPtr<ID3D11VertexShader> m_vertex;
     jegl_dx11_context::MSWRLComPtr<ID3D11PixelShader> m_fragment;
 
-    bool m_have_uniforms;
-    void* m_uniform_updating_buffer;
+    bool m_uniform_updated;
     jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniforms;
+    void* m_uniform_cpu_buffers;
+    size_t m_uniform_buffer_size;
 
     jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
     jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilState> m_depth;
@@ -581,7 +582,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
     case jegl_resource::type::SHADER:
     {
         jedx11_shader* jedx11_shader_res = new jedx11_shader;
-        jedx11_shader_res->m_uniform_updating_buffer = nullptr;
+        jedx11_shader_res->m_uniform_updated = false;
 
         bool shader_load_failed = false;
 
@@ -855,8 +856,8 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
                 last_elem_end_place = last_elem_end_place / DX11_ALLIGN_BASE * DX11_ALLIGN_BASE + DX11_ALLIGN_BASE;
 
             // Alloc constant buffer for this shader!
-            jedx11_shader_res->m_have_uniforms = (last_elem_end_place != 0);
-            if (jedx11_shader_res->m_have_uniforms)
+            jedx11_shader_res->m_uniform_buffer_size = last_elem_end_place;;
+            if (jedx11_shader_res->m_uniform_buffer_size != 0)
             {
                 D3D11_BUFFER_DESC const_buffer_describe;
 
@@ -871,6 +872,9 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
                 JERCHECK(context->m_dx_device->CreateBuffer(
                     &const_buffer_describe, nullptr,
                     jedx11_shader_res->m_uniforms.GetAddressOf()));
+
+                jedx11_shader_res->m_uniform_cpu_buffers = 
+                    malloc(last_elem_end_place);
             }
 
             D3D11_RASTERIZER_DESC rasterizer_describe;
@@ -1516,12 +1520,21 @@ void dx11_draw_vertex_with_shader(jegl_thread* ctx, jegl_resource* vert)
     assert(vert->m_type == jegl_resource::type::VERTEX);
 
     if (context->m_current_target_shader != nullptr
-        && context->m_current_target_shader->m_have_uniforms)
+        && context->m_current_target_shader->m_uniform_buffer_size != 0)
     {
-        if (context->m_current_target_shader->m_uniform_updating_buffer != nullptr)
+        if (context->m_current_target_shader->m_uniform_updated)
         {
+            context->m_current_target_shader->m_uniform_updated = false;
+            D3D11_MAPPED_SUBRESOURCE mappedData;
+            JERCHECK(context->m_dx_context->Map(
+                context->m_current_target_shader->m_uniforms.Get(), 0,
+                D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+            
+            memcpy(mappedData.pData,
+                context->m_current_target_shader->m_uniform_cpu_buffers,
+                context->m_current_target_shader->m_uniform_buffer_size);
+
             context->m_dx_context->Unmap(context->m_current_target_shader->m_uniforms.Get(), 0);
-            context->m_current_target_shader->m_uniform_updating_buffer = nullptr;
         }
         context->m_dx_context->VSSetConstantBuffers(0, 1,
             context->m_current_target_shader->m_uniforms.GetAddressOf());
@@ -1545,10 +1558,6 @@ void dx11_bind_texture(jegl_thread* ctx, jegl_resource* texture, size_t pass)
 void dx11_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
-
-    ID3D11ShaderResourceView* null_view = nullptr;
-    context->m_dx_context->VSSetShaderResources(0, 1, &null_view);
-    context->m_dx_context->PSSetShaderResources(0, 1, &null_view);
 
     if (framebuffer == nullptr)
     {
@@ -1623,37 +1632,31 @@ void dx11_set_uniform(jegl_thread* ctx, uint32_t location, jegl_shader::uniform_
 
     assert(context->m_current_target_shader != nullptr);
 
-    if (location == jeecs::typing::INVALID_UINT32
-        || !context->m_current_target_shader->m_have_uniforms)
+    if (location == jeecs::typing::INVALID_UINT32)
         return;
 
-    if (context->m_current_target_shader->m_uniform_updating_buffer == nullptr)
-    {
-        D3D11_MAPPED_SUBRESOURCE mappedData;
-        JERCHECK(context->m_dx_context->Map(
-            context->m_current_target_shader->m_uniforms.Get(), 0,
-            D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
-        context->m_current_target_shader->m_uniform_updating_buffer = mappedData.pData;
-    }
+    context->m_current_target_shader->m_uniform_updated = true;
+    assert(context->m_current_target_shader->m_uniform_buffer_size != 0);
+    assert(context->m_current_target_shader->m_uniform_cpu_buffers != nullptr);
 
     size_t data_size_byte_length = 0;
     switch (type)
     {
     case jegl_shader::INT:
     case jegl_shader::FLOAT:
-        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_updating_buffer + location), val, 4);
+        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 4);
         break;
     case jegl_shader::FLOAT2:
-        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_updating_buffer + location), val, 8);
+        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 8);
         break;
     case jegl_shader::FLOAT3:
-        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_updating_buffer + location), val, 12);
+        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 12);
         break;
     case jegl_shader::FLOAT4:
-        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_updating_buffer + location), val, 16);
+        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 16);
         break;
     case jegl_shader::FLOAT4X4:
-        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_updating_buffer + location), val, 64);
+        memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 64);
         break;
     default:
         jeecs::debug::logerr("Unknown uniform variable type to set."); break;

@@ -43,6 +43,32 @@ namespace jeecs
                 return get_type_name_from_type(val->get_type());
             }
 
+            std::string _generate_uniform_block_for_glsl(shader_wrapper* wrap)
+            {
+                std::string result;
+
+                for (auto* block : wrap->shader_struct_define_may_uniform_block)
+                {
+                    if (!block->variables.empty())
+                    {
+                        std::string uniform_block_decl =
+                            block->binding_place == jeecs::typing::INVALID_UINT32
+                            ? "struct " + block->name + "\n{\n"
+                            : "layout (std140) uniform " + block->name + "\n{\n";
+
+                        for (auto& variable_inform : block->variables)
+                            if (variable_inform.type == jegl_shader_value::type::STRUCT)
+                                uniform_block_decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
+                            else
+                                uniform_block_decl += "    " + get_type_name_from_type(variable_inform.type) + " " + variable_inform.name + ";\n";
+
+                        result += uniform_block_decl + "};\n";
+                    }
+                }
+
+                return result;
+            }
+
             std::string _generate_code_for_glsl_impl(
                 _shader_wrapper_contex* contex,
                 std::string& out,
@@ -187,32 +213,6 @@ namespace jeecs
                 return varname;
             }
 
-            std::string _generate_uniform_block_for_glsl(shader_wrapper* wrap)
-            {
-                std::string result;
-
-                for (auto* block : wrap->shader_struct_define_may_uniform_block)
-                {
-                    if (!block->variables.empty())
-                    {
-                        std::string uniform_block_decl =
-                            block->binding_place == jeecs::typing::INVALID_UINT32
-                            ? "struct " + block->name + "\n{\n"
-                            : "layout (std140) uniform " + block->name + "\n{\n";
-
-                        for (auto& variable_inform : block->variables)
-                            if (variable_inform.type == jegl_shader_value::type::STRUCT)
-                                uniform_block_decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
-                            else
-                                uniform_block_decl += "    " + get_type_name_from_type(variable_inform.type) + " " + variable_inform.name + ";\n";
-
-                        result += uniform_block_decl + "};\n";
-                    }
-                }
-
-                return result;
-            }
-
             std::string _glsl_pragma()
             {
                 return R"(
@@ -307,7 +307,7 @@ vec2 JEBUILTIN_Uvframebuffer(vec2 v)
                     body_result += "    _v2f_" + std::to_string(outid++) + " = " + outvarname.second + ";\n";
                 }
 
-                body_result += "\n}";
+                body_result += "\n}\n";
 
                 return std::move(
                     "// Vertex shader source\n"
@@ -317,7 +317,6 @@ vec2 JEBUILTIN_Uvframebuffer(vec2 v)
                     + io_declear
                     + body_result);
             }
-
             std::string _generate_code_for_glsl_fragment(shader_wrapper* wrap)
             {
                 _shader_wrapper_contex contex;
@@ -444,7 +443,7 @@ vec2 JEBUILTIN_Uvframebuffer(vec2 v)
                     body_result += "    _out_" + std::to_string(outid++) + " = " + outvarname.second + ";\n";
                 }
 
-                body_result += "\n}";
+                body_result += "\n}\n";
 
                 return std::move(
                     "// Fragment shader source\n"
