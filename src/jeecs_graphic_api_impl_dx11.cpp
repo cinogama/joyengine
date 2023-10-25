@@ -469,7 +469,6 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
     JERCHECK(dxgiFactory1->CreateSwapChain(
         context->m_dx_device.Get(), &sd, context->m_dx_swapchain.GetAddressOf()));
 
-
     // 可以禁止alt+enter全屏
     dxgiFactory1->MakeWindowAssociation(context->m_window_handle,
         DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
@@ -484,6 +483,21 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
         context->WINDOWS_SIZE_WIDTH, context->WINDOWS_SIZE_HEIGHT);
 
     jegui_init_dx11(
+        [](auto* res) {
+            auto* resource = std::launder(reinterpret_cast<jedx11_texture*>(res->m_handle.m_ptr));
+            return (void*)(intptr_t)resource->m_texture_view.Get();
+        },
+        [](auto* res) 
+        {
+            auto* shader = std::launder(reinterpret_cast<jedx11_shader*>(res->m_handle.m_ptr));
+            for (auto& sampler : shader->m_samplers)
+            {
+                _je_dx_current_thread_context->m_dx_context->VSSetSamplers(
+                    sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
+                _je_dx_current_thread_context->m_dx_context->PSSetSamplers(
+                    sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
+            }
+        },
         context->m_window_handle,
         context->m_dx_device.Get(),
         context->m_dx_context.Get(),
@@ -1411,7 +1425,7 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
         context->m_dx_context->VSSetShader(shader->m_vertex.Get(), nullptr, 0);
         context->m_dx_context->PSSetShader(shader->m_fragment.Get(), nullptr, 0);
         context->m_dx_context->IASetInputLayout(shader->m_vao.Get());
-
+        
         context->m_dx_context->RSSetState(shader->m_rasterizer.Get());
         float _useless[4] = {};
         context->m_dx_context->OMSetBlendState(shader->m_blend.Get(), _useless, UINT_MAX);
@@ -1424,7 +1438,6 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
             context->m_dx_context->PSSetSamplers(
                 sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
         }
-
         break;
     }
     case jegl_resource::type::TEXTURE:
@@ -1530,29 +1543,6 @@ void dx11_close_resource(jegl_thread* ctx, jegl_resource* resource)
         break;
     default:
         break;
-    }
-}
-
-void* dx11_native_resource(jegl_thread* gthread, jegl_resource* resource)
-{
-    switch (resource->m_type)
-    {
-    case jegl_resource::type::SHADER:
-        return nullptr;
-    case jegl_resource::type::TEXTURE:
-    {
-        auto* res = std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
-        return (void*)(intptr_t)res->m_texture_view.Get();
-    }
-    case jegl_resource::type::VERTEX:
-        return nullptr;
-    case jegl_resource::type::FRAMEBUF:
-        return nullptr;
-    case jegl_resource::type::UNIFORMBUF:
-        return nullptr;
-    default:
-        jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
-        return nullptr;
     }
 }
 
@@ -1719,7 +1709,6 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->init_resource = dx11_init_resource;
     write_to_apis->using_resource = dx11_using_resource;
     write_to_apis->close_resource = dx11_close_resource;
-    write_to_apis->native_resource = dx11_native_resource;
 
     write_to_apis->draw_vertex = dx11_draw_vertex_with_shader;
     write_to_apis->bind_texture = dx11_bind_texture;

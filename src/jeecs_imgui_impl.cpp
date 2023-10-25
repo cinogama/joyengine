@@ -778,6 +778,9 @@ jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
 jeecs::basic::resource<jeecs::graphic::shader> _jegl_rend_texture_shader;
 
+void* (*_jegl_get_native_texture)(jegl_resource*);
+void (*_jegl_bind_shader_sampler_state)(jegl_resource*);
+
 WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::BeginTooltip();
@@ -1102,7 +1105,7 @@ WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList* dlist = (ImDrawList*)wo_pointer(args + 0);
 
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 3);
     jegl_using_resource((*texture)->resouce());
@@ -1115,8 +1118,9 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
     }
-
-    list->AddImage((ImTextureID)jegl_native_resource((*texture)->resouce()), val2vec2(args + 1), val2vec2(args + 2), uvmin, uvmax, val2color32(args + 4));
+    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
+    dlist->AddImage((ImTextureID)_jegl_get_native_texture((*texture)->resouce()), val2vec2(args + 1), val2vec2(args + 2), uvmin, uvmax, val2color32(args + 4));
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
     return wo_ret_void(vm);
 }
 
@@ -1499,27 +1503,27 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
     }
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {jegl_using_resource(_jegl_rend_texture_shader->resouce()); }, nullptr);
+    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
     if (argc == 1)
-        ImGui::Image((ImTextureID)jegl_native_resource((*texture)->resouce()),
+        ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
             ImVec2(
                 (float)((*texture)->resouce())->m_raw_texture_data->m_width,
                 (float)((*texture)->resouce())->m_raw_texture_data->m_height
             ), uvmin, uvmax);
     else if (argc == 2)
-        ImGui::Image((ImTextureID)jegl_native_resource((*texture)->resouce()),
+        ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
             ), uvmin, uvmax);
     else if (argc == 3)
-        ImGui::Image((ImTextureID)jegl_native_resource((*texture)->resouce()),
+        ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
             ImVec2(
                 wo_float(args + 1),
                 wo_float(args + 2)
             ), uvmin, uvmax);
 
-    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+   dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
     return wo_ret_void(vm); 
 }
@@ -1542,21 +1546,21 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
     bool result = false;
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {jegl_using_resource(_jegl_rend_texture_shader->resouce()); }, nullptr);
+    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
     if (argc == 1)
-        result = ImGui::ImageButton((ImTextureID)jegl_native_resource((*texture)->resouce()),
+        result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
             ImVec2(
                 (float)((*texture)->resouce())->m_raw_texture_data->m_width,
                 (float)((*texture)->resouce())->m_raw_texture_data->m_height
             ), uvmin, uvmax);
     else if (argc == 2)
-        result = ImGui::ImageButton((ImTextureID)jegl_native_resource((*texture)->resouce()),
+        result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
             ImVec2(
                 ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
                 ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
             ), uvmin, uvmax);
     else if (argc == 3)
-        result = ImGui::ImageButton((ImTextureID)jegl_native_resource((*texture)->resouce()),
+        result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
             ImVec2(
                 wo_float(args + 1),
                 wo_float(args + 2)
@@ -2016,8 +2020,14 @@ WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-void _jegui_init_basic()
+void _jegui_init_basic(
+    void* (*get_img_res)(jegl_resource*),
+    void (*apply_shader_sampler)(jegl_resource*)
+)
 {
+    _jegl_get_native_texture = get_img_res;
+    _jegl_bind_shader_sampler_state = apply_shader_sampler;
+
     _jegl_rend_texture_shader = jeecs::graphic::shader::create(
         "!/builtin/imgui_image_displayer.shader", 
         R"(
@@ -2029,15 +2039,12 @@ CULL    (NONE);
 
 VAO_STRUCT! vin 
 {
-    // Make sure same as imgui.
-    vertex: float2,
-    col: float4,
+    vertex: float3,
     uv: float2,
 };
 
 using v2f = struct{
     pos: float4,
-    col: float4,
     uv: float2,
 };
 
@@ -2048,8 +2055,7 @@ using fout = struct{
 public func vert(v: vin)
 {
     return v2f{
-        pos = je_mvp * float4::create(v.vertex, 0., 1.),
-        col = v.col,
+        pos = float4::create(v.vertex, 1.),
         uv = v.uv,
     };
 }
@@ -2057,9 +2063,8 @@ public func frag(vf: v2f)
 {
     let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
     let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
-
     return fout{
-        color = vf.col * texture(main_texture, vf.uv)
+        color = texture(main_texture, vf.uv)
     };
 }
 )");
@@ -2183,13 +2188,15 @@ void _jegui_shutdown_basic(bool reboot)
 }
 #ifdef _WIN32
 void jegui_init_dx11(
+    void* (*get_img_res)(jegl_resource*),
+    void (*apply_shader_sampler)(jegl_resource*),
     void* window_handle,
     void* d11device,
     void* d11context,
     bool reboot)
 {
     _back_end_type = BackEndType::D3D11;
-    _jegui_init_basic();
+    _jegui_init_basic(get_img_res, apply_shader_sampler);
     ImGui_ImplWin32_Init(window_handle);
     ImGui_ImplDX11_Init(
         (ID3D11Device*)d11device,
@@ -2199,6 +2206,8 @@ void jegui_init_dx11(
 void jegui_update_dx11(
     jegl_thread* thread_context)
 {
+    jegl_using_resource(_jegl_rend_texture_shader->resouce());
+
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     _jegui_update_basic();
@@ -2220,16 +2229,22 @@ bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return false;
 }
 #endif
-void jegui_init_gl330(void* window_handle, bool reboot)
+void jegui_init_gl330(
+    void* (*get_img_res)(jegl_resource*),
+    void (*apply_shader_sampler)(jegl_resource*), 
+    void* window_handle,
+    bool reboot)
 {
     _back_end_type = BackEndType::OPENGL330;
-    _jegui_init_basic();
+    _jegui_init_basic(get_img_res, apply_shader_sampler);
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
     ImGui_ImplOpenGL3_Init("#version 330 core");
 }
 
 void jegui_update_gl330(jegl_thread* thread_context)
 {
+    jegl_using_resource(_jegl_rend_texture_shader->resouce());
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     _jegui_update_basic();

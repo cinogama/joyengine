@@ -264,7 +264,69 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
 
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);
-    jegui_init_gl330(context->WINDOWS_HANDLE, reboot);
+    jegui_init_gl330(
+        [](auto* res) {return (void*)(intptr_t)res->m_handle.m_uint1; }, 
+        [](auto* res) 
+        {
+            if (res->m_raw_shader_data != nullptr)
+            {
+                for (size_t i = 0; i < res->m_raw_shader_data->m_sampler_count; ++i)
+                {
+                    auto& sampler = res->m_raw_shader_data->m_sampler_methods[i];
+                    for (size_t id = 0; id < sampler.m_pass_id_count; ++id)
+                    {
+                        glActiveTexture(GL_TEXTURE0 + sampler.m_pass_ids[id]);
+                        switch (sampler.m_mag)
+                        {
+                        case jegl_shader::fliter_mode::LINEAR:
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); break;
+                        case jegl_shader::fliter_mode::NEAREST:
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); break;
+                        default:
+                            abort();
+                        }
+                        switch (sampler.m_min)
+                        {
+                        case jegl_shader::fliter_mode::LINEAR:
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                            /* if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                             else
+                                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);*/
+                            break;
+                        case jegl_shader::fliter_mode::NEAREST:
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                            /*if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+                            else
+                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);*/
+                            break;
+                        default:
+                            abort();
+                        }
+                        switch (sampler.m_uwrap)
+                        {
+                        case jegl_shader::wrap_mode::CLAMP:
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
+                        case jegl_shader::wrap_mode::REPEAT:
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
+                        default:
+                            abort();
+                        }
+                        switch (sampler.m_vwrap)
+                        {
+                        case jegl_shader::wrap_mode::CLAMP:
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
+                        case jegl_shader::wrap_mode::REPEAT:
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
+                        default:
+                            abort();
+                        }
+                    }
+                }
+            }
+        },
+        context->WINDOWS_HANDLE, reboot);
 
     return context;
 }
@@ -689,7 +751,7 @@ thread_local static jegl_shader::blend_method       ACTIVE_BLEND_SRC_MODE = jegl
 thread_local static jegl_shader::blend_method       ACTIVE_BLEND_DST_MODE = jegl_shader::blend_method::INVALID;
 thread_local static jegl_shader::cull_mode          ACTIVE_CULL_MODE = jegl_shader::cull_mode::INVALID;
 
-inline void _gl_update_depth_test_method(jegl_shader::depth_test_method mode)
+void _gl_update_depth_test_method(jegl_shader::depth_test_method mode)
 {
     assert(mode != jegl_shader::depth_test_method::INVALID);
     if (ACTIVE_DEPTH_MODE != mode)
@@ -718,7 +780,7 @@ inline void _gl_update_depth_test_method(jegl_shader::depth_test_method mode)
         }// end else
     }
 }
-inline void _gl_update_depth_mask_method(jegl_shader::depth_mask_method mode)
+void _gl_update_depth_mask_method(jegl_shader::depth_mask_method mode)
 {
     assert(mode != jegl_shader::depth_mask_method::INVALID);
     if (ACTIVE_MASK_MODE != mode)
@@ -731,7 +793,7 @@ inline void _gl_update_depth_mask_method(jegl_shader::depth_mask_method mode)
             glDepthMask(GL_FALSE);
     }
 }
-inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
+void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
 {
     assert(src_mode != jegl_shader::blend_method::INVALID && dst_mode != jegl_shader::blend_method::INVALID);
     if (ACTIVE_BLEND_SRC_MODE != src_mode || ACTIVE_BLEND_DST_MODE != dst_mode)
@@ -778,7 +840,7 @@ inline void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jeg
 
     }
 }
-inline void _gl_update_cull_mode_method(jegl_shader::cull_mode mode)
+void _gl_update_cull_mode_method(jegl_shader::cull_mode mode)
 {
     assert(mode != jegl_shader::cull_mode::INVALID);
     if (ACTIVE_CULL_MODE != mode)
@@ -804,20 +866,17 @@ inline void _gl_update_cull_mode_method(jegl_shader::cull_mode mode)
 
     }
 }
-inline void _gl_update_shader_state(jegl_shader* shader)
-{
-    _gl_update_depth_test_method(shader->m_depth_test);
-    _gl_update_depth_mask_method(shader->m_depth_mask);
-    _gl_update_blend_mode_method(shader->m_blend_src_mode, shader->m_blend_dst_mode);
-    _gl_update_cull_mode_method(shader->m_cull_mode);
-}
 
-inline void _gl_using_shader_program(jegl_resource* resource)
+void _gl_using_shader_program(jegl_resource* resource)
 {
     if (resource->m_raw_shader_data != nullptr)
     {
-        // TODO; Move update shader uniforms here.
-        _gl_update_shader_state(resource->m_raw_shader_data);
+        _gl_update_depth_test_method(resource->m_raw_shader_data->m_depth_test);
+        _gl_update_depth_mask_method(resource->m_raw_shader_data->m_depth_mask);
+        _gl_update_blend_mode_method(
+            resource->m_raw_shader_data->m_blend_src_mode, 
+            resource->m_raw_shader_data->m_blend_dst_mode);
+        _gl_update_cull_mode_method(resource->m_raw_shader_data->m_cull_mode);
 
         for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
         {
@@ -976,29 +1035,6 @@ void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
     }
 }
 
-void* gl_native_resource(jegl_thread* gthread, jegl_resource* resource)
-{
-    switch (resource->m_type)
-    {
-    case jegl_resource::type::SHADER:
-        return (void*)(intptr_t)resource->m_handle.m_uint1;
-    case jegl_resource::type::TEXTURE:
-        return (void*)(intptr_t)resource->m_handle.m_uint1;
-    case jegl_resource::type::VERTEX:
-    {
-        gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(resource->m_handle.m_ptr));
-        return (void*)(intptr_t)vdata->m_vao;
-    }
-    case jegl_resource::type::FRAMEBUF:
-        return (void*)(intptr_t)resource->m_handle.m_uint1;
-    case jegl_resource::type::UNIFORMBUF:
-        return (void*)(intptr_t)resource->m_handle.m_uint1;
-    default:
-        jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
-        return nullptr;
-    }
-}
-
 void gl_bind_texture(jegl_thread*, jegl_resource* texture, size_t pass)
 {
     glActiveTexture(GL_TEXTURE0 + (GLint)pass);
@@ -1054,7 +1090,6 @@ void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->init_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;
     write_to_apis->close_resource = gl_close_resource;
-    write_to_apis->native_resource = gl_native_resource;
 
     write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
     write_to_apis->bind_texture = gl_bind_texture;

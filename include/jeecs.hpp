@@ -1819,7 +1819,6 @@ struct jegl_graphic_api
     using init_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
-    using native_resource_func_t = void* (*)(jegl_thread*, jegl_resource*);
 
     using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*);
     using bind_texture_func_t = void(*)(jegl_thread*, jegl_resource*, size_t);
@@ -1840,18 +1839,16 @@ struct jegl_graphic_api
     init_resource_func_t        init_resource;
     using_resource_func_t       using_resource;
     close_resource_func_t       close_resource;
-    native_resource_func_t      native_resource;
 
     draw_vertex_func_t          draw_vertex;
     bind_texture_func_t         bind_texture;
 
     set_rendbuf_func_t          set_rend_buffer;
 
-    clear_framebuf_color_func_t       clear_rend_buffer_color;
-    clear_framebuf_depth_func_t       clear_rend_buffer_depth;
+    clear_framebuf_color_func_t clear_rend_buffer_color;
+    clear_framebuf_depth_func_t clear_rend_buffer_depth;
 
     set_uniform_func_t          set_uniform;
-
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -2123,13 +2120,6 @@ jegl_using_resource [基本接口]
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
 JE_API void jegl_using_resource(jegl_resource* resource);
-
-/*
-jegl_native_resource [基本接口]
-从指定的资源中获取对应的底层接口资源，这个函数被设计用于给类似imgui的组件或者高级
-用途，一般情况下并不需要使用
-*/
-JE_API void* jegl_native_resource(jegl_resource* resource);
 
 /*
 jegl_close_resource [基本接口]
