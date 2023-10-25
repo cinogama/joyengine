@@ -203,7 +203,11 @@ calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argt
 WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_gchandle(vm,
-        new jegl_shader_value((jegl_shader_value::type)wo_int(args + 0), wo_string(args + 1), (jegl_shader_value*)nullptr, wo_bool(args + 2))
+        new jegl_shader_value(
+            (jegl_shader_value::type)wo_int(args + 0), 
+            wo_string(args + 1), 
+            (jegl_shader_value*)nullptr, 
+            (bool)wo_bool(args + 2))
         , nullptr, _free_shader_value);
 }
 
