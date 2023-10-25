@@ -21,7 +21,7 @@ struct jegl_thread_notifier
 
     std::list<jegl_rendchain*> _m_commited_rendchains;
 
-    // TODO: 还是得把退出清理工作做好，但是东西没地儿放了，放这儿吧
+    // Aliving resource.
     std::unordered_set<jegl_resource*> _m_created_resources;
 };
 
