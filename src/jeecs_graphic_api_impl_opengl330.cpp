@@ -331,17 +331,17 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
     return context;
 }
 
-bool gl_pre_update(jegl_thread* ctx)
+bool gl_pre_update(jegl_thread::custom_thread_data_t ctx)
 {
-    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx->m_userdata));
+    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
     glfwSwapBuffers(context->WINDOWS_HANDLE);
     return true;
 }
 
-bool gl_update(jegl_thread* ctx)
+bool gl_update(jegl_thread::custom_thread_data_t ctx)
 {
-    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx->m_userdata));
+    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
     glfwPollEvents();
     int mouse_lock_x, mouse_lock_y;
@@ -368,9 +368,9 @@ bool gl_update(jegl_thread* ctx)
     return true;
 }
 
-bool gl_lateupdate(jegl_thread* thread_context)
+bool gl_lateupdate(jegl_thread::custom_thread_data_t ctx)
 {
-    jegui_update_gl330(thread_context);
+    jegui_update_gl330(ctx);
     return true;
 }
 
@@ -389,7 +389,7 @@ void gl_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, bool 
         glfwTerminate();
 }
 
-uint32_t gl_get_uniform_location(jegl_thread*, jegl_resource* shader, const char* name)
+uint32_t gl_get_uniform_location(jegl_thread::custom_thread_data_t, jegl_resource* shader, const char* name)
 {
     auto loc = glGetUniformLocation(shader->m_handle.m_uint1, name);
     if (loc == -1)
@@ -397,7 +397,7 @@ uint32_t gl_get_uniform_location(jegl_thread*, jegl_resource* shader, const char
     return (uint32_t)loc;
 }
 
-void gl_set_uniform(jegl_thread* ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
+void gl_set_uniform(jegl_thread::custom_thread_data_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
 {
     if (location == jeecs::typing::INVALID_UINT32)
         return;
@@ -438,7 +438,7 @@ struct gl3_vertex_data
     GLsizei m_pointcount;
 };
 
-void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
+void gl_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
 {
     assert(resource->m_custom_resource != nullptr);
 
@@ -497,28 +497,28 @@ void gl_init_resource(jegl_thread* gthread, jegl_resource* resource)
             resource->m_handle.m_uint1 = shader_program;
             auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
-            builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_M");
-            builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_V");
-            builtin_uniforms.m_builtin_uniform_p = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_P");
+            builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_M");
+            builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_V");
+            builtin_uniforms.m_builtin_uniform_p = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_P");
 
-            builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_MVP");
-            builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_MV");
-            builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(gthread, resource, "JOYENGINE_TRANS_VP");
+            builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MVP");
+            builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MV");
+            builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_VP");
 
-            builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(gthread, resource, "JOYENGINE_TEXTURE_TILING");
-            builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(gthread, resource, "JOYENGINE_TEXTURE_OFFSET");
+            builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_TILING");
+            builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_OFFSET");
 
-            builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(gthread, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
-            builtin_uniforms.m_builtin_uniform_light2d_decay = gl_get_uniform_location(gthread, resource, "JOYENGINE_LIGHT2D_DECAY");
+            builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
+            builtin_uniforms.m_builtin_uniform_light2d_decay = gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_DECAY");
 
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-            builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(gthread, resource, "JOYENGINE_LOCAL_SCALE");
-            builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(gthread, resource, "JOYENGINE_MAIN_COLOR");
+            builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(ctx, resource, "JOYENGINE_LOCAL_SCALE");
+            builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(ctx, resource, "JOYENGINE_MAIN_COLOR");
 
             auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
             while (uniform_var)
             {
-                uniform_var->m_index = gl_get_uniform_location(gthread, resource, uniform_var->m_name);
+                uniform_var->m_index = gl_get_uniform_location(ctx, resource, uniform_var->m_name);
                 uniform_var = uniform_var->m_next;
             }
 
@@ -935,8 +935,8 @@ void _gl_using_shader_program(jegl_resource* resource)
     }
     glUseProgram(resource->m_handle.m_uint1);
 }
-void gl_close_resource(jegl_thread* gthread, jegl_resource* resource);
-inline void _gl_using_texture2d(jegl_thread* gthread, jegl_resource* resource)
+void gl_close_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource);
+inline void _gl_using_texture2d(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
 {
     if (resource->m_raw_texture_data != nullptr)
     {
@@ -944,9 +944,9 @@ inline void _gl_using_texture2d(jegl_thread* gthread, jegl_resource* resource)
         {
             resource->m_raw_texture_data->m_modified = false;
             // Modified, free current resource id, reload one.
-            gl_close_resource(gthread, resource);
+            gl_close_resource(ctx, resource);
             resource->m_handle.m_uint1 = 0;
-            gl_init_resource(gthread, resource);
+            gl_init_resource(ctx, resource);
         }
     }
 
@@ -958,7 +958,7 @@ inline void _gl_using_texture2d(jegl_thread* gthread, jegl_resource* resource)
         glBindTexture(GL_TEXTURE_2D, resource->m_handle.m_uint1);
 }
 
-void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
+void gl_using_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
 {
     switch (resource->m_type)
     {
@@ -966,7 +966,7 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
         _gl_using_shader_program(resource);
         break;
     case jegl_resource::type::TEXTURE:
-        _gl_using_texture2d(gthread, resource);
+        _gl_using_texture2d(ctx, resource);
         break;
     case jegl_resource::type::VERTEX:
     {
@@ -1005,7 +1005,7 @@ void gl_using_resource(jegl_thread* gthread, jegl_resource* resource)
     }
 }
 
-void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
+void gl_close_resource(jegl_thread::custom_thread_data_t, jegl_resource* resource)
 {
     switch (resource->m_type)
     {
@@ -1035,13 +1035,13 @@ void gl_close_resource(jegl_thread* gthread, jegl_resource* resource)
     }
 }
 
-void gl_bind_texture(jegl_thread*, jegl_resource* texture, size_t pass)
+void gl_bind_texture(jegl_thread::custom_thread_data_t, jegl_resource* texture, size_t pass)
 {
     glActiveTexture(GL_TEXTURE0 + (GLint)pass);
     jegl_using_resource(texture);
 }
 
-void gl_draw_vertex_with_shader(jegl_thread*, jegl_resource* vert)
+void gl_draw_vertex_with_shader(jegl_thread::custom_thread_data_t, jegl_resource* vert)
 {
     jegl_using_resource(vert);
 
@@ -1050,9 +1050,9 @@ void gl_draw_vertex_with_shader(jegl_thread*, jegl_resource* vert)
         glDrawArrays(vdata->m_method, 0, vdata->m_pointcount);
 }
 
-void gl_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+void gl_set_rend_to_framebuffer(jegl_thread::custom_thread_data_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
-    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx->m_userdata));
+    jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
     if (nullptr == framebuffer)
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -1066,13 +1066,13 @@ void gl_set_rend_to_framebuffer(jegl_thread* ctx, jegl_resource* framebuffer, si
         h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
     glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }
-void gl_clear_framebuffer_color(jegl_thread*, float color[4])
+void gl_clear_framebuffer_color(jegl_thread::custom_thread_data_t, float color[4])
 {
     glClearColor(color[0], color[1], color[2], color[3]);
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void gl_clear_framebuffer_depth(jegl_thread*)
+void gl_clear_framebuffer_depth(jegl_thread::custom_thread_data_t)
 {
     _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
     glClear(GL_DEPTH_BUFFER_BIT);

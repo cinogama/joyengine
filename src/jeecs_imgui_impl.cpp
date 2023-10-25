@@ -8,18 +8,18 @@
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
-#include <GLFW/glfw3.h>
-
 #ifdef _WIN32
 #   include <Windows.h>
 #   include <imgui_impl_win32.h>
 #   include <imgui_impl_dx11.h>
 #endif
 
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <GLFW/glfw3.h>
+
 const char* gui_api_path = "je/gui.wo";
-const char* gui_api_src = R"(
+const char* gui_api_src = { R"(
 // JoyEngineECS GUI API for woo.
 
 import woo::std;
@@ -748,16 +748,13 @@ R"(
     }
 }
 
-)";
+)" };
 
 enum class BackEndType
 {
     OPENGL330,
     D3D11
 };
-
-bool _stop_work_flag = false;
-BackEndType _back_end_type;
 
 struct key_state
 {
@@ -776,10 +773,13 @@ struct gui_wo_job_coroutine
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
-jeecs::basic::resource<jeecs::graphic::shader> _jegl_rend_texture_shader;
+thread_local bool _stop_work_flag = false;
+thread_local BackEndType _back_end_type;
 
-void* (*_jegl_get_native_texture)(jegl_resource*);
-void (*_jegl_bind_shader_sampler_state)(jegl_resource*);
+thread_local jeecs::basic::resource<jeecs::graphic::shader> _jegl_rend_texture_shader;
+
+thread_local void* (*_jegl_get_native_texture)(jegl_resource*);
+thread_local void (*_jegl_bind_shader_sampler_state)(jegl_resource*);
 
 WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args, size_t argc)
 {
@@ -1523,9 +1523,9 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
                 wo_float(args + 2)
             ), uvmin, uvmax);
 
-   dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
-    return wo_ret_void(vm); 
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
@@ -2028,9 +2028,9 @@ void _jegui_init_basic(
     _jegl_get_native_texture = get_img_res;
     _jegl_bind_shader_sampler_state = apply_shader_sampler;
 
-    _jegl_rend_texture_shader = jeecs::graphic::shader::create(
-        "!/builtin/imgui_image_displayer.shader", 
-        R"(
+     _jegl_rend_texture_shader = jeecs::graphic::shader::create(
+            "!/builtin/imgui_image_displayer.shader",
+            R"(
 import je::shader;
 ZTEST   (OFF);
 ZWRITE  (DISABLE);
@@ -2203,8 +2203,7 @@ void jegui_init_dx11(
         (ID3D11DeviceContext*)d11context);
 }
 
-void jegui_update_dx11(
-    jegl_thread* thread_context)
+void jegui_update_dx11(jegl_thread::custom_thread_data_t thread_context)
 {
     jegl_using_resource(_jegl_rend_texture_shader->resouce());
 
@@ -2231,7 +2230,7 @@ bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #endif
 void jegui_init_gl330(
     void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*), 
+    void (*apply_shader_sampler)(jegl_resource*),
     void* window_handle,
     bool reboot)
 {
@@ -2241,7 +2240,7 @@ void jegui_init_gl330(
     ImGui_ImplOpenGL3_Init("#version 330 core");
 }
 
-void jegui_update_gl330(jegl_thread* thread_context)
+void jegui_update_gl330(jegl_thread::custom_thread_data_t thread_context)
 {
     jegl_using_resource(_jegl_rend_texture_shader->resouce());
 

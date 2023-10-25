@@ -130,7 +130,12 @@ namespace jeecs
                     ((graphic_uhost*)ptr)->_frame_rend_impl();
                 }, this);
 
-            je_ecs_universe_register_pre_call_once_job(universe.handle(), _update_frame_universe_job, this, nullptr);
+            if (glthread != nullptr)
+                je_ecs_universe_register_pre_call_once_job(
+                    universe.handle(),
+                    _update_frame_universe_job, 
+                    this, 
+                    nullptr);
         }
 
         ~graphic_uhost()

@@ -1814,20 +1814,20 @@ struct jegl_graphic_api
     using startup_interface_func_t = jegl_thread::custom_thread_data_t(*)(jegl_thread*, const jegl_interface_config*, bool);
     using shutdown_interface_func_t = void(*)(jegl_thread*, jegl_thread::custom_thread_data_t, bool);
 
-    using update_interface_func_t = bool(*)(jegl_thread*);
+    using update_interface_func_t = bool(*)(jegl_thread::custom_thread_data_t);
 
-    using init_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
-    using using_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
-    using close_resource_func_t = void(*)(jegl_thread*, jegl_resource*);
+    using init_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
+    using using_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
+    using close_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
 
-    using draw_vertex_func_t = void(*)(jegl_thread*, jegl_resource*);
-    using bind_texture_func_t = void(*)(jegl_thread*, jegl_resource*, size_t);
+    using draw_vertex_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
+    using bind_texture_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*, size_t);
 
-    using set_rendbuf_func_t = void(*)(jegl_thread*, jegl_resource*, size_t, size_t, size_t, size_t);
-    using clear_framebuf_color_func_t = void(*)(jegl_thread*, float color[4]);
-    using clear_framebuf_depth_func_t = void(*)(jegl_thread*);
-    using get_uniform_location_func_t = uint32_t(*)(jegl_thread*, jegl_resource*, const char*);
-    using set_uniform_func_t = void(*)(jegl_thread*, uint32_t, jegl_shader::uniform_type, const void*);
+    using set_rendbuf_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*, size_t, size_t, size_t, size_t);
+    using clear_framebuf_color_func_t = void(*)(jegl_thread::custom_thread_data_t, float color[4]);
+    using clear_framebuf_depth_func_t = void(*)(jegl_thread::custom_thread_data_t);
+    using get_uniform_location_func_t = uint32_t(*)(jegl_thread::custom_thread_data_t, jegl_resource*, const char*);
+    using set_uniform_func_t = void(*)(jegl_thread::custom_thread_data_t, uint32_t, jegl_shader::uniform_type, const void*);
 
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
