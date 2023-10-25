@@ -776,6 +776,8 @@ struct gui_wo_job_coroutine
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
+jeecs::basic::resource<jeecs::graphic::shader> _jegl_rend_texture_shader;
+
 WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args, size_t argc)
 {
     ImGui::BeginTooltip();
@@ -1496,6 +1498,8 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
         uvmax = ImVec2(1.0f, 1.0f);
     }
 
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto) {jegl_using_resource(_jegl_rend_texture_shader->resouce()); }, nullptr);
     if (argc == 1)
         ImGui::Image((ImTextureID)jegl_native_resource((*texture)->resouce()),
             ImVec2(
@@ -1515,7 +1519,9 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
                 wo_float(args + 2)
             ), uvmin, uvmax);
 
-    return wo_ret_void(vm);
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+    return wo_ret_void(vm); 
 }
 
 WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
@@ -1534,6 +1540,9 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
     }
 
     bool result = false;
+
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto) {jegl_using_resource(_jegl_rend_texture_shader->resouce()); }, nullptr);
     if (argc == 1)
         result = ImGui::ImageButton((ImTextureID)jegl_native_resource((*texture)->resouce()),
             ImVec2(
@@ -1552,6 +1561,8 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
                 wo_float(args + 1),
                 wo_float(args + 2)
             ), uvmin, uvmax);
+
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
     return wo_ret_bool(vm, result);
 }
@@ -2007,6 +2018,52 @@ WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args, size_t argc)
 
 void _jegui_init_basic()
 {
+    _jegl_rend_texture_shader = jeecs::graphic::shader::create(
+        "!/builtin/imgui_image_displayer.shader", 
+        R"(
+import je::shader;
+ZTEST   (OFF);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (NONE);
+
+VAO_STRUCT! vin 
+{
+    // Make sure same as imgui.
+    vertex: float2,
+    col: float4,
+    uv: float2,
+};
+
+using v2f = struct{
+    pos: float4,
+    col: float4,
+    uv: float2,
+};
+
+using fout = struct{
+    color: float4,
+};
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = je_mvp * float4::create(v.vertex, 0., 1.),
+        col = v.col,
+        uv = v.uv,
+    };
+}
+public func frag(vf: v2f)
+{
+    let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+    let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
+
+    return fout{
+        color = vf.col * texture(main_texture, vf.uv)
+    };
+}
+)");
+
     _stop_work_flag = false;
     ImGui::CreateContext();
 

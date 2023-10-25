@@ -17,6 +17,9 @@
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "D3DCompiler.lib")
 #pragma comment(lib, "winmm.lib")
+#ifndef NDEBUG
+#include <dxgidebug.h>
+#endif
 
 #define JERCHECK(RC) if (FAILED(RC)){jeecs::debug::logfatal("JoyEngine DX11 Failed: " #RC);}
 
@@ -509,6 +512,22 @@ void dx11_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, boo
         jeecs::debug::logfatal("Failed to shutdown windows for dx11: UnregisterClass failed.");
     }
     delete context;
+#ifndef NDEBUG
+    if (!reboot)
+    {
+        if (auto* debug_module = GetModuleHandle("Dxgidebug.dll"))
+        {
+            if (auto* get_debug_interface_f =
+                reinterpret_cast<decltype(&DXGIGetDebugInterface)>(
+                    GetProcAddress(debug_module, "DXGIGetDebugInterface")))
+            {
+                IDXGIDebug* pDxgiDebug;
+                get_debug_interface_f(__uuidof(IDXGIDebug), (void**)&pDxgiDebug);
+                pDxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
+            }
+        }
+    }
+#endif
 }
 
 bool dx11_update(jegl_thread* ctx)
@@ -877,7 +896,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
                     &const_buffer_describe, nullptr,
                     jedx11_shader_res->m_uniforms.GetAddressOf()));
 
-                jedx11_shader_res->m_uniform_cpu_buffers = 
+                jedx11_shader_res->m_uniform_cpu_buffers =
                     malloc(last_elem_end_place);
             }
 
@@ -1228,9 +1247,9 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         }
 
         _jedx11_trace_debug(jedx11_texture_res->m_texture,
-            std::string(resource->m_path == nullptr ? "_builtin_texture_" : resource->m_path) + "_texture");
+            std::string(resource->m_path == nullptr ? "_builtin_texture_" : resource->m_path) + "_Texture");
         _jedx11_trace_debug(jedx11_texture_res->m_texture_view,
-            std::string(resource->m_path == nullptr ? "_builtin_texture_" : resource->m_path) + "_view");
+            std::string(resource->m_path == nullptr ? "_builtin_texture_" : resource->m_path) + "_View");
 
         resource->m_handle.m_ptr = jedx11_texture_res;
         break;
@@ -1378,6 +1397,7 @@ void dx11_init_resource(jegl_thread* ctx, jegl_resource* resource)
         break;
     }
 }
+void dx11_close_resource(jegl_thread* ctx, jegl_resource* resource);
 void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
 {
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
@@ -1409,6 +1429,17 @@ void dx11_using_resource(jegl_thread* ctx, jegl_resource* resource)
     }
     case jegl_resource::type::TEXTURE:
     {
+        if (resource->m_raw_texture_data != nullptr)
+        {
+            if (resource->m_raw_texture_data->m_modified)
+            {
+                resource->m_raw_texture_data->m_modified = false;
+                // Modified, free current resource id, reload one.
+                dx11_close_resource(ctx, resource);
+                resource->m_handle.m_ptr = nullptr;
+                dx11_init_resource(ctx, resource);
+            }
+        }
         auto* texture = std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
         if (texture->m_texture_view.Get() != nullptr)
         {
@@ -1475,8 +1506,16 @@ void dx11_close_resource(jegl_thread* ctx, jegl_resource* resource)
     switch (resource->m_type)
     {
     case jegl_resource::type::SHADER:
-        delete std::launder(reinterpret_cast<jedx11_shader*>(resource->m_handle.m_ptr));
+    {
+        auto* shader = std::launder(reinterpret_cast<jedx11_shader*>(resource->m_handle.m_ptr));
+        if (shader->m_uniform_buffer_size != 0)
+        {
+            assert(shader->m_uniform_cpu_buffers != nullptr);
+            free(shader->m_uniform_cpu_buffers);
+        }
+        delete shader;
         break;
+    }
     case jegl_resource::type::TEXTURE:
         delete std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
         break;
@@ -1533,7 +1572,7 @@ void dx11_draw_vertex_with_shader(jegl_thread* ctx, jegl_resource* vert)
             JERCHECK(context->m_dx_context->Map(
                 context->m_current_target_shader->m_uniforms.Get(), 0,
                 D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
-            
+
             memcpy(mappedData.pData,
                 context->m_current_target_shader->m_uniform_cpu_buffers,
                 context->m_current_target_shader->m_uniform_buffer_size);

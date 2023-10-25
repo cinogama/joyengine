@@ -838,10 +838,10 @@ inline void _gl_using_shader_program(jegl_resource* resource)
                 {
                 case jegl_shader::fliter_mode::LINEAR:
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                   /* if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                    else
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);*/
+                    /* if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
+                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                     else
+                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);*/
                     break;
                 case jegl_shader::fliter_mode::NEAREST:
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -876,7 +876,7 @@ inline void _gl_using_shader_program(jegl_resource* resource)
     }
     glUseProgram(resource->m_handle.m_uint1);
 }
-
+void gl_close_resource(jegl_thread* gthread, jegl_resource* resource);
 inline void _gl_using_texture2d(jegl_thread* gthread, jegl_resource* resource)
 {
     if (resource->m_raw_texture_data != nullptr)
@@ -885,8 +885,8 @@ inline void _gl_using_texture2d(jegl_thread* gthread, jegl_resource* resource)
         {
             resource->m_raw_texture_data->m_modified = false;
             // Modified, free current resource id, reload one.
-            glDeleteTextures(1, &resource->m_handle.m_uint1);
-
+            gl_close_resource(gthread, resource);
+            resource->m_handle.m_uint1 = 0;
             gl_init_resource(gthread, resource);
         }
     }
