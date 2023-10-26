@@ -403,7 +403,8 @@ using v2f = struct {
     color : float3
 };
 using fout = struct {
-    color : float4
+    color : float4,
+    self_lum: float4,
 };
         
 public let vert = 
@@ -414,12 +415,14 @@ public let vert =
 ;
         
 public let frag = 
-    \f: v2f = fout{ color = float4::create(show_color, 1.) }
+    \f: v2f = fout{ 
+        color = float4::create(show_color, 1.),
+        self_lum = float4::create(show_color * 100., 1.),
+        }
         where show_color = lerp(f.color, float3::new(1., 1., 1.), ratio)
             , ratio = step(float::new(0.5), je_color->x)
     ;
 ;
-        
         )");
             static basic::resource<graphic::shader>
                 select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
@@ -435,12 +438,18 @@ using v2f = struct {
     pos : float4,
 };
 using fout = struct {
-    color : float4
+    color : float4,
+    self_lum: float4,
 };
         
 public let vert = \v: vin = v2f{ pos = je_mvp * float4::create(v.vertex, 1.) };;
-public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
-        
+public let frag = 
+    \_: v2f = fout{ 
+        color = float4::create(0.5, 1., 0.5, 1.),
+        self_lum = float4::create(1., 100., 1., 1.),
+    }
+    ;
+;
         )");
 
             if (!mover.init)
@@ -486,6 +495,7 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 >();
 
                 game_entity select_box = current_world.add_entity<
+                    Transform::LocalRotation,
                     Transform::LocalPosition,
                     Transform::LocalScale,
                     Transform::LocalToParent,
@@ -502,9 +512,9 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
                 select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader);
 
-                axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1, 0, 0);
-                axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1, 0);
-                axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1);
+                axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1.f, 0, 0);
+                axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1.f, 0);
+                axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1.f);
 
                 axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
                 axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
@@ -536,21 +546,8 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                         rotation.rot = trans->world_rotation;
                     else
                         rotation.rot = math::quat();
-
-                    float distance =
-                        _camera_ortho_porjection == nullptr
-                        ? 0.25f * (_camera_pos - trans->world_position).length()
-                        : 1.0f / _camera_ortho_porjection->scale;
-
-                    scale.scale = math::vec3(distance, distance, distance);
                 }
             }
-            else
-            {
-                // Hide the mover
-                scale.scale = math::vec3(0, 0, 0);
-            }
-
         }
 
         void MoveEntity(
@@ -611,7 +608,6 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
 
             if (_inputs.r_buttom || !_inputs.l_buttom || nullptr == editing_trans)
                 _grab_axis_translation = nullptr;
-
 
             if (_grab_axis_translation && _inputs.l_buttom && editing_trans)
             {
@@ -695,6 +691,23 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                 else
                     color.color.x = 0.0f;
             }
+
+            if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
+            {
+                if (auto* etrans = _inputs.selected_entity.value().get_component<Transform::Translation>())
+                {
+                    float distance =
+                        _camera_ortho_porjection == nullptr
+                        ? 0.25f * (_camera_pos - etrans->world_position).length()
+                        : 1.0f / _camera_ortho_porjection->scale;
+                    scale.scale = math::vec3(distance, distance, distance);
+                    posi.pos = mover.axis * distance;
+                }
+            }
+            else
+            {
+                scale.scale = math::vec3(0.f, 0.f, 0.f);
+            }
         }
 
         void CommitUpdate()
@@ -750,17 +763,23 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                     })
                 // Create & create mover!
                 .exec(&DefaultEditorSystem::UpdateAndCreateMover)
-                .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale)
+                .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale, Transform::LocalRotation& localRotation)
                     {
-                        float distance =
-                            _camera_ortho_porjection == nullptr
-                            ? 0.25f * (_camera_pos - trans.world_position).length()
-                            : 1.0f / _camera_ortho_porjection->scale;
-
-                        if (_inputs.selected_entity)
+                        if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
                         {
-                            if (auto* escale = _inputs.selected_entity.value().get_component<Transform::LocalScale>())
-                                localScale.scale = escale->scale;
+                            float distance =
+                                _camera_ortho_porjection == nullptr
+                                ? 0.25f * (_camera_pos - trans.world_position).length()
+                                : 1.0f / _camera_ortho_porjection->scale;
+
+                            localRotation.rot = math::quat();
+                            auto* etrans = _inputs.selected_entity.value().get_component<Transform::Translation>();
+                            if (etrans != nullptr)
+                            {
+                                localScale.scale = etrans->local_scale;
+                                if (_coord != coord_mode::local && _mode != Editor::EntityMover::mover_mode::scale)
+                                    localRotation.rot = etrans->world_rotation;
+                            }                       
 
                             if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
                                 localScale.scale = localScale.scale * (
@@ -773,6 +792,11 @@ public let frag = \_: v2f = fout{ color = float4::create(0.5, 1., 0.5, 1.) };;
                                     ));
 
                             localScale.scale = 1.05f * localScale.scale;
+                        }
+                        else
+                        {
+                            // Hide the mover
+                            localScale.scale = math::vec3(0, 0, 0);
                         }
                     }
                 )
