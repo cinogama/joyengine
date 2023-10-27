@@ -147,6 +147,8 @@ namespace jeecs
             bool a = false;
             bool d = false;
 
+            bool l_tab = false;
+
             bool l_ctrl = false;
             bool l_shift = false;
 
@@ -194,7 +196,7 @@ namespace jeecs
             circ_x = _create_circle_vertex({ 1.f, 0.f, 0.f });
             circ_y = _create_circle_vertex({ 0.f, 1.f, 0.f });
             circ_z = _create_circle_vertex({ 0.f, 0.f, 1.f });
-            
+
             circ_x->resouce()->m_raw_vertex_data->m_size_y += 0.2f;
             circ_x->resouce()->m_raw_vertex_data->m_size_z += 0.2f;
             circ_y->resouce()->m_raw_vertex_data->m_size_x += 0.2f;
@@ -334,7 +336,7 @@ namespace jeecs
 
             math::quat r(rot.x, rot.y, rot.z);
 
-           const size_t half_step_count = 50;
+            const size_t half_step_count = 50;
 
             std::vector<float> points;
             for (size_t i = 0; i < half_step_count; ++i)
@@ -367,7 +369,7 @@ namespace jeecs
                 points.push_back(anx.y);
                 points.push_back(anx.z);
             }
-            return graphic::vertex::create(jegl_vertex::type::LINESTRIP, points, {3, 3});
+            return graphic::vertex::create(jegl_vertex::type::LINESTRIP, points, { 3, 3 });
         }
 
         void UpdateAndCreateMover(game_entity mover_entity,
@@ -558,13 +560,16 @@ public let frag =
             Renderer::Shape* shape,
             Renderer::Color& color)
         {
-            if (mover.mode != _mode)
+            if (mover.mode != _mode || _inputs.l_tab)
             {
-                mover.mode = _mode;
-                switch (_mode)
+                if (_inputs.l_tab)
+                    mover.mode = jeecs::Editor::EntityMover::selection;
+                else
+                    mover.mode = _mode;
+                switch (mover.mode)
                 {
                 case jeecs::Editor::EntityMover::selection:
-                    scale.scale = { 0.f,0.f,0.f };
+                    scale.scale = { 0.f, 0.f, 0.f };
                     break;
                 case jeecs::Editor::EntityMover::rotation:
                     if (mover.axis.x != 0.f) shape->vertex = circ_x;
@@ -585,7 +590,7 @@ public let frag =
                     break;
                 }
 
-                if (_mode != jeecs::Editor::EntityMover::rotation)
+                if (mover.mode != jeecs::Editor::EntityMover::rotation)
                     posi.pos = mover.axis;
 
             }
@@ -701,7 +706,9 @@ public let frag =
                         ? 0.25f * (_camera_pos - etrans->world_position).length()
                         : 1.0f / _camera_ortho_porjection->scale;
                     scale.scale = math::vec3(distance, distance, distance);
-                    posi.pos = mover.axis * distance;
+
+                    if (_mode != Editor::EntityMover::mover_mode::rotation)
+                        posi.pos = mover.axis * distance;
                 }
             }
             else
@@ -716,6 +723,7 @@ public let frag =
             _inputs.s = input::keydown(input::keycode::S);
             _inputs.a = input::keydown(input::keycode::A);
             _inputs.d = input::keydown(input::keycode::D);
+            _inputs.l_tab = input::keydown(input::keycode::TAB);
             _inputs.l_ctrl = input::keydown(input::keycode::L_CTRL);
             _inputs.l_shift = input::keydown(input::keycode::L_SHIFT);
             _inputs.l_buttom = input::keydown(input::keycode::MOUSE_L_BUTTION);
@@ -779,7 +787,7 @@ public let frag =
                                 localScale.scale = etrans->local_scale;
                                 if (_coord != coord_mode::local && _mode != Editor::EntityMover::mover_mode::scale)
                                     localRotation.rot = etrans->world_rotation;
-                            }                       
+                            }
 
                             if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
                                 localScale.scale = localScale.scale * (
@@ -818,10 +826,20 @@ public let frag =
                         [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
                         fnd != selected_list.end())
                     {
-                        if (++fnd == selected_list.end())
-                            _set_editing_entity(selected_list.begin()->entity);
+                        if (_inputs.l_shift)
+                        {
+                            if (fnd == selected_list.begin())
+                                fnd = selected_list.end();
+
+                            _set_editing_entity((--fnd)->entity);
+                        }
                         else
-                            _set_editing_entity(fnd->entity);
+                        {
+                            if (++fnd == selected_list.end())
+                                _set_editing_entity(selected_list.begin()->entity);
+                            else
+                                _set_editing_entity(fnd->entity);
+                        }
                     }
                     else
                         _set_editing_entity(selected_list.begin()->entity);
