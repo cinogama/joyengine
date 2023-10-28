@@ -1593,9 +1593,7 @@ public func frag(_: v2f)
                                         m_2dlight_list.emplace_back(
                                             light2d_arch{
                                                 &trans, &color, shadow,
-                                                &shape,
-                                                &shads,
-                                                texs,
+                                                &shape, &shads, texs,
                                             }
                                         );
                                         if (shadow != nullptr)
@@ -1742,6 +1740,7 @@ public func frag(_: v2f)
                             break;
 
                         l2dbuf.l2ds[light_count].color = lightarch.color->color;
+                        l2dbuf.l2ds[light_count].color.w *= lightarch.color->gain;
                         l2dbuf.l2ds[light_count].position = lightarch.translation->world_position;
                         l2dbuf.l2ds[light_count].direction =
                             lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 1.f).unit();
@@ -2284,7 +2283,7 @@ public func frag(_: v2f)
                                 light2d.color->color.x,
                                 light2d.color->color.y,
                                 light2d.color->color.z,
-                                light2d.color->color.w);
+                                light2d.color->color.w * light2d.color->gain);
 
                             if (light2d.shadow != nullptr)
                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,

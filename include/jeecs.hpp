@@ -7676,6 +7676,7 @@ namespace jeecs
         struct Color
         {
             math::vec4 color = math::vec4(1, 1, 1, 1);
+            float gain = 1.0f;
             float decay = 2.0f;
             float range = 1.0f;
             bool parallel = false;
@@ -7683,6 +7684,7 @@ namespace jeecs
             static void JERefRegsiter()
             {
                 typing::register_member(&Color::color, "color");
+                typing::register_member(&Color::gain, "gain");
                 typing::register_member(&Color::decay, "decay");
                 typing::register_member(&Color::range, "range");
                 typing::register_member(&Color::parallel, "parallel");
