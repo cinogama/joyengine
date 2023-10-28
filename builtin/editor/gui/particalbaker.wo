@@ -9,6 +9,8 @@ namespace editor::gui::particalbaker
         
         m_target_launch_count: mut int,
         m_solved_launch_count: mut int,
+
+        m_first_show: mut bool,
     };
     public using ParticalContext = struct{
         m_frame_count : mut int,
@@ -269,9 +271,16 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         openform: mutable<bool>)
     {
         let mut open = true;
+
+        let attrib = econtext.m_first_show
+            ? WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+            | 0: WindowsAttribute
+            ;
+
+        econtext.m_first_show = false;
+
         match (BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path}", 
-            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-            + WindowsAttribute::ImGuiWindowFlags_MenuBar))
+            attrib + WindowsAttribute::ImGuiWindowFlags_MenuBar))
         {
         value(show)?
             if (show)
@@ -375,71 +384,71 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                 }
 
                 BeginGroup();
+                do BeginChildSize("##prof", 320., GetContentRegionAvail()[1]);
+                    Text("帧数");
+                    SameLine();
+                    do InputInt("##framecount", partical_context.m_frame_count)
+                        ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil: void);;
 
-                Text("帧数");
-                SameLine();
-                do InputInt("##framecount", partical_context.m_frame_count)
-                    ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil: void);;
+                    Text("尺寸");
+                    SameLine();
+                    do InputInt2("##framesize", partical_context.m_frame_size...)
+                        ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil: void)
+                            where (x, y) = s
+                            ;;
 
-                Text("尺寸");
-                SameLine();
-                do InputInt2("##framesize", partical_context.m_frame_size...)
-                    ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil: void)
-                        where (x, y) = s
-                        ;;
+                    Text("帧速率(秒/帧)");
+                    SameLine();
+                    do InputFloatFormat("##framerate", partical_context.m_frame_rate, "%.6f")
+                        ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil: void);;
 
-                Text("帧速率(秒/帧)");
-                SameLine();
-                do InputFloatFormat("##framerate", partical_context.m_frame_rate, "%.6f")
-                    ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil: void);;
-
-                Text("粒子渲染趟数");
-                SameLine();
-                do InputInt("##repeatcount", partical_context.m_repeat_round)
-                    ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil: void);;
+                    Text("粒子渲染趟数");
+                    SameLine();
+                    do InputInt("##repeatcount", partical_context.m_repeat_round)
+                        ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil: void);;
                 
-                let (w, h) = partical_context.m_frame_size;
+                    let (w, h) = partical_context.m_frame_size;
 
-                do BeginChildSize("##review", w: real * 400. / h: real, 400.);
+                    do BeginChildSize("##review", w: real * 300. / h: real, 300.);
                 
-                let frames = partical_context.m_frames_caches;
+                    let frames = partical_context.m_frames_caches;
                 
-                if (std::time() - econtext.m_last_update_time >= partical_context.m_frame_rate)
-                {
-                    econtext.m_frame_index += 1;
-                    econtext.m_last_update_time = std::time();
-                }
+                    if (std::time() - econtext.m_last_update_time >= partical_context.m_frame_rate)
+                    {
+                        econtext.m_frame_index += 1;
+                        econtext.m_last_update_time = std::time();
+                    }
 
-                econtext.m_frame_index = frames->empty
-                    ? 0
-                    | econtext.m_frame_index % frames->len;
+                    econtext.m_frame_index = frames->empty
+                        ? 0
+                        | econtext.m_frame_index % frames->len;
                 
-                ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
+                    ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
                 
-                let drawlist = GetWindowDrawList();
-                do InvisibleButton("##draw_space", GetContentRegionAvail());
+                    let drawlist = GetWindowDrawList();
+                    do InvisibleButton("##draw_space", GetContentRegionAvail());
 
-                let (p0, p1) = GetItemRect();
-                let (lux, luy) = p0;
-                let (rbx, rby) = p1;
+                    let (p0, p1) = GetItemRect();
+                    let (lux, luy) = p0;
+                    let (rbx, rby) = p1;
 
-                PushClipRect(p0, p1);
-                drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
-                if (!frames->empty)
-                    drawlist->AddImage(
-                        (lux, luy), 
-                        (rbx, rby), 
-                        frames[econtext.m_frame_index],
-                        (255, 255, 255, 255));
+                    PushClipRect(p0, p1);
+                    drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+                    if (!frames->empty)
+                        drawlist->AddImage(
+                            (lux, luy), 
+                            (rbx, rby), 
+                            frames[econtext.m_frame_index],
+                            (255, 255, 255, 255));
 
+                    EndChild();
                 EndChild();
-
                 EndGroup();
                 SameLine();
-
                 BeginGroup();
                 
-                do InputTextMultilineSize("##source", partical_context.m_script, GetContentRegionAvail()...)
+                let (avail_w, avail_h) = GetContentRegionAvail();
+                do InputTextMultilineSize("##source", partical_context.m_script, std::max(400., avail_w), avail_h)
                     ->> \t = partical_context.m_script = t;;
 
                 EndGroup();
@@ -480,6 +489,8 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
                 m_target_launch_count = mut 0,
                 m_solved_launch_count = mut 0,
+
+                m_first_show = mut true,
             },
             new! mutable(true)));
     }

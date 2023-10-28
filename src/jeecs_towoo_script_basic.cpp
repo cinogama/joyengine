@@ -1357,7 +1357,7 @@ template<typename T>
 T* wo_option_component(wo_value val)
 {
     _wo_value tmp;
-    if (wo_option_get(val, &tmp))
+    if (wo_option_get(&tmp, val))
         return std::launder(reinterpret_cast<T*>(
             wo_pointer(&tmp)));
     return nullptr;
