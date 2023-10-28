@@ -9,17 +9,18 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
+#ifndef NDEBUG
+#   include <dxgidebug.h>
+#endif
+
 #undef max
 #undef min
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "dxguid.lib")
-#pragma comment(lib, "D3DCompiler.lib")
 #pragma comment(lib, "winmm.lib")
-#ifndef NDEBUG
-#include <dxgidebug.h>
-#endif
+#pragma comment(lib, "D3DCompiler.lib")
 
 #define JERCHECK(RC) if (FAILED(RC)){jeecs::debug::logfatal("JoyEngine DX11 Failed: " #RC);}
 

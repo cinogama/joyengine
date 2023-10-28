@@ -1059,7 +1059,6 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
                 case jegl_shader::uniform_type::FLOAT4:
                     new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec4(uniform_var->x, uniform_var->y, uniform_var->z, uniform_var->w)); break;
                 default:
-                    jeecs::debug::logerr("Unsupported type when restore shader(%s)'s uniform named: '%s', skip.", new_shader_instance->resouce()->m_path, uniform_var->m_name);
                     break;
                 }
                 uniform_var = uniform_var->m_next;

@@ -439,10 +439,20 @@ extern func close(_: Context)
 {
 }
 
-system! step_1()
+PRE_UPDATE!
 {
 }
 
+UPDATE!
+{
+    system! update()
+    {
+    }
+}
+
+LATE_UPDATE!
+{
+}
 "@;
                     jeapi::gui::form::input("新建ToWoo System 脚本", F"在{current_work_path}新建ToWoo System 脚本", "NewToWooSystem",
                         \filename: string = filesys::exist(file_path)
