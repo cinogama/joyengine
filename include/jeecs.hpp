@@ -1753,6 +1753,7 @@ struct jegl_uniform_buffer
     size_t      m_update_length;
 };
 
+using jegl_resource_blob = void*;
 /*
 jegl_resource [类型]
 图形资源初级封装，纹理、着色器、帧缓冲区等均为图形资源
@@ -1765,7 +1766,6 @@ struct jegl_resource
         size_t m_retry_times;
         jegl_destroy_resouce* last;
     };
-
     using jegl_custom_resource_t = void*;
     enum type : uint8_t
     {
@@ -1816,7 +1816,10 @@ struct jegl_graphic_api
 
     using update_interface_func_t = bool(*)(jegl_thread::custom_thread_data_t);
 
-    using init_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
+    using create_resource_blob_func_t = jegl_resource_blob(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
+    using close_resource_blob_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource_blob);
+    
+    using init_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource_blob, jegl_resource*);
     using using_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
 
@@ -1835,6 +1838,9 @@ struct jegl_graphic_api
     update_interface_func_t     pre_update_interface;
     update_interface_func_t     update_interface;
     update_interface_func_t     late_update_interface;
+
+    create_resource_blob_func_t create_resource_blob;
+    close_resource_blob_func_t  close_resource_blob;
 
     init_resource_func_t        init_resource;
     using_resource_func_t       using_resource;

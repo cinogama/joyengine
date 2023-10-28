@@ -502,7 +502,7 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
             auto* resource = std::launder(reinterpret_cast<jedx11_texture*>(res->m_handle.m_ptr));
             return (void*)(intptr_t)resource->m_texture_view.Get();
         },
-        [](auto* res) 
+        [](auto* res)
         {
             auto* shader = std::launder(reinterpret_cast<jedx11_shader*>(res->m_handle.m_ptr));
             for (auto& sampler : shader->m_samplers)
@@ -626,21 +626,41 @@ bool dx11_lateupdate(jegl_thread::custom_thread_data_t ctx)
     return true;
 }
 
-void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
+struct dx11_resource_blob
+{
+    jegl_dx11_context::MSWRLComPtr<ID3D11InputLayout> m_vao;
+    jegl_dx11_context::MSWRLComPtr<ID3DBlob> m_vertex_blob;
+    jegl_dx11_context::MSWRLComPtr<ID3DBlob> m_fragment_blob;
+
+    jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
+    jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilState> m_depth;
+    jegl_dx11_context::MSWRLComPtr<ID3D11BlendState> m_blend;
+
+    std::vector<jedx11_shader::sampler_structs> m_samplers;
+    std::unordered_map<std::string, uint32_t> m_ulocations;
+
+    size_t m_uniform_size;
+
+    uint32_t get_built_in_location(const std::string& name)const
+    {
+        auto fnd = m_ulocations.find(name);
+        if (fnd == m_ulocations.end())
+            return jeecs::typing::INVALID_UINT32;
+        return fnd->second;
+    }
+};
+
+jegl_resource_blob dx11_create_resource_blob(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
 {
     jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
     switch (resource->m_type)
     {
     case jegl_resource::type::SHADER:
     {
-        jedx11_shader* jedx11_shader_res = new jedx11_shader;
-        jedx11_shader_res->m_uniform_updated = false;
-
         bool shader_load_failed = false;
 
+        dx11_resource_blob* blob = new dx11_resource_blob;
         std::string error_informations;
-
-        jegl_dx11_context::MSWRLComPtr<ID3DBlob> blob;
         ID3DBlob* error_blob = nullptr;
 
         std::string string_path = resource->m_path == nullptr
@@ -665,7 +685,7 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
 #endif
             ,
             0,
-            blob.GetAddressOf(),
+            blob->m_vertex_blob.GetAddressOf(),
             &error_blob);
 
         if (FAILED(compile_result))
@@ -683,12 +703,6 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
         }
         else
         {
-            JERCHECK(context->m_dx_device->CreateVertexShader(
-                blob->GetBufferPointer(),
-                blob->GetBufferSize(),
-                nullptr,
-                jedx11_shader_res->m_vertex.GetAddressOf()));
-
             UINT layout_begin_offset = 0;
 
             std::vector<D3D11_INPUT_ELEMENT_DESC> vertex_in_layout(resource->m_raw_shader_data->m_vertex_in_count);
@@ -773,9 +787,10 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
             JERCHECK(context->m_dx_device->CreateInputLayout(
                 vertex_in_layout.data(),
                 vertex_in_layout.size(),
-                blob->GetBufferPointer(),
-                blob->GetBufferSize(),
-                jedx11_shader_res->m_vao.GetAddressOf()));
+                blob->m_vertex_blob->GetBufferPointer(),
+                blob->m_vertex_blob->GetBufferSize(),
+                blob->m_vao.GetAddressOf()));
+            JEDX11_TRACE_DEBUG_NAME(blob->m_vao, string_path + "_Vao");
         }
 
         compile_result = D3DCompile(
@@ -796,7 +811,7 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
 #endif
             ,
             0,
-            blob.ReleaseAndGetAddressOf(),
+            blob->m_fragment_blob.ReleaseAndGetAddressOf(),
             &error_blob);
 
         if (FAILED(compile_result))
@@ -812,29 +827,20 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
             else
                 error_informations += "Unknown fragment shader failed.";
         }
-        else
-        {
-            JERCHECK(context->m_dx_device->CreatePixelShader(
-                blob->GetBufferPointer(),
-                blob->GetBufferSize(),
-                nullptr,
-                jedx11_shader_res->m_fragment.GetAddressOf()));
-        }
 
+        // Generate uniform locations here.
         if (shader_load_failed)
         {
+            delete blob;
             jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
                 resource, error_informations.c_str());
-            resource->m_handle.m_ptr = nullptr;
-            delete jedx11_shader_res;
+            return nullptr;
         }
         else
         {
-            // Generate uniform locations here.
             uint32_t last_elem_end_place = 0;
             constexpr size_t DX11_ALLIGN_BASE = 16; // 128bit allign in dx11
 
-            std::unordered_map<std::string, uint32_t> ulocations;
             auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
             while (uniforms != nullptr)
             {
@@ -869,65 +875,17 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
                     if (last_elem_end_place + std::min((size_t)16, unit_size) > next_edge)
                         last_elem_end_place = next_edge;
 
-                    uniforms->m_index = last_elem_end_place;
-                    ulocations[uniforms->m_name] = uniforms->m_index;
+                    blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
 
                     last_elem_end_place += unit_size;
                 }
-
                 uniforms = uniforms->m_next;
             }
-
-            auto get_built_in_location = [&](const std::string& name)
-            {
-                auto fnd = ulocations.find(name);
-                if (fnd == ulocations.end())
-                    return jeecs::typing::INVALID_UINT32;
-                return fnd->second;
-            };
-
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_m = get_built_in_location("JOYENGINE_TRANS_M");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_v = get_built_in_location("JOYENGINE_TRANS_V");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_p = get_built_in_location("JOYENGINE_TRANS_P");
-
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mvp = get_built_in_location("JOYENGINE_TRANS_MVP");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mv = get_built_in_location("JOYENGINE_TRANS_MV");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_vp = get_built_in_location("JOYENGINE_TRANS_VP");
-
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_tiling = get_built_in_location("JOYENGINE_TEXTURE_TILING");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_offset = get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
-
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_resolution = get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_decay = get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
-
-            // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_local_scale = get_built_in_location("JOYENGINE_LOCAL_SCALE");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_color = get_built_in_location("JOYENGINE_MAIN_COLOR");
 
             if (last_elem_end_place % DX11_ALLIGN_BASE != 0)
                 last_elem_end_place = last_elem_end_place / DX11_ALLIGN_BASE * DX11_ALLIGN_BASE + DX11_ALLIGN_BASE;
 
-            // Alloc constant buffer for this shader!
-            jedx11_shader_res->m_uniform_buffer_size = last_elem_end_place;;
-            if (jedx11_shader_res->m_uniform_buffer_size != 0)
-            {
-                D3D11_BUFFER_DESC const_buffer_describe;
-
-                const_buffer_describe.ByteWidth = (UINT)last_elem_end_place;
-                const_buffer_describe.Usage = D3D11_USAGE_DYNAMIC;
-                const_buffer_describe.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-                const_buffer_describe.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-                const_buffer_describe.MiscFlags = 0;
-                const_buffer_describe.StructureByteStride = 0;
-
-                // 新建常量缓冲区，不使用初始数据
-                JERCHECK(context->m_dx_device->CreateBuffer(
-                    &const_buffer_describe, nullptr,
-                    jedx11_shader_res->m_uniforms.GetAddressOf()));
-
-                jedx11_shader_res->m_uniform_cpu_buffers =
-                    malloc(last_elem_end_place);
-            }
+            blob->m_uniform_size = last_elem_end_place;
 
             D3D11_RASTERIZER_DESC rasterizer_describe;
             switch (resource->m_raw_shader_data->m_cull_mode)
@@ -952,9 +910,9 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
             rasterizer_describe.MultisampleEnable = FALSE;
             rasterizer_describe.AntialiasedLineEnable = FALSE;
             JERCHECK(context->m_dx_device->CreateRasterizerState(
-                &rasterizer_describe, jedx11_shader_res->m_rasterizer.GetAddressOf()));
+                &rasterizer_describe, blob->m_rasterizer.GetAddressOf()));
 
-            JEDX11_TRACE_DEBUG_NAME(jedx11_shader_res->m_rasterizer,
+            JEDX11_TRACE_DEBUG_NAME(blob->m_rasterizer,
                 string_path + "_RasterizerState");
 
             D3D11_DEPTH_STENCIL_DESC depth_describe;
@@ -1011,9 +969,9 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
             depth_describe.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
             depth_describe.BackFace;
             JERCHECK(context->m_dx_device->CreateDepthStencilState(
-                &depth_describe, jedx11_shader_res->m_depth.GetAddressOf()));
+                &depth_describe, blob->m_depth.GetAddressOf()));
 
-            JEDX11_TRACE_DEBUG_NAME(jedx11_shader_res->m_depth,
+            JEDX11_TRACE_DEBUG_NAME(blob->m_depth,
                 string_path + "_DepthStencilState");
 
             D3D11_BLEND_DESC blend_describe;
@@ -1064,15 +1022,15 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
                 = blend_describe.RenderTarget[0].DestBlendAlpha
                 = parse_dx11_enum(resource->m_raw_shader_data->m_blend_dst_mode);
             JERCHECK(context->m_dx_device->CreateBlendState(
-                &blend_describe, jedx11_shader_res->m_blend.GetAddressOf()));
+                &blend_describe, blob->m_blend.GetAddressOf()));
 
-            JEDX11_TRACE_DEBUG_NAME(jedx11_shader_res->m_blend, 
+            JEDX11_TRACE_DEBUG_NAME(blob->m_blend,
                 string_path + "_BlendState");
 
-            jedx11_shader_res->m_samplers.resize(resource->m_raw_shader_data->m_sampler_count);
+            blob->m_samplers.resize(resource->m_raw_shader_data->m_sampler_count);
             for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
             {
-                auto& dxsampler = jedx11_shader_res->m_samplers[i];
+                auto& dxsampler = blob->m_samplers[i];
                 auto& sampler = resource->m_raw_shader_data->m_sampler_methods[i];
                 dxsampler.m_sampler_id = sampler.m_sampler_id;
 
@@ -1141,15 +1099,123 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
 
                 dxsampler.m_sampler;
             }
+            return blob;
+        }
+    }
+    case jegl_resource::type::TEXTURE:
+        break;
+    case jegl_resource::type::VERTEX:
+        break;
+    case jegl_resource::type::FRAMEBUF:
+        break;
+    case jegl_resource::type::UNIFORMBUF:
+        break;
+    default:
+        break;
+    }
+    return nullptr;
+}
 
-            JEDX11_TRACE_DEBUG_NAME(jedx11_shader_res->m_uniforms, string_path + "_Uniforms");
-            JEDX11_TRACE_DEBUG_NAME(jedx11_shader_res->m_vao, string_path + "_Vao");
-            JEDX11_TRACE_DEBUG_NAME(jedx11_shader_res->m_vertex, string_path + "_Vertex");
-            JEDX11_TRACE_DEBUG_NAME(jedx11_shader_res->m_fragment, string_path + "_Fragment");
+void dx11_close_resource_blob(jegl_thread::custom_thread_data_t ctx, jegl_resource_blob blob)
+{
+    if (blob != nullptr)
+        delete (dx11_resource_blob*)blob;
+}
+
+void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource_blob blob, jegl_resource* resource)
+{
+    jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+    {
+        if (blob != nullptr)
+        {
+            auto* shader_blob = std::launder(reinterpret_cast<dx11_resource_blob*>(blob));
+
+            jedx11_shader* jedx11_shader_res = new jedx11_shader;
+            jedx11_shader_res->m_uniform_updated = false;
+
+            std::string string_path = resource->m_path == nullptr
+                ? "__joyengine_builtin_vshader" + std::to_string((intptr_t)resource) + "__"
+                : resource->m_path;
+
+            JERCHECK(context->m_dx_device->CreateVertexShader(
+                shader_blob->m_vertex_blob->GetBufferPointer(),
+                shader_blob->m_vertex_blob->GetBufferSize(),
+                nullptr,
+                jedx11_shader_res->m_vertex.GetAddressOf()));
+
+            JERCHECK(context->m_dx_device->CreatePixelShader(
+                shader_blob->m_fragment_blob->GetBufferPointer(),
+                shader_blob->m_fragment_blob->GetBufferSize(),
+                nullptr,
+                jedx11_shader_res->m_fragment.GetAddressOf()));
+
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JOYENGINE_TRANS_M");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_v = shader_blob->get_built_in_location("JOYENGINE_TRANS_V");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_p = shader_blob->get_built_in_location("JOYENGINE_TRANS_P");
+
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JOYENGINE_TRANS_MV");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_vp = shader_blob->get_built_in_location("JOYENGINE_TRANS_VP");
+
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
+
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_resolution = shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_decay = shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
+
+            // ATTENTION: 注意，以下参数特殊shader可能挪作他用
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JOYENGINE_MAIN_COLOR");
+
+            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+            while (uniforms != nullptr)
+            {
+                uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
+                uniforms = uniforms->m_next;
+            }
+
+            jedx11_shader_res->m_uniform_buffer_size = shader_blob->m_uniform_size;
+            if (jedx11_shader_res->m_uniform_buffer_size != 0)
+            {
+                D3D11_BUFFER_DESC const_buffer_describe;
+
+                const_buffer_describe.ByteWidth = (UINT)jedx11_shader_res->m_uniform_buffer_size;
+                const_buffer_describe.Usage = D3D11_USAGE_DYNAMIC;
+                const_buffer_describe.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+                const_buffer_describe.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+                const_buffer_describe.MiscFlags = 0;
+                const_buffer_describe.StructureByteStride = 0;
+
+                // 新建常量缓冲区，不使用初始数据
+                JERCHECK(context->m_dx_device->CreateBuffer(
+                    &const_buffer_describe, nullptr,
+                    jedx11_shader_res->m_uniforms.GetAddressOf()));
+
+                jedx11_shader_res->m_uniform_cpu_buffers =
+                    malloc(shader_blob->m_uniform_size);
+            }
+            else
+            {
+                jedx11_shader_res->m_uniform_cpu_buffers = nullptr;
+            }
+
+            jedx11_shader_res->m_vao = shader_blob->m_vao;
+
+            jedx11_shader_res->m_rasterizer = shader_blob->m_rasterizer;
+            jedx11_shader_res->m_depth = shader_blob->m_depth;
+            jedx11_shader_res->m_blend = shader_blob->m_blend;
+
+            jedx11_shader_res->m_samplers = shader_blob->m_samplers;
 
             resource->m_handle.m_ptr = jedx11_shader_res;
         }
-
+        else
+        {
+            resource->m_handle.m_ptr = nullptr;
+        }
         break;
     }
     case jegl_resource::type::TEXTURE:
@@ -1339,7 +1405,7 @@ void dx11_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* re
             &vertex_buffer_data,
             vertex->m_vbo.GetAddressOf()));
 
-        JEDX11_TRACE_DEBUG_NAME(vertex->m_vbo, 
+        JEDX11_TRACE_DEBUG_NAME(vertex->m_vbo,
             std::string(resource->m_path == nullptr ? "_builtin_vertex_" : resource->m_path) + "_Vbo");
 
         resource->m_handle.m_ptr = vertex;
@@ -1453,7 +1519,7 @@ void dx11_using_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* r
         context->m_dx_context->VSSetShader(shader->m_vertex.Get(), nullptr, 0);
         context->m_dx_context->PSSetShader(shader->m_fragment.Get(), nullptr, 0);
         context->m_dx_context->IASetInputLayout(shader->m_vao.Get());
-        
+
         context->m_dx_context->RSSetState(shader->m_rasterizer.Get());
         float _useless[4] = {};
         context->m_dx_context->OMSetBlendState(shader->m_blend.Get(), _useless, UINT_MAX);
@@ -1478,7 +1544,7 @@ void dx11_using_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* r
                 // Modified, free current resource id, reload one.
                 dx11_close_resource(ctx, resource);
                 resource->m_handle.m_ptr = nullptr;
-                dx11_init_resource(ctx, resource);
+                dx11_init_resource(ctx, nullptr, resource);
             }
         }
         auto* texture = std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
@@ -1733,6 +1799,9 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->pre_update_interface = dx11_pre_update;
     write_to_apis->update_interface = dx11_update;
     write_to_apis->late_update_interface = dx11_lateupdate;
+
+    write_to_apis->create_resource_blob = dx11_create_resource_blob;
+    write_to_apis->close_resource_blob = dx11_close_resource_blob;
 
     write_to_apis->init_resource = dx11_init_resource;
     write_to_apis->using_resource = dx11_using_resource;

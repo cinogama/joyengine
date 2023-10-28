@@ -265,8 +265,8 @@ jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_in
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);
     jegui_init_gl330(
-        [](auto* res) {return (void*)(intptr_t)res->m_handle.m_uint1; }, 
-        [](auto* res) 
+        [](auto* res) {return (void*)(intptr_t)res->m_handle.m_uint1; },
+        [](auto* res)
         {
             if (res->m_raw_shader_data != nullptr)
             {
@@ -438,101 +438,159 @@ struct gl3_vertex_data
     GLsizei m_pointcount;
 };
 
-void gl_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
+struct gl_resource_blob
+{
+    GLuint m_vertex_shader;
+    GLuint m_fragment_shader;
+
+    JECS_DISABLE_MOVE_AND_COPY(gl_resource_blob);
+
+    gl_resource_blob() = default;
+    ~gl_resource_blob()
+    {
+        glDeleteShader(m_vertex_shader);
+        glDeleteShader(m_fragment_shader);
+    }
+};
+
+jegl_resource_blob gl_create_resource_blob(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
+{
+    switch (resource->m_type)
+    {
+    case jegl_resource::type::SHADER:
+    {
+        gl_resource_blob* blob = new gl_resource_blob;
+        blob->m_vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(blob->m_vertex_shader, 1, &resource->m_raw_shader_data->m_vertex_glsl_src, NULL);
+        glCompileShader(blob->m_vertex_shader);
+
+        blob->m_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(blob->m_fragment_shader, 1, &resource->m_raw_shader_data->m_fragment_glsl_src, NULL);
+        glCompileShader(blob->m_fragment_shader);
+
+        // Check this program is acceptable?
+        GLint errmsg_len;
+        GLint errmsg_written_len;
+
+        bool shader_program_has_error = false;
+        std::string error_informations;
+        glGetShaderiv(blob->m_vertex_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
+        if (errmsg_len > 0)
+        {
+            shader_program_has_error = true;
+            std::vector<char> errmsg_buf(errmsg_len + 1);
+            glGetShaderInfoLog(blob->m_vertex_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+            error_informations = error_informations + "In vertex shader: \n" + errmsg_buf.data();
+        }
+        glGetShaderiv(blob->m_fragment_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
+        if (errmsg_len > 0)
+        {
+            shader_program_has_error = true;
+            std::vector<char> errmsg_buf(errmsg_len + 1);
+            glGetShaderInfoLog(blob->m_fragment_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+            error_informations = error_informations + "In fragment shader: \n" + errmsg_buf.data();
+        }
+
+        if (shader_program_has_error)
+        {
+            delete blob;
+            jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
+                resource, error_informations.c_str());
+            return nullptr;
+        }
+        else
+        {
+            return blob;
+        }
+        break;
+    }
+    case jegl_resource::type::TEXTURE:
+        break;
+    case jegl_resource::type::VERTEX:
+        break;
+    case jegl_resource::type::FRAMEBUF:
+        break;
+    case jegl_resource::type::UNIFORMBUF:
+        break;
+    default:
+        break;
+    }
+    return nullptr;
+}
+
+void gl_close_resource_blob(jegl_thread::custom_thread_data_t ctx, jegl_resource_blob blob)
+{
+    if (blob != nullptr)
+        delete (gl_resource_blob*)blob;
+}
+
+void gl_init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource_blob blob, jegl_resource* resource)
 {
     assert(resource->m_custom_resource != nullptr);
 
     switch (resource->m_type)
     {
     case jegl_resource::type::SHADER:
-
     {
-        GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vertex_shader, 1, &resource->m_raw_shader_data->m_vertex_glsl_src, NULL);
-        glCompileShader(vertex_shader);
-
-        GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fragment_shader, 1, &resource->m_raw_shader_data->m_fragment_glsl_src, NULL);
-        glCompileShader(fragment_shader);
-
-        GLuint shader_program = glCreateProgram();
-        glAttachShader(shader_program, vertex_shader);
-        glAttachShader(shader_program, fragment_shader);
-        glLinkProgram(shader_program);
-
-        // Check this program is acceptable?
-        GLint errmsg_len;
-        GLint errmsg_written_len;
-        glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &errmsg_len);
-        if (errmsg_len > 0)
+        if (blob != nullptr)
         {
-            std::string error_informations;
-            glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
-            if (errmsg_len > 0)
-            {
-                std::vector<char> errmsg_buf(errmsg_len + 1);
-                glGetShaderInfoLog(vertex_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
-                error_informations = error_informations + "In vertex shader: \n" + errmsg_buf.data();
-            }
-            glGetShaderiv(fragment_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
-            if (errmsg_len > 0)
-            {
-                std::vector<char> errmsg_buf(errmsg_len + 1);
-                glGetShaderInfoLog(fragment_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
-                error_informations = error_informations + "In fragment shader: \n" + errmsg_buf.data();
-            }
+            auto* shader_blob = std::launder(reinterpret_cast<gl_resource_blob*>(blob));
+            GLuint shader_program = glCreateProgram();
+            glAttachShader(shader_program, shader_blob->m_vertex_shader);
+            glAttachShader(shader_program, shader_blob->m_fragment_shader);
+            glLinkProgram(shader_program);
+
+            // Check this program is acceptable?
+            GLint errmsg_len;
+            GLint errmsg_written_len;
             glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &errmsg_len);
             if (errmsg_len > 0)
             {
                 std::vector<char> errmsg_buf(errmsg_len + 1);
                 glGetProgramInfoLog(shader_program, errmsg_len, &errmsg_written_len, errmsg_buf.data());
-                error_informations = error_informations + "In shader program link: \n" + errmsg_buf.data();
+                jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
+                    resource, errmsg_buf.data());
             }
-            jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
-                resource, error_informations.c_str());
-        }
-        else
-        {
-            glUseProgram(shader_program);
-            resource->m_handle.m_uint1 = shader_program;
-            auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
-
-            builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_M");
-            builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_V");
-            builtin_uniforms.m_builtin_uniform_p = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_P");
-
-            builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MVP");
-            builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MV");
-            builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_VP");
-
-            builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_TILING");
-            builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_OFFSET");
-
-            builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
-            builtin_uniforms.m_builtin_uniform_light2d_decay = gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_DECAY");
-
-            // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-            builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(ctx, resource, "JOYENGINE_LOCAL_SCALE");
-            builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(ctx, resource, "JOYENGINE_MAIN_COLOR");
-
-            auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
-            while (uniform_var)
+            else
             {
-                uniform_var->m_index = gl_get_uniform_location(ctx, resource, uniform_var->m_name);
-                uniform_var = uniform_var->m_next;
-            }
+                glUseProgram(shader_program);
+                resource->m_handle.m_uint1 = shader_program;
+                auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
-            auto* uniform_block = resource->m_raw_shader_data->m_custom_uniform_blocks;
-            while (uniform_block)
-            {
-                GLuint uniform_block_loc = glGetUniformBlockIndex(shader_program, uniform_block->m_name);
-                glUniformBlockBinding(shader_program, uniform_block_loc, (GLuint)uniform_block->m_specify_binding_place);
-                uniform_block = uniform_block->m_next;
+                builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_M");
+                builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_V");
+                builtin_uniforms.m_builtin_uniform_p = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_P");
+
+                builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MVP");
+                builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MV");
+                builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_VP");
+
+                builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_TILING");
+                builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_OFFSET");
+
+                builtin_uniforms.m_builtin_uniform_light2d_resolution = gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
+                builtin_uniforms.m_builtin_uniform_light2d_decay = gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_DECAY");
+
+                // ATTENTION: 注意，以下参数特殊shader可能挪作他用
+                builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(ctx, resource, "JOYENGINE_LOCAL_SCALE");
+                builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(ctx, resource, "JOYENGINE_MAIN_COLOR");
+
+                auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
+                while (uniform_var)
+                {
+                    uniform_var->m_index = gl_get_uniform_location(ctx, resource, uniform_var->m_name);
+                    uniform_var = uniform_var->m_next;
+                }
+
+                auto* uniform_block = resource->m_raw_shader_data->m_custom_uniform_blocks;
+                while (uniform_block)
+                {
+                    GLuint uniform_block_loc = glGetUniformBlockIndex(shader_program, uniform_block->m_name);
+                    glUniformBlockBinding(shader_program, uniform_block_loc, (GLuint)uniform_block->m_specify_binding_place);
+                    uniform_block = uniform_block->m_next;
+                }
             }
         }
-
-        glDeleteShader(vertex_shader);
-        glDeleteShader(fragment_shader);
         break;
     }
     case jegl_resource::type::TEXTURE:
@@ -874,7 +932,7 @@ void _gl_using_shader_program(jegl_resource* resource)
         _gl_update_depth_test_method(resource->m_raw_shader_data->m_depth_test);
         _gl_update_depth_mask_method(resource->m_raw_shader_data->m_depth_mask);
         _gl_update_blend_mode_method(
-            resource->m_raw_shader_data->m_blend_src_mode, 
+            resource->m_raw_shader_data->m_blend_src_mode,
             resource->m_raw_shader_data->m_blend_dst_mode);
         _gl_update_cull_mode_method(resource->m_raw_shader_data->m_cull_mode);
 
@@ -946,7 +1004,7 @@ inline void _gl_using_texture2d(jegl_thread::custom_thread_data_t ctx, jegl_reso
             // Modified, free current resource id, reload one.
             gl_close_resource(ctx, resource);
             resource->m_handle.m_uint1 = 0;
-            gl_init_resource(ctx, resource);
+            gl_init_resource(ctx, nullptr, resource);
         }
     }
 
@@ -1086,6 +1144,9 @@ void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->pre_update_interface = gl_pre_update;
     write_to_apis->update_interface = gl_update;
     write_to_apis->late_update_interface = gl_lateupdate;
+
+    write_to_apis->create_resource_blob = gl_create_resource_blob;
+    write_to_apis->close_resource_blob = gl_close_resource_blob;
 
     write_to_apis->init_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;
