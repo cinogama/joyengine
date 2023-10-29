@@ -421,7 +421,7 @@ func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: d
 
 }
 
-je::editor::register_panic_hook(jeapi::gui::form::panic);
+// je::editor::register_panic_hook(jeapi::gui::form::panic);
 for (;;)
 {
     je::editor::set_able_shared_glresource(false);

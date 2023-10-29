@@ -1808,7 +1808,7 @@ namespace vec2
         if (b is vec2)
             return (a[0] * b[0], a[1] * b[1]): vec2;
         else
-            return (a[0] * v, a[1] * v): vec2;
+            return (a[0] * b, a[1] * b): vec2;
     }
     public func operator / (a: vec2, b)
         where b is vec2 || b is real;
@@ -1816,7 +1816,7 @@ namespace vec2
         if (b is vec2)
             return (a[0] / b[0], a[1] / b[1]): vec2;
         else
-            return (a[0] / v, a[1] / v): vec2;
+            return (a[0] / b, a[1] / b): vec2;
     }
     public func length(self: vec2)
     {
@@ -1829,7 +1829,7 @@ namespace vec2
         let length = self->length;
         if (length == 0.)
             return self;
-        return (x/length, y/length): vec2;
+        return (x / length, y / length): vec2;
     }
     public func dot(self: vec2, b: vec2)
     {
@@ -1852,7 +1852,7 @@ namespace vec3
         if (b is vec3)
             return (a[0] * b[0], a[1] * b[1], a[2] * b[2]): vec3;
         else
-            return (a[0] * v, a[1] * v, a[2] * v): vec3;
+            return (a[0] * b, a[1] * b, a[2] * b): vec3;
     }
     public func operator / (a: vec3, b)
         where b is vec3 || b is real;
@@ -1860,7 +1860,7 @@ namespace vec3
         if (b is vec3)
             return (a[0] / b[0], a[1] / b[1], a[2] / b[2]): vec3;
         else
-            return (a[0] / v, a[1] / v, a[2] / v): vec3;
+            return (a[0] / b, a[1] / b, a[2] / b): vec3;
     }
 
     public func length(self: vec3)
@@ -1905,7 +1905,7 @@ namespace vec4
         if (b is vec4)
             return (a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]): vec4;
         else
-            return (a[0] * v, a[1] * v, a[2] * v, a[3] * v): vec4;
+            return (a[0] * b, a[1] * b, a[2] * b, a[3] * b): vec4;
     }
     public func operator / (a: vec4, b)
         where b is vec4 || b is real;
@@ -1913,7 +1913,7 @@ namespace vec4
         if (b is vec4)
             return (a[0] / b[0], a[1] / b[1], a[2] / b[2], a[3] / b[3]): vec4;
         else
-            return (a[0] / v, a[1] / v, a[2] / v, a[3] / v): vec4;
+            return (a[0] / b, a[1] / b, a[2] / b, a[3] / b): vec4;
     }
 
     public func length(self: vec4)
@@ -1950,7 +1950,7 @@ namespace ivec2
         if (b is ivec2)
             return (a[0] * b[0], a[1] * b[1]): ivec2;
         else
-            return (a[0] * v, a[1] * v): ivec2;
+            return (a[0] * b, a[1] * b): ivec2;
     }
     public func operator / (a: ivec2, b)
         where b is ivec2 || b is int;
@@ -1958,7 +1958,7 @@ namespace ivec2
         if (b is ivec2)
             return (a[0] / b[0], a[1] / b[1]): ivec2;
         else
-            return (a[0] / v, a[1] / v): ivec2;
+            return (a[0] / b, a[1] / b): ivec2;
     }
 }
 namespace quat
@@ -2048,8 +2048,8 @@ namespace quat
             let (x1, y1, z1, w1) = self;
             let (x2, y2, z2, w2) = b;
             
-            let v1 = (x, y, z): vec3;
-            let v2 = (x1, y1, z1): vec3;
+            let v1 = (x1, y1, z1): vec3;
+            let v2 = (x2, y2, z2): vec3;
 
             let w3 = w1 * w2 - v1->dot(v2);
             let v3 = v1->cross(v2) + v2 * w1 + v1 * w2;

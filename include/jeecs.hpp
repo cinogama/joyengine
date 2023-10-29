@@ -8804,7 +8804,7 @@ namespace jeecs
                     wo_struct_set(value, 2, elem);
 
                     wo_set_float(elem, v->w);
-                    wo_struct_set(value, 2, elem);
+                    wo_struct_set(value, 3, elem);
                 },
                 [](wo_vm vm, wo_value value, jeecs::math::quat* v) {
                     wo_value elem = wo_push_empty(vm);
