@@ -13,10 +13,14 @@ namespace editor::gui
     using ScriptEditor = struct{
         m_title: string,
         m_source: mut string,
-        m_context: EditorContext,
+        m_project: Project,
 
-        m_history: vec<ScriptEditor::History>,
-        m_histort_index: mut int,
+        m_history: vec<History>,
+        m_history_index: mut int,
+
+        m_current_edit_state: mut option<History>,
+
+        m_hook_vm: mut (vm)=> option<dynamic>,
     }
     {
         using History = struct{
@@ -30,34 +34,105 @@ namespace editor::gui
                 try! data = proj->dump_all_world;
 
                 return result::ok(History{
-                    m_abs = script->subto(0, 10),
+                    m_abs = script->subto(0, 20),
                     m_script = script,
                     m_data = data,
                 });
             }
         }
-
+    
         public func create(editorctx: EditorContext, template_script: string, title: string)
         {
             let self = ScriptEditor{
                 m_title = title,
                 m_source = mut template_script,
-                m_context = editorctx,
+                m_project = editorctx->get_project,
 
                 m_history = []mut,
-                m_histort_index = mut 0,
+                m_history_index = mut 0,
+
+                m_current_edit_state = mut option::none,
+
+                m_hook_vm = mut \_ = option::value(nil: dynamic);,
             };
             launch(show, (self,));
             return self;
         }
+        public func register_hook(self: ScriptEditor, hook_func: (vm)=>option<dynamic>)
+        {
+            self.m_hook_vm = hook_func;
+        }
+        func restore_history(self: ScriptEditor, history: History)
+        {
+            self.m_source = history.m_script;
+            self.m_project->close_all_world();
+            self.m_project->restore_all_world(history.m_data);
+        }
+        func history_menu(self: ScriptEditor, index: int)
+        {
+            if (BeginPopupContextItem())
+            {
+                if (MenuItem("撤销到此步之前"))
+                {
+                    // 如果从最新状态切回旧历史，那么保存当前状态
+                    if (self.m_history_index == self.m_history->len && 
+                        self.m_history_index != index)
+                    {
+                        self.m_current_edit_state = 
+                            new! History(self.m_project, self.m_source)->okay;
+                    }
 
+                    self.m_history_index = index;
+
+                    if (index < self.m_history->len)
+                    {
+                        self->restore_history(self.m_history[index]);
+                    }
+                    else
+                    {
+                        assert(index == self.m_history->len);
+                        match (self.m_current_edit_state)
+                        {
+                        value(history)? 
+                            {
+                                self->restore_history(history);
+                                self.m_current_edit_state = option::none;
+                            }
+                        none?;
+                        }
+                    }
+                    
+                }
+                EndPopup();
+            }
+        }
         func history_list(self: ScriptEditor)
         {
             BeginGroup();
             let (_, h) = GetContentRegionAvail();
+
+            // 在此展示历史记录，可用于预览和撤回
             if (BeginListBox("##history", 200., h))
             {
-                do self;
+                for (let index, history : self.m_history)
+                {
+                    do SelectableSelected(F"{history.m_abs->replace("\n", "")}...##{index}", 
+                        self.m_history_index == index);
+                    let is_hovered = IsItemHovered();
+                    if (is_hovered)
+                    {
+                        // 鼠标悬浮在选项上？显示脚本内容！
+                        BeginTooltip();
+                        Text(history.m_script);
+                        EndTooltip();
+                    }
+
+                    self->history_menu(index);
+                }
+
+                do SelectableSelected("正在编辑...", 
+                    self.m_history_index == self.m_history->len);
+                self->history_menu(self.m_history_index);
 
                 EndListBox();
             }
@@ -83,16 +158,19 @@ namespace editor::gui
         }
         func run_script(self: ScriptEditor)
         {
-            let proj = self.m_context->get_project();
-
-            try! history = new! History(proj, self.m_source);
-
-            self.m_history->add(history);
+            try! history = new! History(self.m_project, self.m_source);
             try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source);
 
             do vmm->jit;
             if (!vmm->run->has)
                 return result::err("运行脚本时发生错误");
+
+            if (!self.m_hook_vm(vmm)->has)
+                return result::err("运行脚本时发生错误");
+
+            assert(self.m_history->decrease(self.m_history_index));
+            self.m_history->add(history);
+            self.m_history_index += 1;
 
             return result::ok(vmm);
         }
