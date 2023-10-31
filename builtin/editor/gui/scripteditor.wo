@@ -1,0 +1,92 @@
+// scripteditor.wo
+import woo::std;
+
+import je;
+import je::gui;
+
+using std;
+using je;
+using je::gui;
+
+namespace editor::gui
+{
+    using ScriptEditor = struct{
+        m_title: string,
+        m_source: mut string,
+        m_context: EditorContext,
+
+        m_history: vec<array<dict<string, dynamic>>>,
+    }
+    {
+        public func create(editorctx: EditorContext, template_script: string, title: string)
+        {
+            let self = ScriptEditor{
+                m_title = title,
+                m_source = mut template_script,
+                m_context = editorctx,
+
+                m_history = []mut,
+            };
+            launch(show, (self,));
+            return self;
+        }
+
+        public func show(self: ScriptEditor)
+        {
+            let mut exist = true;
+
+            je::gui::SetNextWindowSizeConstraints((350., 200.), (3500., 2000.));
+            match (BeginOpen(
+                F"脚本-{self.m_title}##{JobID()}"))
+            {
+            value(show)?
+                if (show)
+                {
+                    if (Button("执行"))
+                    {
+                        // 执行前先保存状态
+                        let save_state_and_run_vm = func()
+                        {
+                            let proj = self.m_context->get_project();
+
+                            try! dat = proj->dump_all_world;
+                            self.m_history->add(dat);
+                            try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source);
+
+                            do vmm->jit;
+                            if (!vmm->run->has)
+                                return result::err("运行脚本时发生错误");
+
+                            return result::ok(vmm);
+                        };
+                       
+                        match (save_state_and_run_vm())
+                        {
+                        ok(_)?
+                        {
+                        }
+                        err(msg)?
+                            jeapi::gui::form::errmsg("无法执行脚本", msg);
+                        }
+                    }
+                    SameLine();
+                    if (Button("撤销上一步"))
+                    {
+                        
+                    }
+
+                    // TODO: 在此做列表，展示历史脚本
+
+                    let (w, h) = GetContentRegionAvail();
+                    do InputTextMultilineSize("##script", self.m_source, w, h)
+                        ->> \txt = self.m_source = txt;
+                        ;
+                }
+            none?
+                exist = false;
+            }
+            End();
+            return exist;            
+        }
+    }
+}

@@ -8,6 +8,7 @@ import builtin::api::dbg::main;
 import builtin::editor::gui::edit_forms::export_project;
 import builtin::api::gui::inputmgr;
 import builtin::api::gui::style;
+import builtin::editor::gui::scripteditor;
 
 using je::gui;
 using jeapi::gui::style;
@@ -253,6 +254,22 @@ namespace editor::gui
                         Separator();
                         if (MenuItem("重新获取脚本"))
                             tools::update_tool_scripts(context->get_project);
+
+                        if (MenuItem("脚本编辑器..."))
+                            do new! ScriptEditor(
+                                context,
+@"// 编辑器脚本
+import woo::std;
+import je;
+import je::towoo;
+
+using std;
+using je;
+
+// 你可以在此写点你喜欢的东西
+je::log("Helloworld");
+"@, 
+                                "编辑器");
                             
                         EndMenu();
                     }
