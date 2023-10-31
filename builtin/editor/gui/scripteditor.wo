@@ -15,9 +15,28 @@ namespace editor::gui
         m_source: mut string,
         m_context: EditorContext,
 
-        m_history: vec<array<dict<string, dynamic>>>,
+        m_history: vec<ScriptEditor::History>,
+        m_histort_index: mut int,
     }
     {
+        using History = struct{
+            m_abs: string,
+            m_script: string,
+            m_data: array<dict<string, dynamic>>,
+        }
+        {
+            func create(proj: Project, script: string)
+            {
+                try! data = proj->dump_all_world;
+
+                return result::ok(History{
+                    m_abs = script->subto(0, 10),
+                    m_script = script,
+                    m_data = data,
+                });
+            }
+        }
+
         public func create(editorctx: EditorContext, template_script: string, title: string)
         {
             let self = ScriptEditor{
@@ -26,12 +45,58 @@ namespace editor::gui
                 m_context = editorctx,
 
                 m_history = []mut,
+                m_histort_index = mut 0,
             };
             launch(show, (self,));
             return self;
         }
 
-        public func show(self: ScriptEditor)
+        func history_list(self: ScriptEditor)
+        {
+            BeginGroup();
+            let (_, h) = GetContentRegionAvail();
+            if (BeginListBox("##history", 200., h))
+            {
+                do self;
+
+                EndListBox();
+            }
+            EndGroup();
+        }
+        func script_box(self: ScriptEditor)
+        {
+            BeginGroup();
+
+            if (Button("执行"))
+                match (self->run_script)
+                {
+                ok(vm_instance)? do vm_instance->close;
+                err(msg)? jeapi::gui::form::errmsg("无法执行脚本", msg);
+                }
+
+            let (w, h) = GetContentRegionAvail();
+            do InputTextMultilineSize("##script", self.m_source, w, h)
+                ->> \txt = self.m_source = txt;
+                ;
+
+            EndGroup();
+        }
+        func run_script(self: ScriptEditor)
+        {
+            let proj = self.m_context->get_project();
+
+            try! history = new! History(proj, self.m_source);
+
+            self.m_history->add(history);
+            try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source);
+
+            do vmm->jit;
+            if (!vmm->run->has)
+                return result::err("运行脚本时发生错误");
+
+            return result::ok(vmm);
+        }
+        func show(self: ScriptEditor)
         {
             let mut exist = true;
 
@@ -42,45 +107,9 @@ namespace editor::gui
             value(show)?
                 if (show)
                 {
-                    if (Button("执行"))
-                    {
-                        // 执行前先保存状态
-                        let save_state_and_run_vm = func()
-                        {
-                            let proj = self.m_context->get_project();
-
-                            try! dat = proj->dump_all_world;
-                            self.m_history->add(dat);
-                            try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source);
-
-                            do vmm->jit;
-                            if (!vmm->run->has)
-                                return result::err("运行脚本时发生错误");
-
-                            return result::ok(vmm);
-                        };
-                       
-                        match (save_state_and_run_vm())
-                        {
-                        ok(_)?
-                        {
-                        }
-                        err(msg)?
-                            jeapi::gui::form::errmsg("无法执行脚本", msg);
-                        }
-                    }
+                    self->history_list;
                     SameLine();
-                    if (Button("撤销上一步"))
-                    {
-                        
-                    }
-
-                    // TODO: 在此做列表，展示历史脚本
-
-                    let (w, h) = GetContentRegionAvail();
-                    do InputTextMultilineSize("##script", self.m_source, w, h)
-                        ->> \txt = self.m_source = txt;
-                        ;
+                    self->script_box;
                 }
             none?
                 exist = false;
