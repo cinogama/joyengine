@@ -19,8 +19,9 @@ namespace editor::gui
         m_history_index: mut int,
 
         m_current_edit_state: mut option<History>,
+        m_enable_undo: bool,
 
-        m_hook_vm: mut (vm)=> option<dynamic>,
+        m_hook_callback: mut (vm)=> option<dynamic>,
     }
     {
         using History = struct{
@@ -41,7 +42,11 @@ namespace editor::gui
             }
         }
     
-        public func create(editorctx: EditorContext, template_script: string, title: string)
+        public func create(
+            editorctx: EditorContext, 
+            template_script: string, 
+            title: string,
+            enable_undo: bool)
         {
             let self = ScriptEditor{
                 m_title = title,
@@ -50,17 +55,18 @@ namespace editor::gui
 
                 m_history = []mut,
                 m_history_index = mut 0,
+                m_enable_undo = enable_undo,
 
                 m_current_edit_state = mut option::none,
 
-                m_hook_vm = mut \_ = option::value(nil: dynamic);,
+                m_hook_callback = mut \_ = option::value(nil: dynamic);,
             };
             launch(show, (self,));
             return self;
         }
-        public func register_hook(self: ScriptEditor, hook_func: (vm)=>option<dynamic>)
+        public func set_callback(self: ScriptEditor, hook_func: (vm)=>option<dynamic>)
         {
-            self.m_hook_vm = hook_func;
+            self.m_hook_callback = hook_func;
         }
         func restore_history(self: ScriptEditor, history: History)
         {
@@ -72,7 +78,7 @@ namespace editor::gui
         {
             if (BeginPopupContextItem())
             {
-                if (MenuItem("撤销到此步之前"))
+                if (MenuItemEnabled("撤销到此步之前", self.m_enable_undo))
                 {
                     // 如果从最新状态切回旧历史，那么保存当前状态
                     if (self.m_history_index == self.m_history->len && 
@@ -116,7 +122,7 @@ namespace editor::gui
             {
                 for (let index, history : self.m_history)
                 {
-                    do SelectableSelected(F"{history.m_abs->replace("\n", "")}...##{index}", 
+                    let clicked = SelectableSelected(F"{history.m_abs->replace("\n", "")}...##{index}", 
                         self.m_history_index == index);
                     let is_hovered = IsItemHovered();
                     if (is_hovered)
@@ -126,13 +132,15 @@ namespace editor::gui
                         Text(history.m_script);
                         EndTooltip();
                     }
+                    if (clicked)
+                        self.m_source = history.m_script;
 
                     self->history_menu(index);
                 }
 
                 do SelectableSelected("正在编辑...", 
                     self.m_history_index == self.m_history->len);
-                self->history_menu(self.m_history_index);
+                self->history_menu(self.m_history->len);
 
                 EndListBox();
             }
@@ -145,7 +153,7 @@ namespace editor::gui
             if (Button("执行"))
                 match (self->run_script)
                 {
-                ok(vm_instance)? do vm_instance->close;
+                ok(_)?;
                 err(msg)? jeapi::gui::form::errmsg("无法执行脚本", msg);
                 }
 
@@ -161,18 +169,17 @@ namespace editor::gui
             try! history = new! History(self.m_project, self.m_source);
             try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source);
 
-            do vmm->jit;
-            if (!vmm->run->has)
-                return result::err("运行脚本时发生错误");
-
-            if (!self.m_hook_vm(vmm)->has)
-                return result::err("运行脚本时发生错误");
-
             assert(self.m_history->decrease(self.m_history_index));
             self.m_history->add(history);
             self.m_history_index += 1;
 
-            return result::ok(vmm);
+            do vmm->jit;
+            if (!vmm->run->has
+             || !self.m_hook_callback(vmm)->has)
+            {
+                return result::err("运行脚本时发生错误");
+            }
+            return result::ok(do nil);
         }
         func show(self: ScriptEditor)
         {

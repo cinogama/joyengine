@@ -37,5 +37,9 @@ namespace jeapi::loader
         {
             return self.m_world->instance(self.m_prefab);
         }
+        public func close(self: prefab)
+        {
+            self.m_prefab->close();
+        }
     }
 }

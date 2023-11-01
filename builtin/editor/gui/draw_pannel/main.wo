@@ -303,7 +303,32 @@ namespace editor::gui::drawpannel
                                         {
                                             update_and_get_scripts(context->get_project);
                                         }
+                                        if (MenuItem("脚本编辑器..."))
+                                        {
+                                            let DEFAULT_SCRIPT_SRC = 
+@"// 图像处理脚本
+import je::editor::graphic;
 
+NAME = "自定义图像脚本";
+
+public func entry(_: je::graphic::texture)
+{
+    return true;
+}
+
+public func pixel(t: je::graphic::texture, x: int, y: int)
+    => (real, real, real, real)
+{
+    let (r, g, b, a) = tex(t, x, y);
+    return (r, g ,b ,a);
+}
+"@;
+                                            new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)
+                                                ->set_callback(func(vmm)
+                                                {
+                                                    return vmm->invoke("main", [texture: dynamic]);
+                                                });
+                                        }
                                         EndMenu();
                                     }
                                     EndMenu();
