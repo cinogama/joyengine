@@ -22,6 +22,7 @@ void jegui_init_dx11(
 void jegui_update_dx11(jegl_thread::custom_thread_data_t thread_context);
 void jegui_shutdown_dx11(bool reboot);
 bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void jegui_win32_append_unicode16_char(wchar_t wch);
 #endif
 
 void jegui_init_gl330(

@@ -247,8 +247,36 @@ void dx11_handle_key_state(WPARAM wParam, bool down)
 
 LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    if (jegui_win32_proc_handler(hwnd, msg, wParam, lParam))
-        return 0;
+    if (msg == WM_CHAR)
+    {
+        // NOTE: In WIN32, Only support U16.
+        static char multi_byte_record[2];
+        static size_t multi_byte_record_index = 0;
+
+        wchar_t wch = 0;
+
+        multi_byte_record[multi_byte_record_index++] = (char)wParam;
+        if (multi_byte_record_index >= 2)
+        {
+            multi_byte_record_index = 0;
+            MultiByteToWideChar(CP_ACP, 0, multi_byte_record, 2, &wch, 1);
+        }
+        else
+        {
+            if (0 == (multi_byte_record[0] & (char)0x80))
+            {
+                multi_byte_record_index = 0;
+                wch = (wchar_t)multi_byte_record[0];
+            }
+        }
+        jegui_win32_append_unicode16_char(wch);
+    }
+    else
+    {
+        if (jegui_win32_proc_handler(hwnd, msg, wParam, lParam))
+            return 0;
+    }
+
 
     switch (msg)
     {
@@ -386,7 +414,7 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
     {
         // D3D_FEATURE_LEVEL_11_1,// Only support dx11
         D3D_FEATURE_LEVEL_11_0
-    };
+};
 
     UINT dx_device_flag =
 #ifdef NDEBUG
@@ -513,10 +541,10 @@ jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_
                     sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
             }
         },
-        context->m_window_handle,
-        context->m_dx_device.Get(),
-        context->m_dx_context.Get(),
-        reboot);
+            context->m_window_handle,
+            context->m_dx_device.Get(),
+            context->m_dx_context.Get(),
+            reboot);
     return context;
 }
 

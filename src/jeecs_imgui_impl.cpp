@@ -2227,6 +2227,11 @@ bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return true;
     return false;
 }
+void jegui_win32_append_unicode16_char(wchar_t wch)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddInputCharacterUTF16(wch);
+}
 #endif
 void jegui_init_gl330(
     void* (*get_img_res)(jegl_resource*),
