@@ -15,8 +15,14 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
-option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD "Install pkgs by baozi when building." ON)
-option(JE4_COPYING_BUILTIN_FILES "Copy builtin files to build." ON)
+option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD  "Install pkgs by baozi when building."  ON)
+option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."          ON)
+
+option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
+option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
+option(JE4_ENABLE_OPENGLES320_GAPI  "Enable OpenGLES 3.2 Graphic API"   OFF)
+option(JE4_ENABLE_VULKAN110_GAPI    "Enable Vulkan 1.1 Graphic API"     OFF)
+option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
 # openal-soft will be compiled to dynamic-libs
 add_subdirectory("3rd/openal-soft")
@@ -81,7 +87,6 @@ if (JE4_COPYING_BUILTIN_FILES)
             COMMAND echo "COPY_RCEDIT64_FILES is only used for win32")
     endif()
 endif()
-
 
 add_subdirectory("src")
 

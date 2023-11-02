@@ -15,6 +15,21 @@
           "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
           "value": "False",
           "type": "BOOL"
+        },
+		{
+          "name": "JE4_ENABLE_DX11_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_OPENGL330_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_VULKAN110_GAPI",
+          "value": "True",
+          "type": "BOOL"
         }
       ]
     },
@@ -32,6 +47,21 @@
         {
           "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
           "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_DX11_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_OPENGL330_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_VULKAN110_GAPI",
+          "value": "True",
           "type": "BOOL"
         }
       ]
