@@ -2100,8 +2100,18 @@ jegl_using_vulkan110_apis [基本接口] (暂未实现)
 */
 JE_API void jegl_using_vulkan110_apis(jegl_graphic_api* write_to_apis);
 
+
 /*
-jegl_using_dx11_apis [基本接口] (暂未实现)
+jegl_using_metal_apis [基本接口] (暂未实现)
+加载Metal API集合，通常与jegl_start_graphic_thread一起使用
+用于指定图形线程使用的基本图形库
+请参见：
+    jegl_start_graphic_thread
+*/
+JE_API void jegl_using_metal_apis(jegl_graphic_api* write_to_apis);
+
+/*
+jegl_using_dx11_apis [基本接口] 
 加载directx 11 API集合，通常与jegl_start_graphic_thread一起使用
 用于指定图形线程使用的基本图形库
 请参见：

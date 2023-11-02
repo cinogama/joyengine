@@ -1622,20 +1622,24 @@ public func frag(_: v2f)
                                         if (block.mesh.m_block_mesh == nullptr)
                                         {
                                             std::vector<float> _vertex_buffer;
-
-                                            for (auto& point : block.mesh.m_block_points)
+                                            if (!block.mesh.m_block_points.empty())
                                             {
-                                                _vertex_buffer.insert(_vertex_buffer.end(),
-                                                    {
-                                                        point.x, point.y, 0.f, 0.f,
-                                                        point.x, point.y, 0.f, 1.f,
-                                                    });
+                                                for (auto& point : block.mesh.m_block_points)
+                                                {
+                                                    _vertex_buffer.insert(_vertex_buffer.end(),
+                                                        {
+                                                            point.x, point.y, 0.f, 0.f,
+                                                            point.x, point.y, 0.f, 1.f,
+                                                        });
+                                                }
+                                                block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                                                    jegl_vertex::type::TRIANGLESTRIP,
+                                                    _vertex_buffer, { 3,1 });
                                             }
-                                            block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
-                                                jegl_vertex::type::TRIANGLESTRIP,
-                                                _vertex_buffer, { 3,1 });
+                                            else
+                                                block.mesh.m_block_mesh = nullptr;
                                         }
-                                        assert(block.mesh.m_block_mesh != nullptr);
+
                                         m_2dblock_list.push_back(
                                             block2d_arch{
                                                     &trans, &block, texture, shape
@@ -1913,7 +1917,7 @@ public func frag(_: v2f)
                                                 lightarch.translation->world_position.z,
                                                 lightarch.shadow->shape_offset);
                                     }
-                                    else
+                                    else if (blockarch.block->mesh.m_block_mesh != nullptr)
                                     {
                                         // 物体比光源更远离摄像机，或者形状阴影被禁用
                                         auto& using_shadow_pass_shader = blockarch.block->reverse

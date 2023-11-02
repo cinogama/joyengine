@@ -60,10 +60,19 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
     if (_jegl_host_graphic_api == nullptr)
     {
-#ifdef JE_OS_WINDOWS
+#if defined(JE_ENABLE_DX11_GAPI)
         return jegl_using_dx11_apis;
-#else
+#elif defined(JE_ENABLE_GL330_GAPI)
         return jegl_using_opengl330_apis;
+#elif defined(JE_ENABLE_GLES320_GAPI)
+        return jegl_using_opengles320_apis;
+#elif defined(JE_ENABLE_VK110_GAPI)
+        return jegl_using_vulkan110_apis;
+#elif defined(JE_ENABLE_METAL_GAPI)
+        return jegl_using_metal_apis;
+#else
+        jeecs::debug::logfatal("No default graphic-api supported.");
+        return nullptr;
 #endif
     }
     return _jegl_host_graphic_api;
@@ -127,16 +136,29 @@ void je_init(int argc, char** argv)
     {
         std::string config = argv[i];
         std::string value = argv[i + 1];
-        if (config == "--force-using-graphic-api" || config == "-gapi")
+        if (config == "-gapi")
         {
-            if (value == "dx11")
+            if (false);
+#if defined(JE_ENABLE_DX11_GAPI)
+            else if (value == "dx11")
                 jegl_set_host_graphic_api(jegl_using_dx11_apis);
+#endif
+#if defined(JE_ENABLE_GL330_GAPI)
             else if (value == "gl330")
                 jegl_set_host_graphic_api(jegl_using_opengl330_apis);
+#endif
+#if defined(JE_ENABLE_GLES320_GAPI)
             else if (value == "gles320")
                 jegl_set_host_graphic_api(jegl_using_opengles320_apis);
+#endif
+#if defined(JE_ENABLE_VK110_GAPI)
             else if (value == "vk110")
                 jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
+#endif
+#if defined(JE_ENABLE_METAL_GAPI)
+            else if (value == "metal")
+                jegl_set_host_graphic_api(jegl_using_metal_apis);
+#endif
             else
                 jeecs::debug::logwarn("Unknown graphic api named: '%s'.", value.c_str());
         }

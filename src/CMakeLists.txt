@@ -27,19 +27,37 @@ set(imgui_srcs	"../3rd/imgui/imconfig.h"
 				"../3rd/imgui/misc/cpp/imgui_stdlib.cpp"
 				"../3rd/imgui/misc/cpp/imgui_stdlib.h")
 
-list(APPEND imgui_srcs # OPENGL330
-				"../3rd/imgui/backends/imgui_impl_glfw.cpp"
-				"../3rd/imgui/backends/imgui_impl_glfw.h"
-				"../3rd/imgui/backends/imgui_impl_opengl3.cpp"
-				"../3rd/imgui/backends/imgui_impl_opengl3.h"
-				"../3rd/imgui/backends/imgui_impl_opengl3_loader.h")
+option(JE4_ENABLE_OPENGL330_GAPI	"Enable OpenGL 3.3 Graphic API"		OFF)
+option(JE4_ENABLE_DX11_GAPI			"Enable DX11 Graphic api"			OFF)
+option(JE4_ENABLE_OPENGLES320_GAPI	"Enable OpenGLES 3.2 Graphic API"	OFF)
+option(JE4_ENABLE_VULKAN110_GAPI	"Enable Vulkan 1.1 Graphic API"		OFF)
+option(JE4_ENABLE_METAL_GAPI		"Enable Metal Graphic API"			OFF)
 
-if (WIN32)
+if (JE4_ENABLE_OPENGL330_GAPI)
+	add_definitions(-DJE_ENABLE_GL330_GAPI)
+	list(APPEND imgui_srcs # OPENGL330
+			"../3rd/imgui/backends/imgui_impl_glfw.cpp"
+			"../3rd/imgui/backends/imgui_impl_glfw.h"
+			"../3rd/imgui/backends/imgui_impl_opengl3.cpp"
+			"../3rd/imgui/backends/imgui_impl_opengl3.h"
+			"../3rd/imgui/backends/imgui_impl_opengl3_loader.h")
+endif()
+if (JE4_ENABLE_OPENGL330_GAPI AND WIN32)
+	add_definitions(-DJE_ENABLE_DX11_GAPI)
 	list(APPEND imgui_srcs # DX11
-				"../3rd/imgui/backends/imgui_impl_win32.cpp"
-				"../3rd/imgui/backends/imgui_impl_win32.h"
-				"../3rd/imgui/backends/imgui_impl_dx11.cpp"
-				"../3rd/imgui/backends/imgui_impl_dx11.h")
+			"../3rd/imgui/backends/imgui_impl_win32.cpp"
+			"../3rd/imgui/backends/imgui_impl_win32.h"
+			"../3rd/imgui/backends/imgui_impl_dx11.cpp"
+			"../3rd/imgui/backends/imgui_impl_dx11.h")
+endif()
+if (JE4_ENABLE_OPENGLES320_GAPI)
+	add_definitions(-DJE_ENABLE_GLES320_GAPI)
+endif()
+if (JE4_ENABLE_VULKAN110_GAPI)
+	add_definitions(-DJE_ENABLE_VK110_GAPI)
+endif()
+if (JE4_ENABLE_METAL_GAPI)
+	add_definitions(-DJE_ENABLE_METAL_GAPI)
 endif()
 
 if (WIN32)

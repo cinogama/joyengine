@@ -2186,7 +2186,7 @@ void _jegui_shutdown_basic(bool reboot)
         }
     }
 }
-#ifdef _WIN32
+#ifdef JE_ENABLE_DX11_GAPI
 void jegui_init_dx11(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*),
@@ -2233,6 +2233,8 @@ void jegui_win32_append_unicode16_char(wchar_t wch)
     io.AddInputCharacterUTF16(wch);
 }
 #endif
+
+#ifdef JE_ENABLE_GL330_GAPI
 void jegui_init_gl330(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*),
@@ -2262,6 +2264,7 @@ void jegui_shutdown_gl330(bool reboot)
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
+#endif
 
 bool jegui_shutdown_callback()
 {

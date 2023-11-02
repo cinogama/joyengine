@@ -9,7 +9,7 @@
 
 void jegui_set_font(const char* path, size_t size);
 
-#ifdef _WIN32
+#ifdef JE_ENABLE_DX11_GAPI
 #include <Windows.h>
 
 void jegui_init_dx11(
@@ -25,6 +25,7 @@ bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 void jegui_win32_append_unicode16_char(wchar_t wch);
 #endif
 
+#ifdef JE_ENABLE_GL330_GAPI
 void jegui_init_gl330(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*),
@@ -32,6 +33,7 @@ void jegui_init_gl330(
     bool reboot);
 void jegui_update_gl330(jegl_thread::custom_thread_data_t thread_context);
 void jegui_shutdown_gl330(bool reboot);
+#endif
 
 // 用于点击退出窗口时的最终回调，仅允许解除一次。
 // 再次设置之前需要先解除注册

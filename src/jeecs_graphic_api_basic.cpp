@@ -216,34 +216,43 @@ jegl_thread* jegl_start_graphic_thread(
     void(*frame_rend_work)(void*, jegl_thread*),
     void* arg)
 {
-    jegl_thread* thread_handle = new jegl_thread();
-
-    thread_handle->m_version = 0;
-    thread_handle->_m_thread_notifier = new jegl_thread_notifier();
-    thread_handle->m_apis = new jegl_graphic_api();
-
-    memset(thread_handle->m_apis, 0, sizeof(jegl_graphic_api));
-    register_func(thread_handle->m_apis);
-
-    size_t err_api_no = 0;
-    for (void** reador = (void**)thread_handle->m_apis;
-        reador < (void**)(thread_handle->m_apis + 1);
-        ++reador)
+    jegl_thread* thread_handle = nullptr;
+    if (register_func != nullptr)
     {
-        if (!*reador)
+        thread_handle = new jegl_thread();
+
+        thread_handle->m_version = 0;
+        thread_handle->_m_thread_notifier = new jegl_thread_notifier();
+        thread_handle->m_apis = new jegl_graphic_api();
+
+        memset(thread_handle->m_apis, 0, sizeof(jegl_graphic_api));
+        register_func(thread_handle->m_apis);
+
+        size_t err_api_no = 0;
+        for (void** reador = (void**)thread_handle->m_apis;
+            reador < (void**)(thread_handle->m_apis + 1);
+            ++reador)
         {
-            err_api_no++;
-            jeecs::debug::logfatal("GraphicAPI function: %zu is invalid.",
-                (size_t)(reador - (void**)thread_handle->m_apis));
+            if (!*reador)
+            {
+                err_api_no++;
+                jeecs::debug::logfatal("GraphicAPI function: %zu is invalid.",
+                    (size_t)(reador - (void**)thread_handle->m_apis));
+            }
+        }
+
+        if (err_api_no)
+        {
+            delete thread_handle->_m_thread_notifier;
+            delete thread_handle->m_apis;
+            delete thread_handle;
+
+            thread_handle = nullptr;
         }
     }
 
-    if (err_api_no)
+    if (thread_handle == nullptr)
     {
-        delete thread_handle->_m_thread_notifier;
-        delete thread_handle->m_apis;
-        delete thread_handle;
-
         jeecs::debug::logfatal("Fail to start up graphic thread, abort and return nullptr.");
         return nullptr;
     }
@@ -1117,15 +1126,21 @@ jegl_resource* jegl_create_vertex(
     size_t data_length,
     size_t format_length)
 {
-    jegl_resource* vertex = _create_resource();
-    vertex->m_type = jegl_resource::VERTEX;
-    vertex->m_raw_vertex_data = new jegl_vertex();
-
     size_t datacount_per_point = 0;
     for (size_t i = 0; i < format_length; ++i)
         datacount_per_point += format[i];
 
     auto point_count = data_length / datacount_per_point;
+
+    if (point_count == 0)
+    {
+        jeecs::debug::logerr("Vertex data donot contain any completed point.");
+        return nullptr;
+    }
+
+    jegl_resource* vertex = _create_resource();
+    vertex->m_type = jegl_resource::VERTEX;
+    vertex->m_raw_vertex_data = new jegl_vertex();
 
     if (data_length % datacount_per_point)
         jeecs::debug::logwarn("Vertex data & format not matched, please check.");
