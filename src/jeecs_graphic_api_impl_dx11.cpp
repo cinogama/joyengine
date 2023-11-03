@@ -5,7 +5,7 @@
 
 #include "jeecs_imgui_api.hpp"
 
-#include <D3D11.h>
+#include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
@@ -15,12 +15,6 @@
 
 #undef max
 #undef min
-
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "dxguid.lib")
-#pragma comment(lib, "winmm.lib")
-#pragma comment(lib, "D3DCompiler.lib")
 
 #define JERCHECK(RC) if (FAILED(RC)){jeecs::debug::logfatal("JoyEngine DX11 Failed: " #RC);}
 

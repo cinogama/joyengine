@@ -17,6 +17,16 @@ include_directories("../3rd/openal-soft/include")
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
 
+set(jeecs_system_libs "")
+set(jeecs_graphic_libs "")
+
+if (WIN32)
+    list(APPEND jeecs_system_libs winmm)
+else()
+    list(APPEND jeecs_system_libs pthread)
+    list(APPEND jeecs_system_libs dl)
+endif()
+
 set(imgui_srcs    
     "../3rd/imgui/imconfig.h"
     "../3rd/imgui/imgui.cpp"
@@ -28,39 +38,60 @@ set(imgui_srcs
     "../3rd/imgui/misc/cpp/imgui_stdlib.cpp"
     "../3rd/imgui/misc/cpp/imgui_stdlib.h")
 
+# JoyEngine Graphic API support list.
+# OpenGL 3.3
 if (JE4_ENABLE_OPENGL330_GAPI)
+
+    if (WIN32)
+        list(APPEND jeecs_graphic_libs OpenGL32)
+    else()
+        target_compile_options(glew_s PRIVATE -fPIC)
+        target_compile_options(glfw PRIVATE -fPIC)
+    endif()
+
+    list(APPEND jeecs_graphic_libs glew_s glfw)
+
     add_definitions(-DJE_ENABLE_GL330_GAPI)
-    list(APPEND imgui_srcs # OPENGL330
+    list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_glfw.cpp"
         "../3rd/imgui/backends/imgui_impl_glfw.h"
         "../3rd/imgui/backends/imgui_impl_opengl3.cpp"
         "../3rd/imgui/backends/imgui_impl_opengl3.h"
         "../3rd/imgui/backends/imgui_impl_opengl3_loader.h")
 endif()
-if (JE4_ENABLE_OPENGL330_GAPI AND WIN32)
+
+# DX11
+if (JE4_ENABLE_DX11_GAPI AND WIN32)
     add_definitions(-DJE_ENABLE_DX11_GAPI)
-    list(APPEND imgui_srcs # DX11
+
+    list(APPEND jeecs_graphic_libs d3d11)
+    list(APPEND jeecs_graphic_libs dxgi)
+    list(APPEND jeecs_graphic_libs dxguid)
+    list(APPEND jeecs_graphic_libs d3dcompiler)
+
+    list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_win32.cpp"
         "../3rd/imgui/backends/imgui_impl_win32.h"
         "../3rd/imgui/backends/imgui_impl_dx11.cpp"
         "../3rd/imgui/backends/imgui_impl_dx11.h")
 endif()
+
+# OpenGLES 3.2
 if (JE4_ENABLE_OPENGLES320_GAPI)
     add_definitions(-DJE_ENABLE_GLES320_GAPI)
 endif()
+
+# Vulkan 1.1
 if (JE4_ENABLE_VULKAN110_GAPI)
     add_definitions(-DJE_ENABLE_VK110_GAPI)
 endif()
+
+# Metal
 if (JE4_ENABLE_METAL_GAPI)
     add_definitions(-DJE_ENABLE_METAL_GAPI)
 endif()
 
-if (WIN32)
-    list(APPEND jeecs_system_libs OpenGL32)
-else()
-    list(APPEND jeecs_system_libs pthread dl)
-endif()
-
+# Build engine shared/static library
 if (${BUILD_SHARED_LIBS})
     add_definitions(-DWO_SHARED_LIB)
     add_library(joyecs SHARED ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_srcs})
@@ -86,9 +117,8 @@ else()
 endif()
 
 if (NOT WIN32)
-    target_compile_options (glew_s PRIVATE -fPIC)
-    target_compile_options (glfw PRIVATE -fPIC)
     target_compile_options (box2d PRIVATE -fPIC)
 endif()
 target_link_libraries(joyecs ${jeecs_system_libs})
-target_link_libraries(joyecs woolang glew_s glfw box2d OpenAL)
+target_link_libraries(joyecs ${jeecs_graphic_libs})
+target_link_libraries(joyecs woolang box2d OpenAL)

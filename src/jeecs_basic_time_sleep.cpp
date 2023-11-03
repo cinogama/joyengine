@@ -6,7 +6,6 @@
 
 #ifdef JE_OS_WINDOWS
 #include <Windows.h>
-#pragma comment(lib, "Winmm.lib")
 #endif
 
 auto _start_time = std::chrono::steady_clock::now();
