@@ -24,6 +24,12 @@ option(JE4_ENABLE_OPENGLES320_GAPI  "Enable OpenGLES 3.2 Graphic API"   OFF)
 option(JE4_ENABLE_VULKAN110_GAPI    "Enable Vulkan 1.1 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
+# DEBUG!
+set(JE4_ENABLE_OPENGLES320_GAPI ON CACHE BOOL "DEBUG FOR GLES!" FORCE)
+set(JE4_ENABLE_DX11_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
+set(JE4_ENABLE_OPENGL330_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
+set(JE4_ENABLE_VULKAN110_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
+set(JE4_ENABLE_METAL_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
 
 # openal-soft will be compiled to dynamic-libs
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
@@ -35,10 +41,12 @@ set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
 
 if (JE4_ENABLE_OPENGL330_GAPI)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
-    add_subdirectory("3rd/glfw")
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
     add_subdirectory("3rd/glew/build/cmake")
+endif()
+if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES320_GAPI OR JE4_ENABLE_VULKAN110_GAPI)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
+    add_subdirectory("3rd/glfw")
 endif()
 
 if(MSVC) 

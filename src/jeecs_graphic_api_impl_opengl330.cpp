@@ -1,7 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#ifdef JE_ENABLE_GL330_GAPI
+#ifdef JE_ENABLE_GL330_GAPI 
 
 #include "jeecs_imgui_backend_api.hpp"
 
