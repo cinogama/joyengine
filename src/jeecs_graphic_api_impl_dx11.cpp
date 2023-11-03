@@ -3,7 +3,7 @@
 
 #ifdef JE_ENABLE_DX11_GAPI
 
-#include "jeecs_imgui_api.hpp"
+#include "jeecs_imgui_backend_api.hpp"
 
 #include <d3d11.h>
 #include <d3dcompiler.h>

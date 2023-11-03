@@ -3,6 +3,8 @@
 
 #ifdef JE_ENABLE_GLES320_GAPI
 
+#include "GLES3/gl32.h"
+
 namespace jeecs::graphic::api::gles320
 {
 

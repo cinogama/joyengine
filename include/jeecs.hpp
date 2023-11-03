@@ -2524,6 +2524,53 @@ jegl_branch_new_chain [基本接口]
 JE_API jegl_rendchain* jegl_branch_new_chain(jeecs::rendchain_branch* branch, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 
 /*
+jegui_set_font [基本接口]
+让ImGUI使用指定的路径和字体大小设置
+    * 若 path 是空指针，则使用默认字体
+    * 仅在 jegui_init_basic 前调用生效
+    * 此接口仅适合用于对接自定义渲染API时使用
+请参见：
+    jegui_init_basic
+*/
+JE_API void jegui_set_font(const char* path, size_t size);
+
+/*
+jegui_init_basic [基本接口]
+初始化ImGUI
+    * 参数1 用于指示是否需要反转帧纹理，部分图形库的内置字节序与预计的是相反的，这种情况
+        需要手动反转
+    * 参数2 是一个回调函数指针，用于获取一个纹理对应的底层图形库句柄以供ImGUI使用
+    * 参数3 是一个回调函数指针，用于应用一个指定着色器指定的采样设置
+    * 此接口仅适合用于对接自定义渲染API时使用
+*/
+JE_API void jegui_init_basic(
+    bool need_flip_frame_buf,
+    void* (*get_img_res)(jegl_resource*),
+    void (*apply_shader_sampler)(jegl_resource*));
+
+/*
+jegui_update_basic [基本接口]
+一帧渲染开始之后，需要调用此接口以完成ImGUI的绘制和更新操作
+    * 此接口仅适合用于对接自定义渲染API时使用
+*/
+JE_API void jegui_update_basic();
+
+/*
+jegui_shutdown_basic [基本接口]
+图形接口关闭时，请调用此接口关闭ImGUI
+    * 参数reboot用于指示当前是否正在重启图形接口，由统一基础图形接口给出
+*/
+JE_API void jegui_shutdown_basic(bool reboot);
+
+/*
+jegui_shutdown_callback [基本接口]
+当通过关闭窗口等，请求关闭图形接口时，可以调用此函数用于询问ImGUI注册的
+退出回调，获取是否确认关闭
+    * 返回 true 表示注册的回调函数不存在或建议关闭图形接口
+*/
+JE_API bool jegui_shutdown_callback(void);
+
+/*
 je_io_set_keystate [基本接口]
 设置指定键的状态
 */

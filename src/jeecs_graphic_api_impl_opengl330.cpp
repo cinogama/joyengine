@@ -3,7 +3,7 @@
 
 #ifdef JE_ENABLE_GL330_GAPI
 
-#include "jeecs_imgui_api.hpp"
+#include "jeecs_imgui_backend_api.hpp"
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>

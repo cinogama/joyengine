@@ -24,18 +24,22 @@ option(JE4_ENABLE_OPENGLES320_GAPI  "Enable OpenGLES 3.2 Graphic API"   OFF)
 option(JE4_ENABLE_VULKAN110_GAPI    "Enable Vulkan 1.1 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
-# openal-soft will be compiled to dynamic-libs
-add_subdirectory("3rd/openal-soft")
 
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
-add_subdirectory("3rd/glfw")
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
-add_subdirectory("3rd/glew/build/cmake")
+# openal-soft will be compiled to dynamic-libs
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
+add_subdirectory("3rd/openal-soft")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d" FORCE)
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
+
+if (JE4_ENABLE_OPENGL330_GAPI)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
+    add_subdirectory("3rd/glfw")
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
+    add_subdirectory("3rd/glew/build/cmake")
+endif()
 
 if(MSVC) 
     ## Fuck the MSVC, you did a great job that if we disable the exception, 
@@ -88,6 +92,7 @@ if (JE4_COPYING_BUILTIN_FILES)
     endif()
 endif()
 
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic joyengine core" FORCE)
 add_subdirectory("src")
 
 include_directories("include")

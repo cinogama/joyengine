@@ -2,9 +2,11 @@
 
 #ifndef JE_IMPL
 #   define JE_IMPL
-#   define JE_ENABLE_DEBUG_API
-#   include "jeecs.hpp"
 #endif
+#ifndef JE_ENABLE_DEBUG_API
+#   define JE_ENABLE_DEBUG_API
+#endif
+#include "jeecs.hpp"
 
 #include <shared_mutex>
 #include <unordered_map>

@@ -4,14 +4,11 @@ cmake_minimum_required (VERSION 3.16)
 
 include_directories("../include")
 include_directories("../3rd/woolang/include")
-include_directories("../3rd/glew/include")
-include_directories("../3rd/glfw/include")
 include_directories("../3rd/stb")
 include_directories("../3rd/imgui")
 include_directories("../3rd/imgui/backends")
 include_directories("../3rd/imgui/misc/cpp")
 include_directories("../3rd/box2d/include")
-
 include_directories("../3rd/openal-soft/include")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
@@ -41,7 +38,12 @@ set(imgui_srcs
 # JoyEngine Graphic API support list.
 # OpenGL 3.3
 if (JE4_ENABLE_OPENGL330_GAPI)
+    add_definitions(-DJE_ENABLE_GL330_GAPI)
+    
+    include_directories("../3rd/glew/include")
+    include_directories("../3rd/glfw/include")
 
+    list(APPEND jeecs_graphic_libs glew_s glfw)
     if (WIN32)
         list(APPEND jeecs_graphic_libs OpenGL32)
     else()
@@ -49,9 +51,6 @@ if (JE4_ENABLE_OPENGL330_GAPI)
         target_compile_options(glfw PRIVATE -fPIC)
     endif()
 
-    list(APPEND jeecs_graphic_libs glew_s glfw)
-
-    add_definitions(-DJE_ENABLE_GL330_GAPI)
     list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_glfw.cpp"
         "../3rd/imgui/backends/imgui_impl_glfw.h"
@@ -79,6 +78,8 @@ endif()
 # OpenGLES 3.2
 if (JE4_ENABLE_OPENGLES320_GAPI)
     add_definitions(-DJE_ENABLE_GLES320_GAPI)
+
+    include_directories("../3rd/opengles_env_w64/include")
 endif()
 
 # Vulkan 1.1

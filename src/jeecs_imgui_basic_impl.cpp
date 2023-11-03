@@ -8,16 +8,6 @@
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 
-#ifdef _WIN32
-#   include <Windows.h>
-#   include <imgui_impl_win32.h>
-#   include <imgui_impl_dx11.h>
-#endif
-
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
-#include <GLFW/glfw3.h>
-
 const char* gui_api_path = "je/gui.wo";
 const char* gui_api_src = { R"(
 // JoyEngineECS GUI API for woo.
@@ -750,12 +740,6 @@ R"(
 
 )" };
 
-enum class BackEndType
-{
-    OPENGL330,
-    D3D11
-};
-
 struct key_state
 {
     bool m_last_frame_down;
@@ -773,8 +757,8 @@ struct gui_wo_job_coroutine
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
-thread_local bool _stop_work_flag = false;
-thread_local BackEndType _back_end_type;
+thread_local bool _jegui_stop_work_flag = false;
+thread_local bool _jegui_need_flip_frambuf = false;
 
 thread_local jeecs::basic::resource<jeecs::graphic::shader> _jegl_rend_texture_shader;
 
@@ -1111,7 +1095,7 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_back_end_type == BackEndType::D3D11
+    if (_jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1494,7 +1478,7 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_back_end_type == BackEndType::D3D11
+    if (_jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1535,7 +1519,7 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_back_end_type == BackEndType::D3D11
+    if (_jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1872,7 +1856,7 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args, size_t argc)
 {
-    _stop_work_flag = true;
+    _jegui_stop_work_flag = true;
     return wo_ret_void(vm);
 }
 
@@ -2020,11 +2004,13 @@ WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-void _jegui_init_basic(
+void jegui_init_basic(
+    bool need_flip_frame_buf,
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*)
 )
 {
+    _jegui_need_flip_frambuf = need_flip_frame_buf;
     _jegl_get_native_texture = get_img_res;
     _jegl_bind_shader_sampler_state = apply_shader_sampler;
 
@@ -2069,7 +2055,7 @@ public func frag(vf: v2f)
 }
 )");
 
-    _stop_work_flag = false;
+     _jegui_stop_work_flag = false;
     ImGui::CreateContext();
 
     // Set style:
@@ -2095,8 +2081,10 @@ public func frag(vf: v2f)
     }
 
 }
-void _jegui_update_basic()
+void jegui_update_basic()
 {
+    jegl_using_resource(_jegl_rend_texture_shader->resouce());
+
     ImGui::NewFrame();
 
     auto* viewport = ImGui::GetMainViewport();
@@ -2130,7 +2118,7 @@ void _jegui_update_basic()
         }
     } while (0);
 
-    if (!_stop_work_flag)
+    if (!_jegui_stop_work_flag)
     {
         auto chain = _wo_job_list.pick_all();
         while (chain)
@@ -2161,7 +2149,7 @@ void _jegui_update_basic()
 
     ImGui::Render();
 }
-void _jegui_shutdown_basic(bool reboot)
+void jegui_shutdown_basic(bool reboot)
 {
     if (!reboot)
     {
@@ -2186,85 +2174,6 @@ void _jegui_shutdown_basic(bool reboot)
         }
     }
 }
-#ifdef JE_ENABLE_DX11_GAPI
-void jegui_init_dx11(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*),
-    void* window_handle,
-    void* d11device,
-    void* d11context,
-    bool reboot)
-{
-    _back_end_type = BackEndType::D3D11;
-    _jegui_init_basic(get_img_res, apply_shader_sampler);
-    ImGui_ImplWin32_Init(window_handle);
-    ImGui_ImplDX11_Init(
-        (ID3D11Device*)d11device,
-        (ID3D11DeviceContext*)d11context);
-}
-
-void jegui_update_dx11(jegl_thread::custom_thread_data_t thread_context)
-{
-    jegl_using_resource(_jegl_rend_texture_shader->resouce());
-
-    ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    _jegui_update_basic();
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-}
-
-void jegui_shutdown_dx11(bool reboot)
-{
-    _jegui_shutdown_basic(reboot);
-    ImGui_ImplDX11_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
-}
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
-        return true;
-    return false;
-}
-void jegui_win32_append_unicode16_char(wchar_t wch)
-{
-    ImGuiIO& io = ImGui::GetIO();
-    io.AddInputCharacterUTF16(wch);
-}
-#endif
-
-#ifdef JE_ENABLE_GL330_GAPI
-void jegui_init_gl330(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*),
-    void* window_handle,
-    bool reboot)
-{
-    _back_end_type = BackEndType::OPENGL330;
-    _jegui_init_basic(get_img_res, apply_shader_sampler);
-    ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
-    ImGui_ImplOpenGL3_Init("#version 330 core");
-}
-
-void jegui_update_gl330(jegl_thread::custom_thread_data_t thread_context)
-{
-    jegl_using_resource(_jegl_rend_texture_shader->resouce());
-
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    _jegui_update_basic();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-}
-
-void jegui_shutdown_gl330(bool reboot)
-{
-    _jegui_shutdown_basic(reboot);
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-}
-#endif
 
 bool jegui_shutdown_callback()
 {
