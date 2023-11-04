@@ -4181,8 +4181,13 @@ namespace jeecs
                     std::lock_guard g1(_m_self_registed_typeid_mx);
                     return _m_self_registed_typeinfo.at(id);
                 }
+
+                inline static _type_unregister_guard& instance()
+                {
+                    static _type_unregister_guard _type_guard;
+                    return _type_guard;
+                }
             };
-            inline static _type_unregister_guard _type_guard;
 
         public:
             class typeinfo_holder_base
@@ -4210,7 +4215,7 @@ namespace jeecs
                 virtual void update()override
                 {
                     m_typeinfo = je_typing_get_info_by_id(
-                        _type_guard._register_or_get_type_id<T>(m_typename));
+                        _type_unregister_guard::instance()._register_or_get_type_id<T>(m_typename));
                 }
             public:
                 const type_info* get_typeinfo()const noexcept
@@ -4245,12 +4250,12 @@ namespace jeecs
         public:
             static const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id)
             {
-                return _type_guard.get_local_type_info(id);
+                return _type_unregister_guard::instance().get_local_type_info(id);
             }
 
             static void unregister_all_type_in_shutdown()
             {
-                _type_guard.clear();
+                _type_unregister_guard::instance().clear();
             }
 
             template<typename T>
