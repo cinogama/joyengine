@@ -4182,6 +4182,7 @@ namespace jeecs
                     return _m_self_registed_typeinfo.at(id);
                 }
 
+                template<int = 0>
                 inline static _type_unregister_guard& instance()
                 {
                     static _type_unregister_guard _type_guard;
@@ -4208,6 +4209,7 @@ namespace jeecs
                 };
                 virtual void update() = 0;
             public:
+                template<int = 0>
                 static void update_all_typeinfo()
                 {
                     std::lock_guard sg1(typeinfo_holder_global_list::instance().m_list_mx);
