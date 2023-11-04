@@ -537,10 +537,10 @@ namespace jeecs::graphic::api::dx11
                         sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
                 }
             },
-                context->m_window_handle,
-                context->m_dx_device.Get(),
-                context->m_dx_context.Get(),
-                reboot);
+            context->m_window_handle,
+            context->m_dx_device.Get(),
+            context->m_dx_context.Get(),
+            reboot);
         return context;
     }
 
@@ -1263,24 +1263,11 @@ namespace jeecs::graphic::api::dx11
                 texture_describe.Format = depth16f ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
                 break;
             }
-            size_t msaa_level = (size_t)(resource->m_raw_texture_data->m_format
-                & jegl_texture::format::MSAA_MASK) >> (size_t)8;
-            UINT msaa_quality = 0;
-            if (msaa_level != 0)
-            {
-                context->m_dx_device->CheckMultisampleQualityLevels(
-                    texture_describe.Format, (UINT)msaa_level, &msaa_quality);
-            }
-            if (msaa_quality > 0)
-            {
-                texture_describe.SampleDesc.Count = (UINT)msaa_level;
-                texture_describe.SampleDesc.Quality = msaa_quality - 1;
-            }
-            else
-            {
-                texture_describe.SampleDesc.Count = 1;
-                texture_describe.SampleDesc.Quality = 0;
-            }
+
+            // 不使用MSAA
+            texture_describe.SampleDesc.Count = 1;
+            texture_describe.SampleDesc.Quality = 0;
+
             texture_describe.Usage = D3D11_USAGE_IMMUTABLE;
             texture_describe.BindFlags = D3D11_BIND_SHADER_RESOURCE;
             texture_describe.CPUAccessFlags = 0;
@@ -1296,24 +1283,9 @@ namespace jeecs::graphic::api::dx11
                     texture_describe.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
                     texture_describe.Usage = D3D11_USAGE_DEFAULT;
 
-                    size_t msaa_level = (size_t)(resource->m_raw_texture_data->m_format
-                        & jegl_texture::format::MSAA_MASK) >> (size_t)8;
-                    UINT msaa_quality = 0;
-                    if (msaa_level != 0)
-                    {
-                        context->m_dx_device->CheckMultisampleQualityLevels(
-                            texture_describe.Format, (UINT)msaa_level, &msaa_quality);
-                    }
-                    if (msaa_quality > 0)
-                    {
-                        texture_describe.SampleDesc.Count = (UINT)msaa_level;
-                        texture_describe.SampleDesc.Quality = msaa_quality - 1;
-                    }
-                    else
-                    {
-                        texture_describe.SampleDesc.Count = 1;
-                        texture_describe.SampleDesc.Quality = 0;
-                    }
+                    // 不使用MSAA
+                    texture_describe.SampleDesc.Count = 1;
+                    texture_describe.SampleDesc.Quality = 0;
 
                     texture_describe.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 

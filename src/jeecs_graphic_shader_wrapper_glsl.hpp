@@ -338,32 +338,6 @@ vec4 JEBUILTIN_AlphaTest(vec4 color)
 )";
                         built_in_srcs += unifrom_block;
                     }
-                    else if (builtin_func_name == "JEBUILTIN_TextureMs")
-                    {
-                        const std::string unifrom_block = R"(
-vec4 JEBUILTIN_TextureMs(sampler2DMS tex, vec2 uv, int msaa_level)
-{
-    ivec2 texture_size = textureSize(tex);
-    vec4 result = vec4(0, 0, 0, 0);
-    for(int i = 0; i < msaa_level; ++i)
-    {
-	    result+=texelFetch(tex, ivec2(uv * vec2(texture_size)), i);
-    }
-    return result/float(msaa_level);
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_TextureFastMs")
-                    {
-                        const std::string unifrom_block = R"(
-vec4 JEBUILTIN_TextureFastMs(sampler2DMS tex, vec2 uv)
-{
-    return texelFetch(mst,ivec2(uv * vec2(textureSize(tex))),0);
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
                     else if (builtin_func_name == "JEBUILTIN_Movement")
                     {
                         const std::string unifrom_block = R"(

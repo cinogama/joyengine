@@ -528,20 +528,6 @@ float4 JEBUILTIN_AlphaTest(float4 color)
 )";
                         built_in_srcs += unifrom_block;
                     }
-                    else if (builtin_func_name == "JEBUILTIN_TextureMs")
-                    {
-                        const std::string unifrom_block = R"(
-// TODO;
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_TextureFastMs")
-                    {
-                        const std::string unifrom_block = R"(
-// TODO;
-)";
-                        built_in_srcs += unifrom_block;
-                    }
                     else if (builtin_func_name == "JEBUILTIN_Movement")
                     {
                         const std::string unifrom_block = R"(

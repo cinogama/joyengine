@@ -1123,14 +1123,6 @@ public func texture(tex:texture2d, uv:float2)=> float4
 {
     return apply_operation:<float4>("texture", tex, uv);
 }
-public func texture_ms(tex:texture2dms, uv:float2, msaa_level: int)=> float4
-{
-    return apply_operation:<float4>("JEBUILTIN_TextureMs", tex, uv, msaa_level);
-}
-public func texture_fastms(tex:texture2dms, uv:float2)=> float4
-{
-    return apply_operation:<float4>("JEBUILTIN_TextureFastMs", tex, uv);
-}
 
 public func step<T, U>(a: T, b: U)=> float
     where a is float || a is real
