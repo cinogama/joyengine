@@ -1720,7 +1720,7 @@ struct jegl_shader
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
 
-    sampler_method*     m_sampler_methods;
+    sampler_method* m_sampler_methods;
     size_t              m_sampler_count;
 };
 
@@ -1746,7 +1746,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t*    m_buffer;
+    uint8_t* m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
@@ -1818,7 +1818,7 @@ struct jegl_graphic_api
 
     using create_resource_blob_func_t = jegl_resource_blob(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
     using close_resource_blob_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource_blob);
-    
+
     using init_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource_blob, jegl_resource*);
     using using_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
@@ -2062,7 +2062,7 @@ jegl_graphic_api_entry [类型]
 基础图形库的入口类型
 指向一个用于初始化基础图形接口的入口函数
 */
-typedef void(* jegl_graphic_api_entry)(jegl_graphic_api*);
+typedef void(*jegl_graphic_api_entry)(jegl_graphic_api*);
 
 /*
 jegl_set_host_graphic_api [基本接口]
@@ -2111,7 +2111,7 @@ jegl_using_metal_apis [基本接口] (暂未实现)
 JE_API void jegl_using_metal_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_using_dx11_apis [基本接口] 
+jegl_using_dx11_apis [基本接口]
 加载directx 11 API集合，通常与jegl_start_graphic_thread一起使用
 用于指定图形线程使用的基本图形库
 请参见：
@@ -2231,7 +2231,7 @@ jegl_uniform_float2 不会初始化着色器，请在操作之前调用 jegl_usi
 请参见：
     jegl_using_resource
 */
-JE_API void jegl_uniform_float2( uint32_t location, float x, float y);
+JE_API void jegl_uniform_float2(uint32_t location, float x, float y);
 
 /*
 jegl_uniform_float3 [基本接口]
@@ -2336,7 +2336,7 @@ JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource
 jegl_rchain_clear_color_buffer [基本接口]
 指示此链绘制开始时需要清除目标缓冲区的颜色缓存
 */
-JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, float *color);
+JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, float* color);
 
 /*
 jegl_rchain_clear_depth_buffer [基本接口]
@@ -4193,14 +4193,25 @@ namespace jeecs
             class typeinfo_holder_base
             {
             protected:
-                inline static std::mutex m_list_mx;
-                inline static std::unordered_set<typeinfo_holder_base*> m_list;
+                struct typeinfo_holder_global_list
+                {
+                private:
+                    typeinfo_holder_global_list() = default;
+                public:
+                    std::mutex m_list_mx;
+                    std::unordered_set<typeinfo_holder_base*> m_list;
+                    inline static typeinfo_holder_global_list& instance()
+                    {
+                        static typeinfo_holder_global_list _type_guard;
+                        return _type_guard;
+                    }
+                };
                 virtual void update() = 0;
             public:
                 static void update_all_typeinfo()
                 {
-                    std::lock_guard sg1(typeinfo_holder_base::m_list_mx);
-                    for (auto* t : m_list)
+                    std::lock_guard sg1(typeinfo_holder_global_list::instance().m_list_mx);
+                    for (auto* t : typeinfo_holder_global_list::instance().m_list)
                         t->update();
                 }
             };
@@ -4231,16 +4242,16 @@ namespace jeecs
 
                     do
                     {
-                        std::lock_guard sg1(typeinfo_holder_base::m_list_mx);
-                        typeinfo_holder_base::m_list.insert(this);
+                        std::lock_guard sg1(typeinfo_holder_global_list::instance().m_list_mx);
+                        typeinfo_holder_global_list::instance().m_list.insert(this);
                     } while (0);
 
                     update();
                 }
                 ~typeinfo_holder()
                 {
-                    std::lock_guard sg1(typeinfo_holder_base::m_list_mx);
-                    typeinfo_holder_base::m_list.erase(this);
+                    std::lock_guard sg1(typeinfo_holder_global_list::instance().m_list_mx);
+                    typeinfo_holder_global_list::instance().m_list.erase(this);
 
                     if (m_typename != nullptr)
                         je_mem_free((void*)m_typename);
@@ -5175,7 +5186,7 @@ namespace jeecs
     template<typename T>
     inline T* game_entity::get_component()const noexcept
     {
-        return (T*)je_ecs_world_entity_get_component(this, 
+        return (T*)je_ecs_world_entity_get_component(this,
             typing::type_info::of<T>(typeid(T).name()));
     }
 
@@ -5189,7 +5200,7 @@ namespace jeecs
     template<typename T>
     inline void game_entity::remove_component() const noexcept
     {
-        return je_ecs_world_entity_remove_component(this, 
+        return je_ecs_world_entity_remove_component(this,
             typing::type_info::of<T>(typeid(T).name()));
     }
 
