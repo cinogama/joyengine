@@ -61,6 +61,7 @@ if(MSVC)
     # endif()
 else()
     add_compile_options(-fno-exceptions)
+    add_compile_options(-fno-gnu-unique)
 endif()
 
 if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)

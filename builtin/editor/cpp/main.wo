@@ -707,6 +707,10 @@ file(GLOB_RECURSE module_components_headers ../../components/*.hpp)
 file(GLOB_RECURSE module_source_headers ../../source/*.hpp)
 file(GLOB_RECURSE module_source_sources ../../source/*.cpp)     
 
+if (NOT MSVC)
+    add_compile_options(-fno-gnu-unique)
+endif()
+
 add_library($$JEMODULE_PROJECT_NAME$$ SHARED 
     ${module_systems_sources}
     ${module_systems_headers}

@@ -22,6 +22,11 @@ if (WIN32)
 else()
     list(APPEND jeecs_system_libs pthread)
     list(APPEND jeecs_system_libs dl)
+    add_compile_options(-fno-gnu-unique)
+endif()
+
+if (NOT MSVC)
+    add_compile_options(-fno-gnu-unique)
 endif()
 
 set(imgui_srcs    
