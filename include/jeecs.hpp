@@ -6,6 +6,10 @@
 #error jeecs.h only support for c++
 #else
 
+#ifndef JE4_MODULE_NAME
+#error You must specify a unique module name.
+#endif
+
 #include "wo.h"
 
 #include <cstdint>
@@ -4112,7 +4116,8 @@ namespace jeecs
                 friend struct type_info;
                 _type_unregister_guard() = default;
                 mutable std::mutex      _m_self_registed_typeid_mx;
-                std::unordered_map<jeecs::typing::typeid_t, const jeecs::typing::type_info*> _m_self_registed_typeinfo;
+                std::unordered_map<jeecs::typing::typeid_t, const jeecs::typing::type_info*>
+                    _m_self_registed_typeinfo;
 
                 template<typename T>
                 typeid_t _register_or_get_type_id(const char* _typename)
@@ -4182,7 +4187,7 @@ namespace jeecs
                     return _m_self_registed_typeinfo.at(id);
                 }
 
-                template<int = 0>
+                template<jeecs::typing::typehash_t=jeecs::basic::hash_compile_time(JE4_MODULE_NAME)>
                 inline static _type_unregister_guard& instance()
                 {
                     static _type_unregister_guard _type_guard;
@@ -4201,6 +4206,8 @@ namespace jeecs
                 public:
                     std::mutex m_list_mx;
                     std::unordered_set<typeinfo_holder_base*> m_list;
+
+                    template<jeecs::typing::typehash_t = jeecs::basic::hash_compile_time(JE4_MODULE_NAME)>
                     inline static typeinfo_holder_global_list& instance()
                     {
                         static typeinfo_holder_global_list _type_guard;
@@ -4209,7 +4216,6 @@ namespace jeecs
                 };
                 virtual void update() = 0;
             public:
-                template<int = 0>
                 static void update_all_typeinfo()
                 {
                     std::lock_guard sg1(typeinfo_holder_global_list::instance().m_list_mx);
