@@ -31,6 +31,11 @@ set(JE4_ENABLE_OPENGL330_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
 set(JE4_ENABLE_VULKAN110_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
 set(JE4_ENABLE_METAL_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
 
+# Cannot use gles & gl at same time because of ImGUI cannot use two lib at same time.
+if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES320_GAPI)
+    message(FATAL_ERROR "Cannot use OpenGL3.3 and OpenGLES3.2 at same time.")
+endif()
+
 # openal-soft will be compiled to dynamic-libs
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
 add_subdirectory("3rd/openal-soft")
@@ -40,7 +45,7 @@ add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
 
-if (JE4_ENABLE_OPENGL330_GAPI)
+if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES320_GAPI)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
     add_subdirectory("3rd/glew/build/cmake")
 endif()
@@ -66,13 +71,15 @@ endif()
 
 if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    add_custom_target(COPYING_LICENCES_SCRIPT COMMAND woodriver ./script/copylicences.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    add_dependencies(COPYING_LICENCES_SCRIPT INSTALL_PKG)
-    add_dependencies(COPYING_LICENCES_SCRIPT woodriver)
 else()
     add_custom_target(INSTALL_PKG COMMAND echo "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
-    add_custom_target(COPYING_LICENCES_SCRIPT COMMAND echo "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
 endif()
+
+add_custom_target(COPYING_LICENCES_SCRIPT COMMAND
+    woodriver ./script/build.wo 
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+add_dependencies(COPYING_LICENCES_SCRIPT INSTALL_PKG)
+add_dependencies(COPYING_LICENCES_SCRIPT woodriver)
 
 if (JE4_COPYING_BUILTIN_FILES)
     if(WIN32)

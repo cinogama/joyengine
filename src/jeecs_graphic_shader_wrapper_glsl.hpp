@@ -213,13 +213,6 @@ namespace jeecs
                 return varname;
             }
 
-            std::string _glsl_pragma()
-            {
-                return R"(
-#version 330 core
-)";
-            }
-
             std::string _generate_code_for_glsl_vertex(shader_wrapper* wrap)
             {
                 _shader_wrapper_contex contex;
@@ -311,7 +304,6 @@ vec2 JEBUILTIN_Uvframebuffer(vec2 v)
 
                 return std::move(
                     "// Vertex shader source\n"
-                    + _glsl_pragma()
                     + unifrom_block
                     + built_in_srcs
                     + io_declear
@@ -447,7 +439,6 @@ vec2 JEBUILTIN_Uvframebuffer(vec2 v)
 
                 return std::move(
                     "// Fragment shader source\n"
-                    + _glsl_pragma()
                     + unifrom_block
                     + built_in_srcs
                     + io_declear

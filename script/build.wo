@@ -26,16 +26,30 @@ func copy_all_licenses()
 
                 let target_path = build_path / "licenses" / relpath;
                 do mkdir(parent(target_path));
-                try! _ = copy(p, target_path);
+                do copy(p, target_path);
             }
         }
     }
     return result::ok(do nil);
 }
 
-match (copy_all_licenses())
+func copy_opengles_emu_env_libs()
 {
-ok(_)?;
-err(_)?
-    std::halt("Failed to copy 3rd licenses");
+    let gles_env_path = third_party_located_path / "opengles_env_w64";
+    let lib_filenames = [
+        "libEGL.dll",
+        "libGLESv2.dll",
+        "libMaliEmulator.dll",
+        "log4cplus.dll",
+    ];
+    do lib_filenames
+        ->> \name = copy(gles_env_path / name, build_path);
+        ;
+    do mkdir(build_path / "openglessl");
+    do copy(gles_env_path / "openglessl", build_path / "openglessl");
 }
+
+if (copy_all_licenses()->iserr)
+    return -1;
+
+copy_opengles_emu_env_libs();

@@ -62,10 +62,8 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
     {
 #if defined(JE_ENABLE_DX11_GAPI)
         return jegl_using_dx11_apis;
-#elif defined(JE_ENABLE_GL330_GAPI)
+#elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES320_GAPI)
         return jegl_using_opengl330_apis;
-#elif defined(JE_ENABLE_GLES320_GAPI)
-        return jegl_using_opengles320_apis;
 #elif defined(JE_ENABLE_VK110_GAPI)
         return jegl_using_vulkan110_apis;
 #elif defined(JE_ENABLE_METAL_GAPI)
@@ -143,13 +141,9 @@ void je_init(int argc, char** argv)
             else if (value == "dx11")
                 jegl_set_host_graphic_api(jegl_using_dx11_apis);
 #endif
-#if defined(JE_ENABLE_GL330_GAPI)
+#if defined(JE_ENABLE_GL330_GAPI)|| defined(JE_ENABLE_GLES320_GAPI)
             else if (value == "gl330")
                 jegl_set_host_graphic_api(jegl_using_opengl330_apis);
-#endif
-#if defined(JE_ENABLE_GLES320_GAPI)
-            else if (value == "gles320")
-                jegl_set_host_graphic_api(jegl_using_opengles320_apis);
 #endif
 #if defined(JE_ENABLE_VK110_GAPI)
             else if (value == "vk110")

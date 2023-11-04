@@ -1,7 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#ifdef JE_ENABLE_GL330_GAPI
+#if defined(JE_ENABLE_GL330_GAPI) \
+ || defined(JE_ENABLE_GLES320_GAPI)
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -15,7 +16,7 @@ void jegui_init_gl330(
 {
     jegui_init_basic(false, get_img_res, apply_shader_sampler);
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
-    ImGui_ImplOpenGL3_Init("#version 330 core");
+    ImGui_ImplOpenGL3_Init(nullptr);
 }
 
 void jegui_update_gl330(jegl_thread::custom_thread_data_t thread_context)

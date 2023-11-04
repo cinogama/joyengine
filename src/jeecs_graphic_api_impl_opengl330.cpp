@@ -1,11 +1,24 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#ifdef JE_ENABLE_GL330_GAPI 
+#if defined(JE_ENABLE_GL330_GAPI) \
+ || defined(JE_ENABLE_GLES320_GAPI)
 
 #include "jeecs_imgui_backend_api.hpp"
 
-#include <GL/glew.h>
+
+#ifdef JE_ENABLE_GLES320_GAPI
+#   ifdef __APPLE__
+#       include <OpenGLES/ES3/gl.h>
+#   else
+#       include <GLES3/gl31.h>
+#       include <EGL/egl.h>
+#       include <EGL/eglext.h>
+#   endif
+#else
+#   include <GL/glew.h>
+#endif
+
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
@@ -84,6 +97,7 @@ namespace jeecs::graphic::api::gl330
 
     }
 
+#ifdef JE_ENABLE_GL330_GAPI
     void APIENTRY glDebugOutput(GLenum source,
         GLenum type,
         unsigned int id,
@@ -132,6 +146,7 @@ namespace jeecs::graphic::api::gl330
 
         je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
     }
+#endif
 
     jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
     {
@@ -143,10 +158,19 @@ namespace jeecs::graphic::api::gl330
             if (!glfwInit())
                 jeecs::debug::logfatal("Failed to init glfw.");
 
+#ifdef JE_ENABLE_GL330_GAPI
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
+            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
+#else
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+            // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
+#endif
 #ifndef NDEBUG
             glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 #endif
@@ -198,7 +222,9 @@ namespace jeecs::graphic::api::gl330
         auto err_code = glfwGetError(&reason);
         if (err_code != GLFW_NO_ERROR)
         {
-            jeecs::debug::logfatal("Opengl3 glfw reports an error(%d): %s.", err_code, reason);
+            auto x = (const char*)glGetString(GL_VERSION);
+            jeecs::debug::logfatal("Opengl3 glfw reports an error(%d): %s.",
+                err_code, reason);
             je_clock_sleep_for(1.);
             abort();
         }
@@ -249,23 +275,17 @@ namespace jeecs::graphic::api::gl330
             je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 1.0 / (double)config->m_fps);
             glfwSwapInterval(0);
         }
-
+#ifdef JE_ENABLE_GL330_GAPI
         if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
             jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
-
-#ifndef NDEBUG
+#   ifndef NDEBUG
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
         glDebugMessageCallback(glDebugOutput, nullptr);
         glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+#   endif
 #endif
 
-        if (config->m_msaa > 0)
-            glEnable(GL_MULTISAMPLE);
-        else
-            glDisable(GL_MULTISAMPLE);
-
-        glEnable(GL_MULTISAMPLE);
         glEnable(GL_DEPTH_TEST);
         jegui_init_gl330(
             [](auto* res) {return (void*)(intptr_t)res->m_handle.m_uint1; },
@@ -292,17 +312,9 @@ namespace jeecs::graphic::api::gl330
                             {
                             case jegl_shader::fliter_mode::LINEAR:
                                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                                /* if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
-                                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                                 else
-                                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);*/
                                 break;
                             case jegl_shader::fliter_mode::NEAREST:
                                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                                /*if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
-                                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
-                                else
-                                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);*/
                                 break;
                             default:
                                 abort();
@@ -463,35 +475,66 @@ namespace jeecs::graphic::api::gl330
         case jegl_resource::type::SHADER:
         {
             gl_resource_blob* blob = new gl_resource_blob;
+
+            std::string vertex_src
+#ifdef JE_ENABLE_GL330_GAPI
+                = "#version 330 core\n\n"
+#else
+                = "#version 310 es\n\n"
+#endif
+                ;
+            std::string fragment_src = vertex_src
+#ifdef JE_ENABLE_GLES320_GAPI
+                + "precision highp float;\n\n"
+#endif
+                ;
+
+            vertex_src += resource->m_raw_shader_data->m_vertex_glsl_src;
+            const char* vertex_src_cstrptr = vertex_src.c_str();
+
             blob->m_vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-            glShaderSource(blob->m_vertex_shader, 1, &resource->m_raw_shader_data->m_vertex_glsl_src, NULL);
+            glShaderSource(blob->m_vertex_shader, 1, &vertex_src_cstrptr, NULL);
             glCompileShader(blob->m_vertex_shader);
 
+            fragment_src += resource->m_raw_shader_data->m_fragment_glsl_src;
+            const char* fragment_src_cstrptr = fragment_src.c_str();
+
             blob->m_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-            glShaderSource(blob->m_fragment_shader, 1, &resource->m_raw_shader_data->m_fragment_glsl_src, NULL);
+            glShaderSource(blob->m_fragment_shader, 1, &fragment_src_cstrptr, NULL);
             glCompileShader(blob->m_fragment_shader);
 
             // Check this program is acceptable?
+            GLint compile_result;
             GLint errmsg_len;
             GLint errmsg_written_len;
 
             bool shader_program_has_error = false;
             std::string error_informations;
-            glGetShaderiv(blob->m_vertex_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
-            if (errmsg_len > 0)
+
+            glGetShaderiv(blob->m_vertex_shader, GL_COMPILE_STATUS, &compile_result);
+            if (compile_result != GL_TRUE)
             {
                 shader_program_has_error = true;
-                std::vector<char> errmsg_buf(errmsg_len + 1);
-                glGetShaderInfoLog(blob->m_vertex_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
-                error_informations = error_informations + "In vertex shader: \n" + errmsg_buf.data();
+                glGetShaderiv(blob->m_vertex_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
+                if (errmsg_len > 0)
+                {
+                    std::vector<char> errmsg_buf(errmsg_len + 1);
+                    glGetShaderInfoLog(blob->m_vertex_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+                    error_informations = error_informations + "In vertex shader: \n" + errmsg_buf.data();
+                }
             }
-            glGetShaderiv(blob->m_fragment_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
-            if (errmsg_len > 0)
+
+            glGetShaderiv(blob->m_fragment_shader, GL_COMPILE_STATUS, &compile_result);
+            if (compile_result != GL_TRUE)
             {
                 shader_program_has_error = true;
-                std::vector<char> errmsg_buf(errmsg_len + 1);
-                glGetShaderInfoLog(blob->m_fragment_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
-                error_informations = error_informations + "In fragment shader: \n" + errmsg_buf.data();
+                glGetShaderiv(blob->m_fragment_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
+                if (errmsg_len > 0)
+                {
+                    std::vector<char> errmsg_buf(errmsg_len + 1);
+                    glGetShaderInfoLog(blob->m_fragment_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+                    error_informations = error_informations + "In fragment shader: \n" + errmsg_buf.data();
+                }
             }
 
             if (shader_program_has_error)
@@ -544,13 +587,18 @@ namespace jeecs::graphic::api::gl330
                 glLinkProgram(shader_program);
 
                 // Check this program is acceptable?
+                GLint link_result;
                 GLint errmsg_len;
                 GLint errmsg_written_len;
-                glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &errmsg_len);
-                if (errmsg_len > 0)
+
+                glGetProgramiv(shader_program, GL_LINK_STATUS, &link_result);
+                if (link_result != GL_TRUE)
                 {
-                    std::vector<char> errmsg_buf(errmsg_len + 1);
-                    glGetProgramInfoLog(shader_program, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+                    glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &errmsg_len);
+                    std::vector<char> errmsg_buf(errmsg_len + 1, '\0');
+                    if (errmsg_len > 0)
+                        glGetProgramInfoLog(shader_program, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+
                     jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
                         resource, errmsg_buf.data());
                 }
@@ -625,7 +673,7 @@ namespace jeecs::graphic::api::gl330
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            }
+        }
             if (is_depth)
             {
                 if (is_16bit)
@@ -634,12 +682,16 @@ namespace jeecs::graphic::api::gl330
                 if (is_cube)
                     assert(0); // todo;
                 else if (msaa_level != 0)
+#ifdef JE_ENABLE_GL330_GAPI
                     glTexImage2DMultisample(gl_texture_type,
                         msaa_level,
                         GL_DEPTH_COMPONENT,
                         (GLsizei)resource->m_raw_texture_data->m_width,
                         (GLsizei)resource->m_raw_texture_data->m_height,
                         GL_FALSE);
+#else
+                    ;
+#endif
                 else
                     glTexImage2D(gl_texture_type, 0, GL_DEPTH_COMPONENT,
                         (GLsizei)resource->m_raw_texture_data->m_width,
@@ -656,23 +708,27 @@ namespace jeecs::graphic::api::gl330
                 {
                 case jegl_texture::format::MONO:
                     texture_src_format = GL_LUMINANCE;
-                    texture_aim_format = is_16bit ? GL_LUMINANCE16F_ARB : GL_LUMINANCE; break;
+                    texture_aim_format = is_16bit ? GL_R16F : GL_LUMINANCE; break;
                 case jegl_texture::format::RGBA:
                     texture_src_format = GL_RGBA;
                     texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA; break;
                 default:
                     jeecs::debug::logerr("Unknown texture raw-data format.");
-                }
+        }
 
                 if (is_cube)
                     assert(0); // todo;
                 if (msaa_level != 0)
+#ifdef JE_ENABLE_GL330_GAPI
                     glTexImage2DMultisample(gl_texture_type,
                         msaa_level,
                         texture_aim_format,
                         (GLsizei)resource->m_raw_texture_data->m_width,
                         (GLsizei)resource->m_raw_texture_data->m_height,
                         GL_FALSE);
+#else
+                    ;
+#endif
                 else
                 {
                     glTexImage2D(gl_texture_type,
@@ -683,13 +739,13 @@ namespace jeecs::graphic::api::gl330
                         is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
                         resource->m_raw_texture_data->m_pixels);
                 }
-            }
+    }
 
             resource->m_handle.m_uint1 = texture;
             resource->m_handle.m_uint2 = (uint32_t)resource->m_raw_texture_data->m_format;
             static_assert(std::is_same<decltype(resource->m_handle.m_uint2), uint32_t>::value);
             break;
-        }
+}
         case jegl_resource::type::VERTEX:
         {
             GLuint vao, vbo;

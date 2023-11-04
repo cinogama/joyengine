@@ -21,7 +21,8 @@ bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 void jegui_win32_append_unicode16_char(wchar_t wch);
 #endif
 
-#ifdef JE_ENABLE_GL330_GAPI
+#if defined(JE_ENABLE_GL330_GAPI) \
+ || defined(JE_ENABLE_GLES320_GAPI)
 void jegui_init_gl330(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*),

@@ -36,18 +36,41 @@ set(imgui_srcs
     "../3rd/imgui/misc/cpp/imgui_stdlib.h")
 
 # JoyEngine Graphic API support list.
-# OpenGL 3.3
-if (JE4_ENABLE_OPENGL330_GAPI)
-    add_definitions(-DJE_ENABLE_GL330_GAPI)
-    
+# OpenGL 3.3 & OpenGLES 3.2
+if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES320_GAPI)
     include_directories("../3rd/glew/include")
-
-    if (WIN32)
-        list(APPEND jeecs_graphic_libs OpenGL32)
-    else()
+    if (NOT WIN32)
         target_compile_options(glew_s PRIVATE -fPIC)
     endif()
     list(APPEND jeecs_graphic_libs glew_s)
+
+    if (JE4_ENABLE_OPENGL330_GAPI)
+        add_definitions(-DJE_ENABLE_GL330_GAPI)
+
+        if (WIN32)
+            list(APPEND jeecs_graphic_libs OpenGL32)
+        endif()
+    else()
+        add_definitions(-DJE_ENABLE_GLES320_GAPI)
+        add_definitions(-DIMGUI_IMPL_OPENGL_ES3)
+
+        if (WIN32)
+            include_directories("../3rd/opengles_env_w64/include")
+            list(APPEND jeecs_graphic_libs "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/opengles_env_w64/libEGL.lib")
+            list(APPEND jeecs_graphic_libs "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/opengles_env_w64/libGLESv2.lib")
+        else()
+            find_library(OPENGLES3_LIBRARY GLESv2 "OpenGL ES v3.1 library")
+            find_library(EGL_LIBRARY EGL "EGL 1.4 library")
+            list(APPEND jeecs_graphic_libs ${OPENGLES3_LIBRARY})
+            list(APPEND jeecs_graphic_libs ${EGL_LIBRARY})
+        endif()
+
+    endif()
+
+    list(APPEND imgui_srcs
+        "../3rd/imgui/backends/imgui_impl_opengl3.cpp"
+        "../3rd/imgui/backends/imgui_impl_opengl3.h"
+        "../3rd/imgui/backends/imgui_impl_opengl3_loader.h")
 endif()
 
 # DX11
@@ -64,13 +87,6 @@ if (JE4_ENABLE_DX11_GAPI AND WIN32)
         "../3rd/imgui/backends/imgui_impl_win32.h"
         "../3rd/imgui/backends/imgui_impl_dx11.cpp"
         "../3rd/imgui/backends/imgui_impl_dx11.h")
-endif()
-
-# OpenGLES 3.2
-if (JE4_ENABLE_OPENGLES320_GAPI)
-    add_definitions(-DJE_ENABLE_GLES320_GAPI)
-    add_definitions(-DIMGUI_IMPL_OPENGL_ES3)
-    include_directories("../3rd/opengles_env_w64/include")
 endif()
 
 # Vulkan 1.1
@@ -99,15 +115,6 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
         "../3rd/imgui/backends/imgui_impl_glfw.cpp"
         "../3rd/imgui/backends/imgui_impl_glfw.h")
 endif()
-if (JE4_ENABLE_OPENGL330_GAPI OR 
-    JE4_ENABLE_OPENGLES320_GAPI)
-    
-    list(APPEND imgui_srcs
-        "../3rd/imgui/backends/imgui_impl_opengl3.cpp"
-        "../3rd/imgui/backends/imgui_impl_opengl3.h"
-        "../3rd/imgui/backends/imgui_impl_opengl3_loader.h")
-endif()
-
 
 # Build engine shared/static library
 if (${BUILD_SHARED_LIBS})
