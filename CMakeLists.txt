@@ -24,13 +24,6 @@ option(JE4_ENABLE_OPENGLES320_GAPI  "Enable OpenGLES 3.2 Graphic API"   OFF)
 option(JE4_ENABLE_VULKAN110_GAPI    "Enable Vulkan 1.1 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
-# DEBUG!
-set(JE4_ENABLE_OPENGLES320_GAPI ON CACHE BOOL "DEBUG FOR GLES!" FORCE)
-set(JE4_ENABLE_DX11_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
-set(JE4_ENABLE_OPENGL330_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
-set(JE4_ENABLE_VULKAN110_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
-set(JE4_ENABLE_METAL_GAPI OFF CACHE BOOL "DEBUG FOR GLES!" FORCE)
-
 # Cannot use gles & gl at same time because of ImGUI cannot use two lib at same time.
 if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES320_GAPI)
     message(FATAL_ERROR "Cannot use OpenGL3.3 and OpenGLES3.2 at same time.")
@@ -40,6 +33,7 @@ endif()
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
 add_subdirectory("3rd/openal-soft")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d" FORCE)
+set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "Donot built box2d unit-test." FORCE)
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
