@@ -4094,13 +4094,14 @@ namespace jeecs
             using id_typeinfo_map_t = std::unordered_map<
                 jeecs::typing::typeid_t,
                 const jeecs::typing::type_info*>;
-            using registered_type_hash_set_t = std::unordered_set<
-                jeecs::typing::typehash_t>;
+            using registered_type_hash_map_t = std::unordered_map<
+                jeecs::typing::typehash_t,
+                jeecs::typing::typeid_t>;
 
             mutable std::mutex _m_mx;
            
             id_typeinfo_map_t _m_self_registed_id_typeinfo;
-            registered_type_hash_set_t _m_self_registed_hash;
+            registered_type_hash_map_t _m_self_registed_hash;
 
         public:
             type_unregister_guard() = default;
@@ -4112,10 +4113,13 @@ namespace jeecs
             template<typename T>
             typeid_t _register_or_get_type_id(const char* _typename)
             {
-                if (_m_self_registed_hash.find(typeid(T).hash_code()) != _m_self_registed_hash.end())
-                    return jeecs::typing::type_info::id<T>();
-
-                _m_self_registed_hash.insert(typeid(T).hash_code());
+                do
+                {
+                    std::lock_guard g1(_m_mx);
+                    auto fnd = _m_self_registed_hash.find(typeid(T).hash_code());
+                    if (fnd != _m_self_registed_hash.end())
+                        return fnd->second;
+                } while (0);
 
                 bool is_basic_type = false;
                 if (nullptr == _typename)
@@ -4158,6 +4162,7 @@ namespace jeecs
 
                     assert(_m_self_registed_id_typeinfo.find(local_type_info->m_id) == _m_self_registed_id_typeinfo.end());
                     _m_self_registed_id_typeinfo[local_type_info->m_id] = local_type_info;
+                    _m_self_registed_hash[typeid(T).hash_code()] = local_type_info->m_id;
 
                 } while (0);
                 return local_type_info->m_id;
