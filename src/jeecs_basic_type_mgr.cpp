@@ -19,7 +19,7 @@ namespace jeecs_impl
     class type_info_holder
     {
         JECS_DISABLE_MOVE_AND_COPY(type_info_holder);
-        mutable std::mutex  _m_type_holder_mx;
+        mutable std::shared_mutex  _m_type_holder_mx;
 
         std::vector<jeecs::typing::type_info*>  _m_type_holder_list;
         std::unordered_map<jeecs::typing::type_info*, std::vector<jeecs::typing::type_info*>>
@@ -145,7 +145,7 @@ namespace jeecs_impl
         {
             if (id && id != jeecs::typing::INVALID_TYPE_ID)
             {
-                std::lock_guard g1(_m_type_holder_mx);
+                std::shared_lock sg1(_m_type_holder_mx);
                 if (id <= _m_type_holder_list.size())
                     return _m_type_holder_list[id - 1];
             }
@@ -153,7 +153,7 @@ namespace jeecs_impl
         }
         jeecs::typing::type_info* get_info_by_hash(jeecs::typing::typehash_t hash) noexcept
         {
-            std::lock_guard g1(_m_type_holder_mx);
+            std::shared_lock sg1(_m_type_holder_mx);
             auto fnd = _m_type_hash_mapping.find(hash);
             if (fnd != _m_type_hash_mapping.end())
                 return fnd->second;
@@ -163,7 +163,7 @@ namespace jeecs_impl
         {
             if (name)
             {
-                std::lock_guard g1(_m_type_holder_mx);
+                std::shared_lock sg1(_m_type_holder_mx);
                 auto fnd = _m_type_name_id_mapping.find(name);
                 if (fnd != _m_type_name_id_mapping.end())
                     return _m_type_holder_list[fnd->second - 1];
@@ -172,7 +172,7 @@ namespace jeecs_impl
         }
         std::vector<jeecs::typing::type_info*> get_all_registed_types() noexcept
         {
-            std::lock_guard g1(_m_type_holder_mx);
+            std::shared_lock sg1(_m_type_holder_mx);
             std::vector<jeecs::typing::type_info*> types;
 
             for (auto* t : _m_type_holder_list)
@@ -184,7 +184,7 @@ namespace jeecs_impl
         }
         size_t get_unregistered_count() const noexcept
         {
-            std::lock_guard g1(_m_type_holder_mx); 
+            std::shared_lock sg1(_m_type_holder_mx);
             return m_type_unregistered_count;
         }
 
