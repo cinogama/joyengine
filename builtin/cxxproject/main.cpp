@@ -1,4 +1,4 @@
-#include "jeecs.h"
+#include "jeecs.hpp"
 #include "loader.hpp"
 
 extern "C" {
@@ -11,7 +11,6 @@ extern "C" {
 	JE_EXPORT void jeecs_module_leave()
 	{
 		jeecs::entry::module_leave();
-		jeecs::entry::module_preshutdown();
 	}
 }
 

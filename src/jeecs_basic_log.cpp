@@ -1,6 +1,6 @@
 #define JE_IMPL
 #define WO_NEED_ANSI_CONTROL
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 #include <cstdio>
 #include <cstdarg>

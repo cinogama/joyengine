@@ -380,7 +380,7 @@ namespace jeecs
         template<size_t n, typename ... Ts>
         using index_types_t = typename _variadic_type_indexer<n, Ts...>::type;
 
-        class _type_unregister_guard;
+        class type_unregister_guard;
     }
 
     class game_system;
@@ -715,6 +715,16 @@ JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
     jeecs::typing::typeid_t _id);
 
 /*
+je_typing_get_info_by_hash [基本接口]
+通过类型的哈希值获取类型信息，若给定的类型哈希不合法，返回nullptr
+请参见：
+    jeecs::typing::typehash_t
+    jeecs::typing::type_info
+*/
+JE_API const jeecs::typing::type_info* je_typing_get_info_by_hash(
+    jeecs::typing::typehash_t _hash);
+
+/*
 je_typing_get_info_by_name [基本接口]
 通过类型的名称获取类型信息，若给定的类型名不合法或不存在，返回nullptr
 请参见：
@@ -761,10 +771,6 @@ JE_API void je_register_script_parser(
     jeecs::typing::parse_w2c_func_t w2c,
     const char* woolang_typename,
     const char* woolang_typedecl);
-
-
-JE_API jeecs::typing::_type_unregister_guard* je_get_type_register_guard(const char* module_name);
-JE_API void je_free_type_register_guard(jeecs::typing::_type_unregister_guard* guard);
 
 ////////////////////// ToWoo //////////////////////
 /*
@@ -1286,7 +1292,7 @@ jeecs_entry_register_core_systems [基本接口]
 请参见：
     jeecs::entry::module_entry
 */
-JE_API void jeecs_entry_register_core_systems(void);
+JE_API void jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* guard);
 
 /////////////////////////// FILE /////////////////////////////////
 
@@ -1606,8 +1612,8 @@ struct jegl_shader
         FLOAT2,
         FLOAT3,
         FLOAT4,
-        FLOAT4X4,
         TEXTURE,
+        FLOAT4X4,
     };
     struct builtin_uniform_location
     {
@@ -4050,7 +4056,7 @@ namespace jeecs
             static_assert(std::is_void<VoidT>::value);
         };
         template<typename T>
-        struct sfinae_is_static_ref_register_function<T, std::void_t<decltype(T::JERefRegsiter())>> : std::true_type
+        struct sfinae_is_static_ref_register_function<T, std::void_t<decltype(T::JERefRegsiter(nullptr))>> : std::true_type
         {
         };
 
@@ -4081,40 +4087,36 @@ namespace jeecs
             const char* m_woolang_typedecl;
         };
 
-        class _typeinfo_holder_base
-        {
-        public:
-            virtual void _update() = 0;
-        };
-
-        class _type_unregister_guard
+        class type_unregister_guard
         {
             friend struct type_info;
 
+            using id_typeinfo_map_t = std::unordered_map<
+                jeecs::typing::typeid_t,
+                const jeecs::typing::type_info*>;
+            using registered_type_hash_set_t = std::unordered_set<
+                jeecs::typing::typehash_t>;
+
             mutable std::mutex _m_mx;
-            std::string _m_module_name;
-            std::unordered_map<jeecs::typing::typeid_t, const jeecs::typing::type_info*>
-                _m_self_registed_typeinfo;
-            std::unordered_set<_typeinfo_holder_base*> m_typeholder_list;
+           
+            id_typeinfo_map_t _m_self_registed_id_typeinfo;
+            registered_type_hash_set_t _m_self_registed_hash;
 
         public:
-            _type_unregister_guard(const std::string module_name)
-                : _m_module_name(module_name)
-            {
-            }
-            ~_type_unregister_guard()
-            {
-                unregister_all_types();
-            }
+            type_unregister_guard() = default;
 
-            const std::string& get_module_name() const
+            ~type_unregister_guard()
             {
-                return _m_module_name;
+                assert(_m_self_registed_id_typeinfo.empty());
             }
-
             template<typename T>
             typeid_t _register_or_get_type_id(const char* _typename)
             {
+                if (_m_self_registed_hash.find(typeid(T).hash_code()) != _m_self_registed_hash.end())
+                    return jeecs::typing::type_info::id<T>();
+
+                _m_self_registed_hash.insert(typeid(T).hash_code());
+
                 bool is_basic_type = false;
                 if (nullptr == _typename)
                 {
@@ -4154,8 +4156,8 @@ namespace jeecs
                 {
                     std::lock_guard g1(_m_mx);
 
-                    assert(_m_self_registed_typeinfo.find(local_type_info->m_id) == _m_self_registed_typeinfo.end());
-                    _m_self_registed_typeinfo[local_type_info->m_id] = local_type_info;
+                    assert(_m_self_registed_id_typeinfo.find(local_type_info->m_id) == _m_self_registed_id_typeinfo.end());
+                    _m_self_registed_id_typeinfo[local_type_info->m_id] = local_type_info;
 
                 } while (0);
                 return local_type_info->m_id;
@@ -4164,76 +4166,15 @@ namespace jeecs
             void unregister_all_types()
             {
                 std::lock_guard g1(_m_mx);
-                for (auto& [_, local_type_info] : _m_self_registed_typeinfo)
+                for (auto& [_, local_type_info] : _m_self_registed_id_typeinfo)
                     je_typing_unregister(local_type_info);
-                _m_self_registed_typeinfo.clear();
+                _m_self_registed_id_typeinfo.clear();
+                _m_self_registed_hash.clear();
             }
             const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id) const
             {
                 std::lock_guard g1(_m_mx);
-                return _m_self_registed_typeinfo.at(id);
-            }
-
-            void update_all_typeinfo()
-            {
-                std::lock_guard g1(_m_mx);
-                for (auto* t : m_typeholder_list)
-                    t->_update();
-            }
-            void register_typeinfo_holder(_typeinfo_holder_base* holder)
-            {
-                std::lock_guard g1(_m_mx);
-                m_typeholder_list.insert(holder);
-            }
-            void unregister_typeinfo_holder(_typeinfo_holder_base* holder)
-            {
-                std::lock_guard g1(_m_mx);
-                m_typeholder_list.erase(holder);
-            }
-            static void shutdown()
-            {
-                je_free_type_register_guard(&instance());
-            }
-            static _type_unregister_guard& instance()
-            {
-                return *je_get_type_register_guard(JE4_MODULE_NAME);
-            }
-        };
-
-        template<typename T>
-        class _typeinfo_holder : _typeinfo_holder_base
-        {
-            JECS_DISABLE_MOVE_AND_COPY(_typeinfo_holder);
-
-            const char* m_typename;
-            const type_info* m_typeinfo;
-        public:
-            virtual void _update()override
-            {
-                m_typeinfo = je_typing_get_info_by_id(
-                    _type_unregister_guard::instance()._register_or_get_type_id<T>(m_typename));
-            }
-            const type_info* get_typeinfo()const noexcept
-            {
-                return m_typeinfo;
-            }
-            _typeinfo_holder(const char* tname)
-            {
-                if (tname != nullptr)
-                    m_typename = jeecs::basic::make_new_string(tname);
-                else
-                    m_typename = nullptr;
-
-                _type_unregister_guard::instance().register_typeinfo_holder(this);
-
-                _update();
-            }
-            ~_typeinfo_holder()
-            {
-                _type_unregister_guard::instance().unregister_typeinfo_holder(this);
-
-                if (m_typename != nullptr)
-                    je_mem_free((void*)m_typename);
+                return _m_self_registed_id_typeinfo.at(id);
             }
         };
 
@@ -4272,21 +4213,10 @@ namespace jeecs
             const member_info* volatile m_member_types;
             const script_parser_info* volatile m_script_parser_info;
         public:
-            static const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id)
-            {
-                return _type_unregister_guard::instance().get_local_type_info(id);
-            }
-
-            static void unregister_all_type_in_shutdown()
-            {
-                _type_unregister_guard::instance().unregister_all_types();
-            }
-
             template<typename T>
-            inline static const type_info* of(const char* _typename)
+            inline static const type_info* of()
             {
-                static _typeinfo_holder<T> holder(_typename);
-                return holder.get_typeinfo();
+                return je_typing_get_info_by_hash(typeid(T).hash_code());
             }
             inline static const type_info* of(typeid_t _tid)
             {
@@ -4298,19 +4228,21 @@ namespace jeecs
             }
 
             template<typename T>
-            inline static typeid_t id(const char* _typename)
+            inline static typeid_t id()
             {
-                return of<T>(_typename)->m_id;
+                return of<T>()->m_id;
             }
 
             template<typename T>
-            inline static void register_type(const char* _typename)
+            inline static void register_type(
+                jeecs::typing::type_unregister_guard* guard, const char* _typename)
             {
-                of<T>(_typename);
+                guard->_register_or_get_type_id<T>(_typename);
+
                 if constexpr (sfinae_has_ref_register<T>::value)
                 {
                     if constexpr (sfinae_is_static_ref_register_function<T>::value)
-                        T::JERefRegsiter();
+                        T::JERefRegsiter(guard);
                     else
                         static_assert(sfinae_is_static_ref_register_function<T>::value,
                             "T::JERefRegsiter must be static & callable with no arguments.");
@@ -4396,29 +4328,35 @@ namespace jeecs
         };
 
         template<typename ClassT, typename MemberT>
-        inline void register_member(MemberT(ClassT::* _memboffset), const char* membname)
+        inline void register_member(
+            jeecs::typing::type_unregister_guard* guard,
+            MemberT(ClassT::* _memboffset),
+            const char* membname)
         {
-            const type_info* membt = type_info::of<MemberT>(nullptr);
+            const type_info* membt = jeecs::typing::type_info::of(
+                guard->_register_or_get_type_id<MemberT>(nullptr));
+
             assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
 
             ptrdiff_t member_offset = reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
             je_register_member(
-                jeecs::typing::type_info::get_local_type_info(
-                    type_info::id<ClassT>(typeid(ClassT).name())),
+                guard->get_local_type_info(
+                    type_info::id<ClassT>()),
                 membt,
                 membname,
                 member_offset);
         }
         template<typename T>
         inline void register_script_parser(
+            jeecs::typing::type_unregister_guard* guard,
             void(*c2w)(wo_vm, wo_value, const T*),
             void(*w2c)(wo_vm, wo_value, T*),
             const std::string& woolang_typename,
             const std::string& woolang_typedecl)
         {
             je_register_script_parser(
-                jeecs::typing::type_info::get_local_type_info(
-                    type_info::id<T>(nullptr)),
+                guard->get_local_type_info(
+                    guard->_register_or_get_type_id<T>(nullptr)),
                 reinterpret_cast<jeecs::typing::parse_c2w_func_t>(c2w),
                 reinterpret_cast<jeecs::typing::parse_w2c_func_t>(w2c),
                 woolang_typename.c_str(),
@@ -4450,8 +4388,8 @@ namespace jeecs
         inline game_entity add_entity()
         {
             typing::typeid_t component_ids[] = {
-                typing::type_info::id<FirstCompT>(typeid(FirstCompT).name()),
-                typing::type_info::id<CompTs>(typeid(CompTs).name())...,
+                typing::type_info::id<FirstCompT>(),
+                typing::type_info::id<CompTs>()...,
                 typing::INVALID_TYPE_ID
             };
             game_entity gentity;
@@ -4509,7 +4447,7 @@ namespace jeecs
         template<typename SystemT>
         inline SystemT* get_system()
         {
-            return static_cast<SystemT*>(get_system(typing::type_info::of<SystemT>(typeid(SystemT).name())));
+            return static_cast<SystemT*>(get_system(typing::type_info::of<SystemT>()));
         }
 
         inline void remove_system(const jeecs::typing::type_info* type)
@@ -4736,12 +4674,12 @@ namespace jeecs
                     // Reference, means CONTAIN
                     dep.m_requirements.push_front(
                         requirement(requirement::type::CONTAIN, 0,
-                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>(typeid(CurRequireT).name())));
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
                 else if constexpr (std::is_pointer<CurRequireT>::value)
                     // Pointer, means MAYNOT
                     dep.m_requirements.push_front(
                         requirement(requirement::type::MAYNOT, 0,
-                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>(typeid(CurRequireT).name())));
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
                 else
                 {
                     static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value,
@@ -4755,13 +4693,13 @@ namespace jeecs
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
 
-            auto id = typing::type_info::id<CurRequireT>(typeid(CurRequireT).name());
+            auto id = typing::type_info::id<CurRequireT>();
 
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id)
                     debug::logwarn("Repeat or conflict when excepting component '%s'.",
-                        typing::type_info::of<CurRequireT>(typeid(CurRequireT).name())->m_typename);
+                        typing::type_info::of<CurRequireT>()->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::EXCEPT, 0, id));
             if constexpr (sizeof...(Ts) > 0)
@@ -4773,13 +4711,13 @@ namespace jeecs
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
 
-            auto id = typing::type_info::id<CurRequireT>(typeid(CurRequireT).name());
+            auto id = typing::type_info::id<CurRequireT>();
 
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id)
                     debug::logwarn("Repeat or conflict when containing component '%s'.",
-                        typing::type_info::of<CurRequireT>(typeid(CurRequireT).name())->m_typename);
+                        typing::type_info::of<CurRequireT>()->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::CONTAIN, 0, id));
             if constexpr (sizeof...(Ts) > 0)
@@ -4791,12 +4729,12 @@ namespace jeecs
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
 
-            auto id = typing::type_info::id<CurRequireT>(typeid(CurRequireT).name());
+            auto id = typing::type_info::id<CurRequireT>();
 #ifndef NDEBUG
             for (const requirement& req : dep.m_requirements)
                 if (req.m_type == id && req.m_require != requirement::type::MAYNOT)
                     debug::logwarn("Repeat or conflict when require any of component '%s'.",
-                        typing::type_info::of<CurRequireT>(typeid(CurRequireT).name())->m_typename);
+                        typing::type_info::of<CurRequireT>()->m_typename);
 #endif
             dep.m_requirements.push_back(requirement(requirement::type::ANYOF, any_group, id));
             if constexpr (sizeof...(Ts) > 0)
@@ -5200,21 +5138,21 @@ namespace jeecs
     inline T* game_entity::get_component()const noexcept
     {
         return (T*)je_ecs_world_entity_get_component(this,
-            typing::type_info::of<T>(typeid(T).name()));
+            typing::type_info::of<T>());
     }
 
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
         return (T*)je_ecs_world_entity_add_component(this,
-            typing::type_info::of<T>(typeid(T).name()));
+            typing::type_info::of<T>());
     }
 
     template<typename T>
     inline void game_entity::remove_component() const noexcept
     {
         return je_ecs_world_entity_remove_component(this,
-            typing::type_info::of<T>(typeid(T).name()));
+            typing::type_info::of<T>());
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept
@@ -7337,9 +7275,9 @@ namespace jeecs
                 rot = _rot * get_parent_global_rotation(translation).inverse();
             }
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&LocalRotation::rot, "rot");
+                typing::register_member(guard, &LocalRotation::rot, "rot");
             }
         };
 
@@ -7363,9 +7301,9 @@ namespace jeecs
                     pos = translation.world_rotation.inverse() * (_pos - get_parent_global_position(translation, nullptr));
             }
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&LocalPosition::pos, "pos");
+                typing::register_member(guard, &LocalPosition::pos, "pos");
             }
         };
 
@@ -7373,9 +7311,9 @@ namespace jeecs
         {
             math::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&LocalScale::scale, "scale");
+                typing::register_member(guard, &LocalScale::scale, "scale");
             }
         };
 
@@ -7383,9 +7321,9 @@ namespace jeecs
         {
             typing::uid_t uid = je_uid_generate();
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Anchor::uid, "uid");
+                typing::register_member(guard, &Anchor::uid, "uid");
             }
         };
 
@@ -7397,9 +7335,9 @@ namespace jeecs
 
             typing::uid_t parent_uid = {};
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&LocalToParent::parent_uid, "parent_uid");
+                typing::register_member(guard, &LocalToParent::parent_uid, "parent_uid");
             }
         };
 
@@ -7470,12 +7408,12 @@ namespace jeecs
                 return math::vec4(absoffset.x, absoffset.y, abssize.x, abssize.y);
             }
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Origin::left_origin, "left_origin");
-                typing::register_member(&Origin::right_origin, "right_origin");
-                typing::register_member(&Origin::top_origin, "top_origin");
-                typing::register_member(&Origin::buttom_origin, "buttom_origin");
+                typing::register_member(guard, &Origin::left_origin, "left_origin");
+                typing::register_member(guard, &Origin::right_origin, "right_origin");
+                typing::register_member(guard, &Origin::top_origin, "top_origin");
+                typing::register_member(guard, &Origin::buttom_origin, "buttom_origin");
             }
         };
         struct Absolute
@@ -7483,10 +7421,10 @@ namespace jeecs
             math::vec2 size = { 0.0f, 0.0f };
             math::vec2 offset = { 0.0f, 0.0f };
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Absolute::size, "size");
-                typing::register_member(&Absolute::offset, "offset");
+                typing::register_member(guard, &Absolute::size, "size");
+                typing::register_member(guard, &Absolute::offset, "offset");
             }
         };
         struct Relatively
@@ -7495,19 +7433,19 @@ namespace jeecs
             jeecs::math::vec2 scale = { 0.0f, 0.0f };
             bool use_vertical_ratio = false;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Relatively::location, "location");
-                typing::register_member(&Relatively::scale, "scale");
-                typing::register_member(&Relatively::use_vertical_ratio, "use_vertical_ratio");
+                typing::register_member(guard, &Relatively::location, "location");
+                typing::register_member(guard, &Relatively::scale, "scale");
+                typing::register_member(guard, &Relatively::use_vertical_ratio, "use_vertical_ratio");
             }
         };
         struct Distortion
         {
             float angle = 0.0f;
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Distortion::angle, "angle");
+                typing::register_member(guard, &Distortion::angle, "angle");
             }
         };
     };
@@ -7535,9 +7473,9 @@ namespace jeecs
         {
             int rend_queue = 0;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Rendqueue::rend_queue, "rend_queue");
+                typing::register_member(guard, &Rendqueue::rend_queue, "rend_queue");
             }
         };
 
@@ -7600,10 +7538,10 @@ namespace jeecs
                 return nullptr;
             }
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Textures::tiling, "tiling");
-                typing::register_member(&Textures::offset, "offset");
+                typing::register_member(guard, &Textures::tiling, "tiling");
+                typing::register_member(guard, &Textures::offset, "offset");
             }
         };
 
@@ -7611,9 +7549,9 @@ namespace jeecs
         {
             math::vec4 color;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Color::color, "color");
+                typing::register_member(guard, &Color::color, "color");
             }
         };
     }
@@ -7624,10 +7562,10 @@ namespace jeecs
             float znear = 0.3f;
             float zfar = 1000.0f;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Clip::znear, "znear");
-                typing::register_member(&Clip::zfar, "zfar");
+                typing::register_member(guard, &Clip::znear, "znear");
+                typing::register_member(guard, &Clip::zfar, "zfar");
             }
         };
         struct Projection
@@ -7639,34 +7577,34 @@ namespace jeecs
         struct OrthoProjection
         {
             float scale = 1.0f;
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&OrthoProjection::scale, "scale");
+                typing::register_member(guard, &OrthoProjection::scale, "scale");
             }
         };
         struct PerspectiveProjection
         {
             float angle = 75.0f;
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&PerspectiveProjection::angle, "angle");
+                typing::register_member(guard, &PerspectiveProjection::angle, "angle");
             }
         };
         struct Viewport
         {
             math::vec4 viewport = math::vec4(0, 0, 1, 1);
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Viewport::viewport, "viewport");
+                typing::register_member(guard, &Viewport::viewport, "viewport");
             }
         };
         struct RendToFramebuffer
         {
             basic::resource<graphic::framebuffer> framebuffer = nullptr;
             math::vec4 clearcolor = {};
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&RendToFramebuffer::clearcolor, "clearcolor");
+                typing::register_member(guard, &RendToFramebuffer::clearcolor, "clearcolor");
             }
         };
     }
@@ -7692,25 +7630,25 @@ namespace jeecs
         {
             float density = 1.f;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Mass::density, "density");
+                typing::register_member(guard, &Mass::density, "density");
             }
         };
         struct Friction
         {
             float value = 1.f;
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Friction::value, "value");
+                typing::register_member(guard, &Friction::value, "value");
             }
         };
         struct Restitution
         {
             float value = 1.f;
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Restitution::value, "value");
+                typing::register_member(guard, &Restitution::value, "value");
             }
         };
 
@@ -7726,16 +7664,16 @@ namespace jeecs
             bool lock_movement_y = false;
             bool lock_rotation = false;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Kinematics::linear_velocity, "linear_velocity");
-                typing::register_member(&Kinematics::angular_velocity, "angular_velocity");
-                typing::register_member(&Kinematics::linear_damping, "linear_damping");
-                typing::register_member(&Kinematics::angular_damping, "angular_damping");
-                typing::register_member(&Kinematics::gravity_scale, "gravity_scale");
-                typing::register_member(&Kinematics::lock_movement_x, "lock_movement_x");
-                typing::register_member(&Kinematics::lock_movement_y, "lock_movement_y");
-                typing::register_member(&Kinematics::lock_rotation, "lock_rotation");
+                typing::register_member(guard, &Kinematics::linear_velocity, "linear_velocity");
+                typing::register_member(guard, &Kinematics::angular_velocity, "angular_velocity");
+                typing::register_member(guard, &Kinematics::linear_damping, "linear_damping");
+                typing::register_member(guard, &Kinematics::angular_damping, "angular_damping");
+                typing::register_member(guard, &Kinematics::gravity_scale, "gravity_scale");
+                typing::register_member(guard, &Kinematics::lock_movement_x, "lock_movement_x");
+                typing::register_member(guard, &Kinematics::lock_movement_y, "lock_movement_y");
+                typing::register_member(guard, &Kinematics::lock_rotation, "lock_rotation");
             }
         };
         struct Bullet
@@ -7747,9 +7685,9 @@ namespace jeecs
             void* native_fixture = nullptr;
             math::vec2 scale = { 1.f, 1.f };
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&BoxCollider::scale, "scale");
+                typing::register_member(guard, &BoxCollider::scale, "scale");
             }
         };
         struct CircleCollider
@@ -7757,9 +7695,9 @@ namespace jeecs
             void* native_fixture = nullptr;
             float scale = 1.f;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&CircleCollider::scale, "scale");
+                typing::register_member(guard, &CircleCollider::scale, "scale");
             }
         };
     }
@@ -7773,13 +7711,13 @@ namespace jeecs
             float range = 1.0f;
             bool parallel = false;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Color::color, "color");
-                typing::register_member(&Color::gain, "gain");
-                typing::register_member(&Color::decay, "decay");
-                typing::register_member(&Color::range, "range");
-                typing::register_member(&Color::parallel, "parallel");
+                typing::register_member(guard, &Color::color, "color");
+                typing::register_member(guard, &Color::gain, "gain");
+                typing::register_member(guard, &Color::decay, "decay");
+                typing::register_member(guard, &Color::range, "range");
+                typing::register_member(guard, &Color::parallel, "parallel");
             }
         };
         struct Shadow
@@ -7791,11 +7729,11 @@ namespace jeecs
 
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Shadow::resolution_width, "resolution_width");
-                typing::register_member(&Shadow::resolution_height, "resolution_height");
-                typing::register_member(&Shadow::shape_offset, "shape_offset");
+                typing::register_member(guard, &Shadow::resolution_width, "resolution_width");
+                typing::register_member(guard, &Shadow::resolution_height, "resolution_height");
+                typing::register_member(guard, &Shadow::shape_offset, "shape_offset");
             }
         };
         struct CameraPostPass
@@ -7863,12 +7801,12 @@ namespace jeecs
             bool nocover = false;
             bool reverse = false;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Block::mesh, "mesh");
-                typing::register_member(&Block::shadow, "shadow");
-                typing::register_member(&Block::nocover, "nocover");
-                typing::register_member(&Block::reverse, "reverse");
+                typing::register_member(guard, &Block::mesh, "mesh");
+                typing::register_member(guard, &Block::shadow, "shadow");
+                typing::register_member(guard, &Block::nocover, "nocover");
+                typing::register_member(guard, &Block::reverse, "reverse");
             }
         };
     }
@@ -8223,11 +8161,11 @@ namespace jeecs
             float jitter = 0.0f;
             float speed = 1.0f;
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&FrameAnimation::animations, "animations");
-                typing::register_member(&FrameAnimation::jitter, "jitter");
-                typing::register_member(&FrameAnimation::speed, "speed");
+                typing::register_member(guard, &FrameAnimation::animations, "animations");
+                typing::register_member(guard, &FrameAnimation::jitter, "jitter");
+                typing::register_member(guard, &FrameAnimation::speed, "speed");
             }
         };
     }
@@ -8275,9 +8213,9 @@ namespace jeecs
                 return nullptr;
             }
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Woolang::path, "path");
+                typing::register_member(guard, &Woolang::path, "path");
             }
         };
     }
@@ -8308,10 +8246,10 @@ namespace jeecs
             {
             }
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Source::pitch, "pitch");
-                typing::register_member(&Source::volume, "volume");
+                typing::register_member(guard, &Source::pitch, "pitch");
+                typing::register_member(guard, &Source::volume, "volume");
             }
         };
         struct Listener
@@ -8320,9 +8258,9 @@ namespace jeecs
 
             math::vec3 last_position = {};
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Listener::volume, "volume");
+                typing::register_member(guard, &Listener::volume, "volume");
             }
         };
         struct Playing
@@ -8338,11 +8276,11 @@ namespace jeecs
                 buffer.set_resource(buf);
             }
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Playing::buffer, "buffer");
-                typing::register_member(&Playing::play, "play");
-                typing::register_member(&Playing::loop, "loop");
+                typing::register_member(guard, &Playing::buffer, "buffer");
+                typing::register_member(guard, &Playing::play, "play");
+                typing::register_member(guard, &Playing::loop, "loop");
             }
         };
     }
@@ -8354,11 +8292,11 @@ namespace jeecs
             int             layer = 0;
             typing::uid_t   type = {};
 
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&MapTile::location, "location");
-                typing::register_member(&MapTile::layer, "layer");
-                typing::register_member(&MapTile::type, "type");
+                typing::register_member(guard, &MapTile::location, "location");
+                typing::register_member(guard, &MapTile::layer, "layer");
+                typing::register_member(guard, &MapTile::type, "type");
             }
         };
     }
@@ -8662,64 +8600,64 @@ namespace jeecs
 
     namespace entry
     {
-        inline void module_entry()
+        inline void module_entry(jeecs::typing::type_unregister_guard* guard)
         {
             // 0. register built-in components
             using namespace typing;
-            _type_unregister_guard::instance().unregister_all_types();
 
-            type_info::register_type<Transform::LocalPosition>("Transform::LocalPosition");
-            type_info::register_type<Transform::LocalRotation>("Transform::LocalRotation");
-            type_info::register_type<Transform::LocalScale>("Transform::LocalScale");
-            type_info::register_type<Transform::Anchor>("Transform::Anchor");
-            type_info::register_type<Transform::LocalToWorld>("Transform::LocalToWorld");
-            type_info::register_type<Transform::LocalToParent>("Transform::LocalToParent");
-            type_info::register_type<Transform::Translation>("Transform::Translation");
+            type_info::register_type<Transform::LocalPosition>(guard, "Transform::LocalPosition");
+            type_info::register_type<Transform::LocalRotation>(guard, "Transform::LocalRotation");
+            type_info::register_type<Transform::LocalScale>(guard, "Transform::LocalScale");
+            type_info::register_type<Transform::Anchor>(guard, "Transform::Anchor");
+            type_info::register_type<Transform::LocalToWorld>(guard, "Transform::LocalToWorld");
+            type_info::register_type<Transform::LocalToParent>(guard, "Transform::LocalToParent");
+            type_info::register_type<Transform::Translation>(guard, "Transform::Translation");
 
-            type_info::register_type<UserInterface::Origin>("UserInterface::Origin");
-            type_info::register_type<UserInterface::Distortion>("UserInterface::Distortion");
-            type_info::register_type<UserInterface::Absolute>("UserInterface::Absolute");
-            type_info::register_type<UserInterface::Relatively>("UserInterface::Relatively");
+            type_info::register_type<UserInterface::Origin>(guard, "UserInterface::Origin");
+            type_info::register_type<UserInterface::Distortion>(guard, "UserInterface::Distortion");
+            type_info::register_type<UserInterface::Absolute>(guard, "UserInterface::Absolute");
+            type_info::register_type<UserInterface::Relatively>(guard, "UserInterface::Relatively");
 
-            type_info::register_type<Renderer::Rendqueue>("Renderer::Rendqueue");
-            type_info::register_type<Renderer::Shape>("Renderer::Shape");
-            type_info::register_type<Renderer::Shaders>("Renderer::Shaders");
-            type_info::register_type<Renderer::Textures>("Renderer::Textures");
-            type_info::register_type<Renderer::Color>("Renderer::Color");
+            type_info::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
+            type_info::register_type<Renderer::Shape>(guard, "Renderer::Shape");
+            type_info::register_type<Renderer::Shaders>(guard, "Renderer::Shaders");
+            type_info::register_type<Renderer::Textures>(guard, "Renderer::Textures");
+            type_info::register_type<Renderer::Color>(guard, "Renderer::Color");
 
-            type_info::register_type<Animation2D::FrameAnimation>("Animation2D::FrameAnimation");
+            type_info::register_type<Animation2D::FrameAnimation>(guard, "Animation2D::FrameAnimation");
 
-            type_info::register_type<Camera::Clip>("Camera::Clip");
-            type_info::register_type<Camera::Projection>("Camera::Projection");
-            type_info::register_type<Camera::OrthoProjection>("Camera::OrthoProjection");
-            type_info::register_type<Camera::PerspectiveProjection>("Camera::PerspectiveProjection");
-            type_info::register_type<Camera::Viewport>("Camera::Viewport");
-            type_info::register_type<Camera::RendToFramebuffer>("Camera::RendToFramebuffer");
+            type_info::register_type<Camera::Clip>(guard, "Camera::Clip");
+            type_info::register_type<Camera::Projection>(guard, "Camera::Projection");
+            type_info::register_type<Camera::OrthoProjection>(guard, "Camera::OrthoProjection");
+            type_info::register_type<Camera::PerspectiveProjection>(guard, "Camera::PerspectiveProjection");
+            type_info::register_type<Camera::Viewport>(guard, "Camera::Viewport");
+            type_info::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
 
-            type_info::register_type<Light2D::Color>("Light2D::Color");
-            type_info::register_type<Light2D::Shadow>("Light2D::Shadow");
-            type_info::register_type<Light2D::CameraPostPass>("Light2D::CameraPostPass");
-            type_info::register_type<Light2D::Block>("Light2D::Block");
+            type_info::register_type<Light2D::Color>(guard, "Light2D::Color");
+            type_info::register_type<Light2D::Shadow>(guard, "Light2D::Shadow");
+            type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
+            type_info::register_type<Light2D::Block>(guard, "Light2D::Block");
 
-            type_info::register_type<Script::Woolang>("Script::Woolang");
+            type_info::register_type<Script::Woolang>(guard, "Script::Woolang");
 
-            type_info::register_type<Physics2D::Rigidbody>("Physics2D::Rigidbody");
-            type_info::register_type<Physics2D::Kinematics>("Physics2D::Kinematics");
-            type_info::register_type<Physics2D::Mass>("Physics2D::Mass");
-            type_info::register_type<Physics2D::Bullet>("Physics2D::Bullet");
-            type_info::register_type<Physics2D::BoxCollider>("Physics2D::BoxCollider");
-            type_info::register_type<Physics2D::CircleCollider>("Physics2D::CircleCollider");
-            type_info::register_type<Physics2D::Restitution>("Physics2D::Restitution");
-            type_info::register_type<Physics2D::Friction>("Physics2D::Friction");
+            type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
+            type_info::register_type<Physics2D::Kinematics>(guard, "Physics2D::Kinematics");
+            type_info::register_type<Physics2D::Mass>(guard, "Physics2D::Mass");
+            type_info::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
+            type_info::register_type<Physics2D::BoxCollider>(guard, "Physics2D::BoxCollider");
+            type_info::register_type<Physics2D::CircleCollider>(guard, "Physics2D::CircleCollider");
+            type_info::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
+            type_info::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");
 
-            type_info::register_type<Audio::Source>("Audio::Source");
-            type_info::register_type<Audio::Listener>("Audio::Listener");
-            type_info::register_type<Audio::Playing>("Audio::Playing");
+            type_info::register_type<Audio::Source>(guard, "Audio::Source");
+            type_info::register_type<Audio::Listener>(guard, "Audio::Listener");
+            type_info::register_type<Audio::Playing>(guard, "Audio::Playing");
 
-            type_info::register_type<Scene::MapTile>("Scene::MapTile");
+            type_info::register_type<Scene::MapTile>(guard, "Scene::MapTile");
 
             // 1. register basic types
             typing::register_script_parser<bool>(
+                guard,
                 [](wo_vm, wo_value value, const bool* v) {
                     wo_set_bool(value, *v);
                 },
@@ -8733,24 +8671,25 @@ namespace jeecs
             auto integer_uniform_parser_w2c = [](wo_vm, wo_value value, auto* v) {
                 *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
             };
-            typing::register_script_parser<int8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+            typing::register_script_parser<int8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int8", "alias int8 = int;");
-            typing::register_script_parser<int16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+            typing::register_script_parser<int16_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int16", "alias int16 = int;");
-            typing::register_script_parser<int32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+            typing::register_script_parser<int32_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int32", "alias int32 = int;");
-            typing::register_script_parser<int64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+            typing::register_script_parser<int64_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int64", "alias int64 = int;");
-            typing::register_script_parser<uint8_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+            typing::register_script_parser<uint8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "uint8", "alias uint8 = int;");
-            typing::register_script_parser<uint16_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+            typing::register_script_parser<uint16_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "uint16", "alias uint16 = int;");
-            typing::register_script_parser<uint32_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+            typing::register_script_parser<uint32_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "uint32", "alias uint32 = int;");
-            typing::register_script_parser<uint64_t>(integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+            typing::register_script_parser<uint64_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "uint64", "alias uint64 = int;");
 
             typing::register_script_parser<float>(
+                guard,
                 [](wo_vm, wo_value value, const float* v) {
                     wo_set_float(value, *v);
                 },
@@ -8758,6 +8697,7 @@ namespace jeecs
                     *v = wo_float(value);
                 }, "float", "alias float = real;");
             typing::register_script_parser<double>(
+                guard,
                 [](wo_vm, wo_value value, const double* v) {
                     wo_set_real(value, *v);
                 },
@@ -8766,6 +8706,7 @@ namespace jeecs
                 }, "real", "");
 
             typing::register_script_parser<jeecs::basic::string>(
+                guard,
                 [](wo_vm vm, wo_value value, const jeecs::basic::string* v) {
                     wo_set_string(value, vm, v->c_str());
                 },
@@ -8774,6 +8715,7 @@ namespace jeecs
                 }, "string", "");
 
             typing::register_script_parser<jeecs::math::ivec2>(
+                guard,
                 [](wo_vm vm, wo_value value, const jeecs::math::ivec2* v) {
                     wo_set_struct(value, vm, 2);
                     wo_value elem = wo_push_empty(vm);
@@ -8795,6 +8737,7 @@ namespace jeecs
                 }, "ivec2", "public using ivec2 = (int, int);");
 
             typing::register_script_parser<jeecs::math::vec2>(
+                guard,
                 [](wo_vm vm, wo_value value, const jeecs::math::vec2* v) {
                     wo_set_struct(value, vm, 2);
                     wo_value elem = wo_push_empty(vm);
@@ -8816,6 +8759,7 @@ namespace jeecs
                 }, "vec2", "public using vec2 = (real, real);");
 
             typing::register_script_parser<jeecs::math::vec3>(
+                guard,
                 [](wo_vm vm, wo_value value, const jeecs::math::vec3* v) {
                     wo_set_struct(value, vm, 3);
                     wo_value elem = wo_push_empty(vm);
@@ -8843,6 +8787,7 @@ namespace jeecs
                 }, "vec3", "public using vec3 = (real, real, real);");
 
             typing::register_script_parser<jeecs::math::vec4>(
+                guard,
                 [](wo_vm vm, wo_value value, const jeecs::math::vec4* v) {
                     wo_set_struct(value, vm, 4);
                     wo_value elem = wo_push_empty(vm);
@@ -8876,6 +8821,7 @@ namespace jeecs
                 }, "vec4", "public using vec4 = (real, real, real, real);");
 
             typing::register_script_parser<jeecs::math::quat>(
+                guard,
                 [](wo_vm vm, wo_value value, const jeecs::math::quat* v) {
                     wo_set_struct(value, vm, 4);
                     wo_value elem = wo_push_empty(vm);
@@ -8909,20 +8855,15 @@ namespace jeecs
                 }, "quat", "public using quat = (real, real, real, real);");
 
             // 1. register core&graphic systems.
-            jeecs_entry_register_core_systems();
+            jeecs_entry_register_core_systems(guard);
 
             je_towoo_update_api();
         }
 
-        inline void module_leave()
+        inline void module_leave(jeecs::typing::type_unregister_guard* guard)
         {
             // 0. ungister this module components
-            typing::type_info::unregister_all_type_in_shutdown();
-        }
-
-        inline void module_preshutdown()
-        {
-            jeecs::typing::_type_unregister_guard::shutdown();
+            guard->unregister_all_types();
         }
     }
 

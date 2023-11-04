@@ -3,7 +3,7 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 #ifdef JE_ENABLE_DX11_GAPI
 #include <Windows.h>

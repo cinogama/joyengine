@@ -1,5 +1,5 @@
 #define JE_IMPL
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 bool    _key_states[(int)jeecs::input::keycode::MAX_KEY_CODE] = {};
 int     _mouse_pos[64][2] = {};

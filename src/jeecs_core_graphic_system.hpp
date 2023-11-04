@@ -3,7 +3,7 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #   define JE_ENABLE_DEBUG_API
-#   include "jeecs.h"
+#   include "jeecs.hpp"
 #endif
 
 #include <queue>
@@ -2443,7 +2443,7 @@ public func frag(_: v2f)
                                                 switch (cdata.m_member_value.m_type)
                                                 {
                                                 case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>(nullptr))
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
@@ -2453,7 +2453,7 @@ public func frag(_: v2f)
                                                     }
                                                     break;
                                                 case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>(nullptr))
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
@@ -2463,7 +2463,7 @@ public func frag(_: v2f)
                                                     }
                                                     break;
                                                 case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>(nullptr))
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
@@ -2473,7 +2473,7 @@ public func frag(_: v2f)
                                                     }
                                                     break;
                                                 case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>(nullptr))
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
@@ -2483,7 +2483,7 @@ public func frag(_: v2f)
                                                     }
                                                     break;
                                                 case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>(nullptr))
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
@@ -2493,7 +2493,7 @@ public func frag(_: v2f)
                                                     }
                                                     break;
                                                 case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>(nullptr))
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,

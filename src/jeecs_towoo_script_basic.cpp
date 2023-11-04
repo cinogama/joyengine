@@ -1,6 +1,6 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 #include <unordered_map>
 #include <optional>
@@ -557,7 +557,7 @@ const jeecs::typing::type_info* je_towoo_register_system(
 
     auto* towoo_system_tinfo = je_typing_register(
         system_name,
-        jeecs::basic::type_hash<jeecs::towoo::ToWooBaseSystem>(),
+        jeecs::basic::hash_compile_time(system_name),
         sizeof(jeecs::towoo::ToWooBaseSystem),
         alignof(jeecs::towoo::ToWooBaseSystem),
         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
@@ -797,7 +797,7 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_
 
     auto* towoo_component_tinfo = je_typing_register(
         component_name.c_str(),
-        jeecs::basic::type_hash<jeecs::towoo::ToWooBaseComponent>(),
+        jeecs::basic::hash_compile_time(("_towoo_component_" + component_name).c_str()),
         component_size,
         component_allign,
         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,

@@ -1,5 +1,5 @@
 #define JE_IMPL
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 #ifdef JE_ENABLE_METAL_GAPI
 namespace jeecs::graphic::api::metal

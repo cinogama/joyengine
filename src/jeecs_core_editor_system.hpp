@@ -3,7 +3,7 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #   define JE_ENABLE_DEBUG_API
-#   include "jeecs.h"
+#   include "jeecs.hpp"
 #endif
 
 #include <optional>
@@ -52,9 +52,9 @@ namespace jeecs
         struct Prefab
         {
             jeecs::basic::string path;
-            static void JERefRegsiter()
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(&Prefab::path, "path");
+                typing::register_member(guard, &Prefab::path, "path");
             }
         };
 

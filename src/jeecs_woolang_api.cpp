@@ -1,6 +1,6 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 #include <list>
 
@@ -957,32 +957,30 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args, size_t argc)
 {
     enum basic_type
     {
-        INT, INT2, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
+        INT, INT2, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT,
     };
     basic_type type = (basic_type)wo_int(args + 0);
 
     switch (type)
     {
     case INT:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<int>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<int>());
     case INT2:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::ivec2>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::ivec2>());
     case BOOL:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<bool>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<bool>());
     case FLOAT:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<float>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<float>());
     case FLOAT2:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec2>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec2>());
     case FLOAT3:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec3>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec3>());
     case FLOAT4:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec4>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::vec4>());
     case STRING:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::basic::string>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::basic::string>());
     case QUAT:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::quat>(nullptr));
-    case TEXTURE:
-        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::graphic::texture*>(nullptr));
+        return wo_ret_pointer(vm, (void*)jeecs::typing::type_info::of<jeecs::math::quat>());
     default:
         return wo_ret_panic(vm, "Unknown basic type.");
     }
@@ -1532,71 +1530,73 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
     extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
                 func _get_uniforms_from_shader(
                     shad: shader
-                )=> map<string, (typeinfo, uniform_value_data)>;
+                )=> map<string, uniform_variable>;
     */
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
     wo_value out_map = wo_push_map(vm);
 
     auto* uniforms = (*shader)->resouce()->m_raw_shader_data->m_custom_uniforms;
     wo_value key = wo_push_empty(vm);
+    wo_value val = wo_push_empty(vm);
+    wo_value elem = wo_push_empty(vm);
     while (uniforms)
     {
-        const jeecs::typing::type_info* type;
+        wo_set_string(key, vm, uniforms->m_name);
+        wo_set_struct(val, vm, 2);
+
+        wo_map_set(out_map, key, val);
+
+        if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT
+            && uniforms->m_uniform_type <= jegl_shader::uniform_type::TEXTURE)
+            wo_set_int(elem, 1 + uniforms->m_uniform_type);
+        else
+            // Others
+            wo_set_int(elem, 2 + jegl_shader::uniform_type::TEXTURE);
+
+        wo_struct_set(val, 0, elem);
+
         switch (uniforms->m_uniform_type)
         {
-        case jegl_shader::uniform_type::FLOAT:
-            type = jeecs::typing::type_info::of<float>(nullptr); break;
-        case jegl_shader::uniform_type::FLOAT2:
-            type = jeecs::typing::type_info::of<jeecs::math::vec2>(nullptr); break;
-        case jegl_shader::uniform_type::FLOAT3:
-            type = jeecs::typing::type_info::of<jeecs::math::vec3>(nullptr); break;
-        case jegl_shader::uniform_type::FLOAT4:
-            type = jeecs::typing::type_info::of<jeecs::math::vec4>(nullptr); break;
         case jegl_shader::uniform_type::INT:
-            type = jeecs::typing::type_info::of<int>(nullptr); break;
         case jegl_shader::uniform_type::TEXTURE:
-            type = jeecs::typing::type_info::of<jeecs::graphic::texture*>(nullptr); break;
-        default:
-            // Unknown / Unsupport type, just give this things.
-            type = jeecs::typing::type_info::of<jeecs::typing::type_info*>(nullptr); break;
+            wo_set_int(elem, uniforms->n); break;
+        case jegl_shader::uniform_type::FLOAT:
+            wo_set_float(elem, uniforms->x); break;
+        case jegl_shader::uniform_type::FLOAT2:
+            wo_set_struct(elem, vm, 2);
+            wo_set_float(key, uniforms->x);
+            wo_struct_set(elem, 0, key);
+            wo_set_float(key, uniforms->y);
+            wo_struct_set(elem, 1, key);
+            break;
+        case jegl_shader::uniform_type::FLOAT3:
+            wo_set_struct(elem, vm, 3);
+            wo_set_float(key, uniforms->x);
+            wo_struct_set(elem, 0, key);
+            wo_set_float(key, uniforms->y);
+            wo_struct_set(elem, 1, key);
+            wo_set_float(key, uniforms->z);
+            wo_struct_set(elem, 2, key);
+            break;
+        case jegl_shader::uniform_type::FLOAT4:
+            wo_set_struct(elem, vm, 4);
+            wo_set_float(key, uniforms->x);
+            wo_struct_set(elem, 0, key);
+            wo_set_float(key, uniforms->y);
+            wo_struct_set(elem, 1, key);
+            wo_set_float(key, uniforms->z);
+            wo_struct_set(elem, 2, key);
+            wo_set_float(key, uniforms->w);
+            wo_struct_set(elem, 3, key);
             break;
         }
 
-        wo_set_string(key, vm, uniforms->m_name);
-
-        wo_value val_in_map = wo_push_struct(vm, 2);
-
-        wo_value elem = wo_push_empty(vm);
-
-        wo_set_pointer(elem, (void*)type);
-        wo_struct_set(val_in_map, 0, elem);
-
-        wo_map_set(out_map, key, val_in_map);
-
-        wo_value uniform_value_data = wo_push_struct(vm, 5);
-
-        wo_set_int(elem, uniforms->n);
-        wo_struct_set(uniform_value_data, 0, elem);
-        wo_set_float(elem, uniforms->x);
-        wo_struct_set(uniform_value_data, 1, elem);
-        wo_set_float(elem, uniforms->y);
-        wo_struct_set(uniform_value_data, 2, elem);
-        wo_set_float(elem, uniforms->z);
-        wo_struct_set(uniform_value_data, 3, elem);
-        wo_set_float(elem, uniforms->w);
-        wo_struct_set(uniform_value_data, 4, elem);
-
-        wo_struct_set(val_in_map, 1, uniform_value_data);
+        wo_struct_set(val, 1, elem);
 
         uniforms = uniforms->m_next;
     }
-    wo_pop_stack(vm);
 
     return wo_ret_val(vm, out_map);
-
-    if (auto str = (*shader)->resouce()->m_path)
-        return wo_ret_string(vm, str);
-    return wo_ret_string(vm, "< Built-in shader >");
 }
 
 WO_API wo_api wojeapi_set_uniforms_int(wo_vm vm, wo_value args, size_t argc)
@@ -2371,7 +2371,7 @@ namespace je
 
         enum basic_type
         {
-            INT, INT2, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT, TEXTURE
+            INT, INT2, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT,
         }
         extern("libjoyecs", "wojeapi_type_basic_type")
         private func get_basic_type(tid: basic_type)=> typeinfo;
@@ -2388,7 +2388,6 @@ namespace je
         public let float4 = typeinfo::get_basic_type(basic_type::FLOAT4);
         public let quat = typeinfo::get_basic_type(basic_type::QUAT);
         public let string = typeinfo::get_basic_type(basic_type::STRING);
-        public let texture = typeinfo::get_basic_type(basic_type::TEXTURE);
     }
     namespace audio
     {
@@ -2553,31 +2552,9 @@ R"(
                 w : real
             };
 
-            public func get_uniforms(self: shader)=> map<string, uniform_variable>
-            {
-                extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
-                func _get_uniforms_from_shader(shad: shader)=> map<string, (typeinfo, uniform_value_data)>;
+            extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
+            public func get_uniforms(self: shader)=> map<string, uniform_variable>;
 
-                return
-                    _get_uniforms_from_shader(self)
-                        ->map(\name: string, tv: (typeinfo, uniform_value_data) = (name, 
-                            type == typeinfo::int
-                            ? uniform_variable::integer(val.n)
-                            | type == typeinfo::float
-                                ? uniform_variable::float(val.x)
-                                | type == typeinfo::float2
-                                    ? uniform_variable::float2((val.x, val.y))
-                                    | type == typeinfo::float3
-                                        ? uniform_variable::float3((val.x, val.y, val.z))
-                                        | type == typeinfo::float4
-                                            ? uniform_variable::float4((val.x, val.y, val.z, val.w))
-                                            | type == typeinfo::texture
-                                                ? uniform_variable::texture(val.n)
-                                                | uniform_variable::others
-                            )
-                            where (type, val) = tv;
-                        );
-            }
             public func set_uniform<T>(self: shader, name: string, val: T)
                 where std::declval:<T>() is int
                    || std::declval:<T>() is real

@@ -1,6 +1,6 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 #include "jeecs_core_translation_system.hpp"
 #include "jeecs_core_graphic_system.hpp"
@@ -99,28 +99,28 @@ WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args, size_t arg
     return wo_ret_void(vm);
 }
 
-void jeecs_entry_register_core_systems()
+void jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* guard)
 {
-    jeecs::typing::type_info::register_type<jeecs::Editor::Name>("Editor::Name");
-    jeecs::typing::type_info::register_type<jeecs::Editor::Prefab>("Editor::Prefab");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EditorWalker>("Editor::EditorWalker");
-    jeecs::typing::type_info::register_type<jeecs::Editor::Invisable>("Editor::Invisable");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EntityMover>("Editor::EntityMover");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EntityMoverRoot>("Editor::EntityMoverRoot");
-    jeecs::typing::type_info::register_type<jeecs::Editor::BadShadersUniform>("Editor::BadShadersUniform");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EntitySelectBox>("Editor::EntitySelectBox");
-    jeecs::typing::type_info::register_type<jeecs::Editor::NewCreatedEntity>("Editor::NewCreatedEntity");
+    jeecs::typing::type_info::register_type<jeecs::Editor::Name>(guard, "Editor::Name");
+    jeecs::typing::type_info::register_type<jeecs::Editor::Prefab>(guard, "Editor::Prefab");
+    jeecs::typing::type_info::register_type<jeecs::Editor::EditorWalker>(guard, "Editor::EditorWalker");
+    jeecs::typing::type_info::register_type<jeecs::Editor::Invisable>(guard, "Editor::Invisable");
+    jeecs::typing::type_info::register_type<jeecs::Editor::EntityMover>(guard, "Editor::EntityMover");
+    jeecs::typing::type_info::register_type<jeecs::Editor::EntityMoverRoot>(guard, "Editor::EntityMoverRoot");
+    jeecs::typing::type_info::register_type<jeecs::Editor::BadShadersUniform>(guard, "Editor::BadShadersUniform");
+    jeecs::typing::type_info::register_type<jeecs::Editor::EntitySelectBox>(guard, "Editor::EntitySelectBox");
+    jeecs::typing::type_info::register_type<jeecs::Editor::NewCreatedEntity>(guard, "Editor::NewCreatedEntity");
 
-    jeecs::typing::type_info::register_type<jeecs::DefaultEditorSystem>("Editor::DefaultEditorSystem");
-    jeecs::typing::type_info::register_type<jeecs::TranslationUpdatingSystem>("Translation::TranslationUpdatingSystem");
-    jeecs::typing::type_info::register_type<jeecs::Physics2DUpdatingSystem>("Physics::Physics2DUpdatingSystem");
+    jeecs::typing::type_info::register_type<jeecs::DefaultEditorSystem>(guard, "Editor::DefaultEditorSystem");
+    jeecs::typing::type_info::register_type<jeecs::TranslationUpdatingSystem>(guard, "Translation::TranslationUpdatingSystem");
+    jeecs::typing::type_info::register_type<jeecs::Physics2DUpdatingSystem>(guard, "Physics::Physics2DUpdatingSystem");
 
-    jeecs::typing::type_info::register_type<jeecs::FrameAnimation2DSystem>("Animation2D::FrameAnimation2DSystem");
+    jeecs::typing::type_info::register_type<jeecs::FrameAnimation2DSystem>(guard, "Animation2D::FrameAnimation2DSystem");
 
-    jeecs::typing::type_info::register_type<jeecs::UserInterfaceGraphicPipelineSystem>("Graphic::UserInterfaceGraphicPipelineSystem");
-    jeecs::typing::type_info::register_type<jeecs::UnlitGraphicPipelineSystem>("Graphic::UnlitGraphicPipelineSystem");
-    jeecs::typing::type_info::register_type<jeecs::DeferLight2DGraphicPipelineSystem>("Graphic::DeferLight2DGraphicPipelineSystem");
+    jeecs::typing::type_info::register_type<jeecs::UserInterfaceGraphicPipelineSystem>(guard, "Graphic::UserInterfaceGraphicPipelineSystem");
+    jeecs::typing::type_info::register_type<jeecs::UnlitGraphicPipelineSystem>(guard, "Graphic::UnlitGraphicPipelineSystem");
+    jeecs::typing::type_info::register_type<jeecs::DeferLight2DGraphicPipelineSystem>(guard, "Graphic::DeferLight2DGraphicPipelineSystem");
 
-    jeecs::typing::type_info::register_type<jeecs::ScriptRuntimeSystem>("Script::ScriptRuntimeSystem");
-    jeecs::typing::type_info::register_type<jeecs::AudioUpdatingSystem>("Audio::AudioUpdatingSystem");
+    jeecs::typing::type_info::register_type<jeecs::ScriptRuntimeSystem>(guard, "Script::ScriptRuntimeSystem");
+    jeecs::typing::type_info::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
 }

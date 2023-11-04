@@ -1,5 +1,5 @@
 #define JE_IMPL
-#include "jeecs.h"
+#include "jeecs.hpp"
 #include <functional>
 #include <variant>
 #include <string>

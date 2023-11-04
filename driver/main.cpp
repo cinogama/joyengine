@@ -12,7 +12,7 @@
 #endif
 #define JE4_MODULE_NAME "_je4_driver_entry"
 
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 extern "C" 
 {
@@ -24,14 +24,15 @@ int main(int argc, char** argv)
 {
     using namespace jeecs;
     je_init(argc, argv);
+
+    auto* guard = new jeecs::typing::type_unregister_guard();
     {
-        entry::module_entry();
+        entry::module_entry(guard);
         {
             je_main_script_entry();
         }
-        entry::module_leave();
+        entry::module_leave(guard);
     }
-
-    entry::module_preshutdown();
+    delete guard;
     je_finish();
 }

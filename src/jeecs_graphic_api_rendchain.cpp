@@ -1,5 +1,5 @@
 #define JE_IMPL
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 // NOTE:
 // Rendchain 是 JoyEngine 的并行渲染接口，其目标本身并非为了并行渲染，而是

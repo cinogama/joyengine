@@ -876,7 +876,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 
                                                 let system_header = 
 @"#pragma once
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 namespace $$MODULE_NAME$$
 {
@@ -966,18 +966,18 @@ namespace $$MODULE_NAME$$
 
                                                 let component_header = 
 @"#pragma once
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 namespace $$MODULE_NAME$$
 {
     struct $$COMPONENT_NAME$$
     {
-        static void JERefRegsiter()
+        static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
         {
             using namespace jeecs;
 
             // Register member in this function.
-            // e.g. typing::register_member(&$$COMPONENT_NAME$$::member, "member");
+            // e.g. typing::register_member(guard, &$$COMPONENT_NAME$$::member, "member");
         }
     };
 }

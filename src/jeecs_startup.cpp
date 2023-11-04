@@ -1,6 +1,6 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 const char* commit_sha_from_cicd =
 {
@@ -50,6 +50,8 @@ wo_vm _je_global_panic_hooker = nullptr;
 wo_value _je_global_panic_hook_function;
 
 jegl_graphic_api_entry _jegl_host_graphic_api = nullptr;
+
+jeecs::typing::type_unregister_guard* _je_unregister_guard = nullptr;
 
 void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
 {
@@ -171,7 +173,8 @@ void je_init(int argc, char** argv)
     wo_virtual_source(gui_api_path, gui_api_src, false);
     jeal_init();
 
-    jeecs::entry::module_entry();
+    _je_unregister_guard = new jeecs::typing::type_unregister_guard();
+    jeecs::entry::module_entry(_je_unregister_guard);
 }
 
 wo_integer_t crc64_of_source_and_api()
@@ -304,7 +307,7 @@ std::mutex _free_module_list_mx;
 
 void je_finish()
 {
-    jeecs::entry::module_leave();
+    jeecs::entry::module_leave(_je_unregister_guard);
 
     je_ecs_shutdown();
     jeal_finish();
@@ -334,7 +337,8 @@ void je_finish()
         }, nullptr
     );
 
-    jeecs::entry::module_preshutdown();
+    delete _je_unregister_guard;
+    _je_unregister_guard = nullptr;
 }
 
 const char* je_build_version()

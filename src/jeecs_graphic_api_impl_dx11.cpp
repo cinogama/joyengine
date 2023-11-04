@@ -1,5 +1,5 @@
 #define JE_IMPL
-#include "jeecs.h"
+#include "jeecs.hpp"
 
 #ifdef JE_ENABLE_DX11_GAPI
 
