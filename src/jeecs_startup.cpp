@@ -171,7 +171,7 @@ void je_init(int argc, char** argv)
     wo_virtual_source(gui_api_path, gui_api_src, false);
     jeal_init();
 
-    jeecs::enrty::module_entry();
+    jeecs::entry::module_entry();
 }
 
 wo_integer_t crc64_of_source_and_api()
@@ -304,7 +304,7 @@ std::mutex _free_module_list_mx;
 
 void je_finish()
 {
-    jeecs::enrty::module_leave();
+    jeecs::entry::module_leave();
 
     je_ecs_shutdown();
     jeal_finish();
@@ -333,6 +333,8 @@ void je_finish()
             _free_module_list.clear();
         }, nullptr
     );
+
+    jeecs::entry::module_preshutdown();
 }
 
 const char* je_build_version()

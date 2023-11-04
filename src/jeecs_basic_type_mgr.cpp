@@ -29,6 +29,8 @@ namespace jeecs_impl
 
         size_t m_type_unregistered_count = 0;
 
+        std::unordered_map<std::string, jeecs::typing::_type_unregister_guard*> _m_type_unregister_guards;
+
         type_info_holder() = default;
     public:
         ~type_info_holder()
@@ -292,6 +294,24 @@ namespace jeecs_impl
 
             const_cast<jeecs::typing::script_parser_info* volatile&>(tinfo->m_script_parser_info) = sinfo;
         }
+
+        jeecs::typing::_type_unregister_guard* get_type_register_guard(const char* module_name)
+        {
+            std::lock_guard g1(_m_type_holder_mx);
+            auto fnd = _m_type_unregister_guards.find(module_name);
+            if (fnd != _m_type_unregister_guards.end())
+                return fnd->second;
+
+            auto* guard = new jeecs::typing::_type_unregister_guard(module_name);
+            _m_type_unregister_guards[module_name] = guard;
+            return guard;
+        }
+        void free_type_register_guard(jeecs::typing::_type_unregister_guard* guard)
+        {
+            std::lock_guard g1(_m_type_holder_mx);
+            _m_type_unregister_guards.erase(guard->get_module_name());
+            delete guard;
+        }
     };
 }
 
@@ -378,6 +398,18 @@ void je_register_script_parser(
             w2c,
             woolang_typename,
             woolang_typedecl);
+}
+
+jeecs::typing::_type_unregister_guard* je_get_type_register_guard(const char* module_name)
+{
+    return jeecs_impl::type_info_holder::holder()
+        ->get_type_register_guard(module_name);
+}
+
+void je_free_type_register_guard(jeecs::typing::_type_unregister_guard* guard)
+{
+    jeecs_impl::type_info_holder::holder()
+        ->free_type_register_guard(guard);
 }
 
 ///////////////////////////////////////////////////////////////////////////

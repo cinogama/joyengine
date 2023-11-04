@@ -17,15 +17,16 @@ extern "C"
 
 int main(int argc, char** argv)
 {
+    using namespace jeecs;
     je_init(argc, argv);
     {
-        using namespace jeecs;
-        using namespace std;
-        enrty::module_entry();
+        entry::module_entry();
         {
             je_main_script_entry();
         }
-        enrty::module_leave();
+        entry::module_leave();
     }
+
+    entry::module_preshutdown();
     je_finish();
 }

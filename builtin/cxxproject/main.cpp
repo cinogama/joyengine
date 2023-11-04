@@ -5,12 +5,13 @@ extern "C" {
 	JE_EXPORT void jeecs_module_entry()
 	{
 		jemodule::register_types();
-		jeecs::enrty::module_entry();
+		jeecs::entry::module_entry();
 	}
 
 	JE_EXPORT void jeecs_module_leave()
 	{
-		jeecs::enrty::module_leave();
+		jeecs::entry::module_leave();
+		jeecs::entry::module_preshutdown();
 	}
 }
 

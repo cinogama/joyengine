@@ -379,6 +379,8 @@ namespace jeecs
         */
         template<size_t n, typename ... Ts>
         using index_types_t = typename _variadic_type_indexer<n, Ts...>::type;
+
+        class _type_unregister_guard;
     }
 
     class game_system;
@@ -759,6 +761,10 @@ JE_API void je_register_script_parser(
     jeecs::typing::parse_w2c_func_t w2c,
     const char* woolang_typename,
     const char* woolang_typedecl);
+
+
+JE_API jeecs::typing::_type_unregister_guard* je_get_type_register_guard(const char* module_name);
+JE_API void je_free_type_register_guard(jeecs::typing::_type_unregister_guard* guard);
 
 ////////////////////// ToWoo //////////////////////
 /*
@@ -4075,6 +4081,162 @@ namespace jeecs
             const char* m_woolang_typedecl;
         };
 
+        class _typeinfo_holder_base
+        {
+        public:
+            virtual void _update() = 0;
+        };
+
+        class _type_unregister_guard
+        {
+            friend struct type_info;
+
+            mutable std::mutex _m_mx;
+            std::string _m_module_name;
+            std::unordered_map<jeecs::typing::typeid_t, const jeecs::typing::type_info*>
+                _m_self_registed_typeinfo;
+            std::unordered_set<_typeinfo_holder_base*> m_typeholder_list;
+
+        public:
+            _type_unregister_guard(const std::string module_name)
+                : _m_module_name(module_name)
+            {
+            }
+            ~_type_unregister_guard()
+            {
+                unregister_all_types();
+            }
+
+            const std::string& get_module_name() const
+            {
+                return _m_module_name;
+            }
+
+            template<typename T>
+            typeid_t _register_or_get_type_id(const char* _typename)
+            {
+                bool is_basic_type = false;
+                if (nullptr == _typename)
+                {
+                    // If _typename is nullptr, we will not treat it as a component
+                    _typename = typeid(T).name();
+                    is_basic_type = true;
+                }
+
+                je_typing_class current_type =
+                    is_basic_type
+                    ? je_typing_class::JE_BASIC_TYPE
+                    : (std::is_base_of<game_system, T>::value
+                        ? je_typing_class::JE_SYSTEM
+                        : je_typing_class::JE_COMPONENT);
+
+                // store to list for unregister
+                auto* local_type_info = je_typing_register(
+                    _typename,
+                    basic::type_hash<T>(),
+                    sizeof(T),
+                    alignof(T),
+                    basic::default_functions<T>::constructor,
+                    basic::default_functions<T>::destructor,
+                    basic::default_functions<T>::copier,
+                    basic::default_functions<T>::mover,
+                    basic::default_functions<T>::to_string,
+                    basic::default_functions<T>::parse,
+                    basic::default_functions<T>::state_update,
+                    basic::default_functions<T>::pre_update,
+                    basic::default_functions<T>::update,
+                    basic::default_functions<T>::script_update,
+                    basic::default_functions<T>::late_update,
+                    basic::default_functions<T>::apply_update,
+                    basic::default_functions<T>::commit_update,
+                    current_type);
+                do
+                {
+                    std::lock_guard g1(_m_mx);
+
+                    assert(_m_self_registed_typeinfo.find(local_type_info->m_id) == _m_self_registed_typeinfo.end());
+                    _m_self_registed_typeinfo[local_type_info->m_id] = local_type_info;
+
+                } while (0);
+                return local_type_info->m_id;
+            }
+
+            void unregister_all_types()
+            {
+                std::lock_guard g1(_m_mx);
+                for (auto& [_, local_type_info] : _m_self_registed_typeinfo)
+                    je_typing_unregister(local_type_info);
+                _m_self_registed_typeinfo.clear();
+            }
+            const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id) const
+            {
+                std::lock_guard g1(_m_mx);
+                return _m_self_registed_typeinfo.at(id);
+            }
+
+            void update_all_typeinfo()
+            {
+                std::lock_guard g1(_m_mx);
+                for (auto* t : m_typeholder_list)
+                    t->_update();
+            }
+            void register_typeinfo_holder(_typeinfo_holder_base* holder)
+            {
+                std::lock_guard g1(_m_mx);
+                m_typeholder_list.insert(holder);
+            }
+            void unregister_typeinfo_holder(_typeinfo_holder_base* holder)
+            {
+                std::lock_guard g1(_m_mx);
+                m_typeholder_list.erase(holder);
+            }
+            static void shutdown()
+            {
+                je_free_type_register_guard(&instance());
+            }
+            static _type_unregister_guard& instance()
+            {
+                return *je_get_type_register_guard(JE4_MODULE_NAME);
+            }
+        };
+
+        template<typename T>
+        class _typeinfo_holder : _typeinfo_holder_base
+        {
+            JECS_DISABLE_MOVE_AND_COPY(_typeinfo_holder);
+
+            const char* m_typename;
+            const type_info* m_typeinfo;
+        public:
+            virtual void _update()override
+            {
+                m_typeinfo = je_typing_get_info_by_id(
+                    _type_unregister_guard::instance()._register_or_get_type_id<T>(m_typename));
+            }
+            const type_info* get_typeinfo()const noexcept
+            {
+                return m_typeinfo;
+            }
+            _typeinfo_holder(const char* tname)
+            {
+                if (tname != nullptr)
+                    m_typename = jeecs::basic::make_new_string(tname);
+                else
+                    m_typename = nullptr;
+
+                _type_unregister_guard::instance().register_typeinfo_holder(this);
+
+                _update();
+            }
+            ~_typeinfo_holder()
+            {
+                _type_unregister_guard::instance().unregister_typeinfo_holder(this);
+
+                if (m_typename != nullptr)
+                    je_mem_free((void*)m_typename);
+            }
+        };
+
         /*
         jeecs::typing::type_info [类型]
         用于储存类型信息和基本接口
@@ -4109,163 +4271,6 @@ namespace jeecs
             volatile size_t             m_member_count;
             const member_info* volatile m_member_types;
             const script_parser_info* volatile m_script_parser_info;
-
-        private:
-            class _type_unregister_guard
-            {
-                friend struct type_info;
-                _type_unregister_guard() = default;
-                mutable std::mutex      _m_self_registed_typeid_mx;
-                std::unordered_map<jeecs::typing::typeid_t, const jeecs::typing::type_info*>
-                    _m_self_registed_typeinfo;
-
-                template<typename T>
-                typeid_t _register_or_get_type_id(const char* _typename)
-                {
-                    bool is_basic_type = false;
-                    if (nullptr == _typename)
-                    {
-                        // If _typename is nullptr, we will not treat it as a component
-                        _typename = typeid(T).name();
-                        is_basic_type = true;
-                    }
-
-                    je_typing_class current_type =
-                        is_basic_type
-                        ? je_typing_class::JE_BASIC_TYPE
-                        : (std::is_base_of<game_system, T>::value
-                            ? je_typing_class::JE_SYSTEM
-                            : je_typing_class::JE_COMPONENT);
-
-                    // store to list for unregister
-                    auto* local_type_info = je_typing_register(
-                        _typename,
-                        basic::type_hash<T>(),
-                        sizeof(T),
-                        alignof(T),
-                        basic::default_functions<T>::constructor,
-                        basic::default_functions<T>::destructor,
-                        basic::default_functions<T>::copier,
-                        basic::default_functions<T>::mover,
-                        basic::default_functions<T>::to_string,
-                        basic::default_functions<T>::parse,
-                        basic::default_functions<T>::state_update,
-                        basic::default_functions<T>::pre_update,
-                        basic::default_functions<T>::update,
-                        basic::default_functions<T>::script_update,
-                        basic::default_functions<T>::late_update,
-                        basic::default_functions<T>::apply_update,
-                        basic::default_functions<T>::commit_update,
-                        current_type);
-                    do
-                    {
-                        std::lock_guard g1(_m_self_registed_typeid_mx);
-
-                        assert(_m_self_registed_typeinfo.find(local_type_info->m_id) == _m_self_registed_typeinfo.end());
-                        _m_self_registed_typeinfo[local_type_info->m_id] = local_type_info;
-
-                    } while (0);
-                    return local_type_info->m_id;
-                }
-
-            public:
-                void clear()
-                {
-                    std::lock_guard g1(_m_self_registed_typeid_mx);
-                    for (auto& [_, local_type_info] : _m_self_registed_typeinfo)
-                        je_typing_unregister(local_type_info);
-                    _m_self_registed_typeinfo.clear();
-                }
-                ~_type_unregister_guard()
-                {
-                    clear();
-                }
-
-                const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id) const
-                {
-                    std::lock_guard g1(_m_self_registed_typeid_mx);
-                    return _m_self_registed_typeinfo.at(id);
-                }
-
-                template<jeecs::typing::typehash_t=jeecs::basic::hash_compile_time(JE4_MODULE_NAME)>
-                inline static _type_unregister_guard& instance()
-                {
-                    static _type_unregister_guard _type_guard;
-                    return _type_guard;
-                }
-            };
-
-        public:
-            class typeinfo_holder_base
-            {
-            protected:
-                struct typeinfo_holder_global_list
-                {
-                private:
-                    typeinfo_holder_global_list() = default;
-                public:
-                    std::mutex m_list_mx;
-                    std::unordered_set<typeinfo_holder_base*> m_list;
-
-                    template<jeecs::typing::typehash_t = jeecs::basic::hash_compile_time(JE4_MODULE_NAME)>
-                    inline static typeinfo_holder_global_list& instance()
-                    {
-                        static typeinfo_holder_global_list _type_guard;
-                        return _type_guard;
-                    }
-                };
-                virtual void update() = 0;
-            public:
-                static void update_all_typeinfo()
-                {
-                    std::lock_guard sg1(typeinfo_holder_global_list::instance().m_list_mx);
-                    for (auto* t : typeinfo_holder_global_list::instance().m_list)
-                        t->update();
-                }
-            };
-            template<typename T>
-            class typeinfo_holder : typeinfo_holder_base
-            {
-                JECS_DISABLE_MOVE_AND_COPY(typeinfo_holder);
-
-                const char* m_typename;
-                const type_info* m_typeinfo;
-            protected:
-                virtual void update()override
-                {
-                    m_typeinfo = je_typing_get_info_by_id(
-                        _type_unregister_guard::instance()._register_or_get_type_id<T>(m_typename));
-                }
-            public:
-                const type_info* get_typeinfo()const noexcept
-                {
-                    return m_typeinfo;
-                }
-                typeinfo_holder(const char* tname)
-                {
-                    if (tname != nullptr)
-                        m_typename = jeecs::basic::make_new_string(tname);
-                    else
-                        m_typename = nullptr;
-
-                    do
-                    {
-                        std::lock_guard sg1(typeinfo_holder_global_list::instance().m_list_mx);
-                        typeinfo_holder_global_list::instance().m_list.insert(this);
-                    } while (0);
-
-                    update();
-                }
-                ~typeinfo_holder()
-                {
-                    std::lock_guard sg1(typeinfo_holder_global_list::instance().m_list_mx);
-                    typeinfo_holder_global_list::instance().m_list.erase(this);
-
-                    if (m_typename != nullptr)
-                        je_mem_free((void*)m_typename);
-                }
-            };
-
         public:
             static const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id)
             {
@@ -4274,13 +4279,13 @@ namespace jeecs
 
             static void unregister_all_type_in_shutdown()
             {
-                _type_unregister_guard::instance().clear();
+                _type_unregister_guard::instance().unregister_all_types();
             }
 
             template<typename T>
             inline static const type_info* of(const char* _typename)
             {
-                static typeinfo_holder<T> holder(_typename);
+                static _typeinfo_holder<T> holder(_typename);
                 return holder.get_typeinfo();
             }
             inline static const type_info* of(typeid_t _tid)
@@ -8655,13 +8660,13 @@ namespace jeecs
         };
     }
 
-    namespace enrty
+    namespace entry
     {
         inline void module_entry()
         {
             // 0. register built-in components
             using namespace typing;
-            type_info::typeinfo_holder_base::update_all_typeinfo();
+            _type_unregister_guard::instance().unregister_all_types();
 
             type_info::register_type<Transform::LocalPosition>("Transform::LocalPosition");
             type_info::register_type<Transform::LocalRotation>("Transform::LocalRotation");
@@ -8913,6 +8918,11 @@ namespace jeecs
         {
             // 0. ungister this module components
             typing::type_info::unregister_all_type_in_shutdown();
+        }
+
+        inline void module_preshutdown()
+        {
+            jeecs::typing::_type_unregister_guard::shutdown();
         }
     }
 
