@@ -1526,14 +1526,7 @@ struct jegl_texture
         FRAMEBUF = 0x0040,
         CUBE = 0x0080,
 
-        MSAAx1 = 0x0100,    // WTF?
-        MSAAx2 = 0x0200,
-        MSAAx4 = 0x0400,
-        MSAAx8 = 0x0800,
-        MSAAx16 = 0x1000,
-        MSAA_MASK = 0xFF00,
-
-        FORMAT_MASK = 0xFFF0,
+        FORMAT_MASK = 0x0FF0,
     };
 
     // NOTE:

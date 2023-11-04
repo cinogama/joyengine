@@ -24,6 +24,7 @@ option(JE4_ENABLE_OPENGLES320_GAPI  "Enable OpenGLES 3.2 Graphic API"   OFF)
 option(JE4_ENABLE_VULKAN110_GAPI    "Enable Vulkan 1.1 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
+
 # Cannot use gles & gl at same time because of ImGUI cannot use two lib at same time.
 if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES320_GAPI)
     message(FATAL_ERROR "Cannot use OpenGL3.3 and OpenGLES3.2 at same time.")

@@ -11,7 +11,7 @@
 #   ifdef __APPLE__
 #       include <OpenGLES/ES3/gl.h>
 #   else
-#       include <GLES3/gl31.h>
+#       include <GLES3/gl3.h>
 #       include <EGL/egl.h>
 #       include <EGL/eglext.h>
 #   endif
@@ -480,7 +480,7 @@ namespace jeecs::graphic::api::gl330
 #ifdef JE_ENABLE_GL330_GAPI
                 = "#version 330 core\n\n"
 #else
-                = "#version 310 es\n\n"
+                = "#version 300 es\n\n"
 #endif
                 ;
             std::string fragment_src = vertex_src
@@ -655,25 +655,18 @@ namespace jeecs::graphic::api::gl330
             bool is_16bit = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR16);
             bool is_depth = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH);
             bool is_cube = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::CUBE);
-            static_assert(jegl_texture::format::MSAA_MASK == 0xFF00);
-            uint8_t msaa_level = (resource->m_raw_texture_data->m_format & jegl_texture::format::MSAA_MASK) >> 8;
 
             auto gl_texture_type = GL_TEXTURE_2D;
 
-            if (msaa_level != 0)
-                gl_texture_type = GL_TEXTURE_2D_MULTISAMPLE;
-
             glBindTexture(gl_texture_type, texture);
 
-            if (msaa_level == 0)
-            {
-                assert(GL_TEXTURE_2D == gl_texture_type);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            assert(GL_TEXTURE_2D == gl_texture_type);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        }
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
             if (is_depth)
             {
                 if (is_16bit)
@@ -681,17 +674,6 @@ namespace jeecs::graphic::api::gl330
 
                 if (is_cube)
                     assert(0); // todo;
-                else if (msaa_level != 0)
-#ifdef JE_ENABLE_GL330_GAPI
-                    glTexImage2DMultisample(gl_texture_type,
-                        msaa_level,
-                        GL_DEPTH_COMPONENT,
-                        (GLsizei)resource->m_raw_texture_data->m_width,
-                        (GLsizei)resource->m_raw_texture_data->m_height,
-                        GL_FALSE);
-#else
-                    ;
-#endif
                 else
                     glTexImage2D(gl_texture_type, 0, GL_DEPTH_COMPONENT,
                         (GLsizei)resource->m_raw_texture_data->m_width,
@@ -714,21 +696,10 @@ namespace jeecs::graphic::api::gl330
                     texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA; break;
                 default:
                     jeecs::debug::logerr("Unknown texture raw-data format.");
-        }
+                }
 
                 if (is_cube)
                     assert(0); // todo;
-                if (msaa_level != 0)
-#ifdef JE_ENABLE_GL330_GAPI
-                    glTexImage2DMultisample(gl_texture_type,
-                        msaa_level,
-                        texture_aim_format,
-                        (GLsizei)resource->m_raw_texture_data->m_width,
-                        (GLsizei)resource->m_raw_texture_data->m_height,
-                        GL_FALSE);
-#else
-                    ;
-#endif
                 else
                 {
                     glTexImage2D(gl_texture_type,
@@ -739,13 +710,13 @@ namespace jeecs::graphic::api::gl330
                         is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
                         resource->m_raw_texture_data->m_pixels);
                 }
-    }
+            }
 
             resource->m_handle.m_uint1 = texture;
             resource->m_handle.m_uint2 = (uint32_t)resource->m_raw_texture_data->m_format;
             static_assert(std::is_same<decltype(resource->m_handle.m_uint2), uint32_t>::value);
             break;
-}
+        }
         case jegl_resource::type::VERTEX:
         {
             GLuint vao, vbo;
@@ -820,10 +791,6 @@ namespace jeecs::graphic::api::gl330
                 }
                 else
                     ++attachment;
-
-                if (0 != (frame_texture->m_raw_texture_data->m_format & jegl_texture::format::MSAA_MASK))
-                    // Texture using msaa
-                    buffer_texture_type = GL_TEXTURE_2D_MULTISAMPLE;
 
                 glFramebufferTexture2D(GL_FRAMEBUFFER, using_attachment, buffer_texture_type, frame_texture->m_handle.m_uint1, 0);
             }
@@ -1066,10 +1033,7 @@ namespace jeecs::graphic::api::gl330
                 gl_init_resource(ctx, nullptr, resource);
             }
         }
-
-        if (0 != ((jegl_texture::format)resource->m_handle.m_uint2 & jegl_texture::format::MSAA_MASK))
-            glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, resource->m_handle.m_uint1);
-        else if (0 != ((jegl_texture::format)resource->m_handle.m_uint2 & jegl_texture::format::CUBE))
+        if (0 != ((jegl_texture::format)resource->m_handle.m_uint2 & jegl_texture::format::CUBE))
             glBindTexture(GL_TEXTURE_CUBE_MAP, resource->m_handle.m_uint1);
         else
             glBindTexture(GL_TEXTURE_2D, resource->m_handle.m_uint1);
