@@ -1,4 +1,4 @@
-#include "jeecs.hpp"
+#include "jeecs.h"
 #include "loader.hpp"
 
 extern "C" {

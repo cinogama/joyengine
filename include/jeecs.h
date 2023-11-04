@@ -4696,7 +4696,7 @@ namespace jeecs
     * ArchSystem管理的区域内按照我们的需求，分离出满足我们需求的ArchType，再从上面把合法的组件
     * 一个个摘出来递到我们面前。
     *
-    * 在这里——jeecs.hpp中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
+    * 在这里——jeecs.h中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
     * ArchSystem中，有一个名为je_ecs_world_update_dependences_archinfo的函数。这个函数在黑暗处
     * 负责在适当的实际更新选择器的筛选结果。
     *

@@ -108,7 +108,7 @@ include_directories("include")
 include_directories("3rd/woolang/include")
 
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
-add_executable(jedriver ${jedriver_src})
+add_executable(jedriver ${jedriver_src} "include/jeecs.h")
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 	set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "")

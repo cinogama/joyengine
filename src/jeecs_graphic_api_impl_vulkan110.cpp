@@ -1,5 +1,5 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs.h"
 
 #ifdef JE_ENABLE_VK110_GAPI
 

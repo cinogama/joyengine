@@ -12,14 +12,13 @@
 #endif
 #define JE4_MODULE_NAME "_je4_driver_entry"
 
-#include "jeecs.hpp"
+#include "jeecs.h"
 
 extern "C" 
 {
     JE_EXPORT int NvOptimusEnablement = 0x00000001;
     JE_EXPORT int AmdPowerXpressRequestHighPerformance = 0x00000001;
 }
-
 
 int main(int argc, char** argv)
 {

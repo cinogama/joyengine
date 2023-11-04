@@ -3,7 +3,7 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #   define JE_ENABLE_DEBUG_API
-#   include "jeecs.hpp"
+#   include "jeecs.h"
 #endif
 
 #include <optional>

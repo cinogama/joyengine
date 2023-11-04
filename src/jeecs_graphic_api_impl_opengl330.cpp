@@ -1,5 +1,5 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs.h"
 
 #if defined(JE_ENABLE_GL330_GAPI) \
  || defined(JE_ENABLE_GLES320_GAPI)

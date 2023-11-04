@@ -6,7 +6,7 @@
 #ifndef JE_ENABLE_DEBUG_API
 #   define JE_ENABLE_DEBUG_API
 #endif
-#include "jeecs.hpp"
+#include "jeecs.h"
 
 #include <shared_mutex>
 #include <unordered_map>

@@ -1,6 +1,6 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs.h"
 
 const char* commit_sha_from_cicd =
 {

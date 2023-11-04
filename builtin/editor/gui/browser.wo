@@ -876,7 +876,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 
                                                 let system_header = 
 @"#pragma once
-#include "jeecs.hpp"
+#include "jeecs.h"
 
 namespace $$MODULE_NAME$$
 {
@@ -966,7 +966,7 @@ namespace $$MODULE_NAME$$
 
                                                 let component_header = 
 @"#pragma once
-#include "jeecs.hpp"
+#include "jeecs.h"
 
 namespace $$MODULE_NAME$$
 {

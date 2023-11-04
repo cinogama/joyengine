@@ -4,7 +4,7 @@
 
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs.h"
 
 #include <shared_mutex>
 #include <vector>
