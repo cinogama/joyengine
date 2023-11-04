@@ -22,11 +22,6 @@ if (WIN32)
 else()
     list(APPEND jeecs_system_libs pthread)
     list(APPEND jeecs_system_libs dl)
-    add_compile_options(-fno-gnu-unique)
-endif()
-
-if (NOT MSVC)
-    add_compile_options(-fno-gnu-unique)
 endif()
 
 set(imgui_srcs    
@@ -152,3 +147,4 @@ endif()
 target_link_libraries(joyecs ${jeecs_system_libs})
 target_link_libraries(joyecs ${jeecs_graphic_libs})
 target_link_libraries(joyecs woolang box2d OpenAL)
+target_compile_definitions(joyecs PRIVATE JE4_MODULE_NAME="_je4_core")
