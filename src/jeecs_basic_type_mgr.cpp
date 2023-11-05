@@ -91,8 +91,9 @@ namespace jeecs_impl
             jeecs::typing::type_info* tinfo = new jeecs::typing::type_info();
             tinfo->m_typename = jeecs::basic::make_new_string(_name);
             tinfo->m_size = _size;
-            tinfo->m_align = _align;
-            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, _align);
+
+            tinfo->m_align = jeecs::basic::allign_size((size_t)8, _align);
+            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, tinfo->m_align);
 
             assert(tinfo->m_size != 0 && tinfo->m_chunk_size != 0);
 
