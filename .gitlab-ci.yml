@@ -30,6 +30,37 @@ build_linux_opengl:
         - "build/*"
   tags:
     - ubuntu20
+
+build_linux_a64_opengl:
+  stage: build
+  # instead of calling g++ directly you can also use some build toolkit like make
+  # install the necessary build tools when needed
+  # before_script:
+  #   - apt update && apt -y install make autoconf
+  script:
+    - git submodule update --init --recursive --force
+    - if [ ! -d build ]; then mkdir build; fi
+    - cd build
+    - rm -f CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_ENABLE_DX11_GAPI=OFF
+      -DJE4_ENABLE_OPENGL330_GAPI=ON
+      -DJE4_ENABLE_OPENGLES320_GAPI=OFF
+      -DJE4_ENABLE_VULKAN110_GAPI=OFF
+      -DJE4_ENABLE_METAL_GAPI=OFF
+    - if [ ! -d pkg ]; then mkdir pkg; fi
+    - if [ ! -d builtin ]; then mkdir builtin; fi
+    - sudo make -j 4
+    - sudo chmod -R 777 .
+    - cd ..
+  cache:
+    when: on_success
+    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    paths:
+        - "build/*"
+  tags:
     - ubuntu22_arm64
 
 # Linux arm64 OpenGLES
