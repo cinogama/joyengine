@@ -649,7 +649,9 @@ using sampler2d = gchandle
     
     extern("libjoyecs", "jeecs_shader_sampler2d_bind_texture")
     func append_bind<T>(self: sampler2d, tex: T)=> void
-        where tex is texture2d || tex is texture2dms;
+        where tex is texture2d
+        || tex is texture2dms
+        || tex is texturecube;
 }
 
 private func _get_type_enum<ShaderValueT>()=> shader_value_type
