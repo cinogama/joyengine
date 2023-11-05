@@ -1,4 +1,5 @@
-build:
+# Linux x64/arm64 OpenGL
+build_linux_opengl:
   stage: build
   # instead of calling g++ directly you can also use some build toolkit like make
   # install the necessary build tools when needed
@@ -15,7 +16,7 @@ build:
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES320_GAPI=OFF
-      -DJE4_ENABLE_VULKAN110_GAPI=ON
+      -DJE4_ENABLE_VULKAN110_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
@@ -29,8 +30,42 @@ build:
         - "build/*"
   tags:
     - ubuntu20
+    - ubuntu22_arm64
 
-build_win64_release:
+# Linux arm64 OpenGLES
+build_linux_opengles:
+  stage: build
+  # instead of calling g++ directly you can also use some build toolkit like make
+  # install the necessary build tools when needed
+  # before_script:
+  #   - apt update && apt -y install make autoconf
+  script:
+    - git submodule update --init --recursive --force
+    - if [ ! -d build ]; then mkdir build; fi
+    - cd build
+    - rm -f CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_ENABLE_DX11_GAPI=OFF
+      -DJE4_ENABLE_OPENGL330_GAPI=OFF
+      -DJE4_ENABLE_OPENGLES320_GAPI=ON
+      -DJE4_ENABLE_VULKAN110_GAPI=OFF
+      -DJE4_ENABLE_METAL_GAPI=OFF
+    - if [ ! -d pkg ]; then mkdir pkg; fi
+    - if [ ! -d builtin ]; then mkdir builtin; fi
+    - sudo make -j 4
+    - sudo chmod -R 777 .
+    - cd ..
+  cache:
+    when: on_success
+    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    paths:
+        - "build/*"
+  tags:
+    - ubuntu22_arm64
+
+build_win64_dx11_opengl:
   stage: build
   script:
     - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
@@ -44,7 +79,7 @@ build_win64_release:
       -DJE4_ENABLE_DX11_GAPI=ON
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES320_GAPI=OFF
-      -DJE4_ENABLE_VULKAN110_GAPI=ON
+      -DJE4_ENABLE_VULKAN110_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
     - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
     - cd ..
@@ -66,3 +101,24 @@ build_win64_release:
       - build/licenses/*
   tags:
     - winserver22
+
+build_win64_dx11_opengles:
+  stage: build
+  script:
+    - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
+    - git submodule update --init --recursive --force
+    - if not exist cmakebuild ( mkdir cmakebuild )
+    - cd cmakebuild
+    - del CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_ENABLE_DX11_GAPI=ON
+      -DJE4_ENABLE_OPENGL330_GAPI=OFF
+      -DJE4_ENABLE_OPENGLES320_GAPI=ON
+      -DJE4_ENABLE_VULKAN110_GAPI=OFF
+      -DJE4_ENABLE_METAL_GAPI=OFF
+    - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
+  tags:
+    - winserver22
+
