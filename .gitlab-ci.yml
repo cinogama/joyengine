@@ -18,9 +18,9 @@ build:
       -DJE4_ENABLE_VULKAN110_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
-    - sudo chmod 777 ./pkg
-    - sudo chmod 777 .
+    - if [ ! -d builtin ]; then mkdir builtin; fi
     - sudo make -j 4
+    - sudo chmod -R 777 .
     - cd ..
   cache:
     when: on_success
