@@ -10,14 +10,17 @@ build:
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
-      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
-      -DJE4_COPYING_BUILTIN_FILES=OFF
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_COPYING_BUILTIN_FILES=ON
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES320_GAPI=OFF
       -DJE4_ENABLE_VULKAN110_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
-    - make -j 4
+    - if [ ! -d pkg ]; then mkdir pkg; fi
+    - sudo chmod 777 ./pkg
+    - sudo chmod 777 .
+    - sudo make -j 4
     - cd ..
   cache:
     when: on_success
@@ -63,9 +66,3 @@ build_win64_release:
       - build/licenses/*
   tags:
     - winserver22
-
-# run tests using the binary built before
-# test:
-#   stage: test
-#   script:
-#     - ./runmytests.sh
