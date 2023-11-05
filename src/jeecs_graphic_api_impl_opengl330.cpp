@@ -151,33 +151,245 @@ namespace jeecs::graphic::api::gl330
     jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_gl3_context* context = new jegl_gl3_context;
-       
+        if (!reboot)
+        {
+            jeecs::debug::log("Graphic thread (OpenGL330) start!");
+
+            if (!glfwInit())
+                jeecs::debug::logfatal("Failed to init glfw.");
+
+#ifdef JE_ENABLE_GL330_GAPI
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
+#else
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+            // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
+#endif
+#ifndef NDEBUG
+            glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+#endif
+        }
+
+        auto* primary_monitor = glfwGetPrimaryMonitor();
+        auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
+
+        context->WINDOWS_SIZE_WIDTH = config->m_width == 0 ? primary_monitor_video_mode->width : config->m_width;
+        context->WINDOWS_SIZE_HEIGHT = config->m_height == 0 ? primary_monitor_video_mode->height : config->m_height;
+
+        glfwWindowHint(GLFW_REFRESH_RATE,
+            config->m_fps == 0
+            ? primary_monitor_video_mode->refreshRate
+            : (int)config->m_fps);
+        glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
+
+        je_io_set_windowsize((int)context->WINDOWS_SIZE_WIDTH, (int)context->WINDOWS_SIZE_HEIGHT);
+
+        context->WINDOWS_TITLE = config->m_title ? config->m_title : context->WINDOWS_TITLE;
+
+        switch (config->m_displaymode)
+        {
+        case jegl_interface_config::display_mode::FULLSCREEN:
+            context->WINDOWS_HANDLE = glfwCreateWindow(
+                (int)context->WINDOWS_SIZE_WIDTH,
+                (int)context->WINDOWS_SIZE_HEIGHT,
+                context->WINDOWS_TITLE,
+                primary_monitor, NULL);
+            break;
+        case jegl_interface_config::display_mode::BOARDLESS:
+            glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+        case jegl_interface_config::display_mode::WINDOWED:
+            context->WINDOWS_HANDLE = glfwCreateWindow(
+                (int)context->WINDOWS_SIZE_WIDTH,
+                (int)context->WINDOWS_SIZE_HEIGHT,
+                context->WINDOWS_TITLE,
+                NULL, NULL);
+            break;
+        default:
+            jeecs::debug::logfatal("Unknown display mode to start up graphic thread.");
+            je_clock_sleep_for(1.);
+            abort();
+            break;
+        }
+
+        const char* reason;
+        auto err_code = glfwGetError(&reason);
+        if (err_code != GLFW_NO_ERROR)
+        {
+            auto x = (const char*)glGetString(GL_VERSION);
+            jeecs::debug::logfatal("Opengl3 glfw reports an error(%d): %s.",
+                err_code, reason);
+            je_clock_sleep_for(1.);
+            abort();
+        }
+
+        // Try load icon from @/icon.png or !/builtin/icon/icon.png.
+        // Do nothing if both not exist.
+        jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load("@/icon.png");
+        if (icon == nullptr)
+            icon = jeecs::graphic::texture::load("!/builtin/icon/icon.png");
+
+        if (icon != nullptr)
+        {
+            GLFWimage icon_data;
+            icon_data.width = (int)icon->width();
+            icon_data.height = (int)icon->height();
+            // Here need a y-direct flip.
+            auto* image_pixels = icon->resouce()->m_raw_texture_data->m_pixels;
+            icon_data.pixels = (unsigned char*)je_mem_alloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
+            assert(icon_data.pixels != nullptr);
+
+            for (size_t iy = 0; iy < (size_t)icon_data.height; ++iy)
+            {
+                size_t target_place_offset = iy * (size_t)icon_data.width * 4;
+                size_t origin_place_offset = ((size_t)icon_data.height - iy - 1) * (size_t)icon_data.width * 4;
+                memcpy(icon_data.pixels + target_place_offset, image_pixels + origin_place_offset, (size_t)icon_data.width * 4);
+            }
+
+            glfwSetWindowIcon(context->WINDOWS_HANDLE, 1, &icon_data);
+
+            je_mem_free(icon_data.pixels);
+        }
+
+        glfwMakeContextCurrent(context->WINDOWS_HANDLE);
+        glfwSetWindowSizeCallback(context->WINDOWS_HANDLE, glfw_callback_windows_size_changed);
+        glfwSetCursorPosCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_pos_changed);
+        glfwSetMouseButtonCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_key_clicked);
+        glfwSetScrollCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_scroll_changed);
+        glfwSetKeyCallback(context->WINDOWS_HANDLE, glfw_callback_keyboard_stage_changed);
+        glfwSetWindowUserPointer(context->WINDOWS_HANDLE, context);
+
+        if (config->m_fps == 0)
+        {
+            je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 0.0);
+            glfwSwapInterval(1);
+        }
+        else
+        {
+            je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 1.0 / (double)config->m_fps);
+            glfwSwapInterval(0);
+        }
+#ifdef JE_ENABLE_GL330_GAPI
+        if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
+            jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
+#   ifndef NDEBUG
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback(glDebugOutput, nullptr);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+#   endif
+#endif
+
+        glEnable(GL_DEPTH_TEST);
+        //jegui_init_gl330(
+        //    [](auto* res) {return (void*)(intptr_t)res->m_handle.m_uint1; },
+        //    [](auto* res)
+        //    {
+        //        if (res->m_raw_shader_data != nullptr)
+        //        {
+        //            for (size_t i = 0; i < res->m_raw_shader_data->m_sampler_count; ++i)
+        //            {
+        //                auto& sampler = res->m_raw_shader_data->m_sampler_methods[i];
+        //                for (size_t id = 0; id < sampler.m_pass_id_count; ++id)
+        //                {
+        //                    glActiveTexture(GL_TEXTURE0 + sampler.m_pass_ids[id]);
+        //                    switch (sampler.m_mag)
+        //                    {
+        //                    case jegl_shader::fliter_mode::LINEAR:
+        //                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); break;
+        //                    case jegl_shader::fliter_mode::NEAREST:
+        //                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); break;
+        //                    default:
+        //                        abort();
+        //                    }
+        //                    switch (sampler.m_min)
+        //                    {
+        //                    case jegl_shader::fliter_mode::LINEAR:
+        //                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        //                        break;
+        //                    case jegl_shader::fliter_mode::NEAREST:
+        //                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        //                        break;
+        //                    default:
+        //                        abort();
+        //                    }
+        //                    switch (sampler.m_uwrap)
+        //                    {
+        //                    case jegl_shader::wrap_mode::CLAMP:
+        //                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
+        //                    case jegl_shader::wrap_mode::REPEAT:
+        //                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
+        //                    default:
+        //                        abort();
+        //                    }
+        //                    switch (sampler.m_vwrap)
+        //                    {
+        //                    case jegl_shader::wrap_mode::CLAMP:
+        //                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
+        //                    case jegl_shader::wrap_mode::REPEAT:
+        //                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
+        //                    default:
+        //                        abort();
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    },
+        //    context->WINDOWS_HANDLE, reboot);
+
         return context;
     }
 
     bool gl_pre_update(jegl_thread::custom_thread_data_t ctx)
     {
-        return false;
+        return true;
     }
 
     bool gl_update(jegl_thread::custom_thread_data_t ctx)
     {
-        return false;
+        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
+
+        glfwPollEvents();
+        int mouse_lock_x, mouse_lock_y;
+        if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
+            glfwSetCursorPos(context->WINDOWS_HANDLE, mouse_lock_x, mouse_lock_y);
+
+        int window_width, window_height;
+        if (je_io_should_update_windowsize(&window_width, &window_height))
+            glfwSetWindowSize(context->WINDOWS_HANDLE, window_width, window_height);
+
+        if (glfwWindowShouldClose(context->WINDOWS_HANDLE) == GLFW_TRUE)
+        {
+            jeecs::debug::loginfo("Graphic interface has been requested to close.");
+            return false;
+        }
+        return true;
     }
 
     bool gl_lateupdate(jegl_thread::custom_thread_data_t ctx)
     {
-        return false;
+        return true;
     }
 
     void gl_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, bool reboot)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(userdata));
-        jegui_shutdown_basic(reboot);
+
         if (!reboot)
             jeecs::debug::log("Graphic thread (OpenGL330) shutdown!");
 
+        jegui_shutdown_basic(reboot);
+        glfwDestroyWindow(context->WINDOWS_HANDLE);
         delete context;
+
+        if (!reboot)
+            glfwTerminate();
     }
 
     uint32_t gl_get_uniform_location(jegl_thread::custom_thread_data_t, jegl_resource* shader, const char* name)
