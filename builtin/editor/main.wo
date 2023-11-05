@@ -1,7 +1,11 @@
-import pkg::crashhandler;
-crashhandler::init();
-
 import woo::std;
+
+import pkg::crashhandler;
+
+if (std::platform_os == std::os::WIN32)
+    crashhandler::init();
+
+
 import woo::debug;
 
 import pkg::filesystem;
@@ -446,7 +450,9 @@ for (;;)
 
         je::editor::init_graphic_pipeline(u->get_universe());
 
-        if (editor::CxxProject::is_builder_ready())
+        if (std::platform_os != std::os::WIN32 || 
+            editor::CxxProject::is_builder_ready())
+        {
             launch(func(){
                 let open = new! mutable(true);
 
@@ -523,7 +529,9 @@ for (;;)
 
                 return open->get();
             }, ());
+        }
         else
+        {
             launch(func(specify_vs_version: mutable<option<int>>){
                 if (BeginAttr("JoyEngineECS 项目导航", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
@@ -603,6 +611,7 @@ for (;;)
 
                 return true;
             }, (new! mutable(option::none),));
+        }
 
         u->wait();
         // 这个有点操蛋，到时候看一下怎么处理
