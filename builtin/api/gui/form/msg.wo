@@ -19,7 +19,9 @@ namespace jeapi::gui::form
         {
             let mut open = true;
             match (BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
             {
             value(show)?
                 if (show)

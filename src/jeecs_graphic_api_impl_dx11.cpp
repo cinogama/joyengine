@@ -41,6 +41,9 @@ namespace jeecs::graphic::api::dx11
         size_t WINDOWS_SIZE_WIDTH;
         size_t WINDOWS_SIZE_HEIGHT;
 
+        size_t RESOLUTION_WIDTH;
+        size_t RESOLUTION_HEIGHT;
+
         size_t MSAA_LEVEL;
         size_t MSAA_QUALITY;
 
@@ -55,6 +58,7 @@ namespace jeecs::graphic::api::dx11
 
         bool m_dx_context_finished;
         bool m_window_should_close;
+        bool m_lock_resolution_for_fullscreen;
 
         UINT m_next_binding_texture_place;
 
@@ -136,6 +140,12 @@ namespace jeecs::graphic::api::dx11
         context->WINDOWS_SIZE_WIDTH = w;
         context->WINDOWS_SIZE_HEIGHT = h;
 
+        if (context->m_lock_resolution_for_fullscreen == false)
+        {
+            context->RESOLUTION_WIDTH = context->WINDOWS_SIZE_WIDTH;
+            context->RESOLUTION_HEIGHT = context->WINDOWS_SIZE_HEIGHT;
+        }
+
         // 释放渲染管线输出用到的相关资源
         context->m_dx_main_renderer_target_depth_view.Reset();
         context->m_dx_main_renderer_target_depth_buffer.Reset();
@@ -144,7 +154,7 @@ namespace jeecs::graphic::api::dx11
         // 重设交换链并且重新创建渲染目标视图
         jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> back_buffer;
         JERCHECK(context->m_dx_swapchain->ResizeBuffers(
-            1, (UINT)context->WINDOWS_SIZE_WIDTH, (UINT)context->WINDOWS_SIZE_HEIGHT, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
+            1, (UINT)context->RESOLUTION_WIDTH, (UINT)context->RESOLUTION_HEIGHT, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
         JERCHECK(context->m_dx_swapchain->GetBuffer(
             0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(back_buffer.GetAddressOf())));
         JERCHECK(context->m_dx_device->CreateRenderTargetView(
@@ -157,8 +167,8 @@ namespace jeecs::graphic::api::dx11
 
         D3D11_TEXTURE2D_DESC depthStencilDesc;
 
-        depthStencilDesc.Width = (UINT)context->WINDOWS_SIZE_WIDTH;
-        depthStencilDesc.Height = (UINT)context->WINDOWS_SIZE_HEIGHT;
+        depthStencilDesc.Width = (UINT)context->RESOLUTION_WIDTH;
+        depthStencilDesc.Height = (UINT)context->RESOLUTION_HEIGHT;
         depthStencilDesc.MipLevels = 1;
         depthStencilDesc.ArraySize = 1;
         depthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -201,8 +211,8 @@ namespace jeecs::graphic::api::dx11
         D3D11_VIEWPORT viewport;
         viewport.TopLeftX = 0;
         viewport.TopLeftY = 0;
-        viewport.Width = (float)context->WINDOWS_SIZE_WIDTH;
-        viewport.Height = (float)context->WINDOWS_SIZE_HEIGHT;
+        viewport.Width = (float)context->RESOLUTION_WIDTH;
+        viewport.Height = (float)context->RESOLUTION_HEIGHT;
         viewport.MinDepth = 0.0f;
         viewport.MaxDepth = 1.0f;
 
@@ -291,7 +301,10 @@ namespace jeecs::graphic::api::dx11
             // Save the new client area dimensions.
             auto width = LOWORD(lParam);
             auto height = HIWORD(lParam);
-            dx11_callback_windows_size_changed(_je_dx_current_thread_context, (size_t)width, (size_t)height);
+            dx11_callback_windows_size_changed(
+                _je_dx_current_thread_context,
+                (size_t)width,
+                (size_t)height);
             return 0;
         }
         case WM_ENTERSIZEMOVE:
@@ -436,6 +449,9 @@ namespace jeecs::graphic::api::dx11
         context->m_window_should_close = false;
         context->WINDOWS_SIZE_WIDTH = config->m_width;
         context->WINDOWS_SIZE_HEIGHT = config->m_height;
+        context->RESOLUTION_WIDTH = context->WINDOWS_SIZE_WIDTH;
+        context->RESOLUTION_HEIGHT = context->WINDOWS_SIZE_HEIGHT;
+        context->m_lock_resolution_for_fullscreen = false;
         context->MSAA_LEVEL = config->m_msaa;
         context->FPS = config->m_fps;
         context->m_next_binding_texture_place = 0;
@@ -497,9 +513,27 @@ namespace jeecs::graphic::api::dx11
         LONG width = R.right - R.left;
         LONG height = R.bottom - R.top;
 
+        DWORD window_style = WS_OVERLAPPEDWINDOW;
+
+        if (config->m_enable_resize == false)
+            window_style &= ~WS_THICKFRAME;
+
+        switch (config->m_displaymode)
+        {
+        case jegl_interface_config::display_mode::BOARDLESS:
+            window_style = WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_POPUP;
+            break;
+        case jegl_interface_config::display_mode::FULLSCREEN:
+            context->m_lock_resolution_for_fullscreen = true;
+            break;
+        case jegl_interface_config::display_mode::WINDOWED:
+            break;
+        }
+
         context->m_window_handle = CreateWindowA("JoyEngineDX11Form", config->m_title,
-            WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0,
+            window_style, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0,
             context->m_win32_window_class.hInstance, 0);
+
         if (!context->m_window_handle)
         {
             jeecs::debug::logfatal("Failed to create windows for dx11.");
@@ -583,9 +617,11 @@ namespace jeecs::graphic::api::dx11
         sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
         if (config->m_fps == 0)
-            je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 0.0);
+            je_ecs_universe_set_frame_deltatime(
+                gthread->_m_universe_instance, 0.0);
         else
-            je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 1.0 / (double)config->m_fps);
+            je_ecs_universe_set_frame_deltatime(
+                gthread->_m_universe_instance, 1.0 / (double)config->m_fps);
 
         // 是否开启多重采样？
         UINT msaa_quality = 0;
@@ -646,10 +682,15 @@ namespace jeecs::graphic::api::dx11
                         sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
                 }
             },
-            context->m_window_handle,
-            context->m_dx_device.Get(),
-            context->m_dx_context.Get(),
-            reboot);
+                context->m_window_handle,
+                context->m_dx_device.Get(),
+                context->m_dx_context.Get(),
+                reboot);
+
+        // Fullscreen?
+        if (context->m_lock_resolution_for_fullscreen)
+            context->m_dx_swapchain->SetFullscreenState(true, nullptr);
+
         return context;
     }
 

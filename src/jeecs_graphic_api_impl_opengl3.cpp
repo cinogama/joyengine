@@ -202,13 +202,6 @@ namespace jeecs::graphic::api::gl330
 
         switch (config->m_displaymode)
         {
-        case jegl_interface_config::display_mode::FULLSCREEN:
-            context->WINDOWS_HANDLE = glfwCreateWindow(
-                (int)context->WINDOWS_SIZE_WIDTH,
-                (int)context->WINDOWS_SIZE_HEIGHT,
-                context->WINDOWS_TITLE,
-                primary_monitor, NULL);
-            break;
         case jegl_interface_config::display_mode::BOARDLESS:
             glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
         case jegl_interface_config::display_mode::WINDOWED:
@@ -217,6 +210,13 @@ namespace jeecs::graphic::api::gl330
                 (int)context->WINDOWS_SIZE_HEIGHT,
                 context->WINDOWS_TITLE,
                 NULL, NULL);
+            break;
+        case jegl_interface_config::display_mode::FULLSCREEN:
+            context->WINDOWS_HANDLE = glfwCreateWindow(
+                (int)context->WINDOWS_SIZE_WIDTH,
+                (int)context->WINDOWS_SIZE_HEIGHT,
+                context->WINDOWS_TITLE,
+                primary_monitor, NULL);
             break;
         default:
             jeecs::debug::logfatal("Unknown display mode to start up graphic thread.");

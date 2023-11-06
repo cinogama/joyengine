@@ -1472,13 +1472,17 @@ struct jegl_interface_config
     display_mode    m_displaymode;
     bool            m_enable_resize;
 
-    // 若MSAA值为0，则说明关闭超采样抗锯齿，
-    // MSAA配置应该是2的整数次幂
+    // 若MSAA值为0，则说明关闭超采样抗锯齿
+    //  * MSAA配置应该是2的整数次幂
+    //  * 最终能否使用取决于图形库
     size_t          m_msaa;
 
+    // 启动时的窗口大小和分辨率
     size_t          m_width;
     size_t          m_height;
 
+    // 限制帧数，若指定为0，则启用垂直同步
+    // 不限制帧率请设置为 SIZE_MAX
     size_t          m_fps;
 
     const char* m_title;

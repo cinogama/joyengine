@@ -352,22 +352,29 @@ namespace jeecs_impl
             assert(!_types_set.empty());
 
             for (jeecs::typing::typeid_t tid : _types_set)
-                const_cast<types_list&>(_m_arch_typeinfo).push_back(jeecs::typing::type_info::of(tid));
+                const_cast<types_list&>(_m_arch_typeinfo).push_back(
+                    jeecs::typing::type_info::of(tid));
 
-            std::sort(const_cast<types_list&>(_m_arch_typeinfo).begin(),
+            std::sort(
+                const_cast<types_list&>(_m_arch_typeinfo).begin(),
                 const_cast<types_list&>(_m_arch_typeinfo).end(),
                 [](const jeecs::typing::type_info* a, const jeecs::typing::type_info* b) {
                     return a->m_size < b->m_size;
                 });
 
             size_t component_reserved_gap = 0;
-            const_cast<size_t&>(_m_entity_size) = 0;
+            size_t last_align = 0;
+            size_t entity_size = 0;
             for (auto* typeinfo : _m_arch_typeinfo)
             {
-                component_reserved_gap += typeinfo->m_align;
-                const_cast<size_t&>(_m_entity_size) += typeinfo->m_chunk_size;
+                if (last_align % typeinfo->m_align != 0)
+                    component_reserved_gap += typeinfo->m_align;
+                
+                last_align = typeinfo->m_align;
+
+                entity_size += typeinfo->m_chunk_size;
             }
-            component_reserved_gap -= _m_arch_typeinfo.front()->m_align;
+            const_cast<size_t&>(_m_entity_size) = entity_size;
 
             const size_t chunk_size_without_gap = CHUNK_SIZE - component_reserved_gap;
             assert(_m_entity_size != 0 && _m_entity_size <= chunk_size_without_gap);

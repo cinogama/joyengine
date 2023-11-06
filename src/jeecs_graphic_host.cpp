@@ -115,7 +115,7 @@ namespace jeecs
             jegl_interface_config config = {};
             config.m_width = 640;
             config.m_height = 480;
-            config.m_title = "JoyEngineECS(JoyEngine 4.2)";
+            config.m_title = "JoyEngineECS(JoyEngine 4.3)";
             config.m_displaymode = jegl_interface_config::display_mode::WINDOWED;
             config.m_enable_resize = true;
             config.m_fps = 0;   // 使用垂直同步
