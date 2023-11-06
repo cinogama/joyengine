@@ -2101,7 +2101,7 @@ jegl_using_none_apis [基本接口]
 JE_API void jegl_using_none_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_using_opengl330_apis [基本接口]
+jegl_using_opengl3_apis [基本接口]
 加载OpenGL 3.3 或 OpenGLES 3.0 API集合，通常与jegl_start_graphic_thread一起使用
 用于指定图形线程使用的基本图形库
 请参见：

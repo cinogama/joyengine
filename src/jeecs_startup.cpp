@@ -65,7 +65,7 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 #if defined(JE_ENABLE_DX11_GAPI)
         return jegl_using_dx11_apis;
 #elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI)
-        return jegl_using_opengl330_apis;
+        return jegl_using_opengl3_apis;
 #elif defined(JE_ENABLE_VK110_GAPI)
         return jegl_using_vulkan110_apis;
 #elif defined(JE_ENABLE_METAL_GAPI)
