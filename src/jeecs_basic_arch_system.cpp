@@ -349,6 +349,8 @@ namespace jeecs_impl
             static_assert(offsetof(jeecs::game_entity, _m_version)
                 == offsetof(entity, _m_version));
 
+            assert(!_types_set.empty());
+
             for (jeecs::typing::typeid_t tid : _types_set)
                 const_cast<types_list&>(_m_arch_typeinfo).push_back(jeecs::typing::type_info::of(tid));
 
@@ -358,16 +360,26 @@ namespace jeecs_impl
                     return a->m_size < b->m_size;
                 });
 
+            size_t component_reserved_gap = 0;
             const_cast<size_t&>(_m_entity_size) = 0;
             for (auto* typeinfo : _m_arch_typeinfo)
+            {
+                component_reserved_gap += typeinfo->m_align;
                 const_cast<size_t&>(_m_entity_size) += typeinfo->m_chunk_size;
+            }
+            component_reserved_gap -= _m_arch_typeinfo.front()->m_align;
 
-            assert(_m_entity_size != 0 && _m_entity_size <= CHUNK_SIZE);
-            const_cast<size_t&>(_m_entity_count_per_chunk) = CHUNK_SIZE / _m_entity_size;
+            const size_t chunk_size_without_gap = CHUNK_SIZE - component_reserved_gap;
+            assert(_m_entity_size != 0 && _m_entity_size <= chunk_size_without_gap);
+
+            const_cast<size_t&>(_m_entity_count_per_chunk) = 
+                chunk_size_without_gap / _m_entity_size;
 
             size_t mem_offset = 0;
             for (auto* typeinfo : _m_arch_typeinfo)
             {
+                mem_offset = jeecs::basic::allign_size(mem_offset, typeinfo->m_align);
+
                 const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id]
                     = arch_type_info{ typeinfo, mem_offset };
                 mem_offset += typeinfo->m_chunk_size * _m_entity_count_per_chunk;

@@ -20,13 +20,13 @@ option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."      
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
-option(JE4_ENABLE_OPENGLES320_GAPI  "Enable OpenGLES 3.2 Graphic API"   OFF)
+option(JE4_ENABLE_OPENGLES300_GAPI  "Enable OpenGLES 3.0 Graphic API"   OFF)
 option(JE4_ENABLE_VULKAN110_GAPI    "Enable Vulkan 1.1 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
 
 # Cannot use gles & gl at same time because of ImGUI cannot use two lib at same time.
-if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES320_GAPI)
+if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES300_GAPI)
     message(FATAL_ERROR "Cannot use OpenGL3.3 and OpenGLES3.2 at same time.")
 endif()
 
@@ -40,11 +40,11 @@ add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
 
-if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES320_GAPI)
+if (JE4_ENABLE_OPENGL330_GAPI)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
     add_subdirectory("3rd/glew/build/cmake")
 endif()
-if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES320_GAPI OR JE4_ENABLE_VULKAN110_GAPI)
+if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_VULKAN110_GAPI)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
     add_subdirectory("3rd/glfw")
 endif()

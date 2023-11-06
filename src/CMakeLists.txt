@@ -37,7 +37,7 @@ set(imgui_srcs
 
 # JoyEngine Graphic API support list.
 # OpenGL 3.3 & OpenGLES 3.2
-if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES320_GAPI)
+if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
     include_directories("../3rd/glew/include")
     if (NOT WIN32)
         target_compile_options(glew_s PRIVATE -fPIC)
@@ -51,7 +51,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES320_GAPI)
             list(APPEND jeecs_graphic_libs OpenGL32)
         endif()
     else()
-        add_definitions(-DJE_ENABLE_GLES320_GAPI)
+        add_definitions(-DJE_ENABLE_GLES300_GAPI)
         add_definitions(-DIMGUI_IMPL_OPENGL_ES3)
 
         if (WIN32)
@@ -59,8 +59,8 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES320_GAPI)
             list(APPEND jeecs_graphic_libs "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/opengles_env_w64/libEGL.lib")
             list(APPEND jeecs_graphic_libs "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/opengles_env_w64/libGLESv2.lib")
         else()
-            find_library(OPENGLES3_LIBRARY GLESv2 "OpenGL ES v3.1 library")
-            find_library(EGL_LIBRARY EGL "EGL 1.4 library")
+            find_library(OPENGLES3_LIBRARY GLESv2 "OpenGL ES v3.0 library")
+            find_library(EGL_LIBRARY EGL "EGL library")
             list(APPEND jeecs_graphic_libs ${OPENGLES3_LIBRARY})
             list(APPEND jeecs_graphic_libs ${EGL_LIBRARY})
         endif()
@@ -95,13 +95,13 @@ if (JE4_ENABLE_VULKAN110_GAPI)
 endif()
 
 # Metal
-if (JE4_ENABLE_METAL_GAPI)
+if (JE4_ENABLE_METAL_GAPI AND APPLE)
     add_definitions(-DJE_ENABLE_METAL_GAPI)
 endif()
 
 # OpenGL3.3 / OpenGLES3.2 / Vulkan needed:
 if (JE4_ENABLE_OPENGL330_GAPI OR 
-    JE4_ENABLE_OPENGLES320_GAPI OR 
+    JE4_ENABLE_OPENGLES300_GAPI OR 
     JE4_ENABLE_VULKAN110_GAPI)
 
     include_directories("../3rd/glfw/include")

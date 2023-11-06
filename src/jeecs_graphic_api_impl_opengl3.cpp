@@ -2,12 +2,12 @@
 #include "jeecs.hpp"
 
 #if defined(JE_ENABLE_GL330_GAPI) \
- || defined(JE_ENABLE_GLES320_GAPI)
+ || defined(JE_ENABLE_GLES300_GAPI)
 
 #include "jeecs_imgui_backend_api.hpp"
 
 
-#ifdef JE_ENABLE_GLES320_GAPI
+#ifdef JE_ENABLE_GLES300_GAPI
 #   ifdef __APPLE__
 #       include <OpenGLES/ES3/gl.h>
 #   else
@@ -153,7 +153,7 @@ namespace jeecs::graphic::api::gl330
         jegl_gl3_context* context = new jegl_gl3_context;
         if (!reboot)
         {
-            jeecs::debug::log("Graphic thread (OpenGL330) start!");
+            jeecs::debug::log("Graphic thread (OpenGL3) start!");
 
             if (!glfwInit())
                 jeecs::debug::logfatal("Failed to init glfw.");
@@ -401,7 +401,7 @@ namespace jeecs::graphic::api::gl330
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(userdata));
 
         if (!reboot)
-            jeecs::debug::log("Graphic thread (OpenGL330) shutdown!");
+            jeecs::debug::log("Graphic thread (OpenGL3) shutdown!");
 
         jegui_shutdown_gl330(reboot);
         glfwDestroyWindow(context->WINDOWS_HANDLE);
@@ -491,7 +491,9 @@ namespace jeecs::graphic::api::gl330
 #endif
                 ;
             std::string fragment_src = vertex_src
-#ifdef JE_ENABLE_GLES320_GAPI
+#ifdef JE_ENABLE_GL330_GAPI
+                //;
+#else
                 + "precision highp float;\n\n"
 #endif
                 ;
@@ -1167,7 +1169,7 @@ namespace jeecs::graphic::api::gl330
     }
 }
 
-void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
+void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::gl330;
 
@@ -1195,7 +1197,7 @@ void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->set_uniform = gl_set_uniform;
 }
 #else
-void jegl_using_opengl330_apis(jegl_graphic_api* write_to_apis)
+void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
     jeecs::debug::logfatal("GL330 not available.");
 }

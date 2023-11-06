@@ -2,11 +2,11 @@
 #include "jeecs.hpp"
 
 #if defined(JE_ENABLE_GL330_GAPI) \
- || defined(JE_ENABLE_GLES320_GAPI)
-
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
-#include <GLFW/glfw3.h>
+ || defined(JE_ENABLE_GLES300_GAPI)
+#   include <imgui.h>
+#   include <imgui_impl_glfw.h>
+#   include <imgui_impl_opengl3.h>
+#   include <GLFW/glfw3.h>
 
 void jegui_init_gl330(
     void* (*get_img_res)(jegl_resource*),

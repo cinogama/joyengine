@@ -51,6 +51,7 @@ namespace jeecs::graphic::api::dx11
         MSWRLComPtr<ID3D11RenderTargetView> m_dx_main_renderer_target_view;         // 渲染目标视图
 
         WNDCLASS m_win32_window_class;
+        HICON m_win32_window_icon;
 
         bool m_dx_context_finished;
         bool m_window_should_close;
@@ -345,6 +346,85 @@ namespace jeecs::graphic::api::dx11
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
 
+    // Creates an RGBA icon or cursor
+    // (C)GLFW, a little modified.
+    static HICON _dx11_CreateIcon(
+        unsigned char* image_data,
+        LONG width,
+        LONG height)
+    {
+        int i;
+        HDC dc;
+        HICON handle;
+        HBITMAP color, mask;
+        BITMAPV5HEADER bi;
+        ICONINFO ii;
+        unsigned char* target = NULL;
+        unsigned char* source = image_data;
+
+        ZeroMemory(&bi, sizeof(bi));
+        bi.bV5Size = sizeof(bi);
+        bi.bV5Width = width;
+        bi.bV5Height = -height;
+        bi.bV5Planes = 1;
+        bi.bV5BitCount = 32;
+        bi.bV5Compression = BI_BITFIELDS;
+        bi.bV5RedMask = 0x00ff0000;
+        bi.bV5GreenMask = 0x0000ff00;
+        bi.bV5BlueMask = 0x000000ff;
+        bi.bV5AlphaMask = 0xff000000;
+
+        dc = GetDC(NULL);
+        color = CreateDIBSection(dc,
+            (BITMAPINFO*)&bi,
+            DIB_RGB_COLORS,
+            (void**)&target,
+            NULL,
+            (DWORD)0);
+        ReleaseDC(NULL, dc);
+
+        if (!color)
+        {
+            jeecs::debug::logwarn("Failed to create dib section when create icon for dx11 interface window.");
+            return NULL;
+        }
+
+        mask = CreateBitmap(width, height, 1, 1, NULL);
+        if (!mask)
+        {
+            jeecs::debug::logwarn("Failed to create bitmap when create icon for dx11 interface window.");
+            DeleteObject(color);
+            return NULL;
+        }
+
+        for (i = 0; i < width * height; i++)
+        {
+            target[0] = source[2];
+            target[1] = source[1];
+            target[2] = source[0];
+            target[3] = source[3];
+            target += 4;
+            source += 4;
+        }
+
+        ZeroMemory(&ii, sizeof(ii));
+        ii.fIcon = TRUE;
+        ii.xHotspot = 0;
+        ii.yHotspot = 0;
+        ii.hbmMask = mask;
+        ii.hbmColor = color;
+
+        handle = CreateIconIndirect(&ii);
+
+        DeleteObject(color);
+        DeleteObject(mask);
+
+        if (!handle)
+            jeecs::debug::logwarn("Failed to create icon for dx11 interface window.");
+
+        return handle;
+    }
+
     jegl_thread::custom_thread_data_t dx11_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_dx11_context* context = new jegl_dx11_context;
@@ -359,10 +439,36 @@ namespace jeecs::graphic::api::dx11
         context->MSAA_LEVEL = config->m_msaa;
         context->FPS = config->m_fps;
         context->m_next_binding_texture_place = 0;
+        context->m_win32_window_icon = nullptr;
+
         if (!reboot)
         {
             jeecs::debug::log("Graphic thread (DX11) start!");
             // ...
+        }
+
+        jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load("@/icon.png");
+        if (icon == nullptr)
+            icon = jeecs::graphic::texture::load("!/builtin/icon/icon.png");
+
+        if (icon != nullptr)
+        {
+            LONG width = (LONG)icon->width();
+            LONG height = (LONG)icon->height();
+            unsigned char* pixels = (unsigned char*)malloc((size_t)(width * height * 4));
+            // Here need a y-direct flip.
+            auto* image_pixels = icon->resouce()->m_raw_texture_data->m_pixels;
+            assert(pixels != nullptr);
+
+            for (size_t iy = 0; iy < (size_t)height; ++iy)
+            {
+                size_t target_place_offset = iy * (size_t)width * 4;
+                size_t origin_place_offset = ((size_t)height - iy - 1) * (size_t)width * 4;
+                memcpy(pixels + target_place_offset, image_pixels + origin_place_offset, (size_t)width * 4);
+            }
+
+            context->m_win32_window_icon = _dx11_CreateIcon(pixels, width, height);
+            je_mem_free(pixels);
         }
 
         context->m_win32_window_class.style = CS_HREDRAW | CS_VREDRAW;
@@ -370,7 +476,10 @@ namespace jeecs::graphic::api::dx11
         context->m_win32_window_class.cbClsExtra = 0;
         context->m_win32_window_class.cbWndExtra = 0;
         context->m_win32_window_class.hInstance = GetModuleHandle(NULL);
-        context->m_win32_window_class.hIcon = LoadIcon(0, IDI_APPLICATION);
+        context->m_win32_window_class.hIcon =
+            context->m_win32_window_icon == nullptr
+            ? LoadIcon(0, IDI_APPLICATION)
+            : context->m_win32_window_icon;
         context->m_win32_window_class.hCursor = LoadCursor(0, IDC_ARROW);
         context->m_win32_window_class.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
         context->m_win32_window_class.lpszMenuName = 0;
@@ -557,6 +666,7 @@ namespace jeecs::graphic::api::dx11
             context->m_dx_context->ClearState();
 
         DestroyWindow(context->m_window_handle);
+        DestroyIcon(context->m_win32_window_icon);
 
         if (!UnregisterClassA(
             context->m_win32_window_class.lpszClassName,
