@@ -38,18 +38,18 @@ set(imgui_srcs
 # JoyEngine Graphic API support list.
 # OpenGL 3.3 & OpenGLES 3.2
 if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
-    include_directories("../3rd/glew/include")
-    if (NOT WIN32)
-        target_compile_options(glew_s PRIVATE -fPIC)
-    endif()
-    list(APPEND jeecs_graphic_libs glew_s)
-
     if (JE4_ENABLE_OPENGL330_GAPI)
         add_definitions(-DJE_ENABLE_GL330_GAPI)
 
+        include_directories("../3rd/glew/include")
         if (WIN32)
             list(APPEND jeecs_graphic_libs OpenGL32)
+        else()
+            target_compile_options(glew_s PRIVATE -fPIC)
         endif()
+        
+        list(APPEND jeecs_graphic_libs glew_s)
+        
     else()
         add_definitions(-DJE_ENABLE_GLES300_GAPI)
         add_definitions(-DIMGUI_IMPL_OPENGL_ES3)
