@@ -367,11 +367,12 @@ namespace jeecs_impl
             size_t entity_size = 0;
             for (auto* typeinfo : _m_arch_typeinfo)
             {
-                if (last_align % typeinfo->m_align != 0)
-                    component_reserved_gap += typeinfo->m_align;
+                const size_t bulge_size = last_align % typeinfo->m_align;
+                const size_t gap_size = typeinfo->m_align - bulge_size;
+                if (gap_size != 0)
+                    component_reserved_gap += gap_size;
                 
                 last_align = typeinfo->m_align;
-
                 entity_size += typeinfo->m_chunk_size;
             }
             const_cast<size_t&>(_m_entity_size) = entity_size;
