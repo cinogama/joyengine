@@ -8,7 +8,7 @@ if (std::platform_os == std::os::WIN32)
 
 import woo::debug;
 
-import pkg::filesystem;
+import pkg::fsys;
 import pkg::interface;
 import pkg::makenew;
 
@@ -33,7 +33,7 @@ let mut action_after_guide_form_closed = \ = result::ok(do nil); as ()=>result<v
 
 using Path = struct {
     name: string,       // 仅用于显示
-    path: filesys::path_t,
+    path: fsys::path_t,
     childs: mut option<array<Path>>,
 }
 {
@@ -46,8 +46,8 @@ using Path = struct {
 
         return arr
             ->  unsafe::cast:<array<string>>
-            ->> \pname = filesys::normalize(pname);
-            ->  forall(\path = filesys::isdir(path);)
+            ->> \pname = fsys::normalize(pname);
+            ->  forall(\path = fsys::isdir(path);)
             ->> \rootpath = Path
                 {
                     name = rootpath->tostring(),
@@ -62,12 +62,12 @@ using Path = struct {
         if (update || !path.childs->has)
         {
             let arr = 
-                filesys::subpath(path.path)
+                fsys::subpath(path.path)
                     ->  unwarp
-                    ->  forall(\child_path = filesys::isdir(child_path);)
+                    ->  forall(\child_path = fsys::isdir(child_path);)
                     ->> \child_path = Path
                         {
-                            name = filesys::filename(child_path),
+                            name = fsys::filename(child_path),
                             path = child_path,
                             childs = mut option::none
                         }
@@ -78,9 +78,9 @@ using Path = struct {
 
         return path.childs->val;
     }
-    func show(path: Path)=> option<filesys::path_t>
+    func show(path: Path)=> option<fsys::path_t>
     {
-        static let mut selected_path = option::none: option<filesys::path_t>;
+        static let mut selected_path = option::none: option<fsys::path_t>;
 
         let show_child = TreeNodeEx(path.name, 
                 TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
@@ -118,12 +118,12 @@ using Path = struct {
         return roots
             =>> \path = r->has ? [r->val] | [] where r = path->show();
             ->  get(0)
-            =>> \p = filesys::isdir(p) ? option::value(p) | option::none;
+            =>> \p = fsys::isdir(p) ? option::value(p) | option::none;
             ;
     }
 }
 
-func open_path_to_do_sth(action_after_choice: (option<filesys::path_t>)=>void)
+func open_path_to_do_sth(action_after_choice: (option<fsys::path_t>)=>void)
 {
     let mut open = true;
     match (BeginAttrOpen("加载或新建项目", 
@@ -157,7 +157,7 @@ func open_path_to_do_sth(action_after_choice: (option<filesys::path_t>)=>void)
 
 func read_editor_data()
 {
-    return filesys::readall(filesys::normalize(std::exepath())/"editor.dat")
+    return fsys::readall(fsys::normalize(std::exepath())/"editor.dat")
         =>> \dat = dict::deserialize(dat);
         ->  valor({})
         ;
@@ -171,7 +171,7 @@ func apply_editor_data_when_start_up_project(dat: dict<dynamic, dynamic>)
         ;
     je::editor::set_window_size(form_size[0], form_size[1]);
 }
-func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string, proj_path: filesys::path_t)
+func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string, proj_path: fsys::path_t)
 {
     let (win_w, win_h) = je::input::windowsize();
     let project_histories = dat->getor("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< array<array<string>> >;
@@ -183,10 +183,10 @@ func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string,
         ->inlay(0, [proj_name, proj_path->tostring]): dynamic);
 
     assert(
-        filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", newdat->serialize->val)
+        fsys::writeall(fsys::normalize(std::exepath())/"editor.dat", newdat->serialize->val)
     );
 
-    assert(filesys::setworkpath(filesys::normalize(std::exepath())));
+    assert(fsys::setworkpath(fsys::normalize(std::exepath())));
 }
 
 func my_ask_for_get_yes_no_cancel_result(
@@ -309,21 +309,21 @@ public func ask_for_saving_proj_when_exit(p: editor::Project)
     return false;
 }
 
-func create_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
+func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
 {
     // 确保目录存在
-    if (! filesys::exist(path))
+    if (! fsys::exist(path))
         return jeapi::gui::form::errmsg("失败", F"创建项目失败，不存在的目录{path}");
 
     jeapi::gui::form::input("新项目命名", F"将在{path}创建新项目", "NewProject", 
         func(projname)
         {
             // 再次确保文件存在
-            if (! filesys::exist(path))
+            if (! fsys::exist(path))
                 return do jeapi::gui::form::errmsg("失败", F"创建项目失败，不存在的目录{path}");
 
             let project_path = path / projname;
-            match (filesys::mkdir(project_path))
+            match (fsys::mkdir(project_path))
             {
             err(errno)?
                 return do jeapi::gui::form::errmsg("失败", F"创建项目失败，无法创建目录{project_path} ({errno})");
@@ -344,16 +344,16 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
                             assert(p->save_project());
 
                             // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
-                            do filesys::mkdir(p.m_path/"resource");
-                            do filesys::mkdir(p.m_path/"resource"/"texture");
-                            do filesys::writeall(p.m_path/"resource"/"texture"/"readme.md", 
+                            do fsys::mkdir(p.m_path/"resource");
+                            do fsys::mkdir(p.m_path/"resource"/"texture");
+                            do fsys::writeall(p.m_path/"resource"/"texture"/"readme.md", 
 @"# Texture 目录
 ---
 此目录用于保存引擎自动生成的图像资源
 "@);
-                            do filesys::copy(filesys::normalize(F"{std::exepath()}/builtin/shader"), filesys::normalize(F"{p.m_path}/resource/shader"));
-                            do filesys::copy(filesys::normalize(F"{std::exepath()}/builtin/font"), filesys::normalize(F"{p.m_path}/resource/font"));
-                            do filesys::writeall(p.m_path / ".gitignore", 
+                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/shader"), fsys::normalize(F"{p.m_path}/resource/shader"));
+                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/font"), fsys::normalize(F"{p.m_path}/resource/font"));
+                            do fsys::writeall(p.m_path / ".gitignore", 
 @"# JoyEngine ECS
 
 /.export/*
@@ -362,7 +362,7 @@ func create_project_at(path: filesys::path_t, u: editor::Environment, editordat:
 /*.dmp
 /project.jeproj4.lock
 "@);
-                            do filesys::writeall(p.m_path / ".gitattributes", 
+                            do fsys::writeall(p.m_path / ".gitattributes", 
 @"# JoyEngine ECS
 
 project.jeproj4 text eol=lf
@@ -384,15 +384,15 @@ config.jeinf text eol=lf
         });
 }
 
-func open_project_at(path: filesys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
+func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
 {
     let proj_path = path/"project.jeproj4";
 
     // 确保目录存在
-    if (! filesys::exist(proj_path))
+    if (! fsys::exist(proj_path))
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
     
-    match (filesys::readall(proj_path)=>> \d = dict::deserialize(d)->> \d = d->> \k,v = (k as string, v);;;)
+    match (fsys::readall(proj_path)=>> \d = dict::deserialize(d)->> \d = d->> \k,v = (k as string, v);;;)
     {
     value(dat)?
         {
@@ -468,11 +468,11 @@ for (;;)
 
                     if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
                     {
-                        launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
+                        launch(open_path_to_do_sth, (\p: option<fsys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
                     }
                     if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
                     {
-                        launch(open_path_to_do_sth, (\p: option<filesys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
+                        launch(open_path_to_do_sth, (\p: option<fsys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
                     }
 
                     TextDisabled("历史项目");
@@ -483,9 +483,9 @@ for (;;)
                         let context_menu_func = func()
                         {
                             if (MenuItem("加载此项目"))
-                                open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
+                                open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
                             if (MenuItem("打开项目所在路径"))
-                                do std::shell(F"explorer \"{filesys::normalize(dat[1])->tostring->replace("/", "\\")}\"");
+                                do std::shell(F"explorer \"{fsys::normalize(dat[1])->tostring->replace("/", "\\")}\"");
                             Separator();
                             if (MenuItem("从历史记录中移除"))
                             {
@@ -501,7 +501,7 @@ for (;;)
                                                 {
                                                     do historys->remove(index);
                                                     assert(
-                                                        filesys::writeall(filesys::normalize(std::exepath())/"editor.dat", editor_configs->serialize->val)
+                                                        fsys::writeall(fsys::normalize(std::exepath())/"editor.dat", editor_configs->serialize->val)
                                                     );
                                                 }
                                             none?;
@@ -511,7 +511,7 @@ for (;;)
                             }
                         };
                         if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::value(context_menu_func)))
-                            open_project_at(filesys::normalize(dat[1]), u, editor_configs, open);
+                            open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
                     }
 
                     EndChild();
@@ -579,8 +579,8 @@ for (;;)
                         none?
                             do edit_conf->remove("specify_vs_version": dynamic);
                         }
-                        do filesys::writeall(
-                            filesys::normalize(std::exepath())/"editor.dat", 
+                        do fsys::writeall(
+                            fsys::normalize(std::exepath())/"editor.dat", 
                             edit_conf->serialize->val);
                     };
 

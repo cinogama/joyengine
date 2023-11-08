@@ -7,7 +7,7 @@ import woo::shell;
 import je::gui;
 
 import pkg::process;
-import pkg::filesystem;
+import pkg::fsys;
 import pkg::thread;
 
 import builtin::api::tool::varify;
@@ -42,21 +42,21 @@ namespace editor
 
     public using CxxProject = struct {
         name: string, // 模块的名称
-        path: filesys::path_t, // 模块所在路径，仅此而已
+        path: fsys::path_t, // 模块所在路径，仅此而已
         configs: dict<string, CxxProjectBuildConfig>, // 可用的生成配置
         module_instance: mut option<handle>,
         project: Project,
     }
     {
         // Cmake所在路径，项目会使用此路径指示的cmake
-        let CMAKE_PATH_MAY_NULL =  std::env("CMAKE")->>\p = filesys::normalize(F"{p}/cmake.exe");;
-        let MSVC_PATH_MAY_NULL = std::env("MSBUILD")->>\p = filesys::normalize(F"{p}/MSBuild.exe");;
+        let CMAKE_PATH_MAY_NULL =  std::env("CMAKE")->>\p = fsys::normalize(F"{p}/cmake.exe");;
+        let MSVC_PATH_MAY_NULL = std::env("MSBUILD")->>\p = fsys::normalize(F"{p}/MSBuild.exe");;
 
         // C++模块样例，创建项目文件时会复制这个目录
-        let CXX_PROJECT_EXAMPLE_PATH = filesys::normalize(F"{std::exepath()}/builtin/cxxproject");
+        let CXX_PROJECT_EXAMPLE_PATH = fsys::normalize(F"{std::exepath()}/builtin/cxxproject");
 
         // 引擎的头文件路径
-        public let ENGINE_HEADER_PATH = filesys::normalize(F"{std::exepath()}/builtin/include");
+        public let ENGINE_HEADER_PATH = fsys::normalize(F"{std::exepath()}/builtin/include");
 
         let MSVC_TARGET_KEYWORDS = {
             [2017] = "Visual Studio 15 2017",
@@ -88,7 +88,7 @@ namespace editor
                 match (MSVC_PATH_MAY_NULL=>>\msvcp = CMAKE_PATH_MAY_NULL->>\cmakep = (msvcp, cmakep);;)
                 {
                 value((MSVC_PATH, CMAKE_PATH))?
-                    return filesys::isfile(MSVC_PATH) && filesys::isfile(CMAKE_PATH);
+                    return fsys::isfile(MSVC_PATH) && fsys::isfile(CMAKE_PATH);
                 none?;
                 }
             }
@@ -97,7 +97,7 @@ namespace editor
         }
 
         // 引擎的库目录
-        let ENGINE_CORE_LIBRARYS_LOCATE_PATH = filesys::normalize(std::exepath());
+        let ENGINE_CORE_LIBRARYS_LOCATE_PATH = fsys::normalize(std::exepath());
         public using LibraryFiles = struct{
             runtime_dynamic_libs: array<string>,
             link_static_libs: array<string>,
@@ -143,9 +143,9 @@ namespace editor
 
         alias platform_t = string;
 
-        public func update_engine_file(cxx_proj_path: filesys::path_t)
+        public func update_engine_file(cxx_proj_path: fsys::path_t)
         {
-            using filesys;
+            using fsys;
         
             // 从引擎根目录更新引擎相关头文件和库文件
             if (!exist(cxx_proj_path))
@@ -182,9 +182,9 @@ namespace editor
             return result::ok(platform_support);
         }
 
-        public func generate_module_config(project: Project, name: string, cxx_proj_path: filesys::path_t, platform_support: map<platform_t, bool>)
+        public func generate_module_config(project: Project, name: string, cxx_proj_path: fsys::path_t, platform_support: map<platform_t, bool>)
         {      
-            using filesys;
+            using fsys;
             
             let enabled_generating = platform_support
                 ->forall(\_, enable = enable;)
@@ -280,8 +280,8 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         
         public func start(name: string, locpath: string, proj: Project)=> result<CxxProject, string>
         {
-            using filesys;
-            using filesys;
+            using fsys;
+            using fsys;
 
             // 在指定目录下创建Cxx项目目录
             let cxx_proj_path = normalize(locpath)/F"{name}.jemodule4";
@@ -353,9 +353,9 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             }
         }
 
-        func search_file_in(dir: filesys::path_t, exname: string)=> option<filesys::path_t>
+        func search_file_in(dir: fsys::path_t, exname: string)=> option<fsys::path_t>
         {
-            using filesys;
+            using fsys;
 
             for (let _, p : subpath(dir)->okay->val)
             {
@@ -381,9 +381,9 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                 return self.module_instance := option::none;
             }
         }
-        func get_current_runtime_id(runtime_dll_path: filesys::path_t)
+        func get_current_runtime_id(runtime_dll_path: fsys::path_t)
         {
-            using filesys;
+            using fsys;
 
             return 
                 subpath(runtime_dll_path)
@@ -394,17 +394,17 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                         ->  reduce(\l, r = l > r ? l | r;);
                     ;
         }
-        func get_current_runtime_path(runtime_dll_path: filesys::path_t)
+        func get_current_runtime_path(runtime_dll_path: fsys::path_t)
         {
-            using filesys;
+            using fsys;
             return 
                 get_current_runtime_id(runtime_dll_path)
                     ->map(\id = runtime_dll_path / id as int: string;)
                     ;
         }
-        func get_newest_runtime_path(runtime_dll_path: filesys::path_t)
+        func get_newest_runtime_path(runtime_dll_path: fsys::path_t)
         {
-            using filesys;
+            using fsys;
             let newest_path = 
                 get_current_runtime_id(runtime_dll_path)
                     -> map(\id: int = id + 1;)
@@ -427,7 +427,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         }
         func update_library_of_platform(self: CxxProject, config: string)
         {
-            using filesys;
+            using fsys;
 
             // 获取编译出来的二进制，移动到一个统一的位置
             if (!exist(self->get_runtime_path(config)))
@@ -455,9 +455,9 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             }
         }
 
-        public func open_for_loading(path: filesys::path_t, proj: Project)
+        public func open_for_loading(path: fsys::path_t, proj: Project)
         {
-            using filesys;
+            using fsys;
 
             // 加载指定路径的 CXX 项目信息
             if (!exist(path))
@@ -517,16 +517,16 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                             | option::none
                             ;
                         ;
-                    match (sources=>>\srcs = filesys::allsubpath(self.path)->okay->>\subpaths = (subpaths, srcs);;)
+                    match (sources=>>\srcs = fsys::allsubpath(self.path)->okay->>\subpaths = (subpaths, srcs);;)
                     {
                     value((subpaths, srclist))?
                         {
                             let mut varified_file = 0;
                             for (let _, path : subpaths) 
                             {
-                                if (filesys::isfile(path))
+                                if (fsys::isfile(path))
                                 {
-                                    let extension = filesys::extension(path)->lower;
+                                    let extension = fsys::extension(path)->lower;
                                     if (extension == ".cpp" 
                                         || extension == ".hpp" 
                                         || extension == ".c" 
@@ -554,11 +554,11 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         func generate_varify_info(self: CxxProject)
         {
             let source_code_versions = {}mut: map<string, int>;
-            for (let _, path : filesys::allsubpath(self.path)->unwarpor([])) 
+            for (let _, path : fsys::allsubpath(self.path)->unwarpor([])) 
             {
-                if (filesys::isfile(path))
+                if (fsys::isfile(path))
                 {
-                    let extension = filesys::extension(path)->lower;
+                    let extension = fsys::extension(path)->lower;
                     if (extension == ".cpp" 
                         || extension == ".hpp" 
                         || extension == ".c" 
@@ -577,9 +577,9 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                 ["sources"] = source_code_versions: dynamic
             }->serialize->val;
         }
-        public func load(path: filesys::path_t, proj: Project)
+        public func load(path: fsys::path_t, proj: Project)
         {
-            using filesys;
+            using fsys;
 
             match(open_for_loading(path, proj))
             {
@@ -590,7 +590,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                 let config = je::platform();
 
                 // 校验最后一次编译时的引擎版本，如果不一致，那么删掉全部动态库
-                let is_same_version = filesys::readall(path / "version.json")
+                let is_same_version = fsys::readall(path / "version.json")
                     ->> \dat = created_module->check_verify_info(dat);
                     ->  valor(false)
                     ;
@@ -610,12 +610,12 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                 else
                 {
                     // 删除build builder engine runtime loader.hpp和 config.jeinf，用于准备重新编译
-                    do filesys::remove(path / "build");
-                    do filesys::remove(path / "builder");
-                    do filesys::remove(path / "engine");
-                    do filesys::remove(path / "runtime");
-                    do filesys::remove(path / "loader.hpp");
-                    do filesys::remove(path / "config.jeinf");
+                    do fsys::remove(path / "build");
+                    do fsys::remove(path / "builder");
+                    do fsys::remove(path / "engine");
+                    do fsys::remove(path / "runtime");
+                    do fsys::remove(path / "loader.hpp");
+                    do fsys::remove(path / "config.jeinf");
                 }
 
                 let founding_newest_result = 
@@ -624,12 +624,12 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                             filename(dllpath) == "0" 
                             ? result::ok(dllpath)
                             | move(dllpath, created_module->get_runtime_path(config)/"0");
-                        ->  or(\ = result::err(0: filesys::errno_t););
+                        ->  or(\ = result::err(0: fsys::errno_t););
                      
                 match (founding_newest_result)
                 {
                 err(no)?
-                    if (no == 0: filesys::errno_t)
+                    if (no == 0: fsys::errno_t)
                     {
                         // 根本没找到对应的运行库，就近开始现场编一个
                         je::logwarn("动态库未找到，正在重新编译");
@@ -892,8 +892,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                         return result::err("不支持的配置");
                     }
 
-                    using filesys;
-                    using filesys;
+                    using fsys;
+                    using fsys;
 
                     do context->>\context = context.display_msg = "正在检查工具链";;
                     do context->>\context = context.progress = 0;;
@@ -1028,7 +1028,7 @@ $$REGISTER_SYSTEM_TYPES$$
                     self.project->active_module(self);
 
                     // 更新编译版本
-                    if (! filesys::writeall(self.path / "version.json", self->generate_varify_info))
+                    if (! fsys::writeall(self.path / "version.json", self->generate_varify_info))
                     {
                         jeapi::gui::form::errmsg("警告", "无法为生成的模块记录版本信息文件，请检查");
                     }

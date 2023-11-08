@@ -14,13 +14,13 @@ namespace editor::gui::edit_forms
         has_active_types : vec<je::typeinfo>,
         not_append_types : vec<je::typeinfo>,
 
-        target_path: filesys::path_t,
+        target_path: fsys::path_t,
         callback: option<(je::world)=>bool>,
 
         tversion: int,
     }
     {
-        public func create(proj: Project, name: string, path: filesys::path_t, callback: (je::world)=>bool)
+        public func create(proj: Project, name: string, path: fsys::path_t, callback: (je::world)=>bool)
         {
             let context = WorldContext{
                 name = mut name,

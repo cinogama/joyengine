@@ -1,8 +1,8 @@
 import woo::std;
-import build::pkg::filesystem;
+import build::pkg::fsys;
 import build::pkg::try;
 
-using filesys;
+using fsys;
 
 let third_party_located_path = workpath() / "3rd";
 let build_path = workpath() / "build";

@@ -19,10 +19,10 @@ namespace editor::gui::particalbaker
         m_repeat_round : mut int,
         m_frames_caches : mut array<je::graphic::texture>,
         m_script : mut string,
-        m_path : filesys::path_t,
+        m_path : fsys::path_t,
     }
     {
-        public func create(path: filesys::path_t)
+        public func create(path: fsys::path_t)
         {
             return ParticalContext{
                 m_frame_count = mut 24,
@@ -36,7 +36,7 @@ namespace editor::gui::particalbaker
         }
         public func save(self: ParticalContext)
         {
-            return filesys::writeall(
+            return fsys::writeall(
                 self.m_path,
                 {
                     ["framecount"] = self.m_frame_count: dynamic,
@@ -47,9 +47,9 @@ namespace editor::gui::particalbaker
                 }: string,
             );
         }
-        public func load(path: filesys::path_t)
+        public func load(path: fsys::path_t)
         {
-            return filesys::readall(path)
+            return fsys::readall(path)
                 =>> \dat = dict::deserialize(dat);
                 ->> \dat = ParticalContext{
                         m_frame_count = mut fdata["framecount"] as int,
@@ -90,7 +90,7 @@ using ParticalContext = struct{
     m_repeat_round : mut int,
     m_frames_caches : mut array<je::graphic::texture>,
     m_script : mut string,
-    m_path : filesys::path_t,
+    m_path : fsys::path_t,
 };
 
 let mut partical_context = nil->unsafe::cast:<ParticalContext>();
@@ -299,9 +299,9 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                             if (partical_context.m_frames_caches->empty)
                                 jeapi::gui::form::errmsg("动画导出失败", F"当前没有烘焙结果可供导出，请先执行烘焙操作");
 
-                            let filename = filesys::purename(partical_context.m_path);
-                            let outimgpath = filesys::parent(partical_context.m_path) / (filename + ".png");
-                            let outanimpath = filesys::parent(partical_context.m_path) / (filename + ".jeanim4");
+                            let filename = fsys::purename(partical_context.m_path);
+                            let outimgpath = fsys::parent(partical_context.m_path) / (filename + ".png");
+                            let outanimpath = fsys::parent(partical_context.m_path) / (filename + ".jeanim4");
                             jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->tostring} 和 {outanimpath->tostring}，是否确认导出当前烘焙结果？",
                                 func(ok)
                                 {

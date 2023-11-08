@@ -23,7 +23,7 @@ namespace editor
 
     using ProjectWorld = struct{
         m_world_instance: je::world,
-        m_world_path: filesys::path_t,
+        m_world_path: fsys::path_t,
         m_runtime_systems: mut array<je::typeinfo>,
         m_remark_note: mut string,
     };
@@ -36,18 +36,18 @@ namespace editor
 
     using Project = struct{
         m_name: string,             // 项目的名称，不能更改
-        m_path: filesys::path_t,    // 项目所在的目录
+        m_path: fsys::path_t,    // 项目所在的目录
         m_env: Environment,         // 项目环境
         m_configs: map<string, Project::IConfig>, // 配置信息，是的，这是个map，意味着开发者理论上可以自己加点配置项目
         m_worlds: vec<ProjectWorld>,
-        m_modules: map<filesys::path_t, CxxProject>, 
+        m_modules: map<fsys::path_t, CxxProject>, 
         m_editing_world: mut option<je::world>,
         m_debug_context: mut option<DebugContext>,
         m_proj_file_lock: mut option<process::flock>,
         m_towoo_context: ToWooContext,
     }
     {
-        public func make_path_normalize(self: Project, path: filesys::path_t)
+        public func make_path_normalize(self: Project, path: fsys::path_t)
         {
             let npath = path->tostring;
             if (npath->beginwith(self.m_path->tostring + "/"))
@@ -59,8 +59,8 @@ namespace editor
         public func parse_path_normalize(self: Project, path: string)
         {
             if (path->beginwith("@"))
-                return filesys::normalize(self.m_path->tostring + path->sub(1));
-            return filesys::normalize(path);
+                return fsys::normalize(self.m_path->tostring + path->sub(1));
+            return fsys::normalize(path);
         }
         public func is_debugging(self: Project)
         {
@@ -68,9 +68,9 @@ namespace editor
         }
         public func create_dump(self: Project, dumpped: array<dict<string, dynamic>>)
         {
-            do filesys::mkdir(self.m_path / ".runtime");
+            do fsys::mkdir(self.m_path / ".runtime");
             if (! dumpped->serialize
-                ->> \dat = filesys::writeall(self.m_path / ".runtime" / "debugcontext.dump", dat);
+                ->> \dat = fsys::writeall(self.m_path / ".runtime" / "debugcontext.dump", dat);
                 ->  valor(false))
             {
                 jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
@@ -79,7 +79,7 @@ namespace editor
         }
         public func restore_dump(self: Project)
         {
-            match (filesys::readall(self.m_path / ".runtime" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
+            match (fsys::readall(self.m_path / ".runtime" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
             {
             value(dat)?
                 jeapi::gui::form::ask("是否恢复", "检查到上次引擎在调试过程中意外退出，是否恢复之前的编辑器状态？",
@@ -96,7 +96,7 @@ namespace editor
         }
         public func clear_dump(self: Project)
         {
-            do filesys::remove(self.m_path / ".runtime" / "debugcontext.dump");
+            do fsys::remove(self.m_path / ".runtime" / "debugcontext.dump");
         }
         public func stop_debug(self: Project)
         {
@@ -151,7 +151,7 @@ namespace editor
             return result::ok(context);
         }
 
-        public func get_module(self: Project, name: filesys::path_t)
+        public func get_module(self: Project, name: fsys::path_t)
         {
             return self.m_modules->get(name);
         }
@@ -312,7 +312,7 @@ namespace editor
                 {
                     let projfile = self.m_path / "project.jeproj4.lock";
                     // 不可以锁定目录
-                    if (filesys::isdir(projfile) == true)
+                    if (fsys::isdir(projfile) == true)
                         return false;
                     let flock = new! process::flock(projfile->tostring);
                     let result = flock->>\fl = fl->trylock();->valor(false);
@@ -333,11 +333,11 @@ namespace editor
             none? je::logerr("未找到项目的文件锁，可能是未能创建或打开文件，请检查权限");
             }
         }
-        public func create(name: string, path: filesys::path_t)
+        public func create(name: string, path: fsys::path_t)
         {
             let env = new! Environment();
             
-            assert(filesys::setworkpath(path));
+            assert(fsys::setworkpath(path));
 
             let proj = Project{
                 m_name = name,
@@ -409,7 +409,7 @@ namespace editor
         {
             return self.m_towoo_context.m_loaded_towoo
                 ->  unmapping
-                ->> \v = (filesys::purename(v[0]), (v[0], self->make_path_normalize(v[0])));
+                ->> \v = (fsys::purename(v[0]), (v[0], self->make_path_normalize(v[0])));
                 ->  mapping
                 ;
         }
@@ -417,7 +417,7 @@ namespace editor
         {
             return self.m_towoo_context;
         }
-        public func load(path: filesys::path_t, dat: dict<string, dynamic>)
+        public func load(path: fsys::path_t, dat: dict<string, dynamic>)
         {
             try! self = create(dat["name"] as string, path);
 
@@ -442,7 +442,7 @@ namespace editor
             
             self.m_towoo_context->update();
 
-            match (filesys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
+            match (fsys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
             {
             value(dat)?
                     for (let wpath, isediting : dat)
@@ -499,7 +499,7 @@ namespace editor
             };
 
             // 编辑中的世界保存到 .runtime 目录内
-            do filesys::mkdir(self.m_path / ".runtime");
+            do fsys::mkdir(self.m_path / ".runtime");
 
             if (! self.m_worlds
                 ->> \pw = (
@@ -508,7 +508,7 @@ namespace editor
                     ;
                 ->  mapping
                 ->  serialize
-                ->> \dat = filesys::writeall(self.m_path / ".runtime" / "world.list", dat);
+                ->> \dat = fsys::writeall(self.m_path / ".runtime" / "world.list", dat);
                 ->  valor(false))
             {
                 jeapi::gui::form::errmsg("失败", "保存编辑中的世界列表失败");
@@ -534,7 +534,7 @@ namespace editor
                 jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
                 return false;
             }
-            else if (!filesys::writeall(self.m_path/"project.jeproj4", dat as dict<string, dynamic>: string))
+            else if (!fsys::writeall(self.m_path/"project.jeproj4", dat as dict<string, dynamic>: string))
             {
                 jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
                 return false;
@@ -697,7 +697,7 @@ namespace editor
 
             return world.m_world_instance;
         }
-        public func create_new_world(self: Project, new_world_file_path: filesys::path_t)
+        public func create_new_world(self: Project, new_world_file_path: fsys::path_t)
         {          
             return self->append_world_to_list(
                 ProjectWorld 
@@ -774,15 +774,15 @@ namespace editor
         public func save_world(self: Project, w: je::world)
         {
             return self->serialize_world(w)
-                ->> \dat = filesys::writeall(self.m_path / dat["path"]: string, dat as dict<string, dynamic>: string);
+                ->> \dat = fsys::writeall(self.m_path / dat["path"]: string, dat as dict<string, dynamic>: string);
                 ->  valor(false);
         }
-        public func load_world(self: Project, file_path: filesys::path_t)
+        public func load_world(self: Project, file_path: fsys::path_t)
         {
             // 不允许重复加载相同路径的世界
             if (self.m_worlds->forall(\pworld = pworld.m_world_path == file_path;)->empty)
             {
-                match (filesys::readall(file_path)
+                match (fsys::readall(file_path)
                     =>> \dat = dict::deserialize(dat)
                         ->> \d = d
                             ->> \k, v = (k as string, v);

@@ -112,7 +112,7 @@ namespace editor::gui::edit_forms
                                     ->valor(F"<没有绑定到通道{id}的纹理>");
                                 
                         do jeapi::gui::widget::File(name, texture_path, \=do nil;)
-                            ->> \path = context->get_project->make_path_normalize(filesys::normalize(path));
+                            ->> \path = context->get_project->make_path_normalize(fsys::normalize(path));
                             ->> \path =  je::graphic::texture::load(path)
                                 ->> \tex = entity->bind_texture(id, tex);
                                 ->  or(\= path != "" 
@@ -186,7 +186,7 @@ namespace editor::gui::edit_forms
                                                                     je::gui::launch(func()
                                                                         {
                                                                             if (!updated_prefab_data->serialize
-                                                                                ->> \dat = filesys::writeall(
+                                                                                ->> \dat = fsys::writeall(
                                                                                         context->get_project->parse_path_normalize(p), 
                                                                                         dat)
                                                                                     ;
@@ -379,16 +379,16 @@ namespace editor::gui::edit_forms
                                         if (BeginPopupContextItem())
                                         {
                                             static let mut shaders_in_project = 
-                                                filesys::allsubpath(context->get_project.m_path)
-                                                    ->> \paths = paths->forall(\p = filesys::extension(p)->lower == ".shader";);
+                                                fsys::allsubpath(context->get_project.m_path)
+                                                    ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
                                                     ->  or(\_ = [];)
                                                 ;
 
                                             if (MenuItem("重新获取Shader"))
                                             {
                                                 shaders_in_project = 
-                                                    filesys::allsubpath(context->get_project.m_path)
-                                                        ->> \paths = paths->forall(\p = filesys::extension(p)->lower == ".shader";);
+                                                    fsys::allsubpath(context->get_project.m_path)
+                                                        ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
                                                         ->  or(\_ = [];)
                                                     ;
                                             }

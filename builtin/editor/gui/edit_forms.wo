@@ -27,8 +27,8 @@ namespace editor::gui
         context->fixed_launch_editor_form(show_logger, (context, open_logger));
 
         jeapi::gui::widget::register_click_file_callback(func(path){
-            let p = filesys::parent(context->get_project->parse_path_normalize(path));
-            if (filesys::isdir(p))
+            let p = fsys::parent(context->get_project->parse_path_normalize(path));
+            if (fsys::isdir(p))
                 set_current_work_path(p);
         });
     }

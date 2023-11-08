@@ -2,7 +2,7 @@ import pkg::vm;
 
 namespace editor::tools
 {
-    let mut _available_tool_scripts = {}: dict<string, filesys::path_t>;
+    let mut _available_tool_scripts = {}: dict<string, fsys::path_t>;
     public func get_available_tool_scripts()
     {
         return _available_tool_scripts->unmapping->>\kv = kv[0];;
@@ -46,10 +46,10 @@ namespace editor::tools
     }
     public func update_tool_scripts(project: Project)
     {
-        let new_path_results = {}mut: map<string, filesys::path_t>;
+        let new_path_results = {}mut: map<string, fsys::path_t>;
 
-        match (filesys::allsubpath(project.m_path)
-            =>> \p = filesys::allsubpath(filesys::normalize(std::exepath()))
+        match (fsys::allsubpath(project.m_path)
+            =>> \p = fsys::allsubpath(fsys::normalize(std::exepath()))
                 ->> \ep = p->connect(ep);
                 ;)
         {
@@ -58,14 +58,14 @@ namespace editor::tools
         ok(subpaths)?
             {
                 for (let _, path : subpaths)
-                    if (filesys::extension(path)->lower == ".jewo")
+                    if (fsys::extension(path)->lower == ".jewo")
                     {
-                        new_path_results->set(filesys::purename(path), path);
+                        new_path_results->set(fsys::purename(path), path);
                     }
             }
         }
 
         _available_tool_scripts = 
-                    new_path_results as map<string, filesys::path_t>->unsafe::cast:<dict<string, filesys::path_t>>;
+                    new_path_results as map<string, fsys::path_t>->unsafe::cast:<dict<string, fsys::path_t>>;
     }
 }

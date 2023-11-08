@@ -4,12 +4,12 @@
 import je;
 import je::gui;
 
-import pkg::filesystem;
+import pkg::fsys;
 
 import builtin::editor::project::main;
 
 using je;
-using filesys;
+using fsys;
 
 namespace editor
 {

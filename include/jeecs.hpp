@@ -8171,56 +8171,7 @@ namespace jeecs
             }
         };
     }
-    namespace Script
-    {
-        struct Woolang
-        {
-            basic::fileresource<void> path;
 
-            bool        _vm_failed = false;
-            wo_vm       _vm_instance = nullptr;
-
-            wo_integer_t _vm_create_func = 0;
-            wo_integer_t _vm_update_func = 0;
-            wo_value     _vm_context = nullptr;
-
-            Woolang() = default;
-            Woolang(Woolang&& woolang)
-            {
-                path = woolang.path;
-                _vm_failed = woolang._vm_failed;
-                _vm_instance = woolang._vm_instance;
-                _vm_create_func = woolang._vm_create_func;
-                _vm_update_func = woolang._vm_update_func;
-                _vm_context = woolang._vm_context;
-                woolang._vm_instance = nullptr;
-            }
-            Woolang(const Woolang& woolang)
-            {
-                path = woolang.path;
-            }
-            ~Woolang()
-            {
-                if (_vm_instance != nullptr)
-                {
-                    wo_release_vm(_vm_instance);
-                    _vm_instance = nullptr;
-                }
-            }
-
-            wo_vm get_vm_instance() const
-            {
-                if (!_vm_failed)
-                    return _vm_instance;
-                return nullptr;
-            }
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Woolang::path, "path");
-            }
-        };
-    }
     namespace Audio
     {
         struct Source
@@ -8639,8 +8590,6 @@ namespace jeecs
             type_info::register_type<Light2D::Shadow>(guard, "Light2D::Shadow");
             type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
             type_info::register_type<Light2D::Block>(guard, "Light2D::Block");
-
-            type_info::register_type<Script::Woolang>(guard, "Script::Woolang");
 
             type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
             type_info::register_type<Physics2D::Kinematics>(guard, "Physics2D::Kinematics");

@@ -202,7 +202,7 @@ namespace editor::gui::edit_forms
                                 do MenuItemEnabled("编译错误", false);
                                 for (let _, p : bad_scripts)
                                 {
-                                    if (MenuItem(filesys::purename(p)))
+                                    if (MenuItem(fsys::purename(p)))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                                 }
 
@@ -230,16 +230,16 @@ namespace editor::gui::edit_forms
                             do MenuItemEnabled("组件", false);
                             for (let p, _: towoo_context.m_loaded_towoo)
                             {
-                                if (filesys::extension(p)->lower == ".wocomponent")
-                                    if (MenuItem(filesys::purename(p)))
+                                if (fsys::extension(p)->lower == ".wocomponent")
+                                    if (MenuItem(fsys::purename(p)))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                             }
                             Separator();
                             do MenuItemEnabled("系统", false);
                             for (let p, _: towoo_context.m_loaded_towoo)
                             {
-                                if (filesys::extension(p)->lower == ".wosystem")
-                                    if (MenuItem(filesys::purename(p)))
+                                if (fsys::extension(p)->lower == ".wosystem")
+                                    if (MenuItem(fsys::purename(p)))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                             }
                             EndMenu();
@@ -339,7 +339,7 @@ namespace editor::gui::edit_forms
                             value(path)?
                                 {
                                     let filepath = proj->parse_path_normalize(path);
-                                    if (filesys::extension(filepath)->lower == ".jeentity")
+                                    if (fsys::extension(filepath)->lower == ".jeentity")
                                     {
                                         if (debug_world
                                                 =>> \w = jeapi::deserialize::entity(

@@ -53,11 +53,7 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
 
     wo_dispatch_value(co_vmm, cofunc, argument_count);
 
-    std::lock_guard sg1(jeecs::ScriptRuntimeSystem::system_instance
-        ->_coroutine_list_mx);
-
-    jeecs::ScriptRuntimeSystem::system_instance
-        ->_coroutine_list.push_back(co_vmm);
+    jeecs::ScriptRuntimeSystem::system_instance->dispatch_coroutine_vm(co_vmm);
 
     return wo_ret_void(vm);
 }

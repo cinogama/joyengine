@@ -70,13 +70,13 @@ extern func name()
 
         let r = {}mut: map<string, vm>;
 
-        for (let _, path : filesys::allsubpath(filesys::normalize(std::exepath()))
+        for (let _, path : fsys::allsubpath(fsys::normalize(std::exepath()))
                 -> or(\_=[];)
-                -> connect(filesys::allsubpath(proj.m_path)
+                -> connect(fsys::allsubpath(proj.m_path)
                     -> or(\_=[];))
             )
         {
-            if (filesys::extension(path)->lower != ".imagewo")
+            if (fsys::extension(path)->lower != ".imagewo")
                 continue;
 
             match (vm::load(path->tostring))
@@ -86,7 +86,7 @@ extern func name()
                     do vmm->jit;
                     assert(vmm->run->has);
                     let name = vmm->invoke("name", [])->val as string;
-                    r->set(name == ""? filesys::purename(path) | name, vmm);
+                    r->set(name == ""? fsys::purename(path) | name, vmm);
                 }
             err(msg)?
                 je::logerr(F"加载脚本 {path} 失败：{msg}");

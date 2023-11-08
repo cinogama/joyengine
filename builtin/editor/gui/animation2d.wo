@@ -168,7 +168,7 @@ namespace editor::gui::animation2d
 
     public using AnimationContext = struct{
         m_animations: map<string, AnimationActionData>,
-        m_path: filesys::path_t,
+        m_path: fsys::path_t,
 
         // 下面这些是编辑中状态信息
         m_selected_action_name: mut string,
@@ -176,7 +176,7 @@ namespace editor::gui::animation2d
         m_selected_c_or_u_data: mut SelectedComponentOrUniformData,
     }
     {
-        public func create(path: filesys::path_t)
+        public func create(path: fsys::path_t)
         {
             return AnimationContext{
                     m_animations = {}mut, 
@@ -186,7 +186,7 @@ namespace editor::gui::animation2d
                     m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
                 };
         }
-        public func open(path: filesys::path_t)
+        public func open(path: fsys::path_t)
         {
             try! bufdata = buffer::builder::fromfile(path->tostring, 0, -1);
 
@@ -437,7 +437,7 @@ namespace editor::gui::animation2d
 
             }
             // save 函数结束
-            return filesys::writeall(self.m_path, result as buffer: string);
+            return fsys::writeall(self.m_path, result as buffer: string);
         }
         public func fast_create_for_partical(self: AnimationContext, x: int, y: int, fcount: int, ftime: real)
         {
