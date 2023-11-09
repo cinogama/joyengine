@@ -17,6 +17,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD  "Install pkgs by baozi when building."  ON)
 option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."          ON)
+option(JE4_EXECUTE_BUILD_SCRIPT             "Copy liscences & gles-sdk for win32."  ON)
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
@@ -70,11 +71,15 @@ else()
     add_custom_target(INSTALL_PKG COMMAND echo "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
 endif()
 
-add_custom_target(COPYING_LICENCES_SCRIPT COMMAND
-    woodriver ./script/build.wo 
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-add_dependencies(COPYING_LICENCES_SCRIPT INSTALL_PKG)
-add_dependencies(COPYING_LICENCES_SCRIPT woodriver)
+if (JE4_EXECUTE_BUILD_SCRIPT)
+    add_custom_target(EXECUTE_BUILD_SCRIPT COMMAND
+        woodriver ./script/build.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    add_dependencies(EXECUTE_BUILD_SCRIPT INSTALL_PKG)
+    add_dependencies(EXECUTE_BUILD_SCRIPT woodriver)
+else()
+    add_custom_target(EXECUTE_BUILD_SCRIPT COMMAND 
+        echo "JE4_EXECUTE_BUILD_SCRIPT is disabled.")
+endif()
 
 if (JE4_COPYING_BUILTIN_FILES)
     if(WIN32)
@@ -129,5 +134,5 @@ if (JE4_COPYING_BUILTIN_FILES)
     add_dependencies(INSTALL_PKG COPY_RCEDIT32_FILES)
 endif()
 add_dependencies(jedriver INSTALL_PKG)
-add_dependencies(jedriver COPYING_LICENCES_SCRIPT)
+add_dependencies(jedriver EXECUTE_BUILD_SCRIPT)
 target_link_libraries(jedriver joyecs)
