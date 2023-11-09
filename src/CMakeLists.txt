@@ -106,16 +106,21 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
     JE4_ENABLE_OPENGLES300_GAPI OR 
     JE4_ENABLE_VULKAN110_GAPI)
 
-    include_directories("../3rd/glfw/include")
+    if (ANDROID)
+        # GLFW donot support android, use EGL instead.
+        # TODO: ...
+    else()
+        include_directories("../3rd/glfw/include")
     
-    if (NOT WIN32)
-        target_compile_options(glfw PRIVATE -fPIC)
-    endif()
+        if (NOT WIN32)
+            target_compile_options(glfw PRIVATE -fPIC)
+        endif()
 
-    list(APPEND jeecs_graphic_libs glfw)
-    list(APPEND imgui_srcs
-        "../3rd/imgui/backends/imgui_impl_glfw.cpp"
-        "../3rd/imgui/backends/imgui_impl_glfw.h")
+        list(APPEND jeecs_graphic_libs glfw)
+        list(APPEND imgui_srcs
+            "../3rd/imgui/backends/imgui_impl_glfw.cpp"
+            "../3rd/imgui/backends/imgui_impl_glfw.h")
+    endif()
 endif()
 
 # Build engine shared/static library

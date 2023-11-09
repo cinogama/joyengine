@@ -19,8 +19,10 @@
 #   include <GL/glew.h>
 #endif
 
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
+#if !defined(JE_OS_ANDROID)
+#   include <GLFW/glfw3.h>
+#   include <GLFW/glfw3native.h>
+#endif
 
 // Here is low-level-graphic-api impl.
 // OpenGL version.
@@ -31,9 +33,18 @@ namespace jeecs::graphic::api::gl330
         size_t WINDOWS_SIZE_WIDTH;
         size_t WINDOWS_SIZE_HEIGHT;
         const char* WINDOWS_TITLE;
+
+
+#ifdef JE_OS_ANDROID
+        // TODO
+#else
         GLFWwindow* WINDOWS_HANDLE;
+#endif
     };
 
+#ifdef JE_OS_ANDROID
+    // TODO
+#else
     void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(glfwGetWindowUserPointer(fw)));
@@ -43,12 +54,10 @@ namespace jeecs::graphic::api::gl330
 
         je_io_set_windowsize(x, y);
     }
-
     void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
     {
         je_io_set_mousepos(0, (int)x, (int)y);
     }
-
     void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
     {
         switch (key)
@@ -64,12 +73,10 @@ namespace jeecs::graphic::api::gl330
             break;
         }
     }
-
     void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
     {
         je_io_set_wheel(0, je_io_wheel(0) + (float)yoffset);
     }
-
     void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)
     {
         assert(GLFW_KEY_A == 'A');
@@ -96,6 +103,7 @@ namespace jeecs::graphic::api::gl330
         }
 
     }
+#endif
 
 #ifdef JE_ENABLE_GL330_GAPI
     void APIENTRY glDebugOutput(GLenum source,
@@ -156,34 +164,42 @@ namespace jeecs::graphic::api::gl330
         {
             jeecs::debug::log("Graphic thread (OpenGL3) start!");
 
+#ifdef JE_OS_ANDROID
+            // TODO
+#else
             if (!glfwInit())
                 jeecs::debug::logfatal("Failed to init glfw.");
 
-#ifdef JE_ENABLE_GL330_GAPI
+#   ifdef JE_ENABLE_GL330_GAPI
             glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
             glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
-#else
+#   else
             glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#   ifdef JE_OS_WINDOWS
+#       ifdef JE_OS_WINDOWS
             // ATTENTION: Windows等平台上，运行opengles的时候，环境要求EGL
             //          但是opengles的支持仅限于移动端设备和Windows借助ARMEMU
             //          所以这里只针对Windows做了处理
             glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
-#   else
+#       else
             glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
+#       endif
+#   endif
+#   ifndef NDEBUG
+            glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 #   endif
 #endif
-#ifndef NDEBUG
-            glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-#endif
         }
+        context->WINDOWS_TITLE = config->m_title;
 
+#ifdef JE_OS_ANDROID
+        // TODO
+#else
         auto* primary_monitor = glfwGetPrimaryMonitor();
         auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
 
@@ -198,8 +214,6 @@ namespace jeecs::graphic::api::gl330
         glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
 
         je_io_set_windowsize((int)context->WINDOWS_SIZE_WIDTH, (int)context->WINDOWS_SIZE_HEIGHT);
-
-        context->WINDOWS_TITLE = config->m_title;
 
         switch (config->m_displaymode)
         {
@@ -283,6 +297,8 @@ namespace jeecs::graphic::api::gl330
             je_ecs_universe_set_frame_deltatime(gthread->m_universe_instance, 1.0 / (double)config->m_fps);
             glfwSwapInterval(0);
         }
+#endif
+
 #ifdef JE_ENABLE_GL330_GAPI
         if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
             jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
@@ -349,7 +365,13 @@ namespace jeecs::graphic::api::gl330
                     }
                 }
             },
-            context->WINDOWS_HANDLE, reboot);
+#ifdef JE_OS_ANDROID
+            nullptr,
+            // TODO
+#else
+            context->WINDOWS_HANDLE,
+#endif
+            reboot);
 
         return context;
     }
@@ -357,8 +379,11 @@ namespace jeecs::graphic::api::gl330
     bool gl_pre_update(jegl_thread::custom_thread_data_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-
+#ifdef JE_OS_ANDROID
+        // TODO
+#else
         glfwSwapBuffers(context->WINDOWS_HANDLE);
+#endif
         return true;
     }
 
@@ -366,6 +391,9 @@ namespace jeecs::graphic::api::gl330
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
+#ifdef JE_OS_ANDROID
+        // TODO
+#else
         glfwPollEvents();
         int mouse_lock_x, mouse_lock_y;
         if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
@@ -388,6 +416,7 @@ namespace jeecs::graphic::api::gl330
 
             glfwSetWindowShouldClose(context->WINDOWS_HANDLE, GLFW_FALSE);
         }
+#endif
         return true;
     }
 
@@ -405,11 +434,14 @@ namespace jeecs::graphic::api::gl330
             jeecs::debug::log("Graphic thread (OpenGL3) shutdown!");
 
         jegui_shutdown_gl330(reboot);
+#ifdef JE_OS_ANDROID
+        // TODO
+#else
         glfwDestroyWindow(context->WINDOWS_HANDLE);
-        delete context;
-
         if (!reboot)
             glfwTerminate();
+#endif
+        delete context;
     }
 
     uint32_t gl_get_uniform_location(jegl_thread::custom_thread_data_t, jegl_resource* shader, const char* name)
