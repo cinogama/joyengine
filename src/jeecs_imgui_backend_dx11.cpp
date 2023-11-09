@@ -22,7 +22,7 @@ void jegui_init_dx11(
         (ID3D11DeviceContext*)d11context);
 }
 
-void jegui_update_dx11(jegl_thread::custom_thread_data_t thread_context)
+void jegui_update_dx11()
 {
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();

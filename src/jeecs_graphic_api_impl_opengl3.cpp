@@ -28,10 +28,10 @@ namespace jeecs::graphic::api::gl330
 {
     struct jegl_gl3_context
     {
-        size_t WINDOWS_SIZE_WIDTH = 0;
-        size_t WINDOWS_SIZE_HEIGHT = 0;
-        const char* WINDOWS_TITLE = nullptr;
-        GLFWwindow* WINDOWS_HANDLE = nullptr;
+        size_t WINDOWS_SIZE_WIDTH;
+        size_t WINDOWS_SIZE_HEIGHT;
+        const char* WINDOWS_TITLE;
+        GLFWwindow* WINDOWS_HANDLE;
     };
 
     void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
@@ -151,6 +151,7 @@ namespace jeecs::graphic::api::gl330
     jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_gl3_context* context = new jegl_gl3_context;
+
         if (!reboot)
         {
             jeecs::debug::log("Graphic thread (OpenGL3) start!");
@@ -198,7 +199,7 @@ namespace jeecs::graphic::api::gl330
 
         je_io_set_windowsize((int)context->WINDOWS_SIZE_WIDTH, (int)context->WINDOWS_SIZE_HEIGHT);
 
-        context->WINDOWS_TITLE = config->m_title ? config->m_title : context->WINDOWS_TITLE;
+        context->WINDOWS_TITLE = config->m_title;
 
         switch (config->m_displaymode)
         {
@@ -274,12 +275,12 @@ namespace jeecs::graphic::api::gl330
 
         if (config->m_fps == 0)
         {
-            je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 0.0);
+            je_ecs_universe_set_frame_deltatime(gthread->m_universe_instance, 0.0);
             glfwSwapInterval(1);
         }
         else
         {
-            je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 1.0 / (double)config->m_fps);
+            je_ecs_universe_set_frame_deltatime(gthread->m_universe_instance, 1.0 / (double)config->m_fps);
             glfwSwapInterval(0);
         }
 #ifdef JE_ENABLE_GL330_GAPI
@@ -392,7 +393,7 @@ namespace jeecs::graphic::api::gl330
 
     bool gl_lateupdate(jegl_thread::custom_thread_data_t ctx)
     {
-        jegui_update_gl330(ctx);
+        jegui_update_gl330();
         return true;
     }
 

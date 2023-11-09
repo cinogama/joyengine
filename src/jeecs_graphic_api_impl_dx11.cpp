@@ -618,10 +618,10 @@ namespace jeecs::graphic::api::dx11
 
         if (config->m_fps == 0)
             je_ecs_universe_set_frame_deltatime(
-                gthread->_m_universe_instance, 0.0);
+                gthread->m_universe_instance, 0.0);
         else
             je_ecs_universe_set_frame_deltatime(
-                gthread->_m_universe_instance, 1.0 / (double)config->m_fps);
+                gthread->m_universe_instance, 1.0 / (double)config->m_fps);
 
         // 是否开启多重采样？
         UINT msaa_quality = 0;
@@ -797,7 +797,7 @@ namespace jeecs::graphic::api::dx11
     }
     bool dx11_lateupdate(jegl_thread::custom_thread_data_t ctx)
     {
-        jegui_update_dx11(ctx);
+        jegui_update_dx11();
         return true;
     }
 

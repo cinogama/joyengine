@@ -15,7 +15,7 @@ void jegui_init_dx11(
     void* d11device, 
     void* d11context, 
     bool reboot);
-void jegui_update_dx11(jegl_thread::custom_thread_data_t thread_context);
+void jegui_update_dx11();
 void jegui_shutdown_dx11(bool reboot);
 bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void jegui_win32_append_unicode16_char(wchar_t wch);
@@ -28,7 +28,7 @@ void jegui_init_gl330(
     void (*apply_shader_sampler)(jegl_resource*),
     void* window_handle, 
     bool reboot);
-void jegui_update_gl330(jegl_thread::custom_thread_data_t thread_context);
+void jegui_update_gl330();
 void jegui_shutdown_gl330(bool reboot);
 #endif
 

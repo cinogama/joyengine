@@ -273,9 +273,9 @@ jegl_thread* jegl_start_graphic_thread(
     // Take place.
     thread_handle->m_config = config;
     thread_handle->_m_thread_notifier->m_graphic_terminate_flag.test_and_set();
-    thread_handle->_m_universe_instance = universe_instance;
     thread_handle->_m_thread_notifier->m_update_flag = false;
     thread_handle->_m_thread_notifier->m_reboot_flag = false;
+    thread_handle->m_universe_instance = universe_instance;
     thread_handle->m_stop_update = new std::atomic_bool(false);
     thread_handle->_m_thread =
         new std::thread(

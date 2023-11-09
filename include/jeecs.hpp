@@ -965,13 +965,13 @@ JE_API void je_ecs_universe_set_frame_deltatime(void* universe, double delta);
 
 /*
 je_ecs_universe_get_real_deltatime [基本接口]
-获取当前宇宙的实际更新间隔（即距离上次更新的实际时间差异）
+获取当前宇宙的实际更新间隔，即距离上次更新的实际时间差异
 */
 JE_API double je_ecs_universe_get_real_deltatime(void* universe);
 
 /*
 je_ecs_universe_get_smooth_deltatime [基本接口]
-获取当前宇宙的实际更新间隔（即距离上次更新的实际时间差异），是过去若干帧率的平均值
+获取当前宇宙的平滑更新间隔，是过去若干帧的间隔平均值
 */
 JE_API double je_ecs_universe_get_smooth_deltatime(void* universe);
 
@@ -1502,13 +1502,12 @@ struct jegl_thread
     void* _m_thread; // std::thread
     jegl_thread_notifier* _m_thread_notifier;
     void* _m_interface_handle;
-    void* _m_universe_instance;
 
+    void*                       m_universe_instance;
     jeecs::typing::version_t    m_version;
-
     jegl_interface_config       m_config;
-    jegl_graphic_api* m_apis;
-    void* m_stop_update; // std::atomic_bool
+    jegl_graphic_api*           m_apis;
+    void*                       m_stop_update; // std::atomic_bool
     custom_thread_data_t        m_userdata;
 };
 

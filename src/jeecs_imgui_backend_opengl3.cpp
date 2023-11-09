@@ -19,7 +19,7 @@ void jegui_init_gl330(
     ImGui_ImplOpenGL3_Init(nullptr);
 }
 
-void jegui_update_gl330(jegl_thread::custom_thread_data_t thread_context)
+void jegui_update_gl330()
 {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();

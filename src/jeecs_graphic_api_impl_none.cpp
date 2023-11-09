@@ -3,7 +3,6 @@
 
 #include "jeecs_imgui_backend_api.hpp"
 
-
 namespace jeecs::graphic::api::none
 {
     jegl_thread::custom_thread_data_t
@@ -13,9 +12,9 @@ namespace jeecs::graphic::api::none
             jeecs::debug::log("Graphic thread (None) start!");
 
         if (config->m_fps == 0)
-            je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 0.0);
+            je_ecs_universe_set_frame_deltatime(gthread->m_universe_instance, 0.0);
         else
-            je_ecs_universe_set_frame_deltatime(gthread->_m_universe_instance, 1.0 / (double)config->m_fps);
+            je_ecs_universe_set_frame_deltatime(gthread->m_universe_instance, 1.0 / (double)config->m_fps);
 
         jegui_init_none(
             [](auto* res)->void* {return nullptr; },
@@ -23,7 +22,7 @@ namespace jeecs::graphic::api::none
 
         return nullptr;
     }
-    void shutdown(jegl_thread*, jegl_thread::custom_thread_data_t, bool reboot)
+    void shutdown(jegl_thread*, jegl_thread::custom_thread_data_t ctx, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) shutdown!");
@@ -39,7 +38,7 @@ namespace jeecs::graphic::api::none
     {
         return true;
     }
-    bool late_update(jegl_thread::custom_thread_data_t)
+    bool late_update(jegl_thread::custom_thread_data_t ctx)
     {
         jegui_update_none();
         return true;
