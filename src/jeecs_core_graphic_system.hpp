@@ -2400,7 +2400,7 @@ public func frag(_: v2f)
             select_from(get_world())
                 .exec([this](game_entity e, Animation2D::FrameAnimation& frame_animation, Renderer::Shaders* shaders)
                     {
-                        if (abs(frame_animation.speed == 0.0f))
+                        if (abs(frame_animation.speed) == 0.0f)
                             return;
 
                         for (auto& animation : frame_animation.animations.m_animations)

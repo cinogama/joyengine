@@ -775,7 +775,7 @@ JE_API void je_register_script_parser(
 ////////////////////// ToWoo //////////////////////
 /*
 je_towoo_update_api [基本接口]
-根据类型信息重新生成 je/api/* 的接口脚本
+根据类型信息重新生成 je/api/.. 的接口脚本
 请参见：
     jeecs::typing::type_info
 */
@@ -4808,7 +4808,7 @@ namespace jeecs
             if constexpr (std::is_reference<ComponentT>::value)
             {
                 assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
-                return *(typename typing::origin_t<ComponentT>*)nullptr;
+                abort();
             }
             else
                 return nullptr; // Only maynot/anyof can be here, no need to cast the type;

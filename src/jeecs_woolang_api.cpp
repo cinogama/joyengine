@@ -1544,8 +1544,6 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
         wo_set_string(key, vm, uniforms->m_name);
         wo_set_struct(val, vm, 2);
 
-        wo_map_set(out_map, key, val);
-
         if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT
             && uniforms->m_uniform_type <= jegl_shader::uniform_type::TEXTURE)
             wo_set_int(elem, 1 + uniforms->m_uniform_type);
@@ -1589,9 +1587,13 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args, size_t a
             wo_set_float(key, uniforms->w);
             wo_struct_set(elem, 3, key);
             break;
+        default:
+            // Unsupport type
+            wo_set_nil(elem);
         }
 
         wo_struct_set(val, 1, elem);
+        wo_map_set(out_map, key, val);
 
         uniforms = uniforms->m_next;
     }
