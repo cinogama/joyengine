@@ -616,13 +616,6 @@ namespace jeecs::graphic::api::dx11
         sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
         sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
-        if (config->m_fps == 0)
-            je_ecs_universe_set_frame_deltatime(
-                gthread->m_universe_instance, 0.0);
-        else
-            je_ecs_universe_set_frame_deltatime(
-                gthread->m_universe_instance, 1.0 / (double)config->m_fps);
-
         // 是否开启多重采样？
         UINT msaa_quality = 0;
         if (context->MSAA_LEVEL != 0)
@@ -792,7 +785,8 @@ namespace jeecs::graphic::api::dx11
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
-        JERCHECK(context->m_dx_swapchain->Present(context->FPS == 0 ? 1 : 0, 0));
+        JERCHECK(context->m_dx_swapchain->Present(
+            context->FPS == 0 ? 1 : 0, 0));
         return true;
     }
     bool dx11_lateupdate(jegl_thread::custom_thread_data_t ctx)

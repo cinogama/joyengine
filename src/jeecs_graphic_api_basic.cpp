@@ -77,6 +77,15 @@ void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jeg
     _current_graphic_thread = thread;
     do
     {
+        if (thread->m_config.m_fps == 0)
+            je_ecs_universe_set_frame_deltatime(
+                thread->m_universe_instance, 
+                0.0);
+        else
+            je_ecs_universe_set_frame_deltatime(
+                thread->m_universe_instance,
+                1.0 / (double)thread->m_config.m_fps);
+
         thread->m_userdata = thread->m_apis->init_interface(
             thread, &thread->m_config, !first_bootup);
         first_bootup = false;
