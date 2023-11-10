@@ -1,10 +1,12 @@
 #pragma once
 
 #ifndef JE_IMPL
-#   define JE_IMPL
-#   define JE_ENABLE_DEBUG_API
-#   include "jeecs.hpp"
+#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
+#ifndef JE_ENABLE_DEBUG_API
+#   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
+#endif
+#include "jeecs.hpp"
 
 #include <box2d/box2d.h>
 #include <unordered_map>

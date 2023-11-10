@@ -17,16 +17,13 @@
 #   endif
 #else
 #   include <GL/glew.h>
-#endif
-
-#if !defined(JE_OS_ANDROID)
 #   include <GLFW/glfw3.h>
 #   include <GLFW/glfw3native.h>
 #endif
 
 // Here is low-level-graphic-api impl.
 // OpenGL version.
-namespace jeecs::graphic::api::gl330
+namespace jeecs::graphic::api::gl3
 {
     struct jegl_gl3_context
     {
@@ -34,14 +31,14 @@ namespace jeecs::graphic::api::gl330
         size_t WINDOWS_SIZE_HEIGHT;
         const char* WINDOWS_TITLE;
 
-#ifdef JE_OS_ANDROID
+#ifdef JE_ENABLE_GLES300_GAPI
         // TODO
 #else
         GLFWwindow* WINDOWS_HANDLE;
 #endif
     };
 
-#ifdef JE_OS_ANDROID
+#ifdef JE_ENABLE_GLES300_GAPI
     // TODO
 #else
     void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
@@ -163,7 +160,7 @@ namespace jeecs::graphic::api::gl330
         {
             jeecs::debug::log("Graphic thread (OpenGL3) start!");
 
-#ifdef JE_OS_ANDROID
+#ifdef JE_ENABLE_GLES300_GAPI
             // TODO
 #else
             if (!glfwInit())
@@ -196,7 +193,7 @@ namespace jeecs::graphic::api::gl330
         }
         context->WINDOWS_TITLE = config->m_title;
 
-#ifdef JE_OS_ANDROID
+#ifdef JE_ENABLE_GLES300_GAPI
         // TODO
 #else
         auto* primary_monitor = glfwGetPrimaryMonitor();
@@ -364,7 +361,7 @@ namespace jeecs::graphic::api::gl330
                     }
                 }
             },
-#ifdef JE_OS_ANDROID
+#ifdef JE_ENABLE_GLES300_GAPI
             nullptr,
             // TODO
 #else
@@ -378,7 +375,7 @@ namespace jeecs::graphic::api::gl330
     bool gl_pre_update(jegl_thread::custom_thread_data_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-#ifdef JE_OS_ANDROID
+#ifdef JE_ENABLE_GLES300_GAPI
         // TODO
 #else
         glfwSwapBuffers(context->WINDOWS_HANDLE);
@@ -390,7 +387,7 @@ namespace jeecs::graphic::api::gl330
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
-#ifdef JE_OS_ANDROID
+#ifdef JE_ENABLE_GLES300_GAPI
         // TODO
 #else
         glfwPollEvents();
@@ -433,7 +430,7 @@ namespace jeecs::graphic::api::gl330
             jeecs::debug::log("Graphic thread (OpenGL3) shutdown!");
 
         jegui_shutdown_gl330(reboot);
-#ifdef JE_OS_ANDROID
+#ifdef JE_ENABLE_GLES300_GAPI
         // TODO
 #else
         glfwDestroyWindow(context->WINDOWS_HANDLE);
@@ -1203,7 +1200,7 @@ namespace jeecs::graphic::api::gl330
 
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
-    using namespace jeecs::graphic::api::gl330;
+    using namespace jeecs::graphic::api::gl3;
 
     write_to_apis->init_interface = gl_startup;
     write_to_apis->shutdown_interface = gl_shutdown;
