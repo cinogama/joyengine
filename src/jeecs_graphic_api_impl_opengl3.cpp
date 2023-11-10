@@ -34,7 +34,6 @@ namespace jeecs::graphic::api::gl330
         size_t WINDOWS_SIZE_HEIGHT;
         const char* WINDOWS_TITLE;
 
-
 #ifdef JE_OS_ANDROID
         // TODO
 #else
