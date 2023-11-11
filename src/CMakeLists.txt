@@ -109,13 +109,8 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
     JE4_ENABLE_VULKAN110_GAPI)
 
     if (ANDROID)
-        include_directories("../3rd/glfm/include")
-    
-        if (NOT WIN32)
-            target_compile_options(glfm PRIVATE -fPIC)
-        endif()
-
-        list(APPEND jeecs_graphic_libs glfm)
+        # GLFW donot support android, use EGL instead.
+        # TODO: ...
     else()
         include_directories("../3rd/glfw/include")
     

@@ -6,13 +6,7 @@
 #   include <imgui.h>
 #   include <imgui_impl_opengl3.h>
 
-#if defined(JE_OS_ANDROID)||defined(JE_OS_IOS)
-#   define JE_GL_USE_GLFM_INSTEAD_GLFW
-#endif
-
-#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
-#   include <glfm.h>
-#else
+#ifdef JE_ENABLE_GL330_GAPI
 #   include <imgui_impl_glfw.h>
 #   include <GLFW/glfw3.h>
 #endif
@@ -24,7 +18,7 @@ void jegui_init_gl330(
     bool reboot)
 {
     jegui_init_basic(false, get_img_res, apply_shader_sampler);
-#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
+#ifdef JE_ENABLE_GLES300_GAPI
     // TODO;
 #else
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
@@ -35,7 +29,7 @@ void jegui_init_gl330(
 void jegui_update_gl330()
 {
     ImGui_ImplOpenGL3_NewFrame();
-#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
+#ifdef JE_ENABLE_GLES300_GAPI
     // TODO;
 #else
     ImGui_ImplGlfw_NewFrame();
@@ -48,7 +42,7 @@ void jegui_shutdown_gl330(bool reboot)
 {
     jegui_shutdown_basic(reboot);
     ImGui_ImplOpenGL3_Shutdown();
-#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
+#ifdef JE_ENABLE_GLES300_GAPI
     // TODO;
 #else
     ImGui_ImplGlfw_Shutdown();
