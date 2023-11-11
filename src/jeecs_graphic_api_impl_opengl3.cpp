@@ -17,6 +17,16 @@
 #   endif
 #else
 #   include <GL/glew.h>
+#endif
+
+#if defined(JE_OS_ANDROID)||defined(JE_OS_IOS)
+#   define JE_GL_USE_GLFM_INSTEAD_GLFW
+#endif
+
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
+#   define GLFM_INCLUDE_ES3
+#   include <glfm.h>
+#else
 #   include <GLFW/glfw3.h>
 #   include <GLFW/glfw3native.h>
 #endif
@@ -30,14 +40,14 @@ namespace jeecs::graphic::api::gl3
         size_t WINDOWS_SIZE_WIDTH;
         size_t WINDOWS_SIZE_HEIGHT;
 
-#ifdef JE_ENABLE_GLES300_GAPI
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
         // TODO
 #else
         GLFWwindow* WINDOWS_HANDLE;
 #endif
     };
     /////////////////////////////////////////////////////////////////////////////////////
-#ifdef JE_ENABLE_GLES300_GAPI
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
     namespace egl
     {
         void init()
@@ -124,11 +134,24 @@ namespace jeecs::graphic::api::gl3
             if (!glfwInit())
                 jeecs::debug::logfatal("Failed to init glfw.");
 
+#ifdef JE_ENABLE_GL330_GAPI
             glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
             glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
+#else
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#       ifdef JE_OS_WINDOWS
+            // NOTE: Windows平台上，运行OpenGLES的时候，ARM提供的模拟环境要求使用EGL
+            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
+#       else
+            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
+#       endif
+#endif
 
 #ifndef NDEBUG
             glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
@@ -229,8 +252,10 @@ namespace jeecs::graphic::api::gl3
             else
                 glfwSwapInterval(0);
 
+#ifdef JE_ENABLE_GL330_GAPI
             if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
                 jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
+#endif
         }
 
         void swap(jegl_gl3_context* context)
@@ -323,7 +348,7 @@ namespace jeecs::graphic::api::gl3
         }
 
         je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
-}
+    }
 #endif
     jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
     {
@@ -333,14 +358,14 @@ namespace jeecs::graphic::api::gl3
         {
             jeecs::debug::log("Graphic thread (OpenGL3) start!");
 
-#ifdef JE_ENABLE_GLES300_GAPI
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
             egl::init();
 #else
             glfw::init();
 #endif
         }
 
-#ifdef JE_ENABLE_GLES300_GAPI
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
         egl::create_interface(context, config);
 #else
         glfw::create_interface(context, config);
@@ -409,13 +434,13 @@ namespace jeecs::graphic::api::gl3
                     }
                 }
             },
-#ifdef JE_ENABLE_GLES300_GAPI
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
             nullptr,
-                // TODO
+            // TODO
 #else
             context->WINDOWS_HANDLE,
 #endif
-                reboot);
+            reboot);
 
         return context;
     }
@@ -423,7 +448,7 @@ namespace jeecs::graphic::api::gl3
     bool gl_pre_update(jegl_thread::custom_thread_data_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-#ifdef JE_ENABLE_GLES300_GAPI
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
         egl::swap(context);
 #else
         glfw::swap(context);
@@ -436,7 +461,7 @@ namespace jeecs::graphic::api::gl3
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
         bool update_advise_close = false;
-#ifdef JE_ENABLE_GLES300_GAPI
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
         update_advise_close = !egl::update(context);
 #else
         update_advise_close = !glfw::update(context);
@@ -463,7 +488,7 @@ namespace jeecs::graphic::api::gl3
             jeecs::debug::log("Graphic thread (OpenGL3) shutdown!");
 
         jegui_shutdown_gl330(reboot);
-#ifdef JE_ENABLE_GLES300_GAPI
+#ifdef JE_GL_USE_GLFM_INSTEAD_GLFW
         egl::shutdown(context, reboot);
 #else
         glfw::shutdown(context, reboot);
@@ -1227,7 +1252,7 @@ namespace jeecs::graphic::api::gl3
         _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
         glClear(GL_DEPTH_BUFFER_BIT);
     }
-    }
+}
 
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {

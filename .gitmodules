@@ -30,3 +30,7 @@
 	path = 3rd/opengles_env_w64
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/opengles_emulator_win64.git
 	branch = master
+[submodule "3rd/glfm"]
+	path = 3rd/glfm
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/glfm.git
+	branch = main
