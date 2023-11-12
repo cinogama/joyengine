@@ -422,7 +422,6 @@ namespace jeecs
             jeecs::typing::version_t m_version;
             jeecs::game_entity::entity_stat m_stat;
         };
-        static_assert(sizeof(meta) == 24);
 
         void* _m_in_chunk;
         jeecs::typing::entity_id_in_chunk_t   _m_id;

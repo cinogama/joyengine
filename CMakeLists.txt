@@ -90,7 +90,7 @@ else()
 endif()
 
 if (JE4_COPYING_BUILTIN_FILES)
-    if(WIN32)
+    if(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Windows")
         add_custom_target(COPY_BUILTIN_FILES 
             COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\\" /Y /S /I /D)
         add_custom_target(COPY_ENGINE_FILES 
