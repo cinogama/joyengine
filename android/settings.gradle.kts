@@ -13,6 +13,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "JoyEngineECS4a"
+rootProject.name = "JoyEngineECS4A"
 include(":app")
  

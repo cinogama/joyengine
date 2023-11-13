@@ -333,6 +333,7 @@ jegl_thread* jegl_start_graphic_thread(
     thread_handle->_m_promise = new std::promise<void>();
 
     assert(_jegl_sync_callback_func != nullptr);
+    thread_handle->_m_sync_callback_arg = _jegl_sync_callback_arg;
     _jegl_sync_callback_func(thread_handle, _jegl_sync_callback_arg);
 
     return thread_handle;

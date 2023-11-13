@@ -31,7 +31,15 @@ namespace jeecs::graphic::api::gl3
         size_t WINDOWS_SIZE_HEIGHT;
 
 #ifdef JE_ENABLE_GLES300_GAPI
-        // TODO
+        struct egl_context
+        {
+            EGLDisplay m_display;
+            EGLSurface m_surface;
+            EGLContext m_context;
+            EGLNativeWindowType m_window;
+        };
+
+        egl_context m_context;
 #else
         GLFWwindow* WINDOWS_HANDLE;
 #endif
@@ -43,18 +51,89 @@ namespace jeecs::graphic::api::gl3
         void init()
         {
         }
-        void create_interface(jegl_gl3_context* context, const jegl_interface_config* config)
+        void create_interface(jegl_thread* thread, jegl_gl3_context* context, const jegl_interface_config* config)
         {
+            constexpr EGLint attribs[] = {
+               EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+               EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+               EGL_BLUE_SIZE, 8,
+               EGL_GREEN_SIZE, 8,
+               EGL_RED_SIZE, 8,
+               EGL_DEPTH_SIZE, 24,
+               EGL_NONE
+            };
+
+            auto display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+            eglInitialize(display, nullptr, nullptr);
+
+            // figure out how many configs there are
+            EGLint numConfigs;
+            eglChooseConfig(display, attribs, nullptr, 0, &numConfigs);
+
+            // get the list of configurations
+            std::unique_ptr<EGLConfig[]> supportedConfigs(new EGLConfig[numConfigs]);
+            eglChooseConfig(display, attribs, supportedConfigs.get(), numConfigs, &numConfigs);
+
+            // Find a config we like.
+            // Could likely just grab the first if we don't care about anything else in the config.
+            // Otherwise hook in your own heuristic
+            auto egl_config = *std::find_if(
+                supportedConfigs.get(),
+                supportedConfigs.get() + numConfigs,
+                [&display](const EGLConfig& eglconfig) {
+                    EGLint red, green, blue, depth;
+                    if (eglGetConfigAttrib(display, eglconfig, EGL_RED_SIZE, &red)
+                        && eglGetConfigAttrib(display, eglconfig, EGL_GREEN_SIZE, &green)
+                        && eglGetConfigAttrib(display, eglconfig, EGL_BLUE_SIZE, &blue)
+                        && eglGetConfigAttrib(display, eglconfig, EGL_DEPTH_SIZE, &depth)) {
+
+                        return red == 8 && green == 8 && blue == 8 && depth == 24;
+                    }
+                    return false;
+                });
+
+            context->m_context.m_window = (EGLNativeWindowType)thread->_m_sync_callback_arg;
+
+            EGLint format;
+            eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
+            EGLSurface surface = eglCreateWindowSurface(display, egl_config, context->m_context.m_window, nullptr);
+
+            // Create a GLES 3 context
+            EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
+            EGLContext eglcontext = eglCreateContext(display, egl_config, nullptr, contextAttribs);
+
+            // get some window metrics
+            auto madeCurrent = eglMakeCurrent(display, surface, surface, eglcontext);
+            assert(madeCurrent);
+
+            context->m_context.m_display = display;
+            context->m_context.m_surface = surface;
+            context->m_context.m_context = eglcontext;
+
         }
         void swap(jegl_gl3_context* context)
         {
+            eglSwapBuffers(context->m_context.m_display, context->m_context.m_surface);
         }
         bool update(jegl_gl3_context* context)
         {
+            EGLint width;
+            eglQuerySurface(context->m_context.m_display, context->m_context.m_surface, EGL_WIDTH, &width);
+
+            EGLint height;
+            eglQuerySurface(context->m_context.m_display, context->m_context.m_surface, EGL_HEIGHT, &height);
+
+            context->WINDOWS_SIZE_WIDTH = width;
+            context->WINDOWS_SIZE_WIDTH = height;
+
             return true;
         }
         void shutdown(jegl_gl3_context* context, bool reboot)
         {
+            eglMakeCurrent(context->m_context.m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+            eglDestroyContext(context->m_context.m_display, context->m_context.m_context);
+            eglDestroySurface(context->m_context.m_display, context->m_context.m_surface);
+            eglTerminate(context->m_context.m_display);
         }
     }
 #else
@@ -240,7 +319,6 @@ namespace jeecs::graphic::api::gl3
 
         bool update(jegl_gl3_context* context)
         {
-
             glfwPollEvents();
             int mouse_lock_x, mouse_lock_y;
             if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
@@ -323,7 +401,7 @@ namespace jeecs::graphic::api::gl3
         }
 
         je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
-}
+    }
 #endif
     jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
     {
@@ -341,7 +419,7 @@ namespace jeecs::graphic::api::gl3
         }
 
 #ifdef JE_ENABLE_GLES300_GAPI
-        egl::create_interface(context, config);
+        egl::create_interface(gthread, context, config);
 #else
         glfw::create_interface(context, config);
 #endif
@@ -355,6 +433,7 @@ namespace jeecs::graphic::api::gl3
 #   endif
 #endif
         glEnable(GL_DEPTH_TEST);
+#ifndef JE_ENABLE_GLES300_GAPI
         jegui_init_gl330(
             [](auto* res) {return (void*)(intptr_t)res->m_handle.m_uint1; },
             [](auto* res)
@@ -411,11 +490,12 @@ namespace jeecs::graphic::api::gl3
             },
 #ifdef JE_ENABLE_GLES300_GAPI
             nullptr,
-                // TODO
+            // TODO
 #else
             context->WINDOWS_HANDLE,
 #endif
-                reboot);
+            reboot);
+#endif
 
         return context;
     }
@@ -443,7 +523,9 @@ namespace jeecs::graphic::api::gl3
 #endif
         if (update_advise_close)
         {
+#ifndef JE_ENABLE_GLES300_GAPI
             if (jegui_shutdown_callback())
+#endif
                 return false;
         }
         return true;
@@ -451,7 +533,9 @@ namespace jeecs::graphic::api::gl3
 
     bool gl_lateupdate(jegl_thread::custom_thread_data_t ctx)
     {
+#ifndef JE_ENABLE_GLES300_GAPI
         jegui_update_gl330();
+#endif
         return true;
     }
 
@@ -1227,7 +1311,7 @@ namespace jeecs::graphic::api::gl3
         _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
         glClear(GL_DEPTH_BUFFER_BIT);
     }
-    }
+}
 
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {

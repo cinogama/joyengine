@@ -1499,10 +1499,10 @@ struct jegl_thread
     using custom_thread_data_t = void*;
     using frame_rend_work_func_t = void(*)(jegl_thread*, void*);
 
-    bool                    _m_async_mode;
     void*                   _m_promise;   // std::promise<void>
     frame_rend_work_func_t  _m_frame_rend_work;
     void*                   _m_frame_rend_work_arg;
+    void*                   _m_sync_callback_arg;
 
     jegl_thread_notifier*   _m_thread_notifier;
     void*                   _m_interface_handle;
