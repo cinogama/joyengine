@@ -106,6 +106,10 @@ namespace jeecs::graphic::api::gl3
             auto madeCurrent = eglMakeCurrent(display, surface, surface, eglcontext);
             assert(madeCurrent);
 
+            // TODO-LIST: 
+            // * MSAA support
+            // * Direction ?
+
             context->m_context.m_display = display;
             context->m_context.m_surface = surface;
             context->m_context.m_context = eglcontext;
