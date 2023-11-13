@@ -281,7 +281,8 @@ public let frag =
         UserInterfaceGraphicPipelineSystem(game_world w)
             : BasePipelineInterface(w)
         {
-            m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
+            m_default_uniform_buffer = 
+                new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
 
         ~UserInterfaceGraphicPipelineSystem()

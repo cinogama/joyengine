@@ -125,7 +125,7 @@ namespace jeecs
                 config,
                 universe.handle(),
                 jegl_get_host_graphic_api(),
-                [](void* ptr, jegl_thread* glthread)
+                [](jegl_thread* glthread, void* ptr)
                 {
                     ((graphic_uhost*)ptr)->_frame_rend_impl();
                 }, this);

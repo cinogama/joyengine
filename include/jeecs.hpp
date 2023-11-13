@@ -1497,10 +1497,15 @@ jegl_thread [类型]
 struct jegl_thread
 {
     using custom_thread_data_t = void*;
+    using frame_rend_work_func_t = void(*)(jegl_thread*, void*);
 
-    void* _m_thread; // std::thread
-    jegl_thread_notifier* _m_thread_notifier;
-    void* _m_interface_handle;
+    bool                    _m_async_mode;
+    void*                   _m_promise;   // std::promise<void>
+    frame_rend_work_func_t  _m_frame_rend_work;
+    void*                   _m_frame_rend_work_arg;
+
+    jegl_thread_notifier*   _m_thread_notifier;
+    void*                   _m_interface_handle;
 
     void*                       m_universe_instance;
     jeecs::typing::version_t    m_version;
@@ -1870,6 +1875,81 @@ struct jegl_graphic_api
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
 using jeecs_api_register_func_t = void(*)(jegl_graphic_api*);
+using jeecs_sync_callback_func_t = void(*)(jegl_thread*, void*);
+
+/*
+jegl_register_sync_graphic_callback [基本接口]
+一些平台下，由于上下文等限制，不能创建独立的渲染线程，
+对于这种情况，可以使用此函数注册一个回调函数，在本应
+创建图形线程的地方调用此回调，用于获取对应的universe
+和图形上下文，之后则需要手动调用同步图形更新接口。
+    * 必须在 je_init 之后注册，引擎初始化会重置回调
+请参见：
+    je_init
+*/
+JE_API void jegl_register_sync_thread_callback(jeecs_sync_callback_func_t callback, void* arg);
+
+enum jegl_sync_state
+{
+    JEGL_SYNC_COMPLETE,
+    JEGL_SYNC_SHUTDOWN,
+    JEGL_SYNC_REBOOT,
+};
+
+/*
+jegl_sync_init [基本接口]
+一些平台下，由于上下文等限制，不能创建独立的渲染线程，
+对于这种情况，可以使用jegl_register_sync_graphic_callback
+注册回调函数，并手动执行 jegl_sync_init、jegl_sync_update
+和 jegl_sync_shutdown。
+    * jegl_sync_init 用于图形在首次启动或重启时执行图形
+        任务的初始化操作，初始化完成后，则循环执行
+        jegl_sync_update 直到其返回 JEGL_SYNC_SHUTDOWN
+        或 JEGL_SYNC_REBOOT 之前，都不需要重新初始化
+请参见：
+    jegl_register_sync_graphic_callback
+    jegl_sync_update
+    jegl_sync_shutdown
+*/
+JE_API void             jegl_sync_init(jegl_thread* thread, bool isreboot);
+
+/*
+jegl_sync_update [基本接口]
+一些平台下，由于上下文等限制，不能创建独立的渲染线程，
+对于这种情况，可以使用jegl_register_sync_graphic_callback
+注册回调函数，并手动执行 jegl_sync_init、jegl_sync_update
+和 jegl_sync_shutdown。
+    * jegl_sync_update 用于更新图形图形的一帧
+    * 函数返回 JEGL_SYNC_COMPLETE 表示正常结束
+    * 返回 JEGL_SYNC_SHUTDOWN 表示绘制将结束，请以 isreboot = false
+        调用 jegl_sync_shutdown，结束全部绘制工作
+    * 返回 JEGL_SYNC_REBOOT 表示绘制需要重新初始化，请以
+        isreboot = true 调用 jegl_sync_shutdown 释放当前
+        上下文，然后以 isreboot = true 调用jegl_sync_init
+        重新执行初始化
+请参见：
+    jegl_register_sync_graphic_callback
+    jegl_sync_init
+    jegl_sync_shutdown
+*/
+JE_API jegl_sync_state  jegl_sync_update(jegl_thread* thread);
+
+/*
+jegl_sync_shutdown [基本接口]
+一些平台下，由于上下文等限制，不能创建独立的渲染线程，
+对于这种情况，可以使用jegl_register_sync_graphic_callback
+注册回调函数，并手动执行 jegl_sync_init、jegl_sync_update
+和 jegl_sync_shutdown。
+    * jegl_sync_shutdown 用于释放上下文，根据jegl_sync_update
+        的返回值，以适当的参数调用此函数以正确完成渲染逻辑
+    * 返回值事实上只与 isreboot 有关：返回 true 表示确实退出，
+        返回 false 表示仍需重新初始化
+请参见：
+    jegl_register_sync_graphic_callback
+    jegl_sync_init
+    jegl_sync_shutdown
+*/
+JE_API bool             jegl_sync_shutdown(jegl_thread* thread, bool isreboot);
 
 /*
 jegl_start_graphic_thread [基本接口]
@@ -1886,7 +1966,7 @@ JE_API jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
     void* universe_instance,
     jeecs_api_register_func_t register_func,
-    void(*frame_rend_work)(void*, jegl_thread*),
+    void(*frame_rend_work)(jegl_thread*, void*),
     void* arg);
 
 /*
@@ -4094,7 +4174,7 @@ namespace jeecs
                 jeecs::typing::typeid_t>;
 
             mutable std::mutex _m_mx;
-           
+
             id_typeinfo_map_t _m_self_registed_id_typeinfo;
             registered_type_hash_map_t _m_self_registed_hash;
 

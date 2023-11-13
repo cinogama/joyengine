@@ -8,6 +8,7 @@
 
 #include <condition_variable>
 #include <list>
+#include <future>
 
 struct jegl_thread_notifier
 {
@@ -71,139 +72,6 @@ void _unload_resource_blob(const std::string& path)
 
 jeecs::basic::atomic_list<jegl_resource::jegl_destroy_resouce> _destroing_graphic_resources;
 bool _jegl_rchain_resource_used_by_chain(jegl_rendchain* chain, jegl_resource* resource);
-void _graphic_work_thread(jegl_thread* thread, void(*frame_rend_work)(void*, jegl_thread*), void* arg)
-{
-    bool first_bootup = true;
-    _current_graphic_thread = thread;
-    do
-    {
-        if (thread->m_config.m_fps == 0)
-            je_ecs_universe_set_frame_deltatime(
-                thread->m_universe_instance, 
-                0.0);
-        else
-            je_ecs_universe_set_frame_deltatime(
-                thread->m_universe_instance,
-                1.0 / (double)thread->m_config.m_fps);
-
-        thread->m_userdata = thread->m_apis->init_interface(
-            thread, &thread->m_config, !first_bootup);
-        first_bootup = false;
-        ++thread->m_version;
-
-        std::unordered_map<jegl_resource::jegl_destroy_resouce*, bool> _waiting_to_free_resource;
-
-        while (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
-        {
-            do
-            {
-                std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
-                thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
-                    return thread->_m_thread_notifier->m_update_flag;
-                    });
-            } while (0);
-
-            if (!thread->m_apis->pre_update_interface(thread->m_userdata))
-                // graphic thread want to exit. mark stop update
-                std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
-
-            thread->_m_thread_notifier->_m_commited_rendchains.clear();
-
-            // Ready for rend..
-            if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
-                || thread->_m_thread_notifier->m_reboot_flag)
-                break;
-
-            if (!thread->m_apis->update_interface(thread->m_userdata))
-                // graphic thread want to exit. mark stop update
-                std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
-            else
-                frame_rend_work(arg, thread);
-
-            if (!thread->m_apis->late_update_interface(thread->m_userdata))
-                std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
-
-            auto* del_res = _destroing_graphic_resources.pick_all();
-            while (del_res)
-            {
-                auto* cur_del_res = del_res;
-                del_res = del_res->last;
-
-                if (cur_del_res->m_destroy_resource->m_graphic_thread == thread
-                    && cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
-                {
-                    bool need_release = true;
-                    for (auto* chain : thread->_m_thread_notifier->_m_commited_rendchains)
-                    {
-                        if (_jegl_rchain_resource_used_by_chain(chain, cur_del_res->m_destroy_resource))
-                        {
-                            _destroing_graphic_resources.add_one(cur_del_res);
-                            need_release = false;
-                            break;
-                        }
-                    }
-                    if (need_release)
-                        _waiting_to_free_resource[cur_del_res] = true;
-                }
-                else if (--cur_del_res->m_retry_times)
-                    // Need re-try
-                    _destroing_graphic_resources.add_one(cur_del_res);
-                else
-                {
-                    // Free this
-                    if (cur_del_res->m_destroy_resource->m_graphic_thread != nullptr)
-                        jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
-                            cur_del_res->m_destroy_resource);
-                    _waiting_to_free_resource[cur_del_res] = false;
-                }
-            }
-
-            do {
-                std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-                thread->_m_thread_notifier->m_update_flag = false;
-                thread->_m_thread_notifier->m_update_waiter.notify_all();
-            } while (0);
-
-            for (auto [deleting_resource, need_release] : _waiting_to_free_resource)
-            {
-                if (need_release)
-                {
-                    thread->m_apis->close_resource(thread->m_userdata, deleting_resource->m_destroy_resource);
-                    thread->_m_thread_notifier->_m_created_resources.erase(deleting_resource->m_destroy_resource);
-                }
-                delete deleting_resource->m_destroy_resource;
-                delete deleting_resource;
-            }
-            _waiting_to_free_resource.clear();
-        }
-
-        // Before closing interface, close all resource allocated.
-        for (auto& [_, resource_blob] : thread->_m_thread_notifier->_m_cached_resource_blobs)
-        {
-            thread->m_apis->close_resource_blob(thread->m_userdata, resource_blob.m_blob);
-        }
-        thread->_m_thread_notifier->_m_cached_resource_blobs.clear();
-
-        for (auto* resource : thread->_m_thread_notifier->_m_created_resources)
-        {
-            thread->m_apis->close_resource(thread->m_userdata, resource);
-            resource->m_graphic_thread = nullptr;
-            resource->m_graphic_thread_version = 0;
-        }
-        thread->_m_thread_notifier->_m_created_resources.clear();
-
-        thread->m_apis->shutdown_interface(
-            thread,
-            thread->m_userdata,
-            thread->_m_thread_notifier->m_reboot_flag);
-        thread->m_userdata = nullptr;
-        if (!thread->_m_thread_notifier->m_reboot_flag)
-            break;
-
-        thread->_m_thread_notifier->m_reboot_flag = false;
-    } while (true);
-
-}
 
 void _jegl_commit_rendchain(jegl_thread* glthread, jegl_rendchain* chain)
 {
@@ -215,14 +83,187 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 
 //////////////////////////////////// API /////////////////////////////////////////
 
-std::vector<jegl_thread*> _jegl_alive_glthread_list;
-std::mutex _jegl_alive_glthread_list_mx;
+std::vector<jegl_thread*>   _jegl_alive_glthread_list;
+std::mutex                  _jegl_alive_glthread_list_mx;
+
+jeecs_sync_callback_func_t _jegl_sync_callback_func = nullptr;
+void* _jegl_sync_callback_arg = nullptr;
+
+void jegl_sync_init(jegl_thread* thread, bool isreboot)
+{
+    if (_current_graphic_thread == nullptr)
+        _current_graphic_thread = thread;
+
+    assert(_current_graphic_thread == thread);
+
+    if (thread->m_config.m_fps == 0)
+        je_ecs_universe_set_frame_deltatime(
+            thread->m_universe_instance,
+            0.0);
+    else
+        je_ecs_universe_set_frame_deltatime(
+            thread->m_universe_instance,
+            1.0 / (double)thread->m_config.m_fps);
+
+    thread->m_userdata = thread->m_apis->init_interface(
+        thread, &thread->m_config, isreboot);
+
+    ++thread->m_version;
+}
+
+jegl_sync_state jegl_sync_update(jegl_thread* thread)
+{
+    std::unordered_map<jegl_resource::jegl_destroy_resouce*, bool> _waiting_to_free_resource;
+
+    if (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
+    {
+        do
+        {
+            std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
+            thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
+                return thread->_m_thread_notifier->m_update_flag;
+                });
+        } while (0);
+
+        if (!thread->m_apis->pre_update_interface(thread->m_userdata))
+            // graphic thread want to exit. mark stop update
+            std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+
+        thread->_m_thread_notifier->_m_commited_rendchains.clear();
+
+        // Ready for rend..
+        if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
+            || thread->_m_thread_notifier->m_reboot_flag)
+            goto is_reboot_or_shutdown;
+
+        if (!thread->m_apis->update_interface(thread->m_userdata))
+            // graphic thread want to exit. mark stop update
+            std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+        else
+        {
+            // Invoke frame work
+            thread->_m_frame_rend_work(thread, thread->_m_frame_rend_work_arg);
+        }
+
+        if (!thread->m_apis->late_update_interface(thread->m_userdata))
+            std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+
+        auto* del_res = _destroing_graphic_resources.pick_all();
+        while (del_res)
+        {
+            auto* cur_del_res = del_res;
+            del_res = del_res->last;
+
+            if (cur_del_res->m_destroy_resource->m_graphic_thread == thread
+                && cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
+            {
+                bool need_release = true;
+                for (auto* chain : thread->_m_thread_notifier->_m_commited_rendchains)
+                {
+                    if (_jegl_rchain_resource_used_by_chain(chain, cur_del_res->m_destroy_resource))
+                    {
+                        _destroing_graphic_resources.add_one(cur_del_res);
+                        need_release = false;
+                        break;
+                    }
+                }
+                if (need_release)
+                    _waiting_to_free_resource[cur_del_res] = true;
+            }
+            else if (--cur_del_res->m_retry_times)
+                // Need re-try
+                _destroing_graphic_resources.add_one(cur_del_res);
+            else
+            {
+                // Free this
+                if (cur_del_res->m_destroy_resource->m_graphic_thread != nullptr)
+                    jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
+                        cur_del_res->m_destroy_resource);
+                _waiting_to_free_resource[cur_del_res] = false;
+            }
+        }
+
+        do {
+            std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
+            thread->_m_thread_notifier->m_update_flag = false;
+            thread->_m_thread_notifier->m_update_waiter.notify_all();
+        } while (0);
+
+        for (auto [deleting_resource, need_release] : _waiting_to_free_resource)
+        {
+            if (need_release)
+            {
+                thread->m_apis->close_resource(thread->m_userdata, deleting_resource->m_destroy_resource);
+                thread->_m_thread_notifier->_m_created_resources.erase(deleting_resource->m_destroy_resource);
+            }
+            delete deleting_resource->m_destroy_resource;
+            delete deleting_resource;
+        }
+    }
+    else
+    {
+    is_reboot_or_shutdown:
+        if (thread->_m_thread_notifier->m_reboot_flag)
+        {
+            thread->_m_thread_notifier->m_reboot_flag = false;
+            return jegl_sync_state::JEGL_SYNC_REBOOT;
+        }
+        return jegl_sync_state::JEGL_SYNC_SHUTDOWN;
+    }
+
+    return jegl_sync_state::JEGL_SYNC_COMPLETE;
+}
+
+bool jegl_sync_shutdown(jegl_thread* thread, bool isreboot)
+{
+    for (auto& [_, resource_blob] : thread->_m_thread_notifier->_m_cached_resource_blobs)
+    {
+        thread->m_apis->close_resource_blob(thread->m_userdata, resource_blob.m_blob);
+    }
+    thread->_m_thread_notifier->_m_cached_resource_blobs.clear();
+
+    for (auto* resource : thread->_m_thread_notifier->_m_created_resources)
+    {
+        thread->m_apis->close_resource(thread->m_userdata, resource);
+        resource->m_graphic_thread = nullptr;
+        resource->m_graphic_thread_version = 0;
+    }
+    thread->_m_thread_notifier->_m_created_resources.clear();
+
+    thread->m_apis->shutdown_interface(
+        thread,
+        thread->m_userdata,
+        isreboot);
+
+    thread->m_userdata = nullptr;
+
+    if (!isreboot)
+    {
+        // Really shutdown, give promise!
+        auto* promise = std::launder(
+            reinterpret_cast<std::promise<void>*>(
+                thread->_m_promise));
+
+        promise->set_value();
+        _current_graphic_thread = nullptr;
+        return true;
+    }
+    return false;
+}
+
+void jegl_register_sync_thread_callback(jeecs_sync_callback_func_t callback, void* arg)
+{
+    assert(callback != nullptr);
+
+    _jegl_sync_callback_func = callback;
+    _jegl_sync_callback_arg = arg;
+}
 
 jegl_thread* jegl_start_graphic_thread(
     jegl_interface_config config,
     void* universe_instance,
     jeecs_api_register_func_t register_func,
-    void(*frame_rend_work)(void*, jegl_thread*),
+    void(*frame_rend_work)(jegl_thread*, void*),
     void* arg)
 {
     jegl_thread* thread_handle = nullptr;
@@ -286,12 +327,13 @@ jegl_thread* jegl_start_graphic_thread(
     thread_handle->_m_thread_notifier->m_reboot_flag = false;
     thread_handle->m_universe_instance = universe_instance;
     thread_handle->m_stop_update = new std::atomic_bool(false);
-    thread_handle->_m_thread =
-        new std::thread(
-            _graphic_work_thread,
-            thread_handle,
-            frame_rend_work,
-            arg);
+    thread_handle->_m_frame_rend_work = frame_rend_work;
+    thread_handle->_m_frame_rend_work_arg = arg;
+
+    thread_handle->_m_promise = new std::promise<void>();
+
+    assert(_jegl_sync_callback_func != nullptr);
+    _jegl_sync_callback_func(thread_handle, _jegl_sync_callback_arg);
 
     return thread_handle;
 }
@@ -333,9 +375,10 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
         thread->_m_thread_notifier->m_update_waiter.notify_all();
     } while (0);
 
-    assert(std::launder(reinterpret_cast<std::thread*>(thread->_m_thread))->joinable());
-    std::launder(reinterpret_cast<std::thread*>(thread->_m_thread))->join();
+    auto* promise = reinterpret_cast<std::promise<void>*>(thread->_m_promise);
+    promise->get_future().get();
 
+    delete promise;
     delete thread->_m_thread_notifier;
     delete thread;
 }

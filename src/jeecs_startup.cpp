@@ -125,8 +125,32 @@ WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args, size_t
     return wo_ret_void(vm);
 }
 
+void je_default_graphic_interface_sync_func(jegl_thread* gthread, void*)
+{
+    std::thread([=]() 
+        {
+            jegl_sync_state state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
+            for (;;)
+            {
+                jegl_sync_init(gthread, state == jegl_sync_state::JEGL_SYNC_REBOOT);
+                do
+                {
+                    state = jegl_sync_update(gthread);
+                } while (state == jegl_sync_state::JEGL_SYNC_COMPLETE);
+
+                if (jegl_sync_shutdown(gthread, state == jegl_sync_state::JEGL_SYNC_REBOOT))
+                    break;
+            }
+
+        }).detach();
+}
+
 void je_init(int argc, char** argv)
 {
+    // Update default graphic sync funciton
+    jegl_register_sync_thread_callback(
+        je_default_graphic_interface_sync_func, nullptr);
+
     _jegl_host_graphic_api = nullptr;
 
     je_log_strat();

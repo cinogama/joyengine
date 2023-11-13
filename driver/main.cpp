@@ -14,7 +14,7 @@
 
 #include "jeecs.hpp"
 
-extern "C" 
+extern "C"
 {
     JE_EXPORT int NvOptimusEnablement = 0x00000001;
     JE_EXPORT int AmdPowerXpressRequestHighPerformance = 0x00000001;
