@@ -126,6 +126,8 @@ namespace jeecs::graphic::api::gl3
             context->WINDOWS_SIZE_WIDTH = width;
             context->WINDOWS_SIZE_WIDTH = height;
 
+            je_io_set_windowsize((int)width, (int)height);
+
             return true;
         }
         void shutdown(jegl_gl3_context* context, bool reboot)

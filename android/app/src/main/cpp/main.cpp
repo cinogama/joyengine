@@ -48,21 +48,24 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
             w.add_system(typing::type_info::of("Graphic::UnlitGraphicPipelineSystem"));
             w.add_system(typing::type_info::of("Translation::TranslationUpdatingSystem"));
 
-            w.add_entity<
-                    Transform::LocalPosition,
-                    Transform::LocalToWorld,
-                    Transform::Translation,
-                    Camera::OrthoProjection,
-                    Camera::Projection>();
+            auto camera_entity = w.add_entity<
+                Transform::LocalPosition,
+                Transform::LocalToWorld,
+                Transform::Translation,
+                Camera::OrthoProjection,
+                Camera::Projection>();
 
-            w.add_entity<
-                            Transform::LocalPosition,
-                            Transform::LocalToWorld,
-                            Transform::Translation,
-                            Renderer::Shaders,
-                            Renderer::Shape,
-                            Renderer::Textures>()
-                    .get_component<Transform::LocalPosition>()->pos.z = 5.0f;
+            auto block_entity = w.add_entity<
+                Transform::LocalPosition,
+                Transform::LocalRotation,
+                Transform::LocalToWorld,
+                Transform::Translation,
+                Renderer::Shaders,
+                Renderer::Shape,
+                Renderer::Textures>();
+
+            block_entity.get_component<Transform::LocalPosition>()->pos.z = 5.0f;
+            block_entity.get_component<Transform::LocalRotation>()->rot = math::quat::euler(0.f, 0.f, 15.0f);
 
             break;
         }
@@ -116,7 +119,7 @@ void _je_log_to_android(int level, const char* msg, void*)
     switch(level)
     {
     case JE_LOG_FATAL:
-        LOG_FATAL("%s", msg); break;
+        LOGE("%s", msg); break;
     case JE_LOG_ERROR:
         LOGE("%s", msg); break;
     case JE_LOG_WARNING:

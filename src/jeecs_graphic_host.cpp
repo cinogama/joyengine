@@ -91,7 +91,7 @@ namespace jeecs
         void _frame_rend_impl()
         {
             // Clear frame buffer
-            float clearcolor[] = { 0.,0.,0.,0. };
+            float clearcolor[] = { 0.f, 0.f, 0.f, 0.f };
             jegl_clear_framebuffer_color(clearcolor);
             jegl_clear_framebuffer_depth();
 
