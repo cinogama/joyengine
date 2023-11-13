@@ -118,7 +118,7 @@ WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args, size_t
 
     _je_global_panic_hooker = wo_borrow_vm(vm);
     _je_global_panic_hook_function = wo_push_val(_je_global_panic_hooker, args + 0);
-    
+
     if (_je_global_old_panic_handler == nullptr)
         _je_global_old_panic_handler = wo_regist_fail_handler(_jedbg_hook_woolang_panic);
 
@@ -127,7 +127,7 @@ WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args, size_t
 
 void je_default_graphic_interface_sync_func(jegl_thread* gthread, void*)
 {
-    std::thread([=]() 
+    std::thread([=]()
         {
             jegl_sync_state state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
             for (;;)
@@ -247,7 +247,7 @@ return crc64str(crc64_result);
         abort();
     }
 
-    return crc64_result;// src_crc64* api_crc64;
+        return crc64_result;// src_crc64* api_crc64;
 }
 
 wo_vm _jewo_open_file_to_compile_vm(const char* vpath)
@@ -291,44 +291,44 @@ wo_vm try_open_cached_binary()
     return _jewo_open_file_to_compile_vm("@/builtin/editor.woo.jecache4");
 }
 
-bool je_main_script_entry(void)
+bool je_main_script_entry(bool include_editor_script)
 {
     bool failed_in_start_script = false;
 
-    wo_vm vmm = try_open_cached_binary();
-
-    if (vmm == nullptr)
+    wo_vm vmm = nullptr;
+    if (include_editor_script && (vmm = try_open_cached_binary()) != nullptr)
     {
-        if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/editor/main.wo")) != nullptr)
-        {
-            size_t binary_length;
-            void* buffer = wo_dump_binary(vmm, true, &binary_length);
+        // Cache loaded, skip,
+    }
+    else if (include_editor_script && (vmm = _jewo_open_file_to_compile_vm("@/builtin/editor/main.wo")) != nullptr)
+    {
+        size_t binary_length;
+        void* buffer = wo_dump_binary(vmm, true, &binary_length);
 
-            FILE* objdump = fopen((std::string(wo_exe_path()) + "/builtin/editor.woo.jecache4").c_str(), "wb");
-            if (objdump != nullptr)
-            {
-                size_t writelen = fwrite(buffer, 1, binary_length, objdump);
-                assert(writelen == binary_length);
-                fclose(objdump);
-            }
-            auto api_src_crc64 = crc64_of_source_and_api();
-            FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.jecache4").c_str(), "wb");
-            if (srccrc != nullptr)
-            {
-                size_t writecount = fwrite(&api_src_crc64, sizeof(api_src_crc64), 1, srccrc);
-                assert(writecount == 1);
-                fclose(srccrc);
-            }
-            wo_free_binary(buffer);
-        }
-        else if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
+        FILE* objdump = fopen((std::string(wo_exe_path()) + "/builtin/editor.woo.jecache4").c_str(), "wb");
+        if (objdump != nullptr)
         {
-            // Load normal entry.
+            size_t writelen = fwrite(buffer, 1, binary_length, objdump);
+            assert(writelen == binary_length);
+            fclose(objdump);
         }
-        else
+        auto api_src_crc64 = crc64_of_source_and_api();
+        FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.jecache4").c_str(), "wb");
+        if (srccrc != nullptr)
         {
-            failed_in_start_script = true;
+            size_t writecount = fwrite(&api_src_crc64, sizeof(api_src_crc64), 1, srccrc);
+            assert(writecount == 1);
+            fclose(srccrc);
         }
+        wo_free_binary(buffer);
+    }
+    else if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
+    {
+        // Load normal entry.
+    }
+    else
+    {
+        failed_in_start_script = true;
     }
 
     if (failed_in_start_script == false)

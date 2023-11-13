@@ -2955,11 +2955,12 @@ JE_API void             jeal_listener_volume(float volume);
 
 /*
 je_main_script_entry [基本接口]
-运行入口脚本，优先尝试带缓存地加载 @/builtin/editor/main.wo，
-若加载失败，则尝试 @/builtin/main.wo
+运行入口脚本
     * 阻塞直到入口脚本运行完毕
+    * 若 include_editor_script = true，则尝试带缓存地加载 @/builtin/editor/main.wo
+    * 如果未能加载 @/builtin/editor/main.wo，则尝试 @/builtin/main.wo
 */
-JE_API bool             je_main_script_entry(void);
+JE_API bool             je_main_script_entry(bool include_editor_script);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API

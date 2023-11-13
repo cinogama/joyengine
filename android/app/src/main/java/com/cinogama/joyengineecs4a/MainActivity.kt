@@ -13,6 +13,7 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
         // Example of a call to a native method
         binding.sampleText.text = entry(applicationInfo.nativeLibraryDir)
     }
@@ -27,8 +28,6 @@ class MainActivity : AppCompatActivity() {
         // Used to load the 'joyengineecs4a' library on application startup.
         init {
             System.loadLibrary("joyengineecs4a")
-            System.loadLibrary("woo_debug")
-            // System.loadLibrary("abababa")
         }
 
     }
