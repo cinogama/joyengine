@@ -8,17 +8,68 @@
 
 #include "jeecs.hpp"
 
+struct jegl_android_surface_manager
+{
+    inline static jegl_thread* _jegl_graphic_thread = nullptr;
+    inline static jegl_sync_state _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
+
+    inline static bool _jegl_android_update_pause_request = false;
+    inline static bool _jegl_android_update_paused = false;
+
+    static void _jegl_android_sync_thread_created(jegl_thread* gthread, void*)
+    {
+        _jegl_graphic_thread = gthread;
+    }
+
+    static void sync_begin(void* android_window)
+    {
+        _jegl_android_update_pause_request = false;
+        _jegl_android_pause_update = false;
+        _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
+        jegl_register_sync_thread_callback(
+            _jegl_android_sync_thread_created, android_window);
+    }
+    static void sync_pause()
+    {
+        // The app enters the background, will destroy surface & context..
+        // Send a reboot signal, and stop update until awake by sync_begin.
+        assert(_jegl_graphic_thread != nullptr);
+        assert(_jegl_android_update_pause_request == false);
+        assert(_jegl_android_pause_update == false);
+        _jegl_android_update_pause_request = true;
+        jegl_reboot_graphic_thread(_jegl_graphic_thread, _jegl_graphic_thread->m_config);
+    }
+
+    static void sync_update()
+    {
+        if (!_jegl_android_pause_update && _jegl_graphic_thread != nullptr)
+        {
+            if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
+                jegl_sync_init(
+                    _jegl_graphic_thread,
+                    _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT);
+
+            _jegl_graphic_thread_state = jegl_sync_update(_jegl_graphic_thread);
+            if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
+            {
+                if (jegl_sync_shutdown(
+                    _jegl_graphic_thread,
+                    _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT))
+                    _jegl_graphic_thread = nullptr;
+                
+                if (_jegl_android_update_pause_request)
+                {
+                    _jegl_android_update_pause_request = false;
+                    _jegl_android_pause_update = true;
+                }
+            }
+        }
+    }
+};
+
 extern "C" {
 
 #include <game-activity/native_app_glue/android_native_app_glue.c>
-
-std::atomic<jegl_thread*> _jegl_graphic_thread = nullptr;
-jegl_sync_state _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
-
-void _jegl_android_sync_thread_created(jegl_thread* gthread, void*)
-{
-    _jegl_graphic_thread = gthread;
-}
 
 /*!
  * Handles commands sent to this Android application
@@ -26,6 +77,7 @@ void _jegl_android_sync_thread_created(jegl_thread* gthread, void*)
  * @param cmd the command to handle
  */
 void handle_cmd(android_app *pApp, int32_t cmd) {
+
     switch (cmd) {
         case APP_CMD_INIT_WINDOW: {
             // A new window is created, associate a renderer with it. You may replace this with a
@@ -33,15 +85,14 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
             // if you change the class here as a reinterpret_cast is dangerous this in the
             // android_main function and the APP_CMD_TERM_WINDOW handler case.
 
-            using namespace jeecs;
-
-            jegl_register_sync_thread_callback(
-                    _jegl_android_sync_thread_created, pApp->window);
+            jegl_android_surface_manager::sync_begin(pApp->window);
 
             // TODO: Execute script entry at another thread.
             // je_main_script_entry(true);
 
             // DEBUG:
+            using namespace jeecs;
+
             auto u = game_universe::create_universe();
             auto w = u.create_world();
 
@@ -74,6 +125,7 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
             // resources.
             //
             // We have to check if userData is assigned just in case this comes in really quickly
+            jegl_android_surface_manager::sync_pause();
             break;
         default:
             break;
@@ -164,23 +216,7 @@ void android_main(struct android_app *pApp) {
                     }
                 }
 
-                if (_jegl_graphic_thread != nullptr)
-                {
-                    if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
-                        jegl_sync_init(
-                                _jegl_graphic_thread,
-                                _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT);
-
-                    _jegl_graphic_thread_state = jegl_sync_update(_jegl_graphic_thread);
-                    if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
-                    {
-                        if (jegl_sync_shutdown(
-                                _jegl_graphic_thread,
-                                _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT))
-                            _jegl_graphic_thread = nullptr;
-                    }
-
-                }
+                jegl_android_surface_manager::sync_update();
 
             } while (!pApp->destroyRequested);
         }
