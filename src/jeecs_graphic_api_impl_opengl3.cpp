@@ -51,7 +51,7 @@ namespace jeecs::graphic::api::gl3
         void init()
         {
         }
-        void create_interface(jegl_thread* thread, jegl_gl3_context* context, const jegl_interface_config* config)
+        void create_interface(bool is_reboot, jegl_thread* thread, jegl_gl3_context* context, const jegl_interface_config* config)
         {
             constexpr EGLint attribs[] = {
                EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
@@ -92,7 +92,10 @@ namespace jeecs::graphic::api::gl3
                     return false;
                 });
 
-            context->m_context.m_window = (EGLNativeWindowType)thread->_m_sync_callback_arg;
+            context->m_context.m_window = 
+                is_reboot
+                ? (EGLNativeWindowType)thread->_m_sync_callback_arg
+                : (EGLNativeWindowType)config->m_userdata;
 
             EGLint format;
             eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
@@ -425,7 +428,7 @@ namespace jeecs::graphic::api::gl3
         }
 
 #ifdef JE_ENABLE_GLES300_GAPI
-        egl::create_interface(gthread, context, config);
+        egl::create_interface(reboot, gthread, context, config);
 #else
         glfw::create_interface(context, config);
 #endif

@@ -205,9 +205,7 @@ void je_init(int argc, char** argv)
 
 wo_integer_t crc64_of_source_and_api()
 {
-    /*wo_integer_t api_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/api").c_str());
-    wo_integer_t src_crc64 = wo_crc64_dir((std::string(wo_exe_path()) + "/builtin/editor").c_str());*/
-    wo_integer_t crc64_result;
+    wo_integer_t crc64_result = 0;
 
     const char* crc64_src = R"(
 import woo::std;
@@ -234,20 +232,21 @@ for (let _, p : files)
 return crc64str(crc64_result);
 )";
 
-    if (WO_FALSE == wo_execute(
-        crc64_src,
-        [](wo_value v, void* dat)
-        {
-            *(wo_integer_t*)dat = wo_int(v);
-        },
-        &crc64_result))
+    wo_vm vmm = wo_create_vm();
+    if (wo_load_source(vmm, "builtin/je_varify_crc64.wo", crc64_src))
     {
-        jeecs::debug::logfatal("Failed to eval crc64 of builtin scripts.");
-        je_clock_sleep_for(1.);
-        abort();
+        wo_jit(vmm);
+        wo_value result = wo_run(vmm);
+        if (result != nullptr)
+            crc64_result = wo_int(result);
     }
 
-        return crc64_result;// src_crc64* api_crc64;
+    wo_close_vm(vmm);
+
+    if (crc64_result == 0)
+        jeecs::debug::logwarn("Unable to eval crc64 of builtin editor scripts.");
+
+    return crc64_result;
 }
 
 wo_vm _jewo_open_file_to_compile_vm(const char* vpath)
@@ -291,16 +290,20 @@ wo_vm try_open_cached_binary()
     return _jewo_open_file_to_compile_vm("@/builtin/editor.woo.jecache4");
 }
 
-bool je_main_script_entry(bool include_editor_script)
+bool je_main_script_entry()
 {
     bool failed_in_start_script = false;
 
     wo_vm vmm = nullptr;
-    if (include_editor_script && (vmm = try_open_cached_binary()) != nullptr)
+    if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
+    {
+        // Load normal entry.
+    }
+    else if ((vmm = try_open_cached_binary()) != nullptr)
     {
         // Cache loaded, skip,
     }
-    else if (include_editor_script && (vmm = _jewo_open_file_to_compile_vm("@/builtin/editor/main.wo")) != nullptr)
+    else if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/editor/main.wo")) != nullptr)
     {
         size_t binary_length;
         void* buffer = wo_dump_binary(vmm, true, &binary_length);
@@ -321,10 +324,6 @@ bool je_main_script_entry(bool include_editor_script)
             fclose(srccrc);
         }
         wo_free_binary(buffer);
-    }
-    else if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
-    {
-        // Load normal entry.
     }
     else
     {

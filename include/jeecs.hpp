@@ -1484,7 +1484,8 @@ struct jegl_interface_config
     // 不限制帧率请设置为 SIZE_MAX
     size_t          m_fps;
 
-    const char* m_title;
+    const char*     m_title;
+    void*           m_userdata;
 };
 
 struct jegl_thread_notifier;
@@ -2960,7 +2961,7 @@ je_main_script_entry [基本接口]
     * 若 include_editor_script = true，则尝试带缓存地加载 @/builtin/editor/main.wo
     * 如果未能加载 @/builtin/editor/main.wo，则尝试 @/builtin/main.wo
 */
-JE_API bool             je_main_script_entry(bool include_editor_script);
+JE_API bool             je_main_script_entry();
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API

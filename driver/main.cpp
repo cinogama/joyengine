@@ -29,7 +29,7 @@ int main(int argc, char** argv)
     {
         entry::module_entry(guard);
         {
-            je_main_script_entry(true);
+            je_main_script_entry();
         }
         entry::module_leave(guard);
     }

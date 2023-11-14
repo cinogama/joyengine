@@ -13,7 +13,6 @@ struct jegl_android_surface_manager
     inline static jegl_thread* _jegl_graphic_thread = nullptr;
     inline static jegl_sync_state _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
 
-    inline static bool _jegl_android_update_pause_request = false;
     inline static bool _jegl_android_update_paused = false;
 
     static void _jegl_android_sync_thread_created(jegl_thread* gthread, void*)
@@ -23,72 +22,22 @@ struct jegl_android_surface_manager
 
     static void sync_begin(void* android_window)
     {
-        _jegl_android_update_pause_request = false;
-        _jegl_android_pause_update = false;
-        _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
-        jegl_register_sync_thread_callback(
-            _jegl_android_sync_thread_created, android_window);
-    }
-    static void sync_pause()
-    {
-        // The app enters the background, will destroy surface & context..
-        // Send a reboot signal, and stop update until awake by sync_begin.
-        assert(_jegl_graphic_thread != nullptr);
-        assert(_jegl_android_update_pause_request == false);
-        assert(_jegl_android_pause_update == false);
-        _jegl_android_update_pause_request = true;
-        jegl_reboot_graphic_thread(_jegl_graphic_thread, _jegl_graphic_thread->m_config);
-    }
-
-    static void sync_update()
-    {
-        if (!_jegl_android_pause_update && _jegl_graphic_thread != nullptr)
+        if (_jegl_android_update_paused)
         {
-            if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
-                jegl_sync_init(
-                    _jegl_graphic_thread,
-                    _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT);
-
-            _jegl_graphic_thread_state = jegl_sync_update(_jegl_graphic_thread);
-            if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
-            {
-                if (jegl_sync_shutdown(
-                    _jegl_graphic_thread,
-                    _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT))
-                    _jegl_graphic_thread = nullptr;
-                
-                if (_jegl_android_update_pause_request)
-                {
-                    _jegl_android_update_pause_request = false;
-                    _jegl_android_pause_update = true;
-                }
-            }
+            assert(_jegl_graphic_thread != nullptr);
+            _jegl_android_update_paused = false;
+            _jegl_graphic_thread->m_config.m_userdata = android_window;
+            jegl_reboot_graphic_thread(_jegl_graphic_thread, _jegl_graphic_thread->m_config);
         }
-    }
-};
+        else
+        {
+            _jegl_android_update_paused = false;
+            _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
+            jegl_register_sync_thread_callback(
+                _jegl_android_sync_thread_created, android_window);
 
-extern "C" {
-
-#include <game-activity/native_app_glue/android_native_app_glue.c>
-
-/*!
- * Handles commands sent to this Android application
- * @param pApp the app the commands are coming from
- * @param cmd the command to handle
- */
-void handle_cmd(android_app *pApp, int32_t cmd) {
-
-    switch (cmd) {
-        case APP_CMD_INIT_WINDOW: {
-            // A new window is created, associate a renderer with it. You may replace this with a
-            // "game" class if that suits your needs. Remember to change all instances of userData
-            // if you change the class here as a reinterpret_cast is dangerous this in the
-            // android_main function and the APP_CMD_TERM_WINDOW handler case.
-
-            jegl_android_surface_manager::sync_begin(pApp->window);
-
-            // TODO: Execute script entry at another thread.
-            // je_main_script_entry(true);
+            // Execute script entry in another thread.
+            std::thread(je_main_script_entry).detach();
 
             // DEBUG:
             using namespace jeecs;
@@ -117,6 +66,58 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
 
             block_entity.get_component<Transform::LocalPosition>()->pos.z = 5.0f;
             block_entity.get_component<Transform::LocalRotation>()->rot = math::quat::euler(0.f, 0.f, 15.0f);
+
+        }
+
+    }
+    static void sync_pause()
+    {
+        // The app enters the background, will destroy surface & context..
+        // Send a reboot signal, and stop update until awake by sync_begin.
+        assert(_jegl_graphic_thread != nullptr);
+        _jegl_android_update_paused = true;
+
+    }
+    static void sync_update()
+    {
+        if (!_jegl_android_update_paused && _jegl_graphic_thread != nullptr)
+        {
+            if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
+                jegl_sync_init(
+                    _jegl_graphic_thread,
+                    _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT);
+
+            _jegl_graphic_thread_state = jegl_sync_update(_jegl_graphic_thread);
+            if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
+            {
+                if (jegl_sync_shutdown(
+                    _jegl_graphic_thread,
+                    _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT))
+                    _jegl_graphic_thread = nullptr;
+            }
+        }
+    }
+};
+
+extern "C" {
+
+#include <game-activity/native_app_glue/android_native_app_glue.c>
+
+/*!
+ * Handles commands sent to this Android application
+ * @param pApp the app the commands are coming from
+ * @param cmd the command to handle
+ */
+void handle_cmd(android_app *pApp, int32_t cmd) {
+
+    switch (cmd) {
+        case APP_CMD_INIT_WINDOW: {
+            // A new window is created, associate a renderer with it. You may replace this with a
+            // "game" class if that suits your needs. Remember to change all instances of userData
+            // if you change the class here as a reinterpret_cast is dangerous this in the
+            // android_main function and the APP_CMD_TERM_WINDOW handler case.
+
+            jegl_android_surface_manager::sync_begin(pApp->window);
 
             break;
         }

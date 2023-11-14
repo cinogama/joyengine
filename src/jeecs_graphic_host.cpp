@@ -118,8 +118,10 @@ namespace jeecs
             config.m_title = "JoyEngineECS(JoyEngine 4.3)";
             config.m_displaymode = jegl_interface_config::display_mode::WINDOWED;
             config.m_enable_resize = true;
-            config.m_fps = 0;   // 使用垂直同步
-            config.m_msaa = 4;  // 使用MSAAx4抗锯齿
+            config.m_fps = 0;               // 使用垂直同步
+            config.m_msaa = 4;              // 使用MSAAx4抗锯齿
+            config.m_userdata = nullptr;    // 用户自定义数据，默认留空，用户可以根据自己需要，
+                                            // 使用 jegl_reboot_graphic_thread 传入设置并应用
 
             glthread = jegl_start_graphic_thread(
                 config,
