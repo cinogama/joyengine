@@ -2,6 +2,8 @@
 #include "jeecs.hpp"
 
 #ifdef JE_ENABLE_DX11_GAPI
+#   include "jeecs_imgui_backend_api.hpp"
+
 #   include <imgui.h>
 #   include <Windows.h>
 #   include <imgui_impl_win32.h>

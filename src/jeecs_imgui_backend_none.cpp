@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_imgui_backend_api.hpp"
+
 #include <imgui.h>
 
 void jegui_init_none(

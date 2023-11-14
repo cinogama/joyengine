@@ -125,16 +125,16 @@ jegl_sync_state jegl_sync_update(jegl_thread* thread)
                 });
         } while (0);
 
+        // Ready for rend..
+        if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
+            || thread->_m_thread_notifier->m_reboot_flag)
+            goto is_reboot_or_shutdown;
+
         if (!thread->m_apis->pre_update_interface(thread->m_userdata))
             // graphic thread want to exit. mark stop update
             std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
 
         thread->_m_thread_notifier->_m_commited_rendchains.clear();
-
-        // Ready for rend..
-        if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
-            || thread->_m_thread_notifier->m_reboot_flag)
-            goto is_reboot_or_shutdown;
 
         if (!thread->m_apis->update_interface(thread->m_userdata))
             // graphic thread want to exit. mark stop update

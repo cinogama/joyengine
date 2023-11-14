@@ -25,6 +25,12 @@ option(JE4_ENABLE_OPENGLES300_GAPI  "Enable OpenGLES 3.0 Graphic API"   OFF)
 option(JE4_ENABLE_VULKAN110_GAPI    "Enable Vulkan 1.1 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
+set(JE4_ENABLE_DX11_GAPI OFF CACHE BOOL "Build static box2d" FORCE)
+set(JE4_ENABLE_OPENGL330_GAPI OFF CACHE BOOL "Build static box2d" FORCE)
+set(JE4_ENABLE_OPENGLES300_GAPI ON CACHE BOOL "Build static box2d" FORCE)
+set(JE4_ENABLE_VULKAN110_GAPI OFF CACHE BOOL "Build static box2d" FORCE)
+set(JE4_ENABLE_METAL_GAPI OFF CACHE BOOL "Build static box2d" FORCE)
+
 # Cannot use gles & gl at same time because of ImGUI cannot use two lib at same time.
 if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES300_GAPI)
     message(FATAL_ERROR "Cannot use OpenGL3.3 and OpenGLES3.2 at same time.")

@@ -1,8 +1,5 @@
 #include <jni.h>
 
-//#include "AndroidOut.h"
-//#include "Renderer.h"
-
 #include <game-activity/GameActivity.cpp>
 #include <game-text-input/gametextinput.cpp>
 
@@ -10,8 +7,8 @@
 
 struct jegl_android_surface_manager
 {
-    inline static jegl_thread* _jegl_graphic_thread = nullptr;
-    inline static jegl_sync_state _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
+    inline static jegl_thread* _jegl_graphic_thread;
+    inline static jegl_sync_state _jegl_graphic_thread_state;
 
     inline static bool _jegl_android_update_paused = false;
 
@@ -27,7 +24,6 @@ struct jegl_android_surface_manager
             assert(_jegl_graphic_thread != nullptr);
             _jegl_android_update_paused = false;
             _jegl_graphic_thread->m_config.m_userdata = android_window;
-            jegl_reboot_graphic_thread(_jegl_graphic_thread, _jegl_graphic_thread->m_config);
         }
         else
         {
@@ -77,10 +73,23 @@ struct jegl_android_surface_manager
         assert(_jegl_graphic_thread != nullptr);
         _jegl_android_update_paused = true;
 
+        jegl_reboot_graphic_thread(
+                _jegl_graphic_thread,
+                _jegl_graphic_thread->m_config);
+
+        // Let update to close interface here.
+        sync_update();
     }
     static void sync_update()
     {
-        if (!_jegl_android_update_paused && _jegl_graphic_thread != nullptr)
+        if (_jegl_android_update_paused &&
+            _jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
+        {
+            je_clock_sleep_for(0.1);
+            return;
+        }
+
+        if (_jegl_graphic_thread != nullptr)
         {
             if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
                 jegl_sync_init(

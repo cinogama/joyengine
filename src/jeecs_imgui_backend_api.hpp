@@ -23,6 +23,11 @@ void jegui_win32_append_unicode16_char(wchar_t wch);
 
 #if defined(JE_ENABLE_GL330_GAPI) \
  || defined(JE_ENABLE_GLES300_GAPI)
+
+#   if defined(JE_OS_ANDROID) && defined(JE_ENABLE_GLES300_GAPI)
+#       define JE_GL_USE_EGL_INSTEAD_GLFW
+#   endif 
+
 void jegui_init_gl330(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*),
