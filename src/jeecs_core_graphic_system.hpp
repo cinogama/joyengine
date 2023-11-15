@@ -11,10 +11,9 @@
 #include <queue>
 #include <list>
 
-#define JE_MAX_LIGHT2D_COUNT 16
-#define JE_SHADOW2D_0 24
-
-#define JE_LIGHT2D_DEFER_0 16
+#define JE_MAX_LIGHT2D_COUNT 8
+#define JE_SHADOW2D_0 8
+#define JE_LIGHT2D_DEFER_0 4
 
 const char* shader_light2d_path = "je/shader/light2d.wo";
 const char* shader_light2d_src = R"(
@@ -23,9 +22,9 @@ const char* shader_light2d_src = R"(
 
 import je::shader;
 
-public let MAX_SHADOW_LIGHT_COUNT = 16;
-let SHADOW2D_TEX_0 = 24;
-let DEFER_TEX_0 = 16;
+public let JE_MAX_LIGHT2D_COUNT = 8;
+let JE_SHADOW2D_0 = 8;
+let DEFER_TEX_0 = 4;
 
 // define struct for Light
 GRAPHIC_STRUCT! Light2D
@@ -49,7 +48,7 @@ UNIFORM_BUFFER! JOYENGINE_LIGHT2D = 1
 public let je_light2ds = func(){
     let lights = []mut: vec<Light2D_t>;
 
-    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
+    for (let mut i = 0;i < JE_MAX_LIGHT2D_COUNT; i += 1)
         lights->add(JOYENGINE_LIGHT2D->append_struct_uniform(F"JE_LIGHT2D_{i}", Light2D): gchandle: Light2D_t);
 
     return lights->toarray;
@@ -59,8 +58,8 @@ public let DefaultShadow2DSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CL
 public let je_shadow2ds = func(){
     let shadows = []mut: vec<texture2d>;
 
-    for (let mut i = 0;i < MAX_SHADOW_LIGHT_COUNT; i += 1)
-        shadows->add(uniform_texture:<texture2d>(F"JOYENGINE_SHADOW2D_{i}", DefaultShadow2DSampler, SHADOW2D_TEX_0 + i));
+    for (let mut i = 0;i < JE_MAX_LIGHT2D_COUNT; i += 1)
+        shadows->add(uniform_texture:<texture2d>(F"JOYENGINE_SHADOW2D_{i}", DefaultShadow2DSampler, JE_SHADOW2D_0 + i));
 
     return shadows->toarray;
 }();

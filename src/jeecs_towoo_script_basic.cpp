@@ -450,7 +450,7 @@ namespace je::towoo
             + script_parser_info->m_woolang_typename + "'\n"
             + script_parser_info->m_woolang_typedecl + "\n"
             "using " + script_parser_info->m_woolang_typename + "_tid = void\n{\n"
-            + "    public let id = je::typeinfo::load(\"" + typeinfo->m_typename + "\")->val;\n"
+            + "    public let id = je::typeinfo::load(\"" + script_parser_info->m_woolang_typename + "\")->val;\n"
             "}\n\n";
     }
 

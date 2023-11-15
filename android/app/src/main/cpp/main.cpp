@@ -34,35 +34,6 @@ struct jegl_android_surface_manager
 
             // Execute script entry in another thread.
             std::thread(je_main_script_entry).detach();
-
-            // DEBUG:
-            using namespace jeecs;
-
-            auto u = game_universe::create_universe();
-            auto w = u.create_world();
-
-            w.add_system(typing::type_info::of("Graphic::UnlitGraphicPipelineSystem"));
-            w.add_system(typing::type_info::of("Translation::TranslationUpdatingSystem"));
-
-            auto camera_entity = w.add_entity<
-                Transform::LocalPosition,
-                Transform::LocalToWorld,
-                Transform::Translation,
-                Camera::OrthoProjection,
-                Camera::Projection>();
-
-            auto block_entity = w.add_entity<
-                Transform::LocalPosition,
-                Transform::LocalRotation,
-                Transform::LocalToWorld,
-                Transform::Translation,
-                Renderer::Shaders,
-                Renderer::Shape,
-                Renderer::Textures>();
-
-            block_entity.get_component<Transform::LocalPosition>()->pos.z = 5.0f;
-            block_entity.get_component<Transform::LocalRotation>()->rot = math::quat::euler(0.f, 0.f, 15.0f);
-
         }
 
     }
@@ -182,9 +153,6 @@ jstring jni_jstring(JNIEnv* env, const char* str)
     return env->NewStringUTF(str);
 }
 
-std::string _je_android_host_cache_dir;
-std::string _je_android_host_asset_dir;
-
 extern "C" JNIEXPORT void JNICALL
 Java_net_cinogama_joyengineecs4a_MainActivity_initJoyEngine(
         JNIEnv * env,
@@ -194,8 +162,8 @@ Java_net_cinogama_joyengineecs4a_MainActivity_initJoyEngine(
         jstring asset_path)
 {
     wo_set_exe_path(jni_cstring(env, library_path).c_str());
-    _je_android_host_cache_dir = jni_cstring(env, cache_path);
-    _je_android_host_asset_dir = jni_cstring(env, asset_path);
+    jeecs_file_set_host_path(jni_cstring(env, cache_path).c_str());
+    jeecs_file_set_runtime_path(jni_cstring(env, asset_path).c_str());
 }
 
 void _je_log_to_android(int level, const char* msg, void*)
@@ -231,9 +199,6 @@ void android_main(struct android_app *pApp) {
     using namespace jeecs;
 
     je_init(0, nullptr);
-
-    jeecs_file_set_host_path(_je_android_host_cache_dir.c_str());
-    jeecs_file_set_runtime_path(_je_android_host_asset_dir.c_str());
 
     auto logcallback = je_log_register_callback(_je_log_to_android, nullptr);
 

@@ -1,9 +1,15 @@
 package net.cinogama.joyengineecs4a;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
+import android.content.res.AssetManager;
 
 import com.google.androidgamesdk.GameActivity;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 
 public class MainActivity extends GameActivity {
     static {
@@ -19,14 +25,42 @@ public class MainActivity extends GameActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Check packing files, varify file version. unpack them.
+        try {
+            File dir = new File(getApplication().getCacheDir(), "builtin");
+            if (!dir.exists())
+            {
+                dir.mkdirs();
+            }
+            AssetManager asset_manager = getAssets();
+            for (String path : asset_manager.list(""))
+            {
+                if (path.endsWith(".jeimg4") || path.endsWith(".jeimgidx4"))
+                {
+                    InputStream is = asset_manager.open(path);
+                    FileOutputStream fos = new FileOutputStream(
+                            new File(getApplication().getFilesDir().getAbsolutePath(), path));
+                    byte[] buffer = new byte[1024];
+                    int byteCount=0;
+                    while((byteCount=is.read(buffer))!=-1) {//循环从输入流读取 buffer字节
+                        fos.write(buffer, 0, byteCount);//将读取的输入流写入到输出流
+                    }
+                    fos.flush();//刷新缓冲区
+                    is.close();
+                    fos.close();
+                }
+            }
+        }
+        catch(Exception e)
+        {
+            Log.e("JoyEngineAssets", "Failed to unpack image: " + e.getMessage());
+        }
+
         // Init native lib path.
         initJoyEngine(
-            getApplicationInfo().nativeLibraryDir,
-            getApplication().getCacheDir().getAbsolutePath(),
-            getApplication().getFilesDir().getAbsolutePath());
-
-        // Check packing files, varify file version. unpack them.
-        // TODO;
+                getApplicationInfo().nativeLibraryDir,
+                getApplication().getCacheDir().getAbsolutePath(),
+                getApplication().getFilesDir().getAbsolutePath());
     }
 
     @Override

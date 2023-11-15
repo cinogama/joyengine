@@ -125,7 +125,7 @@ namespace jeecs_impl
             }
             else
             {
-                // 3. No such type, append.
+                // 2. No such type, append.
                 auto holder_fnd = std::find(_m_type_holder_list.begin(), _m_type_holder_list.end(), nullptr);
                 if (holder_fnd != _m_type_holder_list.end())
                 {
@@ -168,6 +168,14 @@ namespace jeecs_impl
                 auto fnd = _m_type_name_id_mapping.find(name);
                 if (fnd != _m_type_name_id_mapping.end())
                     return _m_type_holder_list[fnd->second - 1];
+
+                // Not found? find it from woolang name?
+                for (auto* typeinfo : _m_type_holder_list)
+                {
+                    if (typeinfo->m_script_parser_info != nullptr &&
+                        strcmp(typeinfo->m_script_parser_info->m_woolang_typename, name) == 0)
+                        return typeinfo;
+                }
             }
             return nullptr;
         }
