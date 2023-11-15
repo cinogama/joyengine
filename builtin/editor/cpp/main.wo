@@ -715,7 +715,7 @@ add_library($$JEMODULE_PROJECT_NAME$$ SHARED
     ${module_source_sources}
     ../../main.cpp
     ../../loader.hpp)
-target_compile_definitions($$JEMODULE_PROJECT_NAME$$ PUBLIC JE4_MODULE_NAME="_user_module_$$JEMODULE_PROJECT_NAME$$")
+
 if (NOT MSVC)
     target_compile_options($$JEMODULE_PROJECT_NAME$$ PUBLIC --no-gnu-unique)
 endif()

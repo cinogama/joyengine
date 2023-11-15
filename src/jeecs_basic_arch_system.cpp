@@ -371,7 +371,7 @@ namespace jeecs_impl
                 const size_t gap_size = typeinfo->m_align - bulge_size;
                 if (gap_size != 0)
                     component_reserved_gap += gap_size;
-                
+
                 last_align = typeinfo->m_align;
                 entity_size += typeinfo->m_chunk_size;
             }
@@ -380,7 +380,7 @@ namespace jeecs_impl
             const size_t chunk_size_without_gap = CHUNK_SIZE - component_reserved_gap;
             assert(_m_entity_size != 0 && _m_entity_size <= chunk_size_without_gap);
 
-            const_cast<size_t&>(_m_entity_count_per_chunk) = 
+            const_cast<size_t&>(_m_entity_count_per_chunk) =
                 chunk_size_without_gap / _m_entity_size;
 
             size_t mem_offset = 0;
@@ -1004,8 +1004,8 @@ namespace jeecs_impl
 #endif
                 remove_system_instance(type);
                 append_system_instance(type, sys);
+            }
         }
-    }
         void remove_system_instance(const jeecs::typing::type_info* type) noexcept
         {
             if (m_systems.find(type) != m_systems.end())
@@ -1156,7 +1156,7 @@ namespace jeecs_impl
             return _m_universe;
         }
 
-};
+    };
 
     void default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void* _);
 
@@ -1178,205 +1178,205 @@ namespace jeecs_impl
                 // free temp components.
                 arch_type::entity current_entity = _buf_in_entity.first;
 
-        auto* modify_typed_components = _buf_in_entity.second->m_adding_or_removing_components.pick_all();
-        std::unordered_map<const jeecs::typing::type_info*, void*> modifying_component_type_and_instances;
+                auto* modify_typed_components = _buf_in_entity.second->m_adding_or_removing_components.pick_all();
+                std::unordered_map<const jeecs::typing::type_info*, void*> modifying_component_type_and_instances;
 
-        while (modify_typed_components != nullptr)
-        {
-            auto* current_modify_typed_components = modify_typed_components;
-            modify_typed_components = modify_typed_components->last;
-
-            if (modifying_component_type_and_instances.find(current_modify_typed_components->m_typeinfo)
-                == modifying_component_type_and_instances.end())
-            {
-                modifying_component_type_and_instances[current_modify_typed_components->m_typeinfo] =
-                    current_modify_typed_components->m_component_addr;
-            }
-            else if (current_modify_typed_components->m_component_addr != nullptr)
-            {
-                current_modify_typed_components->m_typeinfo->destruct(current_modify_typed_components->m_component_addr);
-                je_mem_free(current_modify_typed_components->m_component_addr);
-            }
-            delete current_modify_typed_components;
-        }
-
-        if (current_entity.is_valid())
-        {
-            if (_buf_in_entity.second->m_entity_removed_flag)
-            {
-                // Remove all new component;
-                for (auto& [typeinfo, instance] : modifying_component_type_and_instances)
+                while (modify_typed_components != nullptr)
                 {
-                    if (instance != nullptr)
+                    auto* current_modify_typed_components = modify_typed_components;
+                    modify_typed_components = modify_typed_components->last;
+
+                    if (modifying_component_type_and_instances.find(current_modify_typed_components->m_typeinfo)
+                        == modifying_component_type_and_instances.end())
+                    {
+                        modifying_component_type_and_instances[current_modify_typed_components->m_typeinfo] =
+                            current_modify_typed_components->m_component_addr;
+                    }
+                    else if (current_modify_typed_components->m_component_addr != nullptr)
+                    {
+                        current_modify_typed_components->m_typeinfo->destruct(current_modify_typed_components->m_component_addr);
+                        je_mem_free(current_modify_typed_components->m_component_addr);
+                    }
+                    delete current_modify_typed_components;
+                }
+
+                if (current_entity.is_valid())
+                {
+                    if (_buf_in_entity.second->m_entity_removed_flag)
+                    {
+                        // Remove all new component;
+                        for (auto& [typeinfo, instance] : modifying_component_type_and_instances)
+                        {
+                            if (instance != nullptr)
+                            {
+                                typeinfo->destruct(instance);
+                                je_mem_free(instance);
+                            }
+                        }
+
+                        // Remove all component
+                        for (jeecs::typing::typeid_t type_id : *current_entity.chunk()->types())
+                        {
+                            current_entity.chunk()->destruct_component_addr_with_typeid(
+                                current_entity._m_id,
+                                type_id
+                            );
+                        }
+
+                        // OK, Mark old entity chunk is freed, 
+                        current_entity.chunk()->command_close_entity(current_entity._m_id);
+                    }
+                    else
+                    {
+                        // 1. Mark entity as active..
+                        if (_buf_in_entity.second->m_entity_active_stat != jeecs::game_entity::entity_stat::UNAVAILABLE)
+                            current_entity.chunk()->command_active_entity(current_entity._m_id, _buf_in_entity.second->m_entity_active_stat);
+
+                        if (current_entity.chunk()->get_entity_meta()[current_entity._m_id].m_stat == jeecs::game_entity::entity_stat::PREFAB)
+                        {
+                            // Remove all new component;
+                            for (auto& [typeinfo, instance] : modifying_component_type_and_instances)
+                            {
+                                if (instance != nullptr)
+                                {
+                                    jeecs::debug::logerr("Cannot add component: '%s' to prefab(%p:%zuv%zu).",
+                                        typeinfo->m_typename,
+                                        current_entity._m_in_chunk,
+                                        (size_t)current_entity._m_id,
+                                        (size_t)current_entity._m_version);
+
+                                    typeinfo->destruct(instance);
+                                    je_mem_free(instance);
+                                }
+                                else
+                                {
+                                    jeecs::debug::logerr("Cannot remove component: '%s' to prefab(%p:%zuv%zu).",
+                                        typeinfo->m_typename,
+                                        current_entity._m_in_chunk,
+                                        (size_t)current_entity._m_id,
+                                        (size_t)current_entity._m_version);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            types_set new_chunk_types = *current_entity.chunk()->types();
+
+                            // 2. Apply modify!
+                            std::unordered_map<jeecs::typing::typeid_t, void*> append_component_type_addr_map;
+                            for (auto& [typeinfo, instance] : modifying_component_type_and_instances)
+                            {
+                                if (instance == nullptr)
+                                {
+                                    // Trying to remove.
+                                    if (new_chunk_types.erase(typeinfo->m_id))
+                                    {
+                                        current_entity.chunk()
+                                            ->destruct_component_addr_with_typeid(current_entity._m_id,
+                                                typeinfo->m_id);
+                                    }
+#ifndef NDEBUG
+                                    else
+                                        jeecs::debug::logwarn("Trying to remove '%s' from entity '%p:%zuv%zu', but the specify entity donot contain this component, skip.",
+                                            typeinfo->m_typename,
+                                            current_entity._m_in_chunk, current_entity._m_id, current_entity._m_version);
+#endif
+                                }
+                                else
+                                {
+                                    append_component_type_addr_map[typeinfo->m_id] = instance;
+
+                                    // Trying to append.
+                                    if (new_chunk_types.find(typeinfo->m_id) == new_chunk_types.end())
+                                        new_chunk_types.insert(typeinfo->m_id);
+                                    else
+                                    {
+#ifndef NDEBUG
+                                        jeecs::debug::logwarn("Trying to append '%s' to entity '%p:%zuv%zu', but the specify entity already contained this component, replace it.",
+                                            typeinfo->m_typename,
+                                            current_entity._m_in_chunk, current_entity._m_id, current_entity._m_version);
+#endif
+                                        // Old component already contained in this entity.
+                                        // Destroy old one for replacing.
+                                        current_entity.chunk()
+                                            ->destruct_component_addr_with_typeid(current_entity._m_id,
+                                                typeinfo->m_id);
+                                    }
+                                }
+                            }
+
+                            // 3. Almost done! get new arch type:
+                            auto* current_arch_type = current_entity.chunk()->get_arch_type();
+                            auto* new_arch_type_my_null = current_arch_type->get_arch_mgr()->find_or_add_arch(new_chunk_types);
+
+                            if (new_arch_type_my_null == current_arch_type)
+                            {
+                                // New & old arch is same, rebuilt in place.
+                                for (auto [typeinfo, instance] : modifying_component_type_and_instances)
+                                {
+                                    assert(instance != nullptr);
+                                    current_entity.chunk()->move_component_from(current_entity._m_id, typeinfo->m_id, instance);
+                                    je_mem_free(instance);
+                                }
+                            }
+                            else
+                            {
+                                if (new_arch_type_my_null != nullptr)
+                                {
+                                    arch_type::arch_chunk* chunk;
+                                    jeecs::typing::entity_id_in_chunk_t entity_id;
+                                    jeecs::typing::version_t entity_version;
+
+                                    new_arch_type_my_null->alloc_entity(current_entity.get_euid(), &chunk, &entity_id, &entity_version);
+                                    // Entity alloced, move component to here..
+
+                                    for (jeecs::typing::typeid_t type_id : new_chunk_types)
+                                    {
+                                        auto fnd = append_component_type_addr_map.find(type_id);
+                                        if (fnd == append_component_type_addr_map.end())
+                                        {
+                                            // 1. Move old component
+                                            chunk->move_component_from(entity_id, type_id,
+                                                current_entity.chunk()->get_component_addr_with_typeid(
+                                                    current_entity._m_id, type_id));
+                                        }
+                                        else
+                                        {
+                                            // 2. Move new component
+                                            assert(fnd->second != nullptr);
+
+                                            chunk->move_component_from(entity_id, type_id, fnd->second);
+                                            je_mem_free(fnd->second);
+                                        }
+                                    }
+
+                                    // Active new one
+                                    assert(current_entity.chunk()->get_entity_meta()[current_entity._m_id].m_stat
+                                        == jeecs::game_entity::entity_stat::READY);
+                                    chunk->command_active_entity(entity_id, jeecs::game_entity::entity_stat::READY);
+                                }
+                                else
+                                {
+                                    assert(new_chunk_types.empty());
+                                }
+
+                                // OK, Mark old entity chunk is freed, 
+                                current_entity.chunk()->command_close_entity(current_entity._m_id);
+                            }
+                        }
+                    }// End component modify
+                }
+                else
+                {
+                    // Remove all new component;
+                    for (auto& [typeinfo, instance] : modifying_component_type_and_instances)
                     {
                         typeinfo->destruct(instance);
                         je_mem_free(instance);
                     }
                 }
 
-                // Remove all component
-                for (jeecs::typing::typeid_t type_id : *current_entity.chunk()->types())
-                {
-                    current_entity.chunk()->destruct_component_addr_with_typeid(
-                        current_entity._m_id,
-                        type_id
-                    );
-                }
-
-                // OK, Mark old entity chunk is freed, 
-                current_entity.chunk()->command_close_entity(current_entity._m_id);
-            }
-            else
-            {
-                // 1. Mark entity as active..
-                if (_buf_in_entity.second->m_entity_active_stat != jeecs::game_entity::entity_stat::UNAVAILABLE)
-                    current_entity.chunk()->command_active_entity(current_entity._m_id, _buf_in_entity.second->m_entity_active_stat);
-
-                if (current_entity.chunk()->get_entity_meta()[current_entity._m_id].m_stat == jeecs::game_entity::entity_stat::PREFAB)
-                {
-                    // Remove all new component;
-                    for (auto& [typeinfo, instance] : modifying_component_type_and_instances)
-                    {
-                        if (instance != nullptr)
-                        {
-                            jeecs::debug::logerr("Cannot add component: '%s' to prefab(%p:%zuv%zu).",
-                                typeinfo->m_typename,
-                                current_entity._m_in_chunk,
-                                (size_t)current_entity._m_id,
-                                (size_t)current_entity._m_version);
-
-                            typeinfo->destruct(instance);
-                            je_mem_free(instance);
-                        }
-                        else
-                        {
-                            jeecs::debug::logerr("Cannot remove component: '%s' to prefab(%p:%zuv%zu).",
-                                typeinfo->m_typename,
-                                current_entity._m_in_chunk,
-                                (size_t)current_entity._m_id,
-                                (size_t)current_entity._m_version);
-                        }
-                    }
-                }
-                else
-                {
-                    types_set new_chunk_types = *current_entity.chunk()->types();
-
-                    // 2. Apply modify!
-                    std::unordered_map<jeecs::typing::typeid_t, void*> append_component_type_addr_map;
-                    for (auto& [typeinfo, instance] : modifying_component_type_and_instances)
-                    {
-                        if (instance == nullptr)
-                        {
-                            // Trying to remove.
-                            if (new_chunk_types.erase(typeinfo->m_id))
-                            {
-                                current_entity.chunk()
-                                    ->destruct_component_addr_with_typeid(current_entity._m_id,
-                                        typeinfo->m_id);
-                            }
-#ifndef NDEBUG
-                            else
-                                jeecs::debug::logwarn("Trying to remove '%s' from entity '%p:%zuv%zu', but the specify entity donot contain this component, skip.",
-                                    typeinfo->m_typename,
-                                    current_entity._m_in_chunk, current_entity._m_id, current_entity._m_version);
-#endif
-                            }
-                        else
-                        {
-                            append_component_type_addr_map[typeinfo->m_id] = instance;
-
-                            // Trying to append.
-                            if (new_chunk_types.find(typeinfo->m_id) == new_chunk_types.end())
-                                new_chunk_types.insert(typeinfo->m_id);
-                            else
-                            {
-#ifndef NDEBUG
-                                jeecs::debug::logwarn("Trying to append '%s' to entity '%p:%zuv%zu', but the specify entity already contained this component, replace it.",
-                                    typeinfo->m_typename,
-                                    current_entity._m_in_chunk, current_entity._m_id, current_entity._m_version);
-#endif
-                                // Old component already contained in this entity.
-                                // Destroy old one for replacing.
-                                current_entity.chunk()
-                                    ->destruct_component_addr_with_typeid(current_entity._m_id,
-                                        typeinfo->m_id);
-                        }
-                        }
-                    }
-
-                    // 3. Almost done! get new arch type:
-                    auto* current_arch_type = current_entity.chunk()->get_arch_type();
-                    auto* new_arch_type_my_null = current_arch_type->get_arch_mgr()->find_or_add_arch(new_chunk_types);
-
-                    if (new_arch_type_my_null == current_arch_type)
-                    {
-                        // New & old arch is same, rebuilt in place.
-                        for (auto [typeinfo, instance] : modifying_component_type_and_instances)
-                        {
-                            assert(instance != nullptr);
-                            current_entity.chunk()->move_component_from(current_entity._m_id, typeinfo->m_id, instance);
-                            je_mem_free(instance);
-                        }
-                    }
-                    else
-                    {
-                        if (new_arch_type_my_null != nullptr)
-                        {
-                            arch_type::arch_chunk* chunk;
-                            jeecs::typing::entity_id_in_chunk_t entity_id;
-                            jeecs::typing::version_t entity_version;
-
-                            new_arch_type_my_null->alloc_entity(current_entity.get_euid(), &chunk, &entity_id, &entity_version);
-                            // Entity alloced, move component to here..
-
-                            for (jeecs::typing::typeid_t type_id : new_chunk_types)
-                            {
-                                auto fnd = append_component_type_addr_map.find(type_id);
-                                if (fnd == append_component_type_addr_map.end())
-                                {
-                                    // 1. Move old component
-                                    chunk->move_component_from(entity_id, type_id,
-                                        current_entity.chunk()->get_component_addr_with_typeid(
-                                            current_entity._m_id, type_id));
-                                }
-                                else
-                                {
-                                    // 2. Move new component
-                                    assert(fnd->second != nullptr);
-
-                                    chunk->move_component_from(entity_id, type_id, fnd->second);
-                                    je_mem_free(fnd->second);
-                                }
-                            }
-
-                            // Active new one
-                            assert(current_entity.chunk()->get_entity_meta()[current_entity._m_id].m_stat 
-                                == jeecs::game_entity::entity_stat::READY);
-                            chunk->command_active_entity(entity_id, jeecs::game_entity::entity_stat::READY);
-                        }
-                        else
-                        {
-                            assert(new_chunk_types.empty());
-                        }
-
-                        // OK, Mark old entity chunk is freed, 
-                        current_entity.chunk()->command_close_entity(current_entity._m_id);
-                    }
-                }
-            }// End component modify
-        }
-        else
-        {
-            // Remove all new component;
-            for (auto& [typeinfo, instance] : modifying_component_type_and_instances)
-            {
-                typeinfo->destruct(instance);
-                je_mem_free(instance);
-            }
-        }
-
-        delete _buf_in_entity.second;
+                delete _buf_in_entity.second;
             });
 
         // Finish! clear buffer.
@@ -1395,41 +1395,41 @@ namespace jeecs_impl
                 // free temp components.
                 ecs_world* world = _buf_in_world.first;
 
-        if (_buf_in_world.second->m_destroy_world)
-            world->ready_to_destroy();
+                if (_buf_in_world.second->m_destroy_world)
+                    world->ready_to_destroy();
 
-        std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*> modifying_system_type_and_instances;
+                std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*> modifying_system_type_and_instances;
 
-        auto* append_or_remove_system = _buf_in_world.second->m_adding_or_removing_systems.pick_all();
-        while (append_or_remove_system)
-        {
-            auto* cur_append_or_remove_system = append_or_remove_system;
-            append_or_remove_system = append_or_remove_system->last;
+                auto* append_or_remove_system = _buf_in_world.second->m_adding_or_removing_systems.pick_all();
+                while (append_or_remove_system)
+                {
+                    auto* cur_append_or_remove_system = append_or_remove_system;
+                    append_or_remove_system = append_or_remove_system->last;
 
-            if (modifying_system_type_and_instances.find(cur_append_or_remove_system->m_typeinfo)
-                == modifying_system_type_and_instances.end())
-            {
-                modifying_system_type_and_instances[cur_append_or_remove_system->m_typeinfo] =
-                    cur_append_or_remove_system->m_add_system_instance;
-            }
-            else if (cur_append_or_remove_system->m_add_system_instance != nullptr)
-            {
-                cur_append_or_remove_system->m_typeinfo->destruct(cur_append_or_remove_system->m_add_system_instance);
-                je_mem_free(cur_append_or_remove_system->m_add_system_instance);
-            }
+                    if (modifying_system_type_and_instances.find(cur_append_or_remove_system->m_typeinfo)
+                        == modifying_system_type_and_instances.end())
+                    {
+                        modifying_system_type_and_instances[cur_append_or_remove_system->m_typeinfo] =
+                            cur_append_or_remove_system->m_add_system_instance;
+                    }
+                    else if (cur_append_or_remove_system->m_add_system_instance != nullptr)
+                    {
+                        cur_append_or_remove_system->m_typeinfo->destruct(cur_append_or_remove_system->m_add_system_instance);
+                        je_mem_free(cur_append_or_remove_system->m_add_system_instance);
+                    }
 
-            delete cur_append_or_remove_system;
-        }
+                    delete cur_append_or_remove_system;
+                }
 
-        for (auto [typeinfo, instance] : modifying_system_type_and_instances)
-        {
-            if (instance == nullptr)
-                world->remove_system_instance(typeinfo);
-            else
-                world->append_system_instance(typeinfo, instance);
-        }
+                for (auto [typeinfo, instance] : modifying_system_type_and_instances)
+                {
+                    if (instance == nullptr)
+                        world->remove_system_instance(typeinfo);
+                    else
+                        world->append_system_instance(typeinfo, instance);
+                }
 
-        delete _buf_in_world.second;
+                delete _buf_in_world.second;
 
             });
 
@@ -1623,7 +1623,7 @@ namespace jeecs_impl
                     auto fnd = std::find_if(_m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
                         [cur_action](ecs_job* _job) {
                             return _job->m_job_type == ecs_job::job_type::FOR_WORLDS
-                            && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                                && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
                         });
 
                     if (fnd == _m_shared_pre_jobs.end())
@@ -1644,7 +1644,7 @@ namespace jeecs_impl
                     auto fnd = std::find_if(_m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
                         [cur_action](ecs_job* _job) {
                             return _job->m_job_type == ecs_job::job_type::CALL_ONCE
-                            && _job->m_call_once_job == cur_action->m_call_once_job;
+                                && _job->m_call_once_job == cur_action->m_call_once_job;
                         });
 
                     if (fnd == _m_shared_pre_jobs.end())
@@ -1663,7 +1663,7 @@ namespace jeecs_impl
                     auto fnd = std::find_if(_m_shared_jobs.begin(), _m_shared_jobs.end(),
                         [cur_action](ecs_job* _job) {
                             return _job->m_job_type == ecs_job::job_type::FOR_WORLDS
-                            && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                                && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
                         });
 
                     if (fnd == _m_shared_jobs.end())
@@ -1681,7 +1681,7 @@ namespace jeecs_impl
                     auto fnd = std::find_if(_m_shared_jobs.begin(), _m_shared_jobs.end(),
                         [cur_action](ecs_job* _job) {
                             return _job->m_job_type == ecs_job::job_type::CALL_ONCE
-                            && _job->m_call_once_job == cur_action->m_call_once_job;
+                                && _job->m_call_once_job == cur_action->m_call_once_job;
                         });
 
                     if (fnd == _m_shared_jobs.end())
@@ -1699,7 +1699,7 @@ namespace jeecs_impl
                     auto fnd = std::find_if(_m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
                         [cur_action](ecs_job* _job) {
                             return _job->m_job_type == ecs_job::job_type::FOR_WORLDS
-                            && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                                && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
                         });
 
                     if (fnd == _m_shared_after_jobs.end())
@@ -1717,7 +1717,7 @@ namespace jeecs_impl
                     auto fnd = std::find_if(_m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
                         [cur_action](ecs_job* _job) {
                             return _job->m_job_type == ecs_job::job_type::CALL_ONCE
-                            && _job->m_call_once_job == cur_action->m_call_once_job;
+                                && _job->m_call_once_job == cur_action->m_call_once_job;
                         });
 
                     if (fnd == _m_shared_after_jobs.end())
@@ -1763,10 +1763,10 @@ namespace jeecs_impl
                 [this](ecs_job* shared_job) {
 
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
-                    ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                        [this, shared_job](ecs_world* world) {
-                            shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
-                        });
+                        ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                            [this, shared_job](ecs_world* world) {
+                                shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
+                            });
                     else
                         shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
@@ -1779,10 +1779,10 @@ namespace jeecs_impl
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
                 [this](ecs_job* shared_job) {
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
-                    ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                        [this, shared_job](ecs_world* world) {
-                            shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
-                        });
+                        ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                            [this, shared_job](ecs_world* world) {
+                                shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
+                            });
                     else
                         shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
@@ -1792,10 +1792,10 @@ namespace jeecs_impl
                 _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
                 [this](ecs_job* shared_job) {
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
-                    ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                        [this, shared_job](ecs_world* world) {
-                            shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
-                        });
+                        ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                            [this, shared_job](ecs_world* world) {
+                                shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
+                            });
                     else
                         shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
@@ -1822,28 +1822,28 @@ namespace jeecs_impl
                             break;
                     }
 
-            // Make sure universe action empty.
-            update();
-            assert(_m_universe_actions.peek() == nullptr);
+                    // Make sure universe action empty.
+                    update();
+                    assert(_m_universe_actions.peek() == nullptr);
 
-            // Free all ecs_jobs.
-            for (ecs_job* pre_job : _m_shared_pre_jobs)
-                delete pre_job;
-            for (ecs_job* job : _m_shared_jobs)
-                delete job;
-            for (ecs_job* after_job : _m_shared_after_jobs)
-                delete after_job;
+                    // Free all ecs_jobs.
+                    for (ecs_job* pre_job : _m_shared_pre_jobs)
+                        delete pre_job;
+                    for (ecs_job* job : _m_shared_jobs)
+                        delete job;
+                    for (ecs_job* after_job : _m_shared_after_jobs)
+                        delete after_job;
 
-            // invoke callback
-            auto* callback_func_node = m_exit_callback_list.pick_all();
-            while (callback_func_node)
-            {
-                auto* current_callback = callback_func_node;
-                callback_func_node = callback_func_node->last;
+                    // invoke callback
+                    auto* callback_func_node = m_exit_callback_list.pick_all();
+                    while (callback_func_node)
+                    {
+                        auto* current_callback = callback_func_node;
+                        callback_func_node = callback_func_node->last;
 
-                current_callback->m_method();
-                delete current_callback;
-            }
+                        current_callback->m_method();
+                        delete current_callback;
+                    }
                 }
             ));
 
@@ -2123,10 +2123,14 @@ void je_ecs_universe_loop(void* ecs_universe)
     std::atomic_flag exit_flag = {};
     exit_flag.test_and_set();
 
-    std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(ecs_universe))->register_exit_callback([&]() {
-        std::lock_guard g1(exit_mx);
-    exit_flag.clear();
-    exit_cv.notify_all();
+    auto* universe_impl = std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(ecs_universe));
+
+    universe_impl->register_exit_callback(
+        [&]()
+        {
+            std::lock_guard g1(exit_mx);
+            exit_flag.clear();
+            exit_cv.notify_all();
         });
 
     do

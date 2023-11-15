@@ -4,13 +4,6 @@
 * JoyECS is a interesting ecs-impl.
 *
 */
-#define JE_IMPL
-#define JE_ENABLE_DEBUG_API
-
-#ifdef JE4_MODULE_NAME
-#   undef JE4_MODULE_NAME
-#endif
-#define JE4_MODULE_NAME "_je4_driver_entry"
 
 #include "jeecs.hpp"
 

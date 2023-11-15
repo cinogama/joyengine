@@ -6,10 +6,6 @@
 #error jeecs.h only support for c++
 #else
 
-#ifndef JE4_MODULE_NAME
-#error You must specify a unique module name.
-#endif
-
 #include "wo.h"
 
 #include <cstdint>
@@ -829,13 +825,16 @@ JE_API void* je_ecs_universe_create(void);
 je_ecs_universe_loop [基本接口]
 等待指定的宇宙直到其完全退出运行，这是一个阻塞函数。
 此函数一般用于宇宙创建并完成初始状态设定之后，阻塞主线程避免过早的退出。
+    * 由于实现机制（依赖Universe的退出回调函数）限制，不允许在Universe被
+    stop之后调用，否则将导致死锁
+请参见：
+    je_ecs_universe_register_exit_callback
 */
 JE_API void je_ecs_universe_loop(void* universe);
 
 /*
 je_ecs_universe_destroy [基本接口]
-销毁一个宇宙，在执行此操作之前请确保宇宙已经完全退出，一般在je_ecs_universe_loop
-之后调用。
+销毁一个宇宙，阻塞直到Universe完全销毁
 请参见：
     je_ecs_universe_loop
 */
@@ -843,8 +842,8 @@ JE_API void je_ecs_universe_destroy(void* universe);
 
 /*
 je_ecs_universe_stop [基本接口]
-请求终止指定宇宙的运行，此函数会请求销毁宇宙中的所有世界，然后宇宙会阻塞直到所有世界
-完全关闭后终止运行。
+请求终止指定宇宙的运行，此函数会请求销毁宇宙中的所有世界，宇宙会在所有世界完全关闭
+后终止运行。
 * 这意味着如果在退出过程中创建了新的世界，宇宙的工作将继续持续直到这些世界完全退出，
     因此不推荐在组件/系统的析构函数中做多余的逻辑操作。析构函数仅用于释放资源。
 */
@@ -853,6 +852,7 @@ JE_API void je_ecs_universe_stop(void* universe);
 /*
 je_ecs_universe_register_exit_callback [基本接口]
 向指定宇宙中注册宇宙关闭之后的回调函数，关于回调函数的调用时机：
+    * 不能对已经终止的宇宙注册回调，回调函数将不会得到执行
 请参见
     je_ecs_universe_create
 */
