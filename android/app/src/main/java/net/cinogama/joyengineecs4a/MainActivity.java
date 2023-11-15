@@ -10,14 +10,23 @@ public class MainActivity extends GameActivity {
         System.loadLibrary("joyengineecs4a");
     }
 
-    public native void initJoyEngine(String native_lib_path);
+    public native void initJoyEngine(
+        String native_lib_path,
+        String cache_path,
+        String asset_path);
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         // Init native lib path.
-        initJoyEngine(getApplicationInfo().nativeLibraryDir);
+        initJoyEngine(
+            getApplicationInfo().nativeLibraryDir,
+            getApplication().getCacheDir().getAbsolutePath(),
+            getApplication().getFilesDir().getAbsolutePath());
+
+        // Check packing files, varify file version. unpack them.
+        // TODO;
     }
 
     @Override
@@ -32,12 +41,12 @@ public class MainActivity extends GameActivity {
     private void hideSystemUi() {
         View decorView = getWindow().getDecorView();
         decorView.setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
         );
     }
 }

@@ -377,14 +377,18 @@ jeecs_fimg_file* fimg_open_file(fimg_img* img, const char* fpath)
 
 ///
 
+std::string _je_host_path = "";
 std::string _je_runtime_path = "!";
+
 fimg_img* _je_runtime_file_image = nullptr;
-std::shared_mutex _je_runtime_path_and_image_mx;
+
+void jeecs_file_set_host_path(const char* path)
+{
+    _je_host_path = path;
+}
 
 void jeecs_file_set_runtime_path(const char* path)
 {
-    std::lock_guard g1(_je_runtime_path_and_image_mx);
-
     _je_runtime_path = path;
     if (_je_runtime_file_image != nullptr)
         fimg_close_img(_je_runtime_file_image);
@@ -392,10 +396,13 @@ void jeecs_file_set_runtime_path(const char* path)
     _je_runtime_file_image = fimg_open_img(path);
 }
 
+const char* jeecs_file_get_host_path()
+{
+    return _je_host_path.c_str();
+}
+
 const char* jeecs_file_get_runtime_path()
 {
-    std::shared_lock g1(_je_runtime_path_and_image_mx);
-
     return _je_runtime_path.c_str();
 }
 
@@ -408,7 +415,6 @@ jeecs_file* jeecs_file_open(const char* path)
 
     if (path_str[0] == '@')
     {
-        std::shared_lock sg1(_je_runtime_path_and_image_mx);
         // 1. Local file, trying to find file from file-image.
         if (_je_runtime_file_image != nullptr)
         {
@@ -425,10 +431,12 @@ jeecs_file* jeecs_file_open(const char* path)
         }
 
         // 2. Not found, try find from local runtime path.
-        path_str = _je_runtime_path + path_str.substr(1);
+        path_str = jeecs_file_get_runtime_path() + path_str.substr(1);
     }
     if (path_str[0] == '!')
-        path_str = wo_exe_path() + path_str.substr(1);
+    {
+        path_str = jeecs_file_get_host_path() + path_str.substr(1);
+    }
 
     FILE* fhandle = fopen(path_str.c_str(), "rb");
     if (fhandle)

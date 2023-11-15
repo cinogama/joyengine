@@ -100,7 +100,7 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
     if (file_cache_path[0] == '@')
         file_cache_path = jeecs_file_get_runtime_path() + file_cache_path.substr(1);
     if (file_cache_path[0] == '!')
-        file_cache_path = wo_exe_path() + file_cache_path.substr(1);
+        file_cache_path = jeecs_file_get_host_path() + file_cache_path.substr(1);
 
     FILE* f = fopen(file_cache_path.c_str(), "wb");
 

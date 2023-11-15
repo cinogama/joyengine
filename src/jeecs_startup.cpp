@@ -186,6 +186,7 @@ void je_init(int argc, char** argv)
         }
     }
 
+    jeecs_file_set_host_path(wo_exe_path());
     jeecs_file_set_runtime_path(wo_exe_path());
 
     wo_virtual_source(jeecs_towoo_path, jeecs_towoo_src, false);

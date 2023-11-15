@@ -1333,6 +1333,17 @@ struct jeecs_file
 };
 
 /*
+jeecs_file_set_host_path [基本接口]
+设置当前引擎的宿主环境在路径，不影响“实际可执行文件所在路径”
+    * 设置此路径将影响以 ! 开头的路径的实际位置
+    * 正常情况下，这个接口不需要调用，在初始化时，
+    引擎会自动设置为实际二进制文件所在路径，但是对于一些特殊平台，引擎
+    不能使用这些路径（出于需要创建缓存文件或需要读取镜像等资源文件）
+    使用此接口可以使得引擎内置机制使用指定的路径
+*/
+JE_API void        jeecs_file_set_host_path(const char* path);
+
+/*
 jeecs_file_set_runtime_path [基本接口]
 设置当前引擎的运行时路径，不影响“工作路径”
     * 设置此路径将影响以 @ 开头的路径的实际位置
@@ -1342,9 +1353,18 @@ jeecs_file_set_runtime_path [基本接口]
 JE_API void        jeecs_file_set_runtime_path(const char* path);
 
 /*
+jeecs_file_get_host_path [基本接口]
+获取当前引擎的宿主环境路径
+若没有使用 jeecs_file_set_host_path 设置此路径，则此路径默认为引擎的可
+执行文件所在路径
+请参见：
+    jeecs_file_set_host_path
+*/
+JE_API const char* jeecs_file_get_host_path();
+
+/*
 jeecs_file_get_runtime_path [基本接口]
 获取当前引擎的运行时路径，与“工作路径”无关
-    * 运行时路径影响以 @ 开头的路径的实际位置
 若没有使用 jeecs_file_set_runtime_path 设置此路径，则此路径默认为引擎的可
 执行文件所在路径
 请参见：

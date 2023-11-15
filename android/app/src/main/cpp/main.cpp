@@ -80,13 +80,13 @@ struct jegl_android_surface_manager
         // Let update to close interface here.
         sync_update();
     }
-    static void sync_update()
+    static bool sync_update()
     {
         if (_jegl_android_update_paused &&
             _jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
         {
             je_clock_sleep_for(0.1);
-            return;
+            return true;
         }
 
         if (_jegl_graphic_thread != nullptr)
@@ -104,6 +104,21 @@ struct jegl_android_surface_manager
                     _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT))
                     _jegl_graphic_thread = nullptr;
             }
+
+            return true;
+        }
+        return false;
+    }
+    static void sync_shutdown()
+    {
+        if (_jegl_graphic_thread != nullptr)
+        {
+            jegl_sync_shutdown(_jegl_graphic_thread, false);
+
+            jegl_terminate_graphic_thread(_jegl_graphic_thread);
+
+            _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
+            _jegl_graphic_thread = nullptr;
         }
     }
 };
@@ -167,13 +182,20 @@ jstring jni_jstring(JNIEnv* env, const char* str)
     return env->NewStringUTF(str);
 }
 
+std::string _je_android_host_cache_dir;
+std::string _je_android_host_asset_dir;
+
 extern "C" JNIEXPORT void JNICALL
 Java_net_cinogama_joyengineecs4a_MainActivity_initJoyEngine(
         JNIEnv * env,
         jobject /* this */,
-        jstring external_path)
+        jstring library_path,
+        jstring cache_path,
+        jstring asset_path)
 {
-    wo_set_exe_path(jni_cstring(env, external_path).c_str());
+    wo_set_exe_path(jni_cstring(env, library_path).c_str());
+    _je_android_host_cache_dir = jni_cstring(env, cache_path);
+    _je_android_host_asset_dir = jni_cstring(env, asset_path);
 }
 
 void _je_log_to_android(int level, const char* msg, void*)
@@ -209,6 +231,10 @@ void android_main(struct android_app *pApp) {
     using namespace jeecs;
 
     je_init(0, nullptr);
+
+    jeecs_file_set_host_path(_je_android_host_cache_dir.c_str());
+    jeecs_file_set_runtime_path(_je_android_host_asset_dir.c_str());
+
     auto logcallback = je_log_register_callback(_je_log_to_android, nullptr);
 
     auto* guard = new typing::type_unregister_guard();
@@ -226,9 +252,13 @@ void android_main(struct android_app *pApp) {
                     }
                 }
 
+                // Update frame sync.
                 jegl_android_surface_manager::sync_update();
 
             } while (!pApp->destroyRequested);
+
+            // Application is requesting to exit.
+            jegl_android_surface_manager::sync_shutdown();
         }
         entry::module_leave(guard);
     }
