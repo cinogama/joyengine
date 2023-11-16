@@ -14,14 +14,24 @@
 #           include <jni.h>
 #           include <game-activity/native_app_glue/android_native_app_glue.h>
 
-thread_local struct android_app* _je_tg_android_app;
+thread_local struct android_app* _je_tg_android_app = nullptr;
+
+void jegui_android_handleInputEvent()
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    auto pos = jeecs::input::mousepos(0);
+    io.AddMousePosEvent(pos.x, pos.y);
+    io.AddMouseButtonEvent(0, jeecs::input::mousedown(0, jeecs::input::mousecode::LEFT));
+}
+
 void jegui_android_init(struct android_app* app)
 {
     _je_tg_android_app = app;
     ImGui_ImplAndroid_Init(_je_tg_android_app->window);
 }
 
-static int jegui_android_ShowSoftKeyboardInput()
+int jegui_android_ShowSoftKeyboardInput()
 {
     JavaVM* java_vm = _je_tg_android_app->activity->vm;
     JNIEnv* java_env = nullptr;
@@ -50,7 +60,7 @@ static int jegui_android_ShowSoftKeyboardInput()
 
     return 0;
 }
-static int jegui_android_PollUnicodeChars()
+int jegui_android_PollUnicodeChars()
 {
     JavaVM* java_vm = _je_tg_android_app->activity->vm;
     JNIEnv* java_env = nullptr;
@@ -83,7 +93,6 @@ static int jegui_android_PollUnicodeChars()
 
     return 0;
 }
-
 #       else
 #           error Unsupport platform.
 #       endif
@@ -123,6 +132,9 @@ void jegui_update_gl330()
     if (io.WantTextInput && !WantTextInputLast)
         jegui_android_ShowSoftKeyboardInput();
     WantTextInputLast = io.WantTextInput;
+
+    jegui_android_handleInputEvent();
+
 #   else
 #       error Unsupport platform.
 #   endif
@@ -149,6 +161,8 @@ void jegui_shutdown_gl330(bool reboot)
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   ifdef JE_OS_ANDROID
     ImGui_ImplAndroid_Shutdown();
+    // _je_tg_android_app->onInputEvent = nullptr;
+    _je_tg_android_app = nullptr;
 #   else
 #       error Unsupport platform.
 #   endif

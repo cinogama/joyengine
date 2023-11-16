@@ -91,10 +91,6 @@ struct jegl_android_surface_manager
     {
         if (_jegl_graphic_thread != nullptr)
         {
-            jegl_sync_shutdown(_jegl_graphic_thread, false);
-
-            jegl_terminate_graphic_thread(_jegl_graphic_thread);
-
             _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
             _jegl_graphic_thread = nullptr;
         }
@@ -190,6 +186,87 @@ void _je_log_to_android(int level, const char* msg, void*)
     }
 }
 
+void _je_handle_inputs(struct android_app *app_) {
+    // handle all queued inputs
+    auto *inputBuffer = android_app_swap_input_buffers(app_);
+    if (!inputBuffer) {
+        // no inputs yet.
+        return;
+    }
+
+    // handle motion events (motionEventsCounts can be 0).
+    for (auto i = 0; i < inputBuffer->motionEventsCount; i++) {
+        auto &motionEvent = inputBuffer->motionEvents[i];
+        auto action = motionEvent.action;
+
+        // Find the pointer index, mask and bitshift to turn it into a readable value.
+        auto pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
+                >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+
+        // get the x and y position of this event if it is not ACTION_MOVE.
+        auto &pointer = motionEvent.pointers[pointerIndex];
+        auto x = GameActivityPointerAxes_getX(&pointer);
+        auto y = GameActivityPointerAxes_getY(&pointer);
+
+        // determine the action type and process the event accordingly.
+        switch (action & AMOTION_EVENT_ACTION_MASK) {
+            case AMOTION_EVENT_ACTION_DOWN:
+            case AMOTION_EVENT_ACTION_POINTER_DOWN:
+                je_io_update_mouse_state(
+                    pointer.id, jeecs::input::mousecode::LEFT, true);
+                je_io_update_mousepos(pointer.id, x, y);
+                break;
+
+            case AMOTION_EVENT_ACTION_CANCEL:
+                // treat the CANCEL as an UP event: doing nothing in the app, except
+                // removing the pointer from the cache if pointers are locally saved.
+                // code pass through on purpose.
+            case AMOTION_EVENT_ACTION_UP:
+            case AMOTION_EVENT_ACTION_POINTER_UP:
+                je_io_update_mouse_state(
+                    pointer.id, jeecs::input::mousecode::LEFT, false);
+                je_io_update_mousepos(pointer.id, x, y);
+                break;
+
+            case AMOTION_EVENT_ACTION_MOVE:
+                // There is no pointer index for ACTION_MOVE, only a snapshot of
+                // all active pointers; app needs to cache previous active pointers
+                // to figure out which ones are actually moved.
+                for (auto index = 0; index < motionEvent.pointerCount; index++) {
+                    pointer = motionEvent.pointers[index];
+                    x = GameActivityPointerAxes_getX(&pointer);
+                    y = GameActivityPointerAxes_getY(&pointer);
+                    je_io_update_mousepos(pointer.id, x, y);
+                }
+                break;
+            default:
+                // ?
+                ;
+        }
+    }
+    // clear the motion input count in this buffer for main thread to re-use.
+    android_app_clear_motion_events(inputBuffer);
+
+    // handle input key events.
+    for (auto i = 0; i < inputBuffer->keyEventsCount; i++) {
+        auto &keyEvent = inputBuffer->keyEvents[i];
+
+        switch (keyEvent.action) {
+            case AKEY_EVENT_ACTION_DOWN:
+                break;
+            case AKEY_EVENT_ACTION_UP:
+                break;
+            case AKEY_EVENT_ACTION_MULTIPLE:
+                // Deprecated since Android API level 29.
+                break;
+            default:
+                ;
+        }
+    }
+    // clear the key input count too.
+    android_app_clear_key_events(inputBuffer);
+}
+
 /*!
  * This the main entry point for a native activity
  */
@@ -224,6 +301,7 @@ void android_main(struct android_app *pApp) {
                 }
 
                 // Update frame sync.
+                _je_handle_inputs(pApp);
                 jegl_android_surface_manager::sync_update();
             } while (!pApp->destroyRequested);
 

@@ -112,11 +112,10 @@ namespace jeecs::graphic::api::gl3
 #   ifdef JE_OS_ANDROID
             auto* data = (jegl_gl3_context::_jegl_window_android_app*)thread->_m_sync_callback_arg;
             context->m_context.m_window = (EGLNativeWindowType)data->m_android_window;
-            context->m_app = (struct android_app*)data->m_android_window;
+            context->m_app = (struct android_app*)data->m_android_app;
 #   else
 #       error Unknown platform.
 #   endif
-
 
             EGLint format;
             eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
@@ -156,7 +155,7 @@ namespace jeecs::graphic::api::gl3
             eglQuerySurface(context->m_context.m_display, context->m_context.m_surface, EGL_HEIGHT, &height);
 
             context->WINDOWS_SIZE_WIDTH = width;
-            context->WINDOWS_SIZE_WIDTH = height;
+            context->WINDOWS_SIZE_HEIGHT = height;
 
             je_io_update_windowsize((int)width, (int)height);
 
@@ -549,10 +548,10 @@ namespace jeecs::graphic::api::gl3
 #else
             context->WINDOWS_HANDLE,
 #endif
-                reboot);
+            reboot);
 
         return context;
-                }
+    }
 
     bool gl_pre_update(jegl_thread::custom_thread_data_t ctx)
     {
@@ -563,7 +562,7 @@ namespace jeecs::graphic::api::gl3
         glfw::swap(context);
 #endif
         return true;
-        }
+    }
 
     bool gl_update(jegl_thread::custom_thread_data_t ctx)
     {
@@ -1362,7 +1361,7 @@ namespace jeecs::graphic::api::gl3
         _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
         glClear(GL_DEPTH_BUFFER_BIT);
     }
-        }
+}
 
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
