@@ -34,7 +34,7 @@ static int jegui_android_ShowSoftKeyboardInput()
     if (jni_return != JNI_OK)
         return -2;
 
-    jclass native_activity_clazz = java_env->GetObjectClass(_je_tg_android_app->activity->clazz);
+    jclass native_activity_clazz = java_env->GetObjectClass(_je_tg_android_app->activity->javaGameActivity);
     if (native_activity_clazz == nullptr)
         return -3;
 
@@ -42,7 +42,7 @@ static int jegui_android_ShowSoftKeyboardInput()
     if (method_id == nullptr)
         return -4;
 
-    java_env->CallVoidMethod(_je_tg_android_app->activity->clazz, method_id);
+    java_env->CallVoidMethod(_je_tg_android_app->activity->javaGameActivity, method_id);
 
     jni_return = java_vm->DetachCurrentThread();
     if (jni_return != JNI_OK)
@@ -63,7 +63,7 @@ static int jegui_android_PollUnicodeChars()
     if (jni_return != JNI_OK)
         return -2;
 
-    jclass native_activity_clazz = java_env->GetObjectClass(_je_tg_android_app->activity->clazz);
+    jclass native_activity_clazz = java_env->GetObjectClass(_je_tg_android_app->activity->javaGameActivity);
     if (native_activity_clazz == nullptr)
         return -3;
 
@@ -74,7 +74,7 @@ static int jegui_android_PollUnicodeChars()
     // Send the actual characters to Dear ImGui
     ImGuiIO& io = ImGui::GetIO();
     jint unicode_character;
-    while ((unicode_character = java_env->CallIntMethod(_je_tg_android_app->activity->clazz, method_id)) != 0)
+    while ((unicode_character = java_env->CallIntMethod(_je_tg_android_app->activity->javaGameActivity, method_id)) != 0)
         io.AddInputCharacter(unicode_character);
 
     jni_return = java_vm->DetachCurrentThread();

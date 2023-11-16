@@ -27,6 +27,10 @@ include_directories("${JE4ANDROID_PATH}/include")
 include_directories("${JE4ANDROID_PATH}/3rd/woolang/include")
 
 target_link_libraries(joyecs game-activity::game-activity)
+target_link_libraries(joyecs
+        # EGL and other dependent libraries required for drawing
+        # and interacting with Android system
+        EGL GLESv3 jnigraphics android log)
 
 # Creates your game shared library. The name must be the same as the
 # one used for loading in your Kotlin/Java or AndroidManifest.txt files.
@@ -35,12 +39,4 @@ add_library(joyengineecs4a SHARED main.cpp)
 # Configure libraries CMake uses to link your target library.
 target_link_libraries(joyengineecs4a
         # JoyEngine core
-        joyecs
-
-        # EGL and other dependent libraries required for drawing
-        # and interacting with Android system
-        EGL
-        GLESv3
-        jnigraphics
-        android
-        log)
+        joyecs)

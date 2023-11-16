@@ -109,8 +109,9 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
     JE4_ENABLE_VULKAN110_GAPI)
 
     if (ANDROID)
-        # GLFW donot support android, use EGL instead.
-        # TODO: ...
+        list(APPEND imgui_srcs
+            "../3rd/imgui/backends/imgui_impl_android.cpp"
+            "../3rd/imgui/backends/imgui_impl_android.h")
     else()
         include_directories("../3rd/glfw/include")
     
