@@ -34,6 +34,7 @@ namespace jeecs::graphic::api::gl3
         size_t WINDOWS_SIZE_HEIGHT;
 
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
+
         struct egl_context
         {
             EGLDisplay m_display;
@@ -41,6 +42,17 @@ namespace jeecs::graphic::api::gl3
             EGLContext m_context;
             EGLNativeWindowType m_window;
         };
+
+#   ifdef JE_OS_ANDROID
+        struct _jegl_window_android_app
+        {
+            void* m_android_app;
+            void* m_android_window;
+        };
+        struct android_app* m_app;
+#   else
+#       error Unknown platform.
+#   endif
 
         egl_context m_context;
 #else
@@ -95,10 +107,16 @@ namespace jeecs::graphic::api::gl3
                     return false;
                 });
 
-            context->m_context.m_window = 
-                is_reboot && config->m_userdata != nullptr
-                ? (EGLNativeWindowType)config->m_userdata
-                : (EGLNativeWindowType)thread->_m_sync_callback_arg;
+            assert(thread->_m_sync_callback_arg != nullptr);
+
+#   ifdef JE_OS_ANDROID
+            auto* data = (jegl_gl3_context::_jegl_window_android_app*)thread->_m_sync_callback_arg;
+            context->m_context.m_window = (EGLNativeWindowType)data->m_android_window;
+            context->m_app = (struct android_app*)data->m_android_window;
+#   else
+#       error Unknown platform.
+#   endif
+            
 
             EGLint format;
             eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
@@ -465,9 +483,7 @@ namespace jeecs::graphic::api::gl3
 #   endif
 #endif
         glEnable(GL_DEPTH_TEST);
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-        // TODO;
-#else
+
         jegui_init_gl330(
             [](auto* res) {return (void*)(intptr_t)res->m_handle.m_uint1; },
             [](auto* res)
@@ -523,13 +539,15 @@ namespace jeecs::graphic::api::gl3
                 }
             },
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-            nullptr,
-            // TODO
+#   ifdef JE_OS_ANDROID
+            context->m_app,
+#   else
+#       error Unknown platform.
+#   endif
 #else
             context->WINDOWS_HANDLE,
 #endif
-            reboot);
-#endif
+                reboot);
 
         return context;
     }
@@ -557,9 +575,7 @@ namespace jeecs::graphic::api::gl3
 #endif
         if (update_advise_close)
         {
-#ifndef JE_GL_USE_EGL_INSTEAD_GLFW
             if (jegui_shutdown_callback())
-#endif
                 return false;
         }
         return true;
@@ -567,9 +583,7 @@ namespace jeecs::graphic::api::gl3
 
     bool gl_lateupdate(jegl_thread::custom_thread_data_t ctx)
     {
-#ifndef JE_GL_USE_EGL_INSTEAD_GLFW
         jegui_update_gl330();
-#endif
         return true;
     }
 
@@ -580,10 +594,11 @@ namespace jeecs::graphic::api::gl3
         if (!reboot)
             jeecs::debug::log("Graphic thread (OpenGL3) shutdown!");
 
+        jegui_shutdown_gl330(reboot);
+
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
         egl::shutdown(context, reboot);
 #else
-        jegui_shutdown_gl330(reboot);
         glfw::shutdown(context, reboot);
 #endif
         delete context;

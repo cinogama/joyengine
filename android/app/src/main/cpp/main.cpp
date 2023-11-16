@@ -5,32 +5,41 @@
 
 #include "jeecs.hpp"
 
+struct _jegl_window_android_app
+{
+    void* m_android_app;
+    void* m_android_window;
+};
+
 struct jegl_android_surface_manager
 {
     inline static jegl_thread* _jegl_graphic_thread;
     inline static jegl_sync_state _jegl_graphic_thread_state;
 
     inline static bool _jegl_android_update_paused = false;
+    inline static _jegl_window_android_app _jegl_window_android_app;
 
     static void _jegl_android_sync_thread_created(jegl_thread* gthread, void*)
     {
         _jegl_graphic_thread = gthread;
     }
 
-    static void sync_begin(void* android_window)
+    static void sync_begin(void* android_app, void* android_window)
     {
+        _jegl_window_android_app.m_android_app = android_app;
+        _jegl_window_android_app.m_android_window = android_window;
+
         if (_jegl_android_update_paused)
         {
             assert(_jegl_graphic_thread != nullptr);
             _jegl_android_update_paused = false;
-            _jegl_graphic_thread->m_config.m_userdata = android_window;
         }
         else
         {
             _jegl_android_update_paused = false;
             _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
             jegl_register_sync_thread_callback(
-                _jegl_android_sync_thread_created, android_window);
+                _jegl_android_sync_thread_created, &_jegl_window_android_app);
 
             // Execute script entry in another thread.
             std::thread(je_main_script_entry).detach();
