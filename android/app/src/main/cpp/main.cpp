@@ -119,7 +119,7 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
             // if you change the class here as a reinterpret_cast is dangerous this in the
             // android_main function and the APP_CMD_TERM_WINDOW handler case.
 
-            jegl_android_surface_manager::sync_begin(pApp->window);
+            jegl_android_surface_manager::sync_begin(pApp, pApp->window);
 
             break;
         }

@@ -11,6 +11,8 @@
 #   ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #       ifdef JE_OS_ANDROID
 #           include "imgui_impl_android.h"
+#           include <jni.h>
+#           include <game-activity/native_app_glue/android_native_app_glue.h>
 
 thread_local struct android_app* _je_tg_android_app;
 void jegui_android_init(struct android_app* app)
@@ -21,7 +23,7 @@ void jegui_android_init(struct android_app* app)
 
 static int jegui_android_ShowSoftKeyboardInput()
 {
-    JavaVM* java_vm = g_App->activity->vm;
+    JavaVM* java_vm = _je_tg_android_app->activity->vm;
     JNIEnv* java_env = nullptr;
 
     jint jni_return = java_vm->GetEnv((void**)&java_env, JNI_VERSION_1_6);
@@ -32,7 +34,7 @@ static int jegui_android_ShowSoftKeyboardInput()
     if (jni_return != JNI_OK)
         return -2;
 
-    jclass native_activity_clazz = java_env->GetObjectClass(g_App->activity->clazz);
+    jclass native_activity_clazz = java_env->GetObjectClass(_je_tg_android_app->activity->clazz);
     if (native_activity_clazz == nullptr)
         return -3;
 
@@ -40,7 +42,7 @@ static int jegui_android_ShowSoftKeyboardInput()
     if (method_id == nullptr)
         return -4;
 
-    java_env->CallVoidMethod(g_App->activity->clazz, method_id);
+    java_env->CallVoidMethod(_je_tg_android_app->activity->clazz, method_id);
 
     jni_return = java_vm->DetachCurrentThread();
     if (jni_return != JNI_OK)
@@ -113,6 +115,8 @@ void jegui_update_gl330()
 {
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   ifdef JE_OS_ANDROID
+    ImGuiIO& io = ImGui::GetIO();
+
     jegui_android_PollUnicodeChars();
     // Open on-screen (soft) input if requested by Dear ImGui
     static bool WantTextInputLast = false;
