@@ -109,19 +109,26 @@ namespace jeecs
             jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
         }
 
-        graphic_uhost(jeecs::game_universe _universe)
+        graphic_uhost(jeecs::game_universe _universe, const jegl_interface_config* _config)
             : universe(_universe)
         {
             jegl_interface_config config = {};
-            config.m_width = 640;
-            config.m_height = 480;
-            config.m_title = "JoyEngineECS(JoyEngine 4.3)";
-            config.m_displaymode = jegl_interface_config::display_mode::WINDOWED;
-            config.m_enable_resize = true;
-            config.m_fps = 0;               // 使用垂直同步
-            config.m_msaa = 4;              // 使用MSAAx4抗锯齿
-            config.m_userdata = nullptr;    // 用户自定义数据，默认留空，用户可以根据自己需要，
-                                            // 使用 jegl_reboot_graphic_thread 传入设置并应用
+            if (_config == nullptr)
+            {
+                config.m_width = 640;
+                config.m_height = 480;
+                config.m_title = "JoyEngineECS(JoyEngine 4.3)";
+                config.m_displaymode = jegl_interface_config::display_mode::WINDOWED;
+                config.m_enable_resize = true;
+                config.m_fps = 0;               // 使用垂直同步
+                config.m_msaa = 4;              // 使用MSAAx4抗锯齿
+                config.m_userdata = nullptr;    // 用户自定义数据，默认留空，用户可以根据自己需要，
+                                                // 使用 jegl_reboot_graphic_thread 传入设置并应用
+            }
+            else
+            {
+                config = *_config;
+            }
 
             glthread = jegl_start_graphic_thread(
                 config,
@@ -151,7 +158,8 @@ namespace jeecs
         inline static std::shared_mutex _m_instance_universe_host_mx;
         inline static std::unordered_map<void*, graphic_uhost*> _m_instance_universe_host;
 
-        static graphic_uhost* get_default_graphic_pipeline_instance(game_universe universe)
+        static graphic_uhost* get_default_graphic_pipeline_instance(
+            game_universe universe, const jegl_interface_config* config)
         {
             assert(universe);
             do
@@ -168,9 +176,18 @@ namespace jeecs
             auto fnd = _m_instance_universe_host.find(universe.handle());
 
             if (fnd != _m_instance_universe_host.end())
+            {
+                if (config != nullptr)
+                {
+                    if (fnd->second->glthread == nullptr)
+                        jeecs::debug::logerr("Unable to re-config graphic setting, bad graphic-thread.");
+                    else
+                        jegl_reboot_graphic_thread(fnd->second->glthread, config);
+                }
                 return fnd->second;
+            }
 
-            auto* instance = new graphic_uhost(universe);
+            auto* instance = new graphic_uhost(universe, config);
             _m_instance_universe_host[universe.handle()] = instance;
             je_ecs_universe_register_exit_callback(universe.handle(),
                 [](void* instance)
@@ -187,9 +204,10 @@ namespace jeecs
     };
 }
 
-jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(void* universe)
+jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
+    void* universe, const jegl_interface_config* config)
 {
-    return jeecs::graphic_uhost::get_default_graphic_pipeline_instance(universe);
+    return jeecs::graphic_uhost::get_default_graphic_pipeline_instance(universe, config);
 }
 jegl_thread* jegl_uhost_get_gl_thread(jeecs::graphic_uhost* host)
 {

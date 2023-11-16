@@ -2008,10 +2008,11 @@ JE_API bool jegl_update(jegl_thread* thread_handle);
 /*
 jegl_reboot_graphic_thread [基本接口]
 以指定的配置重启一个图形线程
+    * 若不需要改变图形配置，请使用nullptr
 */
 JE_API void jegl_reboot_graphic_thread(
     jegl_thread* thread_handle,
-    jegl_interface_config config);
+    const jegl_interface_config* config);
 
 /*
 jegl_load_texture [基本接口]
@@ -2599,9 +2600,15 @@ JE_API void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread);
 
 /*
 jegl_uhost_get_or_create_for_universe [基本接口]
-获取或创建指定Universe的可编程图形上下文接口
+获取或创建指定Universe的可编程图形上下文接口,
+    * config 被用于指示图形配置，若首次创建图形接口则使用此设置，
+    若图形接口已经创建，则调用jegl_reboot_graphic_thread以应用图形配置
+    * 若需要使用默认配置或不改变图形设置，请传入 nullptr
+请参见：
+    jegl_reboot_graphic_thread
 */
-JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(void* universe);
+JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
+    void* universe, const jegl_interface_config* config);
 
 /*
 jegl_uhost_get_gl_thread [基本接口]
@@ -7136,9 +7143,9 @@ namespace jeecs
             std::vector<rendchain_branch*>  _m_rchain_pipeline;
             size_t                          _m_this_frame_allocate_rchain_pipeline_count;
 
-            BasePipelineInterface(game_world w)
+            BasePipelineInterface(game_world w, const jegl_interface_config* config)
                 : game_system(w)
-                , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle()))
+                , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
                 , _m_this_frame_allocate_rchain_pipeline_count(0)
             {
             }

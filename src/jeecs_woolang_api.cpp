@@ -55,7 +55,7 @@ WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args, s
 
 WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args, size_t argc)
 {
-    jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0));
+    jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0), nullptr);
     return wo_ret_void(vm);
 }
 

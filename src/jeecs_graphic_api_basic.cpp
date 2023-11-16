@@ -404,9 +404,11 @@ bool jegl_update(jegl_thread* thread)
     return true;
 }
 
-void jegl_reboot_graphic_thread(jegl_thread* thread_handle, jegl_interface_config config)
+void jegl_reboot_graphic_thread(jegl_thread* thread_handle, const jegl_interface_config * config)
 {
-    thread_handle->m_config = config;
+    if (config)
+        thread_handle->m_config = *config;
+
     thread_handle->_m_thread_notifier->m_reboot_flag = true;
 }
 

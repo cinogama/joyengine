@@ -92,7 +92,7 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
     wo_integer_t crc64_result = usecrc64 == 0 ? _crc64_of_file(filepath) : usecrc64;
     if (crc64_result == 0)
     {
-        jeecs::debug::logerr("Empty or failed to read file: '%s', failed to get crc64, create cache failed.", filepath);
+        jeecs::debug::logwarn("Empty or failed to read file: '%s', failed to get crc64, create cache failed.", filepath);
         return nullptr;
     }
 
@@ -106,7 +106,7 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
 
     if (f == nullptr)
     {
-        jeecs::debug::logerr("Failed to create cache file for: '%s'", filepath);
+        jeecs::debug::logwarn("Failed to create cache file for: '%s'", filepath);
         return nullptr;
     }
 

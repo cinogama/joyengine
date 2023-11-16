@@ -44,9 +44,7 @@ struct jegl_android_surface_manager
         assert(_jegl_graphic_thread != nullptr);
         _jegl_android_update_paused = true;
 
-        jegl_reboot_graphic_thread(
-                _jegl_graphic_thread,
-                _jegl_graphic_thread->m_config);
+        jegl_reboot_graphic_thread(_jegl_graphic_thread, nullptr);
 
         // Let update to close interface here.
         sync_update();
@@ -219,7 +217,6 @@ void android_main(struct android_app *pApp) {
 
                 // Update frame sync.
                 jegl_android_surface_manager::sync_update();
-
             } while (!pApp->destroyRequested);
 
             // Application is requesting to exit.

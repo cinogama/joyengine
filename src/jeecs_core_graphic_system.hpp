@@ -278,7 +278,7 @@ public let frag =
         };
 
         UserInterfaceGraphicPipelineSystem(game_world w)
-            : BasePipelineInterface(w)
+            : BasePipelineInterface(w, nullptr)
         {
             m_default_uniform_buffer = 
                 new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
@@ -697,7 +697,7 @@ public let frag =
         };
 
         UnlitGraphicPipelineSystem(game_world w)
-            : BasePipelineInterface(w)
+            : BasePipelineInterface(w, nullptr)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
@@ -1425,7 +1425,7 @@ public func frag(_: v2f)
         };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
-            : BasePipelineInterface(w)
+            : BasePipelineInterface(w, nullptr)
         {
             m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
