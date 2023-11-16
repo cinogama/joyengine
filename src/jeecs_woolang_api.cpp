@@ -759,9 +759,24 @@ WO_API wo_api wojeapi_input_keydown(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_bool(vm, jeecs::input::keydown((jeecs::input::keycode)wo_int(args + 0)));
 }
 
+WO_API wo_api wojeapi_input_mousedown(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, jeecs::input::mousedown(
+        (size_t)wo_int(args + 0), (jeecs::input::mousecode)wo_int(args + 1)));
+}
+
 WO_API wo_api wojeapi_wheel_count(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_float(vm, jeecs::input::wheel(0));
+    auto wheel = jeecs::input::wheel(0);
+
+    wo_value result = wo_push_struct(vm, 2);
+    wo_value elem = wo_push_empty(vm);
+    wo_set_float(elem, wheel.x);
+    wo_struct_set(result, 0, elem);
+    wo_set_float(elem, wheel.y);
+    wo_struct_set(result, 1, elem);
+
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
@@ -780,7 +795,7 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args, size_t argc)
 {
-    auto winsz = jeecs::input::mousepos(0);
+    auto winsz = jeecs::input::mousepos((size_t)wo_int(args + 0));
 
     wo_value result = wo_push_struct(vm, 2);
     wo_value elem = wo_push_empty(vm);
@@ -794,7 +809,7 @@ WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args, size_t argc)
 {
-    auto winsz = jeecs::input::mouseviewpos(0);
+    auto winsz = jeecs::input::mouseviewpos((size_t)wo_int(args + 0));
 
     wo_value result = wo_push_struct(vm, 2);
     wo_value elem = wo_push_empty(vm);
@@ -808,13 +823,13 @@ WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args, size_t argc)
 {
-    je_io_update_windowsize((int)wo_int(args + 0), (int)wo_int(args + 1));
+    je_io_set_windowsize((int)wo_int(args + 0), (int)wo_int(args + 1));
     return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_input_update_window_title(wo_vm vm, wo_value args, size_t argc)
 {
-    je_io_update_windowtitle(wo_string(args + 0));
+    je_io_set_windowtitle(wo_string(args + 0));
     return wo_ret_void(vm);
 }
 
@@ -2298,41 +2313,53 @@ namespace je
     extern("libjoyecs", "wojeapi_logfatal")
     public func logfatal(...)=> void;
 
-    public enum keycode
+    public let MAX_MOUSE_GROUP_COUNT = 16;
+
+    public enum mousecode
     {
-        A = 65 , B, C, D, E, F, G, H, I, J, K, L,
+        LEFT, MID, RIGHT,
+
+        CUSTOM_0 = 32,
+
+        _COUNT = 64,
+    };
+
+    enum keycode
+    {
+        UNKNOWN = 0,
+
+        A = 65, B, C, D, E, F, G, H, I, J, K, L,
         M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-        _1 = 49 , _2, _3, _4, _5, _6, _7, _8, _9,
+        _1 = 49, _2, _3, _4, _5, _6, _7, _8, _9,
         _0, _ = 32,
 
-        L_SHIFT = 256,
-        L_CTRL,
-        L_ALT,
-        TAB, ENTER, ESC, BACKSPACE,
+        L_SHIFT = 256, L_CTRL, L_ALT, TAB, ENTER,
+        ESC, BACKSPACE,
 
-        MOUSE_L_BUTTION = 512,
-        MOUSE_M_BUTTION,
-        MOUSE_R_BUTTION,
+        CUSTOM_0 = 512,
 
-        MAX_KEY_CODE = 1024,
+        _COUNT = 1024,
     };
 
     namespace input
     {
         extern("libjoyecs", "wojeapi_wheel_count")
-        public func wheel()=> real;
+        public func wheel()=> (real, real);
 
         extern("libjoyecs", "wojeapi_input_keydown")
         public func keydown(kcode: keycode)=> bool;
+
+        extern("libjoyecs", "wojeapi_input_mousedown")
+        public func mousedown(group: int, kcode: mousecode)=> bool;
 
         extern("libjoyecs", "wojeapi_input_window_size")
         public func windowsize()=> (int, int);
 
         extern("libjoyecs", "wojeapi_input_mouse_pos")
-        public func mousepos()=> (int, int);
+        public func mousepos(group: int)=> (int, int);
 
         extern("libjoyecs", "wojeapi_input_mouse_view_pos")
-        public func mouseviewpos()=> (real, real);
+        public func mouseviewpos(group: int)=> (real, real);
     }
 
     public using typeinfo = handle;

@@ -507,6 +507,15 @@ namespace jeecs
     */
     namespace input
     {
+        constexpr size_t MAX_MOUSE_GROUP_COUNT = 16;
+        enum class mousecode
+        {
+            LEFT, MID, RIGHT,
+
+            CUSTOM_0 = 32,
+
+            _COUNT = 64,
+        };
         enum class keycode
         {
             UNKNOWN = 0,
@@ -516,16 +525,12 @@ namespace jeecs
             _1 = '1', _2, _3, _4, _5, _6, _7, _8, _9,
             _0, _ = ' ',
 
-            L_SHIFT = 256,
-            L_CTRL,
-            L_ALT,
-            TAB, ENTER, ESC, BACKSPACE,
+            L_SHIFT = 256, L_CTRL, L_ALT, TAB, ENTER,
+            ESC, BACKSPACE,
 
-            MOUSE_L_BUTTION = 512,
-            MOUSE_M_BUTTION,
-            MOUSE_R_BUTTION,
+            CUSTOM_0 = 512,
 
-            MAX_KEY_CODE = 1024,
+            _COUNT = 1024,
         };
     }
 
@@ -1504,8 +1509,8 @@ struct jegl_interface_config
     // 不限制帧率请设置为 SIZE_MAX
     size_t          m_fps;
 
-    const char*     m_title;
-    void*           m_userdata;
+    const char* m_title;
+    void* m_userdata;
 };
 
 struct jegl_thread_notifier;
@@ -1520,19 +1525,19 @@ struct jegl_thread
     using custom_thread_data_t = void*;
     using frame_rend_work_func_t = void(*)(jegl_thread*, void*);
 
-    void*                   _m_promise;   // std::promise<void>
+    void* _m_promise;   // std::promise<void>
     frame_rend_work_func_t  _m_frame_rend_work;
-    void*                   _m_frame_rend_work_arg;
-    void*                   _m_sync_callback_arg;
+    void* _m_frame_rend_work_arg;
+    void* _m_sync_callback_arg;
 
-    jegl_thread_notifier*   _m_thread_notifier;
-    void*                   _m_interface_handle;
+    jegl_thread_notifier* _m_thread_notifier;
+    void* _m_interface_handle;
 
-    void*                       m_universe_instance;
+    void* m_universe_instance;
     jeecs::typing::version_t    m_version;
     jegl_interface_config       m_config;
-    jegl_graphic_api*           m_apis;
-    void*                       m_stop_update; // std::atomic_bool
+    jegl_graphic_api* m_apis;
+    void* m_stop_update; // std::atomic_bool
     custom_thread_data_t        m_userdata;
 };
 
@@ -2690,94 +2695,107 @@ jegui_shutdown_callback [基本接口]
 JE_API bool jegui_shutdown_callback(void);
 
 /*
-je_io_set_keystate [基本接口]
-设置指定键的状态
+je_io_update_keystate [基本接口]
+更新指定键的状态信息
 */
-JE_API void je_io_set_keystate(jeecs::input::keycode keycode, bool keydown);
+JE_API void je_io_update_keystate(jeecs::input::keycode keycode, bool keydown);
 
 /*
-je_io_set_mousepos [基本接口]
-设置鼠标的坐标
+je_io_update_mousepos [基本接口]
+更新鼠标（或触摸位置点）的坐标
     * 此操作`不会`影响光标的实际位置
 */
-JE_API void je_io_set_mousepos(int group, int x, int y);
+JE_API void je_io_update_mousepos(size_t group, int x, int y);
 
 /*
-je_io_set_windowsize [基本接口]
-设置窗口大小
-    * 此操作`不会`影响窗口的实际大小
+je_io_update_mouse_state [基本接口]
+更新鼠标（或触摸点）的状态
 */
-JE_API void je_io_set_windowsize(int x, int y);
-
-/*
-je_io_set_wheel [基本接口]
-设置鼠标滚轮的计数
-*/
-JE_API void je_io_set_wheel(int group, float count);
-
-/*
-je_io_is_keydown [基本接口]
-获取指定的按键是否被按下
-*/
-JE_API bool je_io_is_keydown(jeecs::input::keycode keycode);
-
-/*
-je_io_mouse_pos [基本接口]
-获取鼠标的坐标
-*/
-JE_API void je_io_mouse_pos(int group, int* x, int* y);
-
-/*
-je_io_windowsize [基本接口]
-获取窗口的大小
-*/
-JE_API void je_io_windowsize(int* x, int* y);
-
-/*
-je_io_wheel [基本接口]
-获取鼠标滚轮的计数
-*/
-JE_API float je_io_wheel(int group);
-
-/*
-je_io_lock_mouse [基本接口]
-设置是否需要将鼠标锁定在指定位置，x,y是窗口坐标
-*/
-JE_API void je_io_lock_mouse(bool lock, int x, int y);
-
-/*
-je_io_should_lock_mouse [基本接口]
-获取当前是否应该锁定鼠标及锁定的位置
-*/
-JE_API bool je_io_should_lock_mouse(int* x, int* y);
+JE_API void je_io_update_mouse_state(size_t group, jeecs::input::mousecode key, bool keydown);
 
 /*
 je_io_update_windowsize [基本接口]
-请求对窗口大小进行调整
-    * 此操作将在图形线程生效
+更新窗口大小
+    * 此操作`不会`影响窗口的实际大小
 */
 JE_API void je_io_update_windowsize(int x, int y);
 
 /*
-je_io_should_update_windowsize [基本接口]
+je_io_update_wheel [基本接口]
+更新鼠标滚轮的计数
+*/
+JE_API void je_io_update_wheel(size_t group, float x, float y);
+
+/*
+je_io_get_keydown [基本接口]
+获取指定的按键是否被按下
+*/
+JE_API bool je_io_get_keydown(jeecs::input::keycode keycode);
+
+/*
+je_io_get_mouse_pos [基本接口]
+获取鼠标的坐标
+*/
+JE_API void je_io_get_mouse_pos(size_t group, int* out_x, int* out_y);
+
+/*
+je_io_get_mouse_state [基本接口]
+获取鼠标的按键状态
+*/
+JE_API bool je_io_get_mouse_state(size_t group, jeecs::input::mousecode key);
+
+/*
+je_io_get_windowsize [基本接口]
+获取窗口的大小
+*/
+JE_API void je_io_get_windowsize(int* out_x, int* out_y);
+
+/*
+je_io_get_wheel [基本接口]
+获取鼠标滚轮的计数
+*/
+JE_API void je_io_get_wheel(size_t group, float* out_x, float* out_y);
+
+/*
+je_io_set_lock_mouse [基本接口]
+设置是否需要将鼠标锁定在指定位置，x,y是窗口坐标
+*/
+JE_API void je_io_set_lock_mouse(bool lock, int x, int y);
+
+/*
+je_io_get_lock_mouse [基本接口]
+获取当前是否应该锁定鼠标及锁定的位置
+*/
+JE_API bool je_io_get_lock_mouse(int* out_x, int* out_y);
+
+/*
+je_io_set_windowsize [基本接口]
+请求对窗口大小进行调整
+    * 此操作将在图形线程生效
+*/
+JE_API void je_io_set_windowsize(int x, int y);
+
+/*
+je_io_fetch_update_windowsize [基本接口]
 获取当前窗口大小是否应该调整及调整的大小
     * 此操作会导致请求操作被拦截
 */
-JE_API bool je_io_should_update_windowsize(int* x, int* y);
+JE_API bool je_io_fetch_update_windowsize(int* out_x, int* out_y);
 
 /*
-je_io_update_windowtitle [基本接口]
+je_io_set_windowtitle [基本接口]
 请求对窗口标题进行调整
     * 此操作将在图形线程生效
 */
-JE_API void je_io_update_windowtitle(const char* title);
+JE_API void je_io_set_windowtitle(const char* title);
 
 /*
-je_io_update_windowtitle [基本接口]
+je_io_set_windowtitle [基本接口]
 获取当前是否需要对窗口标题进行调整及调整之后的内容
     * 此操作会导致请求操作被拦截
+    * TODO: Not thread safe.
 */
-JE_API bool je_io_should_update_windowtitle(const char** title);
+JE_API bool je_io_fetch_update_windowtitle(const char** out_title);
 
 // Library / Module loader
 
@@ -8929,29 +8947,35 @@ namespace jeecs
     {
         inline bool keydown(keycode key)
         {
-            return je_io_is_keydown(key);
+            return je_io_get_keydown(key);
         }
-        inline float wheel(int group)
+        inline bool mousedown(size_t group, mousecode key)
         {
-            return je_io_wheel(group);
+            return je_io_get_mouse_state(group, key);
         }
-        inline math::ivec2 mousepos(int group)
+        inline math::vec2 wheel(size_t group)
         {
-            int x, y;
-            je_io_mouse_pos(group, &x, &y);
+            float x, y;
+            je_io_get_wheel(group, &x, &y);
             return { x, y };
         }
-        inline math::vec2 mouseviewpos(int group)
+        inline math::ivec2 mousepos(size_t group)
+        {
+            int x, y;
+            je_io_get_mouse_pos(group, &x, &y);
+            return { x, y };
+        }
+        inline math::vec2 mouseviewpos(size_t group)
         {
             int x, y, w, h;
-            je_io_mouse_pos(group, &x, &y);
-            je_io_windowsize(&w, &h);
+            je_io_get_mouse_pos(group, &x, &y);
+            je_io_get_windowsize(&w, &h);
             return { ((float)x / (float)w - 0.5f) * 2.0f, ((float)y / (float)h - 0.5f) * -2.0f };
         }
         inline math::ivec2 windowsize()
         {
             int x, y;
-            je_io_windowsize(&x, &y);
+            je_io_get_windowsize(&x, &y);
             return { x, y };
         }
 

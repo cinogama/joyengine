@@ -728,8 +728,8 @@ public let frag =
             _inputs.l_tab = input::keydown(input::keycode::TAB);
             _inputs.l_ctrl = input::keydown(input::keycode::L_CTRL);
             _inputs.l_shift = input::keydown(input::keycode::L_SHIFT);
-            _inputs.l_buttom = input::keydown(input::keycode::MOUSE_L_BUTTION);
-            _inputs.r_buttom = input::keydown(input::keycode::MOUSE_R_BUTTION);
+            _inputs.l_buttom = input::mousedown(0, input::mousecode::LEFT);
+            _inputs.r_buttom = input::mousedown(0, input::mousecode::RIGHT);
             _inputs.l_buttom_click = input::is_up(_inputs.l_buttom);
             _inputs.l_buttom_pushed = input::first_down(_inputs.l_buttom);
             _inputs.r_buttom_click = input::is_up(_inputs.r_buttom);
@@ -739,9 +739,9 @@ public let frag =
 
             if (_inputs._wheel_count_record != INT_MAX)
             {
-                _inputs.wheel_delta_count = (int)input::wheel(0) - _inputs._wheel_count_record;
+                _inputs.wheel_delta_count = (int)input::wheel(0).y - _inputs._wheel_count_record;
             }
-            _inputs._wheel_count_record = (int)input::wheel(0);
+            _inputs._wheel_count_record = (int)input::wheel(0).y;
 
             if (!_editor_enabled)
                 return;
@@ -850,7 +850,7 @@ public let frag =
                     jedbg_set_editing_entity_uid(0);
             }
 
-            je_io_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
+            je_io_set_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
 
             selected_list.clear();
         }

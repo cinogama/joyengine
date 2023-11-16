@@ -1,99 +1,162 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-bool    _key_states[(int)jeecs::input::keycode::MAX_KEY_CODE] = {};
-int     _mouse_pos[64][2] = {};
-float   _wheel_count[64] = {};
-bool    _shoudle_lock_mouse = false;
-int     _mouse_lock_place_x = 0, _mouse_lock_place_y = 0;
-int     _windows_width = 0, _windows_height = 0;
+namespace jeecs::input
+{
+    struct _je_mouse_state
+    {
+        bool    _key_states[(size_t)mousecode::_COUNT];
+        int     _pos_x;
+        int     _pos_y;
+        float   _wheel_x;
+        float   _wheel_y;
+    };
 
+    struct _je_io_state
+    {
+        bool    _key_states[(size_t)keycode::_COUNT];
+        _je_mouse_state     _mouses[MAX_MOUSE_GROUP_COUNT];
+        int     _windows_width;
+        int     _windows_height;
 
-void je_io_set_keystate(jeecs::input::keycode keycode, bool keydown)
-{
-    _key_states[(int)keycode] = keydown;
-}
-void je_io_set_mousepos(int group, int x, int y)
-{
-    _mouse_pos[group][0] = x;
-    _mouse_pos[group][1] = y;
-}
-void je_io_set_wheel(int group, float count)
-{
-    _wheel_count[group] = count;
-}
-void je_io_set_windowsize(int x, int y)
-{
-    _windows_width = x;
-    _windows_height = y;
-}
+        bool    _shoudle_lock_mouse;
+        int     _mouse_lock_place_x, _mouse_lock_place_y;
 
-void je_io_lock_mouse(bool lock, int x, int y)
-{
-    _shoudle_lock_mouse = lock;
-    _mouse_lock_place_x = x;
-    _mouse_lock_place_y = y;
+        bool    _should_update_windowsize;
+        int     _new_windows_width, _new_windows_height;
+
+        bool            _should_update_windowtitle;
+        std::string     _new_windowtitle;
+    };
 }
 
-bool je_io_is_keydown(jeecs::input::keycode keycode)
+jeecs::input::_je_io_state _state = {};
+
+void je_io_update_keystate(jeecs::input::keycode keycode, bool keydown)
 {
-    return _key_states[(int)keycode];
+    _state._key_states[(int)keycode] = keydown;
 }
-void je_io_mouse_pos(int group, int* x, int* y)
+void je_io_update_mousepos(size_t group, int x, int y)
 {
-    *x = _mouse_pos[group][0];
-    *y = _mouse_pos[group][1];
+    if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
+    {
+        auto& mouse_stat = _state._mouses[group];
+        mouse_stat._pos_x = x;
+        mouse_stat._pos_y = y;
+    }
 }
-float je_io_wheel(int group)
+void je_io_update_wheel(size_t group, float x, float y)
 {
-    return _wheel_count[group];
+    if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
+    {
+        auto& mouse_stat = _state._mouses[group];
+        mouse_stat._wheel_x = x;
+        mouse_stat._wheel_y = y;
+    }
 }
-bool je_io_should_lock_mouse(int* x, int* y)
-{
-    *x = _mouse_lock_place_x;
-    *y = _mouse_lock_place_y;
-    return _shoudle_lock_mouse;
-}
-void je_io_windowsize(int* x, int* y)
-{
-    *x = _windows_width;
-    *y = _windows_height;
-}
-bool should_update_windowsize = false;
-int new_windows_width = 0, new_windows_height = 0;
 void je_io_update_windowsize(int x, int y)
 {
-    new_windows_width = x;
-    new_windows_height = y;
-    should_update_windowsize = true;
+    _state._windows_width = x;
+    _state._windows_height = y;
 }
-bool je_io_should_update_windowsize(int* x, int* y)
-{
-    if (should_update_windowsize)
-    {
-        *x = new_windows_width;
-        *y = new_windows_height;
 
-        should_update_windowsize = false;
+void je_io_set_lock_mouse(bool lock, int x, int y)
+{
+    _state._shoudle_lock_mouse = lock;
+    _state._mouse_lock_place_x = x;
+    _state._mouse_lock_place_y = y;
+}
+
+bool je_io_get_keydown(jeecs::input::keycode keycode)
+{
+    return _state._key_states[(int)keycode];
+}
+
+void je_io_get_mouse_pos(size_t group, int* out_x, int* out_y)
+{
+    if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
+    {
+        auto& mouse_stat = _state._mouses[group];
+        *out_x = mouse_stat._pos_x;
+        *out_y = mouse_stat._pos_y;
+    }
+    else
+    {
+        *out_x = 0;
+        *out_y = 0;
+    }
+}
+void je_io_get_wheel(size_t group, float* out_x, float* out_y)
+{
+    if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
+    {
+        auto& mouse_stat = _state._mouses[group];
+        *out_x = mouse_stat._wheel_x;
+        *out_y = mouse_stat._wheel_y;
+    }
+    else
+    {
+        *out_x = 0.0f;
+        *out_y = 0.0f;
+    }
+}
+bool je_io_get_lock_mouse(int* out_x, int* out_y)
+{
+    *out_x = _state._mouse_lock_place_x;
+    *out_y = _state._mouse_lock_place_y;
+    return _state._shoudle_lock_mouse;
+}
+void je_io_get_windowsize(int* out_x, int* out_y)
+{
+    *out_x = _state._windows_width;
+    *out_y = _state._windows_height;
+}
+
+void je_io_set_windowsize(int x, int y)
+{
+    _state._new_windows_width = x;
+    _state._new_windows_height = y;
+    _state._should_update_windowsize = true;
+}
+bool je_io_fetch_update_windowsize(int* out_x, int* out_y)
+{
+    if (_state._should_update_windowsize)
+    {
+        *out_x = _state._new_windows_width;
+        *out_y = _state._new_windows_height;
+
+        _state._should_update_windowsize = false;
         return true;
     }
     return false;
 }
 
-bool should_update_windowtitle = false;
-std::string new_windowtitle;
-void je_io_update_windowtitle(const char* title)
+void je_io_set_windowtitle(const char* title)
 {
-    new_windowtitle = title;
-    should_update_windowtitle = true;
+    _state._new_windowtitle = title;
+    _state._should_update_windowtitle = true;
 }
-bool je_io_should_update_windowtitle(const char** title)
+
+bool je_io_fetch_update_windowtitle(const char** out_title)
 {
-    if (should_update_windowtitle)
+    if (_state._should_update_windowtitle)
     {
-        *title = new_windowtitle.c_str();
-        should_update_windowtitle = false;
+        *out_title = _state._new_windowtitle.c_str();
+        _state._should_update_windowtitle = false;
         return true;
     }
     return false;
+}
+
+bool je_io_get_mouse_state(size_t group, jeecs::input::mousecode key)
+{
+    if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
+        return _state._mouses[group]._key_states[(size_t)key];
+    return false;
+}
+
+void je_io_update_mouse_state(size_t group, jeecs::input::mousecode key, bool keydown)
+{
+    if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
+        _state._mouses[group]._key_states[(size_t)key] = keydown;
 }

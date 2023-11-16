@@ -116,7 +116,7 @@ namespace jeecs::graphic::api::gl3
 #   else
 #       error Unknown platform.
 #   endif
-            
+
 
             EGLint format;
             eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
@@ -158,7 +158,7 @@ namespace jeecs::graphic::api::gl3
             context->WINDOWS_SIZE_WIDTH = width;
             context->WINDOWS_SIZE_WIDTH = height;
 
-            je_io_set_windowsize((int)width, (int)height);
+            je_io_update_windowsize((int)width, (int)height);
 
             return true;
         }
@@ -180,22 +180,22 @@ namespace jeecs::graphic::api::gl3
             context->WINDOWS_SIZE_WIDTH = (size_t)x;
             context->WINDOWS_SIZE_HEIGHT = (size_t)y;
 
-            je_io_set_windowsize(x, y);
+            je_io_update_windowsize(x, y);
         }
         void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
         {
-            je_io_set_mousepos(0, (int)x, (int)y);
+            je_io_update_mousepos(0, (int)x, (int)y);
         }
         void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
         {
             switch (key)
             {
             case GLFW_MOUSE_BUTTON_LEFT:
-                je_io_set_keystate(jeecs::input::keycode::MOUSE_L_BUTTION, state); break;
+                je_io_update_mouse_state(0, jeecs::input::mousecode::LEFT, state); break;
             case GLFW_MOUSE_BUTTON_MIDDLE:
-                je_io_set_keystate(jeecs::input::keycode::MOUSE_M_BUTTION, state); break;
+                je_io_update_mouse_state(0, jeecs::input::mousecode::MID, state); break;
             case GLFW_MOUSE_BUTTON_RIGHT:
-                je_io_set_keystate(jeecs::input::keycode::MOUSE_R_BUTTION, state); break;
+                je_io_update_mouse_state(0, jeecs::input::mousecode::RIGHT, state); break;
             default:
                 // do nothing.
                 break;
@@ -203,7 +203,9 @@ namespace jeecs::graphic::api::gl3
         }
         void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
         {
-            je_io_set_wheel(0, je_io_wheel(0) + (float)yoffset);
+            float ox, oy;
+            je_io_get_wheel(0, &ox, &oy);
+            je_io_update_wheel(0, ox + (float)xoffset, oy + (float)yoffset);
         }
         void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)
         {
@@ -212,22 +214,22 @@ namespace jeecs::graphic::api::gl3
             switch (key)
             {
             case GLFW_KEY_LEFT_SHIFT:
-                je_io_set_keystate(jeecs::input::keycode::L_SHIFT, stage); break;
+                je_io_update_keystate(jeecs::input::keycode::L_SHIFT, stage); break;
             case GLFW_KEY_LEFT_ALT:
-                je_io_set_keystate(jeecs::input::keycode::L_ALT, stage); break;
+                je_io_update_keystate(jeecs::input::keycode::L_ALT, stage); break;
             case GLFW_KEY_LEFT_CONTROL:
-                je_io_set_keystate(jeecs::input::keycode::L_CTRL, stage); break;
+                je_io_update_keystate(jeecs::input::keycode::L_CTRL, stage); break;
             case GLFW_KEY_TAB:
-                je_io_set_keystate(jeecs::input::keycode::TAB, stage); break;
+                je_io_update_keystate(jeecs::input::keycode::TAB, stage); break;
             case GLFW_KEY_ENTER:
             case GLFW_KEY_KP_ENTER:
-                je_io_set_keystate(jeecs::input::keycode::ENTER, stage); break;
+                je_io_update_keystate(jeecs::input::keycode::ENTER, stage); break;
             case GLFW_KEY_ESCAPE:
-                je_io_set_keystate(jeecs::input::keycode::ESC, stage); break;
+                je_io_update_keystate(jeecs::input::keycode::ESC, stage); break;
             case GLFW_KEY_BACKSPACE:
-                je_io_set_keystate(jeecs::input::keycode::BACKSPACE, stage); break;
+                je_io_update_keystate(jeecs::input::keycode::BACKSPACE, stage); break;
             default:
-                je_io_set_keystate((jeecs::input::keycode)key, stage); break;
+                je_io_update_keystate((jeecs::input::keycode)key, stage); break;
             }
 
         }
@@ -277,7 +279,7 @@ namespace jeecs::graphic::api::gl3
             glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
             glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
 
-            je_io_set_windowsize((int)context->WINDOWS_SIZE_WIDTH, (int)context->WINDOWS_SIZE_HEIGHT);
+            je_io_update_windowsize((int)context->WINDOWS_SIZE_WIDTH, (int)context->WINDOWS_SIZE_HEIGHT);
 
             switch (config->m_displaymode)
             {
@@ -371,15 +373,15 @@ namespace jeecs::graphic::api::gl3
         {
             glfwPollEvents();
             int mouse_lock_x, mouse_lock_y;
-            if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
+            if (je_io_get_lock_mouse(&mouse_lock_x, &mouse_lock_y))
                 glfwSetCursorPos(context->WINDOWS_HANDLE, mouse_lock_x, mouse_lock_y);
 
             int window_width, window_height;
-            if (je_io_should_update_windowsize(&window_width, &window_height))
+            if (je_io_fetch_update_windowsize(&window_width, &window_height))
                 glfwSetWindowSize(context->WINDOWS_HANDLE, window_width, window_height);
 
             const char* title;
-            if (je_io_should_update_windowtitle(&title))
+            if (je_io_fetch_update_windowtitle(&title))
                 glfwSetWindowTitle(context->WINDOWS_HANDLE, title);
 
             if (glfwWindowShouldClose(context->WINDOWS_HANDLE) == GLFW_TRUE)
@@ -550,7 +552,7 @@ namespace jeecs::graphic::api::gl3
                 reboot);
 
         return context;
-    }
+                }
 
     bool gl_pre_update(jegl_thread::custom_thread_data_t ctx)
     {
@@ -561,7 +563,7 @@ namespace jeecs::graphic::api::gl3
         glfw::swap(context);
 #endif
         return true;
-    }
+        }
 
     bool gl_update(jegl_thread::custom_thread_data_t ctx)
     {
@@ -1360,7 +1362,7 @@ namespace jeecs::graphic::api::gl3
         _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
         glClear(GL_DEPTH_BUFFER_BIT);
     }
-}
+        }
 
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {

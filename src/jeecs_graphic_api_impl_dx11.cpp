@@ -130,7 +130,7 @@ namespace jeecs::graphic::api::dx11
 
     void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, size_t h)
     {
-        je_io_set_windowsize((int)w, (int)h);
+        je_io_update_windowsize((int)w, (int)h);
         if (context->m_dx_context_finished == false)
             return;
 
@@ -249,7 +249,7 @@ namespace jeecs::graphic::api::dx11
             if (wParam >= 'A' && wParam <= 'Z' || wParam >= '0' && wParam <= '9')
                 code = (jeecs::input::keycode)wParam;
         }
-        je_io_set_keystate(code, down);
+        je_io_update_keystate(code, down);
     }
 
     LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -322,22 +322,22 @@ namespace jeecs::graphic::api::dx11
             ((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;*/
             return 0;
         case WM_LBUTTONDOWN:
-            je_io_set_keystate(jeecs::input::keycode::MOUSE_L_BUTTION, true);
+            je_io_update_mouse_state(0, jeecs::input::mousecode::LEFT, true);
             return 0;
         case WM_MBUTTONDOWN:
-            je_io_set_keystate(jeecs::input::keycode::MOUSE_M_BUTTION, true);
+            je_io_update_mouse_state(0, jeecs::input::mousecode::MID, true);
             return 0;
         case WM_RBUTTONDOWN:
-            je_io_set_keystate(jeecs::input::keycode::MOUSE_R_BUTTION, true);
+            je_io_update_mouse_state(0, jeecs::input::mousecode::RIGHT, true);
             return 0;
         case WM_LBUTTONUP:
-            je_io_set_keystate(jeecs::input::keycode::MOUSE_L_BUTTION, false);
+            je_io_update_mouse_state(0, jeecs::input::mousecode::LEFT, false);
             return 0;
         case WM_MBUTTONUP:
-            je_io_set_keystate(jeecs::input::keycode::MOUSE_M_BUTTION, false);
+            je_io_update_mouse_state(0, jeecs::input::mousecode::MID, false);
             return 0;
         case WM_RBUTTONUP:
-            je_io_set_keystate(jeecs::input::keycode::MOUSE_R_BUTTION, false);
+            je_io_update_mouse_state(0, jeecs::input::mousecode::RIGHT, false);
             return 0;
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN:
@@ -348,8 +348,12 @@ namespace jeecs::graphic::api::dx11
             dx11_handle_key_state(wParam, false);
             break;
         case WM_MOUSEWHEEL:
-            je_io_set_wheel(0, je_io_wheel(0) + GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA);
+        {
+            float wx, wy;
+            je_io_get_wheel(0, &wx, &wy);
+            je_io_update_wheel(0, wx, wy + GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA);
             return 0;
+        }
         case WM_MOUSEMOVE:
             return 0;
         default:
@@ -456,6 +460,10 @@ namespace jeecs::graphic::api::dx11
         context->FPS = config->m_fps;
         context->m_next_binding_texture_place = 0;
         context->m_win32_window_icon = nullptr;
+
+        je_io_update_windowsize(
+            (int)context->WINDOWS_SIZE_WIDTH,
+            (int)context->WINDOWS_SIZE_HEIGHT);
 
         if (!reboot)
         {
@@ -749,15 +757,15 @@ namespace jeecs::graphic::api::dx11
 
         RECT rect;
         GetClientRect(context->m_window_handle, &rect);
-        je_io_set_windowsize(rect.right - rect.left, rect.bottom - rect.top);
+        je_io_update_windowsize(rect.right - rect.left, rect.bottom - rect.top);
 
         POINT point;
         GetCursorPos(&point);
         ScreenToClient(context->m_window_handle, &point);
-        je_io_set_mousepos(0, point.x, point.y);
+        je_io_update_mousepos(0, point.x, point.y);
 
         int mouse_lock_x, mouse_lock_y;
-        if (je_io_should_lock_mouse(&mouse_lock_x, &mouse_lock_y))
+        if (je_io_get_lock_mouse(&mouse_lock_x, &mouse_lock_y))
         {
             point.x = mouse_lock_x;
             point.y = mouse_lock_y;
@@ -766,7 +774,7 @@ namespace jeecs::graphic::api::dx11
         }
 
         int window_width, window_height;
-        if (je_io_should_update_windowsize(&window_width, &window_height))
+        if (je_io_fetch_update_windowsize(&window_width, &window_height))
         {
             RECT rect = { 0, 0, window_width, window_height };
             SetWindowPos(context->m_window_handle, HWND_TOP,
@@ -775,7 +783,7 @@ namespace jeecs::graphic::api::dx11
         }
 
         const char* title;
-        if (je_io_should_update_windowtitle(&title))
+        if (je_io_fetch_update_windowtitle(&title))
             SetWindowTextA(context->m_window_handle, title);
 
         return true;
