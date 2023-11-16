@@ -3,7 +3,12 @@ package net.cinogama.joyengineecs4a;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.content.Context;
+import android.view.inputmethod.InputMethodManager;
+import android.view.KeyEvent;
 import android.content.res.AssetManager;
+
+import java.util.concurrent.LinkedBlockingQueue;
 
 import com.google.androidgamesdk.GameActivity;
 
@@ -62,6 +67,27 @@ public class MainActivity extends GameActivity {
                 getApplication().getCacheDir().getAbsolutePath(),
                 getApplication().getFilesDir().getAbsolutePath());
     }
+    private void hideSystemUi() {
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+        );
+    }
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    public void showSoftInput() {
+        InputMethodManager inputMethodManager = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+        inputMethodManager.showSoftInput(this.getWindow().getDecorView(), 0);
+    }
+    public void  hideSoftInput() {
+        InputMethodManager inputMethodManager = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+        inputMethodManager.hideSoftInputFromWindow(this.getWindow().getDecorView().getWindowToken(), 0);
+    }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
@@ -72,15 +98,23 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    private void hideSystemUi() {
-        View decorView = getWindow().getDecorView();
-        decorView.setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-            | View.SYSTEM_UI_FLAG_FULLSCREEN
-        );
+    // Queue for the Unicode characters to be polled from native code (via pollUnicodeChar())
+    private LinkedBlockingQueue<Integer> unicodeCharacterQueue = new LinkedBlockingQueue<Integer>();
+
+    // We assume dispatchKeyEvent() of the NativeActivity is actually called for every
+    // KeyEvent and not consumed by any View before it reaches here
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            unicodeCharacterQueue.offer(event.getUnicodeChar(event.getMetaState()));
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    int pollUnicodeChar() {
+        Integer val = unicodeCharacterQueue.poll();
+        if (val == null)
+            return 0;
+        return val;
     }
 }
