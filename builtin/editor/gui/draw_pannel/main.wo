@@ -149,8 +149,8 @@ namespace editor::gui::drawpannel
 
     func _delta_wheel()
     {
-        static let mut _w = input::wheel();
-        let _nw = input::wheel();
+        static let mut _w = input::wheel(0)[1];
+        let _nw = input::wheel(0)[1];
         let delta = _nw - _w;
         _w = _nw;
         return delta;
@@ -442,7 +442,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                             let mepixx = mpixx: int;
                             let mepixy = tex_height - 1 - mpixy: int;
 
-                            if (input::keydown(keycode::MOUSE_M_BUTTION)
+                            if (input::mousedown(0, mousecode::MID)
                                 && mepixx >= 0 && mepixx < tex_width
                                 && mepixy >= 0 && mepixy < tex_height)
                                 draw_context.maincolor = texture->pix((mepixx, mepixy))->get_color;
@@ -454,14 +454,14 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 if (draw_context.mousedown == false)
                                 {
                                     first_click = true;
-                                    if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                    if (input::mousedown(0, mousecode::LEFT))
                                         draw_context.usecolor = draw_context.maincolor;
-                                    else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                                    else if (input::mousedown(0, mousecode::RIGHT))
                                         draw_context.usecolor = draw_context.subcolor;
                                     else
                                         first_click = false;
                                 }
-                                if (input::keydown(keycode::MOUSE_L_BUTTION) || input::keydown(keycode::MOUSE_R_BUTTION))
+                                if (input::mousedown(0, mousecode::LEFT) || input::mousedown(0, mousecode::RIGHT))
                                 {
                                     draw_context.mousedown = true;
                                     if (first_click)

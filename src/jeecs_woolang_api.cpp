@@ -767,7 +767,7 @@ WO_API wo_api wojeapi_input_mousedown(wo_vm vm, wo_value args, size_t argc)
 
 WO_API wo_api wojeapi_wheel_count(wo_vm vm, wo_value args, size_t argc)
 {
-    auto wheel = jeecs::input::wheel(0);
+    auto wheel = jeecs::input::wheel((size_t)wo_int(args + 0));
 
     wo_value result = wo_push_struct(vm, 2);
     wo_value elem = wo_push_empty(vm);
@@ -2324,7 +2324,7 @@ namespace je
         _COUNT = 64,
     };
 
-    enum keycode
+    public enum keycode
     {
         UNKNOWN = 0,
 
@@ -2344,7 +2344,7 @@ namespace je
     namespace input
     {
         extern("libjoyecs", "wojeapi_wheel_count")
-        public func wheel()=> (real, real);
+        public func wheel(group: int)=> (real, real);
 
         extern("libjoyecs", "wojeapi_input_keydown")
         public func keydown(kcode: keycode)=> bool;

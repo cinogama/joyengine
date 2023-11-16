@@ -769,7 +769,7 @@ namespace editor::gui::tilemap
 
                             if (ismouse_hovered)
                             {
-                                if (input::keydown(keycode::MOUSE_L_BUTTION))
+                                if (input::mousedown(0, mousecode::LEFT))
                                     self.m_selected_tile = (mpblockx: int, mpblocky: int);
                                 else
                                     drawlist->AddRectFilled(
@@ -898,11 +898,11 @@ namespace editor::gui::tilemap
                 }
 
                 // 高亮鼠标所在的块儿
-                static let mut recored_wheel_count = input::wheel();
+                static let mut recored_wheel_count = input::wheel(0)[1];
                 
                 if (ismouse_hovered)
                 {
-                    let new_wheel_count = input::wheel();
+                    let new_wheel_count = input::wheel(0)[1];
                     self.m_scale *= math::pow(2., (new_wheel_count - recored_wheel_count): real);
                     recored_wheel_count = new_wheel_count;
 
@@ -915,7 +915,7 @@ namespace editor::gui::tilemap
 
                     let mut highlight_alpha = 100;
 
-                    if (input::keydown(keycode::MOUSE_L_BUTTION))
+                    if (input::mousedown(0, mousecode::LEFT))
                     {
                         if (input::keydown(keycode::L_CTRL))
                         {
@@ -930,7 +930,7 @@ namespace editor::gui::tilemap
                             self->apply_draw_tile(mpblockx: int, mpblocky: int);
                         }
                     }
-                    else if (input::keydown(keycode::MOUSE_R_BUTTION))
+                    else if (input::mousedown(0, mousecode::RIGHT))
                     {
                         self->clear_draw_tile(mpblockx: int, mpblocky: int);
                     }
@@ -941,7 +941,7 @@ namespace editor::gui::tilemap
                         (255, 255, 255, highlight_alpha));
                 }
                 else
-                    recored_wheel_count = input::wheel();
+                    recored_wheel_count = input::wheel(0)[1];
 
                 PopClipRect();
 
