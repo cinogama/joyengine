@@ -378,6 +378,8 @@ void je_finish()
 
     delete _je_unregister_guard;
     _je_unregister_guard = nullptr;
+
+    jeecs_file_update_default_fimg(nullptr);
 }
 
 const char* je_build_version()

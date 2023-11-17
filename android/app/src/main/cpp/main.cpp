@@ -5,6 +5,10 @@
 
 #include "jeecs.hpp"
 
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
+#include <sys/stat.h>
+
 struct _jegl_window_android_app
 {
     void* m_android_app;
@@ -97,17 +101,124 @@ struct jegl_android_surface_manager
     }
 };
 
+AAssetManager* _asset_manager = nullptr;
+struct _je_file_instance
+{
+    FILE* m_raw_file;
+    AAsset* m_asset_file;
+
+    _je_file_instance(AAsset* asset)
+        : m_raw_file(nullptr)
+        , m_asset_file(asset)
+    {
+
+    }
+    _je_file_instance(FILE* file)
+        : m_raw_file(file)
+        , m_asset_file(nullptr)
+    {
+
+    }
+
+    int close()
+    {
+        if (m_asset_file != nullptr)
+        {
+            AAsset_close(m_asset_file);
+            return 0;
+        }
+
+        assert(m_raw_file != nullptr);
+        return fclose(m_raw_file);
+    }
+
+    ~_je_file_instance()
+    {
+        assert(m_raw_file == nullptr && m_asset_file == nullptr);
+    }
+};
+
+jeecs_raw_file _je_android_file_open(const char* path, size_t* out_len)
+{
+    if (_asset_manager != nullptr && path[0] == '#')
+    {
+        AAsset* asset = AAssetManager_open(
+            _asset_manager,
+            path[1] == '/' ? path + 2 : path + 1,
+            AASSET_MODE_BUFFER);
+
+        if (asset)
+        {
+            *out_len = AAsset_getLength(asset);
+            return new _je_file_instance(asset);
+        }
+    }
+
+    FILE* fhandle = fopen(path, "rb");
+    if (fhandle)
+    {
+        struct stat cfstat;
+        if (stat(path, &cfstat) != 0)
+        {
+            fclose(fhandle);
+            return nullptr;
+        }
+        *out_len = cfstat.st_size;
+        return new _je_file_instance(fhandle);
+    }
+    return nullptr;
+}
+size_t _je_android_file_read(void* buffer, size_t elemsz, size_t elemcount, jeecs_raw_file file)
+{
+    auto* finstance = (_je_file_instance*)file;
+    if (finstance->m_asset_file != nullptr)
+    {
+        // TODO: Uncomplete elem, need rewind?
+        return AAsset_read(finstance->m_asset_file, buffer, elemsz * elemcount) / elemsz;
+    }
+    else
+    {
+        assert(finstance->m_raw_file != nullptr);
+        return fread(buffer, elemsz, elemcount, finstance->m_raw_file);
+    }
+}
+int _je_android_file_rewind(jeecs_raw_file file, size_t offset)
+{
+    auto* finstance = (_je_file_instance*)file;
+    if (finstance->m_asset_file != nullptr)
+    {
+        if (-1 != AAsset_seek64(finstance->m_asset_file, (off64_t)offset, SEEK_SET))
+            return 0;
+        return -1;
+    }
+    else
+    {
+        assert(finstance->m_raw_file != nullptr);
+        return fseek(finstance->m_raw_file, offset, SEEK_SET);
+    }
+}
+int _je_android_file_close(jeecs_raw_file file)
+{
+    auto* finstance = (_je_file_instance*)file;
+    
+    auto ret = finstance->close();
+
+    delete finstance;
+
+    return ret;
+}
+
 extern "C" {
 
 #include <game-activity/native_app_glue/android_native_app_glue.c>
 
-/*!
- * Handles commands sent to this Android application
- * @param pApp the app the commands are coming from
- * @param cmd the command to handle
- */
-void handle_cmd(android_app *pApp, int32_t cmd) {
-    switch (cmd) {
+    /*!
+     * Handles commands sent to this Android application
+     * @param pApp the app the commands are coming from
+     * @param cmd the command to handle
+     */
+    void handle_cmd(android_app* pApp, int32_t cmd) {
+        switch (cmd) {
         case APP_CMD_INIT_WINDOW: {
             // A new window is created, associate a renderer with it. You may replace this with a
             // "game" class if that suits your needs. Remember to change all instances of userData
@@ -127,89 +238,100 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
             break;
         default:
             break;
+        }
     }
-}
 
-/*!
- * Enable the motion events you want to handle; not handled events are
- * passed back to OS for further processing. For this example case,
- * only pointer and joystick devices are enabled.
- *
- * @param motionEvent the newly arrived GameActivityMotionEvent.
- * @return true if the event is from a pointer or joystick device,
- *         false for all other input devices.
- */
-bool motion_event_filter_func(const GameActivityMotionEvent *motionEvent) {
-    auto sourceClass = motionEvent->source & AINPUT_SOURCE_CLASS_MASK;
-    return (sourceClass == AINPUT_SOURCE_CLASS_POINTER ||
+    /*!
+     * Enable the motion events you want to handle; not handled events are
+     * passed back to OS for further processing. For this example case,
+     * only pointer and joystick devices are enabled.
+     *
+     * @param motionEvent the newly arrived GameActivityMotionEvent.
+     * @return true if the event is from a pointer or joystick device,
+     *         false for all other input devices.
+     */
+    bool motion_event_filter_func(const GameActivityMotionEvent* motionEvent) {
+        auto sourceClass = motionEvent->source & AINPUT_SOURCE_CLASS_MASK;
+        return (sourceClass == AINPUT_SOURCE_CLASS_POINTER ||
             sourceClass == AINPUT_SOURCE_CLASS_JOYSTICK);
-}
+    }
 
-std::string jni_cstring(JNIEnv* env, jstring str)
-{
-    jboolean is_copy = false;
-    return env->GetStringUTFChars(str, &is_copy);
-}
-jstring jni_jstring(JNIEnv* env, const char* str)
-{
-    return env->NewStringUTF(str);
-}
-
-extern "C" JNIEXPORT void JNICALL
-Java_net_cinogama_joyengineecs4a_MainActivity_initJoyEngine(
-        JNIEnv * env,
-        jobject /* this */,
-        jstring library_path,
-        jstring cache_path,
-        jstring asset_path)
-{
-    wo_set_exe_path(jni_cstring(env, library_path).c_str());
-    jeecs_file_set_host_path(jni_cstring(env, cache_path).c_str());
-    jeecs_file_set_runtime_path(jni_cstring(env, asset_path).c_str());
-}
-
-void _je_log_to_android(int level, const char* msg, void*)
-{
-    switch(level)
+    std::string jni_cstring(JNIEnv* env, jstring str)
     {
-    case JE_LOG_FATAL:
-        LOGE("%s", msg); break;
-    case JE_LOG_ERROR:
-        LOGE("%s", msg); break;
-    case JE_LOG_WARNING:
-        LOGW("%s", msg); break;
-    case JE_LOG_INFO:
-        LOGI("%s", msg); break;
-    case JE_LOG_NORMAL:
-    default:
-        LOGV("%s", msg); break;
+        jboolean is_copy = false;
+        return env->GetStringUTFChars(str, &is_copy);
     }
-}
-
-void _je_handle_inputs(struct android_app *app_) {
-    // handle all queued inputs
-    auto *inputBuffer = android_app_swap_input_buffers(app_);
-    if (!inputBuffer) {
-        // no inputs yet.
-        return;
+    jstring jni_jstring(JNIEnv* env, const char* str)
+    {
+        return env->NewStringUTF(str);
     }
 
-    // handle motion events (motionEventsCounts can be 0).
-    for (auto i = 0; i < inputBuffer->motionEventsCount; i++) {
-        auto &motionEvent = inputBuffer->motionEvents[i];
-        auto action = motionEvent.action;
+    extern "C" JNIEXPORT void JNICALL
+        Java_net_cinogama_joyengineecs4a_MainActivity_initJoyEngine(
+            JNIEnv * env,
+            jobject /* this */,
+            jobject asset_manager,
+            jstring library_path,
+            jstring cache_path,
+            jstring asset_path)
+    {
+        _asset_manager = AAssetManager_fromJava(env, asset_manager);
 
-        // Find the pointer index, mask and bitshift to turn it into a readable value.
-        auto pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
+        jeecs_register_native_file_operator(
+                _je_android_file_open,
+                _je_android_file_read,
+                _je_android_file_rewind,
+                _je_android_file_close);
+
+        wo_set_exe_path(jni_cstring(env, library_path).c_str());
+        jeecs_file_set_host_path(jni_cstring(env, cache_path).c_str());
+        jeecs_file_set_runtime_path(jni_cstring(env, asset_path).c_str());
+
+        jeecs_file_update_default_fimg("#/");
+    }
+
+    void _je_log_to_android(int level, const char* msg, void*)
+    {
+        switch (level)
+        {
+        case JE_LOG_FATAL:
+            LOGE("%s", msg); break;
+        case JE_LOG_ERROR:
+            LOGE("%s", msg); break;
+        case JE_LOG_WARNING:
+            LOGW("%s", msg); break;
+        case JE_LOG_INFO:
+            LOGI("%s", msg); break;
+        case JE_LOG_NORMAL:
+        default:
+            LOGV("%s", msg); break;
+        }
+    }
+
+    void _je_handle_inputs(struct android_app* app_) {
+        // handle all queued inputs
+        auto* inputBuffer = android_app_swap_input_buffers(app_);
+        if (!inputBuffer) {
+            // no inputs yet.
+            return;
+        }
+
+        // handle motion events (motionEventsCounts can be 0).
+        for (auto i = 0; i < inputBuffer->motionEventsCount; i++) {
+            auto& motionEvent = inputBuffer->motionEvents[i];
+            auto action = motionEvent.action;
+
+            // Find the pointer index, mask and bitshift to turn it into a readable value.
+            auto pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
                 >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
 
-        // get the x and y position of this event if it is not ACTION_MOVE.
-        auto &pointer = motionEvent.pointers[pointerIndex];
-        auto x = GameActivityPointerAxes_getX(&pointer);
-        auto y = GameActivityPointerAxes_getY(&pointer);
+            // get the x and y position of this event if it is not ACTION_MOVE.
+            auto& pointer = motionEvent.pointers[pointerIndex];
+            auto x = GameActivityPointerAxes_getX(&pointer);
+            auto y = GameActivityPointerAxes_getY(&pointer);
 
-        // determine the action type and process the event accordingly.
-        switch (action & AMOTION_EVENT_ACTION_MASK) {
+            // determine the action type and process the event accordingly.
+            switch (action & AMOTION_EVENT_ACTION_MASK) {
             case AMOTION_EVENT_ACTION_DOWN:
             case AMOTION_EVENT_ACTION_POINTER_DOWN:
                 je_io_update_mouse_state(
@@ -242,16 +364,16 @@ void _je_handle_inputs(struct android_app *app_) {
             default:
                 // ?
                 ;
+            }
         }
-    }
-    // clear the motion input count in this buffer for main thread to re-use.
-    android_app_clear_motion_events(inputBuffer);
+        // clear the motion input count in this buffer for main thread to re-use.
+        android_app_clear_motion_events(inputBuffer);
 
-    // handle input key events.
-    for (auto i = 0; i < inputBuffer->keyEventsCount; i++) {
-        auto &keyEvent = inputBuffer->keyEvents[i];
+        // handle input key events.
+        for (auto i = 0; i < inputBuffer->keyEventsCount; i++) {
+            auto& keyEvent = inputBuffer->keyEvents[i];
 
-        switch (keyEvent.action) {
+            switch (keyEvent.action) {
             case AKEY_EVENT_ACTION_DOWN:
                 break;
             case AKEY_EVENT_ACTION_UP:
@@ -261,57 +383,57 @@ void _je_handle_inputs(struct android_app *app_) {
                 break;
             default:
                 ;
+            }
         }
+        // clear the key input count too.
+        android_app_clear_key_events(inputBuffer);
     }
-    // clear the key input count too.
-    android_app_clear_key_events(inputBuffer);
-}
 
-/*!
- * This the main entry point for a native activity
- */
-void android_main(struct android_app *pApp) {
-    // Register an event handler for Android events
-    pApp->onAppCmd = handle_cmd;
+    /*!
+     * This the main entry point for a native activity
+     */
+    void android_main(struct android_app* pApp) {
+        // Register an event handler for Android events
+        pApp->onAppCmd = handle_cmd;
 
-    // Set input event filters (set it to NULL if the app wants to process all inputs).
-    // Note that for key inputs, this example uses the default default_key_filter()
-    // implemented in android_native_app_glue.c.
-    android_app_set_motion_event_filter(pApp, motion_event_filter_func);
+        // Set input event filters (set it to NULL if the app wants to process all inputs).
+        // Note that for key inputs, this example uses the default default_key_filter()
+        // implemented in android_native_app_glue.c.
+        android_app_set_motion_event_filter(pApp, motion_event_filter_func);
 
-    using namespace jeecs;
+        using namespace jeecs;
 
-    je_init(0, nullptr);
+        je_init(0, nullptr);
 
-    auto logcallback = je_log_register_callback(_je_log_to_android, nullptr);
+        auto logcallback = je_log_register_callback(_je_log_to_android, nullptr);
 
-    auto* guard = new typing::type_unregister_guard();
-    {
-        entry::module_entry(guard);
+        auto* guard = new typing::type_unregister_guard();
         {
-            // This sets up a typical game/event loop. It will run until the app is destroyed.
-            int events;
-            android_poll_source *pSource;
-            do {
-                // Process all pending events before running game logic.
-                if (ALooper_pollAll(0, nullptr, &events, (void **) &pSource) >= 0) {
-                    if (pSource) {
-                        pSource->process(pApp, pSource);
+            entry::module_entry(guard);
+            {
+                // This sets up a typical game/event loop. It will run until the app is destroyed.
+                int events;
+                android_poll_source* pSource;
+                do {
+                    // Process all pending events before running game logic.
+                    if (ALooper_pollAll(0, nullptr, &events, (void**)&pSource) >= 0) {
+                        if (pSource) {
+                            pSource->process(pApp, pSource);
+                        }
                     }
-                }
 
-                // Update frame sync.
-                _je_handle_inputs(pApp);
-                jegl_android_surface_manager::sync_update();
-            } while (!pApp->destroyRequested);
+                    // Update frame sync.
+                    _je_handle_inputs(pApp);
+                    jegl_android_surface_manager::sync_update();
+                } while (!pApp->destroyRequested);
 
-            // Application is requesting to exit.
-            jegl_android_surface_manager::sync_shutdown();
+                // Application is requesting to exit.
+                jegl_android_surface_manager::sync_shutdown();
+            }
+            entry::module_leave(guard);
         }
-        entry::module_leave(guard);
-    }
 
-    je_log_unregister_callback(logcallback);
-    je_finish();
-}
+        je_log_unregister_callback(logcallback);
+        je_finish();
+    }
 }

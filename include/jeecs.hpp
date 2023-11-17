@@ -1321,6 +1321,12 @@ fimg_creating_context [类型]
 */
 struct fimg_creating_context;
 
+typedef void* jeecs_raw_file;
+typedef jeecs_raw_file(*je_read_file_open_func_t)(const char*, size_t*);
+typedef size_t(*je_read_file_func_t)(void*, size_t, size_t, jeecs_raw_file);
+typedef int (*je_read_file_rewind_func_t)(jeecs_raw_file, size_t);
+typedef int (*je_read_file_close_func_t)(jeecs_raw_file);
+
 /*
 jeecs_file [类型]
 文件，用于保存引擎读取的文件
@@ -1333,7 +1339,7 @@ jeecs_file [类型]
 struct jeecs_file
 {
     jeecs_fimg_file* m_image_file_handle;
-    FILE* m_native_file_handle;
+    jeecs_raw_file m_native_file_handle;
     size_t m_file_length;
 };
 
@@ -1352,10 +1358,20 @@ JE_API void        jeecs_file_set_host_path(const char* path);
 jeecs_file_set_runtime_path [基本接口]
 设置当前引擎的运行时路径，不影响“工作路径”
     * 设置此路径将影响以 @ 开头的路径的实际位置
-设置路径时，引擎会尝试在目标运行路径中打开 fimg_table.jeimgidx4 作为默认
-镜像文件，尝试打开打开以 @ 开头的文件路径读取时会优先从默认镜像中读取
+    * 设置路径时，引擎会尝试以相同参数调用jeecs_file_update_default_fimg
+请参考：
+    jeecs_file_update_default_fimg
 */
 JE_API void        jeecs_file_set_runtime_path(const char* path);
+
+/*
+* jeecs_file_update_default_fimg [基本接口]
+读取指定位置的镜像文件作为默认镜像
+    * 以 @/ 开头的路径将优先从默认镜像中读取
+    * 无论打开是否成功，之前打开的默认镜像都将被关闭
+    * 若 path == nullptr，则仅关闭旧的镜像
+*/
+JE_API void         jeecs_file_update_default_fimg(const char* path);
 
 /*
 jeecs_file_get_host_path [基本接口]
@@ -1376,6 +1392,16 @@ jeecs_file_get_runtime_path [基本接口]
     jeecs_file_set_runtime_path
 */
 JE_API const char* jeecs_file_get_runtime_path();
+
+/*
+jeecs_register_native_file_operator [基本接口]
+设置引擎底层的文件读取接口
+*/
+JE_API void jeecs_register_native_file_operator(
+    je_read_file_open_func_t opener,
+    je_read_file_func_t reader,
+    je_read_file_rewind_func_t rewinder,
+    je_read_file_close_func_t closer);
 
 /*
 jeecs_file_open [基本接口]

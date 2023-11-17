@@ -64,7 +64,7 @@ struct fimg_creating_context
 
 struct jeecs_fimg_file
 {
-    std::vector<FILE*> fds;
+    std::vector<jeecs_raw_file> fds;
 
     size_t f_index = 0;
     size_t f_diff_ptr = 0;
@@ -76,13 +76,79 @@ struct jeecs_fimg_file
 
 };
 
+je_read_file_open_func_t _m_read_file_open_impl = nullptr;
+je_read_file_func_t _m_read_file_impl = nullptr;
+je_read_file_rewind_func_t _m_read_file_rewind_impl = nullptr;
+je_read_file_close_func_t _m_read_file_close_impl = nullptr;
+
+void jeecs_register_native_file_operator(
+    je_read_file_open_func_t opener,
+    je_read_file_func_t reader,
+    je_read_file_rewind_func_t rewinder,
+    je_read_file_close_func_t closer)
+{
+    assert(
+        opener != nullptr
+        && reader != nullptr
+        && rewinder != nullptr
+        && closer != nullptr
+    );
+    _m_read_file_open_impl = opener;
+    _m_read_file_impl = reader;
+    _m_read_file_rewind_impl = rewinder;
+    _m_read_file_close_impl = closer;
+}
+
+jeecs_raw_file _je_file_open(const char* path, size_t* out_len)
+{
+    if (_m_read_file_open_impl != nullptr)
+        return _m_read_file_open_impl(path, out_len);
+
+    FILE* fhandle = fopen(path, "rb");
+    if (fhandle)
+    {
+        struct stat cfstat;
+        if (stat(path, &cfstat) != 0)
+        {
+            fclose(fhandle);
+            return nullptr;
+        }
+        *out_len = cfstat.st_size;
+    }
+    return fhandle;
+}
+size_t _je_file_read(void* buffer, size_t elemsz, size_t elemcount, jeecs_raw_file file)
+{
+    if (_m_read_file_impl != nullptr)
+        return _m_read_file_impl(buffer, elemsz, elemcount, file);
+
+    return fread(buffer, elemsz, elemcount, (FILE*)file);
+}
+int _je_file_rewind(jeecs_raw_file file, size_t offset)
+{
+    if (_m_read_file_rewind_impl != nullptr)
+        return _m_read_file_rewind_impl(file, offset);
+
+    return fseek((FILE*)file, offset, SEEK_SET);
+}
+int _je_file_close(jeecs_raw_file file)
+{
+    if (_m_read_file_close_impl != nullptr)
+        return _m_read_file_close_impl(file);
+
+    return fclose((FILE*)file);
+}
+
 fimg_img* fimg_open_img(const char* path)
 {
     using namespace std;
 
     // Read img from specified path or current path.
     // If you don't want to specify the path, you can call 'fimg_read_img' with null;
-    FILE* fimg_fp = fopen((path + "/fimg_table"s + FIMAGE_TABLE_EXTENSION_NAME).c_str(), "rb");
+    size_t fimg_index_file_length = 0;
+    auto fimg_fp = _je_file_open(
+        (path + "/fimg_table"s + FIMAGE_TABLE_EXTENSION_NAME).c_str(), 
+        &fimg_index_file_length);
 
     if (!fimg_fp)
         return nullptr;
@@ -90,7 +156,7 @@ fimg_img* fimg_open_img(const char* path)
     fimg_img* fimgdata = new fimg_img;
     fimgdata->path = path;
 
-    fread(&fimgdata->fimg_head, sizeof(fimgdata->fimg_head), 1, fimg_fp);
+    _je_file_read(&fimgdata->fimg_head, sizeof(fimgdata->fimg_head), 1, fimg_fp);
 
     auto filecount = fimgdata->fimg_head.file_count;
     if (fimgdata->fimg_head.valid())
@@ -100,7 +166,7 @@ fimg_img* fimg_open_img(const char* path)
             std::string rel_path;
 
             char chcode;
-            while (fread(&chcode, sizeof(char), 1, fimg_fp))
+            while (_je_file_read(&chcode, sizeof(char), 1, fimg_fp))
             {
                 if (chcode)
                     rel_path += chcode;
@@ -110,7 +176,7 @@ fimg_img* fimg_open_img(const char* path)
             // read file rel_path end.
 
             fimg_img_index findex;
-            fread(&findex, sizeof(fimg_img_index), 1, fimg_fp);
+            _je_file_read(&findex, sizeof(fimg_img_index), 1, fimg_fp);
 
             fimgdata->file_map[rel_path] = findex;
         }
@@ -118,11 +184,11 @@ fimg_img* fimg_open_img(const char* path)
     else
         goto load_fail;
 
-    fclose(fimg_fp);
+    _je_file_close(fimg_fp);
     return fimgdata;
 
 load_fail:
-    fclose(fimg_fp);
+    _je_file_close(fimg_fp);
     return nullptr;
 }
 
@@ -292,10 +358,10 @@ void fimg_reset(jeecs_fimg_file* file)
     file->nreaded_sz = 0;
 
     for (auto fptr : file->fds)
-        fseek(fptr, 0, SEEK_SET);
+        _je_file_rewind(fptr, 0);
 
     if (file->fds.size())
-        fseek(file->fds[0], (long)file->f_diff_ptr, SEEK_SET);
+        _je_file_rewind(file->fds[0], file->f_diff_ptr);
 }
 
 size_t fimg_read(void* buffer, size_t elemsize, size_t count, jeecs_fimg_file* file)
@@ -308,7 +374,7 @@ size_t fimg_read(void* buffer, size_t elemsize, size_t count, jeecs_fimg_file* f
     while (remain_read_size)
     {
         size_t this_time_read_sz = std::min(remain_read_size, file->i_max_file_sz - file->nf_diff_ptr);
-        fread(write_byte_buffer, 1, this_time_read_sz, file->fds[file->nf_index]);
+        _je_file_read(write_byte_buffer, 1, this_time_read_sz, file->fds[file->nf_index]);
 
         remain_read_size -= this_time_read_sz;
         write_byte_buffer += this_time_read_sz;
@@ -332,7 +398,7 @@ void fimg_close_file(jeecs_fimg_file* file)
 {
     for (auto fp : file->fds)
         if (fp)
-            fclose(fp);
+            _je_file_close(fp);
     delete file;
 }
 
@@ -350,7 +416,8 @@ jeecs_fimg_file* fimg_open_file(fimg_img* img, const char* fpath)
         for (size_t img_byte = 0; img_byte < f.file_size;)
         {
             auto disk_path = img->path + "/disk-" + std::to_string(img_index) + FIMAGE_FILE_EXTENSION_NAME;
-            auto* disk_file_handle = fopen(disk_path.c_str(), "rb");
+            size_t _useless = 0;
+            auto* disk_file_handle = _je_file_open(disk_path.c_str(), &_useless);
             if (disk_file_handle == nullptr)
             {
                 jeecs::debug::logerr("Unable to open disk-%zu: '%s' when trying to read '%s'.", img_index, disk_path.c_str(), fpath);
@@ -390,10 +457,18 @@ void jeecs_file_set_host_path(const char* path)
 void jeecs_file_set_runtime_path(const char* path)
 {
     _je_runtime_path = path;
+    jeecs_file_update_default_fimg(path);
+}
+
+void jeecs_file_update_default_fimg(const char* path)
+{
     if (_je_runtime_file_image != nullptr)
         fimg_close_img(_je_runtime_file_image);
 
-    _je_runtime_file_image = fimg_open_img(path);
+    if (path != nullptr)
+        _je_runtime_file_image = fimg_open_img(path);
+    else
+        _je_runtime_file_image = nullptr;
 }
 
 const char* jeecs_file_get_host_path()
@@ -438,15 +513,14 @@ jeecs_file* jeecs_file_open(const char* path)
         path_str = jeecs_file_get_host_path() + path_str.substr(1);
     }
 
-    FILE* fhandle = fopen(path_str.c_str(), "rb");
+    size_t flength = 0;
+    auto fhandle = _je_file_open(path_str.c_str(), &flength);
     if (fhandle)
     {
         jeecs_file* jefhandle = new jeecs_file();
         jefhandle->m_native_file_handle = fhandle;
         jefhandle->m_image_file_handle = nullptr;
-        struct stat cfstat;
-        stat(path_str.c_str(), &cfstat);
-        jefhandle->m_file_length = cfstat.st_size;
+        jefhandle->m_file_length = flength;
 
         return jefhandle;
     }
@@ -459,7 +533,7 @@ void jeecs_file_close(jeecs_file* file)
 
     if (file->m_native_file_handle != nullptr)
     {
-        auto close_state = fclose(file->m_native_file_handle);
+        auto close_state = _je_file_close(file->m_native_file_handle);
         if (close_state != 0)
             jeecs::debug::logerr("Fail to close file(%d:%d).", (int)close_state, (int)errno);
     }
@@ -477,7 +551,7 @@ size_t jeecs_file_read(
     jeecs_file* file)
 {
     if (file->m_native_file_handle != nullptr)
-        return fread(out_buffer, elem_size, count, file->m_native_file_handle);
+        return _je_file_read(out_buffer, elem_size, count, file->m_native_file_handle);
     else
     {
         assert(file->m_image_file_handle != nullptr);

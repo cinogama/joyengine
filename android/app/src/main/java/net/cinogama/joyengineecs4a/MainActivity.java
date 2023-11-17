@@ -1,12 +1,12 @@
 package net.cinogama.joyengineecs4a;
 
+import android.content.res.AssetManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.content.Context;
 import android.view.inputmethod.InputMethodManager;
 import android.view.KeyEvent;
-import android.content.res.AssetManager;
 
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -22,6 +22,7 @@ public class MainActivity extends GameActivity {
     }
 
     public native void initJoyEngine(
+        AssetManager asset_manager,
         String native_lib_path,
         String cache_path,
         String asset_path);
@@ -37,32 +38,15 @@ public class MainActivity extends GameActivity {
             {
                 dir.mkdirs();
             }
-            AssetManager asset_manager = getAssets();
-            for (String path : asset_manager.list(""))
-            {
-                if (path.endsWith(".jeimg4") || path.endsWith(".jeimgidx4"))
-                {
-                    InputStream is = asset_manager.open(path);
-                    FileOutputStream fos = new FileOutputStream(
-                            new File(getApplication().getFilesDir().getAbsolutePath(), path));
-                    byte[] buffer = new byte[1024];
-                    int byteCount=0;
-                    while((byteCount=is.read(buffer))!=-1) {//循环从输入流读取 buffer字节
-                        fos.write(buffer, 0, byteCount);//将读取的输入流写入到输出流
-                    }
-                    fos.flush();//刷新缓冲区
-                    is.close();
-                    fos.close();
-                }
-            }
         }
         catch(Exception e)
         {
-            Log.e("JoyEngineAssets", "Failed to unpack image: " + e.getMessage());
+            Log.e("JoyEngineAssets", "Assets failed: " + e.getMessage());
         }
 
         // Init native lib path.
         initJoyEngine(
+                getAssets(),
                 getApplicationInfo().nativeLibraryDir,
                 getApplication().getCacheDir().getAbsolutePath(),
                 getApplication().getFilesDir().getAbsolutePath());
