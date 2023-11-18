@@ -448,23 +448,23 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
     //Wav文件数据体模块
     struct WAVE_Data {
         char subChunkID[4]; //should contain the word data
-        long subChunk2Size; //Stores the size of the data block
+        int32_t subChunk2Size; //Stores the size of the data block
     };
     //wav文件数据参数类型
     struct WAVE_Format {
         char subChunkID[4];
-        long subChunkSize;
-        short audioFormat;
-        short numChannels;
-        long sampleRate;
-        long byteRate;
-        short blockAlign;
-        short bitsPerSample;
+        int32_t subChunkSize;
+        int16_t audioFormat;
+        int16_t numChannels;
+        int32_t sampleRate;
+        int32_t byteRate;
+        int16_t blockAlign;
+        int16_t bitsPerSample;
     };
     //RIFF块标准模型
     struct RIFF_Header {
         char chunkID[4];
-        long chunkSize;//size not including chunkSize or chunkID
+        int32_t chunkSize;//size not including chunkSize or chunkID
         char format[4];
     };
 
@@ -513,8 +513,8 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
     //check for extra parameters;
     if (wave_format.subChunkSize > 16)
     {
-        short useless;
-        jeecs_file_read(&useless, sizeof(short), 1, wav_file);
+        int16_t useless;
+        jeecs_file_read(&useless, sizeof(int16_t), 1, wav_file);
     }
 
     //Read in the the last byte of data before the sound file
