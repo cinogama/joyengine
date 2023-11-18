@@ -9,26 +9,87 @@
 #include <android/asset_manager_jni.h>
 #include <sys/stat.h>
 
+extern "C" {
+#include <game-activity/native_app_glue/android_native_app_glue.c>
+}
+
 struct _jegl_window_android_app
 {
     void* m_android_app;
     void* m_android_window;
 };
 
-struct jegl_android_surface_manager
+class jegl_android_surface_manager
 {
-    inline static jegl_thread* _jegl_graphic_thread;
-    inline static jegl_sync_state _jegl_graphic_thread_state;
+    JECS_DISABLE_MOVE_AND_COPY(jegl_android_surface_manager);
 
-    inline static bool _jegl_android_update_paused = false;
-    inline static _jegl_window_android_app _jegl_window_android_app;
+    size_t _je_log_callback;
+    jeecs::typing::type_unregister_guard* _je_type_guard;
 
-    static void _jegl_android_sync_thread_created(jegl_thread* gthread, void*)
+    jegl_thread* _jegl_graphic_thread;
+    jegl_sync_state _jegl_graphic_thread_state;
+
+    bool _jegl_android_update_paused;
+    _jegl_window_android_app _jegl_window_android_app;
+
+    static void _jegl_android_sync_thread_created(jegl_thread* gthread, void* _self)
     {
-        _jegl_graphic_thread = gthread;
+        auto* _this = std::launder(
+                reinterpret_cast<jegl_android_surface_manager*>(_self));
+
+        _this->_jegl_graphic_thread = gthread;
+    }
+    static void _je_log_to_android(int level, const char* msg, void*)
+    {
+        switch (level)
+        {
+            case JE_LOG_FATAL:
+                LOGE("%s", msg); break;
+            case JE_LOG_ERROR:
+                LOGE("%s", msg); break;
+            case JE_LOG_WARNING:
+                LOGW("%s", msg); break;
+            case JE_LOG_INFO:
+                LOGI("%s", msg); break;
+            case JE_LOG_NORMAL:
+            default:
+                LOGV("%s", msg); break;
+        }
     }
 
-    static void sync_begin(void* android_app, void* android_window)
+    jegl_android_surface_manager()
+        : _je_log_callback(0)
+        , _je_type_guard(nullptr)
+        , _jegl_graphic_thread(nullptr)
+        ,  _jegl_graphic_thread_state(jegl_sync_state::JEGL_SYNC_SHUTDOWN)
+        ,  _jegl_android_update_paused(false)
+        ,  _jegl_window_android_app({})
+    {
+        using namespace jeecs;
+
+        je_init(0, nullptr);
+
+        _je_log_callback = je_log_register_callback(_je_log_to_android, nullptr);
+        _je_type_guard = new typing::type_unregister_guard();
+        entry::module_entry(_je_type_guard);
+    }
+    ~jegl_android_surface_manager()
+    {
+        using namespace jeecs;
+
+        entry::module_leave(_je_type_guard);
+        je_log_unregister_callback(_je_log_callback);
+
+        je_finish();
+    }
+
+public:
+    static jegl_android_surface_manager& instance()
+    {
+        static jegl_android_surface_manager _instance;
+        return _instance;
+    }
+    void sync_begin(void* android_app, void* android_window)
     {
         _jegl_window_android_app.m_android_app = android_app;
         _jegl_window_android_app.m_android_window = android_window;
@@ -50,7 +111,7 @@ struct jegl_android_surface_manager
         }
 
     }
-    static void sync_pause()
+    void sync_pause()
     {
         // The app enters the background, will destroy surface & context..
         // Send a reboot signal, and stop update until awake by sync_begin.
@@ -62,7 +123,7 @@ struct jegl_android_surface_manager
         // Let update to close interface here.
         sync_update();
     }
-    static bool sync_update()
+    bool sync_update()
     {
         if (_jegl_android_update_paused &&
             _jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
@@ -91,14 +152,6 @@ struct jegl_android_surface_manager
         }
         return false;
     }
-    static void sync_shutdown()
-    {
-        if (_jegl_graphic_thread != nullptr)
-        {
-            _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
-            _jegl_graphic_thread = nullptr;
-        }
-    }
 };
 
 AAssetManager* _asset_manager = nullptr;
@@ -111,13 +164,13 @@ struct _je_file_instance
         : m_raw_file(nullptr)
         , m_asset_file(asset)
     {
-
+        assert(m_asset_file != nullptr);
     }
     _je_file_instance(FILE* file)
         : m_raw_file(file)
         , m_asset_file(nullptr)
     {
-
+        assert(m_raw_file != nullptr);
     }
 
     int close()
@@ -125,11 +178,14 @@ struct _je_file_instance
         if (m_asset_file != nullptr)
         {
             AAsset_close(m_asset_file);
+            m_asset_file = nullptr;
             return 0;
         }
 
         assert(m_raw_file != nullptr);
-        return fclose(m_raw_file);
+        auto result = fclose(m_raw_file);
+        m_raw_file = nullptr;
+        return result;
     }
 
     ~_je_file_instance()
@@ -209,15 +265,14 @@ int _je_android_file_close(jeecs_raw_file file)
 }
 
 extern "C" {
-
-#include <game-activity/native_app_glue/android_native_app_glue.c>
-
     /*!
      * Handles commands sent to this Android application
      * @param pApp the app the commands are coming from
      * @param cmd the command to handle
      */
     void handle_cmd(android_app* pApp, int32_t cmd) {
+        jeecs::debug::logerr("ANDROID MSG: %d", cmd);
+
         switch (cmd) {
         case APP_CMD_INIT_WINDOW: {
             // A new window is created, associate a renderer with it. You may replace this with a
@@ -225,7 +280,8 @@ extern "C" {
             // if you change the class here as a reinterpret_cast is dangerous this in the
             // android_main function and the APP_CMD_TERM_WINDOW handler case.
 
-            jegl_android_surface_manager::sync_begin(pApp, pApp->window);
+            jegl_android_surface_manager::instance().sync_begin(
+                    pApp, pApp->window);
 
             break;
         }
@@ -234,7 +290,7 @@ extern "C" {
             // resources.
             //
             // We have to check if userData is assigned just in case this comes in really quickly
-            jegl_android_surface_manager::sync_pause();
+            jegl_android_surface_manager::instance().sync_pause();
             break;
         default:
             break;
@@ -287,25 +343,7 @@ extern "C" {
         jeecs_file_set_host_path(jni_cstring(env, cache_path).c_str());
         jeecs_file_set_runtime_path(jni_cstring(env, asset_path).c_str());
 
-        jeecs_file_update_default_fimg("#/");
-    }
-
-    void _je_log_to_android(int level, const char* msg, void*)
-    {
-        switch (level)
-        {
-        case JE_LOG_FATAL:
-            LOGE("%s", msg); break;
-        case JE_LOG_ERROR:
-            LOGE("%s", msg); break;
-        case JE_LOG_WARNING:
-            LOGW("%s", msg); break;
-        case JE_LOG_INFO:
-            LOGI("%s", msg); break;
-        case JE_LOG_NORMAL:
-        default:
-            LOGV("%s", msg); break;
-        }
+        jeecs_file_update_default_fimg("#");
     }
 
     void _je_handle_inputs(struct android_app* app_) {
@@ -401,39 +439,23 @@ extern "C" {
         // implemented in android_native_app_glue.c.
         android_app_set_motion_event_filter(pApp, motion_event_filter_func);
 
-        using namespace jeecs;
+        auto& jengine_interface_instance =
+                jegl_android_surface_manager::instance();
 
-        je_init(0, nullptr);
-
-        auto logcallback = je_log_register_callback(_je_log_to_android, nullptr);
-
-        auto* guard = new typing::type_unregister_guard();
-        {
-            entry::module_entry(guard);
-            {
-                // This sets up a typical game/event loop. It will run until the app is destroyed.
-                int events;
-                android_poll_source* pSource;
-                do {
-                    // Process all pending events before running game logic.
-                    if (ALooper_pollAll(0, nullptr, &events, (void**)&pSource) >= 0) {
-                        if (pSource) {
-                            pSource->process(pApp, pSource);
-                        }
-                    }
-
-                    // Update frame sync.
-                    _je_handle_inputs(pApp);
-                    jegl_android_surface_manager::sync_update();
-                } while (!pApp->destroyRequested);
-
-                // Application is requesting to exit.
-                jegl_android_surface_manager::sync_shutdown();
+        // This sets up a typical game/event loop. It will run until the app is destroyed.
+        int events;
+        android_poll_source* pSource;
+        do {
+            // Process all pending events before running game logic.
+            if (ALooper_pollAll(0, nullptr, &events, (void**)&pSource) >= 0) {
+                if (pSource) {
+                    pSource->process(pApp, pSource);
+                }
             }
-            entry::module_leave(guard);
-        }
+            // Update frame sync.
+            _je_handle_inputs(pApp);
+            jengine_interface_instance.sync_update();
+        } while (!pApp->destroyRequested);
 
-        je_log_unregister_callback(logcallback);
-        je_finish();
     }
 }
