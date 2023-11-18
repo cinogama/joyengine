@@ -27,10 +27,8 @@ public class MainActivity extends GameActivity {
         String cache_path,
         String asset_path);
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
+    public void doInitJoyEngineBasicConfig()
+    {
         // Check packing files, varify file version. unpack them.
         try {
             File dir = new File(getApplication().getCacheDir(), "builtin");
@@ -51,6 +49,12 @@ public class MainActivity extends GameActivity {
                 getApplication().getCacheDir().getAbsolutePath(),
                 getApplication().getFilesDir().getAbsolutePath());
     }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+    }
+
     private void hideSystemUi() {
         View decorView = getWindow().getDecorView();
         decorView.setSystemUiVisibility(
