@@ -59,7 +59,7 @@ namespace jeecs
         static void _update_frame_universe_job(void* host)
         {
             auto* graphic_host = (graphic_uhost*)host;
-            if (!jegl_update(graphic_host->glthread))
+            if (!jegl_update(graphic_host->glthread, jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END))
             {
                 graphic_host->universe.stop();
             }

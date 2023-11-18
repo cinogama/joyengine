@@ -384,7 +384,7 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
     delete thread;
 }
 
-bool jegl_update(jegl_thread* thread)
+bool jegl_update(jegl_thread* thread, jegl_update_sync_mode mode)
 {
     if (std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->load())
         return false;
@@ -392,13 +392,24 @@ bool jegl_update(jegl_thread* thread)
     do
     {
         std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
+        if (mode == jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END)
+        {
+            // Wait until `last` frame draw end.
+            thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
+                return !thread->_m_thread_notifier->m_update_flag;
+                });
+        }
+
         thread->_m_thread_notifier->m_update_flag = true;
         thread->_m_thread_notifier->m_update_waiter.notify_all();
 
-        // Start Frame, then wait frame end...~
-        thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
-            return !thread->_m_thread_notifier->m_update_flag;
-            });
+        if (mode == jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END)
+        {
+            // Wait until `this` frame draw end.
+            thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
+                return !thread->_m_thread_notifier->m_update_flag;
+                });
+        }
     } while (0);
 
     return true;

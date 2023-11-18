@@ -2030,11 +2030,22 @@ jegl_terminate_graphic_thread [基本接口]
 */
 JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);
 
+enum jegl_update_sync_mode
+{
+    JEGL_WAIT_THIS_FRAME_END,
+    JEGL_WAIT_LAST_FRAME_END,
+};
+
 /*
 jegl_update [基本接口]
 调度图形线程更新一帧，此函数将阻塞直到一帧的绘制操作完成
+    * mode 用于指示更新的同步模式，其中：
+        WAIT_THIS_FRAME_END：阻塞直到当前帧渲染完毕
+        * 同步更简单，但是绘制时间无法和其他逻辑同步执行
+        WAIT_LAST_FRAME_END：阻塞直到上一帧渲染完毕（绘制信号发出后立即返回）
+        * 更适合CPU密集操作，但需要更复杂的机制以保证数据完整性
 */
-JE_API bool jegl_update(jegl_thread* thread_handle);
+JE_API bool jegl_update(jegl_thread* thread_handle, jegl_update_sync_mode mode);
 
 /*
 jegl_reboot_graphic_thread [基本接口]
