@@ -524,7 +524,6 @@ jeecs_file* jeecs_file_open(const char* path)
 
         return jefhandle;
     }
-
     return nullptr;
 }
 void jeecs_file_close(jeecs_file* file)

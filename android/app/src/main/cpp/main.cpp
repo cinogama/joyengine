@@ -36,6 +36,7 @@ class jegl_android_surface_manager
 
     static void _jegl_android_sync_thread_created(jegl_thread* gthread, void*)
     {
+        jeecs::debug::loginfo("Graphic interface created!");
         instance()._jegl_graphic_thread = gthread;
     }
     static void _je_log_to_android(int level, const char* msg, void*)
@@ -71,6 +72,8 @@ class jegl_android_surface_manager
         _je_log_callback = je_log_register_callback(_je_log_to_android, nullptr);
         _je_type_guard = new typing::type_unregister_guard();
         entry::module_entry(_je_type_guard);
+
+        jeecs::debug::loginfo("Android application started!");
     }
     ~jegl_android_surface_manager()
     {
@@ -307,7 +310,7 @@ extern "C" {
 
             jegl_android_surface_manager::instance().sync_begin(
                     pApp, pApp->window);
-
+            jeal_global_volume(1.0f);
             break;
         }
         case APP_CMD_TERM_WINDOW:
@@ -316,6 +319,7 @@ extern "C" {
             //
             // We have to check if userData is assigned just in case this comes in really quickly
             jegl_android_surface_manager::instance().sync_pause();
+            jeal_global_volume(0.0f);
             break;
         default:
             break;
@@ -484,5 +488,6 @@ extern "C" {
             jengine_interface_instance.sync_update();
         } while (!pApp->destroyRequested);
 
+        jeecs::debug::loginfo("Android application exiting...");
     }
 }

@@ -3021,9 +3021,25 @@ JE_API void             jeal_listener_direction(float yaw, float pitch, float ro
 
 /*
 jeal_listener_volume [基本接口]
-设置当前全局声音的播放音量，默认是 1.0
+设置当前全局声音的播放音量，默认是 1.0，与jeal_global_volume_scale设置的值相乘之后
+得到最终的音量大小
+请参考：
+    jeal_global_volume_scale
 */
 JE_API void             jeal_listener_volume(float volume);
+
+/*
+jeal_global_volume_scale [基本接口]
+设置全局声音播放系数，默认是 1.0，与jeal_listener_volume设置的值相乘之后
+得到最终的音量大小
+    * 此接口仅应用于因平台本身原因（典型例子是安卓平台切换到后台）等情况
+    时，实现暂停播放音乐的效果；
+    * 仅限于平台兼容工作中使用，一般情况下请`不要`使用此接口调整全局音量，
+    避免与平台实现冲突
+请参考：
+    jeal_listener_volume
+*/
+JE_API void             jeal_global_volume(float volume);
 
 /*
 je_main_script_entry [基本接口]

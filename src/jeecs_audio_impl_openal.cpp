@@ -46,6 +46,9 @@ std::unordered_set<jeal_source*> _jeal_all_sources;
 std::mutex _jeal_all_buffers_mx;
 std::unordered_set<jeal_buffer*> _jeal_all_buffers;
 
+std::atomic<float> _jeal_listener_gain = 1.0f;
+std::atomic<float> _jeal_global_volume_gain = 1.0f;
+
 void _jeal_update_buffer_instance(jeal_buffer* buffer)
 {
     alGenBuffers(1, &buffer->m_openal_buffer);
@@ -730,9 +733,34 @@ void jeal_listener_direction(float yaw, float pitch, float roll)
     alListenerfv(AL_ORIENTATION, orientation);
 }
 
+/*
+std::atomic<float> _jeal_listener_gain = 1.0f;
+std::atomic<float> _jeal_global_volume_gain = 1.0f;
+*/
 void jeal_listener_volume(float volume)
 {
     std::shared_lock g3(_jeal_context_mx);
 
-    alListenerf(AL_GAIN, volume);
+    _jeal_listener_gain.store(volume);
+
+    float global_gain;
+    do
+    {
+        global_gain = _jeal_global_volume_gain.load();
+        alListenerf(AL_GAIN, _jeal_listener_gain.load() * global_gain);
+    } while (_jeal_global_volume_gain.load() != global_gain);
+}
+
+void jeal_global_volume(float volume)
+{
+    std::shared_lock g3(_jeal_context_mx);
+
+    _jeal_global_volume_gain.store(volume);
+
+    float listener_gain;
+    do
+    {
+        listener_gain = _jeal_listener_gain.load();
+        alListenerf(AL_GAIN, _jeal_global_volume_gain.load() * listener_gain);
+    } while (_jeal_listener_gain.load() != listener_gain);
 }
