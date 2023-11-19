@@ -115,10 +115,16 @@ namespace jeecs
             jegl_interface_config config = {};
             if (_config == nullptr)
             {
+                config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
+                config.m_resolution_mode = jegl_interface_config::resolution_mode::SCALE;
                 config.m_width = 640;
                 config.m_height = 480;
+
+                config.m_reso_x = 1;
+                config.m_reso_y = 1;
+
                 config.m_title = "JoyEngineECS(JoyEngine 4.3)";
-                config.m_displaymode = jegl_interface_config::display_mode::WINDOWED;
+                
                 config.m_enable_resize = true;
                 config.m_fps = 0;               // 使用垂直同步
                 config.m_msaa = 4;              // 使用MSAAx4抗锯齿

@@ -211,8 +211,8 @@ namespace jeecs::graphic::api::dx11
         D3D11_VIEWPORT viewport;
         viewport.TopLeftX = 0;
         viewport.TopLeftY = 0;
-        viewport.Width = (float)context->RESOLUTION_WIDTH;
-        viewport.Height = (float)context->RESOLUTION_HEIGHT;
+        viewport.Width = (float)context->WINDOWS_SIZE_WIDTH;
+        viewport.Height = (float)context->WINDOWS_SIZE_HEIGHT;
         viewport.MinDepth = 0.0f;
         viewport.MaxDepth = 1.0f;
 
@@ -526,7 +526,7 @@ namespace jeecs::graphic::api::dx11
         if (config->m_enable_resize == false)
             window_style &= ~WS_THICKFRAME;
 
-        switch (config->m_displaymode)
+        switch (config->m_display_mode)
         {
         case jegl_interface_config::display_mode::BOARDLESS:
             window_style = WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_POPUP;

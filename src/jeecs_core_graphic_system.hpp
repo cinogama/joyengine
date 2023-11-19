@@ -1536,11 +1536,11 @@ public func frag(_: v2f)
                                 RENDAIMBUFFER_WIDTH =
                                 (size_t)llround(
                                     (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)),
+                                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)) / light2dpostpass->ratio,
                                 RENDAIMBUFFER_HEIGHT =
                                 (size_t)llround(
                                     (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT));
+                                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)) / light2dpostpass->ratio;
 
                             if (light2dpostpass->post_light_uniform == nullptr)
                                 light2dpostpass->post_light_uniform =
@@ -2061,7 +2061,7 @@ public func frag(_: v2f)
                     rend_chain = jegl_branch_new_chain(
                         current_camera.branchPipeline,
                         light2d_rend_aim_buffer,
-                        0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                        0, 0, 0, 0);
 
                     jegl_rchain_clear_color_buffer(rend_chain, nullptr);
                     jegl_rchain_clear_depth_buffer(rend_chain);
@@ -2188,7 +2188,8 @@ public func frag(_: v2f)
 
                     // Rend Light result to target buffer.
                     jegl_rendchain* light2d_light_effect_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
-                        current_camera.light2DPostPass->post_light_target->resouce(), 0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                        current_camera.light2DPostPass->post_light_target->resouce(),
+                        0, 0, 0, 0);
 
                     jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain, nullptr);
                     auto lightpass_pre_bind_texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);

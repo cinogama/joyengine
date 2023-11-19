@@ -1314,7 +1314,13 @@ namespace jeecs_impl
                                 // New & old arch is same, rebuilt in place.
                                 for (auto [typeinfo, instance] : modifying_component_type_and_instances)
                                 {
-                                    assert(instance != nullptr);
+                                    if(instance == nullptr)
+                                        // NOTE: 照理来说，如果instance == nullptr，说明正在移除实体中的组件，
+                                        //      此时如果new_arch_type_my_null == current_arch_type，那么说明
+                                        //      本次移除实际上是失败的（即实际上实体没有这个组件），那么直接
+                                        //      跳过这个操作
+                                        continue;
+
                                     current_entity.chunk()->move_component_from(current_entity._m_id, typeinfo->m_id, instance);
                                     je_mem_free(instance);
                                 }

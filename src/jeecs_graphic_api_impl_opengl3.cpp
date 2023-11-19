@@ -280,7 +280,7 @@ namespace jeecs::graphic::api::gl3
 
             je_io_update_windowsize((int)context->WINDOWS_SIZE_WIDTH, (int)context->WINDOWS_SIZE_HEIGHT);
 
-            switch (config->m_displaymode)
+            switch (config->m_display_mode)
             {
             case jegl_interface_config::display_mode::BOARDLESS:
                 glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);

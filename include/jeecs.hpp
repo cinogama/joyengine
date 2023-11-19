@@ -1519,7 +1519,15 @@ struct jegl_interface_config
         BOARDLESS,
     };
 
-    display_mode    m_displaymode;
+    enum resolution_mode
+    {
+        SCALE,
+        ABSOLUTE,
+    };
+
+    display_mode    m_display_mode;
+    resolution_mode m_resolution_mode;
+
     bool            m_enable_resize;
 
     // 若MSAA值为0，则说明关闭超采样抗锯齿
@@ -1527,9 +1535,14 @@ struct jegl_interface_config
     //  * 最终能否使用取决于图形库
     size_t          m_msaa;
 
-    // 启动时的窗口大小和分辨率
+    // 启动时的窗口大小
     size_t          m_width;
     size_t          m_height;
+
+    // 启动时的分辨率，若m_resolution_mode是ABSOLUTE
+    // 则此处的值是绝对值，否则是实际窗口大小的缩放比例
+    size_t          m_reso_x;
+    size_t          m_reso_y;
 
     // 限制帧数，若指定为0，则启用垂直同步
     // 不限制帧率请设置为 SIZE_MAX
@@ -7922,9 +7935,16 @@ namespace jeecs
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
             basic::resource<jeecs::graphic::uniformbuffer> post_light_uniform = nullptr;
 
+            size_t ratio = 1;
+
             CameraPostPass() = default;
-            CameraPostPass(const CameraPostPass&) {}
+            CameraPostPass(const CameraPostPass& another): ratio(another.ratio){}
             CameraPostPass(CameraPostPass&&) = default;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &CameraPostPass::ratio, "ratio");
+            }
         };
         struct Block
         {
