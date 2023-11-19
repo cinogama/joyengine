@@ -7935,7 +7935,7 @@ namespace jeecs
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
             basic::resource<jeecs::graphic::uniformbuffer> post_light_uniform = nullptr;
 
-            size_t ratio = 1;
+            float ratio = 1.0f;
 
             CameraPostPass() = default;
             CameraPostPass(const CameraPostPass& another): ratio(another.ratio){}

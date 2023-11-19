@@ -1536,11 +1536,13 @@ public func frag(_: v2f)
                                 RENDAIMBUFFER_WIDTH =
                                 (size_t)llround(
                                     (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)) / light2dpostpass->ratio,
+                                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)) * 
+                                    std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f)),
                                 RENDAIMBUFFER_HEIGHT =
                                 (size_t)llround(
                                     (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)) / light2dpostpass->ratio;
+                                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)) * 
+                                    std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f));
 
                             if (light2dpostpass->post_light_uniform == nullptr)
                                 light2dpostpass->post_light_uniform =
