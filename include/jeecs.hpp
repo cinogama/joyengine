@@ -3845,8 +3845,8 @@ namespace jeecs
                     debug::logfatal("This type: '%s' have no function named 'to_string'."
                         , typeid(T).name());
                     return 0;
-                }();
-                return basic::make_new_string("");
+                    }();
+                    return basic::make_new_string("");
             }
             static void parse(void* _ptr, const char* _memb)
             {
@@ -3866,7 +3866,7 @@ namespace jeecs
                         debug::logfatal("This type: '%s' have no function named 'parse'."
                             , typeid(T).name());
                         return 0;
-                    }();
+                        }();
                 }
             }
 
@@ -4523,7 +4523,7 @@ namespace jeecs
         template<typename ClassT, typename MemberT>
         inline void register_member(
             jeecs::typing::type_unregister_guard* guard,
-            MemberT(ClassT::* _memboffset),
+            ptrdiff_t member_offset,
             const char* membname)
         {
             const type_info* membt = jeecs::typing::type_info::of(
@@ -4531,13 +4531,24 @@ namespace jeecs
 
             assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
 
-            ptrdiff_t member_offset = reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
             je_register_member(
                 guard->get_local_type_info(
                     type_info::id<ClassT>()),
                 membt,
                 membname,
                 member_offset);
+        }
+
+        template<typename ClassT, typename MemberT>
+        inline void register_member(
+            jeecs::typing::type_unregister_guard* guard,
+            MemberT(ClassT::* _memboffset),
+            const char* membname)
+        {
+            ptrdiff_t member_offset =
+                reinterpret_cast<ptrdiff_t>(&(((ClassT*)nullptr)->*_memboffset));
+
+            register_member<ClassT, MemberT>(guard, member_offset, membname);
         }
         template<typename T>
         inline void register_script_parser(
@@ -4555,6 +4566,43 @@ namespace jeecs
                 woolang_typename.c_str(),
                 woolang_typedecl.c_str());
         }
+    }
+
+    namespace basic
+    {
+        class type
+        {
+            const typing::type_info* m_type_info = nullptr;
+        public:
+            void set_type(const typing::type_info* _type)
+            {
+                m_type_info = _type;
+            }
+            const typing::type_info* get_type() const
+            {
+                return m_type_info;
+            }
+            std::string to_string()const
+            {
+                std::string result = "#je_type_info#";
+
+                if (m_type_info != nullptr)
+                    result += m_type_info->m_typename;
+
+                return result;
+            }
+            void parse(const char* databuf)
+            {
+                size_t readed_length;
+
+                m_type_info = nullptr;
+                if (sscanf(databuf, "#je_type_info#%zn", &readed_length) == 1)
+                {
+                    databuf += readed_length;
+                    m_type_info = je_typing_get_info_by_name(databuf);
+                }
+            }
+        };
     }
 
     class game_universe;
@@ -7803,20 +7851,50 @@ namespace jeecs
     }
     namespace Physics2D
     {
+        struct World
+        {
+            size_t      layerid = 0;
+            math::vec2  gravity = math::vec2(0.f, -9.8f);
+            bool        sleepable = true;
+            bool        continuous = true;
+
+            size_t      velocity_step = 8;
+            size_t      position_step = 3;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &World::layerid, "layerid");
+                typing::register_member(guard, &World::gravity, "gravity");
+                typing::register_member(guard, &World::sleepable, "sleepable");
+                typing::register_member(guard, &World::continuous, "continuous");
+                typing::register_member(guard, &World::velocity_step, "velocity_step");
+                typing::register_member(guard, &World::position_step, "position_step");
+            }
+        };
+
         struct Rigidbody
         {
             void* native_rigidbody = nullptr;
+
             bool        rigidbody_just_created = false;
             math::vec2  record_body_scale = math::vec2(0.f, 0.f);
             float       record_density = 0.f;
             float       record_friction = 0.f;
             float       record_restitution = 0.f;
 
+            size_t      layerid = 0;
+
             Rigidbody() = default;
             Rigidbody(Rigidbody&&) = default;
             Rigidbody(const Rigidbody& other)
+                :layerid(other.layerid)
             {
                 // Do nothing
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Rigidbody::layerid, "layerid");
             }
         };
         struct Mass
@@ -7938,7 +8016,7 @@ namespace jeecs
             float ratio = 1.0f;
 
             CameraPostPass() = default;
-            CameraPostPass(const CameraPostPass& another): ratio(another.ratio){}
+            CameraPostPass(const CameraPostPass& another) : ratio(another.ratio) {}
             CameraPostPass(CameraPostPass&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -8789,6 +8867,7 @@ namespace jeecs
             type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
             type_info::register_type<Light2D::Block>(guard, "Light2D::Block");
 
+            type_info::register_type<Physics2D::World>(guard, "Physics2D::World");
             type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
             type_info::register_type<Physics2D::Kinematics>(guard, "Physics2D::Kinematics");
             type_info::register_type<Physics2D::Mass>(guard, "Physics2D::Mass");
@@ -8816,10 +8895,10 @@ namespace jeecs
 
             auto integer_uniform_parser_c2w = [](wo_vm, wo_value value, const auto* v) {
                 wo_set_int(value, (wo_integer_t)*v);
-            };
+                };
             auto integer_uniform_parser_w2c = [](wo_vm, wo_value value, auto* v) {
                 *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
-            };
+                };
             typing::register_script_parser<int8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int8", "alias int8 = int;");
             typing::register_script_parser<int16_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
