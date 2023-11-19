@@ -1296,54 +1296,75 @@ jeecs::math::quat wo_quat(wo_value val)
     return result;
 }
 
-wo_value wo_push_vec2(wo_vm vm, const jeecs::math::vec2& v)
+void wo_set_vec2(wo_value target, wo_vm vm, const jeecs::math::vec2& v)
 {
-    wo_value result = wo_push_struct(vm, 2);
+    wo_set_struct(target, vm, 2);
     _wo_value tmp;
     wo_set_float(&tmp, v.x);
-    wo_struct_set(result, 0, &tmp);
+    wo_struct_set(target, 0, &tmp);
     wo_set_float(&tmp, v.y);
-    wo_struct_set(result, 1, &tmp);
+    wo_struct_set(target, 1, &tmp);
+}
+void wo_set_vec3(wo_value target, wo_vm vm, const jeecs::math::vec3& v)
+{
+    wo_set_struct(target, vm, 3);
+    _wo_value tmp;
+    wo_set_float(&tmp, v.x);
+    wo_struct_set(target, 0, &tmp);
+    wo_set_float(&tmp, v.y);
+    wo_struct_set(target, 1, &tmp);
+    wo_set_float(&tmp, v.z);
+    wo_struct_set(target, 2, &tmp);
+}
+void wo_set_vec4(wo_value target, wo_vm vm, const jeecs::math::vec4& v)
+{
+    wo_set_struct(target, vm, 4);
+    _wo_value tmp;
+    wo_set_float(&tmp, v.x);
+    wo_struct_set(target, 0, &tmp);
+    wo_set_float(&tmp, v.y);
+    wo_struct_set(target, 1, &tmp);
+    wo_set_float(&tmp, v.z);
+    wo_struct_set(target, 2, &tmp);
+    wo_set_float(&tmp, v.w);
+    wo_struct_set(target, 3, &tmp);
+}
+void wo_set_quat(wo_value target, wo_vm vm, const jeecs::math::quat& v)
+{
+    wo_set_struct(target, vm, 4);
+    _wo_value tmp;
+    wo_set_float(&tmp, v.x);
+    wo_struct_set(target, 0, &tmp);
+    wo_set_float(&tmp, v.y);
+    wo_struct_set(target, 1, &tmp);
+    wo_set_float(&tmp, v.z);
+    wo_struct_set(target, 2, &tmp);
+    wo_set_float(&tmp, v.w);
+    wo_struct_set(target, 3, &tmp);
+}
+
+wo_value wo_push_vec2(wo_vm vm, const jeecs::math::vec2& v)
+{
+    wo_value result = wo_push_empty(vm);
+    wo_set_vec2(result, vm, v);
     return result;
 }
 wo_value wo_push_vec3(wo_vm vm, const jeecs::math::vec3& v)
 {
-    wo_value result = wo_push_struct(vm, 3);
-    _wo_value tmp;
-    wo_set_float(&tmp, v.x);
-    wo_struct_set(result, 0, &tmp);
-    wo_set_float(&tmp, v.y);
-    wo_struct_set(result, 1, &tmp);
-    wo_set_float(&tmp, v.z);
-    wo_struct_set(result, 2, &tmp);
+    wo_value result = wo_push_empty(vm);
+    wo_set_vec3(result, vm, v);
     return result;
 }
 wo_value wo_push_vec4(wo_vm vm, const jeecs::math::vec4& v)
 {
-    wo_value result = wo_push_struct(vm, 4);
-    _wo_value tmp;
-    wo_set_float(&tmp, v.x);
-    wo_struct_set(result, 0, &tmp);
-    wo_set_float(&tmp, v.y);
-    wo_struct_set(result, 1, &tmp);
-    wo_set_float(&tmp, v.z);
-    wo_struct_set(result, 2, &tmp);
-    wo_set_float(&tmp, v.w);
-    wo_struct_set(result, 3, &tmp);
+    wo_value result = wo_push_empty(vm);
+    wo_set_vec4(result, vm, v);
     return result;
 }
 wo_value wo_push_quat(wo_vm vm, const jeecs::math::quat& v)
 {
-    wo_value result = wo_push_struct(vm, 4);
-    _wo_value tmp;
-    wo_set_float(&tmp, v.x);
-    wo_struct_set(result, 0, &tmp);
-    wo_set_float(&tmp, v.y);
-    wo_struct_set(result, 1, &tmp);
-    wo_set_float(&tmp, v.z);
-    wo_struct_set(result, 2, &tmp);
-    wo_set_float(&tmp, v.w);
-    wo_struct_set(result, 3, &tmp);
+    wo_value result = wo_push_empty(vm);
+    wo_set_quat(result, vm, v);
     return result;
 }
 template<typename T>
@@ -1446,6 +1467,53 @@ WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args, size_t argc
             wo_float(args + 2))
     );
     return wo_ret_val(vm, q);
+}
+
+WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* collisionResult = (jeecs::Physics2D::CollisionResult*)wo_pointer(c);
+   
+    wo_set_map(c, vm);
+    auto key = wo_push_empty(vm);
+    auto val = wo_push_empty(vm);
+    for (auto&[rigidbody, result] : collisionResult->results)
+    {
+        jeecs::towoo::ToWooBaseSystem::create_component_struct(
+            key, vm, rigidbody, jeecs::typing::type_info::of<jeecs::Physics2D::Rigidbody>());
+        wo_set_struct(val, vm, 2);
+
+        wo_map_set(c, key, val);
+
+        wo_set_vec2(key, vm, result.position);
+        wo_struct_set(val, 0, key);
+        wo_set_vec2(key, vm, result.normalize);
+        wo_struct_set(val, 1, key);
+    }
+
+    return wo_ret_val(vm, c);
+}
+
+WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* collisionResult = (jeecs::Physics2D::CollisionResult*)wo_pointer(c);
+
+    wo_struct_get(c, args + 1, 0);
+    auto* rigidbody = (jeecs::Physics2D::Rigidbody*)wo_pointer(c);
+
+    auto* result = collisionResult->check(rigidbody);
+    if (result != nullptr)
+    {
+        wo_value ret = wo_push_struct(vm, 2);
+        wo_struct_set(ret, 0, wo_push_vec2(vm, result->position));
+        wo_struct_set(ret, 1, wo_push_vec2(vm, result->normalize));
+
+        return wo_ret_option_val(vm, ret);
+    }
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value args, size_t argc)
@@ -2131,6 +2199,19 @@ namespace Renderer
                     || val is vec2
                     || val is vec3
                     || val is vec4;
+    }
+}
+namespace Physics2D
+{
+    namespace CollisionResult
+    {
+        using collide_result = struct{position: vec2, normalize: vec2};
+
+        extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_all")
+            public func all(self: CollisionResult)=> dict<Rigidbody, collide_result>;
+
+        extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_check")
+            public func check(self: CollisionResult, another: Rigidbody)=> option<collide_result>;
     }
 }
 namespace Animation2D

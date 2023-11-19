@@ -300,6 +300,47 @@ namespace editor
                         where supp = env->get_universe->get_max_deltatime()
                     ;,
                 )),
+                ["JE_ENGINE_PHYSICS_MASK_LAYER_NAME"] = new! IConfig(new! Config(
+                    array::create(16, "未命名层"),
+                    func(config)
+                    {
+                        Text("物理碰撞层命名");
+                        TextDisabled("* 用于Physics2D::Filter的掩码命名");
+                        
+                        let mut modified = false;
+                        let modified_config = config->>\e = mut e;;
+                        for (let i, elem : modified_config)
+                        {
+                            Text(F"层 {i}:");
+                            SameLine();
+                            match (InputText(F"##physics_layer_{i}", elem))
+                            {
+                            value(newname)?
+                                {
+                                    modified = true;
+                                    modified_config[i] = newname;
+                                }
+                            none?;
+                            }
+                        }
+
+                        if (modified)
+                            return option::value(modified_config as array<mut string>->unsafe::cast :<array<string>>);
+                        return option::none;
+                    },
+                    \_,_ = true;,
+                    \config = config->serialize->valor("[]");,
+                    \str = str->array::deserialize
+                        ->> \arr = arr
+                            ->> \e = e: string;
+                            ->  tovec
+                            ->  func(v){v->resize(16, "未命名层"); return v;}
+                                as vec<string>
+                            ->  unsafe::cast :<array<string>>
+                            ;
+                    ;,
+                    \_ = "";,
+                )),
             }mut;
         }
         func try_lock_this_project(self: Project)
@@ -333,6 +374,188 @@ namespace editor
             none? je::logerr("未找到项目的文件锁，可能是未能创建或打开文件，请检查权限");
             }
         }
+        public func register_editor_widget(self: Project)
+        {
+            jeapi::gui::register_custom_editor("je_physics2d_filter_mask", func(tag: string,dat: string)
+            {
+                using je::gui;
+                using std;
+                
+                let mut updated = false;
+                let result_offset = []mut: vec<int>;
+                let mask = dat: int;
+                let maskname = self
+                    ->get_config("JE_ENGINE_PHYSICS_MASK_LAYER_NAME")
+                    ->val->tostring->array::deserialize->valor([])->>\e=e: string;
+                    ;
+
+                for (let mut i = 0; i < 16; i += 1)
+                {
+                    Text(F"层{i} {maskname->get(i)->valor("未命名层")}：");
+                    SameLine();
+                    let bitsetted = mask->bitand(1->bitshl(i)) != 0;
+                    match (CheckBox(F"##check_physics_layer_{i}_{tag}", bitsetted))
+                    {
+                    value(check)?
+                        {
+                            updated = true;
+                            if (check) result_offset->add(i);
+                        }
+                    none?
+                        if (bitsetted) result_offset->add(i);
+                    }
+                }
+
+                if (updated)
+                {
+                    let mut result = 0;
+                    for (let _, offset: result_offset)
+                        result = result->bitor(1->bitshl(offset));
+                    return option::value(result: string);
+                }
+                return option::none;
+            });
+
+            jeapi::gui::register_custom_editor("je_light2d_block_shape", func(tag: string, dat: string)
+            {
+                using je::gui;
+
+                let mut need_update = false;
+                let datas = dat->split(";")
+                    =>> \dat = arr->len == 2 ? [(arr[0], arr[1])] | []
+                        where arr = dat->split(":");
+                    ;
+
+                let length = datas
+                    ->  forall(\data = data[0] == "size";)
+                    ->  reduce(\l, _ = l;)
+                    ->> \data = data[1]: int;
+                    ->  valor(datas->len)
+                    ;
+
+                let mut update_str = "size:";
+
+                match (InputInt(F"size##{tag}", length))
+                {
+                value(newsize)?
+                {
+                    need_update = true;
+                    update_str += (newsize < 0 ? 0 | newsize): string;
+                }
+                none?
+                    update_str += length: string;
+                }
+
+                update_str += ";";
+
+                for (let index, (layer, factor) : datas->forall(\d = d[0]!="size";))
+                {
+                    Text(F"{layer}:");      
+                    SameLine();
+
+                    func _str2vec2(str: string)
+                    {
+                        let x = mutable::create(0.), y = mutable::create(0.);
+                        do str->take_token("(")
+                            =>> \s = s->take_real();
+                            =>> func(snr){x->set(snr[1]); return snr[0]->take_token(",");}
+                            =>> \s = s->take_real();
+                            =>> func(snr){y->set(snr[1]); return snr[0]->take_token(")");}
+                            ;
+                        return (x->get, y->get);
+                    }
+
+                    let (posx, posy) = _str2vec2(factor);
+                    let (new_posx, new_posy) = InputFloat2(F"##factor{index}_{tag}", posx, posy)->valor((posx, posy));
+
+                    if (new_posx != posx || new_posy != posy)
+                        need_update = true;
+
+                    update_str += F"{layer}:({new_posx},{new_posy});";
+                }
+                    
+                if (need_update)
+                    return option::value(update_str);
+                return option::none;
+            });
+
+            jeapi::gui::register_custom_editor("je_file", func(tag: string, dat: string)
+            {
+                using je::gui;
+                return jeapi::gui::widget::File(F"文件##{tag}", dat == "" ? "<无>" | dat, \=do nil;);
+            });
+
+            jeapi::gui::register_custom_editor("je_animation_list", func(tag: string, dat: string)
+            {
+                using je::gui;
+
+                let mut need_update = false;
+                let size_datas = dat->split(";");
+                let size = size_datas->get(0)->valor("0"): int;
+                let datas = (size_datas->empty ? [] | size_datas->sub(1))
+                    ->> \data = data->split("|");
+                    ;
+
+                let mut update_str = "";
+
+                match (InputInt("size##{tag}", size))
+                {
+                value(newsize)?
+                {
+                    need_update = true;
+                    update_str += (newsize < 0 ? 0 | newsize): string;
+                }
+                none?
+                    update_str += size: string;
+                }
+
+                update_str += ";";
+
+                for (let i, dat : datas)
+                {
+                    Separator();
+
+                    if (dat->len != 3) continue;
+
+                    match (jeapi::gui::widget::File(F"动画##{i}_{tag}", dat[0], \=do nil;))
+                    {
+                    value(path)?
+                        {
+                            need_update = true;
+                            update_str += path + "|";
+                        }
+                    none?
+                        update_str += dat[0] + "|";
+                    }
+
+                    match (InputText(F"动作##{i}_{tag}", dat[1]))
+                    {
+                    value(act)?
+                        {
+                            need_update = true;
+                            update_str += act + "|";
+                        }
+                    none?
+                        update_str += dat[1] + "|";
+                    }
+
+                    match (CheckBox(F"循环##{i}_{tag}", dat[2] == "true"))
+                    {
+                    value(loop)?
+                        {
+                            need_update = true;
+                            update_str += (loop ? "true;" | "false;");
+                        }
+                    none?
+                        update_str += dat[2] + ";";
+                    }
+                }
+
+                if (need_update)
+                    return option::value(update_str);
+                return option::none;
+            });
+        }
         public func create(name: string, path: fsys::path_t)
         {
             let env = new! Environment();
@@ -357,6 +580,8 @@ namespace editor
                 proj->close();
                 return result::err("锁定项目失败，请检查相同项目是否已经重复打开");
             }
+
+            proj->register_editor_widget();
 
             tools::update_tool_scripts(proj);
             gui::drawpannel::update_and_get_scripts(proj);

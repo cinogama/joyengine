@@ -12,9 +12,9 @@ namespace jeapi::gui
     public alias TypedEditorMethod = (string/*token*/, je::native_value)=>bool;
 
     let _registed_editor_methods = {}mut: map<je::typeinfo, TypedEditorMethod>;
-    let _custom_component_member_editor = {}mut: map<string, (string)=>option<string>>;
+    let _custom_component_member_editor = {}mut: map<string, (string, string)=>option<string>>;
 
-    public func register_custom_editor(typeflag: string, method: (string)=>option<string>)
+    public func register_custom_editor(typeflag: string, method: (string, string)=>option<string>)
     {
         if (_custom_component_member_editor->contain(typeflag))
             je::logwarn(F"重复注册的标签：{typeflag}");
@@ -22,148 +22,6 @@ namespace jeapi::gui
         _custom_component_member_editor->set(typeflag, method);
     }
     
-    func _str2vec2(str: string)
-    {
-        let x = mutable::create(0.), y = mutable::create(0.);
-        do str->take_token("(")
-            =>> \s = s->take_real();
-            =>> func(snr){x->set(snr[1]); return snr[0]->take_token(",");}
-            =>> \s = s->take_real();
-            =>> func(snr){y->set(snr[1]); return snr[0]->take_token(")");}
-            ;
-        return (x->get, y->get);
-    }
-
-    // 直接在这里注册一下得了
-
-    // 1. 注册2D阴影形状
-    register_custom_editor("je_light2d_block_shape", func(dat: string)
-    {
-        using je::gui;
-
-        let mut need_update = false;
-        let datas = dat->split(";")
-            =>> \dat = arr->len == 2 ? [(arr[0], arr[1])] | []
-                where arr = dat->split(":");
-            ;
-
-        let length = datas
-            ->  forall(\data = data[0] == "size";)
-            ->  reduce(\l, _ = l;)
-            ->> \data = data[1]: int;
-            ->  valor(datas->len)
-            ;
-
-        let mut update_str = "size:";
-
-        match (InputInt("size", length))
-        {
-        value(newsize)?
-        {
-            need_update = true;
-            update_str += (newsize < 0 ? 0 | newsize): string;
-        }
-        none?
-            update_str += length: string;
-        }
-
-        update_str += ";";
-
-        for (let index, (layer, factor) : datas->forall(\d = d[0]!="size";))
-        {
-            Text(F"{layer}:");      
-            SameLine();
-            let (posx, posy) = _str2vec2(factor);
-            let (new_posx, new_posy) = InputFloat2(F"##factor{index}", posx, posy)->valor((posx, posy));
-
-            if (new_posx != posx || new_posy != posy)
-                need_update = true;
-
-            update_str += F"{layer}:({new_posx},{new_posy});";
-        }
-            
-        if (need_update)
-            return option::value(update_str);
-        return option::none;
-    });
-
-    register_custom_editor("je_file", func(dat: string)
-    {
-        using je::gui;
-        return jeapi::gui::widget::File("文件", dat == "" ? "<无>" | dat, \=do nil;);
-    });
-
-    register_custom_editor("je_animation_list", func(dat: string)
-    {
-        using je::gui;
-
-        let mut need_update = false;
-        let size_datas = dat->split(";");
-        let size = size_datas->get(0)->valor("0"): int;
-        let datas = (size_datas->empty ? [] | size_datas->sub(1))
-            ->> \data = data->split("|");
-            ;
-
-        let mut update_str = "";
-
-        match (InputInt("size", size))
-        {
-        value(newsize)?
-        {
-            need_update = true;
-            update_str += (newsize < 0 ? 0 | newsize): string;
-        }
-        none?
-            update_str += size: string;
-        }
-
-        update_str += ";";
-
-        for (let i, dat : datas)
-        {
-            Separator();
-
-            if (dat->len != 3) continue;
-
-            match (jeapi::gui::widget::File(F"动画##{i}", dat[0], \=do nil;))
-            {
-            value(path)?
-                {
-                    need_update = true;
-                    update_str += path + "|";
-                }
-            none?
-                update_str += dat[0] + "|";
-            }
-
-            match (InputText(F"动作##{i}", dat[1]))
-            {
-            value(act)?
-                {
-                    need_update = true;
-                    update_str += act + "|";
-                }
-            none?
-                update_str += dat[1] + "|";
-            }
-
-            match (CheckBox(F"循环##{i}", dat[2] == "true"))
-            {
-            value(loop)?
-                {
-                    need_update = true;
-                    update_str += (loop ? "true;" | "false;");
-                }
-            none?
-                update_str += dat[2] + ";";
-            }
-        }
-
-        if (need_update)
-            return option::value(update_str);
-        return option::none;
-    });
-
     public func register_editor_for_native_value(type: je::typeinfo, method: TypedEditorMethod)
     {
         if (_registed_editor_methods->contain(type))
@@ -196,7 +54,7 @@ namespace jeapi::gui
                     none?
                         TextDisabled(F"未找到编辑{spec_method}的自定义编辑器");
                     value(method)?
-                        do method(member_data->sub(spec_method->len + 2))
+                        do method(tag, member_data->sub(spec_method->len + 2))
                             ->> \update_str = native_value->parse(type, F"#{spec_method}#" + update_str);
                             ;
                     }

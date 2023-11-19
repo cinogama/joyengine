@@ -144,6 +144,7 @@ namespace jeecs
                     Physics2D::Bullet* bullet,
                     Physics2D::BoxCollider* boxcollider,
                     Physics2D::CircleCollider* circlecollider,
+                    Physics2D::Filter* filter,
                     Renderer::Shape* rendshape)
                     {
                         auto fnd = _m_this_frame_alive_worlds.find(rigidbody.layerid);
@@ -182,6 +183,9 @@ namespace jeecs
 
                             b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
                             assert(rigidbody_instance != nullptr);
+
+                            // Set address of rigidbody for storing collision result.
+                            rigidbody_instance->GetUserData().pointer = (uintptr_t)&rigidbody;
 
                             all_rigidbody_list[rigidbody_instance] = m_simulate_round_count;
 
@@ -314,15 +318,31 @@ namespace jeecs
                                     translation.world_rotation.euler_angle().z / math::RAD2DEG);
                                 rigidbody_instance->SetAwake(true);
                             }
+
+                            if (auto* fixture = rigidbody_instance->GetFixtureList())
+                            {
+                                b2Filter fixture_filter = fixture->GetFilterData();
+                                if (filter)
+                                {
+                                    fixture_filter.maskBits = filter->typemask.m_mask;
+                                    fixture_filter.categoryBits = filter->collidemask.m_mask;
+                                }
+                                else
+                                {
+                                    fixture_filter.maskBits = 0xFFFF;
+                                    fixture_filter.categoryBits = 0xFFFF;
+                                }
+                                fixture->SetFilterData(fixture_filter);
+                            }
                         }
                     });
 
             // 物理引擎在此处进行物理解算
-            for (auto&[_, physics_world]: _m_this_frame_alive_worlds)
+            for (auto& [_, physics_world] : _m_this_frame_alive_worlds)
             {
                 physics_world->m_physics_world.Step(
                     deltatime(),
-                    physics_world->m_velocity_iterations, 
+                    physics_world->m_velocity_iterations,
                     physics_world->m_position_iterations);
 
                 std::vector<b2Body*> _dead_bodys;
@@ -349,13 +369,41 @@ namespace jeecs
                     Transform::LocalPosition& localposition,
                     Transform::LocalRotation& localrotation,
                     Physics2D::Rigidbody& rigidbody,
-                    Physics2D::Kinematics* kinematics
+                    Physics2D::Kinematics* kinematics,
+                    Physics2D::CollisionResult* collisions
                     ) {
                         if (rigidbody.native_rigidbody != nullptr)
                         {
                             // 从刚体获取解算完成之后的坐标
                             b2Body* rigidbody_instance = (b2Body*)rigidbody.native_rigidbody;
 
+                            if (collisions != nullptr)
+                            {
+                                collisions->results.clear();
+
+                                auto* connect = rigidbody_instance->GetContactList();
+                                while (connect != nullptr)
+                                {
+                                    if (connect->contact->GetManifold()->pointCount > 0)
+                                    {
+                                        auto* rigidbody = std::launder(reinterpret_cast<Physics2D::Rigidbody*>(
+                                            connect->other->GetUserData().pointer));
+
+                                        assert(rigidbody != nullptr);
+                                        assert(collisions->results.find(rigidbody) == collisions->results.end());
+
+                                        b2WorldManifold manifold;
+                                        connect->contact->GetWorldManifold(&manifold);
+
+                                        collisions->results[rigidbody] =
+                                            Physics2D::CollisionResult::collide_result{
+                                                math::vec2(manifold.points[0].x, manifold.points[0].y),
+                                                math::vec2(manifold.normal.x,manifold.normal.y),
+                                        };
+                                    }
+                                    connect = connect->next;
+                                }
+                            }
                             if (kinematics != nullptr && rigidbody.rigidbody_just_created == false)
                             {
                                 auto& new_position = rigidbody_instance->GetPosition();

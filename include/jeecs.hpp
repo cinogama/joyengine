@@ -4596,7 +4596,7 @@ namespace jeecs
                 size_t readed_length;
 
                 m_type_info = nullptr;
-                if (sscanf(databuf, "#je_type_info#%zn", &readed_length) == 1)
+                if (sscanf(databuf, "#je_type_info#%zn", &readed_length) == 0)
                 {
                     databuf += readed_length;
                     m_type_info = je_typing_get_info_by_name(databuf);
@@ -7891,10 +7891,38 @@ namespace jeecs
             {
                 // Do nothing
             }
-
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Rigidbody::layerid, "layerid");
+            }
+        };
+        struct Filter
+        {
+            struct filter_mask
+            {
+                uint16_t m_mask;
+
+                std::string to_string()const
+                {
+                    return "#je_physics2d_filter_mask#" + std::to_string(m_mask);
+                }
+                void parse(const char* databuf)
+                {
+                    size_t readed_mask;
+                    if (sscanf(databuf, "#je_physics2d_filter_mask#%zu", &readed_mask) == 1)
+                        m_mask = (uint16_t)readed_mask;
+                    else
+                        m_mask = 0;
+                }
+            };
+
+            filter_mask typemask = { 0xFFFF };
+            filter_mask collidemask = { 0xFFFF };
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Filter::typemask, "typemask");
+                typing::register_member(guard, &Filter::collidemask, "collidemask");
             }
         };
         struct Mass
@@ -7922,7 +7950,6 @@ namespace jeecs
                 typing::register_member(guard, &Restitution::value, "value");
             }
         };
-
         struct Kinematics
         {
             math::vec2 linear_velocity = {};
@@ -7969,6 +7996,24 @@ namespace jeecs
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &CircleCollider::scale, "scale");
+            }
+        };
+
+        struct CollisionResult
+        {
+            struct collide_result
+            {
+                math::vec2 position;
+                math::vec2 normalize;
+            };
+            basic::map<Rigidbody*, collide_result> results;
+
+            const collide_result* check(Rigidbody* rigidbody) const
+            {
+                auto fnd = results.find(rigidbody);
+                if (fnd == results.end())
+                    return nullptr;
+                return &fnd->v;
             }
         };
     }
@@ -8869,6 +8914,7 @@ namespace jeecs
 
             type_info::register_type<Physics2D::World>(guard, "Physics2D::World");
             type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
+            type_info::register_type<Physics2D::Filter>(guard, "Physics2D::Filter");
             type_info::register_type<Physics2D::Kinematics>(guard, "Physics2D::Kinematics");
             type_info::register_type<Physics2D::Mass>(guard, "Physics2D::Mass");
             type_info::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
@@ -8876,6 +8922,7 @@ namespace jeecs
             type_info::register_type<Physics2D::CircleCollider>(guard, "Physics2D::CircleCollider");
             type_info::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
             type_info::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");
+            type_info::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
 
             type_info::register_type<Audio::Source>(guard, "Audio::Source");
             type_info::register_type<Audio::Listener>(guard, "Audio::Listener");
