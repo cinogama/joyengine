@@ -7927,7 +7927,7 @@ namespace jeecs
                 }
             };
 
-            filter_mask typemask = { 0xFFFF };
+            filter_mask typemask = { 0x0001 };
             filter_mask collidemask = { 0xFFFF };
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
