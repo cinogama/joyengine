@@ -972,6 +972,12 @@ namespace $$MODULE_NAME$$
 {
     struct $$COMPONENT_NAME$$
     {
+        JECS_DISABLE_MOVE_AND_COPY_OPERATOR($$COMPONENT_NAME$$);
+
+        $$COMPONENT_NAME$$()= default;
+        $$COMPONENT_NAME$$(const $$COMPONENT_NAME$$&) = default;
+        $$COMPONENT_NAME$$($$COMPONENT_NAME$$&&) = default;
+
         static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
         {
             using namespace jeecs;

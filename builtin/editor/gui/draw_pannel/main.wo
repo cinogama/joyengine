@@ -92,7 +92,7 @@ namespace editor::gui::drawpannel
             self.m_current += 1;
             if (self.m_current < self.m_history->len)
                 // 新添加快照将覆盖后续所有
-                assert(self.m_history->decrease(self.m_current)); // 必须成功
+                assert(self.m_history->shrink(self.m_current)); // 必须成功
             self.m_history->add(snapshot);            
         }
         func undo(self: HistoryManager)

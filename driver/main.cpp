@@ -16,6 +16,7 @@ extern "C"
 int main(int argc, char** argv)
 {
     using namespace jeecs;
+
     je_init(argc, argv);
 
     auto* guard = new jeecs::typing::type_unregister_guard();

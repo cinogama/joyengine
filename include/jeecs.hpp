@@ -3140,11 +3140,18 @@ WO_FORCE_CAPI_END
 
 namespace jeecs
 {
-#define JECS_DISABLE_MOVE_AND_COPY(TYPE) \
-    TYPE(const TYPE &)  = delete;\
-    TYPE(TYPE &&)       = delete;\
+#define JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE) \
     TYPE& operator = (const TYPE &) = delete;\
-    TYPE& operator = (TYPE &&) = delete;
+    TYPE& operator = (TYPE &&) = delete
+
+#define JECS_DISABLE_MOVE_AND_COPY_CONSTRUCTOR(TYPE) \
+    TYPE(const TYPE &)  = delete;\
+    TYPE(TYPE &&)       = delete
+
+#define JECS_DISABLE_MOVE_AND_COPY(TYPE) \
+    JECS_DISABLE_MOVE_AND_COPY_CONSTRUCTOR(TYPE);\
+    JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE)
+    
 
     /*
     jeecs::debug [命名空间]
@@ -7562,6 +7569,10 @@ namespace jeecs
         {
             typing::uid_t uid = je_uid_generate();
 
+            Anchor() = default;
+            Anchor(Anchor&&) = default;
+            Anchor(Anchor&) {}
+
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Anchor::uid, "uid");
@@ -8044,6 +8055,14 @@ namespace jeecs
             float shape_offset = 0.f;
 
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
+
+            Shadow() = default;
+            Shadow(const Shadow& another)
+                : resolution_width(another.resolution_width)
+                , resolution_height(another.resolution_width)
+                , shape_offset(another.shape_offset)
+            {}
+            Shadow(Shadow&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {

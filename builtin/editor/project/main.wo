@@ -301,7 +301,7 @@ namespace editor
                     ;,
                 )),
                 ["JE_ENGINE_PHYSICS_MASK_LAYER_NAME"] = new! IConfig(new! Config(
-                    array::create(16, "未命名层"),
+                    ["默认"]->connect(array::create(15, "未命名层")),
                     func(config)
                     {
                         Text("物理碰撞层命名");
@@ -333,10 +333,7 @@ namespace editor
                     \str = str->array::deserialize
                         ->> \arr = arr
                             ->> \e = e: string;
-                            ->  tovec
-                            ->  func(v){v->resize(16, "未命名层"); return v;}
-                                as vec<string>
-                            ->  unsafe::cast :<array<string>>
+                            ->  resize(16, "未命名层")
                             ;
                     ;,
                     \_ = "";,

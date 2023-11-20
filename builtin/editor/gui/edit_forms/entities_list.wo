@@ -310,7 +310,14 @@ namespace editor::gui::edit_forms
                     "Camera::Viewport",
                 ]);
             }
-            
+            Separator();
+            if (MenuItem("物理层级配置"))
+            {
+                do fast_create_entity(context, w, "物理层级配置", [
+                    "Physics2D::World",
+                ]);
+            }
+
             EndMenu();
         }
         Separator();
