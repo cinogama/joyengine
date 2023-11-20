@@ -1449,7 +1449,7 @@ public func CULL(cull: CullConfig)
     }
     out_struct_decl += "};}\n";
 
-    lexer->lex(out_struct_decl);
+    return out_struct_decl;
 }
 
 namespace structure
@@ -1560,7 +1560,7 @@ using struct_define = handle
     }
     out_struct_decl += "}\n";
 
-    lexer->lex(out_struct_decl);
+    return out_struct_decl;
 }
 
 using uniform_block = struct_define
@@ -1648,7 +1648,7 @@ using uniform_block = struct_define
         else
             out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_uniform:<{vao_shader_type}>(\"{vao_member_name->upper}\");\n";
 
-    lexer->lex(out_struct_decl);
+    return out_struct_decl;
 }
 
 UNIFORM_BUFFER! JOYENGINE_DEFAULT = 0

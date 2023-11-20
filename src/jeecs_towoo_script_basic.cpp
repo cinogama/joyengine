@@ -865,7 +865,7 @@ extern func _init_towoo_component(name: string)
     if (lexer->next != "{")
     {
         lexer->error("Unexpected token, here should be '{'.");
-        return;
+        return "";
     }
 
     let decls = []mut: vec<(string, string)>;
@@ -882,7 +882,7 @@ extern func _init_towoo_component(name: string)
         if (lexer->next != ":")
         {
             lexer->error("Unexpected token, here should be ':'.");
-            return;
+            return "";
         }
         let mut type = "";
         for (;;)
@@ -899,7 +899,7 @@ extern func _init_towoo_component(name: string)
     {
         result += F"je::towoo::component::register_member:<{type}_tid>({name->enstring});";
     }
-    lexer->lex(result);
+    return result;
 }
 )";
 
@@ -1041,15 +1041,15 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
 }
 #macro PRE_UPDATE
 {
-    lexer->lex("je::towoo::system::_set_current_job_type(je::towoo::system::job_type::PRE_UPDATE);");
+    return "je::towoo::system::_set_current_job_type(je::towoo::system::job_type::PRE_UPDATE);";
 }
 #macro UPDATE
 {
-    lexer->lex("je::towoo::system::_set_current_job_type(je::towoo::system::job_type::UPDATE);");
+    return "je::towoo::system::_set_current_job_type(je::towoo::system::job_type::UPDATE);";
 }
 #macro LATE_UPDATE
 {
-    lexer->lex("je::towoo::system::_set_current_job_type(je::towoo::system::job_type::LATE_UPDATE);");
+    return "je::towoo::system::_set_current_job_type(je::towoo::system::job_type::LATE_UPDATE);";
 }
 #macro work
 {
@@ -1063,29 +1063,29 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     if (job_func_name == "")
     {
         lexer->error("Unexpected EOF");
-        return;
+        return "";
     }
 
     if (lexer->next != "(")
     {
         lexer->error("Unexpected token, here should be '('.");
-        return;
+        return "";
     }
     if (lexer->next != "\x29")
     {
         lexer->error("Unexpected token, here should be ')'.");
-        return;
+        return "";
     }
     if (lexer->next != "{")
     {
         lexer->error("Unexpected token, here should be '{'.");
-        return;
+        return "";
     }
 
     let mut result = F"do je::towoo::system::register_work_function({job_func_name});";
     result += F"func {job_func_name}(context: typeof(create(std::declval:<je::world>())))\{do context;";
 
-    lexer->lex(result);
+    return result;
 }
 #macro system
 {
@@ -1106,13 +1106,13 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     if (job_func_name == "")
     {
         lexer->error("Unexpected EOF");
-        return;
+        return "";
     }
 
     if (lexer->next != "(")
     {
         lexer->error("Unexpected token, here should be '('.");
-        return;
+        return "";
     }
 
     let read_component_type = func()
@@ -1142,13 +1142,13 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         if (lexer->next != ":")
         {
             lexer->error("Unexpected token, here should be ':'.");
-            return;
+            return "";
         }
         let type = read_component_type();
         if (type == "")
         {
             lexer->error("Missing 'type' here.");
-            return;
+            return "";
         }
 
         let maynot = lexer->peek == "?";
@@ -1204,7 +1204,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         else
         {
             lexer->error("Unexpected token, here should be 'contain', 'except', 'anyof' or '{'.");
-            return;
+            return "";
         }
     }
 
@@ -1237,7 +1237,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
             result += F", {argname}: {type}";
     }
     result += "){do e; do context;\n";
-    lexer->lex(result);
+    return result;
 }
 )";
 
