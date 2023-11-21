@@ -49,8 +49,7 @@ namespace editor::gui::edit_forms
                     }
                 });
             
-            if (fsys::extension(originpath)->lower == ".wo"
-                || fsys::extension(originpath)->lower == ".wosystem")
+            if (fsys::extension(originpath)->lower == ".wo")
                 return Action::ACTION(func(pconfig, fimg){
                     pconfig.m_pack_output_log->add(F"正在编译脚本：{packpath}");
                     match (vm::load(originpath->tostring))
@@ -315,7 +314,7 @@ namespace editor::gui::edit_forms
 
                             // 1.5.2 加载ToWoo类型
                             let loading_towoo_components = proj->get_all_towoo_scripts_name_and_path
-                                ->  forall(\_, paths = fsys::extension(paths[0])->lower == ".wocomponent";)
+                                ->  forall(\_, paths = fsys::filename(paths[0])->lower->endwith(".jecomponent.wo");)
                                 ->  unmapping
                                 ->> \pathnameandpath = F"LOADED_TOWOO_COMPONENT_TYPES->add(je::towoo::update_component({
                                         name->enstring}, {path->enstring})->val);\n"
@@ -324,7 +323,7 @@ namespace editor::gui::edit_forms
                                 ->  reduce(\l, r = l + r;)
                                 ->  valor("");
                             let loading_towoo_systems = proj->get_all_towoo_scripts_name_and_path
-                                ->  forall(\_, paths = fsys::extension(paths[0])->lower == ".wosystem";)
+                                ->  forall(\_, paths = fsys::filename(paths[0])->lower->endwith(".jesystem.wo");)
                                 ->  unmapping
                                 ->> \pathnameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::update_system({
                                         name->enstring}, {path->enstring})->val);\n"
@@ -352,18 +351,18 @@ namespace editor::gui::edit_forms
                             // 1.5.5 加载入口脚本
                             let load_entry_script = "";
 
+                            let final_boot_script = boot_up_script
+                                ->replace("$LOAD_DYLIB_MODULES$", dylib_loader)
+                                ->replace("$LOAD_TOWOO_COMPONENT$", loading_towoo_components)
+                                ->replace("$LOAD_TOWOO_SCRIPTS$", loading_towoo_systems)
+                                ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
+                                ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
+                                ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
+                                ->replace("$APPLY_RESOLUTION$", F"je::editor::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
+                                ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj.m_name->enstring});");
+
                             let (start_up_script_binary, start_up_script_binary_sz) = 
-                                new! vm("@/builtin/main.wo", 
-                                    boot_up_script
-                                        ->replace("$LOAD_DYLIB_MODULES$", dylib_loader)
-                                        ->replace("$LOAD_TOWOO_COMPONENT$", loading_towoo_components)
-                                        ->replace("$LOAD_TOWOO_SCRIPTS$", loading_towoo_systems)
-                                        ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
-                                        ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
-                                        ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
-                                        ->replace("$APPLY_RESOLUTION$", F"je::editor::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
-                                        ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj.m_name->enstring});")
-                                    )->unwarp->save_binary(false);
+                                new! vm("@/builtin/main.wo", final_boot_script)->unwarp->save_binary(false);
 
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
 

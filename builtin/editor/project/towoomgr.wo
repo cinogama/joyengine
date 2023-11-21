@@ -23,12 +23,19 @@ namespace editor
         m_removing_system: map<string, void>,
     }
     {
+        public func pure_component_or_system_name(name: string)
+        {
+            let idx = name->find(".");
+            if (idx == -1)
+                return name;
+            return name->subto(0, idx);
+        }
         public func fetch_file(self: ToWooContext, type: string)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
             for (let _, p : allsubpath(self.m_project_path)->unwarpor([]))
             {
-                if (isfile(p) && extension(p)->lower == type)
+                if (isfile(p) && filename(p)->lower->endwith(type))
                 {
                     match (editor::crc64file(p->tostring))
                     {
@@ -42,17 +49,17 @@ namespace editor
         }
         public func update_system(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
         {
-            let fetched_scripts = self->fetch_file(".wosystem");
+            let fetched_scripts = self->fetch_file(".jesystem.wo");
             for (let p, (c, t) : self.m_loaded_towoo)
             {
-                if (extension(p)->lower == ".wosystem")
+                if (filename(p)->lower->endwith(".jesystem.wo"))
                 {
                     if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
-                        assert(!self.m_removing_system->contain(purename(p)));
+                        assert(!self.m_removing_system->contain(pure_component_or_system_name(purename(p))));
 
                         if (fetched_scripts->contain(p) == false)
-                            self.m_removing_system->set(purename(p), do nil);
+                            self.m_removing_system->set(pure_component_or_system_name(purename(p)), do nil);
                     }
                     else
                     {
@@ -66,17 +73,17 @@ namespace editor
         }
         public func update_component(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>)
         {
-            let fetched_scripts = self->fetch_file(".wocomponent");
+            let fetched_scripts = self->fetch_file(".jecomponent.wo");
             for (let p, (c, t) : self.m_loaded_towoo)
             {
-                if (extension(p)->lower == ".wocomponent")
+                if (filename(p)->lower->endwith(".jecomponent.wo"))
                 {
                     if (fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
-                        assert(!self.m_removing_component->contain(purename(p)));
+                        assert(!self.m_removing_component->contain(pure_component_or_system_name(purename(p))));
 
                         if (fetched_scripts->contain(p) == false)
-                            self.m_removing_component->set(purename(p), do nil);
+                            self.m_removing_component->set(pure_component_or_system_name(purename(p)), do nil);
                     }
                     else
                     {
@@ -100,9 +107,9 @@ namespace editor
             for (let p, c : fetched_components)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
-                assert(extension(p)->lower == ".wocomponent");
-                do self.m_removing_component->remove(purename(p));
-                match (towoo::update_component(purename(p), p->tostring))
+                assert(filename(p)->lower->endwith(".jecomponent.wo"));
+                do self.m_removing_component->remove(pure_component_or_system_name(purename(p)));
+                match (towoo::update_component(pure_component_or_system_name(purename(p)), p->tostring))
                 {
                 value(t)?
                     new_scripts->set(p, (c, t));
@@ -118,9 +125,9 @@ namespace editor
             for (let p, c : fetched_system)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
-                assert(extension(p)->lower == ".wosystem");
-                do self.m_removing_system->remove(purename(p));
-                match (towoo::update_system(purename(p), p->tostring))
+                assert(filename(p)->lower->endwith(".jesystem.wo"));
+                do self.m_removing_system->remove(pure_component_or_system_name(purename(p)));
+                match (towoo::update_system(pure_component_or_system_name(purename(p)), p->tostring))
                 {
                 value(t)?
                     new_scripts->set(p, (c, t));
@@ -158,8 +165,8 @@ namespace editor
             for (let _, p : allsubpath(self.m_project_path)->unwarpor([]))
             {
                 if (isfile(p) && (
-                    extension(p)->lower == ".wosystem" 
-                    || extension(p)->lower == ".wocomponent"))
+                    filename(p)->lower->endwith(".jesystem.wo")
+                    || filename(p)->lower->endwith(".jecomponent.wo")))
                 {
                     match (editor::crc64file(p->tostring))
                     {

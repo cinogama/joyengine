@@ -401,10 +401,10 @@ component!
                     jeapi::gui::form::input("新建ToWoo Component 声明", F"在{current_work_path}新建ToWoo Component 脚本", "NewToWooComponent",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.wocomponent\n{default_empty_script}") 
+                            | write_file_if_not_exist(file_path, F"// {filename}.jecomponent.wo\n{default_empty_script}") 
                                 ? func(){context->get_project->try_update_towoo(false);force_update();}()
                                 | jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".wocomponent"););
+                        where file_path = fsys::normalize(current_work_path) / (filename + ".jecomponent.wo"););
                 }
                 if (MenuItem(F"ToWoo System 脚本"))
                 {
@@ -449,10 +449,10 @@ LATE_UPDATE!
                     jeapi::gui::form::input("新建ToWoo System 脚本", F"在{current_work_path}新建ToWoo System 脚本", "NewToWooSystem",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.wosystem\n{default_empty_script}") 
+                            | write_file_if_not_exist(file_path, F"// {filename}.jesystem.wo\n{default_empty_script}") 
                                 ? func(){context->get_project->try_update_towoo(false);force_update();}()
                                 | jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".wosystem"););
+                        where file_path = fsys::normalize(current_work_path) / (filename + ".jesystem.wo"););
                 }
                 if (MenuItem(F"Physics2D 组配置"))
                 {
@@ -471,10 +471,10 @@ PHYSICS2D_COLLISIONS!
                     jeapi::gui::form::input("新建Physics2D 组配置", F"在{current_work_path}新建Physics2D 组配置", "group",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.phyconfig\n{default_empty_script}") 
+                            | write_file_if_not_exist(file_path, F"// {filename}.jephysics2d.wo\n{default_empty_script}") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".phyconfig"););
+                        where file_path = fsys::normalize(current_work_path) / (filename + ".jephysics2d.wo"););
                 }
                 if (MenuItem(F"编辑器工具脚本"))
                 {

@@ -230,7 +230,7 @@ namespace editor::gui::edit_forms
                             do MenuItemEnabled("组件", false);
                             for (let p, _: towoo_context.m_loaded_towoo)
                             {
-                                if (fsys::extension(p)->lower == ".wocomponent")
+                                if (fsys::filename(p)->lower->endwith(".jecomponent.wo"))
                                     if (MenuItem(fsys::purename(p)))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                             }
@@ -238,7 +238,7 @@ namespace editor::gui::edit_forms
                             do MenuItemEnabled("系统", false);
                             for (let p, _: towoo_context.m_loaded_towoo)
                             {
-                                if (fsys::extension(p)->lower == ".wosystem")
+                                if (fsys::extension(p)->lower == ".jesystem.wo")
                                     if (MenuItem(fsys::purename(p)))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                             }
