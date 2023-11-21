@@ -34,6 +34,9 @@ extern const char* jeecs_towoo_component_src;
 extern const char* jeecs_towoo_path;
 extern const char* jeecs_towoo_src;
 
+extern const char* jeecs_physics2d_config_path;
+extern const char* jeecs_physics2d_config_src;
+
 void je_ecs_shutdown();
 void jeal_init();
 void jeal_finish();
@@ -86,11 +89,12 @@ void _jedbg_hook_woolang_panic(
     uint32_t rterrcode,
     wo_string_t reason)
 {
-    auto* trace = wo_debug_trace_callstack(vm, 32);
+    auto* trace = vm == nullptr ? nullptr : wo_debug_trace_callstack(vm, 32);
     jeecs::debug::logfatal("Woolang Panic(%x):%s (%s in %s: %u):\n%s",
-        rterrcode, reason, functionname, src_file, lineno, trace);
+        rterrcode, reason, functionname, src_file, lineno, 
+        trace == nullptr ? "<no-found>" : trace);
 
-    wo_push_string(_je_global_panic_hooker, trace);
+    wo_push_string(_je_global_panic_hooker, trace == nullptr ? "<no-found>" : trace);
     wo_push_string(_je_global_panic_hooker, reason);
     wo_push_int(_je_global_panic_hooker, (wo_integer_t)rterrcode);
     wo_push_string(_je_global_panic_hooker, functionname);
@@ -189,6 +193,7 @@ void je_init(int argc, char** argv)
     jeecs_file_set_host_path(wo_exe_path());
     jeecs_file_set_runtime_path(wo_exe_path());
 
+    wo_virtual_source(jeecs_physics2d_config_path, jeecs_physics2d_config_src, false);
     wo_virtual_source(jeecs_towoo_path, jeecs_towoo_src, false);
     wo_virtual_source(jeecs_towoo_component_path, jeecs_towoo_component_src, false);
     wo_virtual_source(jeecs_towoo_system_path, jeecs_towoo_system_src, false);

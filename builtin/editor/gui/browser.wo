@@ -378,23 +378,15 @@ import je;
 using std;
 using je;
 
-using Context = ();
-
-extern func create(_: entity)
-{
-    return (): Context;
-}
-extern func update(_: Context, _: entity)
-{
-
-}
+// 可以在此处编写自己的代码：
+je::log("Helloworld");
 "@;
                     jeapi::gui::form::input("新建Woolang 脚本", F"在{current_work_path}新建Woolang 脚本", "NewScript",
                         \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            ? jeapi::gui::form::errmsg("创建Woolang 脚本失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.wo\n{default_empty_script}") 
                                 ? force_update()
-                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                                | jeapi::gui::form::errmsg("创建Woolang 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".wo"););
                 }
                 if (MenuItem(F"ToWoo Component 声明"))
@@ -408,10 +400,10 @@ component!
 "@;
                     jeapi::gui::form::input("新建ToWoo Component 声明", F"在{current_work_path}新建ToWoo Component 脚本", "NewToWooComponent",
                         \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            ? jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.wocomponent\n{default_empty_script}") 
                                 ? func(){context->get_project->try_update_towoo(false);force_update();}()
-                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                                | jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".wocomponent"););
                 }
                 if (MenuItem(F"ToWoo System 脚本"))
@@ -456,11 +448,33 @@ LATE_UPDATE!
 "@;
                     jeapi::gui::form::input("新建ToWoo System 脚本", F"在{current_work_path}新建ToWoo System 脚本", "NewToWooSystem",
                         \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            ? jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.wosystem\n{default_empty_script}") 
                                 ? func(){context->get_project->try_update_towoo(false);force_update();}()
-                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                                | jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".wosystem"););
+                }
+                if (MenuItem(F"Physics2D 组配置"))
+                {
+                    let default_empty_script = 
+@"import je::physics2d::config;
+
+PHYSICS2D_GROUP! 普通物体
+{
+}
+
+PHYSICS2D_COLLISIONS!
+{
+    普通物体, 普通物体;
+}
+"@;
+                    jeapi::gui::form::input("新建Physics2D 组配置", F"在{current_work_path}新建Physics2D 组配置", "group",
+                        \filename: string = fsys::exist(file_path)
+                            ? jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.phyconfig\n{default_empty_script}") 
+                                ? force_update()
+                                | jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                        where file_path = fsys::normalize(current_work_path) / (filename + ".phyconfig"););
                 }
                 if (MenuItem(F"编辑器工具脚本"))
                 {
@@ -478,10 +492,10 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 "@;
                     jeapi::gui::form::input("新建编辑器工具脚本", F"在{current_work_path}新建编辑器工具脚本", "NewScript",
                         \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            ? jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.jewo\n{default_empty_script}") 
                                 ? force_update()
-                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                                | jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".jewo"););
                 }
                 Separator();

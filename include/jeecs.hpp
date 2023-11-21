@@ -3151,7 +3151,7 @@ namespace jeecs
 #define JECS_DISABLE_MOVE_AND_COPY(TYPE) \
     JECS_DISABLE_MOVE_AND_COPY_CONSTRUCTOR(TYPE);\
     JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE)
-    
+
 
     /*
     jeecs::debug [命名空间]
@@ -3852,8 +3852,8 @@ namespace jeecs
                     debug::logfatal("This type: '%s' have no function named 'to_string'."
                         , typeid(T).name());
                     return 0;
-                    }();
-                    return basic::make_new_string("");
+                }();
+                return basic::make_new_string("");
             }
             static void parse(void* _ptr, const char* _memb)
             {
@@ -3873,7 +3873,7 @@ namespace jeecs
                         debug::logfatal("This type: '%s' have no function named 'parse'."
                             , typeid(T).name());
                         return 0;
-                        }();
+                    }();
                 }
             }
 
@@ -7872,6 +7872,8 @@ namespace jeecs
             size_t      velocity_step = 8;
             size_t      position_step = 3;
 
+            basic::fileresource<void> group_config;
+
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &World::layerid, "layerid");
@@ -7880,12 +7882,14 @@ namespace jeecs
                 typing::register_member(guard, &World::continuous, "continuous");
                 typing::register_member(guard, &World::velocity_step, "velocity_step");
                 typing::register_member(guard, &World::position_step, "position_step");
+                typing::register_member(guard, &World::group_config, "group_config");
             }
         };
 
         struct Rigidbody
         {
             void* native_rigidbody = nullptr;
+            Rigidbody* _arch_updated_modify_hack = nullptr;
 
             bool        rigidbody_just_created = false;
             math::vec2  record_body_scale = math::vec2(0.f, 0.f);
@@ -7905,35 +7909,6 @@ namespace jeecs
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Rigidbody::layerid, "layerid");
-            }
-        };
-        struct Filter
-        {
-            struct filter_mask
-            {
-                uint16_t m_mask;
-
-                std::string to_string()const
-                {
-                    return "#je_physics2d_filter_mask#" + std::to_string(m_mask);
-                }
-                void parse(const char* databuf)
-                {
-                    size_t readed_mask;
-                    if (sscanf(databuf, "#je_physics2d_filter_mask#%zu", &readed_mask) == 1)
-                        m_mask = (uint16_t)readed_mask;
-                    else
-                        m_mask = 0;
-                }
-            };
-
-            filter_mask typemask = { 0x0001 };
-            filter_mask collidemask = { 0xFFFF };
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Filter::typemask, "typemask");
-                typing::register_member(guard, &Filter::collidemask, "collidemask");
             }
         };
         struct Mass
@@ -8933,7 +8908,6 @@ namespace jeecs
 
             type_info::register_type<Physics2D::World>(guard, "Physics2D::World");
             type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
-            type_info::register_type<Physics2D::Filter>(guard, "Physics2D::Filter");
             type_info::register_type<Physics2D::Kinematics>(guard, "Physics2D::Kinematics");
             type_info::register_type<Physics2D::Mass>(guard, "Physics2D::Mass");
             type_info::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
@@ -8961,10 +8935,10 @@ namespace jeecs
 
             auto integer_uniform_parser_c2w = [](wo_vm, wo_value value, const auto* v) {
                 wo_set_int(value, (wo_integer_t)*v);
-                };
+            };
             auto integer_uniform_parser_w2c = [](wo_vm, wo_value value, auto* v) {
                 *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
-                };
+            };
             typing::register_script_parser<int8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int8", "alias int8 = int;");
             typing::register_script_parser<int16_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,

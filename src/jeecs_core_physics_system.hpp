@@ -24,6 +24,14 @@ namespace jeecs
             size_t m_simulate_round_count;
             std::unordered_map<b2Body*, size_t> m_all_alive_bodys;
 
+            constexpr static size_t MAX_GROUP_COUNT = 16;
+            struct group_config
+            {
+                std::vector<const jeecs::typing::type_info*> m_group_filter;
+                uint16_t m_collision_mask;
+            };
+            group_config m_group_configs[MAX_GROUP_COUNT];
+
             JECS_DISABLE_MOVE_AND_COPY(Physics2DWorldContext);
 
             Physics2DWorldContext(
@@ -34,9 +42,78 @@ namespace jeecs
                 , m_velocity_iterations(8)
                 , m_position_iterations(3)
                 , m_simulate_round_count(0)
+                , m_group_configs()
             {
                 update_world_config(
                     world, simulate_round_count);
+
+                if (world->group_config.has_resource())
+                {
+                    auto path = world->group_config.get_path();
+                    auto* physics_group_config = jeecs_file_open(path.c_str());
+
+                    if (physics_group_config == nullptr)
+                        jeecs::debug::logerr("Unable to open physics group config: '%s', please check.",
+                            path.c_str());
+                    else
+                    {
+                        std::vector<char> buf(physics_group_config->m_file_length);
+                        jeecs_file_read(buf.data(), sizeof(char), buf.size(), physics_group_config);
+                        jeecs_file_close(physics_group_config);
+
+                        wo_vm vmm = wo_create_vm();
+                        if (!wo_load_binary(vmm, path.c_str(), buf.data(), buf.size()))
+                            jeecs::debug::logerr("Unable to resolve physics group config: '%s':\n%s.",
+                                path.c_str(), wo_get_compile_error(vmm, WO_NOTHING));
+                        else
+                        {
+                            // array<group_config_info_t>
+                            wo_value result = wo_run(vmm);
+
+                            // group_config_info_t: struct{types, collider_mask}
+                            wo_value group_config_info = wo_push_empty(vmm);
+
+                            // array<const type_info*>
+                            wo_value filter_types = wo_push_empty(vmm);
+
+                            // int
+                            wo_value group_collide_with_mask = wo_push_empty(vmm);
+
+                            if (result == nullptr)
+                                jeecs::debug::logerr("Unable to resolve physics group config: '%s': %s.",
+                                    path.c_str(), wo_get_runtime_error(vmm));
+                            else if (wo_valuetype(result) != WO_ARRAY_TYPE)
+                                jeecs::debug::logerr("Unable to resolve physics group config: '%s': Unexpected value type.",
+                                    path.c_str());
+                            else
+                            {
+                                // Resolve!
+                                wo_integer_t configed_group_count = std::min((wo_integer_t)MAX_GROUP_COUNT, wo_lengthof(result));
+                                for (wo_integer_t i = 0; i < (wo_integer_t)MAX_GROUP_COUNT; ++i)
+                                {
+                                    auto& group = m_group_configs[i];
+                                    if (i < configed_group_count)
+                                    {
+                                        wo_arr_get(group_config_info, result, i);
+                                        wo_struct_get(filter_types, group_config_info, 0);
+                                        for (wo_integer_t ii = wo_lengthof(filter_types); ii > 0; --ii)
+                                        {
+                                            wo_arr_get(group_collide_with_mask, filter_types, ii - 1);
+                                            group.m_group_filter.push_back(
+                                                (const typing::type_info*)wo_pointer(group_collide_with_mask));
+                                        }
+
+                                        wo_struct_get(filter_types, group_config_info, 1);
+                                        group.m_collision_mask = (uint16_t)wo_int(filter_types);
+                                    }
+                                    else
+                                        group.m_collision_mask = 0x0000;
+                                }
+                            }
+                        }
+                        wo_close_vm(vmm);
+                    }
+                }
             }
 
             void update_world_config(
@@ -144,7 +221,6 @@ namespace jeecs
                     Physics2D::Bullet* bullet,
                     Physics2D::BoxCollider* boxcollider,
                     Physics2D::CircleCollider* circlecollider,
-                    Physics2D::Filter* filter,
                     Renderer::Shape* rendshape)
                     {
                         auto fnd = _m_this_frame_alive_worlds.find(rigidbody.layerid);
@@ -308,7 +384,6 @@ namespace jeecs
                                     rigidbody_instance->SetFixedRotation(kinematics->lock_rotation);
                                     rigidbody_instance->SetAwake(true);
                                 }
-
                             }
 
                             if (check_if_need_update_vec2(rigidbody_instance->GetPosition(), math::vec2(translation.world_position.x, translation.world_position.y))
@@ -319,20 +394,40 @@ namespace jeecs
                                 rigidbody_instance->SetAwake(true);
                             }
 
-                            if (auto* fixture = rigidbody_instance->GetFixtureList())
+                            if (rigidbody._arch_updated_modify_hack != &rigidbody)
                             {
-                                b2Filter fixture_filter = fixture->GetFilterData();
-                                if (filter)
+                                if (auto* fixture = rigidbody_instance->GetFixtureList())
                                 {
-                                    fixture_filter.maskBits = filter->typemask.m_mask;
-                                    fixture_filter.categoryBits = filter->collidemask.m_mask;
+                                    rigidbody._arch_updated_modify_hack = &rigidbody;
+                                    uint16_t self_mask_type = 0x0000;
+                                    uint16_t self_collide_group = 0x0000;
+
+                                    for (size_t i = 0; i < Physics2DWorldContext::MAX_GROUP_COUNT; ++i)
+                                    {
+                                        auto &group = fnd->second->m_group_configs[i];
+                                        bool is_this_group = true;
+
+                                        for (auto* filter_type: group.m_group_filter)
+                                        {
+                                            if (nullptr == je_ecs_world_entity_get_component(&e, filter_type))
+                                            {
+                                                is_this_group = false;
+                                                break;
+                                            }
+                                        }
+
+                                        if (is_this_group)
+                                        {
+                                            self_mask_type |= (uint16_t)(1 << i);
+                                            self_collide_group |= group.m_collision_mask;
+                                        }
+                                    }
+
+                                    b2Filter fixture_filter = fixture->GetFilterData();
+                                    fixture_filter.maskBits = self_mask_type;
+                                    fixture_filter.categoryBits = self_collide_group;
+                                    fixture->SetFilterData(fixture_filter);
                                 }
-                                else
-                                {
-                                    fixture_filter.maskBits = 0xFFFF;
-                                    fixture_filter.categoryBits = 0xFFFF;
-                                }
-                                fixture->SetFilterData(fixture_filter);
                             }
                         }
                     });
@@ -431,3 +526,175 @@ namespace jeecs
         }
     };
 }
+
+const char* jeecs_physics2d_config_path = "je/physics2d/config.wo";
+const char* jeecs_physics2d_config_src = R"(
+// (C)Cinogama. 
+import woo::std;
+import je;
+import je::towoo;
+
+namespace je::physics2d::config
+{
+    using CollideGroupInfo = struct{
+        m_filter_components: vec<je::typeinfo>,
+        m_collide_mask: mut int,
+        m_self_gid: int,
+    }
+    {
+        public let groups = []mut: vec<CollideGroupInfo>;
+
+        public func create()
+        {
+            let self = CollideGroupInfo{
+                m_filter_components = []mut, 
+                m_collide_mask = mut 0,
+                m_self_gid = groups->len,
+            };
+
+            groups->add(self);
+            return self;
+        }
+        public func add_filter_components(self: CollideGroupInfo, t: je::typeinfo)
+        {
+            self.m_filter_components->add(t);
+        }
+        public func collide_each_other(a: CollideGroupInfo, b: CollideGroupInfo)
+        {
+            using std;
+            a.m_collide_mask = a.m_collide_mask->bitor(1->bitshl(b.m_self_gid));
+            b.m_collide_mask = b.m_collide_mask->bitor(1->bitshl(a.m_self_gid));
+        }
+    }
+}
+
+#macro PHYSICS2D_GROUP
+{
+    /*
+    PHYSICS2D_GROUP! GroupName
+    {
+        ComponentA,
+        ComponentB,
+    }
+    */
+    using std::token_type;
+
+    let group_name = lexer->expecttoken(l_identifier)->valor("<Empty>");
+    if (lexer->next != "{")
+    {
+        lexer->error("Unexpected token, should be '{'.");
+        return "";
+    }
+    
+    let types = []mut: vec<string>;
+
+    parse_filter_components@
+    for (;;)
+    {
+        let mut typename = "";
+        for (;;)
+        {
+            let token = lexer->next;
+            if (token == ";")
+            {
+                if (typename == "")
+                {
+                    lexer->error("Unexpected '}', should be typename.");
+                    return "";
+                }
+
+                types->add(typename);
+                typename = "";
+                break;
+            }
+            if (token == "}")
+            {
+                if (typename != "")
+                {
+                    lexer->error("Unexpected '}', should be ';'.");
+                    return "";
+                }
+                break parse_filter_components;
+            }
+            if (token == "")
+            {
+                lexer->error("Unexpected EOF.");
+                return "";
+            }
+            
+            typename += token;
+        }
+    }
+
+    let mut result = F"let {group_name} = je::physics2d::config::CollideGroupInfo::create();";
+    for (let _, typename : types)
+    {
+        result += F"{group_name}->add_filter_components({typename}::id);";
+    }
+    return result;
+}
+
+#macro PHYSICS2D_COLLISIONS
+{
+    if (lexer->next != "{")
+    {
+        lexer->error("Unexpected token, should be '{'.");
+        return "";
+    }
+
+    let mut groups = []mut: vec<vec<string>>;
+    let mut group = []mut: vec<string>;
+    let mut typename = "";
+
+    for (;;)
+    {
+        let token = lexer->next;
+        if (token == "")
+        {
+            lexer->error("Unexpected EOF.");
+            return "";
+        }
+        else if (token == "}")
+            break;
+        else if (token == ",")
+        {
+            if (typename != "")
+            {
+                group->add(typename);
+                typename = "";
+            }
+        }
+        else if (token == ";")
+        {
+            if (typename != "")
+            {
+                group->add(typename);
+                typename = "";
+            }
+            if (group->empty)
+            {
+                lexer->error("Unexpected ';'.");
+                return "";
+            }
+            groups->add(group);
+            group = []mut;
+        }
+        else
+            typename += token;
+    }
+
+    let mut result = "";
+    for (let _, group_list : groups)
+    {
+        for (let i, group_a : group_list)
+        {
+            for (let j, group_b : group_list)
+            {
+                if (i == j) continue;
+                result += F"{group_a}->collide_each_other({group_b});";
+            }
+        }
+    }
+    return result + "return je::physics2d::config::CollideGroupInfo::groups;";
+}
+)";
