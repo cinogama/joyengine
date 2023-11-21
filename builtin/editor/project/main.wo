@@ -300,44 +300,6 @@ namespace editor
                         where supp = env->get_universe->get_max_deltatime()
                     ;,
                 )),
-                ["JE_ENGINE_PHYSICS_MASK_LAYER_NAME"] = new! IConfig(new! Config(
-                    ["默认"]->connect(array::create(15, "未命名层")),
-                    func(config)
-                    {
-                        Text("物理碰撞层命名");
-                        TextDisabled("* 用于Physics2D::Filter的掩码命名");
-                        
-                        let mut modified = false;
-                        let modified_config = config->>\e = mut e;;
-                        for (let i, elem : modified_config)
-                        {
-                            Text(F"层 {i}:");
-                            SameLine();
-                            match (InputText(F"##physics_layer_{i}", elem))
-                            {
-                            value(newname)?
-                                {
-                                    modified = true;
-                                    modified_config[i] = newname;
-                                }
-                            none?;
-                            }
-                        }
-
-                        if (modified)
-                            return option::value(modified_config as array<mut string>->unsafe::cast :<array<string>>);
-                        return option::none;
-                    },
-                    \_,_ = true;,
-                    \config = config->serialize->valor("[]");,
-                    \str = str->array::deserialize
-                        ->> \arr = arr
-                            ->> \e = e: string;
-                            ->  resize(16, "未命名层")
-                            ;
-                    ;,
-                    \_ = "";,
-                )),
             }mut;
         }
         func try_lock_this_project(self: Project)
@@ -373,46 +335,6 @@ namespace editor
         }
         public func register_editor_widget(self: Project)
         {
-            jeapi::gui::register_custom_editor("je_physics2d_filter_mask", func(tag: string,dat: string)
-            {
-                using je::gui;
-                using std;
-                
-                let mut updated = false;
-                let result_offset = []mut: vec<int>;
-                let mask = dat: int;
-                let maskname = self
-                    ->get_config("JE_ENGINE_PHYSICS_MASK_LAYER_NAME")
-                    ->val->tostring->array::deserialize->valor([])->>\e=e: string;
-                    ;
-
-                for (let mut i = 0; i < 16; i += 1)
-                {
-                    Text(F"层{i} {maskname->get(i)->valor("未命名层")}：");
-                    SameLine();
-                    let bitsetted = mask->bitand(1->bitshl(i)) != 0;
-                    match (CheckBox(F"##check_physics_layer_{i}_{tag}", bitsetted))
-                    {
-                    value(check)?
-                        {
-                            updated = true;
-                            if (check) result_offset->add(i);
-                        }
-                    none?
-                        if (bitsetted) result_offset->add(i);
-                    }
-                }
-
-                if (updated)
-                {
-                    let mut result = 0;
-                    for (let _, offset: result_offset)
-                        result = result->bitor(1->bitshl(offset));
-                    return option::value(result: string);
-                }
-                return option::none;
-            });
-
             jeapi::gui::register_custom_editor("je_light2d_block_shape", func(tag: string, dat: string)
             {
                 using je::gui;
