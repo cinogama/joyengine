@@ -27,7 +27,13 @@ namespace jeecs
             constexpr static size_t MAX_GROUP_COUNT = 16;
             struct group_config
             {
-                std::vector<const jeecs::typing::type_info*> m_group_filter;
+                struct filter_config
+                {
+                    const jeecs::typing::type_info* m_type;
+                    requirement::type               m_requirement;
+                };
+
+                std::vector<filter_config> m_group_filter;
                 uint16_t m_collision_mask;
             };
             group_config m_group_configs[MAX_GROUP_COUNT];
@@ -73,10 +79,13 @@ namespace jeecs
                             // group_config_info_t: struct{types, collider_mask}
                             wo_value group_config_info = wo_push_empty(vmm);
 
-                            // array<const type_info*>
+                            // array<(const type_info*, Requirement)>
                             wo_value filter_types = wo_push_empty(vmm);
 
-                            // int
+                            // Requirement
+                            wo_value group_requirement = wo_push_empty(vmm);
+
+                            // int/const type_info*
                             wo_value group_collide_with_mask = wo_push_empty(vmm);
 
                             if (result == nullptr)
@@ -88,7 +97,16 @@ namespace jeecs
                             else
                             {
                                 // Resolve!
-                                wo_integer_t configed_group_count = std::min((wo_integer_t)MAX_GROUP_COUNT, wo_lengthof(result));
+
+                                wo_integer_t configed_group_count = wo_lengthof(result);
+                                if (configed_group_count > (wo_integer_t)MAX_GROUP_COUNT)
+                                {
+                                    jeecs::debug::logwarn("The number of physics2d collision groups is limited to 16, "
+                                        "but the %d group(s) are provided in this configuration: `%s`, excess groups will be ignored",
+                                        (int)configed_group_count, path.c_str());
+                                    configed_group_count = (wo_integer_t)MAX_GROUP_COUNT;
+                                }
+
                                 for (wo_integer_t i = 0; i < (wo_integer_t)MAX_GROUP_COUNT; ++i)
                                 {
                                     auto& group = m_group_configs[i];
@@ -99,8 +117,14 @@ namespace jeecs
                                         for (wo_integer_t ii = wo_lengthof(filter_types); ii > 0; --ii)
                                         {
                                             wo_arr_get(group_collide_with_mask, filter_types, ii - 1);
+                                            wo_struct_get(group_requirement, group_collide_with_mask, 1);
+                                            wo_struct_get(group_collide_with_mask, group_collide_with_mask, 0);
                                             group.m_group_filter.push_back(
-                                                (const typing::type_info*)wo_pointer(group_collide_with_mask));
+                                                group_config::filter_config
+                                                {
+                                                    (const typing::type_info*)wo_pointer(group_collide_with_mask),
+                                                    (requirement::type)wo_int(group_requirement),
+                                                });
                                         }
 
                                         wo_struct_get(filter_types, group_config_info, 1);
@@ -404,12 +428,16 @@ namespace jeecs
 
                                     for (size_t i = 0; i < Physics2DWorldContext::MAX_GROUP_COUNT; ++i)
                                     {
-                                        auto &group = fnd->second->m_group_configs[i];
+                                        auto& group = fnd->second->m_group_configs[i];
                                         bool is_this_group = true;
 
-                                        for (auto* filter_type: group.m_group_filter)
+                                        for (auto& filter_type : group.m_group_filter)
                                         {
-                                            if (nullptr == je_ecs_world_entity_get_component(&e, filter_type))
+                                            assert(filter_type.m_requirement == requirement::type::CONTAIN
+                                                || filter_type.m_requirement == requirement::type::EXCEPT);
+
+                                            bool has_component = je_ecs_world_entity_get_component(&e, filter_type.m_type);
+                                            if ((filter_type.m_requirement == requirement::type::CONTAIN) != has_component)
                                             {
                                                 is_this_group = false;
                                                 break;
@@ -537,11 +565,20 @@ import je::towoo;
 namespace je::physics2d::config
 {
     using CollideGroupInfo = struct{
-        m_filter_components: vec<je::typeinfo>,
+        m_filter_components: vec<(je::typeinfo, CollideGroupInfo::Requirement)>,
         m_collide_mask: mut int,
+
         m_self_gid: int,
     }
     {
+        public enum Requirement
+        {
+            CONTAIN,        // Must have spcify component
+            MAYNOT,         // May have or not have
+            ANYOF,          // Must have one of 'ANYOF' components
+            EXCEPT,         // Must not contain spcify component
+        }
+
         public let groups = []mut: vec<CollideGroupInfo>;
 
         public func create()
@@ -555,9 +592,9 @@ namespace je::physics2d::config
             groups->add(self);
             return self;
         }
-        public func add_filter_components(self: CollideGroupInfo, t: je::typeinfo)
+        public func add_filter_components(self: CollideGroupInfo, t: je::typeinfo, r: Requirement)
         {
-            self.m_filter_components->add(t);
+            self.m_filter_components->add((t, r));
         }
         public func collide_each_other(a: CollideGroupInfo, b: CollideGroupInfo)
         {
@@ -586,12 +623,13 @@ namespace je::physics2d::config
         return "";
     }
     
-    let types = []mut: vec<string>;
+    let types = []mut: vec<(string, string)>;
 
     parse_filter_components@
     for (;;)
     {
         let mut typename = "";
+        let mut mode = option::none: option<string>;
         for (;;)
         {
             let token = lexer->next;
@@ -603,11 +641,11 @@ namespace je::physics2d::config
                     return "";
                 }
 
-                types->add(typename);
+                types->add((typename, mode->valor("CONTAIN")));
                 typename = "";
                 break;
             }
-            if (token == "}")
+            else if (token == "}")
             {
                 if (typename != "")
                 {
@@ -616,20 +654,38 @@ namespace je::physics2d::config
                 }
                 break parse_filter_components;
             }
-            if (token == "")
+            else if (token == "")
             {
                 lexer->error("Unexpected EOF.");
                 return "";
             }
-            
-            typename += token;
+            else if (token == "except")
+            {
+                if (mode->has)
+                {
+                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->val}`");
+                    return "";
+                }
+                mode = option::value("EXCEPT");
+            }
+            else if (token == "contain")
+            {
+                if (mode->has)
+                {
+                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->val}`");
+                    return "";
+                }
+                mode = option::value("CONTAIN");
+            }
+            else
+                typename += token;
         }
     }
 
     let mut result = F"let {group_name} = je::physics2d::config::CollideGroupInfo::create();";
-    for (let _, typename : types)
+    for (let _, (typename, mode) : types)
     {
-        result += F"{group_name}->add_filter_components({typename}::id);";
+        result += F"{group_name}->add_filter_components({typename}::id, je::physics2d::config::CollideGroupInfo::Requirement::{mode});";
     }
     return result;
 }
