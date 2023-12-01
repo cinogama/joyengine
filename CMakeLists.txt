@@ -28,7 +28,7 @@ option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
 # Cannot use gles & gl at same time because of ImGUI cannot use two lib at same time.
 if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES300_GAPI)
-    message(FATAL_ERROR "Cannot use OpenGL3.3 and OpenGLES3.2 at same time.")
+    message(FATAL_ERROR "Cannot use OpenGL3.3 and OpenGLES3.0 at same time.")
 endif()
 
 # openal-soft will be compiled to dynamic-libs
