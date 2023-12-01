@@ -63,6 +63,7 @@ namespace jeecs
         struct NewCreatedEntity
         {
             // 用于新创建的实体，把它放到当前摄像机面前 1.0 处
+            // TODO: 为了这么个破烂功能整个组件，简直是……难以评价，之后换正经方式重新实现
         };
 
         // Used for store uniform vars of failed-shader in entity. used for 'update' shaders
