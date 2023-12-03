@@ -983,6 +983,77 @@ namespace editor::gui::tilemap
                 }
             }
         }
+        func generate_big_texture(self: TileEditContext, tile_reso: int)
+        {
+            // 顾名思义，不是生成一片片的实体，而是把整个地图打一个大包儿，直接拉出来变成一张贴图
+            let xys = self.m_layerd_tiles
+                ->  unmapping
+                =>> \layer_tiles = layer_tiles[1]->unmapping
+                    =>> \x_tiles = x_tiles[1]->unmapping
+                        =>> \y_tiles = [(x_tiles[0], y_tiles[0])];
+                        ;
+                    ;
+                ;
+            
+            let xs = xys->>\xy = xy[0];, ys = xys->>\xy = xy[1];;
+
+            let max_x = xs->reduce(\l, r = max(l, r);)->valor(0);
+            let min_x = xs->reduce(\l, r = min(l, r);)->valor(0);
+            let max_y = ys->reduce(\l, r = max(l, r);)->valor(0);
+            let min_y = ys->reduce(\l, r = min(l, r);)->valor(0);
+
+            // OK, 获取到Tile的范围，创建一个Image准备开始绘制
+            let width = max_x - min_x + 1;
+            let height = max_y - min_y + 1;
+
+            let result_image = new! image(width * tile_reso, height * tile_reso);
+
+            for (let layer, tiles : self.m_layerd_tiles)
+            {
+                for (let x, ytiles :  tiles)
+                {
+                    for (let y, tile :  ytiles)
+                    {
+                        let tile_texture = tile->get_texture(self.m_context, self->get_tile_way(layer, x, y));
+                        let (tile_texture_w, tile_texture_h) = tile_texture->size;
+
+                        let NEAREST_SAMPLER = 
+                            \ux: real, uy: real = tile_texture->pix((px, py))->get_color
+                                where px = math::round(ux * tile_texture_w: real)
+                                    , py = math::round(uy * tile_texture_h: real)
+                            ;
+                        ;
+
+                        // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
+                        let tx = x - min_x;
+                        let ty = max_y - y;
+                        for (let mut ix = 0; ix < tile_reso; ix += 1)
+                            for (let mut iy = 0; iy < tile_reso; iy += 1)
+                            {
+                                let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
+
+                                let (r, g, b, a) = 
+                                    result_image->getpix(result_img_pos);
+
+                                let (dr, dg, db, da) = NEAREST_SAMPLER(
+                                    ix: real / tile_reso: real, iy: real / tile_reso: real);
+
+                                result_image->setpix(result_img_pos, (
+                                    math::lerp(r, dr, da), 
+                                    math::lerp(g, dg, da), 
+                                    math::lerp(b, db, da),
+                                    std::max(a, da)));
+                            }
+                    }
+                }
+            }
+
+            // TODO: 还有好多好多活儿要做！
+            if (result_image->save("AAAA.png"))
+                return result::ok(do nil);
+
+            return result::err("保存文件失败");
+        }
     }
 
     public func main(context: EditorContext)
@@ -1040,6 +1111,9 @@ namespace editor::gui::tilemap
                                     ->> \e = e->close;
                                     ;
                                 editctx->generate_entities_for_world(w);
+                                
+                                // DEBUG:
+                                do editctx->generate_big_texture(32);
                             }
                         });
                 none?

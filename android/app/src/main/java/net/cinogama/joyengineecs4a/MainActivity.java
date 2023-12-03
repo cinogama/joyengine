@@ -72,7 +72,7 @@ public class MainActivity extends GameActivity {
         InputMethodManager inputMethodManager = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
         inputMethodManager.showSoftInput(this.getWindow().getDecorView(), 0);
     }
-    public void  hideSoftInput() {
+    public void hideSoftInput() {
         InputMethodManager inputMethodManager = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
         inputMethodManager.hideSoftInputFromWindow(this.getWindow().getDecorView().getWindowToken(), 0);
     }
