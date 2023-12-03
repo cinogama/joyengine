@@ -312,9 +312,7 @@ namespace editor::gui::tilemap
     using Tile = struct{
         maintex: graphic::texture,
 
-        uid: string,                 // 当前Tile的uid，被用于跟踪Tile并进行组件更新
         texture: graphic::texture,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
-        tile_components: dict<typeinfo, dict<string/*member name*/, string /*member value*/>>,
         location: (int, int),
         
         /*
@@ -366,7 +364,6 @@ namespace editor::gui::tilemap
         func create(context: EditorContext, 
             maintex: graphic::texture, 
             crc64: int, 
-            tileuid: string,
             ix: int, iy: int, 
             xcount: int, ycount: int)
         {
@@ -384,8 +381,6 @@ namespace editor::gui::tilemap
             return result::ok(Tile{
                 maintex = maintex,
                 texture = tiletexture,
-                tile_components = {},
-                uid = tileuid,
                 location = (ix, iy),
                 auto_wrap = mut option::none,
             });
@@ -441,34 +436,12 @@ namespace editor::gui::tilemap
             none? return self.texture;
             }
         }
-        func create_entity(self: Tile, w: world, context: EditorContext, way: WrapingTileWay)
+        
+        func serialize(self: Tile)
         {
-            let e = w->add_entity(
-                [
-                    typeinfo::load("Transform::LocalPosition")->val,
-                    typeinfo::load("Transform::LocalRotation")->val,
-                    typeinfo::load("Transform::LocalScale")->val,
-                    typeinfo::load("Transform::LocalToWorld")->val,
-                    typeinfo::load("Transform::Translation")->val,
-
-                    typeinfo::load("Renderer::Shape")->val,
-                    typeinfo::load("Renderer::Shaders")->val,
-                    typeinfo::load("Renderer::Textures")->val,
-                    typeinfo::load("Renderer::Rendqueue")->val,
-                    
-                    typeinfo::load("Scene::MapTile")->val,
-
-                    typeinfo::load("Editor::Name")->val,
-                ]
-            );
-            e->editor::set_name("Tile");
-            e->set_shaders([graphic::shader::load("@/resource/shader/UnlitBlend.shader")->val]);
-            e->bind_texture(0, self->get_texture(context, way));
-
-            let (tile_nt, tile_nv) = e->get_component(typeinfo::load("Scene::MapTile")->val)->val
-                ->get_member("type")->val;
-            tile_nv->parse(tile_nt, self.uid);
-            return e;
+            return {
+                ["auto_wrap"] = self.auto_wrap->has,
+            };
         }
     }
 
@@ -494,7 +467,7 @@ namespace editor::gui::tilemap
                 let ytiles = []mut: vec<Tile>;
                 for (let mut iy = 0; iy < ycount; iy += 1)
                 {
-                    try! tile = new! Tile(context, tilemaptex, crc64, je::uid(), ix, iy, xcount, ycount);
+                    try! tile = new! Tile(context, tilemaptex, crc64, ix, iy, xcount, ycount);
                     ytiles->add(tile);
                 }
                 tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
@@ -515,10 +488,24 @@ namespace editor::gui::tilemap
         {
             return self.tiles->get(x)=>>\a = a->get(y);;
         }
-    }
 
-    // 16*16个Tile是一个chunk
-    let CHUNK_TILE_SIZE = 16;
+        func serialize(self: TileMapSet)
+        {
+            let texture_path = self.texture->path;
+
+            if (self.texture->has == false)
+                return result::err("无法获取纹理路径");
+            
+            let size = self->getsize;
+
+            return {
+                ["name"] = self.name as string: dynamic,
+                ["texture"] = self.texture->val as string: dynamic,
+                ["size"] = [size[0], size[1]]: dynamic,
+                ["tiles"] = self.tiles=>>\tiles = tiles;->>\t = t->serialize;: dynamic,
+            };
+        }
+    }
 
     using TileChunk = struct{
         m_chunk_texture: graphic::texture,
@@ -955,34 +942,6 @@ namespace editor::gui::tilemap
                 -> forall(\e = e->get_component(typeinfo::load("Scene::MapTile")->val)->has;)
                 ;
         }
-        func generate_entities_for_world(self: TileEditContext, w: world)
-        {
-            for (let layer, tiles : self.m_layerd_tiles)
-            {
-                for (let x, ytiles :  tiles)
-                {
-                    for (let y, tile :  ytiles)
-                    {
-                        let e = tile->create_entity(w, self.m_context, self->get_tile_way(layer, x, y));
-                        let (_, lpos_nv) = e->get_component(typeinfo::load("Transform::LocalPosition")->val)->val
-                            ->get_member("pos")->val;
-                        lpos_nv->set_float3(x: real, -y: real, 0.1 * -layer: real);
-                        
-                        let (_, rendqueue_nv) = e->get_component(typeinfo::load("Renderer::Rendqueue")->val)->val
-                            ->get_member("rend_queue")->val;
-                        rendqueue_nv->set_int(5000 + layer);
-                        
-                        let tile_component = e->get_component(typeinfo::load("Scene::MapTile")->val)->val;
-                        let (locationnt, locationnv) = tile_component->get_member("location")->val;
-                        locationnv->parse(locationnt, F"({x},{y})");
-                        let (_, layernv) = tile_component->get_member("layer")->val;
-                        layernv->set_int(layer);
-
-                        
-                    }
-                }
-            }
-        }
         func generate_big_texture(self: TileEditContext, tile_reso: int)
         {
             // 顾名思义，不是生成一片片的实体，而是把整个地图打一个大包儿，直接拉出来变成一张贴图
@@ -1106,12 +1065,6 @@ namespace editor::gui::tilemap
                             formopen->set(false);
                             if (opt)
                             {
-                                // 1. 删除已有的所有Tile
-                                do TileEditContext::get_all_tile_entity(w)
-                                    ->> \e = e->close;
-                                    ;
-                                editctx->generate_entities_for_world(w);
-                                
                                 // DEBUG:
                                 do editctx->generate_big_texture(32);
                             }
