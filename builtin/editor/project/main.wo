@@ -948,7 +948,7 @@ namespace editor
             }
             return result::err("相同世界已存在");
         }
-        
+
         public func destroy_world(self: Project, world: je::world)=> result<void, string>
         {
             // 使用create_new_world创建的世界，务必使用destroy_world销毁，不应该close

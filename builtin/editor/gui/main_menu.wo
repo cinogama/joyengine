@@ -232,11 +232,6 @@ namespace editor::gui
                     }
                     if (BeginMenu("工具"))
                     {
-                        if (MenuItem("TileMap编辑器"))
-                            tilemap::main(context);
-
-                        Separator();
-
                         let scripts = tools::get_available_tool_scripts();
                         if (scripts->empty())
                             do MenuItemEnabled("空", false);

@@ -315,6 +315,8 @@ namespace editor::gui::tilemap
         texture: graphic::texture,   // 为了规避边缘像素采样问题，tile使用的纹理会单独裁剪出来变成独立的纹理   
         location: (int, int),
         
+        uid: string,
+
         /*
         auto_wrap 当前地块是否需要展开，
         若需要展开，纹理则需要提供如下种类：
@@ -326,6 +328,7 @@ namespace editor::gui::tilemap
         因此共有： 16 + 15 共31张图
         */
         auto_wrap: mut option<map<WrapingTileWay, graphic::texture>>,
+        walkable: mut bool,
     }
     {
         func _create_clip_texture(
@@ -364,6 +367,7 @@ namespace editor::gui::tilemap
         func create(context: EditorContext, 
             maintex: graphic::texture, 
             crc64: int, 
+            uid: string,
             ix: int, iy: int, 
             xcount: int, ycount: int)
         {
@@ -382,7 +386,9 @@ namespace editor::gui::tilemap
                 maintex = maintex,
                 texture = tiletexture,
                 location = (ix, iy),
+                uid = uid,
                 auto_wrap = mut option::none,
+                walkable = mut true,
             });
         }
         func get_texture(self: Tile, context: EditorContext, way: WrapingTileWay)
@@ -441,6 +447,7 @@ namespace editor::gui::tilemap
         {
             return {
                 ["auto_wrap"] = self.auto_wrap->has as bool: dynamic,
+                ["walkable"] = self.walkable as bool: dynamic,
             };
         }
     }
@@ -451,9 +458,12 @@ namespace editor::gui::tilemap
         name: string,
         texture: graphic::texture,
         tiles: array<array<Tile>>,
+        uid: string,
+
+        modifed: mut bool,
     }
     {
-        func create(context: EditorContext, name: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
+        func create(context: EditorContext, name: string, uid: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
         {
             try! crc64 = tilemaptex->path
                 =>> \p = crc64file(context->get_project->parse_path_normalize(p)->tostring);
@@ -467,7 +477,7 @@ namespace editor::gui::tilemap
                 let ytiles = []mut: vec<Tile>;
                 for (let mut iy = 0; iy < ycount; iy += 1)
                 {
-                    try! tile = new! Tile(context, tilemaptex, crc64, ix, iy, xcount, ycount);
+                    try! tile = new! Tile(context, tilemaptex, crc64, uid, ix, iy, xcount, ycount);
                     ytiles->add(tile);
                 }
                 tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
@@ -478,6 +488,8 @@ namespace editor::gui::tilemap
                     name = name,
                     texture = tilemaptex,
                     tiles = tiles as vec<array<Tile>>->unsafe::cast :<array<array<Tile>>>(),
+                    uid = uid,
+                    modifed = mut false,
                 });
         }
         func getsize(self: TileMapSet)
@@ -502,6 +514,7 @@ namespace editor::gui::tilemap
                 ["name"] = self.name as string: dynamic,
                 ["texture"] = texture_path->val as string: dynamic,
                 ["size"] = [size[0], size[1]]: dynamic,
+                ["uid"] = self.uid as string: dynamic,
                 ["tiles"] = self.tiles=>>\tiles = tiles;->>\t = t->serialize; as array<dict<string, dynamic>>: dynamic,
             });
         }
@@ -512,13 +525,14 @@ namespace editor::gui::tilemap
             let name = data["name"] as string;
             let texture_path = data["texture"] as string;
             let size = data["size"] as array<dynamic>->>\e = e as int;;
+            let uid = data["uid"] as string;
             let tiles = data["tiles"] as array<dynamic>->>\e = e as dict<dynamic, dynamic>->>\k, v = (k as string, v);;;
 
             let texture = graphic::texture::load(texture_path);
             if (texture->has == false)
                 return result::err("无法加载纹理");
 
-            try! tileset = new! TileMapSet(context, name, texture->val, size[0], size[1]);
+            try! tileset = new! TileMapSet(context, name, uid, texture->val, size[0], size[1]);
             for (let mut ix = 0; ix < size[0]; ix += 1)
             {
                 for (let mut iy = 0; iy < size[1]; iy += 1)
@@ -526,16 +540,16 @@ namespace editor::gui::tilemap
                     let tiledata = tiles[ix * size[1] + iy];
                     let tile = tileset->gettile(ix, iy)->val;
                     tile->set_auto_warping(tiledata["auto_wrap"] as bool);
+                    tile.walkable = tiledata["walkable"] as bool;
                 }
             }
 
             return result::ok(tileset);
-        }   
+        }
     }
 
     using TileEditContext = struct{
         m_context: EditorContext,
-        m_editing_world: mut option<world>,
         m_tile_sets: vec<TileMapSet>,
         m_selected_tileset_index: mut int,
         m_selected_tile: mut (int, int),
@@ -548,11 +562,10 @@ namespace editor::gui::tilemap
         m_layerd_tiles: map<int, map<int, map<int, Tile>>>,
     }
     {
-        func create(context: EditorContext)
+        func create(context: EditorContext, mapdata: dict<string, dynamic>)
         {
             let self = TileEditContext{
                 m_context = context,
-                m_editing_world = mut option::none,
                 m_tile_sets = []mut,
                 m_selected_tileset_index = mut -1,
                 m_selected_tile = mut (0, 0),
@@ -565,19 +578,25 @@ namespace editor::gui::tilemap
             };
 
             // 读取旧有的TileMapSet
-            self->load();
+            self->load_tile_sets();
+            
+            // 读取mapdata中的瓦片数据
+            self->load_tiles(mapdata);
 
             return self;
         }
         // 保存TileEditContext的所有m_tile_sets序列化结果到项目的"resource/tilemap"目录下
-        func save(self: TileEditContext)
+        func save_tile_sets(self: TileEditContext)
         {
             let tilemap_path = self.m_context->get_project.m_path / "resource" / "tilemap";
             do fsys::mkdir(tilemap_path);
 
             for (let _, tileset: self.m_tile_sets)
             {
-                let tileset_path = tilemap_path / F"{tileset.name}.tilemap";
+                if (tileset.modifed == false)
+                    continue;  // 如果没有修改，就不保存了
+
+                let tileset_path = tilemap_path / F"{tileset.name}.jetileset4";
                 match (tileset->serialize)
                 {
                 ok(data)?
@@ -590,14 +609,14 @@ namespace editor::gui::tilemap
         }
 
         // 遍历项目的"resource/tilemap"目录下的所有json文件，加载并创建TileMapSet实例，获得一个TileMapSet实例数组
-        func load(self: TileEditContext)
+        func load_tile_sets(self: TileEditContext)
         {
             let tilemap_path = self.m_context->get_project.m_path / "resource" / "tilemap";
             do fsys::mkdir(tilemap_path);
 
             for (let _, file: fsys::allsubpath(tilemap_path)->unwarpor([]))
             {
-                if (fsys::extension(file)->lower == "tilemap")
+                if (fsys::extension(file)->lower == ".jetileset4")
                 {
                     match (fsys::readall(file))
                     {
@@ -613,6 +632,89 @@ namespace editor::gui::tilemap
                     none?
                         jeapi::gui::form::errmsg("错误", F"无法加载TileMapSet: 文件无法打开");
                     }
+                }
+            }
+        }
+
+        // 将瓦片全部保存起来
+        func dump_tiles(self: TileEditContext)
+        {
+            // 获取m_tile_sets的uid
+            let tileset_id_mapping = {}mut: map<string, int>;
+            for (let index, tileset: self.m_tile_sets)
+            {
+                tileset_id_mapping->set(tileset.uid, index);
+            }
+            
+            let tilelists = []mut: vec<array<int>>;
+            let unwalkable_mapping = {}mut: map<int, map<int, void>>;
+            for (let layer, tiles: self.m_layerd_tiles)
+            {
+                for (let x, ytiles: tiles)
+                {
+                    for (let y, tile: ytiles)
+                    {
+                        tilelists->add([layer, x, y, tileset_id_mapping[tile.uid], tile.location[0], tile.location[1]]);
+                        if (!tile.walkable)
+                            unwalkable_mapping->getorset(x, {}mut)->set(y, do nil);
+                    }
+                }
+            }
+
+            return {
+                ["tilesets"] = tileset_id_mapping->unmapping->>\kv = kv[0]; as array<string>: dynamic,
+                ["tiles"] = tilelists as vec<array<int>>: dynamic,
+                ["unwalkable"] = unwalkable_mapping->unmapping
+                    =>> \x_ys = ys->unmapping
+                        ->> \y_void = [x, y]
+                            where (y, _) = y_void;
+                        where (x, ys) = x_ys; as array<array<int>>: dynamic,
+            };
+        }
+
+        // 从mapdata中读取瓦片数据并创建瓦片实例
+        func load_tiles(self: TileEditContext, mapdata: dict<string, dynamic>)
+        {
+            let tileset_id_mapping = mapdata->getor("tilesets", []: dynamic) as array<dynamic>->>\e = e as string;;
+            let tiles = mapdata->getor("tiles", []: dynamic) as array<dynamic>->>\e = e as array<dynamic>->>\e = e as int;;;
+            let unwalkable = mapdata->getor("unwalkable", []: dynamic) as array<dynamic>->>\e = e as array<dynamic>->>\e = e as int;;;
+
+            let existed_tileset_uid = self.m_tile_sets->>\tileset = (tileset.uid, tileset);->mapping;
+            let tileset_mapping = {}mut: map<int, TileMapSet>;
+            for (let index, tileset_id: tileset_id_mapping)
+            {
+                match (existed_tileset_uid->get(tileset_id))
+                {
+                value(tileset)?
+                    tileset_mapping->set(index, tileset);
+                none?
+                    jeapi::gui::form::errmsg("错误", F"无法加载TileMapSet: {tileset_id} 不存在");
+                }
+            }
+
+            for (let _, tile : tiles)
+            {
+                let (layer, x, y, tid, tx, ty) = (tile[0], tile[1], tile[2], tile[3], tile[4], tile[5]);
+                match (tileset_mapping->get(tid))
+                {
+                value(tileset)?
+                    {
+                        let tile = tileset->gettile(tx, ty)->val;
+                        self.m_layerd_tiles->getorset(layer, {}mut)->getorset(x, {}mut)->set(y, tile);
+                    }
+                none?
+                    ; // 已经报过错了，这里就简单忽略
+                }
+            }
+
+            for (let _, tile : unwalkable)
+            {
+                let (x, y) = (tile[0], tile[1]);
+                match (self.m_layerd_tiles->getorset(0, {}mut)->getorset(x, {}mut)->get(y))
+                {
+                value(tile)?
+                    tile.walkable = false;
+                none?;
                 }
             }
         }
@@ -633,23 +735,6 @@ namespace editor::gui::tilemap
         func clear_draw_tile(self: TileEditContext, x: int, y: int)
         {
             do self.m_layerd_tiles->get(self.m_drawing_layer)=>>\tiles=tiles->get(x);->>\ytiles=ytiles->remove(y);;
-        }
-        func update(self: TileEditContext)
-        {
-            let now_editing_world = self.m_context->get_project->get_editing_world;
-            if (!self.m_editing_world=>>\w = now_editing_world->>\nw = w == nw;;->valor(false))
-            {
-                // match (now_editing_world)
-                // {
-                // value(w)?
-                //     {
-                //         do w;
-                //     }
-                // none?
-                //     ;
-                // }
-                self.m_editing_world = now_editing_world;
-            }
         }
         func create_tilemap_form(self: TileEditContext)
         {
@@ -714,6 +799,7 @@ namespace editor::gui::tilemap
                                         match (new! TileMapSet(
                                             self.m_context, 
                                             create_context.m_name,
+                                            je::uid(),
                                             tex,
                                             create_context.m_tile_x_count,
                                             create_context.m_tile_y_count,
@@ -723,7 +809,7 @@ namespace editor::gui::tilemap
                                             {
                                                 open = false;
                                                 self.m_tile_sets->add(tilemap);
-                                                self->save;
+                                                tilemap.modifed = true;
                                             }
                                         err(msg)?
                                             jeapi::gui::form::errmsg("失败", msg);
@@ -767,11 +853,15 @@ namespace editor::gui::tilemap
                             let (blockcountx, blockcounty) = tset->getsize;
                             let (blockw, blockh) = (rangew / blockcountx: real, rangeh / blockcounty: real);
 
-                            do CheckBox("自动铺开", self->get_selected_tile->>\t = t.auto_wrap->has;->valor(false))
-                                ->> \opt = self->get_selected_tile
-                                    ->> \t = t->set_auto_warping(opt);
-                                    ;
-                                ;
+                            match (CheckBox("自动铺开", self->get_selected_tile->>\t = t.auto_wrap->has;->valor(false)))
+                            {
+                            value(opt)?
+                                {
+                                    tset.modifed = true; // 自动铺开属性发生变化，标记为修改
+                                    do self->get_selected_tile->>\t = t->set_auto_warping(opt);;
+                                }
+                            none?;
+                            }
 
                             do InvisibleButton("##tileset", (rangew, rangeh));
                             let ismouse_hovered = IsItemHovered();
@@ -1045,18 +1135,14 @@ namespace editor::gui::tilemap
                 }
             }
 
-            // TODO: 还有好多好多活儿要做！
-            if (result_image->save("AAAA.png"))
-                return result::ok(do nil);
-
-            return result::err("保存文件失败");
+            return result::ok(result_image);
         }
     }
 
-    public func main(context: EditorContext)
+    public func main(context: EditorContext, tilemap_file: fsys::path_t, mapdata: dict<string, dynamic>)
     {
         let formopen = new! mutable(true);
-        let editctx = new! TileEditContext(context);
+        let editctx = new! TileEditContext(context, mapdata);
         launch(func(){
             let mut open = true;
             match (BeginAttrOpen("TileMap 编辑器", WindowsAttribute::ImGuiWindowFlags_MenuBar))
@@ -1064,7 +1150,6 @@ namespace editor::gui::tilemap
             value(show)?
                 if (show)
                 {
-                    editctx->update();
                     if (BeginMenuBar())
                     {
                         if (BeginMenu("编辑"))
@@ -1094,22 +1179,21 @@ namespace editor::gui::tilemap
 
             if (open == false)
             {
-                match (context->get_project->get_editing_world)
-                {
-                value(w)?
-                    jeapi::gui::form::ask("是否保存", F"是否保存当前绘制结果到世界: {w->name}\n是: 立即覆盖\n否: 直接关闭", 
-                        func(opt)
+                jeapi::gui::form::ask("是否保存", F"是否保存当前绘制结果到: {tilemap_file->tostring}", 
+                    func(opt)
+                    {
+                        editctx->save_tile_sets(); // 保存发生变化的tileset
+
+                        formopen->set(false);
+                        if (opt)
                         {
-                            formopen->set(false);
-                            if (opt)
+                            if (!fsys::writeall(tilemap_file, editctx->dump_tiles->serialize->val))
                             {
-                                // DEBUG:
-                                do editctx->generate_big_texture(32);
+                                jeapi::gui::form::errmsg("错误", F"无法保存TileMap到{tilemap_file->tostring}: 无法写入文件");
+                                formopen->set(true);
                             }
-                        });
-                none?
-                    jeapi::gui::form::errmsg("失败", "没有正在编辑中的世界");
-                }
+                        }
+                    });
             }
             
             return formopen->get();

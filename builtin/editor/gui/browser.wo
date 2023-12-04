@@ -301,7 +301,22 @@ namespace editor::gui
                         none?
                             return option::value(F"无法打开和编辑粒子动画文件：{p.path}");
                         }
-                    }
+                    },
+                [".jetilemap4"] = 
+                    func (p: PathInfo, context: EditorContext)
+                    {
+                        
+                        match (fsys::readall(p.path)=>>\dat = dat->dict::deserialize->>\dat = dat->>\k, v = (k as string, v);;;)
+                        {
+                        value(tilemap_data)?
+                            {
+                                tilemap::main(context, p.path, tilemap_data);
+                                return option::none;
+                            }
+                        none?
+                            return option::value(F"无法打开和编辑瓦片地图文件：{p.path}");
+                        }
+                    },
             };
 
             return registed_open_method
@@ -499,7 +514,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                         where file_path = fsys::normalize(current_work_path) / (filename + ".jewo"););
                 }
                 Separator();
-                if (MenuItem(F"世界"))
+                if (MenuItem("世界"))
                 {
                     jeapi::gui::form::input("创建世界", F"将在{current_work_path}创建新世界：",
                         "Newworld",
@@ -525,8 +540,18 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                             )));
                         ); 
                 }
+                if (MenuItem("瓦片地图"))
+                {
+                    jeapi::gui::form::input("新建瓦片地图", F"在{current_work_path}新建瓦片地图", "NewTileMap",
+                        \filename: string = fsys::exist(file_path)
+                            ? jeapi::gui::form::errmsg("新建瓦片地图失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, "{}") 
+                                ? func(){context->get_project->try_update_towoo(false);force_update();}()
+                                | jeapi::gui::form::errmsg("新建瓦片地图失败失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                        where file_path = fsys::normalize(current_work_path) / (filename + ".jetilemap4"););
+                }
                 Separator();
-                if (BeginMenu(F"纹理"))
+                if (BeginMenu("纹理"))
                 {
                     if (MenuItem(F"空白纹理"))
                         create_image("White", current_work_path, func(img){
