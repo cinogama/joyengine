@@ -367,7 +367,7 @@ namespace editor::gui::tilemap
             ix: int, iy: int, 
             xcount: int, ycount: int)
         {
-            let tilemap_path = context->get_project.m_path / "resource" / "texture" / "tilemap";
+            let tilemap_path = context->get_project.m_path / ".temporary" / "tilemap" / "texture";
             do fsys::mkdir(tilemap_path);
 
             let imgpath = tilemap_path / F"{crc64}-{ix}d{xcount}-{iy}d{ycount}.png";
@@ -577,7 +577,7 @@ namespace editor::gui::tilemap
 
             for (let _, tileset: self.m_tile_sets)
             {
-                let tileset_path = tilemap_path / F"{tileset.name}.json";
+                let tileset_path = tilemap_path / F"{tileset.name}.tilemap";
                 match (tileset->serialize)
                 {
                 ok(data)?
@@ -597,7 +597,7 @@ namespace editor::gui::tilemap
 
             for (let _, file: fsys::allsubpath(tilemap_path)->unwarpor([]))
             {
-                if (fsys::extension(file) == "json")
+                if (fsys::extension(file)->lower == "tilemap")
                 {
                     match (fsys::readall(file))
                     {
