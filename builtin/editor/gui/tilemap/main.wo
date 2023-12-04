@@ -440,7 +440,7 @@ namespace editor::gui::tilemap
         func serialize(self: Tile)
         {
             return {
-                ["auto_wrap"] = self.auto_wrap->has,
+                ["auto_wrap"] = self.auto_wrap->has as bool: dynamic,
             };
         }
     }
@@ -493,60 +493,44 @@ namespace editor::gui::tilemap
         {
             let texture_path = self.texture->path;
 
-            if (self.texture->has == false)
+            if (texture_path->has == false)
                 return result::err("无法获取纹理路径");
             
             let size = self->getsize;
 
-            return {
+            return result::ok({
                 ["name"] = self.name as string: dynamic,
-                ["texture"] = self.texture->val as string: dynamic,
+                ["texture"] = texture_path->val as string: dynamic,
                 ["size"] = [size[0], size[1]]: dynamic,
-                ["tiles"] = self.tiles=>>\tiles = tiles;->>\t = t->serialize;: dynamic,
-            };
+                ["tiles"] = self.tiles=>>\tiles = tiles;->>\t = t->serialize; as array<dict<string, dynamic>>: dynamic,
+            });
         }
-    }
 
-    using TileChunk = struct{
-        m_chunk_texture: graphic::texture,
-        m_tile_size: (int, int),
-    }
-    {
-        func create(tilew: int, tileh: int)
+        // 从给定的数据进行反序列化，并且创建TileMapSet实例
+        func deserialize(context: EditorContext, data: dict<string, dynamic>)
         {
-            let chunktex = new! graphic::texture(CHUNK_TILE_SIZE * tilew, CHUNK_TILE_SIZE * tileh);
-            return TileChunk{
-                m_chunk_texture = chunktex,
-                m_tile_size = (tilew, tileh),
-            };
-        }
-        func update(self: TileChunk, tile: graphic::texture, loc: (int, int))
-        {
-            let (tilew, tileh) = self.m_tile_size;
-            let (locx, locy) = loc;
+            let name = data["name"] as string;
+            let texture_path = data["texture"] as string;
+            let size = data["size"] as array<dynamic>->>\e = e as int;;
+            let tiles = data["tiles"] as array<dynamic>->>\e = e as dict<dynamic, dynamic>->>\k, v = (k as string, v);;;
 
-            for (let mut ix = 0; ix < tilew; ix += 1)
+            let texture = graphic::texture::load(texture_path);
+            if (texture->has == false)
+                return result::err("无法加载纹理");
+
+            try! tileset = new! TileMapSet(context, name, texture->val, size[0], size[1]);
+            for (let mut ix = 0; ix < size[0]; ix += 1)
             {
-                for (let mut iy = 0; iy < tileh; iy += 1)
+                for (let mut iy = 0; iy < size[1]; iy += 1)
                 {
-                    let p = self.m_chunk_texture->pix((locx * tilew + ix, (CHUNK_TILE_SIZE - 1 - locy) * tileh + iy));
-                    let srcp = tile->pix((ix, iy));
-                    p->set_color(srcp->get_color);
+                    let tiledata = tiles[ix * size[1] + iy];
+                    let tile = tileset->gettile(ix, iy)->val;
+                    tile->set_auto_warping(tiledata["auto_wrap"] as bool);
                 }
             }
-        }
 
-        func raw_to_chunk_location(raw_x: int, raw_y: int)
-        {
-            let mut chunk_id_x = raw_x / CHUNK_TILE_SIZE;
-            let mut chunk_id_y = raw_y / CHUNK_TILE_SIZE;
-            let chunk_x = raw_x - chunk_id_x * CHUNK_TILE_SIZE;
-            let chunk_y = raw_x - chunk_id_x * CHUNK_TILE_SIZE;
-            if (chunk_x < 0) chunk_id_x -= 1;
-            if (chunk_y < 0) chunk_id_y -= 1;
-
-            return ((chunk_id_x, chunk_id_y), (chunk_x, chunk_y));
-        }
+            return result::ok(tileset);
+        }   
     }
 
     using TileEditContext = struct{
@@ -566,7 +550,7 @@ namespace editor::gui::tilemap
     {
         func create(context: EditorContext)
         {
-            return TileEditContext{
+            let self = TileEditContext{
                 m_context = context,
                 m_editing_world = mut option::none,
                 m_tile_sets = []mut,
@@ -579,7 +563,60 @@ namespace editor::gui::tilemap
                 m_scale = mut 1.,
                 m_layerd_tiles = {}mut,
             };
+
+            // 读取旧有的TileMapSet
+            self->load();
+
+            return self;
         }
+        // 保存TileEditContext的所有m_tile_sets序列化结果到项目的"resource/tilemap"目录下
+        func save(self: TileEditContext)
+        {
+            let tilemap_path = self.m_context->get_project.m_path / "resource" / "tilemap";
+            do fsys::mkdir(tilemap_path);
+
+            for (let _, tileset: self.m_tile_sets)
+            {
+                let tileset_path = tilemap_path / F"{tileset.name}.json";
+                match (tileset->serialize)
+                {
+                ok(data)?
+                    if (!fsys::writeall(tileset_path, data->serialize->val))
+                        jeapi::gui::form::errmsg("错误", F"无法保存TileMapSet到{tileset_path->tostring}: 无法写入文件");
+                err(msg)?
+                    jeapi::gui::form::errmsg("错误", F"无法保存TileMapSet到{tileset_path->tostring}: {msg}");
+                }               
+            }
+        }
+
+        // 遍历项目的"resource/tilemap"目录下的所有json文件，加载并创建TileMapSet实例，获得一个TileMapSet实例数组
+        func load(self: TileEditContext)
+        {
+            let tilemap_path = self.m_context->get_project.m_path / "resource" / "tilemap";
+            do fsys::mkdir(tilemap_path);
+
+            for (let _, file: fsys::allsubpath(tilemap_path)->unwarpor([]))
+            {
+                if (fsys::extension(file) == "json")
+                {
+                    match (fsys::readall(file))
+                    {
+                    value(data)?
+                        match (TileMapSet::deserialize(
+                            self.m_context, data->dict::deserialize->valor({})->>\k, v = (k as string, v);))
+                        {
+                        ok(tileset)?
+                            self.m_tile_sets->add(tileset);
+                        err(msg)?
+                            jeapi::gui::form::errmsg("错误", F"无法加载TileMapSet: {msg}");
+                        }
+                    none?
+                        jeapi::gui::form::errmsg("错误", F"无法加载TileMapSet: 文件无法打开");
+                    }
+                }
+            }
+        }
+
         func get_tile(self: TileEditContext, layer: int, x: int, y: int)
         {
             return self.m_layerd_tiles->get(layer)=>>\d = d->get(x);=>>\d = d->get(y);;
@@ -686,6 +723,7 @@ namespace editor::gui::tilemap
                                             {
                                                 open = false;
                                                 self.m_tile_sets->add(tilemap);
+                                                self->save;
                                             }
                                         err(msg)?
                                             jeapi::gui::form::errmsg("失败", msg);
