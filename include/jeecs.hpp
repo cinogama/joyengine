@@ -8552,22 +8552,6 @@ namespace jeecs
             }
         };
     }
-    namespace Scene
-    {
-        struct MapTile
-        {
-            math::ivec2     location = {};
-            int             layer = 0;
-            typing::uid_t   type = {};
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &MapTile::location, "location");
-                typing::register_member(guard, &MapTile::layer, "layer");
-                typing::register_member(guard, &MapTile::type, "type");
-            }
-        };
-    }
 
     inline typing::euid_t game_entity::get_euid() const noexcept
     {
@@ -8920,8 +8904,6 @@ namespace jeecs
             type_info::register_type<Audio::Source>(guard, "Audio::Source");
             type_info::register_type<Audio::Listener>(guard, "Audio::Listener");
             type_info::register_type<Audio::Playing>(guard, "Audio::Playing");
-
-            type_info::register_type<Scene::MapTile>(guard, "Scene::MapTile");
 
             // 1. register basic types
             typing::register_script_parser<bool>(

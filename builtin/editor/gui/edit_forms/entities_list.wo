@@ -429,13 +429,10 @@ namespace editor::gui::edit_forms
             ;
 
         static let 
-            Invisable = je::typeinfo::load("Editor::Invisable")->val,
-            MapTile = je::typeinfo::load("Scene::MapTile")->val;
+            Invisable = je::typeinfo::load("Editor::Invisable")->val;
 
         if (!get_is_albe_to_display_debug_entity() && e.e->get_component(Invisable)->has)
             // 不可见实体，不准看！
-            return;
-        if (e.e->get_component(MapTile)->has)
             return;
 
         let is_variant_or_prefab = e.e->towoo::get_component:<Editor::Prefab>->has;

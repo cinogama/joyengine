@@ -358,6 +358,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 
 /.export/*
 /.runtime/*
+/.temporary/*
 /imgui.ini
 /*.dmp
 /project.jeproj4.lock

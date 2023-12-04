@@ -34,6 +34,15 @@ namespace editor::gui::edit_forms
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
 
+            if (fsys::extension(originpath)->lower == ".jetilemap4")
+                return Action::SKIP;  // 跳过tilemap文件
+
+            if (fsys::extension(originpath)->lower == ".jetileset4")
+                return Action::SKIP;  // 跳过tileset文件
+            
+            if (fsys::extension(originpath)->lower == ".dmp")
+                return Action::SKIP;  // 跳过崩溃转储文件
+
             if (fsys::extension(originpath)->lower == ".shader")
                 return Action::ACTION(func(pconfig, _){
                     pconfig.m_pack_output_log->add(F"正在编译着色器：{packpath}");
@@ -77,6 +86,9 @@ namespace editor::gui::edit_forms
 
             if (packpath->lower->find("/.runtime/") != -1)
                 return Action::SKIP;  // 跳过缓存文件
+
+            if (packpath->lower->find("/.temporary/") != -1)
+                return Action::SKIP;  // 跳过临时文件
             
             if (packpath->lower->find("/.git/") != -1)
                 return Action::SKIP;  // 跳过git文件
