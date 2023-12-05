@@ -148,13 +148,14 @@ namespace editor::gui
         [".psd"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
         [".shader"] = je::graphic::texture::load(F"!/builtin/icon/ShaderFile.png")->val,
         [".jemodule4"] = je::graphic::texture::load(F"!/builtin/icon/CppProgram.png")->val,
-        [".jecache4"] = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val,
         [".jeworld"] = je::graphic::texture::load(F"!/builtin/icon/World.png")->val,
-        [".jewo"] = je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val,
         [".jeanim4"] = je::graphic::texture::load(F"!/builtin/icon/AnimationFile.png")->val,
         
-        // 欸嘿还没做呢，先拿joy顶一下
-        [".jepartical"] = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val,
+        [".wo"] = je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val,
+        [".jetilemap4"] = je::graphic::texture::load(F"!/builtin/icon/Tilemap.png")->val,
+        [".jepartical"] = je::graphic::texture::load(F"!/builtin/icon/Partical.png")->val,
+
+        [".jecache4"] = je::graphic::texture::load(F"!/builtin/icon/Joy.png")->val,
     };
 
     // 根据文件拓展名返回文件的类型
