@@ -1283,7 +1283,7 @@ namespace editor::gui::tilemap
             value(show)?
                 if (show)
                 {
-                    Text(F"即将导出当前纹理到{target_path}");
+                    Text(F"即将导出并覆盖当前纹理到{target_path}");
 
                     do InputInt("瓦片像素", export_image.m_tile_pcount)
                         ->> \neww = export_image.m_tile_pcount = 
@@ -1341,7 +1341,7 @@ namespace editor::gui::tilemap
                             if (MenuItem("新建Tileset"))
                                 editctx->create_tilemap_form(option::none);
 
-                            if (MenuItem("生成Tilemap纹理"))
+                            if (MenuItem("导出"))
                                 create_image_dialog(editctx, 
                                     fsys::parent(tilemap_file) / F"{fsys::purename(tilemap_file)}.png");
 
