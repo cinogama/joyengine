@@ -154,7 +154,7 @@ namespace editor::gui::edit_forms
 
         BeginGroup();
             PushIDStr(typename);
-                do ImageButtonScale(icon_world_image, 0.075);
+                do ImageButtonScale(icon_world_image, 1.);
             PopID();
             if (BeginDragDropSource())
             {

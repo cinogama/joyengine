@@ -152,7 +152,10 @@ namespace editor::gui
 
         [".shader"] = je::graphic::texture::load(F"!/builtin/icon/ShaderFile.png")->val,
         [".jemodule4"] = je::graphic::texture::load(F"!/builtin/icon/CppProgram.png")->val,
+
         [".jeworld"] = je::graphic::texture::load(F"!/builtin/icon/World.png")->val,
+        [".jeentity"] = je::graphic::texture::load(F"!/builtin/icon/Entity.png")->val,
+
         [".jeanim4"] = je::graphic::texture::load(F"!/builtin/icon/AnimationFile.png")->val,
         
         [".wo"] = je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val,

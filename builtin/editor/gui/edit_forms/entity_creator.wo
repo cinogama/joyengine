@@ -114,7 +114,7 @@ namespace editor::gui::edit_forms
     {
         BeginGroup();
         PushIDStr(typename);
-        let clicked = ImageButtonScale(icon_entity_image, 0.075);
+        let clicked = ImageButtonScale(icon_entity_image, 1.);
         PopID();
         if (BeginDragDropSource())
         {
