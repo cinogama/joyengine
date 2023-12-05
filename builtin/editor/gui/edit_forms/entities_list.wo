@@ -58,7 +58,7 @@ namespace editor::gui::edit_forms
         }
         do child.e->editor::set_parent(parent.e, true);
     }
-    func fast_create_entity(context: EditorContext, w: je::world, name: string, cs: array<string>)
+    public func fast_create_entity(context: EditorContext, w: je::world, name: string, cs: array<string>)
     {
         if (!context->get_project->validate_world_or_warning(w))
         {

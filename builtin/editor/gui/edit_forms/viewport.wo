@@ -354,6 +354,86 @@ namespace editor::gui::edit_forms
                                             jeapi::gui::form::errmsg("失败", "加载实体失败");
                                         }  
                                     }
+                                    if (editor::gui::IMAGE_FILE_EXTERN_NAMES->find(fsys::extension(filepath)->lower) != -1)
+                                    {
+                                        match (je::graphic::texture::load(path))
+                                        {
+                                        value(tex)?
+                                            {
+                                                let entity_create_context = struct{
+                                                    pixel_per_unit = mut 16,
+                                                };
+                                                launch(
+                                                    func()
+                                                    {
+                                                        let mut open = true;
+                                                        match (BeginAttrOpen("从纹理创建实体", 
+                                                            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                                                            + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                                                            + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                                                        {
+                                                        value(show)?
+                                                            if (show)
+                                                            {
+                                                                Text(F"从纹理 `{path}` 创建实体");
+                                                                Text("单位像素数");
+                                                                SameLine();
+                                                                do InputInt("##pixel_per_unit", entity_create_context.pixel_per_unit)
+                                                                    ->> \newval = entity_create_context.pixel_per_unit = newval > 0 ? newval | 1;
+                                                                    ;
+                                                                
+                                                                if (Button("创建"))
+                                                                {
+                                                                    match (editor::gui::edit_forms::fast_create_entity(
+                                                                        context, 
+                                                                        debug_world->val, 
+                                                                        fsys::purename(filepath), 
+                                                                        [
+                                                                            "Transform::LocalPosition",
+                                                                            "Transform::LocalRotation",
+                                                                            "Transform::LocalScale",
+                                                                            "Transform::LocalToWorld",
+                                                                            "Transform::Translation",
+                                                                            "Renderer::Shape",
+                                                                            "Renderer::Shaders",
+                                                                            "Renderer::Textures",
+                                                                        ]))
+                                                                    {
+                                                                    value(e)?
+                                                                        {
+                                                                            let default_shader = je::graphic::shader::load("@/resource/shader/Unlit.shader")->val;
+                                                                            e->set_shaders([default_shader]);
+                                                                            e->bind_texture(0, tex);
+
+                                                                            let localscale = e->towoo::get_component :<Transform::LocalScale>()->val;
+                                                                            let (px, py) = tex->size;
+                                                                            localscale.scale->set(
+                                                                                (px: real / entity_create_context.pixel_per_unit: real, 
+                                                                                py: real / entity_create_context.pixel_per_unit: real, 
+                                                                                1.): vec3);
+                                                                        }
+                                                                    none?
+                                                                        jeapi::gui::form::errmsg("失败", "从纹理创建实体失败");
+                                                                    }
+                                                                    open = false;
+                                                                }
+                                                                if (Button("取消"))
+                                                                {
+                                                                    open = false;
+                                                                }
+                                                            }
+                                                        none?
+                                                            open = false;
+                                                        }
+                                                        End();
+
+                                                        return open;
+                                                    }, ());
+                                            }
+                                        none?
+                                            jeapi::gui::form::errmsg("失败", "从纹理创建实体失败");
+                                        }
+                                    }
                                 }
                             none?;
                             }

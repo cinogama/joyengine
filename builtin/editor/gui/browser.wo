@@ -138,7 +138,7 @@ namespace editor::gui
     }
     
     // 支持作为图片格式的拓展名
-    let IMAGE_FILE_EXTERN_NAMES = [".png", ".jpg", ".bmp", ".psd",];
+    public let IMAGE_FILE_EXTERN_NAMES = [".png", ".jpg", ".bmp", ".psd",];
 
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
