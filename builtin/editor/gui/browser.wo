@@ -146,6 +146,10 @@ namespace editor::gui
         [".jpg"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
         [".bmp"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
         [".psd"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
+        [".ttf"] = je::graphic::texture::load(F"!/builtin/icon/Font.png")->val,
+
+        [".wav"] = je::graphic::texture::load(F"!/builtin/icon/Music.png")->val,
+
         [".shader"] = je::graphic::texture::load(F"!/builtin/icon/ShaderFile.png")->val,
         [".jemodule4"] = je::graphic::texture::load(F"!/builtin/icon/CppProgram.png")->val,
         [".jeworld"] = je::graphic::texture::load(F"!/builtin/icon/World.png")->val,
