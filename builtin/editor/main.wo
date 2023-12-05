@@ -431,9 +431,9 @@ for (;;)
 {
     je::editor::set_able_shared_glresource(false);
 
-    let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP-Dev.png")->val;
-    let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/JoyEngineCSP.png")->val;
-    let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/joyengine.png")->val;
+    let create_project_icon = je::graphic::texture::load(F"!/builtin/icon/Create.png")->val;
+    let load_project_icon = je::graphic::texture::load(F"!/builtin/icon/Load.png")->val;
+    let exit_editor_icon = je::graphic::texture::load(F"!/builtin/icon/Exit.png")->val;
     
     action_after_guide_form_closed = \ = result::ok(do nil);;
 
