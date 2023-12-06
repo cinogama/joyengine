@@ -1,4 +1,4 @@
-// SelfGrowingForward2D.shader
+// SelfGlowingForward2D.shader
 // (C)Cinogama project. 2022. 版权所有
 
 import je::shader;
@@ -43,7 +43,7 @@ public func frag(vf: v2f)
     let Albedo = uniform_texture:<texture2d>("Albedo", NearestRepeatSampler, 0);
 
     let albedo_color = alphatest(texture(Albedo, vf.uv));
-    let self_growing = uniform("SelfGrowing", float::one);
+    let self_growing = uniform("SelfGlowing", float::one);
 
     return fout{
         albedo = alphatest(texture(Albedo, vf.uv)),

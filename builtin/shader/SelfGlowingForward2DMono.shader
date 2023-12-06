@@ -1,4 +1,4 @@
-// SelfGrowingForward2DMono.shader
+// SelfGlowingForward2DMono.shader
 // (C)Cinogama project. 2022. 版权所有
 
 import je::shader;
@@ -40,7 +40,7 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let color = uniform("Color", float4::one);
-    let self_growing = uniform("SelfGrowing", float::one);
+    let self_growing = uniform("SelfGlowing", float::one);
 
     return fout{
         albedo = color,
