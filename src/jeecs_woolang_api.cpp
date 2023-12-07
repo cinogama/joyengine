@@ -1952,6 +1952,63 @@ WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args, siz
     return wo_ret_int(vm, (wo_integer_t)jedbg_get_unregister_type_count());
 }
 
+std::mutex global_pined_value_list_mx;
+std::unordered_map<std::string, wo_pin_value> global_pined_value_list;
+
+bool jewo_set_global_pin_value(const char* name, wo_value value)
+{
+    std::lock_guard g1(global_pined_value_list_mx);
+    if (global_pined_value_list.find(name) == global_pined_value_list.end())
+    {
+        global_pined_value_list[name] = wo_create_pin_value(value);
+        return true;
+    }
+    return false;
+}
+bool jewo_get_global_pin_value(const char* name, wo_pin_value* out_value)
+{
+    std::lock_guard g1(global_pined_value_list_mx);
+    auto fnd = global_pined_value_list.find(name);
+
+    if (fnd == global_pined_value_list.end())
+        return false;
+
+    *out_value = fnd->second;
+
+    return true;
+}
+void jewo_clear_global_pin_value()
+{
+    std::lock_guard g1(global_pined_value_list_mx);
+    for (auto&[_, p] : global_pined_value_list)
+    {
+        wo_close_pin_value(p);
+    }
+    global_pined_value_list.clear();
+}
+
+WO_API wo_api wojeapi_set_global_value(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, jewo_set_global_pin_value(wo_string(args + 0), args + 1));
+}
+WO_API wo_api wojeapi_get_global_value(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_pin_value out_value;
+    if (WO_TRUE == jewo_get_global_pin_value(wo_string(args + 0), &out_value))
+    {
+        wo_value result = wo_push_empty(vm);
+        wo_read_pin_value(result, out_value);
+
+        return wo_ret_option_val(vm, result);
+    }
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api wojeapi_clear_global_value(wo_vm vm, wo_value args, size_t argc)
+{
+    jewo_clear_global_pin_value();
+    return wo_ret_void(vm);
+}
+
 const char* jeecs_woolang_editor_api_path = "je/editor.wo";
 const char* jeecs_woolang_editor_api_src = R"(
 import woo::std;
@@ -2131,6 +2188,9 @@ namespace je
     }
     namespace editor
     {
+        extern("libjoyecs", "wojeapi_clear_global_value")
+        public func clear_shared_value()=> void;
+
         extern("libjoyecs", "wojeapi_editor_register_panic_hook")
         public func register_panic_hook(f: (string, int, string, int, string, string)=> void)=> void;
 
@@ -2270,6 +2330,12 @@ namespace je
         extern("libjoyecs", "wojeapi_towoo_unregister_component")
         public func unregister_component(t: typeinfo)=> void;
     }
+
+    extern("libjoyecs", "wojeapi_set_global_value")
+    public func init_shared_value(name: string, val: dynamic)=> bool;
+
+    extern("libjoyecs", "wojeapi_get_global_value")
+    public func read_shared_value(name: string)=> option<dynamic>;
 
     extern("libjoyecs", "wojeapi_deltatime")
     public func real_deltatime()=> real;

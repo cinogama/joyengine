@@ -48,6 +48,8 @@ void jetowoo_finish();
 void je_log_strat();
 void je_log_shutdown();
 
+void jewo_clear_global_pin_value();
+
 wo_fail_handler _je_global_old_panic_handler = nullptr;
 wo_vm _je_global_panic_hooker = nullptr;
 wo_value _je_global_panic_hook_function;
@@ -370,6 +372,8 @@ void je_finish()
     }
 
     je_log_shutdown();
+
+    jewo_clear_global_pin_value();
 
     wo_finish([](void*)
         {
