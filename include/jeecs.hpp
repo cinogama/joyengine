@@ -1329,11 +1329,11 @@ enum je_read_file_seek_mode
 };
 
 typedef void* jeecs_raw_file;
+
 typedef jeecs_raw_file(*je_read_file_open_func_t)(const char*, size_t*);
 typedef size_t(*je_read_file_func_t)(void*, size_t, size_t, jeecs_raw_file);
 typedef size_t(*je_read_file_tell_func_t)(jeecs_raw_file);
 typedef int (*je_read_file_seek_func_t)(jeecs_raw_file, int64_t, je_read_file_seek_mode);
-typedef int (*je_read_file_eof_func_t)(jeecs_raw_file);
 typedef int (*je_read_file_close_func_t)(jeecs_raw_file);
 
 /*
@@ -1411,7 +1411,6 @@ JE_API void jeecs_register_native_file_operator(
     je_read_file_func_t reader,
     je_read_file_tell_func_t teller,
     je_read_file_seek_func_t seeker,
-    je_read_file_eof_func_t eofer,
     je_read_file_close_func_t closer);
 
 /*
@@ -1455,12 +1454,6 @@ jeecs_file_seek [基本接口]
     je_read_file_seek_mode
 */
 JE_API void jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode);
-
-/*
-jeecs_file_eof [基本接口]
-判断指示的文件是否已经读取完毕
-*/
-JE_API bool jeecs_file_eof(jeecs_file* file);
 
 /*
 jeecs_file_image_begin [基本接口]

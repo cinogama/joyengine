@@ -82,7 +82,6 @@ je_read_file_open_func_t _m_read_file_open_impl = nullptr;
 je_read_file_func_t _m_read_file_impl = nullptr;
 je_read_file_tell_func_t _m_read_file_tell_impl = nullptr;
 je_read_file_seek_func_t _m_read_file_seek_impl = nullptr;
-je_read_file_eof_func_t _m_read_file_eof_impl = nullptr;
 je_read_file_close_func_t _m_read_file_close_impl = nullptr;
 
 void jeecs_register_native_file_operator(
@@ -90,7 +89,6 @@ void jeecs_register_native_file_operator(
     je_read_file_func_t reader,
     je_read_file_tell_func_t teller,
     je_read_file_seek_func_t seeker,
-    je_read_file_eof_func_t eofer,
     je_read_file_close_func_t closer)
 {
     assert(
@@ -98,14 +96,12 @@ void jeecs_register_native_file_operator(
         && reader != nullptr
         && teller != nullptr
         && seeker != nullptr
-        && eofer != nullptr
         && closer != nullptr
     );
     _m_read_file_open_impl = opener;
     _m_read_file_impl = reader;
     _m_read_file_tell_impl = teller;
     _m_read_file_seek_impl = seeker;
-    _m_read_file_eof_impl = eofer;
     _m_read_file_close_impl = closer;
 }
 
@@ -147,13 +143,6 @@ int _je_file_seek(jeecs_raw_file file, int64_t offset, je_read_file_seek_mode mo
         return _m_read_file_seek_impl(file, offset, mode);
 
     return fseek((FILE*)file, offset, (int)mode);
-}
-int _je_file_eof(jeecs_raw_file file)
-{
-    if (_m_read_file_eof_impl != nullptr)
-        return _m_read_file_eof_impl(file);
-
-    return feof((FILE*)file);
 }
 int _je_file_close(jeecs_raw_file file)
 {
@@ -373,11 +362,6 @@ void fimg_finish_saving_img_and_close(fimg_creating_context* ctx)
 
     delete[] ctx->writing_buffer;
     delete ctx;
-}
-
-bool fimg_eof(jeecs_fimg_file* file)
-{
-    return file->eof_flag;
 }
 
 void fimg_seek(jeecs_fimg_file* file, int64_t offset, je_read_file_seek_mode mode)
@@ -646,17 +630,6 @@ void jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mo
     {
         assert(file->m_image_file_handle != nullptr);
         fimg_seek(file->m_image_file_handle, offset, mode);
-    }
-}
-
-bool jeecs_file_eof(jeecs_file* file)
-{
-    if (file->m_native_file_handle != nullptr)
-        return 0 != _je_file_eof(file->m_native_file_handle);
-    else
-    {
-        assert(file->m_image_file_handle != nullptr);
-        return fimg_eof(file->m_image_file_handle);
     }
 }
 

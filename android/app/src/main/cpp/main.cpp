@@ -268,19 +268,33 @@ size_t _je_android_file_read(void* buffer, size_t elemsz, size_t elemcount, jeec
         return fread(buffer, elemsz, elemcount, finstance->m_raw_file);
     }
 }
-int _je_android_file_rewind(jeecs_raw_file file, size_t offset)
+size_t _je_android_file_tell(jeecs_raw_file file)
 {
     auto* finstance = (_je_file_instance*)file;
     if (finstance->m_asset_file != nullptr)
     {
-        if (-1 != AAsset_seek64(finstance->m_asset_file, (off64_t)offset, SEEK_SET))
+        return AAsset_getLength64(finstance->m_asset_file) 
+            - AAsset_getRemainingLength64(finstance->m_asset_file);
+    }
+    else
+    {
+        assert(finstance->m_raw_file != nullptr);
+        return ftell(finstance->m_raw_file);
+    }
+}
+int _je_android_file_seek(jeecs_raw_file file, int64_t offset, je_read_file_seek_mode mode)
+{
+    auto* finstance = (_je_file_instance*)file;
+    if (finstance->m_asset_file != nullptr)
+    {
+        if (-1 != AAsset_seek64(finstance->m_asset_file, offset, mode))
             return 0;
         return -1;
     }
     else
     {
         assert(finstance->m_raw_file != nullptr);
-        return fseek(finstance->m_raw_file, offset, SEEK_SET);
+        return fseek(finstance->m_raw_file, offset, mode);
     }
 }
 int _je_android_file_close(jeecs_raw_file file)
@@ -365,7 +379,8 @@ extern "C" {
         jeecs_register_native_file_operator(
                 _je_android_file_open,
                 _je_android_file_read,
-                _je_android_file_rewind,
+                _je_android_file_tell,
+                _je_android_file_seek,
                 _je_android_file_close);
 
         wo_set_exe_path(jni_cstring(env, library_path).c_str());

@@ -1149,9 +1149,9 @@ jegl_resource* jegl_load_texture(const char* path)
         stbi_set_flip_vertically_on_load(true);
 
         stbi_io_callbacks res_reader;
-        res_reader.read = [](void* f, char* data, int size) {return (int)jeecs_file_read(data, 1, size, (jeecs_file*)f); };
-        res_reader.eof = [](void* f) {return jeecs_file_eof((jeecs_file*)f) ? 1 : 0; };
-        res_reader.skip = [](void* f, int n) {jeecs_file_seek((jeecs_file*)f, n, je_read_file_seek_mode::JE_READ_FILE_CURRENT); };
+        res_reader.read = [](void* f, char* data, int size) {return (int)jeecs_file_read(data, 1, (size_t)size, (jeecs_file*)f); };
+        res_reader.eof = [](void* f) {return jeecs_file_tell((jeecs_file*)f) >= ((jeecs_file*)f)->m_file_length ? 1 : 0; };
+        res_reader.skip = [](void* f, int n) {jeecs_file_seek((jeecs_file*)f, (size_t)n, je_read_file_seek_mode::JE_READ_FILE_CURRENT); };
 
         texture->m_raw_texture_data->m_pixels = stbi_load_from_callbacks(&res_reader, texfile, &w, &h, &cdepth, STBI_rgb_alpha);
 
