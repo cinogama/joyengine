@@ -1321,10 +1321,19 @@ fimg_creating_context [类型]
 */
 struct fimg_creating_context;
 
+enum je_read_file_seek_mode
+{
+    JE_READ_FILE_SET = SEEK_SET,
+    JE_READ_FILE_CURRENT = SEEK_CUR,
+    JE_READ_FILE_END = SEEK_END,
+};
+
 typedef void* jeecs_raw_file;
 typedef jeecs_raw_file(*je_read_file_open_func_t)(const char*, size_t*);
 typedef size_t(*je_read_file_func_t)(void*, size_t, size_t, jeecs_raw_file);
-typedef int (*je_read_file_rewind_func_t)(jeecs_raw_file, size_t);
+typedef size_t(*je_read_file_tell_func_t)(jeecs_raw_file);
+typedef int (*je_read_file_seek_func_t)(jeecs_raw_file, int64_t, je_read_file_seek_mode);
+typedef int (*je_read_file_eof_func_t)(jeecs_raw_file);
 typedef int (*je_read_file_close_func_t)(jeecs_raw_file);
 
 /*
@@ -1400,7 +1409,9 @@ jeecs_register_native_file_operator [基本接口]
 JE_API void jeecs_register_native_file_operator(
     je_read_file_open_func_t opener,
     je_read_file_func_t reader,
-    je_read_file_rewind_func_t rewinder,
+    je_read_file_tell_func_t teller,
+    je_read_file_seek_func_t seeker,
+    je_read_file_eof_func_t eofer,
     je_read_file_close_func_t closer);
 
 /*
@@ -1430,6 +1441,26 @@ JE_API size_t      jeecs_file_read(
     size_t elem_size,
     size_t count,
     jeecs_file* file);
+
+/*
+jeecs_file_tell [基本接口]
+获取当前文件下一个读取的位置偏移量
+*/
+JE_API size_t jeecs_file_tell(jeecs_file* file);
+
+/*
+jeecs_file_seek [基本接口]
+按照指定的模式，对文件即将读取的位置进行偏移和跳转
+请参见：
+    je_read_file_seek_mode
+*/
+JE_API void jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode);
+
+/*
+jeecs_file_eof [基本接口]
+判断指示的文件是否已经读取完毕
+*/
+JE_API bool jeecs_file_eof(jeecs_file* file);
 
 /*
 jeecs_file_image_begin [基本接口]

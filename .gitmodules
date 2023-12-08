@@ -30,3 +30,7 @@
 	path = 3rd/opengles_env_w64
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/opengles_emulator_win64.git
 	branch = master
+[submodule "3rd/assimp"]
+	path = 3rd/assimp
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/assimp.git
+	branch = master_v5.3.1

@@ -40,6 +40,8 @@ set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
 add_subdirectory("3rd/woolang")
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
+add_subdirectory("3rd/assimp")
 
 if (JE4_ENABLE_OPENGL330_GAPI)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)

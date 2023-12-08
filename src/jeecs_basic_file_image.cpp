@@ -66,36 +66,46 @@ struct jeecs_fimg_file
 {
     std::vector<jeecs_raw_file> fds;
 
-    size_t f_index = 0;
-    size_t f_diff_ptr = 0;
-    size_t f_size = 0;      // just like const
-    size_t i_max_file_sz = 0;
-    size_t nf_index = 0;
-    size_t nf_diff_ptr = 0;
-    size_t nreaded_sz = 0;
+    size_t f_size;          // 当前文件的总大小
+    size_t nreaded_sz;      // 已经读取的文件大小
 
+    size_t f_diff_ptr;      // 当前文件在首个镜像的起始偏移位置
+    size_t i_max_file_sz;   // 单个镜像分卷文件的大小
+
+    size_t nf_index;        // 下次读取时，将从此索引指向的镜像开始
+    size_t nf_diff_ptr;     // 下次读取所在镜像的偏移位置
+
+    bool eof_flag;
 };
 
 je_read_file_open_func_t _m_read_file_open_impl = nullptr;
 je_read_file_func_t _m_read_file_impl = nullptr;
-je_read_file_rewind_func_t _m_read_file_rewind_impl = nullptr;
+je_read_file_tell_func_t _m_read_file_tell_impl = nullptr;
+je_read_file_seek_func_t _m_read_file_seek_impl = nullptr;
+je_read_file_eof_func_t _m_read_file_eof_impl = nullptr;
 je_read_file_close_func_t _m_read_file_close_impl = nullptr;
 
 void jeecs_register_native_file_operator(
     je_read_file_open_func_t opener,
     je_read_file_func_t reader,
-    je_read_file_rewind_func_t rewinder,
+    je_read_file_tell_func_t teller,
+    je_read_file_seek_func_t seeker,
+    je_read_file_eof_func_t eofer,
     je_read_file_close_func_t closer)
 {
     assert(
         opener != nullptr
         && reader != nullptr
-        && rewinder != nullptr
+        && teller != nullptr
+        && seeker != nullptr
+        && eofer != nullptr
         && closer != nullptr
     );
     _m_read_file_open_impl = opener;
     _m_read_file_impl = reader;
-    _m_read_file_rewind_impl = rewinder;
+    _m_read_file_tell_impl = teller;
+    _m_read_file_seek_impl = seeker;
+    _m_read_file_eof_impl = eofer;
     _m_read_file_close_impl = closer;
 }
 
@@ -124,12 +134,26 @@ size_t _je_file_read(void* buffer, size_t elemsz, size_t elemcount, jeecs_raw_fi
 
     return fread(buffer, elemsz, elemcount, (FILE*)file);
 }
-int _je_file_rewind(jeecs_raw_file file, size_t offset)
+size_t _je_file_tell(jeecs_raw_file file)
 {
-    if (_m_read_file_rewind_impl != nullptr)
-        return _m_read_file_rewind_impl(file, offset);
+    if (_m_read_file_tell_impl != nullptr)
+        return _m_read_file_tell_impl(file);
 
-    return fseek((FILE*)file, offset, SEEK_SET);
+    return (size_t)ftell((FILE*)file);
+}
+int _je_file_seek(jeecs_raw_file file, int64_t offset, je_read_file_seek_mode mode)
+{
+    if (_m_read_file_seek_impl != nullptr)
+        return _m_read_file_seek_impl(file, offset, mode);
+
+    return fseek((FILE*)file, offset, (int)mode);
+}
+int _je_file_eof(jeecs_raw_file file)
+{
+    if (_m_read_file_eof_impl != nullptr)
+        return _m_read_file_eof_impl(file);
+
+    return feof((FILE*)file);
 }
 int _je_file_close(jeecs_raw_file file)
 {
@@ -147,7 +171,7 @@ fimg_img* fimg_open_img(const char* path)
     // If you don't want to specify the path, you can call 'fimg_read_img' with null;
     size_t fimg_index_file_length = 0;
     auto fimg_fp = _je_file_open(
-        (path + "/fimg_table"s + FIMAGE_TABLE_EXTENSION_NAME).c_str(), 
+        (path + "/fimg_table"s + FIMAGE_TABLE_EXTENSION_NAME).c_str(),
         &fimg_index_file_length);
 
     if (!fimg_fp)
@@ -351,23 +375,57 @@ void fimg_finish_saving_img_and_close(fimg_creating_context* ctx)
     delete ctx;
 }
 
-void fimg_reset(jeecs_fimg_file* file)
+bool fimg_eof(jeecs_fimg_file* file)
 {
-    file->nf_diff_ptr = file->f_diff_ptr;
-    file->nf_index = 0;
-    file->nreaded_sz = 0;
+    return file->eof_flag;
+}
+
+void fimg_seek(jeecs_fimg_file* file, int64_t offset, je_read_file_seek_mode mode)
+{
+    const size_t first_image_size = file->i_max_file_sz - file->f_diff_ptr;
+
+    switch (mode)
+    {
+    case je_read_file_seek_mode::JE_READ_FILE_SET:
+        file->eof_flag = false;
+        file->nreaded_sz = std::min(file->f_size, (size_t)offset);
+        if (file->nreaded_sz >= first_image_size)
+        {
+            // 当前位置越过了首个镜像,计算目标起始偏移位置
+            file->nf_index = 1 + ((size_t)offset - first_image_size) / file->i_max_file_sz;
+            file->nf_diff_ptr = ((size_t)offset - first_image_size) % file->i_max_file_sz;
+        }
+        else
+        {
+            // 没有越过首个镜像，直接收摊
+            file->nf_index = 0;
+            file->nf_diff_ptr = file->f_diff_ptr + (size_t)offset;
+        }
+        break;
+    case je_read_file_seek_mode::JE_READ_FILE_CURRENT:
+        fimg_seek(file, (int64_t)file->nreaded_sz + offset, je_read_file_seek_mode::JE_READ_FILE_SET);
+        break;
+    case je_read_file_seek_mode::JE_READ_FILE_END:
+        fimg_seek(file, (int64_t)file->f_size + offset, je_read_file_seek_mode::JE_READ_FILE_SET);
+        break;
+    }
 
     for (auto fptr : file->fds)
-        _je_file_rewind(fptr, 0);
+        _je_file_seek(fptr, 0, je_read_file_seek_mode::JE_READ_FILE_SET);
 
-    if (file->fds.size())
-        _je_file_rewind(file->fds[0], file->f_diff_ptr);
+    if (file->fds.empty() == false)
+        _je_file_seek(file->fds[0], file->f_diff_ptr, je_read_file_seek_mode::JE_READ_FILE_SET);
+
+    _je_file_seek(file->fds[file->nf_index], file->nf_diff_ptr, je_read_file_seek_mode::JE_READ_FILE_SET);
 }
 
 size_t fimg_read(void* buffer, size_t elemsize, size_t count, jeecs_fimg_file* file)
 {
     size_t readed = 0;
     unsigned char* write_byte_buffer = (unsigned char*)buffer;
+
+    if (elemsize * count > file->f_size - file->nreaded_sz)
+        file->eof_flag = true;
 
     size_t remain_read_size = std::min(elemsize * count, file->f_size - file->nreaded_sz);
 
@@ -408,7 +466,7 @@ jeecs_fimg_file* fimg_open_file(fimg_img* img, const char* fpath)
     auto itor = img->file_map.find(fpath);
     if (itor != img->file_map.end())
     {
-        jeecs_fimg_file* fptr = new jeecs_fimg_file{ {} };
+        jeecs_fimg_file* fptr = new jeecs_fimg_file;
 
         auto& f = itor->second;
         size_t img_index = (size_t)f.img_index;
@@ -432,11 +490,21 @@ jeecs_fimg_file* fimg_open_file(fimg_img* img, const char* fpath)
 
             start_diff = 0;
         }
+
         fptr->f_size = (size_t)f.file_size;
-        fptr->nf_index = fptr->f_index = 0;
-        fptr->nf_diff_ptr = fptr->f_diff_ptr = (size_t)f.img_offset;
+        fptr->nreaded_sz = 0;
+
+        fptr->f_diff_ptr = (size_t)f.img_offset;
         fptr->i_max_file_sz = (size_t)img->fimg_head.MAX_FILE_SINGLE_IMG_SIZE;
-        fimg_reset(fptr);
+
+        fptr->nf_index = 0;
+        fptr->nf_diff_ptr = fptr->f_diff_ptr;
+
+        fptr->eof_flag = false;
+
+        if (fptr->fds.empty() == false)
+            _je_file_seek(fptr->fds.front(), fptr->f_diff_ptr, je_read_file_seek_mode::JE_READ_FILE_SET);
+
         return fptr;
     }
     return nullptr;
@@ -543,6 +611,7 @@ void jeecs_file_close(jeecs_file* file)
     }
     delete file;
 }
+
 size_t jeecs_file_read(
     void* out_buffer,
     size_t elem_size,
@@ -555,6 +624,39 @@ size_t jeecs_file_read(
     {
         assert(file->m_image_file_handle != nullptr);
         return fimg_read(out_buffer, elem_size, count, file->m_image_file_handle);
+    }
+}
+
+size_t jeecs_file_tell(jeecs_file* file)
+{
+    if (file->m_native_file_handle != nullptr)
+        return _je_file_tell(file->m_native_file_handle);
+    else
+    {
+        assert(file->m_image_file_handle != nullptr);
+        return file->m_image_file_handle->nreaded_sz;
+    }
+}
+
+void jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode)
+{
+    if (file->m_native_file_handle != nullptr)
+        _je_file_seek(file->m_native_file_handle, offset, mode);
+    else
+    {
+        assert(file->m_image_file_handle != nullptr);
+        fimg_seek(file->m_image_file_handle, offset, mode);
+    }
+}
+
+bool jeecs_file_eof(jeecs_file* file)
+{
+    if (file->m_native_file_handle != nullptr)
+        return 0 != _je_file_eof(file->m_native_file_handle);
+    else
+    {
+        assert(file->m_image_file_handle != nullptr);
+        return fimg_eof(file->m_image_file_handle);
     }
 }
 
