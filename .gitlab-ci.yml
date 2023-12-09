@@ -11,8 +11,8 @@ build_linux_opengl:
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
-      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
-      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
+      -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
@@ -20,8 +20,7 @@ build_linux_opengl:
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
-    - sudo make -j 4
-    - sudo chmod -R 777 .
+    - make -j 4
     - cd ..
   cache:
     when: on_success
@@ -43,8 +42,8 @@ build_linux_a64_opengl:
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
-      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
-      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
+      -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
@@ -52,8 +51,7 @@ build_linux_a64_opengl:
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
-    - sudo make -j 4
-    - sudo chmod -R 777 .
+    - make -j 4
     - cd ..
   cache:
     when: on_success
@@ -76,8 +74,8 @@ build_linux_opengles:
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
-      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
-      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
+      -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=OFF
       -DJE4_ENABLE_OPENGLES300_GAPI=ON
@@ -85,8 +83,7 @@ build_linux_opengles:
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
-    - sudo make -j 4
-    - sudo chmod -R 777 .
+    - make -j 4
     - cd ..
   cache:
     when: on_success
