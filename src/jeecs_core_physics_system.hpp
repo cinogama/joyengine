@@ -299,10 +299,10 @@ namespace jeecs
                             // 获取实体的网格大小，如果没有，那么默认就是 1，1
                             // TODO: 考虑网格本身改变的情况，不过目前应该没人会去动网格
                             auto&& rendshape_mesh_size =
-                                rendshape && rendshape->vertex != nullptr
+                                rendshape && rendshape->vertex.has_resource()
                                 ? math::vec2(
-                                    rendshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
-                                    rendshape->vertex->resouce()->m_raw_vertex_data->m_size_y)
+                                    rendshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_x,
+                                    rendshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_y)
                                 : math::vec2(1.f, 1.f);
 
                             auto entity_scaled_size = rendshape_mesh_size

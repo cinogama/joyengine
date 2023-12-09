@@ -521,10 +521,10 @@ public let frag =
                 axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1.f, 0);
                 axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1.f);
 
-                axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
-                axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
-                axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
-                select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
+                axis_x_e.get_component<Renderer::Shape>()->vertex.set_resource(axis_x);
+                axis_y_e.get_component<Renderer::Shape>()->vertex.set_resource(axis_y);
+                axis_z_e.get_component<Renderer::Shape>()->vertex.set_resource(axis_z);
+                select_box.get_component<Renderer::Shape>()->vertex.set_resource(select_box_vert);
 
                 select_box.get_component<Renderer::Rendqueue>()->rend_queue = 0;
                 axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
@@ -575,17 +575,17 @@ public let frag =
                     scale.scale = { 0.f, 0.f, 0.f };
                     break;
                 case jeecs::Editor::EntityMover::rotation:
-                    if (mover.axis.x != 0.f) shape->vertex = circ_x;
-                    else if (mover.axis.y != 0.f) shape->vertex = circ_y;
-                    else shape->vertex = circ_z;
+                    if (mover.axis.x != 0.f) shape->vertex.set_resource(circ_x);
+                    else if (mover.axis.y != 0.f) shape->vertex.set_resource(circ_y);
+                    else shape->vertex.set_resource(circ_z);
                     posi.pos = { 0.f, 0.f, 0.f };
                     scale.scale = { 1.f, 1.f, 1.f };
                     break;
                 case jeecs::Editor::EntityMover::movement:
                 case jeecs::Editor::EntityMover::scale:
-                    if (mover.axis.x != 0.f) shape->vertex = axis_x;
-                    else if (mover.axis.y != 0.f) shape->vertex = axis_y;
-                    else shape->vertex = axis_z;
+                    if (mover.axis.x != 0.f) shape->vertex.set_resource(axis_x);
+                    else if (mover.axis.y != 0.f) shape->vertex.set_resource(axis_y);
+                    else shape->vertex.set_resource(axis_z);
                     scale.scale = { 1.f, 1.f, 1.f };
                     break;
                 default:
@@ -794,12 +794,12 @@ public let frag =
 
                             if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
                                 localScale.scale = localScale.scale * (
-                                    eshape->vertex == nullptr
+                                    eshape->vertex.has_resource() == false
                                     ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
                                     : jeecs::math::vec3(
-                                        eshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
-                                        eshape->vertex->resouce()->m_raw_vertex_data->m_size_y,
-                                        eshape->vertex->resouce()->m_raw_vertex_data->m_size_z
+                                        eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_x,
+                                        eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_y,
+                                        eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_z
                                     ));
 
                             localScale.scale = 1.05f * localScale.scale;

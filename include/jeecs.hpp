@@ -7757,7 +7757,12 @@ namespace jeecs
 
         struct Shape
         {
-            basic::resource<graphic::vertex> vertex;
+            basic::fileresource<graphic::vertex> vertex;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Shape::vertex, "vertex");
+            }
         };
 
         struct Shaders
@@ -8806,9 +8811,9 @@ namespace jeecs
             intersect_result intersect_entity(const Transform::Translation& translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
             {
                 vec3 entity_box_sz;
-                if (entity_shape && entity_shape->vertex != nullptr)
+                if (entity_shape && entity_shape->vertex.has_resource())
                 {
-                    auto* vertex_dat = entity_shape->vertex->resouce()->m_raw_vertex_data;
+                    auto* vertex_dat = entity_shape->vertex.get_resource()->resouce()->m_raw_vertex_data;
                     entity_box_sz = { vertex_dat->m_size_x, vertex_dat->m_size_y ,vertex_dat->m_size_z };
                 }
                 else

@@ -535,8 +535,8 @@ public let frag =
                         && rendentity.shape != nullptr);
 
                     auto& drawing_shape =
-                        rendentity.shape->vertex != nullptr
-                        ? rendentity.shape->vertex
+                        rendentity.shape->vertex.has_resource()
+                        ? rendentity.shape->vertex.get_resource()
                         : m_default_resources.default_shape_quad;
 
                     auto& drawing_shaders =
@@ -887,8 +887,8 @@ public let frag =
                         && rendentity.shape != nullptr);
 
                     auto& drawing_shape =
-                        rendentity.shape->vertex != nullptr
-                        ? rendentity.shape->vertex
+                        rendentity.shape->vertex.has_resource()
+                        ? rendentity.shape->vertex.get_resource()
                         : m_default_resources.default_shape_quad;
 
                     auto& drawing_shaders =
@@ -1754,15 +1754,15 @@ public func frag(_: v2f)
                             lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 1.f).unit();
 
                         l2dbuf.l2ds[light_count].position.w =
-                            ((lightarch.shape == nullptr || lightarch.shape->vertex == nullptr
+                            ((lightarch.shape == nullptr || lightarch.shape->vertex.has_resource() == false
                                 ? math::vec3(
                                     m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_x,
                                     m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_y,
                                     m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_z)
                                 : math::vec3(
-                                    lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_x,
-                                    lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_y,
-                                    lightarch.shape->vertex->resouce()->m_raw_vertex_data->m_size_z)
+                                    lightarch.shape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_x,
+                                    lightarch.shape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_y,
+                                    lightarch.shape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_z)
                                 )
                                 * lightarch.translation->local_scale).length()
                             * lightarch.color->range
@@ -1858,9 +1858,9 @@ public func frag(_: v2f)
 
                                         jeecs::graphic::vertex* using_shape =
                                             (blockarch.shape == nullptr
-                                                || blockarch.shape->vertex == nullptr)
+                                                || blockarch.shape->vertex.has_resource() == false)
                                             ? m_default_resources.default_shape_quad.get()
-                                            : blockarch.shape->vertex.get();
+                                            : blockarch.shape->vertex.get_resource().get();
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
                                             light2d_shadow_rend_chain,
@@ -1997,9 +1997,9 @@ public func frag(_: v2f)
 
                                         jeecs::graphic::vertex* using_shape =
                                             (block_in_layer->shape == nullptr
-                                                || block_in_layer->shape->vertex == nullptr)
+                                                || block_in_layer->shape->vertex.has_resource() == false)
                                             ? m_default_resources.default_shape_quad.get()
-                                            : block_in_layer->shape->vertex.get();
+                                            : block_in_layer->shape->vertex.get_resource().get();
 
                                         // 如果物体被指定为不需要cover，那么就不绘制
                                         if (block_in_layer->block->nocover == false)
@@ -2120,8 +2120,8 @@ public func frag(_: v2f)
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                     auto& drawing_shape =
-                        rendentity.shape->vertex != nullptr
-                        ? rendentity.shape->vertex
+                        rendentity.shape->vertex.has_resource()
+                        ? rendentity.shape->vertex.get_resource()
                         : m_default_resources.default_shape_quad;
                     auto& drawing_shaders =
                         rendentity.shaders->shaders.empty() == false
@@ -2237,8 +2237,8 @@ public func frag(_: v2f)
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                         auto& drawing_shape =
-                            light2d.shape->vertex != nullptr
-                            ? light2d.shape->vertex
+                            light2d.shape->vertex.has_resource()
+                            ? light2d.shape->vertex.get_resource()
                             : m_default_resources.default_shape_quad;
                         auto& drawing_shaders =
                             light2d.shaders->shaders.empty() == false

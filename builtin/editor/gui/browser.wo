@@ -349,8 +349,12 @@ namespace editor::gui
 
     public func set_current_work_path(path: fsys::path_t)
     {
-        assert(fsys::isdir(path));
-        current_work_path = path->tostring();
+        if (fsys::isdir(path))
+            current_work_path = path->tostring();
+        else
+            // 刷新！
+            jeapi::gui::form::errmsg("无效的路径", F"无效的路径：{path->tostring()}");
+
     }
 
     enum Action
