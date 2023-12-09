@@ -393,7 +393,7 @@ void je_finish()
 
 const char* je_build_version()
 {
-    return "JoyEngine 4.3.5 " __TIMESTAMP__;
+    return "JoyEngine 4.3.6 " __TIMESTAMP__;
 }
 
 const char* je_build_commit()

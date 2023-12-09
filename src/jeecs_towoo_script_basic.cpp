@@ -757,7 +757,7 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_
     auto* ty = je_typing_get_info_by_name(component_name.c_str());
     if (ty != nullptr)
     {
-        if (ty->m_hash == jeecs::basic::type_hash<jeecs::towoo::ToWooBaseComponent>())
+        if (ty->m_hash == jeecs::basic::hash_compile_time(("_towoo_component_" + component_name).c_str()))
             je_typing_unregister(ty);
         else
             return wo_ret_halt(vm, "Invalid towoo component name, cannot same as native-components.");
