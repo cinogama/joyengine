@@ -4194,7 +4194,7 @@ namespace jeecs
             {
                 return _m_resource != nullptr;
             }
-            basic::resource<T> get_resource() const
+            const basic::resource<T>& get_resource() const
             {
                 return _m_resource;
             }

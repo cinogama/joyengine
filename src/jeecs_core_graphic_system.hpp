@@ -534,7 +534,7 @@ public let frag =
                         && rendentity.shaders != nullptr
                         && rendentity.shape != nullptr);
 
-                    const auto& drawing_shape =
+                    auto& drawing_shape =
                         rendentity.shape->vertex.has_resource()
                         ? rendentity.shape->vertex.get_resource()
                         : m_default_resources.default_shape_quad;
@@ -886,7 +886,7 @@ public let frag =
                         && rendentity.shaders != nullptr
                         && rendentity.shape != nullptr);
 
-                    const auto& drawing_shape =
+                    auto& drawing_shape =
                         rendentity.shape->vertex.has_resource()
                         ? rendentity.shape->vertex.get_resource()
                         : m_default_resources.default_shape_quad;
@@ -2119,7 +2119,7 @@ public func frag(_: v2f)
                     math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
-                    const auto& drawing_shape =
+                    auto& drawing_shape =
                         rendentity.shape->vertex.has_resource()
                         ? rendentity.shape->vertex.get_resource()
                         : m_default_resources.default_shape_quad;
@@ -2236,7 +2236,7 @@ public func frag(_: v2f)
                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
-                        const auto& drawing_shape =
+                        auto& drawing_shape =
                             light2d.shape->vertex.has_resource()
                             ? light2d.shape->vertex.get_resource()
                             : m_default_resources.default_shape_quad;
