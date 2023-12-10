@@ -62,6 +62,10 @@ namespace jeapi::welcome
                     TextDisabled("Copyright (c) 2019 Erin Catto.");
                     TextDisabled("Box2D is licensed under the MIT License");
 
+                    Text("Assimp https://www.assimp.org/");
+                    TextDisabled("Copyright (c) 2006-2021, assimp team All rights reserved.");
+                    TextDisabled("Assimp is licensed under the BSD License");
+
                     Text("Woolang https://github.com/cinogama/woolang");
                     TextDisabled("Copyright (c) 2021-2023 Cinogama project.");
                     TextDisabled("Woolang is licensed under the Apache License v2.0");

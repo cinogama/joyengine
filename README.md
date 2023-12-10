@@ -54,6 +54,10 @@ Thanks to [imgui](https://github.com/ocornut/imgui) for taking the pain out of w
 
 Thanks to [box2d](https://box2d.org/) for providing nice physical effects, This is really a great physics engine, thanks a lot.
 
+感谢 [Assimp](https://www.assimp.org/) 这是一个能导入读取许多不同三维模型格式数据的库，功能非常强大，后续JoyEngine在支持3D游戏开发的时候，少不了这个库的帮助——不过现在为时尚早；感谢Assimp的开发者！
+
+Thanks to [Assimp](https://www.assimp.org/). This is a library that can import and read data from many different 3D model formats, with very powerful functions. In the future, JoyEngine will be able to support 3D game development with the help of this library - but it's too early now; Thanks to the developers of Assymp!
+
 感谢 [woolang](https://github.com/cinogama/woolang) 给JoyEngine提供了一门强类型和静态类型的脚本语言，感谢它的创作者——@mr_cino，额，好像就是我。那么谢谢我自己。
 
 Thanks to [woolang](https://github.com/cinogama/woolang) for providing JoyEngine with a strongly typed and statically typed scripting language, and thanks to its creator - @mr_cino, well, it seems to be me. Then thank myself.
