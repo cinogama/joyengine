@@ -16,7 +16,7 @@ func copy_all_licenses()
         ;
     for (let _, _3rd_path : third_party_path)
     {
-        try! subpath_of_3rd = subpath(_3rd_path);
+        try! subpath_of_3rd = allsubpath(_3rd_path);
         for (let _, p : subpath_of_3rd)
         {
             if (filename(p)->lower->find("license") != -1
