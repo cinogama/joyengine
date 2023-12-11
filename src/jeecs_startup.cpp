@@ -37,16 +37,14 @@ extern const char* jeecs_towoo_src;
 extern const char* jeecs_physics2d_config_path;
 extern const char* jeecs_physics2d_config_src;
 
-void je_ecs_shutdown();
 void jeal_init();
+void je_log_init();
+
+void je_ecs_finish();
 void jeal_finish();
-
 void jegl_finish();
-
 void jetowoo_finish();
-
-void je_log_strat();
-void je_log_shutdown();
+void je_log_finish();
 
 void jewo_clear_global_pin_value();
 
@@ -159,7 +157,7 @@ void je_init(int argc, char** argv)
 
     _jegl_host_graphic_api = nullptr;
 
-    je_log_strat();
+    je_log_init();
     wo_init(argc, argv);
 
     for (int i = 1; i < argc - 1; ++i)
@@ -355,7 +353,7 @@ void je_finish()
 {
     jeecs::entry::module_leave(_je_unregister_guard);
 
-    je_ecs_shutdown();
+    je_ecs_finish();
     jeal_finish();
     jegl_finish();
     jetowoo_finish();
@@ -371,7 +369,7 @@ void je_finish()
         _je_global_old_panic_handler = nullptr;
     }
 
-    je_log_shutdown();
+    je_log_finish();
 
     jewo_clear_global_pin_value();
 

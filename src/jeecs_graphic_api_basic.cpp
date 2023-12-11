@@ -86,6 +86,16 @@ namespace Assimp
     };
     class je_file_io_system : public IOSystem
     {
+        JECS_DISABLE_MOVE_AND_COPY(je_file_io_system);
+
+        std::string m_current_dir;
+
+    public:
+        je_file_io_system()
+            : m_current_dir(jeecs_file_get_runtime_path())
+        {
+        }
+
         bool Exists(const char* pFile) const override {
             auto* f = jeecs_file_open(pFile);
             if (f == nullptr)
@@ -120,7 +130,7 @@ namespace Assimp
         }
 
         const std::string& CurrentDirectory() const override {
-            return jeecs_file_get_runtime_path();
+            return m_current_dir;
         }
 
         size_t StackSize() const override {
@@ -1327,7 +1337,7 @@ jegl_resource* jegl_load_vertex(const char* path)
         return shared_vertex;
 
     Assimp::Importer importer;
-    importer.SetIOHandler(new Assimp::je_file_io_system);
+    importer.SetIOHandler(new Assimp::je_file_io_system());
 
     auto* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenNormals);
 
@@ -1358,7 +1368,7 @@ jegl_resource* jegl_load_vertex(const char* path)
             {
                 auto& face = mesh->mFaces[f];
                 assert(face.mNumIndices == 3);
-                
+
                 for (size_t i = 0; i < face.mNumIndices; ++i)
                 {
                     auto& index = face.mIndices[i];

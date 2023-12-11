@@ -2539,7 +2539,7 @@ double je_ecs_universe_get_time_scale(void* universe)
     return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_time_scale();
 }
 
-void je_ecs_shutdown()
+void je_ecs_finish()
 {
     jeecs_impl::ecs_universe::_shutdown_all_universe();
 }

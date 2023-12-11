@@ -42,11 +42,11 @@ public func frag(vf: v2f)
     let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
     let Albedo = uniform_texture:<texture2d>("Albedo", NearestRepeatSampler, 0);
 
-    let albedo_color = alphatest(texture(Albedo, vf.uv));
+    let albedo_color = texture(Albedo, vf.uv);
     let self_growing = uniform("SelfGlowing", float::one);
 
     return fout{
-        albedo = alphatest(texture(Albedo, vf.uv)),
+        albedo = alphatest(albedo_color),
         self_luminescence = float4::create(albedo_color->xyz * self_growing, 1.),
         visual_coordinates = float4::create(vf.vpos, 1.),
     };

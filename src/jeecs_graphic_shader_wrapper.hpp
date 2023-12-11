@@ -375,6 +375,12 @@ struct shader_sampler
 
 struct shader_wrapper
 {
+    struct custom_shader_src
+    {
+        std::string m_glsl_impl;
+        std::string m_hlsl_impl;
+    };
+
     shader_value_outs* vertex_out;
     shader_value_outs* fragment_out;
     shader_configs shader_config;
@@ -385,6 +391,7 @@ struct shader_wrapper
     std::vector<shader_sampler*> decleared_samplers;
 
     std::unordered_map<std::string, uniform_information> uniform_variables;
+    std::unordered_map<std::string, custom_shader_src> custom_methods;
 
     shader_wrapper(
         shader_value_outs* vout, 

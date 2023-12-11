@@ -114,24 +114,29 @@ namespace jeecs
                             else
                             {
                                 std::string funcname = value->m_opname;
-                                if (funcname == "float2")
-                                    funcname = "vec2";
-                                else if (funcname == "float3")
-                                    funcname = "vec3";
-                                else if (funcname == "float4")
-                                    funcname = "vec4";
-                                else if (funcname == "float2x2")
-                                    funcname = "mat2";
-                                else if (funcname == "float3x3")
-                                    funcname = "mat3";
-                                else if (funcname == "float4x4")
-                                    funcname = "mat4";
-                                else if (funcname == "lerp")
-                                    funcname = "mix";
 
-                                if (funcname.find("JEBUILTIN_") == 0)
+                                if (!funcname.empty())
                                 {
-                                    contex->_used_builtin_func.insert(funcname);
+                                    if (funcname == "float2")
+                                        funcname = "vec2";
+                                    else if (funcname == "float3")
+                                        funcname = "vec3";
+                                    else if (funcname == "float4")
+                                        funcname = "vec4";
+                                    else if (funcname == "float2x2")
+                                        funcname = "mat2";
+                                    else if (funcname == "float3x3")
+                                        funcname = "mat3";
+                                    else if (funcname == "float4x4")
+                                        funcname = "mat4";
+                                    else if (funcname == "lerp")
+                                        funcname = "mix";
+
+                                    if (funcname[0] == '#')
+                                    {
+                                        funcname = funcname.substr(1);
+                                        contex->_used_builtin_func.insert(funcname);
+                                    }
                                 }
 
                                 apply += funcname + "("s;
@@ -229,47 +234,10 @@ namespace jeecs
                 std::string built_in_srcs;
                 for (auto& builtin_func_name : contex._used_builtin_func)
                 {
-                    if (builtin_func_name == "JEBUILTIN_Movement")
+                    auto fnd = wrap->custom_methods.find(builtin_func_name);
+                    if (fnd != wrap->custom_methods.end())
                     {
-                        const std::string unifrom_block = R"(
-vec3 JEBUILTIN_Movement(mat4 trans)
-{
-    return vec3(trans[3][0], trans[3][1], trans[3][2]);
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Negative")
-                    {
-                        const std::string unifrom_block = R"(
-float JEBUILTIN_Negative(float v)
-{
-    return -v;
-}
-vec2 JEBUILTIN_Negative(vec2 v)
-{
-    return -v;
-}
-vec3 JEBUILTIN_Negative(vec3 v)
-{
-    return -v;
-}
-vec4 JEBUILTIN_Negative(vec4 v)
-{
-    return -v;
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
-                    {
-                        const std::string unifrom_block = R"(
-vec2 JEBUILTIN_Uvframebuffer(vec2 v)
-{
-    return v;
-}
-)";
-                        built_in_srcs += unifrom_block;
+                        built_in_srcs += fnd->second.m_glsl_impl + "\n";
                     }
                 }
 
@@ -326,59 +294,10 @@ vec2 JEBUILTIN_Uvframebuffer(vec2 v)
                 std::string built_in_srcs;
                 for (auto& builtin_func_name : contex._used_builtin_func)
                 {
-                    if (builtin_func_name == "JEBUILTIN_AlphaTest")
+                    auto fnd = wrap->custom_methods.find(builtin_func_name);
+                    if (fnd != wrap->custom_methods.end())
                     {
-                        const std::string unifrom_block = R"(
-vec4 JEBUILTIN_AlphaTest(vec4 color)
-{
-    if (color.a <= 0.0)
-        discard;
-    return color;
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Movement")
-                    {
-                        const std::string unifrom_block = R"(
-vec3 JEBUILTIN_Movement(mat4 trans)
-{
-    return vec3(trans[3][0], trans[3][1], trans[3][2]);
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Negative")
-                    {
-                        const std::string unifrom_block = R"(
-float JEBUILTIN_Negative(float v)
-{
-    return -v;
-}
-vec2 JEBUILTIN_Negative(vec2 v)
-{
-    return -v;
-}
-vec3 JEBUILTIN_Negative(vec3 v)
-{
-    return -v;
-}
-vec4 JEBUILTIN_Negative(vec4 v)
-{
-    return -v;
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
-                    {
-                        const std::string unifrom_block = R"(
-vec2 JEBUILTIN_Uvframebuffer(vec2 v)
-{
-    return v;
-}
-)";
-                        built_in_srcs += unifrom_block;
+                        built_in_srcs += fnd->second.m_glsl_impl + "\n";
                     }
                 }
 

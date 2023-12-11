@@ -123,33 +123,6 @@ public func FresnelSchlick(cosTheta: float, F0: float3)
 {
     return F0 + (float3::one - F0) * pow(float::one - cosTheta, float::new(5.));
 }
-
-public func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
-{
-    let mut shadow_factor = float::zero;
-    let bias = 2.;
-
-    let bias_weight = [
-        (0., 0., 1.)
-        //(-2., 2., 0.08),    (-1., 2., 0.08),    (0., 2., 0.08),     (1., 2., 0.08),     (2., 2., 0.08),
-        //(-2., 1., 0.08),    (-1., 1., 0.08),    (0., 1., 0.16),     (1., 1., 0.16),     (2., 1., 0.08),
-        //(-2., 0., 0.08),    (-1., 0., 0.08),    (0., 0., 0.72),     (1., 0., 0.16),     (2., 0., 0.08),
-        //(-2., -1., 0.08),   (-1., -1., 0.16),   (0., -1., 0.16),    (1., -1., 0.16),    (2., -1., 0.08),
-        //(-2., -2., 0.08),   (-1., -2., 0.08),   (0., -2., 0.08),    (1., -2., 0.08),    (2., -2., 0.08),
-    ];
-
-    let reso_inv = float2::one / reso;
-
-    for (let _, (x, y, weight) : bias_weight)
-    {
-        shadow_factor = shadow_factor + texture(
-            shadow, uv + reso_inv * float2::create(x, y) * bias
-        )->x * weight;
-        
-    }
-    return clamp(shadow_factor, 0., 1.);
-}
-
 )";
 
 namespace jeecs

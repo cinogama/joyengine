@@ -84,7 +84,7 @@ void _je_log_work(je_log_context* ctx)
 std::shared_mutex log_context_instance_mx;
 je_log_context* log_context_instance = {};
 
-void je_log_strat()
+void je_log_init()
 {
     std::lock_guard g1(log_context_instance_mx);
     je_log_context* ctx = new je_log_context;
@@ -94,7 +94,7 @@ void je_log_strat()
     );
 }
 
-void je_log_shutdown()
+void je_log_finish()
 {
     std::lock_guard g1(log_context_instance_mx);
     if (log_context_instance != nullptr)

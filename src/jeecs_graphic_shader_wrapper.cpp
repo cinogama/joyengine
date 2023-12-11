@@ -54,7 +54,9 @@ void _free_shader_value(void* shader_value)
 
 WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_gchandle(vm, new jegl_shader_value((float)wo_real(args + 0)), nullptr, _free_shader_value);
+    return wo_ret_gchandle(vm, 
+        new jegl_shader_value(
+            (float)wo_real(args + 0)), nullptr, _free_shader_value);
 }
 WO_API wo_api jeecs_shader_float2_create(wo_vm vm, wo_value args, size_t argc)
 {
@@ -273,7 +275,10 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
         if (value_type == WO_GCHANDLE_TYPE || value_type == WO_HANDLE_TYPE)
             sval = (jegl_shader_value*)wo_pointer(args + i);
         else if (value_type == WO_INTEGER_TYPE)
+        {
             sval = new jegl_shader_value((int)wo_int(args + i));
+            tmp_svalue.push_back(sval);
+        }
         else
         {
             sval = new jegl_shader_value((float)wo_cast_real(args + i));
@@ -293,20 +298,27 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
     else
     {
         auto* reduce_func = get_const_reduce_func(operation, _types.data(), _types.size());
-        if (!reduce_func)
-            return wo_ret_halt(vm, "Cannot do this operations: no matched operation with these types.");
-
-        if (result_is_const)
+        if (operation[0] == '#')
         {
-            auto* result = (*reduce_func)(_args.size(), _args.data());
-            if (result) // if result == nullptr, there is no method for constant, calc it in shader~
+            // Custom method 
+        }
+        else
+        {
+            if (!reduce_func)
+                return wo_ret_halt(vm, "Cannot do this operations: no matched operation with these types.");
+
+            if (result_is_const)
             {
-                if (result->get_type() != result_type)
+                auto* result = (*reduce_func)(_args.size(), _args.data());
+                if (result) // if result == nullptr, there is no method for constant, calc it in shader~
                 {
-                    _free_shader_value(result);
-                    return wo_ret_halt(vm, "Cannot do this operations: return type dis-matched.");
+                    if (result->get_type() != result_type)
+                    {
+                        _free_shader_value(result);
+                        return wo_ret_halt(vm, "Cannot do this operations: return type dis-matched.");
+                    }
+                    return wo_ret_gchandle(vm, result, nullptr, _free_shader_value);
                 }
-                return wo_ret_gchandle(vm, result, nullptr, _free_shader_value);
             }
         }
     }
@@ -470,6 +482,7 @@ WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t ar
 WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc)
 {
     wo_value elem = wo_push_empty(vm);
+    wo_value val = wo_push_empty(vm);
 
     shader_wrapper* wrapper = new shader_wrapper(
         (shader_value_outs*)wo_pointer(args + 1),
@@ -515,6 +528,22 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
         wo_arr_get(elem, args + 5, i);
         wrapper->decleared_samplers.push_back(
             (shader_sampler*)wo_pointer(elem));
+    }
+
+    size_t custom_method_count = (size_t)wo_lengthof(args + 6);
+    for (size_t i = 0; i < custom_method_count; ++i)
+    {
+        wo_arr_get(elem, args + 6, i);
+        wo_struct_get(val, elem, 0);
+
+        auto& custom_shader_srcs = wrapper->custom_methods[wo_string(val)];
+
+        wo_struct_get(val, elem, 1);
+
+        wo_struct_get(elem, val, 0);
+        custom_shader_srcs.m_glsl_impl = wo_string(elem);
+        wo_struct_get(elem, val, 1);
+        custom_shader_srcs.m_hlsl_impl = wo_string(elem);
     }
 
     return wo_ret_gchandle(vm,
@@ -617,6 +646,20 @@ public let NEAREST = fliter::NEAREST;
 public let LINEAR = fliter::LINEAR;
 public let CLAMP = wrap::CLAMP;
 public let REPEAT = wrap::REPEAT;
+
+let registered_custom_methods = {}mut: map<string, (string, string)>;
+
+public func custom_method<ShaderResultT>(name: string, glsl_src: string, hlsl_src: string)
+{
+    if (registered_custom_methods->contain(name))
+        return std::halt(F"Custom method '{name}' has been registered.");
+
+    registered_custom_methods->set(name, (glsl_src, hlsl_src));
+    return func(...)
+    {
+        return apply_operation:<ShaderResultT>("#" + name, ......);
+    };
+}
 
 using sampler2d = gchandle
 {
@@ -1066,7 +1109,8 @@ namespace shader
         fragout: fragment_out, 
         shader_config: ShaderConfig,
         struct_or_uniform_block_decl_list: array<struct_define>,
-        sampler_defines: array<sampler2d>)=> shader_wrapper;
+        sampler_defines: array<sampler2d>,
+        custom_methods: array<(string, (string, string))>)=> shader_wrapper;
 
     private extern func generate()
     {
@@ -1089,7 +1133,8 @@ namespace shader
             fragment_out_result,
             configs,
             struct_uniform_blocks_decls->toarray,
-            sampler2d::created_sampler2ds->toarray);
+            sampler2d::created_sampler2ds->toarray,
+            registered_custom_methods->unmapping);
     }
 
     namespace debug
@@ -1137,9 +1182,23 @@ public func uvtrans(uv: float2, tiling: float2, offset: float2)
 {
     return uv * tiling + offset;
 }
+
+let _uvframebuf = custom_method:<float2>("JEBUILTIN_Uvframebuffer",
+@"
+vec2 JEBUILTIN_Uvframebuffer(vec2 v)
+{
+    return v;
+}
+"@,
+@"
+float2 JEBUILTIN_Uvframebuffer(float2 v)
+{
+    return float2(v.x, 1.0 - v.y);
+}
+"@);
 public func uvframebuf(uv: float2)
 {
-     return apply_operation:<float2>("JEBUILTIN_Uvframebuffer", uv);
+     return _uvframebuf(uv);
 }
 
 // Math functions
@@ -1208,10 +1267,47 @@ public func abs<T>(a: T)=> T
     return apply_operation:<T>("abs", a);
 }
 
+do custom_method:<void>("JEBUILTIN_Negative",
+@"
+float JEBUILTIN_Negative(float v)
+{
+    return -v;
+}
+vec2 JEBUILTIN_Negative(vec2 v)
+{
+    return -v;
+}
+vec3 JEBUILTIN_Negative(vec3 v)
+{
+    return -v;
+}
+vec4 JEBUILTIN_Negative(vec4 v)
+{
+    return -v;
+}
+"@,
+@"
+float JEBUILTIN_Negative(float v)
+{
+    return -v;
+}
+float2 JEBUILTIN_Negative(float2 v)
+{
+    return -v;
+}
+float3 JEBUILTIN_Negative(float3 v)
+{
+    return -v;
+}
+float4 JEBUILTIN_Negative(float4 v)
+{
+    return -v;
+}
+"@);
 public func negative<T>(a: T)=> T
     where is_glvalue:<T>;
 {
-    return apply_operation:<T>("JEBUILTIN_Negative", a);
+    return apply_operation:<T>("#JEBUILTIN_Negative", a);
 }
 
 public func pow<T>(a: T, b: T)=> T
@@ -1238,9 +1334,22 @@ public func normalize<T>(a: T)=> T
     return apply_operation:<T>("normalize", a);
 }
 
+let _movement = custom_method:<float3>("JEBUILTIN_Movement",
+@"
+vec3 JEBUILTIN_Movement(mat4 trans)
+{
+    return vec3(trans[3][0], trans[3][1], trans[3][2]);
+}
+"@,
+@"
+float3 JEBUILTIN_Movement(float4x4 trans)
+{
+    return float3(trans[0].w, trans[1].w, trans[2].w);
+}
+"@);
 public func movement(trans4x4: float4x4)=> float3
 {
-    return apply_operation:<float3>("JEBUILTIN_Movement", trans4x4);
+    return _movement(trans4x4);
 }
 
 public func clamp<T, FT>(a: T, b: FT, c: FT)=> T
@@ -1273,12 +1382,30 @@ public func distance<T>(a: T, b: T)=> float
 }
 
 // Engine builtin function
-
+let _alphatest = custom_method:<float4>("JEBUILTIN_AlphaTest",
+@"
+vec4 JEBUILTIN_AlphaTest(vec4 color)
+{
+    if (color.a <= 0.0)
+        discard;
+    return color;
+}
+"@,
+@"
+float4 JEBUILTIN_AlphaTest(float4 color)
+{
+    if (color.a <= 0.0)
+        clip(-1.0);
+    return color;
+}
+"@);
 public func alphatest(colf4: float4)=> float4
 {
-    return apply_operation:<float4>("JEBUILTIN_AlphaTest", colf4);
+    return _alphatest(colf4);
 }
 
+)"
+R"(
 enum ZConfig
 {
     OFF = 0,

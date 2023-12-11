@@ -238,18 +238,6 @@ reduce_method{return new jegl_shader_value(
     jeecs::math::lerp(args[0]->m_float4[2], args[1]->m_float3[2], args[2]->m_float),
     jeecs::math::lerp(args[0]->m_float4[3], args[1]->m_float4[3], args[2]->m_float)
 ); }} },
-{ "JEBUILTIN_AlphaTest", {jegl_shader_value::FLOAT4,
-reduce_method{return nullptr; }} },
-{ "JEBUILTIN_TextureMs", {jegl_shader_value::TEXTURE2D_MS, jegl_shader_value::FLOAT2, jegl_shader_value::INTEGER,
-reduce_method{return nullptr; }} },
-{ "JEBUILTIN_TextureFastMs", {jegl_shader_value::TEXTURE2D_MS, jegl_shader_value::FLOAT2,
-reduce_method{return nullptr; }} },
-
-{ "JEBUILTIN_Movement", {jegl_shader_value::FLOAT4x4,
-reduce_method{return new jegl_shader_value(args[0]->m_float4x4[3][0], args[0]->m_float4x4[3][1], args[0]->m_float4x4[3][2]); }} },
-
-{ "JEBUILTIN_Uvframebuffer", {jegl_shader_value::FLOAT2,
-reduce_method{return nullptr; }} },
 
 { "sin", {jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },
@@ -325,15 +313,6 @@ reduce_method{return nullptr; }} },
 reduce_method{return nullptr; }} },
 { "abs", {jegl_shader_value::FLOAT,
 reduce_method{return nullptr; }} },
-
-{ "JEBUILTIN_Negative", {jegl_shader_value::FLOAT4,
-reduce_method{return new jegl_shader_value(-args[0]->m_float4[0], -args[0]->m_float4[1],-args[0]->m_float4[2],-args[0]->m_float4[3]); }} },
-{ "JEBUILTIN_Negative", {jegl_shader_value::FLOAT3,
-reduce_method{return new jegl_shader_value(-args[0]->m_float3[0], -args[0]->m_float3[1],-args[0]->m_float3[2]); }} },
-{ "JEBUILTIN_Negative", {jegl_shader_value::FLOAT2,
-reduce_method{return new jegl_shader_value(-args[0]->m_float2[0], -args[0]->m_float2[1]); }} },
-{ "JEBUILTIN_Negative", {jegl_shader_value::FLOAT,
-reduce_method{return new jegl_shader_value(-args[0]->m_float); }} },
 
 { "pow", {jegl_shader_value::FLOAT4, jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },

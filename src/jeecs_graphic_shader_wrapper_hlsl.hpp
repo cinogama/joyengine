@@ -154,8 +154,15 @@ namespace jeecs
                                 }
                                 else
                                 {
-                                    if (funcname.find("JEBUILTIN_") == 0)
-                                        contex->_used_builtin_func.insert(funcname);
+                                    if (!funcname.empty())
+                                    {
+                                        if (funcname[0] == '#')
+                                        {
+                                            funcname = funcname.substr(1);
+                                            contex->_used_builtin_func.insert(funcname);
+                                        }
+                                    }
+
                                     apply += funcname + "(";
                                     for (size_t i = 0; i < variables.size(); i++)
                                     {
@@ -274,48 +281,11 @@ namespace jeecs
 
                 for (auto& builtin_func_name : contex._used_builtin_func)
                 {
-                     if (builtin_func_name == "JEBUILTIN_Movement")
-                     {
-                         const std::string unifrom_block = R"(
-float3 JEBUILTIN_Movement(float4x4 trans)
-{
-    return float3(trans[0].w, trans[1].w, trans[2].w);
-}
-)";
-                         built_in_srcs += unifrom_block;
-                     }
-                     else if (builtin_func_name == "JEBUILTIN_Negative")
-                     {
-                         const std::string unifrom_block = R"(
-float JEBUILTIN_Negative(float v)
-{
-    return -v;
-}
-float2 JEBUILTIN_Negative(float2 v)
-{
-    return -v;
-}
-float3 JEBUILTIN_Negative(float3 v)
-{
-    return -v;
-}
-float4 JEBUILTIN_Negative(float4 v)
-{
-    return -v;
-}
-)";
-                         built_in_srcs += unifrom_block;
-                     }
-                     else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
-                     {
-                         const std::string unifrom_block = R"(
-float2 JEBUILTIN_Uvframebuffer(float2 v)
-{
-    return float2(v.x, 1.0 - v.y);
-}
-)";
-                         built_in_srcs += unifrom_block;
-                     }
+                    auto fnd = wrap->custom_methods.find(builtin_func_name);
+                    if (fnd != wrap->custom_methods.end())
+                    {
+                        built_in_srcs += fnd->second.m_hlsl_impl + "\n";
+                    }
                 }
 
                 // Generate shaders
@@ -516,59 +486,10 @@ float2 JEBUILTIN_Uvframebuffer(float2 v)
 
                 for (auto& builtin_func_name : contex._used_builtin_func)
                 {
-                    if (builtin_func_name == "JEBUILTIN_AlphaTest")
+                    auto fnd = wrap->custom_methods.find(builtin_func_name);
+                    if (fnd != wrap->custom_methods.end())
                     {
-                        const std::string unifrom_block = R"(
-float4 JEBUILTIN_AlphaTest(float4 color)
-{
-    if (color.a <= 0.0)
-        clip(-1.0);
-    return color;
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Movement")
-                    {
-                        const std::string unifrom_block = R"(
-float3 JEBUILTIN_Movement(float4x4 trans)
-{
-    return float3(trans[0].w, trans[1].w, trans[2].w);
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Negative")
-                    {
-                        const std::string unifrom_block = R"(
-float JEBUILTIN_Negative(float v)
-{
-    return -v;
-}
-float2 JEBUILTIN_Negative(float2 v)
-{
-    return -v;
-}
-float3 JEBUILTIN_Negative(float3 v)
-{
-    return -v;
-}
-float4 JEBUILTIN_Negative(float4 v)
-{
-    return -v;
-}
-)";
-                        built_in_srcs += unifrom_block;
-                    }
-                    else if (builtin_func_name == "JEBUILTIN_Uvframebuffer")
-                    {
-                        const std::string unifrom_block = R"(
-float2 JEBUILTIN_Uvframebuffer(float2 v)
-{
-    return float2(v.x, 1.0 - v.y);
-}
-)";
-                        built_in_srcs += unifrom_block;
+                        built_in_srcs += fnd->second.m_hlsl_impl + "\n";
                     }
                 }
 
