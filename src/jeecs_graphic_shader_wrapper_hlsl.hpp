@@ -6,11 +6,12 @@ namespace jeecs
 {
     namespace shader_generator
     {
-        namespace hlsl
+        class hlsl_generator : public shader_source_generator
         {
-            std::string get_type_name_from_type(jegl_shader_value::type ty)
+        protected:
+            virtual std::string get_typename(jegl_shader_value::type type) override
             {
-                switch (ty)
+                switch (type)
                 {
                 case jegl_shader_value::type::FLOAT:
                     return "float";
@@ -38,47 +39,39 @@ namespace jeecs
                     break;
                 }
             }
-            std::string get_type_name(jegl_shader_value* val)
+            virtual std::string generate_struct(shader_wrapper* wrapper, shader_struct_define* st) override
             {
-                return get_type_name_from_type(val->get_type());
+                std::string decl = "struct " + st->name + "\n{\n";
+                for (auto& variable_inform : st->variables)
+                    if (variable_inform.type == jegl_shader_value::type::STRUCT)
+                        decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
+                    else
+                        decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + ";\n";
+
+                return decl + "};\n";
+            }
+            virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) override
+            {
+                std::string decl = "cbuffer " + st->name + ": register(b" + std::to_string(st->binding_place + 1) + ")\n{\n";
+                for (auto& variable_inform : st->variables)
+                    if (variable_inform.type == jegl_shader_value::type::STRUCT)
+                        decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
+                    else
+                        decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + ";\n";
+
+                return decl + "};\n";
             }
 
-            std::string _generate_uniform_block_for_hlsl(shader_wrapper* wrap)
-            {
-                std::string result;
-
-                for (auto* block : wrap->shader_struct_define_may_uniform_block)
-                {
-                    if (!block->variables.empty())
-                    {
-                        std::string uniform_block_decl =
-                            block->binding_place == jeecs::typing::INVALID_UINT32
-                            ? "struct " + block->name + "\n{\n"
-                            : "cbuffer " + block->name + ": register(b" + std::to_string(block->binding_place + 1) + ")\n{\n";
-
-                        for (auto& variable_inform : block->variables)
-                            if (variable_inform.type == jegl_shader_value::type::STRUCT)
-                                uniform_block_decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
-                            else
-                                uniform_block_decl += "    " + get_type_name_from_type(variable_inform.type) + " " + variable_inform.name + ";\n";
-
-                        result += uniform_block_decl + "};\n";
-                    }
-                }
-
-                return result;
-            }
-
-            std::string _generate_code_for_hlsl_impl(
-                _shader_wrapper_contex* contex,
-                std::string& out,
+            virtual std::string generate_code(
+                _shader_wrapper_contex* context,
                 jegl_shader_value* value,
-                bool is_fragment)
+                bool in_fragment,
+                std::string* out_src) override
             {
                 using namespace std;
 
                 std::string varname;
-                if (contex->get_var_name(value, varname, is_fragment))
+                if (context->get_var_name(value, varname, in_fragment))
                 {
                     if (value->is_calc_value())
                     {
@@ -92,18 +85,21 @@ namespace jeecs
                         }
                         else
                         {
-                            std::string apply = "    " + get_type_name(value) + " " + varname + " = ";
+                            std::string apply = "    " + get_value_typename(value) + " " + varname + " = ";
 
                             std::vector<std::string> variables;
                             for (size_t i = 0; i < value->m_opnums_count; i++)
-                                variables.push_back(_generate_code_for_hlsl_impl(contex, out, value->m_opnums[i], is_fragment));
+                                variables.push_back(generate_code(context, value->m_opnums[i], in_fragment, out_src));
 
                             if (value->m_opname == "+"s
                                 || value->m_opname == "-"s
                                 || value->m_opname == "/"s)
                             {
-                                assert(variables.size() == 2);
-                                apply += variables[0] + " " + value->m_opname + " " + variables[1];
+                                assert(variables.size() == 2 || value->m_opname == "-"s);
+                                if (variables.size() == 1)
+                                    apply += value->m_opname + variables[0];
+                                else
+                                    apply += variables[0] + " " + value->m_opname + " " + variables[1];
                             }
                             else if (value->m_opname == "*"s)
                             {
@@ -125,22 +121,7 @@ namespace jeecs
                             else
                             {
                                 std::string funcname = value->m_opname;
-                                //if (funcname == "float2")
-                                //    funcname = "vec2";
-                                //else if (funcname == "float3")
-                                //    funcname = "vec3";
-                                //else if (funcname == "float4")
-                                //    funcname = "vec4";
-                                //else if (funcname == "float2x2")
-                                //    funcname = "mat2";
-                                //else if (funcname == "float3x3")
-                                //    funcname = "mat3";
-                                //else if (funcname == "float4x4")
-                                //    funcname = "mat4";
-                                //else if (funcname == "lerp")
-                                //    funcname = "mix";
 
-                                // 此处塞函数转发，部分函数的姿势和gl不一样，为了保持上层一致性，在此转发！
                                 if (funcname == "texture")
                                 {
                                     assert(variables.size() == 2);
@@ -159,7 +140,7 @@ namespace jeecs
                                         if (funcname[0] == '#')
                                         {
                                             funcname = funcname.substr(1);
-                                            contex->_used_builtin_func.insert(funcname);
+                                            context->_used_builtin_func.insert(funcname);
                                         }
                                     }
 
@@ -175,12 +156,12 @@ namespace jeecs
                             }
                             apply += ";";
 
-                            out += apply + "\n";
+                            *out_src += apply + "\n";
                         }
                     }
                     else
                     {
-                        std::string apply/* = "    const " + _shader_wrapper_contex::get_type_name(value) + " " + varname + " = "*/;
+                        std::string apply;
 
                         switch (value->get_type())
                         {
@@ -242,7 +223,7 @@ namespace jeecs
 
                 if (value->is_shader_in_value())
                 {
-                    if (is_fragment)
+                    if (in_fragment)
                         varname = "_v2f." + varname;
                     else
                         varname = "_vin." + varname;
@@ -250,23 +231,18 @@ namespace jeecs
 
                 return varname;
             }
-
-            std::string _hlsl_pragma()
-            {
-                return R"()";
-            }
-
-            std::string _generate_code_for_hlsl_vertex(shader_wrapper* wrap)
+        public:
+            virtual std::string generate_vertex(shader_wrapper* wrap) override
             {
                 _shader_wrapper_contex contex;
                 std::string          body_result;
                 std::string          io_declear;
 
-                const std::string    unifrom_block = _generate_uniform_block_for_hlsl(wrap);
+                const std::string    unifrom_block = generate_uniform_block_and_struct(wrap);
 
                 std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
                 for (auto* out_val : wrap->vertex_out->out_values)
-                    outvalue.push_back(std::make_pair(out_val, _generate_code_for_hlsl_impl(&contex, body_result, out_val, false)));
+                    outvalue.push_back(std::make_pair(out_val, generate_code(&contex, out_val, false, &body_result)));
 
                 // Generate built function src here.
                 std::string built_in_srcs;
@@ -304,7 +280,7 @@ namespace jeecs
                         if (uinfo.m_used_in_vertex)
                         {
                             texture_decl
-                                += get_type_name_from_type(value_type)
+                                += get_typename(value_type)
                                 + " "
                                 + name
                                 + ": register(t"
@@ -315,7 +291,7 @@ namespace jeecs
                     else
                     {
                         ++uniform_count;
-                        uniform_decl += "    " + get_type_name_from_type(value_type) + " " + name + ";\n";
+                        uniform_decl += "    " + get_typename(value_type) + " " + name + ";\n";
                     }
                 }
                 uniform_decl += "};";
@@ -370,7 +346,7 @@ namespace jeecs
                 {
                     io_declear +=
                         "    "
-                        + get_type_name(indecl.first)
+                        + get_value_typename(indecl.first)
                         + " _in_"
                         + std::to_string(indecl.second.first)
                         + ": "
@@ -390,7 +366,10 @@ namespace jeecs
                 {
                     io_declear +=
                         "    "
-                        + get_type_name(outvarname.first) + " _v2f_" + std::to_string(outid++) + ": ";
+                        + get_value_typename(outvarname.first) 
+                        + " _v2f_" 
+                        + std::to_string(outid++) 
+                        + ": ";
 
                     switch (outvarname.first->get_type())
                     {
@@ -451,19 +430,18 @@ namespace jeecs
 
                 return std::move(
                     "// Vertex shader source\n"
-                    + _hlsl_pragma()
                     + unifrom_block
                     + built_in_srcs
                     + io_declear
                     + body_result);
             }
-            std::string _generate_code_for_hlsl_fragment(shader_wrapper* wrap)
+            virtual std::string generate_fragment(shader_wrapper* wrap) override
             {
                 _shader_wrapper_contex contex;
                 std::string          body_result;
                 std::string          io_declear;
 
-                const std::string    unifrom_block = _generate_uniform_block_for_hlsl(wrap);
+                const std::string    unifrom_block = generate_uniform_block_and_struct(wrap);
 
                 std::vector<jegl_shader_value*> invalue;
                 for (auto* in_val : wrap->vertex_out->out_values)
@@ -471,7 +449,7 @@ namespace jeecs
 
                 std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
                 for (auto* out_val : wrap->fragment_out->out_values)
-                    outvalue.push_back(std::make_pair(out_val, _generate_code_for_hlsl_impl(&contex, body_result, out_val, true)));
+                    outvalue.push_back(std::make_pair(out_val, generate_code(&contex, out_val, true, &body_result)));
 
                 // Generate built function src here.
                 std::string built_in_srcs;
@@ -509,7 +487,7 @@ namespace jeecs
                         if (uinfo.m_used_in_fragment)
                         {
                             texture_decl
-                                += get_type_name_from_type(value_type)
+                                += get_typename(value_type)
                                 + " "
                                 + name
                                 + ": register(t"
@@ -520,7 +498,7 @@ namespace jeecs
                     else
                     {
                         ++uniform_count;
-                        uniform_decl += "    " + get_type_name_from_type(value_type) + " " + name + ";\n";
+                        uniform_decl += "    " + get_typename(value_type) + " " + name + ";\n";
                     }
                 }
                 uniform_decl += "};";
@@ -546,7 +524,9 @@ namespace jeecs
                 {
                     io_declear +=
                         "    "
-                        + get_type_name(inval) + " _v2f_" + std::to_string(outid++) + ": ";
+                        + get_value_typename(inval)
+                        + " _v2f_" 
+                        + std::to_string(outid++) + ": ";
 
                     switch (inval->get_type())
                     {
@@ -583,7 +563,7 @@ namespace jeecs
                     auto oid = outid++;
                     io_declear +=
                         "    "
-                        + get_type_name(outvarname.first)
+                        + get_value_typename(outvarname.first)
                         + " _out_"
                         + std::to_string(oid)
                         + ": SV_TARGET"
@@ -608,12 +588,11 @@ namespace jeecs
 
                 return std::move(
                     "// Fragment shader source\n"
-                    + _hlsl_pragma()
                     + unifrom_block
                     + built_in_srcs
                     + io_declear
                     + body_result);
             }
-        }
+        };
     }
 }

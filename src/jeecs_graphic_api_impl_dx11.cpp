@@ -683,10 +683,10 @@ namespace jeecs::graphic::api::dx11
                         sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
                 }
             },
-                context->m_window_handle,
-                context->m_dx_device.Get(),
-                context->m_dx_context.Get(),
-                reboot);
+            context->m_window_handle,
+            context->m_dx_device.Get(),
+            context->m_dx_context.Get(),
+            reboot);
 
         // Fullscreen?
         if (context->m_lock_resolution_for_fullscreen)

@@ -410,3 +410,42 @@ struct shader_wrapper
         delete fragment_out;
     }
 };
+
+class shader_source_generator
+{
+protected:
+    virtual std::string get_typename(jegl_shader_value::type type) = 0;
+    virtual std::string generate_struct(shader_wrapper* wrapper, shader_struct_define* st) = 0;
+    virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) = 0;
+
+    virtual std::string generate_code(
+        _shader_wrapper_contex*     context,
+        jegl_shader_value*          value,
+        bool                        in_fragment,
+        std::string*                out_src) = 0;
+
+    std::string get_value_typename(jegl_shader_value* val)
+    {
+        return get_typename(val->get_type());
+    }
+    std::string generate_uniform_block_and_struct(shader_wrapper* wrap)
+    {
+        std::string result;
+
+        for (auto* block : wrap->shader_struct_define_may_uniform_block)
+        {
+            if (!block->variables.empty())
+            {
+                if (block->binding_place == jeecs::typing::INVALID_UINT32)
+                    result += generate_struct(wrap, block);
+                else
+                    result += generate_uniform_block(wrap, block);
+            }
+        }
+        return result;
+    }
+
+public:
+    virtual std::string generate_vertex(shader_wrapper* wrap) = 0;
+    virtual std::string generate_fragment(shader_wrapper* wrap) = 0;
+};

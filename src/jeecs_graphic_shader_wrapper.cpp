@@ -553,35 +553,6 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
         });
 }
 
-std::string _generate_glsl_vertex_by_wrapper(shader_wrapper* wrap)
-{
-    return jeecs::shader_generator::glsl::_generate_code_for_glsl_vertex(wrap);
-}
-std::string _generate_glsl_fragment_by_wrapper(shader_wrapper* wrap)
-{
-    return jeecs::shader_generator::glsl::_generate_code_for_glsl_fragment(wrap);
-}
-std::string _generate_hlsl_vertex_by_wrapper(shader_wrapper* wrap)
-{
-    return jeecs::shader_generator::hlsl::_generate_code_for_hlsl_vertex(wrap);
-}
-std::string _generate_hlsl_fragment_by_wrapper(shader_wrapper* wrap)
-{
-    return jeecs::shader_generator::hlsl::_generate_code_for_hlsl_fragment(wrap);
-}
-
-WO_API wo_api jeecs_shader_wrap_glsl_vertex(wo_vm vm, wo_value args, size_t argc)
-{
-    shader_wrapper* wrap = (shader_wrapper*)wo_pointer(args + 0);
-    return wo_ret_string(vm, _generate_glsl_vertex_by_wrapper(wrap).c_str());
-}
-
-WO_API wo_api jeecs_shader_wrap_glsl_fragment(wo_vm vm, wo_value args, size_t argc)
-{
-    shader_wrapper* wrap = (shader_wrapper*)wo_pointer(args + 0);
-    return wo_ret_string(vm, _generate_glsl_fragment_by_wrapper(wrap).c_str());
-}
-
 const char* shader_wrapper_path = "je/shader.wo";
 const char* shader_wrapper_src = R"(
 // JoyEngineECS RScene shader wrapper
@@ -1136,15 +1107,6 @@ namespace shader
             sampler2d::created_sampler2ds->toarray,
             registered_custom_methods->unmapping);
     }
-
-    namespace debug
-    {
-        extern("libjoyecs", "jeecs_shader_wrap_glsl_vertex")
-        public func generate_glsl_vertex(wrapper:shader_wrapper)=> string;
-
-        extern("libjoyecs", "jeecs_shader_wrap_glsl_fragment")
-        public func generate_glsl_fragment(wrapper:shader_wrapper)=> string;
-    }
 }
 
 // Default uniform
@@ -1205,7 +1167,6 @@ public func uvframebuf(uv: float2)
 
 let is_glvalue<T> = 
     std::declval:<T>() is real
-    || std::declval:<T>() is int
     || std::declval:<T>() is float
     || std::declval:<T>() is float2
     || std::declval:<T>() is float3
@@ -1267,47 +1228,10 @@ public func abs<T>(a: T)=> T
     return apply_operation:<T>("abs", a);
 }
 
-do custom_method:<void>("JEBUILTIN_Negative",
-@"
-float JEBUILTIN_Negative(float v)
-{
-    return -v;
-}
-vec2 JEBUILTIN_Negative(vec2 v)
-{
-    return -v;
-}
-vec3 JEBUILTIN_Negative(vec3 v)
-{
-    return -v;
-}
-vec4 JEBUILTIN_Negative(vec4 v)
-{
-    return -v;
-}
-"@,
-@"
-float JEBUILTIN_Negative(float v)
-{
-    return -v;
-}
-float2 JEBUILTIN_Negative(float2 v)
-{
-    return -v;
-}
-float3 JEBUILTIN_Negative(float3 v)
-{
-    return -v;
-}
-float4 JEBUILTIN_Negative(float4 v)
-{
-    return -v;
-}
-"@);
 public func negative<T>(a: T)=> T
     where is_glvalue:<T>;
 {
-    return apply_operation:<T>("#JEBUILTIN_Negative", a);
+    return apply_operation:<T>("-", a);
 }
 
 public func pow<T>(a: T, b: T)=> T
@@ -1845,19 +1769,21 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
 
     scan_used_uniforms_in_wrap(shader_wrapper_ptr);
 
+    jeecs::shader_generator::glsl_generator _glsl_generator;
     write_to_shader->m_vertex_glsl_src
         = jeecs::basic::make_new_string(
-            _generate_glsl_vertex_by_wrapper(shader_wrapper_ptr).c_str());
+            _glsl_generator.generate_vertex(shader_wrapper_ptr).c_str());
     write_to_shader->m_fragment_glsl_src
         = jeecs::basic::make_new_string(
-            _generate_glsl_fragment_by_wrapper(shader_wrapper_ptr).c_str());
+            _glsl_generator.generate_fragment(shader_wrapper_ptr).c_str());
 
+    jeecs::shader_generator::hlsl_generator _hlsl_generator;
     write_to_shader->m_vertex_hlsl_src
         = jeecs::basic::make_new_string(
-            _generate_hlsl_vertex_by_wrapper(shader_wrapper_ptr).c_str());
+            _hlsl_generator.generate_vertex(shader_wrapper_ptr).c_str());
     write_to_shader->m_fragment_hlsl_src
         = jeecs::basic::make_new_string(
-            _generate_hlsl_fragment_by_wrapper(shader_wrapper_ptr).c_str());
+            _hlsl_generator.generate_fragment(shader_wrapper_ptr).c_str());
 
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
     write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[write_to_shader->m_vertex_in_count];
