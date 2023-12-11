@@ -492,7 +492,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
 
     for (wo_integer_t i = 0; i < vin_size; ++i)
     {
-        wo_struct_get(elem, args + 0, i);
+        wo_struct_get(elem, args + 0, (uint16_t)i);
         auto* shader_val = (jegl_shader_value*)wo_pointer(elem);
 
         if (shader_val->is_shader_in_value() == false)
@@ -544,6 +544,32 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
         custom_shader_srcs.m_glsl_impl = wo_string(elem);
         wo_struct_get(elem, val, 1);
         custom_shader_srcs.m_hlsl_impl = wo_string(elem);
+    }
+
+    size_t user_function_count = (size_t)wo_lengthof(args + 7);
+    for (size_t i = 0; i < user_function_count; ++i)
+    {
+        wo_arr_get(elem, args + 7, i);
+        wo_struct_get(val, elem, 0);
+
+        auto& user_function = wrapper->user_define_functions[wo_string(val)];
+        user_function.m_name = wo_string(val);
+
+        wo_struct_get(val, elem, 2);      
+        user_function.m_result = (shader_value_outs*)wo_pointer(val);
+
+        wo_struct_get(val, elem, 1);
+        size_t user_function_arg_count = (size_t)wo_lengthof(val);
+        for (size_t i = 0; i < user_function_arg_count; ++i)
+        {
+            wo_struct_get(elem, val, (uint16_t)i);
+            auto* shader_val = (jegl_shader_value*)wo_pointer(elem);
+
+            if (shader_val->is_shader_in_value() == false)
+                return wo_ret_halt(vm, "Unsupport value source, should be user function in.");
+
+            user_function.m_args.push_back(shader_val->get_type());
+        }
     }
 
     return wo_ret_gchandle(vm,
@@ -753,7 +779,7 @@ public func shared_uniform<ShaderResultT>(uniform_name:string)=> ShaderResultT
 extern("libjoyecs", "jeecs_shader_create_rot_mat4x4")
 public func rotation(x:real, y:real, z:real)=> float4x4;
 
-public using vertex_in = handle;
+using vertex_in = handle;
 namespace vertex_in
 {
     extern("libjoyecs", "jeecs_shader_create_vertex_in")
@@ -768,7 +794,7 @@ namespace vertex_in
     }
 }
 
-public using vertex_out = handle; // nogc! will free by shader_wrapper
+using vertex_out = handle; // nogc! will free by shader_wrapper
 namespace vertex_out
 {   
     func create<VertexOutT>(vout : VertexOutT)=> vertex_out
@@ -780,7 +806,7 @@ namespace vertex_out
     }
 }
 
-public using fragment_in = handle;
+using fragment_in = handle;
 namespace fragment_in
 {
     public func create<VertexOutT>(data_from_vert: vertex_out)=> VertexOutT
@@ -801,6 +827,27 @@ namespace fragment_out
         func _create_shader_out<FragementOutT>(is_vertex: bool, out_val: FragementOutT)=> fragment_out;
 
         return _create_shader_out(false, fout);
+    }
+}
+
+using function = struct{
+    m_name: string,
+    m_function_in: dynamic, // ArgumentTs
+    m_result_out: fragment_out,
+}
+{
+    let _generate_functions = []mut: vec<function>;
+    public func register<ArgumentTs, ResultT>(name: string, vin: ArgumentTs, result: ResultT)
+    {
+        _generate_functions->add(
+            function{
+                m_name = "je_shader_uf_" + name, 
+                m_function_in = vin: dynamic, 
+                m_result_out = fragment_out::create((result,))
+            });
+        return func(...){
+            return apply_operation:<ResultT>("#je_shader_uf_" + name, ......);
+        };
     }
 }
 
@@ -1051,7 +1098,7 @@ namespace float4x4
 
 namespace shader
 {
-    public using shader_wrapper = gchandle;
+    using shader_wrapper = gchandle;
 
     using ShaderConfig = struct {
         shared    : mut bool,
@@ -1081,7 +1128,8 @@ namespace shader
         shader_config: ShaderConfig,
         struct_or_uniform_block_decl_list: array<struct_define>,
         sampler_defines: array<sampler2d>,
-        custom_methods: array<(string, (string, string))>)=> shader_wrapper;
+        custom_methods: array<(string, (string, string))>,
+        function_declear: array<function>)=> shader_wrapper;
 
     private extern func generate()
     {
@@ -1105,7 +1153,8 @@ namespace shader
             configs,
             struct_uniform_blocks_decls->toarray,
             sampler2d::created_sampler2ds->toarray,
-            registered_custom_methods->unmapping);
+            registered_custom_methods->unmapping,
+            function::_generate_functions->toarray);
     }
 }
 

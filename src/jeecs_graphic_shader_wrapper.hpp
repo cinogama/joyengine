@@ -238,13 +238,20 @@ struct uniform_information
 class _shader_wrapper_contex
 {
 public:
+    enum class generate_target
+    {
+        VERTEX,
+        FRAGMENT,
+        USER,
+    };
+
     std::unordered_map<jegl_shader_value*, std::string> _calced_value;
     std::unordered_map<jegl_shader_value*, std::pair<size_t, std::string>> _in_value;
     int _variable_count = 0;
 
     std::unordered_set<std::string> _used_builtin_func;
 
-    bool get_var_name(jegl_shader_value* val, std::string& var_name, bool is_in_fragment)
+    bool get_var_name(jegl_shader_value* val, std::string& var_name, generate_target target)
     {
         if (val->is_init_value())
             return true;
@@ -258,13 +265,22 @@ public:
             }
             else if (val->is_shader_in_value())
             {
-                if (is_in_fragment)
-                    var_name = "_v2f_" + std::to_string(val->m_shader_in_index);
-                else
+                switch (target)
+                {
+                case _shader_wrapper_contex::generate_target::VERTEX:
                     var_name = "_in_" + std::to_string(val->m_shader_in_index);
-
-                _in_value[val] = std::pair{ val->m_shader_in_index, var_name };
-
+                    _in_value[val] = std::pair{ val->m_shader_in_index, var_name };
+                    break;
+                case _shader_wrapper_contex::generate_target::FRAGMENT:
+                    var_name = "_v2f_" + std::to_string(val->m_shader_in_index);
+                    _in_value[val] = std::pair{ val->m_shader_in_index, var_name };
+                    break;
+                case _shader_wrapper_contex::generate_target::USER:
+                    var_name = "_in_" + std::to_string(val->m_shader_in_index);
+                    break;
+                default:
+                    break;
+                }
                 _calced_value[val] = var_name;
             }
             else
@@ -393,8 +409,16 @@ struct shader_wrapper
     std::unordered_map<std::string, uniform_information> uniform_variables;
     std::unordered_map<std::string, custom_shader_src> custom_methods;
 
+    struct user_function_information
+    {
+        std::string m_name;
+        std::vector<jegl_shader_value::type> m_args;
+        shader_value_outs* m_result;
+    };
+    std::unordered_map<std::string, user_function_information> user_define_functions;
+
     shader_wrapper(
-        shader_value_outs* vout, 
+        shader_value_outs* vout,
         shader_value_outs* fout)
         : vertex_out(vout)
         , fragment_out(fout)
@@ -406,6 +430,9 @@ struct shader_wrapper
         for (auto* block : shader_struct_define_may_uniform_block)
             delete block;
 
+        for (auto& userfunc : user_define_functions)
+            delete userfunc.second.m_result;
+
         delete vertex_out;
         delete fragment_out;
     }
@@ -413,16 +440,22 @@ struct shader_wrapper
 
 class shader_source_generator
 {
+public:
+    using generate_target = _shader_wrapper_contex::generate_target;
+
 protected:
     virtual std::string get_typename(jegl_shader_value::type type) = 0;
     virtual std::string generate_struct(shader_wrapper* wrapper, shader_struct_define* st) = 0;
     virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) = 0;
 
     virtual std::string generate_code(
-        _shader_wrapper_contex*     context,
-        jegl_shader_value*          value,
-        bool                        in_fragment,
-        std::string*                out_src) = 0;
+        _shader_wrapper_contex* context,
+        jegl_shader_value* value,
+        generate_target target,
+        std::string* out_src) = 0;
+
+    virtual std::string use_custom_function(const shader_wrapper::custom_shader_src& src) = 0;
+    virtual std::string use_user_function(shader_wrapper* wrap, _shader_wrapper_contex* context, const shader_wrapper::user_function_information& user) = 0;
 
     std::string get_value_typename(jegl_shader_value* val)
     {
@@ -444,7 +477,41 @@ protected:
         }
         return result;
     }
+    std::string generate_builtin_codes(shader_wrapper* wrap, _shader_wrapper_contex* context)
+    {
+        std::string builtin_functions;
+        std::vector<std::string> user_functions;
 
+        std::unordered_set<std::string> generated_function;
+
+        while (generated_function.size() != context->_used_builtin_func.size())
+        {
+            for (auto& builtin_func_name : context->_used_builtin_func)
+            {
+                if (generated_function.find(builtin_func_name) != generated_function.end())
+                    continue;
+
+                generated_function.insert(builtin_func_name);
+
+                auto fnd = wrap->custom_methods.find(builtin_func_name);
+                if (fnd != wrap->custom_methods.end())
+                {
+                    builtin_functions += use_custom_function(fnd->second) + "\n";
+                }
+
+                auto fnd2 = wrap->user_define_functions.find(builtin_func_name);
+                if (fnd2 != wrap->user_define_functions.end())
+                {
+                    user_functions.push_back(use_user_function(wrap, context, fnd2->second));
+                }
+            }
+        }
+
+        for (auto ri = user_functions.rbegin(); ri != user_functions.rend(); ++ri)
+            builtin_functions += *ri + "\n";
+
+        return builtin_functions;
+    }
 public:
     virtual std::string generate_vertex(shader_wrapper* wrap) = 0;
     virtual std::string generate_fragment(shader_wrapper* wrap) = 0;

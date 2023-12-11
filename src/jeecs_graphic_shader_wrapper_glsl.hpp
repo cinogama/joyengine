@@ -65,13 +65,13 @@ namespace jeecs
             virtual std::string generate_code(
                 _shader_wrapper_contex* context,
                 jegl_shader_value* value,
-                bool in_fragment,
+                generate_target target,
                 std::string* out_src) override
             {
                 using namespace std;
 
                 std::string varname;
-                if (context->get_var_name(value, varname, in_fragment))
+                if (context->get_var_name(value, varname, target))
                 {
                     if (value->is_calc_value())
                     {
@@ -89,7 +89,7 @@ namespace jeecs
 
                             std::vector<std::string> variables;
                             for (size_t i = 0; i < value->m_opnums_count; i++)
-                                variables.push_back(generate_code(context, value->m_opnums[i], in_fragment, out_src));
+                                variables.push_back(generate_code(context, value->m_opnums[i], target, out_src));
 
                             if (value->m_opname == "+"s
                                 || value->m_opname == "-"s
@@ -213,10 +213,35 @@ namespace jeecs
 
                 return varname;
             }
+
+            virtual std::string use_custom_function(const shader_wrapper::custom_shader_src& src) override
+            {
+                return src.m_glsl_impl;
+            }
+            virtual std::string use_user_function(shader_wrapper* wrap, _shader_wrapper_contex* context, const shader_wrapper::user_function_information& user) override
+            {
+                assert(user.m_result != nullptr && user.m_result->out_values.size() == 1);
+                std::string function_declear = get_value_typename(user.m_result->out_values[0]) + " " + user.m_name + "(";
+
+                for (size_t inidx = 0; inidx < user.m_args.size(); ++inidx)
+                {
+                    if (inidx != 0)
+                        function_declear += ", ";
+                    function_declear += get_typename(user.m_args[inidx]) + " _in_" + std::to_string(inidx);
+                }
+                
+
+                std::string function_body;
+                std::string result_var_name = generate_code(context, user.m_result->out_values[0], generate_target::USER, &function_body);
+
+                function_declear += ")\n{\n" + function_body + "\n    return " + result_var_name + ";\n}";
+                return function_declear;
+            }
+
         public:
             virtual std::string generate_vertex(shader_wrapper* wrap) override
             {
-                 _shader_wrapper_contex contex;
+                _shader_wrapper_contex contex;
                 std::string          body_result;
                 std::string          io_declear;
 
@@ -224,18 +249,10 @@ namespace jeecs
 
                 std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
                 for (auto* out_val : wrap->vertex_out->out_values)
-                    outvalue.push_back(std::make_pair(out_val, generate_code(&contex, out_val, false, &body_result)));
+                    outvalue.push_back(std::make_pair(out_val, generate_code(&contex, out_val, generate_target::VERTEX, &body_result)));
 
                 // Generate built function src here.
-                std::string built_in_srcs;
-                for (auto& builtin_func_name : contex._used_builtin_func)
-                {
-                    auto fnd = wrap->custom_methods.find(builtin_func_name);
-                    if (fnd != wrap->custom_methods.end())
-                    {
-                        built_in_srcs += fnd->second.m_glsl_impl + "\n";
-                    }
-                }
+                std::string built_in_srcs = generate_builtin_codes(wrap, &contex);
 
                 for (auto& [name, uinfo] : wrap->uniform_variables)
                 {
@@ -268,8 +285,8 @@ namespace jeecs
                 return std::move(
                     "// Vertex shader source\n"
                     + unifrom_block
-                    + built_in_srcs
                     + io_declear
+                    + built_in_srcs
                     + body_result);
             }
             virtual std::string generate_fragment(shader_wrapper* wrap) override
@@ -282,18 +299,10 @@ namespace jeecs
 
                 std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
                 for (auto* out_val : wrap->fragment_out->out_values)
-                    outvalue.push_back(std::make_pair(out_val, generate_code(&contex, out_val, true, &body_result)));
+                    outvalue.push_back(std::make_pair(out_val, generate_code(&contex, out_val, generate_target::FRAGMENT, &body_result)));
 
                 // Generate built function src here.
-                std::string built_in_srcs;
-                for (auto& builtin_func_name : contex._used_builtin_func)
-                {
-                    auto fnd = wrap->custom_methods.find(builtin_func_name);
-                    if (fnd != wrap->custom_methods.end())
-                    {
-                        built_in_srcs += fnd->second.m_glsl_impl + "\n";
-                    }
-                }
+                std::string built_in_srcs = generate_builtin_codes(wrap, &contex);
 
                 for (auto& [name, uinfo] : wrap->uniform_variables)
                 {
@@ -327,8 +336,8 @@ namespace jeecs
                 return std::move(
                     "// Fragment shader source\n"
                     + unifrom_block
-                    + built_in_srcs
                     + io_declear
+                    + built_in_srcs
                     + body_result);
             }
         };
