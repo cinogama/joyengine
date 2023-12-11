@@ -125,7 +125,18 @@ namespace jeecs
                                 if (funcname == "texture")
                                 {
                                     assert(variables.size() == 2);
-                                    apply +=
+
+                                    if (value->m_opnums[0]->is_shader_in_value())
+                                        apply +=
+                                        variables[0]
+                                        + ".Sample("
+                                        + variables[0]
+                                        + "_sampler"
+                                        + ", "
+                                        + variables[1]
+                                        + ")";
+                                    else
+                                        apply +=
                                         variables[0]
                                         + ".Sample(sampler_"
                                         + std::to_string(value->m_opnums[0]->m_binded_sampler_id)
@@ -148,6 +159,18 @@ namespace jeecs
                                     for (size_t i = 0; i < variables.size(); i++)
                                     {
                                         apply += variables[i];
+
+                                        if (0 != (value->m_opnums[i]->get_type() & (
+                                            jegl_shader_value::type::TEXTURE2D
+                                            | jegl_shader_value::type::TEXTURE2D_MS
+                                            | jegl_shader_value::type::TEXTURE_CUBE)))
+                                        {
+                                            if (value->m_opnums[i]->is_shader_in_value())
+                                                apply += ", " + variables[i] + "_sampler";
+                                            else
+                                                apply += ", sampler_" + std::to_string(value->m_opnums[i]->m_binded_sampler_id);
+                                        }
+
                                         if (i + 1 != variables.size())
                                             apply += ", ";
                                     }
@@ -235,7 +258,7 @@ namespace jeecs
                         break;
                     default:
                         break;
-                    }                        
+                    }
                 }
 
                 return varname;
@@ -255,6 +278,14 @@ namespace jeecs
                     if (inidx != 0)
                         function_declear += ", ";
                     function_declear += get_typename(user.m_args[inidx]) + " _in_" + std::to_string(inidx);
+
+                    if (0 != (user.m_args[inidx] & (
+                        jegl_shader_value::type::TEXTURE2D
+                        | jegl_shader_value::type::TEXTURE2D_MS
+                        | jegl_shader_value::type::TEXTURE_CUBE)))
+                    {
+                        function_declear += ", SamplerState _in_" + std::to_string(inidx) + "_sampler";
+                    }
                 }
 
 
@@ -393,9 +424,9 @@ namespace jeecs
                 {
                     io_declear +=
                         "    "
-                        + get_value_typename(outvarname.first) 
-                        + " _v2f_" 
-                        + std::to_string(outid++) 
+                        + get_value_typename(outvarname.first)
+                        + " _v2f_"
+                        + std::to_string(outid++)
                         + ": ";
 
                     switch (outvarname.first->get_type())
@@ -546,7 +577,7 @@ namespace jeecs
                     io_declear +=
                         "    "
                         + get_value_typename(inval)
-                        + " _v2f_" 
+                        + " _v2f_"
                         + std::to_string(outid++) + ": ";
 
                     switch (inval->get_type())

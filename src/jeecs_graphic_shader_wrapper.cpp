@@ -54,7 +54,7 @@ void _free_shader_value(void* shader_value)
 
 WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_gchandle(vm, 
+    return wo_ret_gchandle(vm,
         new jegl_shader_value(
             (float)wo_real(args + 0)), nullptr, _free_shader_value);
 }
@@ -206,9 +206,9 @@ WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args, size
 {
     return wo_ret_gchandle(vm,
         new jegl_shader_value(
-            (jegl_shader_value::type)wo_int(args + 0), 
-            wo_string(args + 1), 
-            (jegl_shader_value*)nullptr, 
+            (jegl_shader_value::type)wo_int(args + 0),
+            wo_string(args + 1),
+            (jegl_shader_value*)nullptr,
             (bool)wo_bool(args + 2))
         , nullptr, _free_shader_value);
 }
@@ -555,7 +555,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
         auto& user_function = wrapper->user_define_functions[wo_string(val)];
         user_function.m_name = wo_string(val);
 
-        wo_struct_get(val, elem, 2);      
+        wo_struct_get(val, elem, 2);
         user_function.m_result = (shader_value_outs*)wo_pointer(val);
 
         wo_struct_get(val, elem, 1);
@@ -570,6 +570,9 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc
 
             user_function.m_args.push_back(shader_val->get_type());
         }
+
+        user_function.m_used_in_fragment = false;
+        user_function.m_used_in_vertex = false;
     }
 
     return wo_ret_gchandle(vm,
@@ -1751,6 +1754,88 @@ using uniform_block = struct_define
     return out_struct_decl;
 }
 
+#macro SHADER_FUNCTION
+{
+    /*
+    SHADER_FUNCTION!
+    public func add(a: float, b: float)
+    */
+
+    let mut desc = "";
+    for (;;)
+    {
+        let token = lexer->next;
+        if (token == "")
+        {
+            lexer->error("Unexpected EOF.");
+            return "";
+        }
+        else if (token == "func")
+            break;
+        else
+            desc += token + " ";
+    }
+
+    let func_name = lexer->next;
+    if (lexer->next != "(")
+    {
+        lexer->error("Expected '(' here.");
+        return "";
+    }
+
+    let args = []mut: vec<(string, string)>;
+    for (;;)
+    {
+        let arg_name = lexer->next;
+        if (arg_name == "\x29")
+            break;
+        else if (arg_name == "")
+        {
+            lexer->error("Unexpected EOF.");
+            return "";
+        }
+        
+        if (lexer->next != ":")
+        {
+            lexer->error("Expected ':' here.");
+            return "";
+        }
+        
+        let arg_type = lexer->next;
+        if (arg_type == "")
+        {
+            lexer->error("Unexpected EOF.");
+            return "";
+        }
+        args->add((arg_name, arg_type));
+
+        if (lexer->peek == ",")
+            do lexer->next;
+    }
+
+    let mut result = F"let {func_name}_uf_vin = vertex_in::create();";
+    result += F"let {func_name}_uf_args = (";
+
+    for (let idx, (_, arg_type): args)
+    {
+        result += F"{func_name}_uf_vin->in:<{arg_type}>({idx}), ";
+    }
+    result += ");";
+
+    result += desc + F"let {func_name} = function::register(\"{func_name}\", {func_name}_uf_args, {func_name}_uf_impl({func_name}_uf_args...));";
+
+    result += F"func {func_name}_uf_impl(";
+    for (let idx, (arg_name, arg_type): args)
+    {
+        if (idx != 0)
+            result += ", ";
+        result += F"{arg_name}: {arg_type}";
+    }
+    result += ")\n";
+
+    return result;
+}
+
 UNIFORM_BUFFER! JOYENGINE_DEFAULT = 0
 {
     je_time: float4,
@@ -1788,6 +1873,18 @@ void _scan_used_uniforms_in_vals(
                 return;
             sanned->insert(val);
 
+            if (val->m_opname[0] == '#')
+            {
+                auto fnd = wrap->user_define_functions.find(val->m_opname + 1);
+                if (fnd != wrap->user_define_functions.end())
+                {
+                    if (in_vertex)
+                        fnd->second.m_used_in_vertex = true;
+                    else
+                        fnd->second.m_used_in_fragment = true;
+                }
+            }
+
             for (size_t i = 0; i < val->m_opnums_count; ++i)
             {
                 _scan_used_uniforms_in_vals(wrap, val->m_opnums[i], in_vertex, sanned);
@@ -1803,6 +1900,15 @@ void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
         _scan_used_uniforms_in_vals(wrap, vout, true, &_scanned_val);
     for (auto* vout : wrap->fragment_out->out_values)
         _scan_used_uniforms_in_vals(wrap, vout, false, &_scanned_val);
+
+    for (auto& [_, func_info] : wrap->user_define_functions)
+    {
+        assert(func_info.m_result != nullptr && func_info.m_result->out_values.size() == 1);
+        if (func_info.m_used_in_vertex)
+            _scan_used_uniforms_in_vals(wrap, func_info.m_result->out_values[0], true, &_scanned_val);
+        if (func_info.m_used_in_fragment)
+            _scan_used_uniforms_in_vals(wrap, func_info.m_result->out_values[0], false, &_scanned_val);
+    }
 }
 
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)
@@ -1936,7 +2042,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
     } while (false);
 
     write_to_shader->m_sampler_count = shader_wrapper_ptr->decleared_samplers.size();
-    auto * sampler_methods = new jegl_shader::sampler_method[write_to_shader->m_sampler_count];
+    auto* sampler_methods = new jegl_shader::sampler_method[write_to_shader->m_sampler_count];
     for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
     {
         auto* sampler = shader_wrapper_ptr->decleared_samplers[i];
@@ -1951,7 +2057,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         auto* passids = new uint32_t[sampler->m_binded_texture_passid.size()];
 
         static_assert(std::is_same<decltype(sampler_methods[i].m_pass_ids), uint32_t*>::value);
-        
+
         memcpy(passids, sampler->m_binded_texture_passid.data(), sampler_methods[i].m_pass_id_count * sizeof(uint32_t));
         sampler_methods[i].m_pass_ids = passids;
     }
@@ -1989,6 +2095,6 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
     }
 
     for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
-        delete []write_to_shader->m_sampler_methods[i].m_pass_ids;
+        delete[]write_to_shader->m_sampler_methods[i].m_pass_ids;
     delete[]write_to_shader->m_sampler_methods;
 }

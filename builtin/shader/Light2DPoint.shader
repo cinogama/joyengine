@@ -36,6 +36,7 @@ public func vert(v: vin)
     };
 }
 
+SHADER_FUNCTION!
 func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
 {
     let mut shadow_factor = float::zero;

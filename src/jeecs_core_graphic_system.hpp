@@ -83,6 +83,7 @@ import je::shader;
 
 public let PI = float::new(3.1415926535897932384626);
 
+SHADER_FUNCTION!
 public func DistributionGGX(N: float3, H: float3, roughness: float)
 {
     let a = roughness * roughness;
@@ -97,6 +98,7 @@ public func DistributionGGX(N: float3, H: float3, roughness: float)
     return nom / pidenom2;
 }
 
+SHADER_FUNCTION!
 public func GeometrySchlickGGX(NdotV: float, roughness: float)
 {
     let r = roughness + float::one;
@@ -108,6 +110,7 @@ public func GeometrySchlickGGX(NdotV: float, roughness: float)
     return nom / denom;
 }
 
+SHADER_FUNCTION!
 public func GeometrySmith(N: float3, V: float3, L: float3, roughness: float)
 {
     let NdotV = max(dot(N, V), float::zero);
@@ -119,6 +122,7 @@ public func GeometrySmith(N: float3, V: float3, L: float3, roughness: float)
     return ggx1 * ggx2;
 }
 
+SHADER_FUNCTION!
 public func FresnelSchlick(cosTheta: float, F0: float3)
 {
     return F0 + (float3::one - F0) * pow(float::one - cosTheta, float::new(5.));

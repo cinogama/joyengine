@@ -414,6 +414,9 @@ struct shader_wrapper
         std::string m_name;
         std::vector<jegl_shader_value::type> m_args;
         shader_value_outs* m_result;
+
+        bool m_used_in_vertex;
+        bool m_used_in_fragment;
     };
     std::unordered_map<std::string, user_function_information> user_define_functions;
 

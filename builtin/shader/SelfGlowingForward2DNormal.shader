@@ -31,6 +31,7 @@ using fout = struct {
                                   // w 系数暂时留空，应当设置为1
 };
 
+SHADER_FUNCTION!
 func invscale_f3_2_f4(v: float3)
 {
     return float4::create(v / abs(je_local_scale), 1.);
@@ -57,6 +58,7 @@ public func vert(v: vin)
     };
 }
 
+SHADER_FUNCTION!
 func get_normal_from_map(normal_map: texture2d, uv : float2)
 {
     return (float::new(2.) * texture(normal_map, uv)->xyz) - float3::new(1., 1., 1.);
