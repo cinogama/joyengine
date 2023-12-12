@@ -1746,6 +1746,10 @@ namespace jeecs_impl
         }
         void update() noexcept
         {
+            // 0. update actions & worlds
+            update_universe_action_and_worlds();
+
+            // Wait until new frame.
             double current_time = je_clock_time();
             _m_real_deltatime = jeecs::math::clamp(
                 current_time - _m_real_current_time, 0., _m_max_deltatime);
@@ -1761,9 +1765,6 @@ namespace jeecs_impl
             }
 
             // New frame begin here!!!!
-
-            // 0. update actions & worlds
-            update_universe_action_and_worlds();
 
             // Walk through all jobs:
             // 1. Do pre jobs.
