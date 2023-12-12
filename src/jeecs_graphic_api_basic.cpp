@@ -529,11 +529,14 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
         thread->_m_thread_notifier->m_update_waiter.notify_all();
     } while (0);
 
-    auto* promise = reinterpret_cast<std::promise<void>*>(thread->_m_promise);
+    auto* promise = std::launder(reinterpret_cast<std::promise<void>*>(thread->_m_promise));
     promise->get_future().get();
 
     delete promise;
+
+    delete std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update));
     delete thread->_m_thread_notifier;
+    delete thread->m_apis;
     delete thread;
 }
 

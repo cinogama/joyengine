@@ -1762,6 +1762,9 @@ namespace jeecs_impl
 
             // New frame begin here!!!!
 
+            // 0. update actions & worlds
+            update_universe_action_and_worlds();
+
             // Walk through all jobs:
             // 1. Do pre jobs.
             ParallelForeach(
@@ -1777,10 +1780,7 @@ namespace jeecs_impl
                         shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
 
-            // 2. update actions & worlds
-            update_universe_action_and_worlds();
-
-            // 3. Do normal jobs.
+            // 2. Do normal jobs.
             ParallelForeach(
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
                 [this](ecs_job* shared_job) {
@@ -1793,7 +1793,7 @@ namespace jeecs_impl
                         shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
 
-            // 4. Do after jobs.
+            // 3. Do after jobs.
             ParallelForeach(
                 _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
                 [this](ecs_job* shared_job) {
@@ -1829,8 +1829,22 @@ namespace jeecs_impl
                     }
 
                     // Make sure universe action empty.
-                    update();
-                    assert(_m_universe_actions.peek() == nullptr);
+                    do
+                    {
+                        update();
+                        assert(_m_universe_actions.peek() == nullptr);
+
+                        // invoke callback
+                        auto* callback_func_node = m_exit_callback_list.pick_all();
+                        while (callback_func_node)
+                        {
+                            auto* current_callback = callback_func_node;
+                            callback_func_node = callback_func_node->last;
+
+                            current_callback->m_method();
+                            delete current_callback;
+                        }
+                    } while (_m_universe_actions.peek() != nullptr);
 
                     // Free all ecs_jobs.
                     for (ecs_job* pre_job : _m_shared_pre_jobs)
@@ -1840,16 +1854,10 @@ namespace jeecs_impl
                     for (ecs_job* after_job : _m_shared_after_jobs)
                         delete after_job;
 
-                    // invoke callback
-                    auto* callback_func_node = m_exit_callback_list.pick_all();
-                    while (callback_func_node)
-                    {
-                        auto* current_callback = callback_func_node;
-                        callback_func_node = callback_func_node->last;
-
-                        current_callback->m_method();
-                        delete current_callback;
-                    }
+                    // Clear all jobs.
+                    _m_shared_pre_jobs.clear();
+                    _m_shared_jobs.clear();
+                    _m_shared_after_jobs.clear();
                 }
             ));
 
