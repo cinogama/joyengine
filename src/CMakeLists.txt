@@ -104,7 +104,7 @@ if (JE4_ENABLE_METAL_GAPI AND APPLE)
     add_definitions(-DJE_ENABLE_METAL_GAPI)
 endif()
 
-# OpenGL3.3 / OpenGLES3.2 / Vulkan needed:
+# OpenGL3.3 / OpenGLES3.0 / Vulkan needed:
 if (JE4_ENABLE_OPENGL330_GAPI OR 
     JE4_ENABLE_OPENGLES300_GAPI OR 
     JE4_ENABLE_VULKAN110_GAPI)
