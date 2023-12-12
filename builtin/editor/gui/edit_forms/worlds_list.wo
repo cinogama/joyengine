@@ -2,8 +2,8 @@
 // 用于显示和编辑项目中的世界
 
 import je::gui;
-import builtin::api::gui::form::input;
-import builtin::api::gui::form::ask;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::ask;
 
 import builtin::editor::gui::edit_forms::world_creator;
 import builtin::api::serialize::main;

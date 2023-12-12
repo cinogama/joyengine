@@ -4,10 +4,10 @@ import je::gui;
 
 import builtin::editor::gui::main;
 import builtin::editor::gui::tilemap::main;
-import builtin::api::dbg::main;
+import builtin::editor::dbg::main;
 import builtin::editor::gui::edit_forms::export_project;
-import builtin::api::gui::inputmgr;
-import builtin::api::gui::style;
+import builtin::editor::gui::inputmgr;
+import builtin::editor::gui::style;
 import builtin::editor::gui::scripteditor;
 
 using je::gui;

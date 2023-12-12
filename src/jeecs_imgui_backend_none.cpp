@@ -19,6 +19,11 @@ void jegui_init_none(
 
 void jegui_update_none()
 {
+    ImGuiIO& io = ImGui::GetIO();
+
+    io.DisplaySize = ImVec2(1920, 1080);
+    io.DeltaTime = 1.0f / 60.0f;
+
     jegui_update_basic();
 }
 

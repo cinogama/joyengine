@@ -2,7 +2,7 @@
 // 用于编辑器样式调整
 import je::gui;
 import woo::std;
-import builtin::api::gui::form::ask;
+import builtin::editor::gui::form::ask;
 
 using je::gui;
 using je::gui::ImGuiCol;

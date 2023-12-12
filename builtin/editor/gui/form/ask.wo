@@ -2,7 +2,7 @@
 // 询问窗口
 
 import je::gui;
-import builtin::api::gui::inputmgr;
+import builtin::editor::gui::inputmgr;
 
 using je::gui;
 

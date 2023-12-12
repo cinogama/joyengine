@@ -9,9 +9,8 @@ import pkg::worst;
 import config;
 
 import builtin::editor::environment::main;
-import builtin::api::rend::main;
-import builtin::api::gui::form::msg;
-import builtin::api::gui::form::ask;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::form::ask;
 import builtin::editor::cpp::main;
 import builtin::editor::tools::script_manager;
 import builtin::editor::gui::draw_pannel::main;

@@ -6,10 +6,10 @@ import je::gui;
 import je::towoo;
 
 import pkg::math;
-import builtin::api::gui::form::input;
-import builtin::api::gui::form::ask;
-import builtin::api::gui::form::msg;
-import builtin::api::dbg::main;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::ask;
+import builtin::editor::gui::form::msg;
+import builtin::editor::dbg::main;
 
 import builtin::editor::gui::edit_forms::entity_creator;
 import builtin::editor::gui::draw_pannel::main;

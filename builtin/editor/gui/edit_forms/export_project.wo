@@ -241,7 +241,7 @@ namespace editor::gui::edit_forms
                                 import je::editor;
                                 import woo::std;
                                 import builtin::api::serialize::main;
-                                import builtin::api::gui::form::panic;
+                                import builtin::editor::gui::form::panic;
 
                                 je::editor::set_able_shared_glresource(true);
                                 je::editor::register_panic_hook(jeapi::gui::form::panic);

@@ -910,7 +910,7 @@ namespace editor::gui::tilemap
         }
         func show_tile_sets(self: TileEditContext)
         {
-            if (BeginChildSize("##tilemapsets", 400., 0.))
+            if (BeginChildSize("##tilemapsets", 250., 0.))
             {
                 do InputInt("绘制层级", self.m_drawing_layer)->>\n = self.m_drawing_layer = n;;
                 SameLine();

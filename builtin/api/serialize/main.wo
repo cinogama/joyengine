@@ -3,8 +3,8 @@
 
 import je;
 import je::editor;
-import builtin::api::gui::form::msg;
-import builtin::api::tool::varify;
+import builtin::editor::gui::form::msg;
+import builtin::editor::tools::varify;
 
 using je;
 

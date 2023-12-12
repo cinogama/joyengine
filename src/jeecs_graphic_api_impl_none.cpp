@@ -11,11 +11,6 @@ namespace jeecs::graphic::api::none
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) start!");
 
-        if (config->m_fps == 0)
-            je_ecs_universe_set_frame_deltatime(gthread->m_universe_instance, 0.0);
-        else
-            je_ecs_universe_set_frame_deltatime(gthread->m_universe_instance, 1.0 / (double)config->m_fps);
-
         jegui_init_none(
             [](auto* res)->void* {return nullptr; },
             [](auto* res){});

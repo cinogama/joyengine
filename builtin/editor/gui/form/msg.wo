@@ -4,7 +4,7 @@
 import je;
 import je::gui;
 
-import builtin::api::gui::inputmgr;
+import builtin::editor::gui::inputmgr;
 
 using je::gui;
 using je::graphic;

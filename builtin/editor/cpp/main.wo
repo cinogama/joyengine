@@ -10,7 +10,7 @@ import pkg::process;
 import pkg::fsys;
 import pkg::thread;
 
-import builtin::api::tool::varify;
+import builtin::editor::tools::varify;
 
 using je::gui;
 using jeapi::varify;

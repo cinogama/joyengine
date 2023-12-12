@@ -1,0 +1,14 @@
+// 
+
+namespace jeapi::gui::framework
+{
+    using Form = struct{
+
+    }
+    {
+        public func create()
+        {
+            
+        }
+    }
+}

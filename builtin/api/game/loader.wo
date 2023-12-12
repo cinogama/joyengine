@@ -1,7 +1,45 @@
-// jeapi::game::loader
-//
+import je;
+import builtin::api::serialize::main;
 
-namespace jeapi::game::loader
+namespace jeapi::loader
 {
+    namespace scene
+    {
+        public func load(u: je::universe, wpath: string)
+        {
+            return je::file::readall(wpath)
+                =>> \dat = dat->dict::deserialize;
+                ->> \dat = jeapi::deserialize::world(u, dat
+                    ->> \k, v = (k: string, v);,
+                    false)
+                    ;
+                ;
+        }
+    }
 
+    using prefab = struct{
+        m_world: je::world,
+        m_prefab: je::entity,
+    }
+    {
+        public func create(w: je::world, wpath: string)
+        {
+            return je::file::readall(wpath)
+                =>> \dat = dat->dict::deserialize;
+                =>> \dat = jeapi::deserialize::prefab(w, dat
+                    ->> \k, v = (k: string, v);,
+                    false)
+                    ;
+                ->> \e = prefab{m_world = w, m_prefab = e};
+                ;
+        }
+        public func instance(self: prefab)
+        {
+            return self.m_world->instance(self.m_prefab);
+        }
+        public func close(self: prefab)
+        {
+            self.m_prefab->close();
+        }
+    }
 }

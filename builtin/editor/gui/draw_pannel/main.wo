@@ -7,7 +7,7 @@ import pkg::fsys;
 import tools;
 import imagescripts;
 
-import builtin::api::gui::inputmgr;
+import builtin::editor::gui::inputmgr;
 
 using je;
 using je::gui;

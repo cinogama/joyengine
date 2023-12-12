@@ -2,7 +2,7 @@
 // debug相关API，通常是些不怎么安全合适的接口函数
 
 import je;
-import builtin::api::gui::form::msg;
+import builtin::editor::gui::form::msg;
 
 namespace jeapi::debug
 {
