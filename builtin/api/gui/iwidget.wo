@@ -1,0 +1,19 @@
+// 
+import woo::std;
+
+import pkg::interface;
+
+import je;
+import je::gui;
+
+using std;
+using je;
+using je::gui;
+
+namespace jeapi::gui::framework
+{
+    interface! IWidget
+    {
+        public func show(self: IWidget)=> void;
+    }
+}

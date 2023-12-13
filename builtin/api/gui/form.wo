@@ -1,0 +1,137 @@
+// 
+import woo::std;
+
+import je;
+import je::gui;
+
+using std;
+using je;
+using je::gui;
+
+namespace jeapi::gui::framework
+{
+    using Form = struct{
+        m_name: string,
+        m_enable_close: mut bool,
+
+        m_auto_resize: mut bool,
+        m_no_docking: mut bool,
+
+        m_menu: vec<Menu>,
+        m_widgets: vec<IWidget>,
+
+        m_event_closing: mut (Form)=> bool,
+        m_event_closed: mut (Form)=> void,
+
+        _m_show_flag: mut bool,
+    }
+    {
+        public func force_close(self: Form)
+        {
+            self._m_show_flag = false;
+            self.m_event_closed(self);
+        }
+        public func close(self: Form)
+        {
+            if (self.m_event_closing(self))
+            {
+                self->force_close();
+                return true;
+            }
+            return false;
+        }
+        private func _framework_job(self: Form)
+        {
+            let title = self.m_name;
+            let mut attr = WindowsAttribute::ImGuiWindowFlags_None;
+
+            if (self.m_auto_resize)
+                attr += WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize;
+
+            if (self.m_no_docking)
+                attr += WindowsAttribute::ImGuiWindowFlags_NoDocking;
+
+            if (!self.m_menu->empty)
+                attr += WindowsAttribute::ImGuiWindowFlags_MenuBar;
+
+            match (self.m_enable_close ? BeginAttrOpen(title, attr) | option::value(BeginAttr(title, attr)))
+            {
+            value(show)?
+                if (show)
+                {
+                    if (!self.m_menu->empty)
+                    {
+                        if (BeginMenuBar())
+                        {
+                            for (let _, m : self.m_menu)
+                                m->show;
+                            
+                            EndMenuBar();
+                        }
+                    }
+
+                    for (let _, w: self.m_widgets)
+                        w->show;
+                }
+            none?
+                do self->close;
+            }
+            End();
+
+            return self._m_show_flag;
+        }
+        public func create(title: string)
+        {
+            let self = Form{
+                m_name = title,
+                m_enable_close = mut true,
+                
+                m_auto_resize = mut true,
+                m_no_docking = mut true,
+
+                m_menu = []mut,
+                m_widgets = []mut,
+
+                m_event_closing = mut \_=true;,
+                m_event_closed = mut \_=do nil;,
+
+                _m_show_flag = mut true,
+            }; 
+
+            launch(_framework_job, (self,));
+
+            return self;
+        }
+        public func set_closing_callback(self: Form, callback: (Form)=> bool)
+        {
+            self.m_event_closing = callback;
+        }
+        public func set_closed_callback(self: Form, callback: (Form)=> void)
+        {
+            self.m_event_closed = callback;
+        }
+        public func set_enable_close(self: Form, enable: bool)
+        {
+            self.m_enable_close = enable;
+        }
+        public func set_auto_resize(self: Form, enable: bool)
+        {
+            self.m_auto_resize = enable;
+        }
+        public func set_no_docking(self: Form, enable: bool)
+        {
+            self.m_no_docking = enable;
+        }
+        public func add_menu(self: Form, name: string)
+        {
+            let menu = Menu::create(name);
+            self.m_menu->add(menu);
+            return menu;
+        }
+        public func add_widget<WidgetT>(self: Form, widget: WidgetT)
+            where IWidget::create(widget) is IWidget;
+        {
+            self.m_widgets->add(IWidget::create(widget));
+        }
+    }
+}

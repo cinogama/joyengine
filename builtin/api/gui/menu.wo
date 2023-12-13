@@ -1,0 +1,54 @@
+// 
+import woo::std;
+
+import je;
+import je::gui;
+
+using std;
+using je;
+using je::gui;
+
+namespace jeapi::gui::framework
+{
+    using Menu = struct{
+        m_name: string,
+        m_elems: vec<IWidget>,
+    }
+    {
+        public func create(name: string)
+        {
+            let self = Menu{
+                m_name = name,
+                m_elems = []mut,
+            };
+
+            return self;
+        }
+        public func add_item<T>(self: Menu, name: string)
+            where std::declval:<T>() is MenuItem 
+                || std::declval:<T>() is Menu
+                ;
+        {
+            let elem = T::create(name);
+            
+            self.m_elems->add(IWidget::create(elem));
+            
+            return elem;
+        }
+        public func add_separator(self: Menu)
+        {
+            self.m_elems->add(IWidget::create(Separator::create()));
+        }
+        public func show(self: Menu)
+        {
+            if (BeginMenu(self.m_name))
+            {
+                for (let _, elem : self.m_elems)
+                {
+                    elem->show;
+                }
+                EndMenu();
+            }
+        }
+    }
+}
