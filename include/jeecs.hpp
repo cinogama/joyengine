@@ -820,8 +820,10 @@ je_ecs_universe_create [基本接口]
 说明：
     宇宙创建后会创建一个线程，在循环内执行逻辑更新等操作。此循环会在调用
     je_ecs_universe_stop终止且所有世界关闭之后退出，并依次执行以下操作：
-        1. 解除注册所有Job
-        2. 按注册的相反顺序调用退出时回调
+        1. 处理剩余的Universe消息
+        2. 按注册的相反顺序调用退出时回调，若Universe仍有消息未处理，
+        返回第一步
+        3. 解除注册所有Job
     完成全部操作后，宇宙将处于可销毁状态。
 */
 JE_API void* je_ecs_universe_create(void);
@@ -857,7 +859,7 @@ JE_API void je_ecs_universe_stop(void* universe);
 /*
 je_ecs_universe_register_exit_callback [基本接口]
 向指定宇宙中注册宇宙关闭之后的回调函数，关于回调函数的调用时机：
-    * 不能对已经终止的宇宙注册回调，回调函数将不会得到执行
+    * 不能对已经终止的宇宙注册回调，回调函数将不会得到执行，并导致内存泄漏！
 请参见
     je_ecs_universe_create
 */
