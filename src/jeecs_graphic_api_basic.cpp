@@ -646,7 +646,8 @@ void jegl_using_resource(jegl_resource* resource)
         size_t resource_blob_version = 0;
         if (resource->m_path != nullptr)
         {
-            resource_blob_version = _get_resource_blob_unload_counter(resource->m_path);
+            resource_blob_version = _get_resource_blob_unload_counter(
+                resource->m_path);
 
             auto fnd = _current_graphic_thread->_m_thread_notifier
                 ->_m_cached_resource_blobs.find(resource->m_path);
@@ -665,11 +666,10 @@ void jegl_using_resource(jegl_resource* resource)
                 }
             }
         }
+
         if (resource_blob == nullptr)
-        {
-            resource_blob = _current_graphic_thread->m_apis
-                ->create_resource_blob(_current_graphic_thread->m_userdata, resource);
-        }
+            resource_blob = _current_graphic_thread->m_apis->create_resource_blob(
+                _current_graphic_thread->m_userdata, resource);
 
         if (resource->m_path != nullptr)
         {
@@ -681,61 +681,60 @@ void jegl_using_resource(jegl_resource* resource)
         }
 
         // Init resource by blob.
-        _current_graphic_thread->m_apis
-            ->init_resource(_current_graphic_thread->m_userdata, resource_blob, resource);
+        _current_graphic_thread->m_apis->init_resource(
+            _current_graphic_thread->m_userdata, resource_blob, resource);
 
         if (resource->m_path == nullptr)
-        {
-            _current_graphic_thread->m_apis
-                ->close_resource_blob(_current_graphic_thread->m_userdata, resource_blob);
-        }
+            _current_graphic_thread->m_apis->close_resource_blob(
+                _current_graphic_thread->m_userdata, resource_blob);
 
         _current_graphic_thread->_m_thread_notifier->_m_created_resources.insert(resource);
     }
 
-    _current_graphic_thread->m_apis->using_resource(_current_graphic_thread->m_userdata, resource);
+    _current_graphic_thread->m_apis->using_resource(
+        _current_graphic_thread->m_userdata, resource);
 
-    if (resource->m_custom_resource != nullptr)
+    if (resource->m_type == jegl_resource::SHADER)
     {
-        if (resource->m_type == jegl_resource::SHADER)
+        auto uniform_vars = resource->m_raw_shader_data != nullptr 
+            ? resource->m_raw_shader_data->m_custom_uniforms
+            : nullptr;
+
+        while (uniform_vars)
         {
-            auto uniform_vars = resource->m_raw_shader_data->m_custom_uniforms;
-            while (uniform_vars)
+            if (uniform_vars->m_index != jeecs::typing::INVALID_UINT32)
             {
-                if (uniform_vars->m_index != jeecs::typing::INVALID_UINT32)
+                if (uniform_vars->m_updated || need_init_resouce)
                 {
-                    if (uniform_vars->m_updated || need_init_resouce)
+                    uniform_vars->m_updated = false;
+                    switch (uniform_vars->m_uniform_type)
                     {
-                        uniform_vars->m_updated = false;
-                        switch (uniform_vars->m_uniform_type)
-                        {
-                        case jegl_shader::uniform_type::FLOAT:
-                            jegl_uniform_float(uniform_vars->m_index, uniform_vars->x);
-                            break;
-                        case jegl_shader::uniform_type::FLOAT2:
-                            jegl_uniform_float2(uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
-                            break;
-                        case jegl_shader::uniform_type::FLOAT3:
-                            jegl_uniform_float3(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
-                            break;
-                        case jegl_shader::uniform_type::FLOAT4:
-                            jegl_uniform_float4(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
-                            break;
-                        case jegl_shader::uniform_type::FLOAT4X4:
-                            jegl_uniform_float4x4(uniform_vars->m_index, uniform_vars->mat4x4);
-                            break;
-                        case jegl_shader::uniform_type::INT:
-                        case jegl_shader::uniform_type::TEXTURE:
-                            jegl_uniform_int(uniform_vars->m_index, uniform_vars->n);
-                            break;
-                        default:
-                            jeecs::debug::logerr("Unsupport uniform variable type."); break;
-                            break;
-                        }
+                    case jegl_shader::uniform_type::FLOAT:
+                        jegl_uniform_float(uniform_vars->m_index, uniform_vars->x);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT2:
+                        jegl_uniform_float2(uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT3:
+                        jegl_uniform_float3(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4:
+                        jegl_uniform_float4(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4X4:
+                        jegl_uniform_float4x4(uniform_vars->m_index, uniform_vars->mat4x4);
+                        break;
+                    case jegl_shader::uniform_type::INT:
+                    case jegl_shader::uniform_type::TEXTURE:
+                        jegl_uniform_int(uniform_vars->m_index, uniform_vars->n);
+                        break;
+                    default:
+                        jeecs::debug::logerr("Unsupport uniform variable type."); break;
+                        break;
                     }
                 }
-                uniform_vars = uniform_vars->m_next;
             }
+            uniform_vars = uniform_vars->m_next;
         }
     }
 }
