@@ -369,8 +369,6 @@ void je_finish()
         _je_global_old_panic_handler = nullptr;
     }
 
-    je_log_finish();
-
     jewo_clear_global_pin_value();
 
     wo_finish([](void*)
@@ -387,6 +385,8 @@ void je_finish()
     _je_unregister_guard = nullptr;
 
     jeecs_file_update_default_fimg(nullptr);
+
+    je_log_finish();
 }
 
 const char* je_build_version()

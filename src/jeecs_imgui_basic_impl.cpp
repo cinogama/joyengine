@@ -2175,6 +2175,10 @@ void jegui_shutdown_basic(bool reboot)
 
 bool jegui_shutdown_callback()
 {
+#ifndef NDEBUG
+    jeecs::debug::loginfo("Graphic interface has been requested to close.");
+#endif
+
     if (exit_callback_handler_vm == nullptr)
         return true;
 

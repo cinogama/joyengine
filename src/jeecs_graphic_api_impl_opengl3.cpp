@@ -386,8 +386,6 @@ namespace jeecs::graphic::api::gl3
             if (glfwWindowShouldClose(context->WINDOWS_HANDLE) == GLFW_TRUE)
             {
                 glfwSetWindowShouldClose(context->WINDOWS_HANDLE, GLFW_FALSE);
-                jeecs::debug::loginfo("Graphic interface has been requested to close.");
-
                 return false;
             }
             return true;

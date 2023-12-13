@@ -1760,7 +1760,7 @@ namespace jeecs_impl
             {
                 _m_frame_current_time += _m_frame_deltatime;
                 je_clock_sleep_until(_m_frame_current_time);
-                if (current_time - _m_frame_current_time >= 2.0)
+                if (current_time - _m_frame_current_time >= _m_max_deltatime)
                     _m_frame_current_time = current_time;
             }
 

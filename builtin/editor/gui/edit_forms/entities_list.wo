@@ -65,8 +65,10 @@ namespace editor::gui::edit_forms
             jeapi::gui::form::errmsg("失败", "无法创建实体，世界不存在。");
             return option::none;
         }
-        let e = w->add_entity(cs->append("Editor::NewCreatedEntity")->>\tname = je::typeinfo::load(tname)->val;);
+        let e = w->add_entity(cs->>\tname = je::typeinfo::load(tname)->val;);
         e->editor::set_name(name);
+
+        set_new_created_entity_pos(w, e);
 
         return option::value(e);
     }

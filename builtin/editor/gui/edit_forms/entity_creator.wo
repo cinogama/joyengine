@@ -4,6 +4,37 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
+    public func get_debug_camera(w: je::world)
+    {
+        return w->get_all_entities->forall(\e = 
+                e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
+                && e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
+            ;)
+            ->reduce(\l, _ = l;)
+            ;
+        ;
+    }
+    public func set_new_created_entity_pos(w: je::world, e: je::entity)
+    {
+        match (get_debug_camera(w))
+        {
+        value(ce)?
+            {
+                let ep = e->towoo::get_component:<Transform::LocalPosition>();
+                let ct = ce->towoo::get_component:<Transform::Translation>();
+
+                let target_pos = ct
+                    ->> \cti = cti->get_global_pos + camera_rot * (0., 0., 1.): vec3
+                        where camera_rot = cti->get_global_rot
+                        ;
+                    ->  valor((0., 0., 0.): vec3)
+                    ;
+                do ep->>\epi = epi.pos->set(target_pos);;
+            }
+        none?;
+        }
+    }
+
     let icon_entity_image = je::graphic::texture::load(F"!/builtin/icon/Component.png")->val;
     using EntityContext = struct {
         name  : mut string,
@@ -365,7 +396,8 @@ namespace editor::gui::edit_forms
                             {
                                 let e = w->add_entity(entity_context.has_append_types->toarray);
                                 e->editor::set_name(entity_context.name);
-                                do e->add_component(je::typeinfo::load("Editor::NewCreatedEntity")->val);
+
+                                set_new_created_entity_pos(w, e);
                                 open = false;
                             }
                         none? jeapi::gui::form::errmsg("失败", F"操作无法完成，没有正在编辑中的世界");

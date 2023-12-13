@@ -32,14 +32,8 @@ namespace editor::gui::edit_forms
                 {
                     let debug_world = proj->get_editing_world;
                     let debug_camera_entity = debug_world
-                        =>> \w = w->get_all_entities
-                            ->forall(\e = 
-                                e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
-                                && e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
-                            ;)
-                            ->reduce(\l, _ = l;)
-                            ;
-                    ;
+                        =>> \w = get_debug_camera(w);
+                        ;
 
                     if (BeginMenuBar())
                     {
@@ -342,14 +336,19 @@ namespace editor::gui::edit_forms
                                     if (fsys::extension(filepath)->lower == ".jeentity")
                                     {
                                         if (debug_world
-                                                =>> \w = jeapi::deserialize::entity(
-                                                    w, 
+                                                =>> func(w)
                                                     {
-                                                        ["prefab"] = proj->make_path_normalize(filepath): dynamic
-                                                    },
-                                                    true)
-                                                    ;
-                                                ->has == false)
+                                                        let e = jeapi::deserialize::entity(
+                                                        w, 
+                                                        {
+                                                            ["prefab"] = proj->make_path_normalize(filepath): dynamic
+                                                        },
+                                                        true);
+
+                                                        do e->>\e = set_new_created_entity_pos(w, e);;
+                                                        return e;
+                                                    }
+                                                ->  has == false)
                                         {
                                             jeapi::gui::form::errmsg("失败", "加载实体失败");
                                         }  

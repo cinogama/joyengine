@@ -60,6 +60,10 @@ namespace jeecs::graphic::api::dx11
         bool m_window_should_close;
         bool m_lock_resolution_for_fullscreen;
 
+        bool m_windows_changing;
+        size_t m_windows_changing_width;
+        size_t m_windows_changing_height;
+
         UINT m_next_binding_texture_place;
 
         jedx11_shader* m_current_target_shader;
@@ -297,20 +301,24 @@ namespace jeecs::graphic::api::dx11
             return 0;
             // WM_SIZE is sent when the user resizes the window.  
         case WM_SIZE:
-        {
-            // Save the new client area dimensions.
-            auto width = LOWORD(lParam);
-            auto height = HIWORD(lParam);
-            dx11_callback_windows_size_changed(
-                _je_dx_current_thread_context,
-                (size_t)width,
-                (size_t)height);
+            _je_dx_current_thread_context->m_windows_changing_width = (size_t)LOWORD(lParam);
+            _je_dx_current_thread_context->m_windows_changing_height = (size_t)HIWORD(lParam);
+            if (!_je_dx_current_thread_context->m_windows_changing)
+                goto JE_DX11_APPLY_SIZE;
             return 0;
-        }
         case WM_ENTERSIZEMOVE:
+            _je_dx_current_thread_context->m_windows_changing = true;
             return 0;
         case WM_EXITSIZEMOVE:
+        {
+            _je_dx_current_thread_context->m_windows_changing = false;
+        JE_DX11_APPLY_SIZE:
+            dx11_callback_windows_size_changed(
+                _je_dx_current_thread_context,
+                _je_dx_current_thread_context->m_windows_changing_width,
+                _je_dx_current_thread_context->m_windows_changing_height);
             return 0;
+        }
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
@@ -460,6 +468,9 @@ namespace jeecs::graphic::api::dx11
         context->FPS = config->m_fps;
         context->m_next_binding_texture_place = 0;
         context->m_win32_window_icon = nullptr;
+        context->m_windows_changing = false;
+        context->m_windows_changing_width = context->WINDOWS_SIZE_WIDTH;
+        context->m_windows_changing_height = context->WINDOWS_SIZE_HEIGHT;
 
         je_io_update_windowsize(
             (int)context->WINDOWS_SIZE_WIDTH,
@@ -748,8 +759,6 @@ namespace jeecs::graphic::api::dx11
         }
         if (context->m_window_should_close)
         {
-            jeecs::debug::loginfo("Graphic interface has been requested to close.");
-
             if (jegui_shutdown_callback())
                 return false;
             context->m_window_should_close = false;
