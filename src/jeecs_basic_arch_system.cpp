@@ -1746,28 +1746,19 @@ namespace jeecs_impl
         }
         void update() noexcept
         {
-            // 0. update actions & worlds
+            // 0. 更新、处理Universe消息和世界更新，完成组件、实体、系统相关的
+            //      增加移除和移动操作等
             update_universe_action_and_worlds();
 
-            // Wait until new frame.
+            // 计算 DeltaTime
             double current_time = je_clock_time();
             _m_real_deltatime = jeecs::math::clamp(
                 current_time - _m_real_current_time, 0., _m_max_deltatime);
             _m_smooth_deltatime = (_m_smooth_deltatime * 9. + _m_real_deltatime) / 10.;
             _m_real_current_time = current_time;
 
-            if (_m_frame_deltatime > 0.)
-            {
-                _m_frame_current_time += _m_frame_deltatime;
-                je_clock_sleep_until(_m_frame_current_time);
-                if (current_time - _m_frame_current_time >= _m_max_deltatime)
-                    _m_frame_current_time = current_time;
-            }
-
-            // New frame begin here!!!!
-
-            // Walk through all jobs:
-            // 1. Do pre jobs.
+            // 一个逻辑帧从此处开始：
+            // 1. 完成预先任务
             ParallelForeach(
                 _m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
                 [this](ecs_job* shared_job) {
@@ -1781,7 +1772,7 @@ namespace jeecs_impl
                         shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
 
-            // 2. Do normal jobs.
+            // 2. 完成常规任务
             ParallelForeach(
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
                 [this](ecs_job* shared_job) {
@@ -1794,7 +1785,24 @@ namespace jeecs_impl
                         shared_job->m_call_once_job(shared_job->m_custom_data);
                 });
 
-            // 3. Do after jobs.
+
+            // 在此执行引擎的主动同步机制（如果需要）
+            // 
+            // NOTE: 渲染画面等呈现型操作将在稍后呈现，为保证非垂直同步设定下
+            //      呈现出的内容尽可能平滑，在此保证同步时间点完成后即刻提交
+            if (_m_frame_deltatime > 0.)
+            {
+                _m_frame_current_time += _m_frame_deltatime;
+                je_clock_sleep_until(_m_frame_current_time);
+                if (current_time - _m_frame_current_time >= _m_max_deltatime)
+                    _m_frame_current_time = current_time;
+            }
+
+            // 3. 完成提交任务
+            // 
+            // NOTE: 渲染等呈现操作必须在提交完成后、世界更新前完成，为了规避图形资源
+            //      因移除组件等行为而释放，产生错误的渲染结果——尽管高阶图形接口提供
+            //      了图形资源安全和基本正确性保证；
             ParallelForeach(
                 _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
                 [this](ecs_job* shared_job) {

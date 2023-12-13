@@ -146,7 +146,7 @@ namespace jeecs
                 }, this);
 
             if (glthread != nullptr)
-                je_ecs_universe_register_pre_call_once_job(
+                je_ecs_universe_register_after_call_once_job(
                     universe.handle(),
                     _update_frame_universe_job, 
                     this, 
@@ -158,7 +158,8 @@ namespace jeecs
             if (glthread)
                 jegl_terminate_graphic_thread(glthread);
 
-            je_ecs_universe_unregister_pre_call_once_job(universe.handle(), _update_frame_universe_job);
+            je_ecs_universe_unregister_after_call_once_job(
+                universe.handle(), _update_frame_universe_job);
         }
 
         inline static std::shared_mutex _m_instance_universe_host_mx;

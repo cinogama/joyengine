@@ -869,21 +869,6 @@ typedef void(*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
 typedef void(*je_job_call_once_t)(void* /*custom_data*/);
 
 /*
-Jobs in universe have 2*3 types:
-2: For all worlds / Call once job;
-3: Pre/Normal/After job;
-
-For all worlds job will be execute with each world in universe.
-Call once job only execute 1 time per frame.
-
-Pre job used for timing sensitive tasks, such as frame-update
-Normal job used for normal tasks.
-After job used to update some data based on normal job.
-
-For example, graphic update will be pre-callonce-job.
-*/
-
-/*
 je_ecs_universe_register_pre_for_worlds_job [基本接口]
 向指定宇宙中注册优先遍历世界任务（Pre job for worlds）
 */
@@ -5388,18 +5373,6 @@ namespace jeecs
 #define LateUpdate          LateUpdate      // * 用户更新
 #define ApplyUpdate         ApplyUpdate     // 用于最终影响一些特殊组件，这些组件通常不会被其他地方写入(Translation)
 #define CommitUpdate        CommitUpdate    // 用于最终提交(Graphic)
-
-        /*
-        struct TranslationUpdater : game_system
-        {
-            void LateUpdate()
-            {
-                select()
-                    .exec(...);
-                    .exec(...);
-            }
-        }
-        */
     };
 
 
