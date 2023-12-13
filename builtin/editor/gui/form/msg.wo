@@ -5,6 +5,7 @@ import je;
 import je::gui;
 
 import builtin::editor::gui::inputmgr;
+import builtin::api::gui::errmsg;
 
 using je::gui;
 using je::graphic;
@@ -41,48 +42,5 @@ namespace jeapi::gui::form
         }, ());
     }
 
-    public func errmsg(
-        title: string, 
-        text: string)
-    {
-        let boom_icon = je::graphic::texture::create(7, 7);
-        
-        for (let mut ix = 0; ix < 7; ix += 1)
-            for (let mut iy = 0; iy < 7; iy += 1)
-                boom_icon->pix((ix, iy))->set_color((0.8, 0.75, 0., 1.));
-
-        let black_color = (0.1, 0.1, 0.1, 1.);
-        boom_icon->pix((3, 5))->set_color(black_color);
-        boom_icon->pix((3, 4))->set_color(black_color);
-        boom_icon->pix((3, 3))->set_color(black_color);
-        boom_icon->pix((3, 1))->set_color(black_color);        
-
-        launch(func()
-        {
-            let mut open = true;
-            match (BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
-            {
-            value(show)?
-                if (show)
-                {
-                    ImageSize(boom_icon, 32., 32.);
-
-                    SameLine();
-
-                    Text(text);
-
-                    if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
-                        open = false;
-                }
-            none?
-                open = false;
-            }
-
-            End();
-
-            return open;
-
-        }, ());
-    }
+    public let errmsg = jeapi::gui::errmsg;
 }

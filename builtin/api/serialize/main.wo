@@ -3,8 +3,8 @@
 
 import je;
 import je::editor;
-import builtin::editor::gui::form::msg;
-import builtin::editor::tools::varify;
+
+import builtin::api::gui::errmsg;
 
 using je;
 
@@ -237,6 +237,20 @@ namespace jeapi
     }
     namespace serialize
     {        
+        func has_bad_shader(e: je::entity)
+        {
+            static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
+            return e->get_component(BadShadersUniform)->has;
+        }
+        public func varify_all_shader_is_valid_in_world(w: je::world)
+        {
+            // 检查所有世界中所有实体是否有非法的shader？
+            // 返回所有shader非法的实体
+            return w->get_all_entities
+                -> forall(\e = has_bad_shader(e);)
+                ;
+        }
+
         alias texture_inform = string;
         func get_entity_texture_passes(saving_entity: entity)=> dict<int, option<texture_inform>>
         {
@@ -354,7 +368,7 @@ namespace jeapi
         }
         public func world(w: je::world, need_euid: bool)=> result<dict<string, dynamic>, array<je::entity>>
         {
-            let bad_shader_entity = varify::varify_all_shader_is_valid_in_world(w);
+            let bad_shader_entity = varify_all_shader_is_valid_in_world(w);
             if (!bad_shader_entity->empty)
                 return result::err(bad_shader_entity);
 
@@ -425,7 +439,7 @@ namespace jeapi
             if (!tinfo->has)
             {
                 je::logerr(F"无法找到{typename}，请检查是否有模块未加载成功");
-                jeapi::gui::form::errmsg("找不到类型", 
+                jeapi::gui::errmsg("找不到类型", 
                     F"无法找到{typename}，请检查是否有模块未加载成功");
             }
             return tinfo;
