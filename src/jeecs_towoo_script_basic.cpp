@@ -12,36 +12,6 @@
 /*
 TooWooo~
 toWoo JoyEngine generated wrap code for woolang.
-
-设想中的代码：
-ecs_system! MovementDemoSystem
-{
-  select! (
-    localpos: Transform::LocalPosition,
-    speed: MyScript::Speed?,
-    jump: MyScript::Jump?,
-  )
-    anyof MyScript::Speed, MyScript::Jump;
-    expected ;
-    exclude ;
-  {
-    let speedv = speed->>\s=s.value->get();->or(10.);
-    localpos.pos->set(localpos.pos->get + (speedv * deltatime(),0.,0.): vec3);
-  }
-
-  select! (
-    localpos: Transform::LocalPosition,
-    speed: MyScript::Speed?,
-    jump: MyScript::Jump?,
-  )
-    anyof MyScript::Speed, MyScript::Jump;
-    expected ;
-    exclude ;
-  {
-    let speedv = speed->>\s=s.value->get();->or(10.);
-    localpos.pos->set(localpos.pos->get + (speedv * deltatime(),0.,0.): vec3);
-  }
-}
 */
 
 namespace jeecs
@@ -1379,8 +1349,11 @@ T* wo_option_component(wo_value val)
 {
     _wo_value tmp;
     if (wo_option_get(&tmp, val))
+    {
+        wo_struct_get(&tmp, &tmp, 0);
         return std::launder(reinterpret_cast<T*>(
             wo_pointer(&tmp)));
+    }
     return nullptr;
 }
 
@@ -1686,24 +1659,6 @@ WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args,
     return wo_ret_val(vm, result);
 }
 
-/*
-    namespace LocalPosition
-    {
-        extern("libjoyecs", "wojeapi_towoo_transform_localposition_get_parent_global_pos")
-            public func get_parent_global_position(self: LocalPosition, trans: Translation, rot: option<LocalRotation>)=> vec3;
-
-        extern("libjoyecs", "wojeapi_towoo_transform_localposition_set_global_pos")
-            public func set_global_position(self: LocalPosition, pos: vec3, trans: Translation, rot: option<LocalRotation>)=> void;
-    }
-    namespace LocalRotation
-    {
-        extern("libjoyecs", "wojeapi_towoo_transform_localrotation_get_parent_global_rot")
-            public func get_parent_global_rotation(self: LocalRotation, trans: Translation)=> quat;
-
-        extern("libjoyecs", "wojeapi_towoo_transform_localrotation_set_global_rot")
-            public func set_global_position(self: LocalRotation, rot: quat, trans: Translation)=> void;
-    }*/
-
 WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm vm, wo_value args, size_t argc)
 {
     wo_value c = wo_push_empty(vm);
@@ -1742,8 +1697,7 @@ WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm 
     wo_struct_get(c, args + 1, 0);
     auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
 
-    wo_struct_get(c, args + 2, 0);
-    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(c);
+    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(args + 2);
 
     return wo_ret_val(vm, 
         wo_push_vec3(vm, lpos->get_parent_global_position(*translation, lrot)));
@@ -1759,8 +1713,7 @@ WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_
     wo_struct_get(c, args + 2, 0);
     auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
 
-    wo_struct_get(c, args + 3, 0);
-    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(c);
+    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(args + 3);
 
     lpos->set_global_position(pos, *translation, lrot);
     return wo_ret_void(vm);
@@ -2031,6 +1984,8 @@ namespace ivec2
 }
 namespace quat
 {
+    public let ident = (0., 0., 0., 1.): quat;
+
     public func euler(yaw: real, pitch: real, roll: real)
     {
         let yangle = 0.5 * yaw * je::mathf::DEG2RAD;
@@ -2169,7 +2124,7 @@ namespace Transform
             public func get_parent_global_rotation(self: LocalRotation, trans: Translation)=> quat;
 
         extern("libjoyecs", "wojeapi_towoo_transform_localrotation_set_global_rot")
-            public func set_global_position(self: LocalRotation, rot: quat, trans: Translation)=> void;
+            public func set_global_rotation(self: LocalRotation, rot: quat, trans: Translation)=> void;
     }
 }
 namespace UserInterface

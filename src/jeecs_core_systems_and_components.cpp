@@ -105,7 +105,6 @@ void jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* gua
     jeecs::typing::type_info::register_type<jeecs::Editor::EntityMoverRoot>(guard, "Editor::EntityMoverRoot");
     jeecs::typing::type_info::register_type<jeecs::Editor::BadShadersUniform>(guard, "Editor::BadShadersUniform");
     jeecs::typing::type_info::register_type<jeecs::Editor::EntitySelectBox>(guard, "Editor::EntitySelectBox");
-    jeecs::typing::type_info::register_type<jeecs::Editor::NewCreatedEntity>(guard, "Editor::NewCreatedEntity");
 
     jeecs::typing::type_info::register_type<jeecs::DefaultEditorSystem>(guard, "Editor::DefaultEditorSystem");
     jeecs::typing::type_info::register_type<jeecs::TranslationUpdatingSystem>(guard, "Translation::TranslationUpdatingSystem");

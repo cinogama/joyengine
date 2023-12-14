@@ -894,6 +894,34 @@ namespace editor
                             mdat->set("systems", dat["systems"] as array<dynamic>->std::sort(
                                     \l, r = (l as string) < (r as string);
                                 ): dynamic);
+
+                            let debug_camera_root_trans = gui::edit_forms::get_debug_camera_root(w)
+                                =>> \e = e->towoo::get_component :<Transform::Translation>;
+                                ;
+                            let debug_camera_rot = gui::edit_forms::get_debug_camera(w)
+                                =>> \e = e->towoo::get_component :<Transform::LocalRotation>;
+                                ->> \r = r.rot->get;
+                                ;
+
+                            match (debug_camera_root_trans)
+                            {
+                            value(trans)?
+                                {
+                                    let pos = trans->get_global_pos;
+                                    let rot = trans->get_global_rot;
+
+                                    let crot = debug_camera_rot->valor(quat::ident);
+
+                                    let debug_camera_info = {
+                                        ["root_position"] = [pos[0], pos[1], pos[2]],
+                                        ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]],
+                                        ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]],
+                                    };
+
+                                    mdat->set("debug_camera", debug_camera_info: dynamic);
+                                }
+                            none?;
+                            }
                             return mdat->unsafe::cast:< typeof(dat) >;
                         }
                     ->> \dat = dat->apply("path", pw.m_world_path->tostring->sub(self.m_path->tostring->len): dynamic);
@@ -919,6 +947,50 @@ namespace editor
             if (dat->getor("is_editing", false: dynamic) as bool)
                 do self->reset_editing_world(w);
 
+            match (dat->get("debug_camera"))
+            {
+            value(dat)?
+                je::gui::launch(
+                    func()
+                    {
+                        // NOTE: 世界刚创建出来，第一帧无法获取到摄像机，需要等待若干帧
+                        std::yield();
+                        std::yield();
+                        std::yield();
+
+                        let cameradat = dat as dict<dynamic, dynamic>
+                            ->> \k, v = (k as string, v as array<dynamic>->>\e = e: real;);
+                            ;
+                        
+                        let camera_root = gui::edit_forms::get_debug_camera_root(w)->val;
+                        let camera = gui::edit_forms::get_debug_camera(w)->val;
+
+                        let root_translation = camera_root->towoo::get_component :<Transform::Translation>->val;
+                        let root_local_position = camera_root->towoo::get_component :<Transform::LocalPosition>->val;
+                        let root_local_rotation = camera_root->towoo::get_component :<Transform::LocalRotation>->val;
+
+                        let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->val;
+
+                        let rpos = cameradat->getor("root_position", [0., 0., 0.]);
+                        do root_local_position->set_global_position(
+                            (rpos[0], rpos[1], rpos[2]): vec3, 
+                            root_translation, 
+                            option::value(root_local_rotation)
+                        );
+
+                        let rrot = cameradat->getor("root_rotation", [0., 0., 0., 1.]);
+                        do root_local_rotation->set_global_rotation(
+                            (rrot[0], rrot[1], rrot[2], rrot[3]): quat, 
+                            root_translation
+                        );
+
+                        let crot = cameradat->getor("camera_rotation", [0., 0., 0., 1.]);
+                        camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]): quat);
+
+                        return false;
+                    }, ());
+            none?;
+            }
             return w;
         }
         public func save_world(self: Project, w: je::world)

@@ -4,6 +4,16 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
+    public func get_debug_camera_root(w: je::world)
+    {
+        return w->get_all_entities->forall(\e = 
+                e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
+                && !e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
+            ;)
+            ->reduce(\l, _ = l;)
+            ;
+        ;
+    }
     public func get_debug_camera(w: je::world)
     {
         return w->get_all_entities->forall(\e = 
@@ -42,6 +52,8 @@ namespace editor::gui::edit_forms
         has_append_types : vec<je::typeinfo>,
         not_append_types : vec<je::typeinfo>,
         tversion         : int,
+
+        ori_append_types : vec<je::typeinfo>,
     }
     {
         public func create()
@@ -52,6 +64,8 @@ namespace editor::gui::edit_forms
                 has_append_types = []mut,
                 not_append_types = je::typeinfo::get_all_components_types()->tovec,
                 tversion = je::typeinfo::get_unregister_count(),
+
+                ori_append_types = []mut,
             };
     
             let comps = []mut: typeof(context.not_append_types);
@@ -72,6 +86,8 @@ namespace editor::gui::edit_forms
                 has_append_types = []mut,
                 not_append_types = je::typeinfo::get_all_components_types()->tovec,
                 tversion = je::typeinfo::get_unregister_count(),
+
+                ori_append_types = []mut,
             };
 
             entity->justdo(func(e){
@@ -87,8 +103,13 @@ namespace editor::gui::edit_forms
                 // 把当前已有的组件处理一下
                 let all_comps = context.not_append_types->dup();
                 for (let _, comp : all_comps)
+                {
                     if (e->get_component(comp)->has)
+                    {
                         context->add_components(comp->name);
+                        context.ori_append_types->add(comp);
+                    }
+                }
             });
 
             return context;
@@ -129,6 +150,9 @@ namespace editor::gui::edit_forms
             for (let _, append_component : context.has_append_types)
                 context.not_append_types->add(append_component);
             context.has_append_types->clear();
+
+            for (let _, origin_component : context.ori_append_types)
+                context->add_components(origin_component->name);
         }
     }
 

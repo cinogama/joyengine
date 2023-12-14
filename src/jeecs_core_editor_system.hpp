@@ -60,12 +60,6 @@ namespace jeecs
             }
         };
 
-        struct NewCreatedEntity
-        {
-            // 用于新创建的实体，把它放到当前摄像机面前 1.0 处
-            // TODO: 为了这么个破烂功能整个组件，简直是……难以评价，之后换正经方式重新实现
-        };
-
         // Used for store uniform vars of failed-shader in entity. used for 'update' shaders
         struct BadShadersUniform
         {
@@ -766,12 +760,6 @@ public let frag =
                 .except<Editor::Invisable>()
                 .anyof<Renderer::Shape, Renderer::Shaders, Renderer::Textures>()
                 .exec(&DefaultEditorSystem::SelectEntity)
-                .exec([this](game_entity e, Transform::LocalPosition* l2p, Editor::NewCreatedEntity&)
-                    {
-                        if (l2p != nullptr)
-                            l2p->pos = _camera_pos + _camera_rot * math::vec3(0.f, 0.f, 1.f);
-                        e.remove_component<Editor::NewCreatedEntity>();
-                    })
                 // Create & create mover!
                 .exec(&DefaultEditorSystem::UpdateAndCreateMover)
                 .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale, Transform::LocalRotation& localRotation)
