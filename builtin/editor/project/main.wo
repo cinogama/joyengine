@@ -961,16 +961,25 @@ namespace editor
                     func()
                     {
                         // NOTE: 世界刚创建出来，第一帧无法获取到摄像机，需要等待若干帧
-                        std::yield();
-                        std::yield();
-                        std::yield();
+                        let mut camera_root_may_none = option::none: option<je::entity>;
+                        let mut camera_may_none = option::none: option<je::entity>;
+                        for (;;)
+                        {
+                            camera_root_may_none = gui::edit_forms::get_debug_camera_root(w);
+                            camera_may_none = gui::edit_forms::get_debug_camera(w);
+
+                            if (camera_root_may_none->has && camera_may_none->has)
+                                break;
+
+                            std::yield();
+                        }
 
                         let cameradat = dat as dict<dynamic, dynamic>
                             ->> \k, v = (k as string, v);
                             ;
                         
-                        let camera_root = gui::edit_forms::get_debug_camera_root(w)->val;
-                        let camera = gui::edit_forms::get_debug_camera(w)->val;
+                        let camera_root = camera_root_may_none->val;
+                        let camera = camera_may_none->val;
 
                         let root_translation = camera_root->towoo::get_component :<Transform::Translation>->val;
                         let root_local_position = camera_root->towoo::get_component :<Transform::LocalPosition>->val;
