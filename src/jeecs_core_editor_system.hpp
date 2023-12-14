@@ -232,6 +232,9 @@ namespace jeecs
 
         void MoveWalker(Transform::LocalPosition& position, Transform::LocalRotation& rotation, Transform::Translation& trans)
         {
+            if (!_editor_enabled)
+                return;
+
             using namespace input;
             using namespace math;
 
@@ -290,6 +293,9 @@ namespace jeecs
             Transform::Translation& trans,
             Camera::OrthoProjection* o2d)
         {
+            if (!_editor_enabled)
+                return;
+
             using namespace input;
             using namespace math;
 
@@ -317,6 +323,9 @@ namespace jeecs
 
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
         {
+            if (!_editor_enabled)
+                return;
+
             if (_inputs.l_buttom_pushed)
             {
                 auto result = _camera_ray.intersect_entity(trans, shape);
@@ -594,6 +603,9 @@ public let frag =
             if (mover.mode == Editor::EntityMover::selection)
                 return;
 
+            if (!_editor_enabled)
+                return;
+
             const auto* editing_entity = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
             Transform::LocalPosition* editing_pos_may_null = editing_entity
                 ? editing_entity->get_component<Transform::LocalPosition>()
@@ -738,9 +750,6 @@ public let frag =
             }
             _inputs._wheel_count_record = (int)input::wheel(0).y;
 
-            if (!_editor_enabled)
-                return;
-
             select_from(get_world())
                 // 获取被选中的实体
                 .exec([this](game_entity e)
@@ -762,7 +771,11 @@ public let frag =
                 .exec(&DefaultEditorSystem::SelectEntity)
                 // Create & create mover!
                 .exec(&DefaultEditorSystem::UpdateAndCreateMover)
-                .exec([this](Editor::EntitySelectBox&, Transform::Translation& trans, Transform::LocalScale& localScale, Transform::LocalRotation& localRotation)
+                .exec([this](
+                    Editor::EntitySelectBox&, 
+                    Transform::Translation& trans, 
+                    Transform::LocalScale& localScale, 
+                    Transform::LocalRotation& localRotation)
                     {
                         if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
                         {
@@ -802,6 +815,9 @@ public let frag =
                 // Mover mgr          
                 .exec(&DefaultEditorSystem::MoveEntity)
                 ;
+
+            if (!_editor_enabled)
+                return;
 
             if (nullptr == _grab_axis_translation)
             {

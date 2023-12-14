@@ -1590,6 +1590,50 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* shaders = (jeecs::Renderer::Shaders*)wo_pointer(c);
+
+    shaders->shaders.clear();
+    auto setting_shaders_len = wo_lengthof(args + 1);
+    for (wo_integer_t i = 0; i < setting_shaders_len; ++i)
+    {
+        wo_arr_get(c, args + 1, i);
+        shaders->shaders.push_back(
+            *std::launder(reinterpret_cast<
+                jeecs::basic::resource<jeecs::graphic::shader>*>(
+                    wo_pointer(c))));
+    }
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* shaders = (jeecs::Renderer::Shaders*)wo_pointer(c);
+
+    wo_set_arr(c, vm, 0);
+
+    wo_value elem = wo_push_empty(vm);
+    for (auto& shad : shaders->shaders)
+    {
+        wo_set_gchandle(elem, vm,
+            new jeecs::basic::resource<jeecs::graphic::shader>(shad), nullptr,
+            [](void* ptr)
+            {
+                delete std::launder(reinterpret_cast<
+                    jeecs::basic::resource<jeecs::graphic::shader>*>(ptr));
+            });
+        wo_arr_add(c, elem);
+    }
+
+    return wo_ret_val(vm, c);
+}
+
 WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args, size_t argc)
 {
     wo_value c = wo_push_empty(vm);
@@ -2154,6 +2198,11 @@ namespace Renderer
                     || val is vec2
                     || val is vec3
                     || val is vec4;
+        extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
+            public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
+        
+        extern("libjoyecs", "wojeapi_towoo_renderer_shaders_get_shaders")
+            public func get_shaders(self: Shaders)=> array<je::graphic::shader>;
     }
 }
 namespace Physics2D

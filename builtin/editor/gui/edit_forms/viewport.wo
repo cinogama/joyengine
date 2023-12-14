@@ -9,6 +9,43 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
+    public func update_camera_2d3d_mode(e: je::entity, to2d: bool)
+    {
+        if (to2d)
+        {
+            do e->towoo::remove_component :<Camera::PerspectiveProjection>;
+            do e->towoo::add_component :<Camera::OrthoProjection>;
+        }
+        else
+        {
+            do e->towoo::remove_component :<Camera::OrthoProjection>;
+            do e->towoo::add_component :<Camera::PerspectiveProjection>;
+        }
+    }
+    public func update_camera_2dlight_mode(e: je::entity, enable_2dlight: bool)
+    {
+        if (enable_2dlight)
+        {
+            match (je::graphic::shader::load("@/resource/shader/Light2DCameraPass.shader"))
+            {
+            value(shader)? 
+                {
+                    do e->towoo::add_component :<Light2D::CameraPostPass>;
+                    let shaders = e->towoo::add_component :<Renderer::Shaders>;
+
+                    do shaders->>\shad = shad->set_shaders([shader]);;
+                }                
+            none? jeapi::gui::form::errmsg("加载着色器失败", "无法加载文件@/resource/shader/Light2DCameraPass.shader作为着色器");
+            }                 
+        }
+        else
+        {
+            do e->towoo::remove_component :<Light2D::CameraPostPass>;
+            do e->towoo::remove_component :<Renderer::Shaders>;
+        }
+    }
+
+
     public func show_viewport(context: EditorContext, open: mutable<bool>)
     {
         if (open->get)
@@ -76,48 +113,13 @@ namespace editor::gui::edit_forms
                         }
                         if (MenuItemEnabled("3D/2D编辑模式", debug_camera_entity->has))
                         {
-                            let o2d_type = je::typeinfo::load("Camera::OrthoProjection")->val;
-                            let p3d_type = je::typeinfo::load("Camera::PerspectiveProjection")->val;
-
-                            if (debug_camera_entity->val->get_component(o2d_type)->has)
-                            {
-                                debug_camera_entity->val->remove_component(o2d_type);
-                                do debug_camera_entity->val->add_component(p3d_type);
-                            }
-                            else
-                            {
-                                assert(debug_camera_entity->val->get_component(p3d_type)->has);
-                                debug_camera_entity->val->remove_component(p3d_type);
-                                do debug_camera_entity->val->add_component(o2d_type);
-                            }
+                            update_camera_2d3d_mode(debug_camera_entity->val, 
+                                !debug_camera_entity->val->towoo::get_component :<Camera::OrthoProjection>->has);
                         }
                         if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
                         {
-                            let l2d_camera_pass_component_type = je::typeinfo::load("Light2D::CameraPostPass")->val;
-                            let shaders_type = je::typeinfo::load("Renderer::Shaders")->val;
-
-                            if (debug_camera_entity->val->get_component(l2d_camera_pass_component_type)->has)
-                            {
-                                debug_camera_entity->val->remove_component(l2d_camera_pass_component_type);
-                                debug_camera_entity->val->remove_component(shaders_type);
-                            }
-                            else
-                            {
-                                do debug_camera_entity->val->add_component(l2d_camera_pass_component_type);
-                                do debug_camera_entity->val->add_component(shaders_type);
-
-                                let debug_camera_eid = jeapi::debug::get_entity_editor_id(debug_camera_entity->val);
-
-                                match (je::graphic::shader::load("@/resource/shader/Light2DCameraPass.shader"))
-                                {
-                                value(shader)? 
-                                    // 注意，因为实体刚刚添加组件，因此在当前帧无法获取组件
-                                    // 因此用个launch确保发配下一帧执行
-                                    launch(func(){debug_camera_eid->justdo(\e = e->set_shaders([shader]);); return false;}, ());
-                                    
-                                none? jeapi::gui::form::errmsg("加载着色器失败", "无法加载文件@/resource/shader/Light2DCameraPass.shader作为着色器");
-                                }                 
-                            }
+                            update_camera_2dlight_mode(debug_camera_entity->val,
+                                !debug_camera_entity->val->towoo::get_component :<Light2D::CameraPostPass>->has);
                         }
                         static let MOVER_MODE = {
                             [je::editor::mover_mode::nospecify] = "未指定",

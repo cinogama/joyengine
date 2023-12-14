@@ -898,7 +898,8 @@ namespace editor
                             let debug_camera_root_trans = gui::edit_forms::get_debug_camera_root(w)
                                 =>> \e = e->towoo::get_component :<Transform::Translation>;
                                 ;
-                            let debug_camera_rot = gui::edit_forms::get_debug_camera(w)
+                            let debug_camera = gui::edit_forms::get_debug_camera(w);
+                            let debug_camera_rot = debug_camera
                                 =>> \e = e->towoo::get_component :<Transform::LocalRotation>;
                                 ->> \r = r.rot->get;
                                 ;
@@ -913,16 +914,22 @@ namespace editor
                                     let crot = debug_camera_rot->valor(quat::ident);
 
                                     let debug_camera_info = {
-                                        ["root_position"] = [pos[0], pos[1], pos[2]],
-                                        ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]],
-                                        ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]],
+                                        ["root_position"] = [pos[0], pos[1], pos[2]]: dynamic,
+                                        ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]]: dynamic,
+                                        ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]]: dynamic,
+                                        ["camera_in_2d_mode"] = debug_camera
+                                            =>> \e = e->towoo::get_component :<Camera::OrthoProjection>;
+                                            ->  has: dynamic,
+                                        ["camera_in_2d_light"] = debug_camera
+                                            =>> \e = e->towoo::get_component :<Light2D::CameraPostPass>;
+                                            ->  has: dynamic,
                                     };
 
                                     mdat->set("debug_camera", debug_camera_info: dynamic);
                                 }
                             none?;
                             }
-                            return mdat->unsafe::cast:< typeof(dat) >;
+                            return mdat->unsafe::cast :<typeof(dat)>;
                         }
                     ->> \dat = dat->apply("path", pw.m_world_path->tostring->sub(self.m_path->tostring->len): dynamic);
                     ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
@@ -959,7 +966,7 @@ namespace editor
                         std::yield();
 
                         let cameradat = dat as dict<dynamic, dynamic>
-                            ->> \k, v = (k as string, v as array<dynamic>->>\e = e: real;);
+                            ->> \k, v = (k as string, v);
                             ;
                         
                         let camera_root = gui::edit_forms::get_debug_camera_root(w)->val;
@@ -971,21 +978,30 @@ namespace editor
 
                         let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->val;
 
-                        let rpos = cameradat->getor("root_position", [0., 0., 0.]);
+                        let rpos = cameradat->getor("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
                         do root_local_position->set_global_position(
                             (rpos[0], rpos[1], rpos[2]): vec3, 
                             root_translation, 
                             option::value(root_local_rotation)
                         );
 
-                        let rrot = cameradat->getor("root_rotation", [0., 0., 0., 1.]);
+                        let rrot = cameradat->getor("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
                         do root_local_rotation->set_global_rotation(
                             (rrot[0], rrot[1], rrot[2], rrot[3]): quat, 
                             root_translation
                         );
 
-                        let crot = cameradat->getor("camera_rotation", [0., 0., 0., 1.]);
+                        let crot = cameradat->getor("camera_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
                         camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]): quat);
+
+                        if (cameradat->getor("camera_in_2d_mode", false: dynamic) as bool)
+                        {
+                            gui::edit_forms::update_camera_2d3d_mode(camera, true);
+                        }
+                        if (cameradat->getor("camera_in_2d_light", false: dynamic) as bool)
+                        {
+                            gui::edit_forms::update_camera_2dlight_mode(camera, true);
+                        }
 
                         return false;
                     }, ());
