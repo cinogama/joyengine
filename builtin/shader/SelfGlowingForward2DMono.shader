@@ -40,7 +40,7 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let color = uniform("Color", float4::one);
-    let self_growing = uniform("SelfGlowing", float::one);
+    let self_glowing = uniform("SelfGlowing", float::one);
 
     return fout{
         albedo = color,

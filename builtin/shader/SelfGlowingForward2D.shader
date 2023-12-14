@@ -43,7 +43,7 @@ public func frag(vf: v2f)
     let Albedo = uniform_texture:<texture2d>("Albedo", NearestRepeatSampler, 0);
 
     let albedo_color = texture(Albedo, vf.uv);
-    let self_growing = uniform("SelfGlowing", float::one);
+    let self_glowing = uniform("SelfGlowing", float::one);
 
     return fout{
         albedo = alphatest(albedo_color),

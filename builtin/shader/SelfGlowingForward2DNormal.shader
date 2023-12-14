@@ -58,7 +58,6 @@ public func vert(v: vin)
     };
 }
 
-SHADER_FUNCTION!
 func get_normal_from_map(normal_map: texture2d, uv : float2)
 {
     return (float::new(2.) * texture(normal_map, uv)->xyz) - float3::new(1., 1., 1.);
@@ -74,6 +73,43 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
     );
 }
 
+SHADER_FUNCTION!
+func apply_light_effect(
+    pos         : float4,
+    v_pos : float3,
+    v_norm : float3,
+    light_col : float4,
+    light_pos : float4,
+    light_fac : float4,
+    light_dir : float4,
+    shadow_tex : texture2d)
+{
+    let lvpos = je_v * float4::create(light_pos->xyz, 1.);
+    let f2l = v_pos - lvpos->xyz / lvpos->w;
+    let ldistance = length(f2l);
+    let ldir = normalize(f2l);
+
+    let distance_factor = max(float::one - ldistance / light_pos->w, float::zero);
+
+    // 用线性衰减而不是指数衰减，否则法线效果会变得很弱
+    let fade_factor = distance_factor / light_fac->z;
+    let point_light_factor = v_norm->dot(ldir->negative) / (ldistance + 1.) * fade_factor * light_fac->x;
+
+    // 平行光源照射部分
+    let parallel_light_factor = v_norm->dot(light_dir->xyz->negative) * light_fac->y;
+
+    // 最终光照产生的法线效果
+    let light_effect_factor = max(float::zero, point_light_factor + parallel_light_factor);
+
+    // 获取阴影, 如果当前像素被此灯光的阴影遮盖，则得到系数 0. 否则得到 1.
+    let shadow_factor = float::one - texture(shadow_tex, uvframebuf((pos->xy / pos->w + float2::one) / 2.))->x;
+
+    return shadow_factor
+        * light_col->w
+        * light_effect_factor
+        * float4::create(light_col->xyz, 1.);
+}
+
 public func frag(vf: v2f)
 {
     let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
@@ -85,35 +121,21 @@ public func frag(vf: v2f)
     let mut normal_effect_self_luminescence = float3::zero;
     for (let index, light : je_light2ds)
     {
-        // 点光源照射部分
-        let lvpos = je_v * float4::create(light->position->xyz, 1.);
-        let f2l = vf.vpos - lvpos->xyz / lvpos->w;
-        let ldistance = length(f2l);
-        let ldir = normalize(f2l);
-
-        let distance_factor = max(float::one - ldistance / light->position->w, float::zero);
-        let fade_factor = pow(distance_factor, light->factors->z);
-        let point_light_factor = vnormal->dot(ldir->negative) / (ldistance + 1.) * fade_factor * light->factors->x;
-
-        // 平行光源照射部分
-        let parallel_light_factor = vnormal->dot(light->direction->xyz->negative) * light->factors->y;
-
-        // 最终光照产生的法线效果
-        let light_effect_factor = max(float::zero, point_light_factor + parallel_light_factor);
-
-        // 获取阴影, 如果当前像素被此灯光的阴影遮盖，则得到系数 0. 否则得到 1.
-        let shadow_factor = float::one - texture(je_shadow2ds[index], uvframebuf((vf.pos->xy / vf.pos->w + float2::one) / 2.))->x;
-
         normal_effect_self_luminescence =
-            shadow_factor
-            * light_effect_factor
-            * light->color->w
-            * light->color->xyz
-            + normal_effect_self_luminescence;
+            apply_light_effect(
+                vf.pos,
+                vf.vpos,
+                vnormal,
+                light->color,
+                light->position,
+                light->factors,
+                light->direction,
+                je_shadow2ds[index]
+            ) + normal_effect_self_luminescence;
     }
 
     let albedo_color = alphatest(texture(Albedo, vf.uv));
-    let self_growing = uniform("SelfGlowing", float::one);
+    let self_glowing = uniform("SelfGlowing", float::one);
 
     return fout{
         albedo = albedo_color,
