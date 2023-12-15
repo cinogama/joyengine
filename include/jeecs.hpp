@@ -186,13 +186,13 @@ namespace jeecs
                 };
                 struct
                 {
-                    uint32_t x;
-                    uint16_t y; // Time stamp
-                    uint16_t z;
+                    uint32_t x32; // Time stamp
+                    uint16_t y16; // Inc L16
+                    uint16_t z16; // Inc H16
 
-                    uint16_t w; // Inc L16
-                    uint16_t u; // Inc H16
-                    uint32_t v; // Random
+                    uint16_t w16; // Random
+                    uint16_t u16; // MAC/Random
+                    uint32_t v32; // MAC/Random
                 };
             };
 

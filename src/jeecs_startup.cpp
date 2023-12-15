@@ -37,6 +37,7 @@ extern const char* jeecs_towoo_src;
 extern const char* jeecs_physics2d_config_path;
 extern const char* jeecs_physics2d_config_src;
 
+void je_uid_init();
 void jeal_init();
 void je_log_init();
 
@@ -151,6 +152,8 @@ void je_default_graphic_interface_sync_func(jegl_thread* gthread, void*)
 
 void je_init(int argc, char** argv)
 {
+    je_uid_init();
+
     // Update default graphic sync funciton
     jegl_register_sync_thread_callback(
         je_default_graphic_interface_sync_func, nullptr);
