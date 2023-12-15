@@ -186,15 +186,17 @@ namespace jeecs
                 };
                 struct
                 {
-                    uint32_t x32; // Time stamp
-                    uint16_t y16; // Inc L16
-                    uint16_t z16; // Inc H16
+                    uint32_t x;
+                    uint16_t y; // Time stamp
+                    uint16_t z;
 
-                    uint16_t w16; // Random
-                    uint16_t u16; // MAC/Random
-                    uint32_t v32; // MAC/Random
+                    uint16_t w; // Inc L16
+                    uint16_t u; // Inc H16
+                    uint32_t v; // Random
                 };
             };
+
+            static uuid generate() noexcept;
 
             inline bool operator == (const uuid& uid) const noexcept
             {
@@ -1273,7 +1275,7 @@ je_uid_generate [基本接口]
 请参见：
     jeecs::typing::uid_t
 */
-JE_API jeecs::typing::uid_t je_uid_generate(void);
+JE_API void je_uid_generate(jeecs::typing::uid_t* out_uid);
 
 /////////////////////////// CORE /////////////////////////////////
 
@@ -4244,6 +4246,13 @@ namespace jeecs
 
     namespace typing
     {
+        inline uuid uuid::generate() noexcept
+        {
+            uuid u;
+            je_uid_generate(&u);
+            return u;
+        }
+
 #define JERefRegsiter zzz_jeref_register 
 
         template<typename T, typename VoidT = void>
@@ -7566,7 +7575,7 @@ namespace jeecs
 
         struct Anchor
         {
-            typing::uid_t uid = je_uid_generate();
+            typing::uid_t uid = typing::uid_t::generate();
 
             Anchor() = default;
             Anchor(Anchor&&) = default;

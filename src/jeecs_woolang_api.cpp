@@ -9,7 +9,7 @@ std::list<std::pair<int, std::string>> log_buffer;
 
 WO_API wo_api wojeapi_generate_uid(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_string(vm, je_uid_generate().to_string().c_str());
+    return wo_ret_string(vm, jeecs::typing::uid_t::generate().to_string().c_str());
 }
 
 WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args, size_t argc)

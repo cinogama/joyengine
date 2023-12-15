@@ -72,19 +72,14 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
         {
             if (crc64_result != cache_crc64)
             {
-#ifndef NDEBUG
                 jeecs::debug::loginfo("Found cache file when loading '%s', but cache's CRC64 din't match.",
                     filepath);
-#endif
                 jeecs_file_close(cache_file);
                 return nullptr;
             }
         }
-#ifndef NDEBUG
         else if (virtual_crc64 != -1)
             jeecs::debug::loginfo("Found cache file when loading '%s', but origin file missing.", filepath);
-#endif
-
         return cache_file;
     }
     return nullptr;
