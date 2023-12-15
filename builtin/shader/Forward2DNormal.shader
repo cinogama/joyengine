@@ -103,7 +103,7 @@ func apply_light_effect(
     return shadow_factor
         * light_col->w
         * light_effect_factor
-        * float4::create(light_col->xyz, 1.);
+        * light_col->xyz;
 }
 
 public func frag(vf: v2f)
@@ -114,7 +114,7 @@ public func frag(vf: v2f)
 
     let vnormal = transed_normal_tangent_map(Normalize, vf);
 
-    let mut normal_effect_self_luminescence = float4::zero;
+    let mut normal_effect_self_luminescence = float3::zero;
     for (let index, light : je_light2ds)
     {
         normal_effect_self_luminescence =
@@ -132,7 +132,7 @@ public func frag(vf: v2f)
 
     return fout{
         albedo = alphatest(texture(Albedo, vf.uv)),
-        self_luminescence = normal_effect_self_luminescence,
+        self_luminescence = float4::create(normal_effect_self_luminescence, 1.),
         visual_coordinates = float4::create(vf.vpos, 1.),
     };
 }

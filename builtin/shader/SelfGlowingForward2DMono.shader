@@ -43,7 +43,7 @@ public func frag(vf: v2f)
 
     return fout{
         albedo = color,
-        self_luminescence = float4::create(color->xyz * self_growing, 1.),
+        self_luminescence = float4::create(color->xyz * self_glowing, 1.),
         visual_coordinates = float4::create(vf.vpos, 1.),
     };
 }

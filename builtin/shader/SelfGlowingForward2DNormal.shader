@@ -75,13 +75,13 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
 SHADER_FUNCTION!
 func apply_light_effect(
     pos         : float4,
-    v_pos : float3,
-    v_norm : float3,
-    light_col : float4,
-    light_pos : float4,
-    light_fac : float4,
-    light_dir : float4,
-    shadow_tex : texture2d)
+    v_pos       : float3,
+    v_norm      : float3,
+    light_col   : float4,
+    light_pos   : float4, 
+    light_fac   : float4,
+    light_dir   : float4,
+    shadow_tex  : texture2d)
 {
     let lvpos = je_v * float4::create(light_pos->xyz, 1.);
     let f2l = v_pos - lvpos->xyz / lvpos->w;
@@ -106,7 +106,7 @@ func apply_light_effect(
     return shadow_factor
         * light_col->w
         * light_effect_factor
-        * float4::create(light_col->xyz, 1.);
+        * light_col->xyz;
 }
 
 public func frag(vf: v2f)
@@ -139,7 +139,9 @@ public func frag(vf: v2f)
     return fout{
         albedo = albedo_color,
         self_luminescence = float4::create(
-            normal_effect_self_luminescence + albedo_color->xyz * self_growing, 1.),
+            normal_effect_self_luminescence
+            + albedo_color->xyz * self_glowing,
+            1.),
         visual_coordinates = float4::create(vf.vpos, 1.),
     };
 }
