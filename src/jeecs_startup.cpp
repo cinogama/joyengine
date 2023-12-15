@@ -161,6 +161,7 @@ void je_init(int argc, char** argv)
     _jegl_host_graphic_api = nullptr;
 
     je_log_init();
+
     wo_init(argc, argv);
 
     for (int i = 1; i < argc - 1; ++i)
