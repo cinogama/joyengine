@@ -10,15 +10,13 @@ std::atomic_uint32_t _uid_counter = 1;
 
 void je_uid_generate(jeecs::typing::uid_t* uid)
 {
-    //(_uid++ & 0b0'1111'1111'1111)
-    // rand() & 0b0'11111'11111
-
     static std::random_device rd;
     static std::mt19937 mt(rd());
     static std::uniform_int_distribution<uint16_t> dist_ushort(0, UINT16_MAX);
     static std::uniform_int_distribution<uint32_t> dist_uint(0, UINT32_MAX);
+
     // JUID
-    // 4-2-2-6(2-4)
+    // 4-2-2-2-4
     // 4-2 -> TIME STAMP
     // 2 -> RANDOM
     // 2 -> INC LOW 16
