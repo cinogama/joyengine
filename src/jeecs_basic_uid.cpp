@@ -7,9 +7,15 @@
 #include <cstdint>
 
 #ifdef JE_OS_WINDOWS
-#include <Windows.h>
-#include <iphlpapi.h>
-#pragma comment(lib, "IPHLPAPI.lib")
+#   include <Windows.h>
+#   include <iphlpapi.h>
+#   pragma comment(lib, "IPHLPAPI.lib")
+#else
+#   include <sys/types.h>
+#   include <sys/socket.h>
+#   include <netinet/in.h>
+#   include <arpa/inet.h>
+#   include <sys/ioctl.h>
 #endif
 
 std::atomic_uint32_t _je_uid_counter = 1;
@@ -52,17 +58,20 @@ void je_uid_init()
     {
         ifr.ifr_addr.sa_family = AF_INET;
         strncpy(ifr.ifr_name, "eth0", IFNAMSIZ - 1);
-        ioctl(sock, SIOCGIFHWADDR, &ifr);
+        if (0 == ioctl(sock, SIOCGIFHWADDR, &ifr))
+        {
+            close(sock);
+            _je_uid_mac_low16_or_rand16 = 
+                (uint16_t)ifr.ifr_hwaddr.sa_data[0] << 8 
+                | (uint16_t)ifr.ifr_hwaddr.sa_data[1];
+            _je_uid_mac_high32_or_rand32 = 
+                (uint32_t)ifr.ifr_hwaddr.sa_data[2] << 24 
+                | (uint32_t)ifr.ifr_hwaddr.sa_data[3] << 16 
+                | (uint32_t)ifr.ifr_hwaddr.sa_data[4] << 8 
+                | (uint32_t)ifr.ifr_hwaddr.sa_data[5];
+            return;
+        }
         close(sock);
-        _je_uid_mac_low16_or_rand16 = 
-            (uint16_t)ifr.ifr_hwaddr.sa_data[0] << 8 
-            | (uint16_t)ifr.ifr_hwaddr.sa_data[1];
-        _je_uid_mac_high32_or_rand32 = 
-            (uint32_t)ifr.ifr_hwaddr.sa_data[2] << 24 
-            | (uint32_t)ifr.ifr_hwaddr.sa_data[3] << 16 
-            | (uint32_t)ifr.ifr_hwaddr.sa_data[4] << 8 
-            | (uint32_t)ifr.ifr_hwaddr.sa_data[5];
-        return;
     }
 #endif
 
