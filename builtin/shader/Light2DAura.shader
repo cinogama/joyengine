@@ -22,8 +22,11 @@ using v2f = struct {
 using fout = struct {
     albedo              : float4, // 漫反射颜色，在光照处理中用于计算颜色
     self_luminescence   : float4, // 自发光颜色，最终混合颜色公式中将叠加此颜色
-    visual_coordinates  : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，决定后处理光照的影响系数
-                                  // w 系数暂时留空，应当设置为1
+    vspace_position     : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，
+                                  // 决定后处理光照的影响系数，w 系数暂时留空，应当设
+                                  // 置为1
+    vspace_normalize    : float4, // 视空间法线(xyz)，主要用于光照后处理进行光照计算
+                                  // 的高光等效果，w 系数暂时留空，应当设置为1
 };
 
 public func vert(v: vin)
@@ -45,6 +48,7 @@ public func frag(vf: v2f)
     return fout{
         albedo = float4::new(0.,0.,0.,0.),
         self_luminescence = float4::create(color->xyz, pow(dv, decay)) * color->w,
-        visual_coordinates = float4::zero,  // 避免影响到光照效果计算，此处不混合视空间坐标
+        vspace_position = float4::zero,
+        vspace_normalize = float::zero,
     };
 }

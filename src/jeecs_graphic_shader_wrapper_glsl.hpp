@@ -113,6 +113,9 @@ namespace jeecs
 
                                 if (!funcname.empty())
                                 {
+                                    if (funcname[0] == '%')
+                                        funcname = funcname.substr(1);
+
                                     if (funcname == "float2")
                                         funcname = "vec2";
                                     else if (funcname == "float3")

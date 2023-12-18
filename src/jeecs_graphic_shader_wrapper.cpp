@@ -82,6 +82,15 @@ WO_API wo_api jeecs_shader_float4_create(wo_vm vm, wo_value args, size_t argc)
             (float)wo_real(args + 2),
             (float)wo_real(args + 3)), nullptr, _free_shader_value);
 }
+WO_API wo_api jeecs_shader_float3x3_create(wo_vm vm, wo_value args, size_t argc)
+{
+    float data[9] = {};
+    for (size_t i = 0; i < 9; i++)
+        data[i] = (float)wo_real(args + i);
+    return wo_ret_gchandle(vm,
+        new jegl_shader_value(data, jegl_shader_value::FLOAT3x3),
+        nullptr, _free_shader_value);
+}
 WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args, size_t argc)
 {
     float data[16] = {};
@@ -301,6 +310,10 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
         if (operation[0] == '#')
         {
             // Custom method 
+        }
+        else if (operation[0] == '%')
+        {
+            // Type casting 
         }
         else
         {
@@ -963,7 +976,7 @@ namespace float3
         return apply_operation:<float3>("-", a, b);
     }
     public func operator * <T>(a:float3, b:T)=> float3
-        where b is real || b is float || b is float3;
+        where b is real || b is float || b is float3 || b is float3x3;
     {
         return apply_operation:<float3>("*", a, b);
     }
@@ -1062,7 +1075,7 @@ namespace float4
         return apply_operation:<float4>("-", a, b);
     }
     public func operator * <T>(a:float4, b:T)=> float4
-        where b is real || b is float || b is float4;
+        where b is real || b is float || b is float4 || b is float4x4;
     {
         return apply_operation:<float4>("*", a, b);
     }
@@ -1082,12 +1095,18 @@ namespace float4x4
         0., 0., 1., 0.,
         0., 0., 0., 1.);
     extern("libjoyecs", "jeecs_shader_float4x4_create")
-    public func new(p00:real, p01:real, p02:real, p03:real,
-                p10:real, p11:real, p12:real, p13:real,
-                p20:real, p21:real, p22:real, p23:real,
-                p30:real, p31:real, p32:real, p33:real)=> float4x4;
+    public func new(
+        p00:real, p01:real, p02:real, p03:real,
+        p10:real, p11:real, p12:real, p13:real,
+        p20:real, p21:real, p22:real, p23:real,
+        p30:real, p31:real, p32:real, p33:real)=> float4x4;
 
     public func create(...)=> float4x4{return apply_operation:<float4x4>("float4x4", ......);}
+
+    public func float3x3(self: float4x4)=> float3x3
+    {
+        return apply_operation:<float3x3>("%float3x3", self);
+    }
 
     public func operator * <T>(a:float4x4, b:T)=> T
         where b is float4 || b is float4x4;
@@ -1096,6 +1115,31 @@ namespace float4x4
             return apply_operation:<float4x4>("*", a, b);
         else
             return apply_operation:<float4>("*", a, b);
+    }
+}
+
+namespace float3x3
+{
+    public let unit = float3x3::new(
+        1., 0., 0.,
+        0., 1., 0.,
+        0., 0., 1.,);
+
+    extern("libjoyecs", "jeecs_shader_float3x3_create")
+    public func new(
+        p00:real, p01:real, p02:real,
+        p10:real, p11:real, p12:real,
+        p20:real, p21:real, p22:real)=> float3x3;
+
+    public func create(...)=> float3x3{return apply_operation:<float3x3>("float3x3", ......);}
+
+    public func operator * <T>(a:float3x3, b:T)=> T
+        where b is float3 || b is float3x3;
+    {
+        if (b is float3x3)
+            return apply_operation:<float3x3>("*", a, b);
+        else
+            return apply_operation:<float3>("*", a, b);
     }
 }
 

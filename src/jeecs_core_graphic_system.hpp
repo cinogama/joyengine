@@ -11,8 +11,6 @@
 #include <queue>
 #include <list>
 
-#define JE_MAX_LIGHT2D_COUNT 8
-#define JE_SHADOW2D_0 8
 #define JE_LIGHT2D_DEFER_0 4
 
 const char* shader_light2d_path = "je/shader/light2d.wo";
@@ -22,48 +20,9 @@ const char* shader_light2d_src = R"(
 
 import je::shader;
 
-public let JE_MAX_LIGHT2D_COUNT = 8;
-let JE_SHADOW2D_0 = 8;
 let DEFER_TEX_0 = 4;
 
-// define struct for Light
-GRAPHIC_STRUCT! Light2D
-{
-    color:      float4,  // color->xyz is color, color->w is intensity.
-    position:   float4,  // position->xyz used for point-light
-                         // position->w is range that calced by local-scale & shape size.
-    direction:  float4,  // direction->xyz used for parallel-light
-                         // direction->w is reserved.
-    factors:    float4,  // factors->x & y used for effect position or parallel
-                         // factors->z is decay, normally, parallel light's decay should be 0
-                         // factors->w is reserved.
-};
-
-UNIFORM_BUFFER! JOYENGINE_LIGHT2D = 1
-{
-    // Append nothing here, add them later.
-};
-
-// Create lights for JOYENGINE_LIGHT2D
-public let je_light2ds = func(){
-    let lights = []mut: vec<Light2D_t>;
-
-    for (let mut i = 0;i < JE_MAX_LIGHT2D_COUNT; i += 1)
-        lights->add(JOYENGINE_LIGHT2D->append_struct_uniform(F"JE_LIGHT2D_{i}", Light2D): gchandle: Light2D_t);
-
-    return lights->toarray;
-}();
-
 public let DefaultShadow2DSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-public let je_shadow2ds = func(){
-    let shadows = []mut: vec<texture2d>;
-
-    for (let mut i = 0;i < JE_MAX_LIGHT2D_COUNT; i += 1)
-        shadows->add(uniform_texture:<texture2d>(F"JOYENGINE_SHADOW2D_{i}", DefaultShadow2DSampler, JE_SHADOW2D_0 + i));
-
-    return shadows->toarray;
-}();
-
 
 public let je_light2d_resolutin = uniform("JOYENGINE_LIGHT2D_RESOLUTION", float2::one);
 public let je_light2d_decay = uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
@@ -1388,18 +1347,6 @@ public func frag(_: v2f)
         {
             jeecs::math::vec4 time;
         };
-        struct light2d_uniform_buffer_data_t
-        {
-            struct light2d_info
-            {
-                jeecs::math::vec4 color;
-                jeecs::math::vec4 position;
-                jeecs::math::vec4 direction;
-                jeecs::math::vec4 factors;
-            };
-
-            light2d_info l2ds[JE_MAX_LIGHT2D_COUNT];
-        };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
             : BasePipelineInterface(w, nullptr)
@@ -1521,10 +1468,6 @@ public func frag(_: v2f)
                                     (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)) * 
                                     std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f));
 
-                            if (light2dpostpass->post_light_uniform == nullptr)
-                                light2dpostpass->post_light_uniform =
-                                new jeecs::graphic::uniformbuffer(1, sizeof(light2d_uniform_buffer_data_t));
-
                             bool need_update = light2dpostpass->post_rend_target == nullptr
                                 || light2dpostpass->post_rend_target->width() != RENDAIMBUFFER_WIDTH
                                 || light2dpostpass->post_rend_target->height() != RENDAIMBUFFER_HEIGHT;
@@ -1539,6 +1482,8 @@ public func frag(_: v2f)
                                             jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16),
                                             // 视空间坐标(RGB) Alpha通道暂时留空
                                             jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16),
+                                            // 法线空间颜色
+                                            jegl_texture::format::RGBA,
                                             // 深度缓冲区
                                             jegl_texture::format::DEPTH,
                                         });
@@ -1662,8 +1607,6 @@ public func frag(_: v2f)
                 sizeof(math::vec4),
                 &shader_time);
 
-            std::vector<jegl_resource*> LIGHT2D_SHADOW;
-
             for (auto& current_camera : m_camera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
@@ -1695,12 +1638,10 @@ public func frag(_: v2f)
                 math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
 
                 jegl_rendchain* rend_chain = nullptr;
-                light2d_uniform_buffer_data_t l2dbuf = {};
 
                 // If current camera contain light2d-pass, prepare light shadow here.
                 if (current_camera.light2DPostPass != nullptr)
                 {
-                    LIGHT2D_SHADOW.clear();
                     std::sort(m_2dlight_list.begin(), m_2dlight_list.end(),
                         [&](const light2d_arch& a, const light2d_arch& b)
                         {
@@ -1715,59 +1656,6 @@ public func frag(_: v2f)
                             adistance.z = bdistance.z = 0.f;
                             return adistance.length() < bdistance.length();
                         });
-
-                    size_t light_count = 0;
-
-                    // Update l2d buffer here.
-                    for (auto& lightarch : m_2dlight_list)
-                    {
-                        if (light_count >= JE_MAX_LIGHT2D_COUNT)
-                            break;
-
-                        l2dbuf.l2ds[light_count].color = lightarch.color->color;
-                        l2dbuf.l2ds[light_count].color.w *= lightarch.color->gain;
-                        l2dbuf.l2ds[light_count].position = lightarch.translation->world_position;
-                        l2dbuf.l2ds[light_count].direction =
-                            lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 1.f).unit();
-
-                        l2dbuf.l2ds[light_count].position.w =
-                            ((lightarch.shape == nullptr || lightarch.shape->vertex.has_resource() == false
-                                ? math::vec3(
-                                    m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_x,
-                                    m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_y,
-                                    m_default_resources.default_shape_quad->resouce()->m_raw_vertex_data->m_size_z)
-                                : math::vec3(
-                                    lightarch.shape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_x,
-                                    lightarch.shape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_y,
-                                    lightarch.shape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_z)
-                                )
-                                * lightarch.translation->local_scale).length()
-                            * lightarch.color->range
-                            / 2.0f;
-
-                        l2dbuf.l2ds[light_count].factors = math::vec4(
-                            lightarch.color->parallel ? 0.f : 1.f,
-                            lightarch.color->parallel ? 1.f : 0.f,
-                            lightarch.color->decay,
-                            0.f);
-
-                        if (lightarch.shadow != nullptr)
-                        {
-                            assert(lightarch.shadow->shadow_buffer != nullptr);
-                            LIGHT2D_SHADOW.push_back(lightarch.shadow->shadow_buffer->get_attachment(0)->resouce());
-                        }
-                        else
-                            LIGHT2D_SHADOW.push_back(m_defer_light2d_host._no_shadow->resouce());
-
-                        ++light_count;
-                    }
-
-                    assert(current_camera.light2DPostPass->post_light_uniform != nullptr);
-                    current_camera.light2DPostPass->post_light_uniform->update_buffer(
-                        0,
-                        sizeof(light2d_uniform_buffer_data_t),
-                        &l2dbuf
-                    );
 
                     if (current_camera.light2DPostPass->post_rend_target == nullptr
                         || current_camera.light2DPostPass->post_light_target == nullptr)
@@ -2044,9 +1932,6 @@ public func frag(_: v2f)
 
                     jegl_rchain_clear_color_buffer(rend_chain, nullptr);
                     jegl_rchain_clear_depth_buffer(rend_chain);
-
-                    jegl_rchain_bind_uniform_buffer(rend_chain, 
-                        current_camera.light2DPostPass->post_light_uniform->resouce());
                 }
                 else
                 {
@@ -2072,8 +1957,6 @@ public func frag(_: v2f)
                 jegl_rchain_bind_uniform_buffer(rend_chain, m_default_uniform_buffer->resouce());
 
                 auto shadow_pre_bind_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
-                for (size_t i = 0; i < LIGHT2D_SHADOW.size(); ++i)
-                    jegl_rchain_bind_texture(rend_chain, shadow_pre_bind_texture_group, JE_SHADOW2D_0 + i, LIGHT2D_SHADOW[i]);
 
                 jegl_rchain_bind_pre_texture_group(rend_chain, shadow_pre_bind_texture_group);
 

@@ -1,59 +1,53 @@
 // SelfGlowingForward2DNormal.shader
 
 import je::shader;
-import je::shader::light2d;
 
-SHARED  (false);
-ZTEST   (LESS);
-ZWRITE  (ENABLE);
-BLEND   (ONE, ZERO);
-CULL    (NONE);
+SHARED(true);
+ZTEST(LESS);
+ZWRITE(ENABLE);
+BLEND(ONE, ZERO);
+CULL(NONE);
 
-VAO_STRUCT! vin {
-    vertex  : float3,
-    uv      : float2,
+VAO_STRUCT!vin{
+    vertex: float3,
+    uv : float2,
 };
 
 using v2f = struct {
-    pos     : float4,
-    vpos    : float3,
-    uv      : float2,
-    vtangent_x : float3,
-    vtangent_y : float3,
-    vtangent_z : float3,
+pos: float4,
+vpos : float3,
+uv : float2,
+vtangent_x : float3,
+vtangent_y : float3,
+vtangent_z : float3,
 };
 
 using fout = struct {
-    albedo              : float4, // 漫反射颜色，在光照处理中用于计算颜色
-    self_luminescence   : float4, // 自发光颜色，最终混合颜色公式中将叠加此颜色
-    visual_coordinates  : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，决定后处理光照的影响系数
-                                  // w 系数暂时留空，应当设置为1
+albedo: float4, // 漫反射颜色，在光照处理中用于计算颜色
+self_luminescence : float4, // 自发光颜色，最终混合颜色公式中将叠加此颜色
+vspace_position : float4, // 视空间坐标(xyz)，主要用于与光源坐标进行距离计算，
+                              // 决定后处理光照的影响系数，w 系数暂时留空，应当设
+                              // 置为1
+    vspace_normalize : float4, // 视空间法线(xyz)，主要用于光照后处理进行光照计算
+                                  // 的高光等效果，w 系数暂时留空，应当设置为1
 };
 
 SHADER_FUNCTION!
-func invscale_f3_2_f4(v: float3)
+func vtangent(normal: float3)
 {
-    return float4::create(v / abs(je_local_scale), 1.);
+    return normal / abs(je_local_scale) * je_mv->float3x3;
 }
 
 public func vert(v: vin)
 {
     let vspace_position = je_mv * float4::create(v.vertex, 1.);
-    let m_movement = movement(je_m);
-    let v_movement = movement(je_v);
     return v2f{
         pos = je_p * vspace_position,
         vpos = vspace_position->xyz / vspace_position->w,
         uv = uvtrans(v.uv, je_tiling, je_offset),
-        vtangent_x = (je_v * float4::create((je_m *invscale_f3_2_f4(
-            float3::new(1., 0., 0.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
-        vtangent_y = (je_v * float4::create((je_m * invscale_f3_2_f4(
-            float3::new(0., 1., 0.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
-        vtangent_z = (je_v * float4::create((je_m * invscale_f3_2_f4(
-            float3::new(0., 0., -1.)))->xyz - m_movement, 1.))
-            ->xyz - v_movement,
+        vtangent_x = vtangent(float3::new(1., 0., 0.)),
+        vtangent_y = vtangent(float3::new(0., 1., 0.)),
+        vtangent_z = vtangent(float3::new(0., 0., -1.)),
     };
 }
 
@@ -72,76 +66,19 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
     );
 }
 
-SHADER_FUNCTION!
-func apply_light_effect(
-    pos         : float4,
-    v_pos       : float3,
-    v_norm      : float3,
-    light_col   : float4,
-    light_pos   : float4, 
-    light_fac   : float4,
-    light_dir   : float4,
-    shadow_tex  : texture2d)
-{
-    let lvpos = je_v * float4::create(light_pos->xyz, 1.);
-    let f2l = v_pos - lvpos->xyz / lvpos->w;
-    let ldistance = length(f2l);
-    let ldir = normalize(f2l);
-
-    let distance_factor = max(float::one - ldistance / light_pos->w, float::zero);
-
-    // 用线性衰减而不是指数衰减，否则法线效果会变得很弱
-    let fade_factor = distance_factor / light_fac->z;
-    let point_light_factor = v_norm->dot(ldir->negative) / (ldistance + 1.) * fade_factor * light_fac->x;
-
-    // 平行光源照射部分
-    let parallel_light_factor = v_norm->dot(light_dir->xyz->negative) * light_fac->y;
-
-    // 最终光照产生的法线效果
-    let light_effect_factor = max(float::zero, point_light_factor + parallel_light_factor);
-
-    // 获取阴影, 如果当前像素被此灯光的阴影遮盖，则得到系数 0. 否则得到 1.
-    let shadow_factor = float::one - texture(shadow_tex, uvframebuf((pos->xy / pos->w + float2::one) / 2.))->x;
-
-    return shadow_factor
-        * light_col->w
-        * light_effect_factor
-        * light_col->xyz;
-}
-
 public func frag(vf: v2f)
 {
     let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
     let Albedo = uniform_texture:<texture2d>("Albedo", NearestRepeatSampler, 0);
     let Normalize = uniform_texture:<texture2d>("Normalize", NearestRepeatSampler, 1);
 
-    let vnormal = transed_normal_tangent_map(Normalize, vf);
-
-    let mut normal_effect_self_luminescence = float3::zero;
-    for (let index, light : je_light2ds)
-    {
-        normal_effect_self_luminescence =
-            apply_light_effect(
-                vf.pos,
-                vf.vpos,
-                vnormal,
-                light->color,
-                light->position,
-                light->factors,
-                light->direction,
-                je_shadow2ds[index]
-            ) + normal_effect_self_luminescence;
-    }
-
     let albedo_color = alphatest(texture(Albedo, vf.uv));
     let self_glowing = uniform("SelfGlowing", float::one);
 
     return fout{
         albedo = albedo_color,
-        self_luminescence = float4::create(
-            normal_effect_self_luminescence
-            + albedo_color->xyz * self_glowing,
-            1.),
-        visual_coordinates = float4::create(vf.vpos, 1.),
+        self_luminescence = float4::create(albedo_color->xyz * self_glowing, 1.),
+        vspace_position = float4::create(vf.vpos, 1.),
+        vspace_normalize = float4::create(transed_normal_tangent_map(Normalize, vf), 1.),
     };
 }

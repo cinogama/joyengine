@@ -106,7 +106,10 @@ namespace jeecs
                                 assert(variables.size() == 2);
                                 if (value->m_opnums[0]->get_type() == jegl_shader_value::type::FLOAT2x2
                                     || value->m_opnums[0]->get_type() == jegl_shader_value::type::FLOAT3x3
-                                    || value->m_opnums[0]->get_type() == jegl_shader_value::type::FLOAT4x4)
+                                    || value->m_opnums[0]->get_type() == jegl_shader_value::type::FLOAT4x4
+                                    || value->m_opnums[1]->get_type() == jegl_shader_value::type::FLOAT2x2
+                                    || value->m_opnums[1]->get_type() == jegl_shader_value::type::FLOAT3x3
+                                    || value->m_opnums[1]->get_type() == jegl_shader_value::type::FLOAT4x4)
                                     apply += "mul(" + variables[0] + "," + variables[1] + ")";
                                 else
                                 {
@@ -146,6 +149,7 @@ namespace jeecs
                                 }
                                 else
                                 {
+                                    bool is_casting_op = false;
                                     if (!funcname.empty())
                                     {
                                         if (funcname[0] == '#')
@@ -153,9 +157,20 @@ namespace jeecs
                                             funcname = funcname.substr(1);
                                             context->_used_builtin_func.insert(funcname);
                                         }
+                                        else if (funcname[0] == '%')
+                                        {
+                                            is_casting_op = true;
+
+                                            funcname = funcname.substr(1);
+                                            context->_used_builtin_func.insert(funcname);
+                                        }
                                     }
 
-                                    apply += funcname + "(";
+                                    if (is_casting_op)
+                                        apply += "(" + funcname + ")(";
+                                    else
+                                        apply += funcname + "(";
+
                                     for (size_t i = 0; i < variables.size(); i++)
                                     {
                                         apply += variables[i];

@@ -5486,6 +5486,47 @@ namespace jeecs
             return mat4xmat4((float*)out_result, (const float*)left, (const float*)right);
         }
 
+        inline void mat3xmat3(float* out_result, const float* left, const float* right)
+        {
+#define R(x, y) (out_result[(x) + (y)* 3])
+#define A(x, y) (left[(x) + (y)* 3])
+#define B(x, y) (right[(x) + (y)* 3])
+            memset(out_result, 0, 9 * sizeof(float));
+            for (size_t iy = 0; iy < 3; iy++)
+                for (size_t ix = 0; ix < 3; ix++)
+                {
+                    R(ix, iy)
+                        += A(ix, 0) * B(0, iy)
+                        + A(ix, 1) * B(1, iy)
+                        + A(ix, 2) * B(2, iy);
+                }
+
+#undef R
+#undef A
+#undef B
+        }
+        inline void mat3xmat3(float(*out_result)[3], const float(*left)[3], const float(*right)[3])
+        {
+            return mat3xmat3((float*)out_result, (const float*)left, (const float*)right);
+        }
+
+        inline void mat3xvec3(float* out_result, const float* left_mat, const float* right_vex)
+        {
+#define R(x) (out_result[x])
+#define A(x, y) (left_mat[(x) + (y)* 3])
+#define B(x) (right_vex[x])
+            R(0) = A(0, 0) * B(0) + A(0, 1) * B(1) + A(0, 2) * B(2);
+            R(1) = A(1, 0) * B(0) + A(1, 1) * B(1) + A(1, 2) * B(2);
+            R(2) = A(2, 0) * B(0) + A(2, 1) * B(1) + A(2, 2) * B(2);
+#undef R
+#undef A
+#undef B
+        }
+        inline void mat3xvec3(float* out_result, const float(*left)[3], const float* right)
+        {
+            return mat3xvec3(out_result, (const float*)left, right);
+        }
+
         inline void mat4xvec4(float* out_result, const float* left_mat, const float* right_vex)
         {
 #define R(x) (out_result[x])
@@ -8063,8 +8104,7 @@ namespace jeecs
         {
             basic::resource<graphic::framebuffer> post_rend_target = nullptr;
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
-            basic::resource<jeecs::graphic::uniformbuffer> post_light_uniform = nullptr;
-
+ 
             float ratio = 1.0f;
 
             CameraPostPass() = default;

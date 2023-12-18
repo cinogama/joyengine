@@ -52,24 +52,24 @@ args[0]->m_float3[1] * args[1]->m_float3[1],
 args[0]->m_float3[2] * args[1]->m_float3[2]); }}},
 {"*", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(
-    args[0]->m_float3[0] * args[1]->m_float, 
-    args[0]->m_float3[1] * args[1]->m_float,
-    args[0]->m_float3[2] * args[1]->m_float); }}},
+args[0]->m_float3[0] * args[1]->m_float,
+args[0]->m_float3[1] * args[1]->m_float,
+args[0]->m_float3[2] * args[1]->m_float); }}},
 {"/", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(
-    args[0]->m_float3[0] / args[1]->m_float,
-    args[0]->m_float3[1] / args[1]->m_float,
-    args[0]->m_float3[2] / args[1]->m_float); }}},
+args[0]->m_float3[0] / args[1]->m_float,
+args[0]->m_float3[1] / args[1]->m_float,
+args[0]->m_float3[2] / args[1]->m_float); }}},
 {"/", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3,
 reduce_method{return new jegl_shader_value(
-    args[0]->m_float3[0] / args[1]->m_float3[0],
-    args[0]->m_float3[1] / args[1]->m_float3[1],
-    args[0]->m_float3[2] / args[1]->m_float3[2]); }}},
+args[0]->m_float3[0] / args[1]->m_float3[0],
+args[0]->m_float3[1] / args[1]->m_float3[1],
+args[0]->m_float3[2] / args[1]->m_float3[2]); }}},
 {"-", {jegl_shader_value::FLOAT3,
 reduce_method{return new jegl_shader_value(
-    -args[0]->m_float3[0],
-    -args[0]->m_float3[1],
-    -args[0]->m_float3[2]); }}},
+-args[0]->m_float3[0],
+-args[0]->m_float3[1],
+-args[0]->m_float3[2]); }}},
 
 {"+", {jegl_shader_value::FLOAT4, jegl_shader_value::FLOAT4,
 reduce_method{return new jegl_shader_value(
@@ -91,28 +91,28 @@ args[0]->m_float4[2] * args[1]->m_float4[2],
 args[0]->m_float4[3] * args[1]->m_float4[3]); }}},
 {"*", {jegl_shader_value::FLOAT4, jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(
-    args[0]->m_float4[0] * args[1]->m_float,
-    args[0]->m_float4[1] * args[1]->m_float,
-    args[0]->m_float4[2] * args[1]->m_float,
-    args[0]->m_float4[3] * args[1]->m_float); }}},
+args[0]->m_float4[0] * args[1]->m_float,
+args[0]->m_float4[1] * args[1]->m_float,
+args[0]->m_float4[2] * args[1]->m_float,
+args[0]->m_float4[3] * args[1]->m_float); }}},
 {"/", {jegl_shader_value::FLOAT4, jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(
-    args[0]->m_float4[0] / args[1]->m_float,
-    args[0]->m_float4[1] / args[1]->m_float,
-    args[0]->m_float4[2] / args[1]->m_float,
-    args[0]->m_float4[3] / args[1]->m_float); }}},
+args[0]->m_float4[0] / args[1]->m_float,
+args[0]->m_float4[1] / args[1]->m_float,
+args[0]->m_float4[2] / args[1]->m_float,
+args[0]->m_float4[3] / args[1]->m_float); }}},
 {"/", {jegl_shader_value::FLOAT4, jegl_shader_value::FLOAT4,
 reduce_method{return new jegl_shader_value(
-    args[0]->m_float4[0] / args[1]->m_float4[0],
-    args[0]->m_float4[1] / args[1]->m_float4[1],
-    args[0]->m_float4[2] / args[1]->m_float4[2],
-    args[0]->m_float4[3] / args[1]->m_float4[3]); }}},
+args[0]->m_float4[0] / args[1]->m_float4[0],
+args[0]->m_float4[1] / args[1]->m_float4[1],
+args[0]->m_float4[2] / args[1]->m_float4[2],
+args[0]->m_float4[3] / args[1]->m_float4[3]); }}},
 { "-", {jegl_shader_value::FLOAT4,
 reduce_method{return new jegl_shader_value(
-    -args[0]->m_float4[0],
-    -args[0]->m_float4[1],
-    -args[0]->m_float4[2],
-    -args[0]->m_float4[3]); }} },
+-args[0]->m_float4[0],
+-args[0]->m_float4[1],
+-args[0]->m_float4[2],
+-args[0]->m_float4[3]); }} },
 
 //
 {"float", {jegl_shader_value::FLOAT,
@@ -172,24 +172,65 @@ matdata[i] = args[i]->m_float;
 return new jegl_shader_value(matdata, jegl_shader_value::FLOAT4x4);
 }} },
 //
-#define A(M,N) (args[0]->m_float4x4[M][N])
-#define B(M,N) (args[1]->m_float4x4[M][N])
+{ "float3x3", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3,
+reduce_method
+{
+float matdata[9];
+matdata[0] = args[0]->m_float3[0]; matdata[1] = args[0]->m_float3[1]; matdata[2] = args[0]->m_float3[2];
+matdata[3] = args[1]->m_float3[0]; matdata[4] = args[1]->m_float3[1]; matdata[5] = args[1]->m_float3[2];
+matdata[6] = args[2]->m_float3[0]; matdata[7] = args[2]->m_float3[1]; matdata[8] = args[2]->m_float3[2];
+
+return new jegl_shader_value(matdata, jegl_shader_value::FLOAT3x3);
+}} },
+{ "float3x3", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
+jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
+jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
+reduce_method
+{
+float matdata[9];
+for (size_t i = 0; i < 9; i++)
+matdata[i] = args[i]->m_float;
+
+return new jegl_shader_value(matdata, jegl_shader_value::FLOAT3x3);
+}} },
+//
 {"*", {jegl_shader_value::FLOAT4x4, jegl_shader_value::FLOAT4,
 reduce_method{
 float result[4] = {};
-for (size_t iy = 0; iy < 4; iy++)
-for (size_t ix = 0; ix < 4; ix++)
-result[iy] += args[0]->m_float4x4[ix][iy] * args[1]->m_float4[ix];
+jeecs::math::mat4xvec4(result, args[0]->m_float4x4, args[1]->m_float4);
 return new jegl_shader_value(result[0], result[1], result[2], result[3]);
 }}},
-#undef A
-#undef B
+
+{"*", {jegl_shader_value::FLOAT4, jegl_shader_value::FLOAT4x4,
+reduce_method{
+return nullptr; // TODO;
+}} },
+
 {"*", {jegl_shader_value::FLOAT4x4, jegl_shader_value::FLOAT4x4,
 reduce_method{
 float result[4][4] = {};
 jeecs::math::mat4xmat4(result, args[0]->m_float4x4, args[1]->m_float4x4);
 return new jegl_shader_value((float*)&result, jegl_shader_value::FLOAT4x4);
 }}},
+//
+{ "*", {jegl_shader_value::FLOAT3x3, jegl_shader_value::FLOAT3,
+reduce_method{
+float result[3] = {};
+jeecs::math::mat3xvec3(result, args[0]->m_float3x3, args[1]->m_float3);
+return new jegl_shader_value(result[0], result[1], result[2]);
+}} },
+
+{ "*", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3x3,
+reduce_method{
+return nullptr; // TODO;
+}} },
+
+{ "*", {jegl_shader_value::FLOAT3x3, jegl_shader_value::FLOAT3x3,
+reduce_method{
+float result[3][3] = {};
+jeecs::math::mat3xmat3(result, args[0]->m_float3x3, args[1]->m_float3x3);
+return new jegl_shader_value((float*)&result, jegl_shader_value::FLOAT3x3);
+}} },
 //
 {"texture", {jegl_shader_value::TEXTURE2D, jegl_shader_value::FLOAT2,
 reduce_method{return nullptr; }} },
@@ -220,7 +261,7 @@ reduce_method{return nullptr; }} },
 { "min", {jegl_shader_value::FLOAT4, jegl_shader_value::FLOAT4,
 reduce_method{return nullptr; }} },
 
-{ "length", {jegl_shader_value::FLOAT2, 
+{ "length", {jegl_shader_value::FLOAT2,
 reduce_method{return nullptr; }} },
 { "length", {jegl_shader_value::FLOAT3,
 reduce_method{return nullptr; }} },
