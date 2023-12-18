@@ -65,7 +65,7 @@ func apply_point_light_effect(
     fragment_vpos: float3,
     fragment_vnorm: float3,
     light_vpos : float3,
-    shadow_factor: float,
+    shadow_factor: float
 )
 {
     let f2l = fragment_vpos - light_vpos;

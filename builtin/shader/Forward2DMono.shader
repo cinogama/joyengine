@@ -37,7 +37,7 @@ public func vert(v: vin)
     return v2f{
         pos = je_p * vpos,
         vpos = vpos->xyz / vpos->w,
-        vnorm = vnorm->xyz / vnorm->w,
+        vnorm = vnorm,
     };
 }
 

@@ -49,6 +49,6 @@ public func frag(vf: v2f)
         albedo = float4::new(0.,0.,0.,0.),
         self_luminescence = float4::create(color->xyz, pow(dv, decay)) * color->w,
         vspace_position = float4::zero,
-        vspace_normalize = float::zero,
+        vspace_normalize = float4::zero,
     };
 }
