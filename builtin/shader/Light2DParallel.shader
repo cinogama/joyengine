@@ -14,7 +14,8 @@ VAO_STRUCT! vin {
 };
 
 using v2f = struct {
-    pos     : float4,
+    pos         : float4,
+    light_vdir  : float3,
 };
 
 using fout = struct {
@@ -25,6 +26,7 @@ public func vert(v: vin)
 {
     return v2f{
         pos = float4::create(v.vertex, 0.5) * 2.,
+        light_vdir = je_mv->float3x3 * float3::new(0., -1, 1.),
     };
 }
 
