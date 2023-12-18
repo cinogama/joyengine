@@ -61,14 +61,17 @@ public func frag(vf: v2f)
 {
     // let albedo_buffer = je_light2d_defer_albedo;
     // let self_lumine = je_light2d_defer_self_luminescence;
-    let visual_coord = je_light2d_defer_visual_position;
+    let vspace_position = je_light2d_defer_vspace_position;
+    let vspace_normalize = je_light2d_defer_vspace_normalize;
     let shadow_buffer = je_light2d_defer_shadow;
+
+    do vspace_normalize; // TODO
    
     let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);
 
     let pixvpos = vf.vpos->xyz / vf.vpos->w;
 
-    let vposition = texture(visual_coord, uv);
+    let vposition = texture(vspace_position, uv);
     let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
     let fgdistance = distance(vposition->xyz, pixvpos);
     let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_light2d_resolutin, uv);

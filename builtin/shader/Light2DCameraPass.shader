@@ -33,10 +33,11 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let albedo_buffer = je_light2d_defer_albedo;
-    let self_lumine = je_light2d_defer_self_luminescence;
     let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
     let light_buffer = uniform_texture:<texture2d>("Light", NearestRepeatSampler, 0);
+
+    let albedo_buffer = je_light2d_defer_albedo;
+    let self_lumine = je_light2d_defer_self_luminescence;
 
     let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
     let light_color_rgb = texture(light_buffer, vf.uv)->xyz;

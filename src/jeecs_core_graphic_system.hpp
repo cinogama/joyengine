@@ -29,8 +29,8 @@ public let je_light2d_decay = uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
 
 public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 0);
 public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 1);
-public let je_light2d_defer_visual_position = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VisualPosition", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 2);
-public let je_light2d_defer_visual_normalize = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VisualNormalize", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 3);
+public let je_light2d_defer_vspace_position = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpacePosition", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 2);
+public let je_light2d_defer_vspace_normalize = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpaceNormalize", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 3);
 public let je_light2d_defer_shadow = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 4);
 )";
 
