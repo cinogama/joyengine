@@ -2339,7 +2339,7 @@ JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
 
 /*
 jegl_draw_vertex [基本接口]
-使用当前着色器（通过jegl_using_texture绑定）和纹理（通过jegl_using_texture绑定）,
+使用当前着色器（通过jegl_using_resource绑定）和纹理（通过jegl_using_texture绑定）,
 以指定方式绘制一个模型，与jegl_using_resource类似，会根据情况是否执行资源的初始化操作
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
