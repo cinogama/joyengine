@@ -853,7 +853,7 @@ namespace jeecs::graphic::api::gl3
             GLint texture_aim_format = GL_RGBA;
             GLint texture_src_format = GL_RGBA;
 
-            bool is_16bit = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR16);
+            bool is_16bit = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::FLOAT16);
             bool is_depth = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH);
             bool is_cube = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::CUBE);
 

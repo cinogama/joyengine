@@ -1606,12 +1606,12 @@ struct jegl_texture
         RGBA = 0x0004,
         COLOR_DEPTH_MASK = 0x000F,
 
-        COLOR16 = 0x0010,
+        FLOAT16 = 0x0010,
         DEPTH = 0x0020,
         FRAMEBUF = 0x0040,
         CUBE = 0x0080,
 
-        FORMAT_MASK = 0x0FF0,
+        FORMAT_MASK = 0xFFF0,
     };
 
     // NOTE:

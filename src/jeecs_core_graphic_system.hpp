@@ -20,17 +20,18 @@ const char* shader_light2d_src = R"(
 
 import je::shader;
 
-let DEFER_TEX_0 = 4;
+let JE_LIGHT2D_DEFER_0 = 4;
 
 public let DefaultShadow2DSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
 
 public let je_light2d_resolutin = uniform("JOYENGINE_LIGHT2D_RESOLUTION", float2::one);
 public let je_light2d_decay = uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
 
-public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", DefaultShadow2DSampler, DEFER_TEX_0 + 0);
-public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", DefaultShadow2DSampler, DEFER_TEX_0 + 1);
-public let je_light2d_defer_visual_coord = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VisualCoordinates", DefaultShadow2DSampler, DEFER_TEX_0 + 2);
-public let je_light2d_defer_shadow = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", DefaultShadow2DSampler, DEFER_TEX_0 + 3);
+public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 0);
+public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 1);
+public let je_light2d_defer_visual_position = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VisualPosition", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 2);
+public let je_light2d_defer_visual_normalize = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VisualNormalize", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 3);
+public let je_light2d_defer_shadow = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 4);
 )";
 
 const char* shader_pbr_path = "je/shader/pbr.wo";
@@ -1479,11 +1480,11 @@ public func frag(_: v2f)
                                             // 漫反射颜色
                                             jegl_texture::format::RGBA,
                                             // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                            jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16),
+                                            jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
                                             // 视空间坐标(RGB) Alpha通道暂时留空
-                                            jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::COLOR16),
+                                            jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
                                             // 法线空间颜色
-                                            jegl_texture::format::RGBA,
+                                            jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
                                             // 深度缓冲区
                                             jegl_texture::format::DEPTH,
                                         });
@@ -1491,7 +1492,7 @@ public func frag(_: v2f)
                                     = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
                                         {
                                             // 光渲染结果
-                                            (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::COLOR16),
+                                            (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
                                         });
                             }
                         }
@@ -2066,6 +2067,9 @@ public func frag(_: v2f)
                     // 绑定视空间坐标通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 2,
                         current_camera.light2DPostPass->post_rend_target->get_attachment(2)->resouce());
+                    // 绑定视空间法线通道
+                    jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 3,
+                        current_camera.light2DPostPass->post_rend_target->get_attachment(3)->resouce());
 
                     jegl_rchain_bind_pre_texture_group(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group);
 
@@ -2080,7 +2084,7 @@ public func frag(_: v2f)
                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
 
                         jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group,
-                            JE_LIGHT2D_DEFER_0 + 3,
+                            JE_LIGHT2D_DEFER_0 + 4,
                             light2d.shadow != nullptr
                             ? light2d.shadow->shadow_buffer->get_attachment(0)->resouce()
                             : m_defer_light2d_host._no_shadow->resouce());
@@ -2202,6 +2206,9 @@ public func frag(_: v2f)
                     // 绑定视空间坐标通道
                     jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 2,
                         current_camera.light2DPostPass->post_rend_target->get_attachment(2)->resouce());
+                    // 绑定视空间法线通道
+                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 3,
+                        current_camera.light2DPostPass->post_rend_target->get_attachment(3)->resouce());
 
                     const jeecs::math::vec2
                         * _using_tiling = &default_tiling,

@@ -54,8 +54,7 @@ public func frag(vf: v2f)
 {
     // let albedo_buffer = je_light2d_defer_albedo;
     // let self_lumine = je_light2d_defer_self_luminescence;
-    // let visual_coord = je_light2d_defer_visual_coord;
-
+    // let visual_coord = je_light2d_defer_visual_position;
     let shadow_buffer = je_light2d_defer_shadow;
 
     let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);

@@ -1414,15 +1414,19 @@ namespace jeecs::graphic::api::dx11
             texture_describe.MipLevels = 1;
             texture_describe.ArraySize = 1;
 
-            bool depth16f = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR16);
+            bool float16 = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::FLOAT16);
 
             switch (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
             {
             case jegl_texture::format::MONO:
-                texture_describe.Format = depth16f ? DXGI_FORMAT_R16_FLOAT : DXGI_FORMAT_R8_UNORM;
+                texture_describe.Format = float16 
+                    ? DXGI_FORMAT_R16_FLOAT
+                    : DXGI_FORMAT_R8_UNORM;
                 break;
             case jegl_texture::format::RGBA:
-                texture_describe.Format = depth16f ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+                texture_describe.Format = float16 
+                    ? DXGI_FORMAT_R16G16B16A16_FLOAT 
+                    : DXGI_FORMAT_R8G8B8A8_UNORM;
                 break;
             }
 

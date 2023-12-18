@@ -14,12 +14,12 @@ VAO_STRUCT! vin {
 };
 
 using v2f = struct {
-    pos     : float4,
-    vpos    : float3,
-    uv      : float2,
-    vtangent_x : float3,
-    vtangent_y : float3,
-    vtangent_z : float3,
+    pos         : float4,
+    vpos        : float3,
+    uv          : float2,
+    vtangent_x  : float3,
+    vtangent_y  : float3,
+    vtangent_z  : float3,
 };
 
 using fout = struct {
@@ -35,7 +35,7 @@ using fout = struct {
 SHADER_FUNCTION!
 func vtangent(normal: float3)
 {
-    return normal / abs(je_local_scale) * je_mv->float3x3;
+    return normalize(je_mv->float3x3 * normal / abs(je_local_scale));
 }
 
 public func vert(v: vin)
