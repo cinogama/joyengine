@@ -8065,7 +8065,6 @@ namespace jeecs
             float gain = 1.0f;
             float decay = 2.0f;
             float range = 1.0f;
-            bool parallel = false;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -8073,7 +8072,6 @@ namespace jeecs
                 typing::register_member(guard, &Color::gain, "gain");
                 typing::register_member(guard, &Color::decay, "decay");
                 typing::register_member(guard, &Color::range, "range");
-                typing::register_member(guard, &Color::parallel, "parallel");
             }
         };
         struct Shadow
@@ -8082,6 +8080,8 @@ namespace jeecs
             size_t resolution_height = 768;
 
             float shape_offset = 0.f;
+
+            bool parallel = false;
 
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
 
@@ -8098,6 +8098,7 @@ namespace jeecs
                 typing::register_member(guard, &Shadow::resolution_width, "resolution_width");
                 typing::register_member(guard, &Shadow::resolution_height, "resolution_height");
                 typing::register_member(guard, &Shadow::shape_offset, "shape_offset");
+                typing::register_member(guard, &Shadow::parallel, "parallel");
             }
         };
         struct CameraPostPass

@@ -242,9 +242,9 @@ namespace editor::gui::edit_forms
                     "Light2D::Shadow",
                 ])->>func(e)
                     {
-                        // 设置e的Light2D::Color.parallel,
+                        // 设置e的Light2D::Shadow.parallel,
                         // 设置默认的光照着色器
-                        do e->get_component(je::typeinfo::load("Light2D::Color")->val)->val
+                        do e->get_component(je::typeinfo::load("Light2D::Shadow")->val)->val
                             ->  get_member("parallel")
                             ->> \tv = tv[1]->set_bool(false);
                             ;
@@ -270,7 +270,7 @@ namespace editor::gui::edit_forms
                     "Light2D::Shadow",
                 ])->>func(e)
                     {
-                        // 设置e的Light2D::Color.parallel,
+                        // 设置e的Light2D::Shadow.parallel,
                         // 设置默认的光照着色器
                         do e->get_component(je::typeinfo::load("Light2D::Color")->val)->val
                             ->  get_member("parallel")

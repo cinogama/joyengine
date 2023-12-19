@@ -1643,21 +1643,6 @@ public func frag(_: v2f)
                 // If current camera contain light2d-pass, prepare light shadow here.
                 if (current_camera.light2DPostPass != nullptr)
                 {
-                    std::sort(m_2dlight_list.begin(), m_2dlight_list.end(),
-                        [&](const light2d_arch& a, const light2d_arch& b)
-                        {
-                            // 平行光源权重最高，然后以摄像机距离排序
-                            if (a.color->parallel || b.color->parallel)
-                                return b.color->parallel == false;
-
-                            auto adistance = a.translation->world_position
-                                - current_camera.translation->world_position;
-                            auto bdistance = b.translation->world_position
-                                - current_camera.translation->world_position;
-                            adistance.z = bdistance.z = 0.f;
-                            return adistance.length() < bdistance.length();
-                        });
-
                     if (current_camera.light2DPostPass->post_rend_target == nullptr
                         || current_camera.light2DPostPass->post_light_target == nullptr)
                         // Not ready, skip this frame.
@@ -1679,15 +1664,15 @@ public func frag(_: v2f)
                             jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain);
 
                             const auto& normal_shadow_pass =
-                                lightarch.color->parallel ?
+                                lightarch.shadow->parallel ?
                                 m_defer_light2d_host._defer_light2d_shadow_parallel_pass :
                                 m_defer_light2d_host._defer_light2d_shadow_point_pass;
                             const auto& reverse_normal_shadow_pass =
-                                lightarch.color->parallel ?
+                                lightarch.shadow->parallel ?
                                 m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass :
                                 m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass;
                             const auto& shape_shadow_pass =
-                                lightarch.color->parallel ?
+                                lightarch.shadow->parallel ?
                                 m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass :
                                 m_defer_light2d_host._defer_light2d_shadow_shape_point_pass;
 
@@ -1769,7 +1754,7 @@ public func frag(_: v2f)
                                         }
 
                                         // 通过 je_color 变量传递着色器的位置或方向
-                                        if (lightarch.color->parallel)
+                                        if (lightarch.shadow->parallel)
                                         {
                                             jeecs::math::vec3 rotated_light_dir =
                                                 lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
@@ -1825,7 +1810,7 @@ public func frag(_: v2f)
                                             0.f,
                                             0.f);
 
-                                        if (lightarch.color->parallel)
+                                        if (lightarch.shadow->parallel)
                                         {
                                             jeecs::math::vec3 rotated_light_dir =
                                                 lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 1.f).unit();
