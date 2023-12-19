@@ -1205,25 +1205,6 @@ namespace shader
     }
 }
 
-// Default uniform
-public let je_m = uniform("JOYENGINE_TRANS_M", float4x4::unit);
-public let je_v = uniform("JOYENGINE_TRANS_V", float4x4::unit);
-public let je_p = uniform("JOYENGINE_TRANS_P", float4x4::unit);
-
-// je_mvp = je_p * je_v * je_m;
-// je_mv  = je_v * je_m;
-// je_vp  = je_p * je_v;
-public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4::unit);
-public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4::unit);
-public let je_vp = uniform("JOYENGINE_TRANS_VP", float4x4::unit);
-
-public let je_local_scale = uniform("JOYENGINE_LOCAL_SCALE", float3::one);
-
-public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2::one);
-public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2::zero);
-
-public let je_color = uniform("JOYENGINE_MAIN_COLOR", float4::one);
-
 public func texture(tex:texture2d, uv:float2)=> float4
 {
     return apply_operation:<float4>("texture", tex, uv);
@@ -1882,8 +1863,29 @@ using uniform_block = struct_define
 
 UNIFORM_BUFFER! JOYENGINE_DEFAULT = 0
 {
-    je_time: float4,
+    je_v    : float4x4,
+    je_p    : float4x4,
+    je_vp   : float4x4,
+    
+    je_time : float4,
 };
+
+// je_mvp = je_p * je_v * je_m;
+// je_mv  = je_v * je_m;
+// je_vp  = je_p * je_v;
+
+// Default uniform
+public let je_m = uniform("JOYENGINE_TRANS_M", float4x4::unit);
+
+public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4::unit);
+public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4::unit);
+
+public let je_local_scale = uniform("JOYENGINE_LOCAL_SCALE", float3::one);
+
+public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2::one);
+public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2::zero);
+
+public let je_color = uniform("JOYENGINE_MAIN_COLOR", float4::one);
 )";
 
 void _scan_used_uniforms_in_vals(

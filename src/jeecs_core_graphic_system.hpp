@@ -208,25 +208,17 @@ public let frag =
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
 
-        jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_default_uniform_buffer;
-        struct default_uniform_buffer_data_t
-        {
-            jeecs::math::vec4 time;
-        };
-
         UserInterfaceGraphicPipelineSystem(game_world w)
             : BasePipelineInterface(w, nullptr)
         {
-            m_default_uniform_buffer = 
-                new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
 
         ~UserInterfaceGraphicPipelineSystem()
         {
-
         }
 
-        void PrepareCameras(Projection& projection,
+        void PrepareCameras(
+            Projection& projection,
             Translation& translation,
             OrthoProjection* ortho,
             PerspectiveProjection* perspec,
@@ -280,6 +272,17 @@ public let frag =
                     (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
                     perspec->angle, znear, zfar);
             }
+
+            assert(projection.default_uniform_buffer != nullptr);
+
+            projection.default_uniform_buffer->update_buffer(
+                offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
+                sizeof(projection.view),
+                projection.view);
+            projection.default_uniform_buffer->update_buffer(
+                offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
+                sizeof(projection.projection),
+                projection.projection);
         }
 
         void CommitUpdate()
@@ -406,11 +409,6 @@ public let frag =
                 (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5))
             };
 
-            m_default_uniform_buffer->update_buffer(
-                offsetof(default_uniform_buffer_data_t, time),
-                sizeof(math::vec4),
-                &shader_time);
-
             const float MAT4_UI_UNIT[4][4] = {
                 { 1.0f, 0.0f, 0.0f, 0.0f },
                 { 0.0f, 1.0f, 0.0f, 0.0f },
@@ -422,6 +420,25 @@ public let frag =
 
             for (auto& current_camera : m_camera_list)
             {
+                assert(current_camera.projection->default_uniform_buffer != nullptr);
+
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_UI_UNIT);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_UI_UNIT);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_vp_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_UI_UNIT);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_time),
+                    sizeof(float) * 4,
+                    &shader_time);
+
                 graphic::framebuffer* rend_aim_buffer = nullptr;
                 float clear_buffer_color[] = {0.f, 0.f, 0.f, 0.f};
                 if (current_camera.rendToFramebuffer)
@@ -462,7 +479,8 @@ public let frag =
                 // Clear depth buffer to overwrite pixels.
                 jegl_rchain_clear_depth_buffer(rend_chain);
 
-                jegl_rchain_bind_uniform_buffer(rend_chain, m_default_uniform_buffer->resouce());
+                jegl_rchain_bind_uniform_buffer(rend_chain, 
+                    current_camera.projection->default_uniform_buffer->resouce());
 
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
                 for (auto& rendentity : m_renderer_list)
@@ -545,11 +563,7 @@ public let frag =
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_UI_MODULE);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_UI_MODULE);
-
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_UI_MODULE);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_UI_UNIT);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_UI_UNIT);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_UI_UNIT);
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3, 1.0f, 1.0f, 1.0f);
 
@@ -627,7 +641,6 @@ public let frag =
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
 
-        jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_default_uniform_buffer;
         struct default_uniform_buffer_data_t
         {
             jeecs::math::vec4 time;
@@ -636,7 +649,6 @@ public let frag =
         UnlitGraphicPipelineSystem(game_world w)
             : BasePipelineInterface(w, nullptr)
         {
-            m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
 
         ~UnlitGraphicPipelineSystem()
@@ -644,7 +656,8 @@ public let frag =
 
         }
 
-        void PrepareCameras(Projection& projection,
+        void PrepareCameras(
+            Projection& projection,
             Translation& translation,
             OrthoProjection* ortho,
             PerspectiveProjection* perspec,
@@ -761,11 +774,6 @@ public let frag =
                 (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5))
             };
 
-            m_default_uniform_buffer->update_buffer(
-                offsetof(default_uniform_buffer_data_t, time),
-                sizeof(math::vec4),
-                &shader_time);
-
             for (auto& current_camera : m_camera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
@@ -794,6 +802,25 @@ public let frag =
                 float MAT4_MV[4][4], MAT4_VP[4][4];
                 math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
 
+                assert(current_camera.projection->default_uniform_buffer != nullptr);
+
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_VIEW);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_PROJECTION);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_vp_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_VP);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_time),
+                    sizeof(float) * 4,
+                    &shader_time);
+
                 jegl_rendchain* rend_chain = nullptr;
 
                 if (current_camera.viewport)
@@ -814,7 +841,8 @@ public let frag =
                 // Clear depth buffer to overwrite pixels.
                 jegl_rchain_clear_depth_buffer(rend_chain);
 
-                jegl_rchain_bind_uniform_buffer(rend_chain, m_default_uniform_buffer->resouce());
+                jegl_rchain_bind_uniform_buffer(rend_chain,
+                    current_camera.projection->default_uniform_buffer->resouce());
 
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
                 for (auto& rendentity : m_renderer_list)
@@ -874,9 +902,6 @@ public let frag =
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
                             rendentity.translation->local_scale.x,
@@ -1343,7 +1368,6 @@ public func frag(_: v2f)
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
 
-        jeecs::basic::resource<jeecs::graphic::uniformbuffer> m_default_uniform_buffer;
         struct default_uniform_buffer_data_t
         {
             jeecs::math::vec4 time;
@@ -1352,7 +1376,6 @@ public func frag(_: v2f)
         DeferLight2DGraphicPipelineSystem(game_world w)
             : BasePipelineInterface(w, nullptr)
         {
-            m_default_uniform_buffer = new jeecs::graphic::uniformbuffer(0, sizeof(default_uniform_buffer_data_t));
         }
 
         ~DeferLight2DGraphicPipelineSystem()
@@ -1360,7 +1383,8 @@ public func frag(_: v2f)
 
         }
 
-        void PrepareCameras(Projection& projection,
+        void PrepareCameras(
+            Projection& projection,
             Translation& translation,
             OrthoProjection* ortho,
             PerspectiveProjection* perspec,
@@ -1603,11 +1627,6 @@ public func frag(_: v2f)
                 (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5))
             };
 
-            m_default_uniform_buffer->update_buffer(
-                offsetof(default_uniform_buffer_data_t, time),
-                sizeof(math::vec4),
-                &shader_time);
-
             for (auto& current_camera : m_camera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
@@ -1638,6 +1657,25 @@ public func frag(_: v2f)
 
                 math::mat4xmat4(MAT4_VP, MAT4_PROJECTION, MAT4_VIEW);
 
+                assert(current_camera.projection->default_uniform_buffer != nullptr);
+
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_VIEW);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_PROJECTION);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_vp_float4x4),
+                    sizeof(float) * 16,
+                    MAT4_VP);
+                current_camera.projection->default_uniform_buffer->update_buffer(
+                    offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_time),
+                    sizeof(float) * 4,
+                    &shader_time);
+
                 jegl_rendchain* rend_chain = nullptr;
 
                 // If current camera contain light2d-pass, prepare light shadow here.
@@ -1662,6 +1700,9 @@ public func frag(_: v2f)
 
                             jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, nullptr);
                             jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain);
+
+                            jegl_rchain_bind_uniform_buffer(light2d_shadow_rend_chain,
+                                current_camera.projection->default_uniform_buffer->resouce());
 
                             const auto& normal_shadow_pass =
                                 lightarch.shadow->parallel ?
@@ -1731,11 +1772,7 @@ public func frag(_: v2f)
                                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
                                         // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
@@ -1797,11 +1834,7 @@ public func frag(_: v2f)
                                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
                                         // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
@@ -1873,11 +1906,7 @@ public func frag(_: v2f)
                                             math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
                                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-
                                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
                                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
                                             // local_scale.x .y .z 通道预留
@@ -1940,7 +1969,8 @@ public func frag(_: v2f)
                     jegl_rchain_clear_depth_buffer(rend_chain);
                 }
 
-                jegl_rchain_bind_uniform_buffer(rend_chain, m_default_uniform_buffer->resouce());
+                jegl_rchain_bind_uniform_buffer(rend_chain,
+                    current_camera.projection->default_uniform_buffer->resouce());
 
                 auto shadow_pre_bind_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
@@ -2002,11 +2032,7 @@ public func frag(_: v2f)
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
@@ -2040,6 +2066,10 @@ public func frag(_: v2f)
                         0, 0, 0, 0);
 
                     jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain, nullptr);
+
+                    jegl_rchain_bind_uniform_buffer(light2d_light_effect_rend_chain,
+                        current_camera.projection->default_uniform_buffer->resouce());
+
                     auto lightpass_pre_bind_texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
 
                     // Bind attachment
@@ -2121,11 +2151,7 @@ public func frag(_: v2f)
                             auto* builtin_uniform = (*using_shader)->m_builtin;
 
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, v, float4x4, MAT4_VIEW);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, p, float4x4, MAT4_PROJECTION);
-
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, vp, float4x4, MAT4_VP);
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
@@ -2173,9 +2199,12 @@ public func frag(_: v2f)
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (rend_aim_buffer)
-                        jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                        jegl_rchain_clear_color_buffer(final_target_rend_chain, clear_buffer_color);
                     // Clear depth buffer to overwrite pixels.
-                    jegl_rchain_clear_depth_buffer(rend_chain);
+                    jegl_rchain_clear_depth_buffer(final_target_rend_chain);
+
+                    jegl_rchain_bind_uniform_buffer(final_target_rend_chain,
+                        current_camera.projection->default_uniform_buffer->resouce());
 
                     auto texture_group = jegl_rchain_allocate_texture_group(final_target_rend_chain);
 

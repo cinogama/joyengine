@@ -1339,13 +1339,9 @@ namespace jeecs::graphic::api::dx11
                     jedx11_shader_res->m_fragment.GetAddressOf()));
 
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JOYENGINE_TRANS_M");
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_v = shader_blob->get_built_in_location("JOYENGINE_TRANS_V");
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_p = shader_blob->get_built_in_location("JOYENGINE_TRANS_P");
-
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JOYENGINE_TRANS_MV");
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_vp = shader_blob->get_built_in_location("JOYENGINE_TRANS_VP");
-
+                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
+                
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
 

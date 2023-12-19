@@ -1669,13 +1669,13 @@ struct jegl_shader
         fliter_mode m_min;
         fliter_mode m_mag;
         fliter_mode m_mip;
-        wrap_mode m_uwrap;
-        wrap_mode m_vwrap;
+        wrap_mode   m_uwrap;
+        wrap_mode   m_vwrap;
 
-        uint32_t m_sampler_id;  // Used for dx11
+        uint32_t    m_sampler_id;   // Used for DX11 & HLSL generation
 
-        size_t m_pass_id_count;
-        uint32_t* m_pass_ids;     // Used for gl330
+        size_t      m_pass_id_count;
+        uint32_t* m_pass_ids;     // Used for GL3 & GLSL generation
     };
 #ifdef JE_PLATFORM_M64
     static_assert(sizeof(sampler_method) == 24 + 16);
@@ -1696,11 +1696,9 @@ struct jegl_shader
     struct builtin_uniform_location
     {
         uint32_t m_builtin_uniform_m = jeecs::typing::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_v = jeecs::typing::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_p = jeecs::typing::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_mvp = jeecs::typing::PENDING_UNIFORM_LOCATION;
         uint32_t m_builtin_uniform_mv = jeecs::typing::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_vp = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_mvp = jeecs::typing::PENDING_UNIFORM_LOCATION;
+
         uint32_t m_builtin_uniform_local_scale = jeecs::typing::PENDING_UNIFORM_LOCATION;
 
         uint32_t m_builtin_uniform_tiling = jeecs::typing::PENDING_UNIFORM_LOCATION;
@@ -6803,11 +6801,18 @@ namespace jeecs
 
         class uniformbuffer : public resource_basic
         {
-        public:
-            explicit uniformbuffer(size_t binding_place, size_t buffersize)
-                :resource_basic(jegl_create_uniformbuf(binding_place, buffersize))
+            explicit uniformbuffer(jegl_resource* res)
+                :resource_basic(res)
             {
                 assert(resouce() != nullptr);
+            }
+        public:
+            static basic::resource<uniformbuffer> create(size_t binding_place, size_t buffersize)
+            {
+                jegl_resource* res = jegl_create_uniformbuf(binding_place, buffersize);
+                if (res != nullptr)
+                    return new uniformbuffer(res);
+                return nullptr;
             }
 
             void update_buffer(size_t offset, size_t size, const void* datafrom) const noexcept
@@ -7327,6 +7332,14 @@ namespace jeecs
         */
         struct BasePipelineInterface : game_system
         {
+            struct default_uniform_buffer_data_t
+            {
+                float m_v_float4x4[4][4];
+                float m_p_float4x4[4][4];
+                float m_vp_float4x4[4][4];
+                float m_time[4];
+            };
+
             graphic_uhost* _m_graphic_host;
             std::vector<rendchain_branch*>  _m_rchain_pipeline;
             size_t                          _m_this_frame_allocate_rchain_pipeline_count;
@@ -7876,9 +7889,17 @@ namespace jeecs
         };
         struct Projection
         {
+            jeecs::basic::resource<jeecs::graphic::uniformbuffer>
+                default_uniform_buffer = jeecs::graphic::uniformbuffer::create(
+                    0, sizeof(graphic::BasePipelineInterface::default_uniform_buffer_data_t));
+
             float view[4][4] = {};
             float projection[4][4] = {};
             float inv_projection[4][4] = {};
+
+            Projection() = default;
+            Projection(const Projection&) {/* Do nothing */ }
+            Projection(Projection&&) = default;
         };
         struct OrthoProjection
         {
@@ -8103,7 +8124,7 @@ namespace jeecs
         {
             basic::resource<graphic::framebuffer> post_rend_target = nullptr;
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
- 
+
             float ratio = 1.0f;
 
             CameraPostPass() = default;

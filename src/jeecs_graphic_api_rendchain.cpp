@@ -335,23 +335,35 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread)
                 switch (uniform_data.m_type)
                 {
                 case jegl_shader::uniform_type::INT:
-                    jegl_uniform_int(*uniform_data.m_binding_place_addr, uniform_data.m_int); break;
+                    jegl_uniform_int(*uniform_data.m_binding_place_addr, 
+                        uniform_data.m_int);
+                    break;
                 case jegl_shader::uniform_type::FLOAT:
-                    jegl_uniform_float(*uniform_data.m_binding_place_addr, uniform_data.m_float); break;
+                    jegl_uniform_float(*uniform_data.m_binding_place_addr, 
+                        uniform_data.m_float); 
+                    break;
                 case jegl_shader::uniform_type::FLOAT2:
                     jegl_uniform_float2(*uniform_data.m_binding_place_addr,
-                        uniform_data.m_float2[0], uniform_data.m_float2[1]);
+                        uniform_data.m_float2[0],
+                        uniform_data.m_float2[1]);
                     break;
                 case jegl_shader::uniform_type::FLOAT3:
                     jegl_uniform_float3(*uniform_data.m_binding_place_addr,
-                        uniform_data.m_float3[0], uniform_data.m_float3[1], uniform_data.m_float3[2]);
+                        uniform_data.m_float3[0], 
+                        uniform_data.m_float3[1], 
+                        uniform_data.m_float3[2]);
                     break;
                 case jegl_shader::uniform_type::FLOAT4:
                     jegl_uniform_float4(*uniform_data.m_binding_place_addr,
-                        uniform_data.m_float4[0], uniform_data.m_float4[1], uniform_data.m_float4[2], uniform_data.m_float4[3]);
+                        uniform_data.m_float4[0], 
+                        uniform_data.m_float4[1],
+                        uniform_data.m_float4[2], 
+                        uniform_data.m_float4[3]);
                     break;
                 case jegl_shader::uniform_type::FLOAT4X4:
-                    jegl_uniform_float4x4(*uniform_data.m_binding_place_addr, uniform_data.m_float4x4); break;
+                    jegl_uniform_float4x4(*uniform_data.m_binding_place_addr, 
+                        uniform_data.m_float4x4);
+                    break;
                 default:
                     break;
                 }

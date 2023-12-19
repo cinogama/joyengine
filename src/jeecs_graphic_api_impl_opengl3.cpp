@@ -810,12 +810,8 @@ namespace jeecs::graphic::api::gl3
                     auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
                     builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_M");
-                    builtin_uniforms.m_builtin_uniform_v = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_V");
-                    builtin_uniforms.m_builtin_uniform_p = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_P");
-
-                    builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MVP");
                     builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MV");
-                    builtin_uniforms.m_builtin_uniform_vp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_VP");
+                    builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MVP");
 
                     builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_TILING");
                     builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_OFFSET");
