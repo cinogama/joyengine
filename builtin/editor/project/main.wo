@@ -826,6 +826,7 @@ namespace editor
                 // Camera 族组件
                 je::typeinfo::load("Camera::PerspectiveProjection")->val,
                 je::typeinfo::load("Camera::Projection")->val,
+                je::typeinfo::load("Camera::FrustumCulling")->val,
                 je::typeinfo::load("Camera::RendToFramebuffer")->val,
             ]);
             editor_camera->je::editor::apply_camera_framebuf_setting(320, 240);

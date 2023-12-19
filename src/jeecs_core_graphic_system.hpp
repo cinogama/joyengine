@@ -149,53 +149,14 @@ public let frag =
         }
     };
 
-    bool frustum_culling_entity(const Camera::Projection& proj, const Transform::Translation& trans, const Renderer::Shape* vtx)
+    struct BaseImpledGraphicPipeline : public graphic::BasePipelineInterface
     {
-        // 做一个球型碰撞检测
-        float vertex_rad_square = 1.f;
-
-        if (vtx != nullptr)
+        BaseImpledGraphicPipeline(game_world w)
+            : BasePipelineInterface(w, nullptr)
         {
-            auto* vertex_instance = vtx->vertex.get_resource().get();
-            if (vertex_instance != nullptr)
-            {
-                auto* vertex_resource = vertex_instance->resouce();
-                if (vertex_resource->m_raw_vertex_data != nullptr)
-                {
-                    vertex_rad_square =
-                        vertex_resource->m_raw_vertex_data->m_size_x * vertex_resource->m_raw_vertex_data->m_size_x
-                        + vertex_resource->m_raw_vertex_data->m_size_y * vertex_resource->m_raw_vertex_data->m_size_y
-                        + vertex_resource->m_raw_vertex_data->m_size_z * vertex_resource->m_raw_vertex_data->m_size_z;
-                }
-            }
         }
 
-        // [-1, 1.]
-        constexpr math::vec3 plane_norm[] = {
-            math::vec3(0.,0.,1.f),
-            math::vec3(0.,0.,-1.f),
-            math::vec3(0.,1.f,0.),
-            math::vec3(0.,-1.f,0.),
-            math::vec3(1.f,0.,0.),
-            math::vec3(-1.f,0.,0.),
-        };
-
-        for (auto& plane_norm : plane_norm)
-        {
-            float double_distance = plane_norm.dot(trans.world_position + plane_norm) * 2.f;
-            if (double_distance * double_distance <= vertex_rad_square)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    struct UserInterfaceGraphicPipelineSystem : public graphic::BasePipelineInterface
-    {
         using Translation = Transform::Translation;
-
         using Rendqueue = Renderer::Rendqueue;
 
         using Clip = Camera::Clip;
@@ -204,6 +165,7 @@ public let frag =
         using Projection = Camera::Projection;
         using Viewport = Camera::Viewport;
         using RendToFramebuffer = Camera::RendToFramebuffer;
+        using FrustumCulling = Camera::FrustumCulling;
 
         using Shape = Renderer::Shape;
         using Shaders = Renderer::Shaders;
@@ -217,6 +179,7 @@ public let frag =
             const Projection* projection;
             const Viewport* viewport;
             const RendToFramebuffer* rendToFramebuffer;
+            const FrustumCulling* frustumCulling;
 
             bool operator < (const camera_arch& another) const noexcept
             {
@@ -229,9 +192,11 @@ public let frag =
         {
             const Renderer::Color* color;
             const Rendqueue* rendqueue;
+            const Translation* translation;
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
+
             const UserInterface::Origin* ui_origin;
             const UserInterface::Distortion* ui_distortion;
 
@@ -251,23 +216,15 @@ public let frag =
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
 
-        UserInterfaceGraphicPipelineSystem(game_world w)
-            : BasePipelineInterface(w, nullptr)
-        {
-        }
-
-        ~UserInterfaceGraphicPipelineSystem()
-        {
-        }
-
         void PrepareCameras(
-            Projection& projection,
-            Translation& translation,
-            OrthoProjection* ortho,
-            PerspectiveProjection* perspec,
-            Clip* clip,
-            Viewport* viewport,
-            RendToFramebuffer* rendbuf)
+            Transform::Translation& translation,
+            Camera::Projection& projection,
+            Camera::OrthoProjection* ortho,
+            Camera::PerspectiveProjection* perspec,
+            Camera::Clip* clip,
+            Camera::Viewport* viewport,
+            Camera::RendToFramebuffer* rendbuf,
+            Camera::FrustumCulling* frustumCulling)
         {
             float mat_inv_rotation[4][4];
             translation.world_rotation.create_inv_matrix(mat_inv_rotation);
@@ -326,6 +283,87 @@ public let frag =
                 offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
                 sizeof(projection.projection),
                 projection.projection);
+
+            math::mat4xmat4(projection.view_projection, projection.projection, projection.view);
+
+            if (frustumCulling != nullptr)
+            {
+                float ortho_width_gain = ortho == nullptr ? 1.0f : (float)RENDAIMBUFFER_WIDTH / 100.f * 2.f;
+                float ortho_height_gain = ortho == nullptr ? 1.0f : (float)RENDAIMBUFFER_HEIGHT / 100.f * 2.f;
+                float ortho_depth_gain = ortho == nullptr ? 1.0f : zfar / 100.f * 2.f;
+
+                // Left clipping plane
+                frustumCulling->frustum_plane_normals[0] =
+                    ortho_width_gain * math::vec3(
+                        projection.view_projection[0][3] + projection.view_projection[0][0],
+                        projection.view_projection[1][3] + projection.view_projection[1][0],
+                        projection.view_projection[2][3] + projection.view_projection[2][0]
+                    );
+                frustumCulling->frustum_plane_distance[0] =
+                    ortho_width_gain * (projection.view_projection[3][3] + projection.view_projection[3][0]);
+
+                // Right clipping plane
+                frustumCulling->frustum_plane_normals[1] =
+                    ortho_width_gain * math::vec3(
+                        projection.view_projection[0][3] - projection.view_projection[0][0],
+                        projection.view_projection[1][3] - projection.view_projection[1][0],
+                        projection.view_projection[2][3] - projection.view_projection[2][0]
+                    );
+                frustumCulling->frustum_plane_distance[1] =
+                    ortho_width_gain * (projection.view_projection[3][3] - projection.view_projection[3][0]);
+
+                // Top clipping plane
+                frustumCulling->frustum_plane_normals[2] =
+                    ortho_height_gain * math::vec3(
+                        projection.view_projection[0][3] - projection.view_projection[0][1],
+                        projection.view_projection[1][3] - projection.view_projection[1][1],
+                        projection.view_projection[2][3] - projection.view_projection[2][1]
+                    );
+                frustumCulling->frustum_plane_distance[2] =
+                    ortho_height_gain * (projection.view_projection[3][3] - projection.view_projection[3][1]);
+
+                // Bottom clipping plane
+                frustumCulling->frustum_plane_normals[3] =
+                    ortho_height_gain * math::vec3(
+                        projection.view_projection[0][3] + projection.view_projection[0][1],
+                        projection.view_projection[1][3] + projection.view_projection[1][1],
+                        projection.view_projection[2][3] + projection.view_projection[2][1]
+                    );
+                frustumCulling->frustum_plane_distance[3] =
+                    ortho_height_gain * (projection.view_projection[3][3] + projection.view_projection[3][1]);
+
+                // Near clipping plane
+                frustumCulling->frustum_plane_normals[4] =
+                    ortho_depth_gain * math::vec3(
+                        projection.view_projection[0][3] + projection.view_projection[0][2],
+                        projection.view_projection[1][3] + projection.view_projection[1][2],
+                        projection.view_projection[2][3] + projection.view_projection[2][2]
+                    );
+                frustumCulling->frustum_plane_distance[5] =
+                    ortho_depth_gain * (projection.view_projection[3][3] + projection.view_projection[3][2]);
+
+                // Far clipping plane
+                frustumCulling->frustum_plane_normals[5] = 
+                    ortho_depth_gain * math::vec3(
+                    projection.view_projection[0][3] - projection.view_projection[0][2],
+                    projection.view_projection[1][3] - projection.view_projection[1][2],
+                    projection.view_projection[2][3] - projection.view_projection[2][2]
+                );
+                frustumCulling->frustum_plane_distance[5] =
+                    ortho_depth_gain * (projection.view_projection[3][3] - projection.view_projection[3][2]);
+            }
+        }
+    };
+
+    struct UserInterfaceGraphicPipelineSystem : public BaseImpledGraphicPipeline
+    {
+        UserInterfaceGraphicPipelineSystem(game_world w)
+            : BaseImpledGraphicPipeline(w)
+        {
+        }
+
+        ~UserInterfaceGraphicPipelineSystem()
+        {
         }
 
         void CommitUpdate()
@@ -357,7 +395,7 @@ public let frag =
                         auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
-                                branch, rendqueue, &projection, cameraviewport, rendbuf
+                                branch, rendqueue, &projection, cameraviewport, rendbuf, nullptr
                             }
                         );
                     }
@@ -423,7 +461,7 @@ public let frag =
                                     {
                                         m_renderer_list.emplace_back(
                                             renderer_arch{
-                                                color, rendqueue, &shape, &shads, texs, &origin, distortion
+                                                color, rendqueue, nullptr, &shape, &shads, texs, &origin, distortion
                                             });
                                     })
                                 ;
@@ -628,132 +666,16 @@ public let frag =
 
     };
 
-    struct UnlitGraphicPipelineSystem : public graphic::BasePipelineInterface
+    struct UnlitGraphicPipelineSystem : public BaseImpledGraphicPipeline
     {
-        using Translation = Transform::Translation;
-        using Rendqueue = Renderer::Rendqueue;
-
-        using Clip = Camera::Clip;
-        using PerspectiveProjection = Camera::PerspectiveProjection;
-        using OrthoProjection = Camera::OrthoProjection;
-        using Projection = Camera::Projection;
-        using Viewport = Camera::Viewport;
-        using RendToFramebuffer = Camera::RendToFramebuffer;
-
-        using Shape = Renderer::Shape;
-        using Shaders = Renderer::Shaders;
-        using Textures = Renderer::Textures;
-
-        struct camera_arch
-        {
-            rendchain_branch* branchPipeline;
-
-            const Rendqueue* rendqueue;
-            const Projection* projection;
-            const Viewport* viewport;
-            const RendToFramebuffer* rendToFramebuffer;
-
-            bool operator < (const camera_arch& another) const noexcept
-            {
-                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue < b_queue;
-            }
-        };
-        struct renderer_arch
-        {
-            const Renderer::Color* color;
-            const Rendqueue* rendqueue;
-            const Translation* translation;
-            const Shape* shape;
-            const Shaders* shaders;
-            const Textures* textures;
-
-            bool operator < (const renderer_arch& another) const noexcept
-            {
-                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue < b_queue;
-            }
-        };
-
-        DefaultResources m_default_resources;
-        std::vector<camera_arch> m_camera_list;
-        std::vector<renderer_arch> m_renderer_list;
-
-        size_t WINDOWS_WIDTH = 0;
-        size_t WINDOWS_HEIGHT = 0;
-
-        struct default_uniform_buffer_data_t
-        {
-            jeecs::math::vec4 time;
-        };
-
         UnlitGraphicPipelineSystem(game_world w)
-            : BasePipelineInterface(w, nullptr)
+            : BaseImpledGraphicPipeline(w)
         {
         }
 
         ~UnlitGraphicPipelineSystem()
         {
 
-        }
-
-        void PrepareCameras(
-            Projection& projection,
-            Translation& translation,
-            OrthoProjection* ortho,
-            PerspectiveProjection* perspec,
-            Clip* clip,
-            Viewport* viewport,
-            RendToFramebuffer* rendbuf)
-        {
-            float mat_inv_rotation[4][4];
-            translation.world_rotation.create_inv_matrix(mat_inv_rotation);
-            float mat_inv_position[4][4] = {};
-            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
-            mat_inv_position[3][0] = -translation.world_position.x;
-            mat_inv_position[3][1] = -translation.world_position.y;
-            mat_inv_position[3][2] = -translation.world_position.z;
-
-            // TODO: Optmize
-            math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
-
-            assert(ortho || perspec);
-            float znear = clip ? clip->znear : 0.3f;
-            float zfar = clip ? clip->zfar : 1000.0f;
-
-            graphic::framebuffer* rend_aim_buffer =
-                rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer.get() : nullptr;
-
-            size_t
-                RENDAIMBUFFER_WIDTH =
-                (size_t)llround(
-                    (viewport ? viewport->viewport.z : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)),
-                RENDAIMBUFFER_HEIGHT =
-                (size_t)llround(
-                    (viewport ? viewport->viewport.w : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT));
-
-            if (ortho)
-            {
-                graphic::ortho_projection(projection.projection,
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    ortho->scale, znear, zfar);
-                graphic::ortho_inv_projection(projection.inv_projection,
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    ortho->scale, znear, zfar);
-            }
-            else
-            {
-                graphic::perspective_projection(projection.projection,
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    perspec->angle, znear, zfar);
-                graphic::perspective_inv_projection(projection.inv_projection,
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    perspec->angle, znear, zfar);
-            }
         }
 
         void CommitUpdate()
@@ -770,12 +692,17 @@ public let frag =
             select_from(get_world())
                 .exec(&UnlitGraphicPipelineSystem::PrepareCameras).anyof<OrthoProjection, PerspectiveProjection>()
                 .exec(
-                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
+                    [this](
+                        Projection& projection,
+                        Rendqueue* rendqueue,
+                        Viewport* cameraviewport,
+                        RendToFramebuffer* rendbuf,
+                        FrustumCulling* frustumCulling)
                     {
                         auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
-                                branch, rendqueue, &projection, cameraviewport, rendbuf
+                                branch, rendqueue, &projection, cameraviewport, rendbuf, frustumCulling
                             }
                         );
                     })
@@ -969,7 +896,7 @@ public let frag =
 
     };
 
-    struct DeferLight2DGraphicPipelineSystem : public graphic::BasePipelineInterface
+    struct DeferLight2DGraphicPipelineSystem : public BaseImpledGraphicPipeline
     {
         struct DeferLight2DResource
         {
@@ -1345,7 +1272,7 @@ public func frag(_: v2f)
         using Shaders = Renderer::Shaders;
         using Textures = Renderer::Textures;
 
-        struct camera_arch
+        struct l2dcamera_arch
         {
             rendchain_branch* branchPipeline;
 
@@ -1357,8 +1284,9 @@ public func frag(_: v2f)
             const Light2D::CameraPostPass* light2DPostPass;
             const Shaders* shaders;
             const Textures* textures;
+            const FrustumCulling* frustumCulling;
 
-            bool operator < (const camera_arch& another) const noexcept
+            bool operator < (const l2dcamera_arch& another) const noexcept
             {
                 int a_queue = rendqueue ? rendqueue->rend_queue : 0;
                 int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
@@ -1377,23 +1305,6 @@ public func frag(_: v2f)
             const Textures* textures;
         };
 
-        struct renderer_arch
-        {
-            const Renderer::Color* color;
-            const Rendqueue* rendqueue;
-            const Translation* translation;
-            const Shape* shape;
-            const Shaders* shaders;
-            const Textures* textures;
-
-            bool operator < (const renderer_arch& another) const noexcept
-            {
-                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue < b_queue;
-            }
-        };
-
         struct block2d_arch
         {
             const Translation* translation;
@@ -1402,14 +1313,9 @@ public func frag(_: v2f)
             const Shape* shape;
         };
 
-        DefaultResources m_default_resources;
-        std::vector<camera_arch> m_camera_list;
-        std::vector<renderer_arch> m_renderer_list;
+        std::vector<l2dcamera_arch> m_2dcamera_list;
         std::vector<light2d_arch> m_2dlight_list;
         std::vector<block2d_arch> m_2dblock_list;
-
-        size_t WINDOWS_WIDTH = 0;
-        size_t WINDOWS_HEIGHT = 0;
 
         struct default_uniform_buffer_data_t
         {
@@ -1417,70 +1323,13 @@ public func frag(_: v2f)
         };
 
         DeferLight2DGraphicPipelineSystem(game_world w)
-            : BasePipelineInterface(w, nullptr)
+            : BaseImpledGraphicPipeline(w)
         {
         }
 
         ~DeferLight2DGraphicPipelineSystem()
         {
 
-        }
-
-        void PrepareCameras(
-            Projection& projection,
-            Translation& translation,
-            OrthoProjection* ortho,
-            PerspectiveProjection* perspec,
-            Clip* clip,
-            Viewport* viewport,
-            RendToFramebuffer* rendbuf)
-        {
-            float mat_inv_rotation[4][4];
-            translation.world_rotation.create_inv_matrix(mat_inv_rotation);
-            float mat_inv_position[4][4] = {};
-            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
-            mat_inv_position[3][0] = -translation.world_position.x;
-            mat_inv_position[3][1] = -translation.world_position.y;
-            mat_inv_position[3][2] = -translation.world_position.z;
-
-            // TODO: Optmize
-            math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
-
-            assert(ortho || perspec);
-            float znear = clip ? clip->znear : 0.3f;
-            float zfar = clip ? clip->zfar : 1000.0f;
-
-            graphic::framebuffer* rend_aim_buffer =
-                rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer.get() : nullptr;
-
-            size_t
-                RENDAIMBUFFER_WIDTH =
-                (size_t)llround(
-                    (viewport ? viewport->viewport.z : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)),
-                RENDAIMBUFFER_HEIGHT =
-                (size_t)llround(
-                    (viewport ? viewport->viewport.w : 1.0f) *
-                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT));
-
-            if (ortho)
-            {
-                graphic::ortho_projection(projection.projection,
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    ortho->scale, znear, zfar);
-                graphic::ortho_inv_projection(projection.inv_projection,
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    ortho->scale, znear, zfar);
-            }
-            else
-            {
-                graphic::perspective_projection(projection.projection,
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    perspec->angle, znear, zfar);
-                graphic::perspective_inv_projection(projection.inv_projection,
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    perspec->angle, znear, zfar);
-            }
         }
 
         void CommitUpdate()
@@ -1491,7 +1340,7 @@ public func frag(_: v2f)
 
             m_2dlight_list.clear();
             m_2dblock_list.clear();
-            m_camera_list.clear();
+            m_2dcamera_list.clear();
             m_renderer_list.clear();
 
             this->branch_allocate_begin();
@@ -1509,12 +1358,22 @@ public func frag(_: v2f)
                         RendToFramebuffer* rendbuf,
                         Light2D::CameraPostPass* light2dpostpass,
                         Shaders* shaders,
-                        Textures* textures)
+                        Textures* textures,
+                        FrustumCulling* frustumCulling)
                     {
                         auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-                        m_camera_list.emplace_back(
-                            camera_arch{
-                                branch, rendqueue, &tarns, &projection, cameraviewport, rendbuf, light2dpostpass, shaders, textures
+                        m_2dcamera_list.emplace_back(
+                            l2dcamera_arch{
+                                branch,
+                                rendqueue,
+                                &tarns,
+                                &projection,
+                                cameraviewport,
+                                rendbuf,
+                                light2dpostpass,
+                                shaders,
+                                textures,
+                                frustumCulling
                             }
                         );
 
@@ -1645,7 +1504,7 @@ public func frag(_: v2f)
                                         [](const block2d_arch& a, const block2d_arch& b) {
                                             return a.translation->world_position.z > b.translation->world_position.z;
                                         });
-                                    std::sort(m_camera_list.begin(), m_camera_list.end());
+                                    std::sort(m_2dcamera_list.begin(), m_2dcamera_list.end());
                                     std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
                                     this->branch_allocate_end();
@@ -1670,7 +1529,7 @@ public func frag(_: v2f)
                 (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5))
             };
 
-            for (auto& current_camera : m_camera_list)
+            for (auto& current_camera : m_2dcamera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
                 float clear_buffer_color[] = { 0.f, 0.f, 0.f, 0.f };
@@ -1735,8 +1594,28 @@ public func frag(_: v2f)
                     // Walk throw all light, rend shadows to light's ShadowBuffer.
                     for (auto& lightarch : m_2dlight_list)
                     {
-                        if (!frustum_culling_entity(*current_camera.projection, *lightarch.translation, lightarch.shape))
-                            continue;
+                        if (lightarch.shadow->parallel == false && current_camera.frustumCulling != nullptr)
+                        {
+                            const auto& shape = lightarch.shape->vertex.has_resource() 
+                                ? lightarch.shape->vertex.get_resource()
+                                : m_default_resources.default_shape_quad;
+
+                            assert(shape->resouce() != nullptr);
+
+                            auto* raw_vertex_data = shape->resouce()->m_raw_vertex_data;
+                            if (raw_vertex_data != nullptr)
+                            {
+                                math::vec3 shape_size = lightarch.translation->local_scale;
+                                shape_size.x *= raw_vertex_data->m_size_x;
+                                shape_size.y *= raw_vertex_data->m_size_y;
+                                shape_size.z *= raw_vertex_data->m_size_z;
+
+                                if (false == current_camera.frustumCulling->test_circle(
+                                    lightarch.translation->world_position,
+                                    shape_size.length() * 0.5f))
+                                    continue;
+                            }
+                        }
 
                         _2dlight_after_culling.push_back(&lightarch);
 
@@ -2356,149 +2235,149 @@ public func frag(_: v2f)
 
                                         auto update_and_apply_component_frame_data =
                                             [](const game_entity& e, jeecs::Animation2D::FrameAnimation::animation_data_set_list::frame_data& frame)
-                                        {
-                                            for (auto& cdata : frame.m_component_data)
                                             {
-                                                if (cdata.m_entity_cache == e)
-                                                    continue;
-
-                                                cdata.m_entity_cache = e;
-
-                                                assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
-
-                                                auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type);
-                                                if (component_addr == nullptr)
-                                                    // 没有这个组件，忽略之
-                                                    continue;
-
-                                                auto* member_addr = (void*)(cdata.m_member_info->m_member_offset + (intptr_t)component_addr);
-
-                                                // 在这里做好缓存和检查，不要每次都重新获取组件地址和检查类型
-                                                cdata.m_member_addr_cache = member_addr;
-
-                                                switch (cdata.m_member_value.m_type)
+                                                for (auto& cdata : frame.m_component_data)
                                                 {
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
-                                                    {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
-                                                            cdata.m_component_type->m_typename,
-                                                            cdata.m_member_info->m_member_name,
-                                                            cdata.m_member_info->m_member_type->m_typename);
-                                                        cdata.m_member_addr_cache = nullptr;
-                                                    }
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>())
-                                                    {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
-                                                            cdata.m_component_type->m_typename,
-                                                            cdata.m_member_info->m_member_name,
-                                                            cdata.m_member_info->m_member_type->m_typename);
-                                                        cdata.m_member_addr_cache = nullptr;
-                                                    }
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>())
-                                                    {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
-                                                            cdata.m_component_type->m_typename,
-                                                            cdata.m_member_info->m_member_name,
-                                                            cdata.m_member_info->m_member_type->m_typename);
-                                                        cdata.m_member_addr_cache = nullptr;
-                                                    }
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>())
-                                                    {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
-                                                            cdata.m_component_type->m_typename,
-                                                            cdata.m_member_info->m_member_name,
-                                                            cdata.m_member_info->m_member_type->m_typename);
-                                                        cdata.m_member_addr_cache = nullptr;
-                                                    }
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>())
-                                                    {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
-                                                            cdata.m_component_type->m_typename,
-                                                            cdata.m_member_info->m_member_name,
-                                                            cdata.m_member_info->m_member_type->m_typename);
-                                                        cdata.m_member_addr_cache = nullptr;
-                                                    }
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
-                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>())
-                                                    {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
-                                                            cdata.m_component_type->m_typename,
-                                                            cdata.m_member_info->m_member_name,
-                                                            cdata.m_member_info->m_member_type->m_typename);
-                                                        cdata.m_member_addr_cache = nullptr;
-                                                    }
-                                                    break;
-                                                default:
-                                                    jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
-                                                        (int)cdata.m_member_value.m_type,
-                                                        cdata.m_component_type->m_typename,
-                                                        cdata.m_member_info->m_member_name);
-                                                    cdata.m_member_addr_cache = nullptr;
-                                                    break;
-                                                }
-                                            }
-                                            for (auto& cdata : frame.m_component_data)
-                                            {
-                                                if (cdata.m_member_addr_cache == nullptr)
-                                                    continue; // Invalid! skip this component.
+                                                    if (cdata.m_entity_cache == e)
+                                                        continue;
 
-                                                switch (cdata.m_member_value.m_type)
-                                                {
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
-                                                    if (cdata.m_offset_mode)
-                                                        *(int*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.i32;
-                                                    else
-                                                        *(int*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.i32;
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
-                                                    if (cdata.m_offset_mode)
-                                                        *(float*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.f32;
-                                                    else
-                                                        *(float*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.f32;
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
-                                                    if (cdata.m_offset_mode)
-                                                        *(math::vec2*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v2;
-                                                    else
-                                                        *(math::vec2*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v2;
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
-                                                    if (cdata.m_offset_mode)
-                                                        *(math::vec3*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v3;
-                                                    else
-                                                        *(math::vec3*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v3;
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
-                                                    if (cdata.m_offset_mode)
-                                                        *(math::vec4*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v4;
-                                                    else
-                                                        *(math::vec4*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v4;
-                                                    break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
-                                                    if (cdata.m_offset_mode)
-                                                        *(math::quat*)cdata.m_member_addr_cache = *(math::quat*)cdata.m_member_addr_cache * cdata.m_member_value.m_value.q4;
-                                                    else
-                                                        *(math::quat*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.q4;
-                                                    break;
-                                                default:
-                                                    jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
-                                                        (int)cdata.m_member_value.m_type,
-                                                        cdata.m_component_type->m_typename,
-                                                        cdata.m_member_info->m_member_name);
-                                                    break;
+                                                    cdata.m_entity_cache = e;
+
+                                                    assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
+
+                                                    auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type);
+                                                    if (component_addr == nullptr)
+                                                        // 没有这个组件，忽略之
+                                                        continue;
+
+                                                    auto* member_addr = (void*)(cdata.m_member_info->m_member_offset + (intptr_t)component_addr);
+
+                                                    // 在这里做好缓存和检查，不要每次都重新获取组件地址和检查类型
+                                                    cdata.m_member_addr_cache = member_addr;
+
+                                                    switch (cdata.m_member_value.m_type)
+                                                    {
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
+                                                        if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
+                                                        {
+                                                            jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
+                                                                cdata.m_component_type->m_typename,
+                                                                cdata.m_member_info->m_member_name,
+                                                                cdata.m_member_info->m_member_type->m_typename);
+                                                            cdata.m_member_addr_cache = nullptr;
+                                                        }
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
+                                                        if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>())
+                                                        {
+                                                            jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
+                                                                cdata.m_component_type->m_typename,
+                                                                cdata.m_member_info->m_member_name,
+                                                                cdata.m_member_info->m_member_type->m_typename);
+                                                            cdata.m_member_addr_cache = nullptr;
+                                                        }
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
+                                                        if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>())
+                                                        {
+                                                            jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
+                                                                cdata.m_component_type->m_typename,
+                                                                cdata.m_member_info->m_member_name,
+                                                                cdata.m_member_info->m_member_type->m_typename);
+                                                            cdata.m_member_addr_cache = nullptr;
+                                                        }
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
+                                                        if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>())
+                                                        {
+                                                            jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
+                                                                cdata.m_component_type->m_typename,
+                                                                cdata.m_member_info->m_member_name,
+                                                                cdata.m_member_info->m_member_type->m_typename);
+                                                            cdata.m_member_addr_cache = nullptr;
+                                                        }
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
+                                                        if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>())
+                                                        {
+                                                            jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
+                                                                cdata.m_component_type->m_typename,
+                                                                cdata.m_member_info->m_member_name,
+                                                                cdata.m_member_info->m_member_type->m_typename);
+                                                            cdata.m_member_addr_cache = nullptr;
+                                                        }
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
+                                                        if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>())
+                                                        {
+                                                            jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
+                                                                cdata.m_component_type->m_typename,
+                                                                cdata.m_member_info->m_member_name,
+                                                                cdata.m_member_info->m_member_type->m_typename);
+                                                            cdata.m_member_addr_cache = nullptr;
+                                                        }
+                                                        break;
+                                                    default:
+                                                        jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
+                                                            (int)cdata.m_member_value.m_type,
+                                                            cdata.m_component_type->m_typename,
+                                                            cdata.m_member_info->m_member_name);
+                                                        cdata.m_member_addr_cache = nullptr;
+                                                        break;
+                                                    }
                                                 }
-                                            }
-                                        };
+                                                for (auto& cdata : frame.m_component_data)
+                                                {
+                                                    if (cdata.m_member_addr_cache == nullptr)
+                                                        continue; // Invalid! skip this component.
+
+                                                    switch (cdata.m_member_value.m_type)
+                                                    {
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
+                                                        if (cdata.m_offset_mode)
+                                                            *(int*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.i32;
+                                                        else
+                                                            *(int*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.i32;
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
+                                                        if (cdata.m_offset_mode)
+                                                            *(float*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.f32;
+                                                        else
+                                                            *(float*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.f32;
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
+                                                        if (cdata.m_offset_mode)
+                                                            *(math::vec2*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v2;
+                                                        else
+                                                            *(math::vec2*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v2;
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
+                                                        if (cdata.m_offset_mode)
+                                                            *(math::vec3*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v3;
+                                                        else
+                                                            *(math::vec3*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v3;
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
+                                                        if (cdata.m_offset_mode)
+                                                            *(math::vec4*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v4;
+                                                        else
+                                                            *(math::vec4*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v4;
+                                                        break;
+                                                    case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
+                                                        if (cdata.m_offset_mode)
+                                                            *(math::quat*)cdata.m_member_addr_cache = *(math::quat*)cdata.m_member_addr_cache * cdata.m_member_value.m_value.q4;
+                                                        else
+                                                            *(math::quat*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.q4;
+                                                        break;
+                                                    default:
+                                                        jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
+                                                            (int)cdata.m_member_value.m_type,
+                                                            cdata.m_component_type->m_typename,
+                                                            cdata.m_member_info->m_member_name);
+                                                        break;
+                                                    }
+                                                }
+                                            };
 
                                         if (animation.m_current_frame_index == SIZE_MAX || animation.m_last_speed != frame_animation.speed)
                                         {

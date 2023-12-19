@@ -3863,8 +3863,8 @@ namespace jeecs
                     debug::logfatal("This type: '%s' have no function named 'to_string'."
                         , typeid(T).name());
                     return 0;
-                }();
-                return basic::make_new_string("");
+                    }();
+                    return basic::make_new_string("");
             }
             static void parse(void* _ptr, const char* _memb)
             {
@@ -3884,7 +3884,7 @@ namespace jeecs
                         debug::logfatal("This type: '%s' have no function named 'parse'."
                             , typeid(T).name());
                         return 0;
-                    }();
+                        }();
                 }
             }
 
@@ -6829,12 +6829,9 @@ namespace jeecs
             float znear,
             float zfar)
         {
-            const float RATIO = 1024.0f;
-            const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
-
-            const float R = WIDTH_HEIGHT_RATIO * RATIO / 2.0f / scale / 100.0f;
+            const float R = windows_width / 2.0f / scale / 100.f;
             const float L = -R;
-            const float T = RATIO / 2.0f / scale / 100.0f;
+            const float T = windows_height / 2.0f / scale / 100.f;
             const float B = -T;
 
             auto m = out_proj_mat;
@@ -6867,12 +6864,9 @@ namespace jeecs
             float znear,
             float zfar)
         {
-            const float RATIO = 1024.0f;
-            const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
-
-            const float R = WIDTH_HEIGHT_RATIO * RATIO / 2.0f / scale / 100.0f;
+            const float R = windows_width / 2.0f / scale / 100.f;
             const float L = -R;
-            const float T = RATIO / 2.0f / scale / 100.0f;
+            const float T = windows_height / 2.0f / scale / 100.f;
             const float B = -T;
 
             auto m = out_proj_mat;
@@ -7887,6 +7881,25 @@ namespace jeecs
                 typing::register_member(guard, &Clip::zfar, "zfar");
             }
         };
+        struct FrustumCulling
+        {
+            float frustum_plane_distance[6] = {};
+            math::vec3 frustum_plane_normals[6] = {};
+
+            bool test_circle(const math::vec3& origin, float r) const
+            {
+                for (size_t index = 0; index < 6; ++index)
+                {
+                    auto distance_vec = frustum_plane_normals[index] * origin;
+                    auto distance = distance_vec.x + distance_vec.y + distance_vec.z + frustum_plane_distance[index];
+
+                    if (distance < -r)
+                        return false;
+                }
+                return true;
+            }
+
+        };
         struct Projection
         {
             jeecs::basic::resource<jeecs::graphic::uniformbuffer>
@@ -7895,6 +7908,7 @@ namespace jeecs
 
             float view[4][4] = {};
             float projection[4][4] = {};
+            float view_projection[4][4] = {};
             float inv_projection[4][4] = {};
 
             Projection() = default;
@@ -8952,6 +8966,7 @@ namespace jeecs
             type_info::register_type<Animation2D::FrameAnimation>(guard, "Animation2D::FrameAnimation");
 
             type_info::register_type<Camera::Clip>(guard, "Camera::Clip");
+            type_info::register_type<Camera::FrustumCulling>(guard, "Camera::FrustumCulling");
             type_info::register_type<Camera::Projection>(guard, "Camera::Projection");
             type_info::register_type<Camera::OrthoProjection>(guard, "Camera::OrthoProjection");
             type_info::register_type<Camera::PerspectiveProjection>(guard, "Camera::PerspectiveProjection");
@@ -8990,10 +9005,10 @@ namespace jeecs
 
             auto integer_uniform_parser_c2w = [](wo_vm, wo_value value, const auto* v) {
                 wo_set_int(value, (wo_integer_t)*v);
-            };
+                };
             auto integer_uniform_parser_w2c = [](wo_vm, wo_value value, auto* v) {
                 *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
-            };
+                };
             typing::register_script_parser<int8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int8", "alias int8 = int;");
             typing::register_script_parser<int16_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
