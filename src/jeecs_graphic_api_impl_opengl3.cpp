@@ -870,7 +870,7 @@ namespace jeecs::graphic::api::gl3
                     jeecs::debug::logerr("Depth texture cannot use 16bit.");
 
                 if (is_cube)
-                    assert(0); // todo;
+                    assert(0); // TODO;
                 else
                     glTexImage2D(gl_texture_type, 0, GL_DEPTH_COMPONENT,
                         (GLsizei)resource->m_raw_texture_data->m_width,

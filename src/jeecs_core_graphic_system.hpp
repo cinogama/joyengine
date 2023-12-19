@@ -149,6 +149,49 @@ public let frag =
         }
     };
 
+    bool frustum_culling_entity(const Camera::Projection& proj, const Transform::Translation& trans, const Renderer::Shape* vtx)
+    {
+        // 做一个球型碰撞检测
+        float vertex_rad_square = 1.f;
+
+        if (vtx != nullptr)
+        {
+            auto* vertex_instance = vtx->vertex.get_resource().get();
+            if (vertex_instance != nullptr)
+            {
+                auto* vertex_resource = vertex_instance->resouce();
+                if (vertex_resource->m_raw_vertex_data != nullptr)
+                {
+                    vertex_rad_square =
+                        vertex_resource->m_raw_vertex_data->m_size_x * vertex_resource->m_raw_vertex_data->m_size_x
+                        + vertex_resource->m_raw_vertex_data->m_size_y * vertex_resource->m_raw_vertex_data->m_size_y
+                        + vertex_resource->m_raw_vertex_data->m_size_z * vertex_resource->m_raw_vertex_data->m_size_z;
+                }
+            }
+        }
+
+        // [-1, 1.]
+        constexpr math::vec3 plane_norm[] = {
+            math::vec3(0.,0.,1.f),
+            math::vec3(0.,0.,-1.f),
+            math::vec3(0.,1.f,0.),
+            math::vec3(0.,-1.f,0.),
+            math::vec3(1.f,0.,0.),
+            math::vec3(-1.f,0.,0.),
+        };
+
+        for (auto& plane_norm : plane_norm)
+        {
+            float double_distance = plane_norm.dot(trans.world_position + plane_norm) * 2.f;
+            if (double_distance * double_distance <= vertex_rad_square)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     struct UserInterfaceGraphicPipelineSystem : public graphic::BasePipelineInterface
     {
         using Translation = Transform::Translation;
@@ -440,7 +483,7 @@ public let frag =
                     &shader_time);
 
                 graphic::framebuffer* rend_aim_buffer = nullptr;
-                float clear_buffer_color[] = {0.f, 0.f, 0.f, 0.f};
+                float clear_buffer_color[] = { 0.f, 0.f, 0.f, 0.f };
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
@@ -479,7 +522,7 @@ public let frag =
                 // Clear depth buffer to overwrite pixels.
                 jegl_rchain_clear_depth_buffer(rend_chain);
 
-                jegl_rchain_bind_uniform_buffer(rend_chain, 
+                jegl_rchain_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resouce());
 
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
@@ -1485,13 +1528,13 @@ public func frag(_: v2f)
                                 RENDAIMBUFFER_WIDTH =
                                 (size_t)llround(
                                     (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)) * 
-                                    std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f)),
+                                    (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)) *
+                                std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f)),
                                 RENDAIMBUFFER_HEIGHT =
                                 (size_t)llround(
                                     (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)) * 
-                                    std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f));
+                                    (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)) *
+                                std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f));
 
                             bool need_update = light2dpostpass->post_rend_target == nullptr
                                 || light2dpostpass->post_rend_target->width() != RENDAIMBUFFER_WIDTH
@@ -1678,6 +1721,9 @@ public func frag(_: v2f)
 
                 jegl_rendchain* rend_chain = nullptr;
 
+                std::vector<light2d_arch*> _2dlight_after_culling;
+                _2dlight_after_culling.reserve(m_2dlight_list.size());
+
                 // If current camera contain light2d-pass, prepare light shadow here.
                 if (current_camera.light2DPostPass != nullptr)
                 {
@@ -1689,6 +1735,11 @@ public func frag(_: v2f)
                     // Walk throw all light, rend shadows to light's ShadowBuffer.
                     for (auto& lightarch : m_2dlight_list)
                     {
+                        if (!frustum_culling_entity(*current_camera.projection, *lightarch.translation, lightarch.shape))
+                            continue;
+
+                        _2dlight_after_culling.push_back(&lightarch);
+
                         if (lightarch.shadow != nullptr)
                         {
                             auto light2d_shadow_aim_buffer = lightarch.shadow->shadow_buffer.get();
@@ -2088,8 +2139,10 @@ public func frag(_: v2f)
 
                     jegl_rchain_bind_pre_texture_group(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group);
 
-                    for (auto& light2d : m_2dlight_list)
+                    for (auto* light2d_p : _2dlight_after_culling)
                     {
+                        auto& light2d = *light2d_p;
+
                         assert(light2d.translation != nullptr
                             && light2d.color != nullptr
                             && light2d.shaders != nullptr
@@ -2260,9 +2313,6 @@ public func frag(_: v2f)
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
                     }
-
-                    // 将光照信息储存到通道0，进行最终混合和gamma矫正等操作，完成输出
-
                 } // Finish for Light2d effect.
             }
         }
