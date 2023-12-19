@@ -80,11 +80,9 @@ public func frag(vf: v2f)
 
     let vnormalize = texture(vspace_normalize, uv)->xyz;
 
-    let result = je_color->xyz * je_color->w * shadow_factor;
-
     return fout{
         color = float4::create(
-            result + apply_parallel_light_effect(
+            apply_parallel_light_effect(
                 vnormalize,
                 vf.light_vdir,
                 shadow_factor),
