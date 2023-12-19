@@ -19,7 +19,6 @@ using v2f = struct {
     vpos        : float4,
     uv          : float2,
     light_vpos  : float3,
-    light_range : float,
 };
 
 using fout = struct {
@@ -29,15 +28,12 @@ using fout = struct {
 public func vert(v: vin)
 {
     let vpos = je_mv * float4::create(v.vertex, 1.);
-    let scale = abs(je_local_scale);
-
     return v2f{
         pos = je_p * vpos,
         vpos = vpos,
         uv = v.uv, // No need for uvtrans(...).
 
         light_vpos = movement(je_mv),
-        light_range = max(scale->x, scale->y),
     };
 }
 
@@ -68,7 +64,6 @@ func apply_point_light_effect(
     fragment_vpos   : float3,
     fragment_vnorm  : float3,
     light_vpos      : float3,
-    light_range     : float,
     light_fade      : float,
     shadow_factor   : float
 )
@@ -77,12 +72,8 @@ func apply_point_light_effect(
     let ldistance = length(f2l);
     let ldirection = normalize(f2l);
 
-    let distance_factor = max(float::one - ldistance / light_range, float::zero);
-
-    // Linear decay for better effect.
-    let fade_factor = distance_factor / je_light2d_decay;
     let point_light_factor = 
-        fragment_vnorm->dot(ldirection->negative) / (ldistance + 1.) * fade_factor;
+        fragment_vnorm->dot(ldirection->negative) / (ldistance + 1.);
 
     return shadow_factor 
         * light_fade
@@ -101,21 +92,31 @@ public func frag(vf: v2f)
    
     let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);
 
+    let pixvpos = vf.vpos->xyz / vf.vpos->w;
+
     let vposition = texture(vspace_position, uv)->xyz;
     let vnormalize = texture(vspace_normalize, uv)->xyz;
     let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+    let fgdistance = distance(vposition, pixvpos);
 
     let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_light2d_resolutin, uv);
     let decay = je_light2d_decay;
 
+    let fade_factor = pow(float::one - uvdistance, decay);
+
+    let color_intensity = je_color->xyz * je_color->w * shadow_factor;
+
+    let result = color_intensity 
+        * fade_factor / (fgdistance + 1.0)
+        * step(pixvpos->z, vposition->z);
+
     return fout{
         color = float4::create(
-            apply_point_light_effect(
+            result + apply_point_light_effect(
                 vposition,
                 vnormalize,
                 vf.light_vpos,
-                vf.light_range,
-                pow(float::one - uvdistance, decay),
+                fade_factor,
                 shadow_factor),
             0.),
     };

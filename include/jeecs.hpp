@@ -8078,9 +8078,7 @@ namespace jeecs
         {
             size_t resolution_width = 1024;
             size_t resolution_height = 768;
-
             float shape_offset = 0.f;
-
             bool parallel = false;
 
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
