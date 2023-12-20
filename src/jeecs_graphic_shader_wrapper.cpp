@@ -1881,7 +1881,23 @@ using uniform_block = struct_define
     }
     result += ");";
 
-    result += desc + F"let {func_name} = function::register(\"{func_name}\", {func_name}_uf_args, {func_name}_uf_impl({func_name}_uf_args...));";
+    result += F"let {func_name}_uf_fimpl = function::register(\"{func_name}\", {func_name}_uf_args, {func_name}_uf_impl({func_name}_uf_args...));";
+
+    result += desc + F"func {func_name}(";
+    for (let idx, (arg_name, arg_type): args)
+    {
+        if (idx != 0)
+            result += ", ";
+        result += F"{arg_name}: {arg_type}";
+    }
+    result += F")\{ return {func_name}_uf_fimpl(";
+    for (let idx, (arg_name, _): args)
+    {
+        if (idx != 0)
+            result += ", ";
+        result += arg_name;
+    }
+    result += ");}";
 
     result += F"func {func_name}_uf_impl(";
     for (let idx, (arg_name, arg_type): args)

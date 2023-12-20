@@ -33,17 +33,19 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
-    let light_buffer = uniform_texture:<texture2d>("Light", NearestRepeatSampler, 0);
+    let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
 
+    let light_buffer = uniform_texture:<texture2d>("Light", NearestRepeatSampler, 0);
     let albedo_buffer = je_light2d_defer_albedo;
     let self_lumine = je_light2d_defer_self_luminescence;
 
     let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
+
     let light_color_rgb = texture(light_buffer, vf.uv)->xyz;
     let self_lumine_color_rgb = texture(self_lumine, vf.uv)->xyz;
-    let mixed_color_rgb = max(float3::zero, albedo_color_rgb
-        * (self_lumine_color_rgb + light_color_rgb + float3::new(0.03, 0.03, 0.03)));
+    let glowing_color_rgb = self_lumine_color_rgb + light_color_rgb + float3::new(0.03, 0.03, 0.03);
+
+    let mixed_color_rgb = max(float3::zero, albedo_color_rgb * glowing_color_rgb);
 
     let hdr_color_rgb = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
     let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::new(1. / 2.2, 1. / 2.2, 1. / 2.2, ));
