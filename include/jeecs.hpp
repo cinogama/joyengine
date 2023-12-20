@@ -2103,7 +2103,7 @@ jegl_create_texture [基本接口]
 JE_API jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format);
 
 /*
-jegl_load_vertex [基本接口] (暂未实现)
+jegl_load_vertex [基本接口]
 从指定路径加载一个顶点（模型）资源，加载的路径规则与 jeecs_file_open 相同
     * 若指定的文件不存在或不是一个合法的模型，则返回nullptr
     * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放

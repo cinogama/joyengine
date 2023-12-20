@@ -782,9 +782,12 @@ public func uniform_texture<ShaderResultT>(uniform_name:string, sampler: sampler
     return tex;
 }
 
-public func uniform<ShaderResultT>(uniform_name:string, init_value: ShaderResultT)=> ShaderResultT
+public func uniform<ShaderResultT>(uniform_name:string, init_value: ShaderResultT)
 {
-    return _uniform_with_init:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, init_value);
+    if (init_value is real)
+        return _uniform_with_init:<float>(_get_type_enum:<float>(), uniform_name, float::new(init_value));
+    else
+        return _uniform_with_init:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, init_value);
 }
 
 public func shared_uniform<ShaderResultT>(uniform_name:string)=> ShaderResultT
@@ -864,6 +867,37 @@ using function = struct{
         return func(...){
             return apply_operation:<ResultT>("#je_shader_uf_" + name, ......);
         };
+    }
+}
+
+namespace real
+{
+    public func operator + <T>(a:real, b:T)=> float
+        where b is float;
+    {
+        return apply_operation:<float>("+", a, b);
+    }
+    public func operator - <T>(a:real, b:T)=> float
+        where b is float;
+    {
+        return apply_operation:<float>("-", a, b);
+    }
+    public func operator * <T>(a:real, b:T)
+        where b is float 
+            || b is float2 
+            || b is float3 
+            || b is float4;
+    {
+        if (b is float || b is real)
+            return apply_operation:<float>("*", a, b);
+        else
+            return b * a;
+    }
+
+    public func operator / <T>(a:real, b:T)=> float
+        where b is float;
+    {
+        return apply_operation:<float>("/", a, b);
     }
 }
 

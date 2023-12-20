@@ -77,7 +77,7 @@ public func frag(vf: v2f)
 
     let mixed_color_rgb = max(float3::zero, albedo_color_rgb
         * ( self_luming_color_gos_rgb_hdr_brightness * self_luming_color_gos_rgb 
-            + (float::one - self_luming_color_gos_rgb_hdr_brightness) * self_lumine_color_rgb
+            + (1. - self_luming_color_gos_rgb_hdr_brightness) * self_lumine_color_rgb
             + light_color_rgb 
             + float3::new(0.03, 0.03, 0.03)));
 

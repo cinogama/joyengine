@@ -49,7 +49,7 @@ func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
         let shadow_weight = texture(shadow, uv + reso_inv * float2::create(x, y) * bias)->x;
         shadow_factor = max(shadow_factor, shadow_weight * weight);
     }
-    return float::one - shadow_factor;
+    return 1. - shadow_factor;
 }
 
 SHADER_FUNCTION!
