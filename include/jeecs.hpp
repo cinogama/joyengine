@@ -6821,6 +6821,8 @@ namespace jeecs
             }
         };
 
+        inline constexpr float ORTHO_PROJECTION_RATIO = 5.0f;
+
         inline void ortho_projection(
             float(*out_proj_mat)[4],
             float windows_width,
@@ -6829,9 +6831,11 @@ namespace jeecs
             float znear,
             float zfar)
         {
-            const float R = windows_width / 2.0f / scale / 100.f;
+            const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
+
+            const float R = WIDTH_HEIGHT_RATIO * ORTHO_PROJECTION_RATIO / scale;
             const float L = -R;
-            const float T = windows_height / 2.0f / scale / 100.f;
+            const float T = ORTHO_PROJECTION_RATIO / scale;
             const float B = -T;
 
             auto m = out_proj_mat;
@@ -6864,9 +6868,11 @@ namespace jeecs
             float znear,
             float zfar)
         {
-            const float R = windows_width / 2.0f / scale / 100.f;
+            const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
+
+            const float R = WIDTH_HEIGHT_RATIO * ORTHO_PROJECTION_RATIO / 2.0f / scale / 100.0f;
             const float L = -R;
-            const float T = windows_height / 2.0f / scale / 100.f;
+            const float T = ORTHO_PROJECTION_RATIO / 2.0f / scale / 100.0f;
             const float B = -T;
 
             auto m = out_proj_mat;
