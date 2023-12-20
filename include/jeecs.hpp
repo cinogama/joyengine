@@ -6870,9 +6870,9 @@ namespace jeecs
         {
             const float WIDTH_HEIGHT_RATIO = windows_width / windows_height;
 
-            const float R = WIDTH_HEIGHT_RATIO * ORTHO_PROJECTION_RATIO / 2.0f / scale / 100.0f;
+            const float R = WIDTH_HEIGHT_RATIO * ORTHO_PROJECTION_RATIO / scale;
             const float L = -R;
-            const float T = ORTHO_PROJECTION_RATIO / 2.0f / scale / 100.0f;
+            const float T = ORTHO_PROJECTION_RATIO / scale;
             const float B = -T;
 
             auto m = out_proj_mat;
