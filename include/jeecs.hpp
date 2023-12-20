@@ -7891,7 +7891,8 @@ namespace jeecs
                 for (size_t index = 0; index < 6; ++index)
                 {
                     auto distance_vec = frustum_plane_normals[index] * origin;
-                    auto distance = distance_vec.x + distance_vec.y + distance_vec.z + frustum_plane_distance[index];
+                    auto distance = distance_vec.x + distance_vec.y + distance_vec.z + 
+                        frustum_plane_distance[index];
 
                     if (distance < -r)
                         return false;
@@ -8109,12 +8110,15 @@ namespace jeecs
                 typing::register_member(guard, &Color::range, "range");
             }
         };
+        struct Parallel
+        {
+
+        };
         struct Shadow
         {
             size_t resolution_width = 1024;
             size_t resolution_height = 768;
             float shape_offset = 0.f;
-            bool parallel = false;
 
             basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
 
@@ -8131,7 +8135,6 @@ namespace jeecs
                 typing::register_member(guard, &Shadow::resolution_width, "resolution_width");
                 typing::register_member(guard, &Shadow::resolution_height, "resolution_height");
                 typing::register_member(guard, &Shadow::shape_offset, "shape_offset");
-                typing::register_member(guard, &Shadow::parallel, "parallel");
             }
         };
         struct CameraPostPass
@@ -8974,6 +8977,7 @@ namespace jeecs
             type_info::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
 
             type_info::register_type<Light2D::Color>(guard, "Light2D::Color");
+            type_info::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
             type_info::register_type<Light2D::Shadow>(guard, "Light2D::Shadow");
             type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
             type_info::register_type<Light2D::Block>(guard, "Light2D::Block");

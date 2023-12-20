@@ -242,12 +242,7 @@ namespace editor::gui::edit_forms
                     "Light2D::Shadow",
                 ])->>func(e)
                     {
-                        // 设置e的Light2D::Shadow.parallel,
                         // 设置默认的光照着色器
-                        do e->get_component(je::typeinfo::load("Light2D::Shadow")->val)->val
-                            ->  get_member("parallel")
-                            ->> \tv = tv[1]->set_bool(false);
-                            ;
                         let default_shader_path = "@/resource/shader/Light2DPoint.shader";
                         do je::graphic::shader::load(default_shader_path)
                             ->> \s = e->set_shaders([s]);
@@ -268,14 +263,10 @@ namespace editor::gui::edit_forms
                     "Renderer::Textures",
                     "Light2D::Color",
                     "Light2D::Shadow",
+                    "Light2D::Parallel",
                 ])->>func(e)
                     {
-                        // 设置e的Light2D::Shadow.parallel,
                         // 设置默认的光照着色器
-                        do e->get_component(je::typeinfo::load("Light2D::Shadow")->val)->val
-                            ->  get_member("parallel")
-                            ->> \tv = tv[1]->set_bool(true);
-                            ;
                         let default_shader_path = "@/resource/shader/Light2DParallel.shader";
                         do je::graphic::shader::load(default_shader_path)
                             ->> \s = e->set_shaders([s]);

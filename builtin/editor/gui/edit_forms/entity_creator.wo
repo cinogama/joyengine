@@ -318,6 +318,7 @@ namespace editor::gui::edit_forms
                     context->add_components("Camera::Projection");
                     context->add_components("Camera::PerspectiveProjection");
                     context->add_components("Camera::Viewport");
+                    context->add_components("Camera::FrustumCulling");
                 }
 
                 if (MenuItem("摄像机（平行）"))
@@ -326,6 +327,7 @@ namespace editor::gui::edit_forms
                     context->add_components("Camera::Projection");
                     context->add_components("Camera::OrthoProjection");
                     context->add_components("Camera::Viewport");
+                    context->add_components("Camera::FrustumCulling");
                 }
 
                 if (MenuItem("2D光照后处理"))

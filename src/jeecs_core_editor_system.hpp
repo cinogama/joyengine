@@ -641,7 +641,7 @@ public let frag =
                     math::vec2 screen_axis = { p1.x - p0.x,p1.y - p0.y };
                     screen_axis = screen_axis.unit();
 
-                    float factor = 1.0f;
+                    float factor = 0.5f;
                     if (_inputs.l_ctrl)
                         factor *= 0.5f;
                     if (_inputs.l_shift)
