@@ -206,21 +206,24 @@ struct shared_resource_instance
     }
 };
 
+// TODO: 全局缓存的共享资源列表，在多图形线程时会导致相同路径的资源无法在两个图形线程同时使用
+//          考虑像blob那样把资源以图形线程为单位进行缓存？
 std::shared_mutex shared_resource_list_smx;
 std::unordered_map<std::string, std::unique_ptr<shared_resource_instance>> shared_resource_list;
 bool enable_shared_resource_list = false;
-std::unordered_map<std::string, size_t> resource_unload_counters;
 
-size_t _get_resource_blob_unload_counter(const std::string& path)
+std::shared_mutex shared_blobs_smx;
+std::unordered_map<std::string, size_t> shared_blob_unload_counters;
+size_t _get_shared_blob_unload_counter(const std::string& path)
 {
-    auto fnd = resource_unload_counters.find(path);
-    if (fnd == resource_unload_counters.end())
+    auto fnd = shared_blob_unload_counters.find(path);
+    if (fnd == shared_blob_unload_counters.end())
         return 0;
     return fnd->second;
 }
-void _unload_resource_blob(const std::string& path)
+void _unload_shared_blob(const std::string& path)
 {
-    ++resource_unload_counters[path];
+    ++shared_blob_unload_counters[path];
 }
 
 jeecs::basic::atomic_list<jegl_resource::jegl_destroy_resouce> _destroing_graphic_resources;
@@ -595,7 +598,12 @@ bool jegl_mark_shared_resources_outdated(const char* path)
 {
     std::lock_guard g2(shared_resource_list_smx);
 
-    _unload_resource_blob(path);
+    do
+    {
+        std::lock_guard g1(shared_blobs_smx);
+        _unload_shared_blob(path);
+
+    } while (0);
 
     if (enable_shared_resource_list)
     {
@@ -640,13 +648,14 @@ void jegl_using_resource(jegl_resource* resource)
 
     if (need_init_resouce)
     {
-        std::shared_lock sg1(shared_resource_list_smx);
-
         jegl_resource_blob resource_blob = nullptr;
+
+        std::shared_lock sg1(shared_blobs_smx);
+
         size_t resource_blob_version = 0;
         if (resource->m_path != nullptr)
         {
-            resource_blob_version = _get_resource_blob_unload_counter(
+            resource_blob_version = _get_shared_blob_unload_counter(
                 resource->m_path);
 
             auto fnd = _current_graphic_thread->_m_thread_notifier
