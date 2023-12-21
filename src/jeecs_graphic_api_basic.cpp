@@ -163,6 +163,12 @@ namespace Assimp
 #include <future>
 #include <stack>
 
+struct _jegl_destroy_resouce
+{
+    jegl_resource* m_destroy_resource;
+    _jegl_destroy_resouce* last;
+};
+
 struct jegl_thread_notifier
 {
     std::atomic_flag m_graphic_terminate_flag;
@@ -184,6 +190,7 @@ struct jegl_thread_notifier
         size_t m_blob_version;
     };
     std::unordered_map<std::string, cached_resource> _m_cached_resource_blobs;
+    jeecs::basic::atomic_list<_jegl_destroy_resouce> _m_closing_resources;
 };
 
 thread_local jegl_thread* _current_graphic_thread = nullptr;
@@ -206,27 +213,130 @@ struct shared_resource_instance
     }
 };
 
-// TODO: È«¾Ö»º´æµÄ¹²Ïí×ÊÔ´ÁĞ±í£¬ÔÚ¶àÍ¼ĞÎÏß³ÌÊ±»áµ¼ÖÂÏàÍ¬Â·¾¶µÄ×ÊÔ´ÎŞ·¨ÔÚÁ½¸öÍ¼ĞÎÏß³ÌÍ¬Ê±Ê¹ÓÃ
-//          ¿¼ÂÇÏñblobÄÇÑù°Ñ×ÊÔ´ÒÔÍ¼ĞÎÏß³ÌÎªµ¥Î»½øĞĞ»º´æ£¿
-std::shared_mutex shared_resource_list_smx;
-std::unordered_map<std::string, std::unique_ptr<shared_resource_instance>> shared_resource_list;
-bool enable_shared_resource_list = false;
-
-std::shared_mutex shared_blobs_smx;
-std::unordered_map<std::string, size_t> shared_blob_unload_counters;
-size_t _get_shared_blob_unload_counter(const std::string& path)
+struct _je_graphic_shared_context
 {
-    auto fnd = shared_blob_unload_counters.find(path);
-    if (fnd == shared_blob_unload_counters.end())
-        return 0;
-    return fnd->second;
-}
-void _unload_shared_blob(const std::string& path)
-{
-    ++shared_blob_unload_counters[path];
-}
+    std::shared_mutex shared_resource_list_smx;
+    bool enable_shared_resource_list = false;
+    std::unordered_map<std::string, std::unique_ptr<shared_resource_instance>> shared_resource_list;
 
-jeecs::basic::atomic_list<jegl_resource::jegl_destroy_resouce> _destroing_graphic_resources;
+    std::shared_mutex shared_blobs_smx;
+    std::unordered_map<std::string, size_t> shared_blob_unload_counters;
+
+    size_t _get_shared_blob_unload_counter(const std::string& path)
+    {
+        auto fnd = shared_blob_unload_counters.find(path);
+        if (fnd == shared_blob_unload_counters.end())
+            return 0;
+        return fnd->second;
+    }
+    void _unload_shared_blob(const std::string& path)
+    {
+        ++shared_blob_unload_counters[path];
+    }
+
+    bool mark_shared_resources_outdated(const char* path)
+    {
+        std::lock_guard g2(shared_resource_list_smx);
+
+        do
+        {
+            std::lock_guard g1(shared_blobs_smx);
+            _unload_shared_blob(path);
+
+        } while (0);
+
+        if (enable_shared_resource_list)
+        {
+            auto fnd = shared_resource_list.find(path);
+            if (fnd != shared_resource_list.end()
+                && fnd->second->m_tobe_replace == false)
+            {
+                fnd->second->m_tobe_replace = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void set_able_shared_resources(bool able)
+    {
+        std::lock_guard g1(shared_resource_list_smx);
+        enable_shared_resource_list = able;
+        if (able)
+            assert(shared_resource_list.empty());
+        else
+            shared_resource_list.clear();
+    }
+
+    static jegl_resource* _share_resource(jegl_resource* resource)
+    {
+        assert(resource != nullptr);
+        if (resource->m_raw_ref_count == nullptr)
+        {
+            static_assert(sizeof(uint32_t) == sizeof(std::atomic_uint32_t));
+            static_assert(std::atomic_uint32_t::is_always_lock_free);
+
+            resource->m_raw_ref_count = std::launder(reinterpret_cast<uint32_t*>(new std::atomic_uint32_t(1)));
+            assert(std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->load() == 1);
+        }
+        std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_add(1);
+
+        return resource;
+    }
+
+    jegl_resource* try_update_shared_resource(jegl_resource* resource, jegl_resource::type aimtype)
+    {
+        assert(resource != nullptr && resource->m_path != nullptr);
+        do
+        {
+            std::lock_guard g1(shared_resource_list_smx);
+            if (!enable_shared_resource_list)
+                return resource;
+
+            auto fnd = shared_resource_list.find(resource->m_path);
+            if (fnd != shared_resource_list.end()
+                && fnd->second->m_tobe_replace == false
+                && fnd->second->m_resource->m_type == aimtype)
+            {
+                jegl_close_resource(resource);
+                return _share_resource(fnd->second->m_resource);
+            }
+
+            // Create new fxxking one!
+            auto shared_info = std::make_unique<shared_resource_instance>();
+            shared_info->m_resource = resource;
+            shared_resource_list[resource->m_path] = std::move(shared_info);
+            return _share_resource(resource);
+
+        } while (0);
+
+        // Cannot be here
+        abort();
+    }
+
+    jegl_resource* try_load_shared_resource(const char* path)
+    {
+        do
+        {
+            std::shared_lock sg1(shared_resource_list_smx);
+
+            if (!enable_shared_resource_list)
+                return nullptr;
+
+            auto fnd = shared_resource_list.find(path);
+            if (fnd != shared_resource_list.end() && fnd->second->m_tobe_replace == false)
+            {
+                return _share_resource(fnd->second->m_resource);
+            }
+
+        } while (0);
+
+        return nullptr;
+    }
+};
+_je_graphic_shared_context _je_graphic_shared_context_instance;
+
+
 bool _jegl_rchain_resource_used_by_chain(jegl_rendchain* chain, jegl_resource* resource);
 
 void _jegl_commit_rendchain(jegl_thread* glthread, jegl_rendchain* chain)
@@ -240,7 +350,7 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 //////////////////////////////////// API /////////////////////////////////////////
 
 std::vector<jegl_thread*>   _jegl_alive_glthread_list;
-std::mutex                  _jegl_alive_glthread_list_mx;
+std::shared_mutex           _jegl_alive_glthread_list_mx;
 
 jeecs_sync_callback_func_t _jegl_sync_callback_func = nullptr;
 void* _jegl_sync_callback_arg = nullptr;
@@ -269,7 +379,7 @@ void jegl_sync_init(jegl_thread* thread, bool isreboot)
 
 jegl_sync_state jegl_sync_update(jegl_thread* thread)
 {
-    std::unordered_map<jegl_resource::jegl_destroy_resouce*, bool> _waiting_to_free_resource;
+    std::unordered_map<_jegl_destroy_resouce*, bool> _waiting_to_free_resource;
 
     if (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
     {
@@ -304,21 +414,22 @@ jegl_sync_state jegl_sync_update(jegl_thread* thread)
         if (!thread->m_apis->late_update_interface(thread->m_userdata))
             std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
 
-        auto* del_res = _destroing_graphic_resources.pick_all();
+        auto* del_res = thread->_m_thread_notifier->_m_closing_resources.pick_all();
         while (del_res)
         {
             auto* cur_del_res = del_res;
             del_res = del_res->last;
 
-            if (cur_del_res->m_destroy_resource->m_graphic_thread == thread
-                && cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
+            assert(cur_del_res->m_destroy_resource->m_graphic_thread == thread);
+
+            if (cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
             {
                 bool need_release = true;
                 for (auto* chain : thread->_m_thread_notifier->_m_commited_rendchains)
                 {
                     if (_jegl_rchain_resource_used_by_chain(chain, cur_del_res->m_destroy_resource))
                     {
-                        _destroing_graphic_resources.add_one(cur_del_res);
+                        thread->_m_thread_notifier->_m_closing_resources.add_one(cur_del_res);
                         need_release = false;
                         break;
                     }
@@ -326,15 +437,9 @@ jegl_sync_state jegl_sync_update(jegl_thread* thread)
                 if (need_release)
                     _waiting_to_free_resource[cur_del_res] = true;
             }
-            else if (--cur_del_res->m_retry_times)
-                // Need re-try
-                _destroing_graphic_resources.add_one(cur_del_res);
             else
             {
                 // Free this
-                if (cur_del_res->m_destroy_resource->m_graphic_thread != nullptr)
-                    jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
-                        cur_del_res->m_destroy_resource);
                 _waiting_to_free_resource[cur_del_res] = false;
             }
         }
@@ -535,6 +640,16 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
     auto* promise = std::launder(reinterpret_cast<std::promise<void>*>(thread->_m_promise));
     promise->get_future().get();
 
+    auto* closing_resource = thread->_m_thread_notifier->_m_closing_resources.pick_all();
+    while (closing_resource)
+    {
+        auto* cur_closing_resource = closing_resource;
+        closing_resource = closing_resource->last;
+
+        delete cur_closing_resource->m_destroy_resource;
+        delete cur_closing_resource;
+    }
+
     delete promise;
 
     delete std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update));
@@ -584,38 +699,12 @@ void jegl_reboot_graphic_thread(jegl_thread* thread_handle, const jegl_interface
 
 void jegl_set_able_shared_resources(bool able)
 {
-    std::lock_guard g1(shared_resource_list_smx);
-    enable_shared_resource_list = able;
-    if (able)
-    {
-        assert(shared_resource_list.empty());
-    }
-    else
-        shared_resource_list.clear();
+    _je_graphic_shared_context_instance.set_able_shared_resources(able);
 }
 
 bool jegl_mark_shared_resources_outdated(const char* path)
 {
-    std::lock_guard g2(shared_resource_list_smx);
-
-    do
-    {
-        std::lock_guard g1(shared_blobs_smx);
-        _unload_shared_blob(path);
-
-    } while (0);
-
-    if (enable_shared_resource_list)
-    {
-        auto fnd = shared_resource_list.find(path);
-        if (fnd != shared_resource_list.end()
-            && fnd->second->m_tobe_replace == false)
-        {
-            fnd->second->m_tobe_replace = true;
-            return true;
-        }
-    }
-    return false;
+    return _je_graphic_shared_context_instance.mark_shared_resources_outdated(path);
 }
 
 void jegl_using_resource(jegl_resource* resource)
@@ -648,15 +737,15 @@ void jegl_using_resource(jegl_resource* resource)
 
     if (need_init_resouce)
     {
+        std::shared_lock sg1(_je_graphic_shared_context_instance.shared_blobs_smx);
         jegl_resource_blob resource_blob = nullptr;
-
-        std::shared_lock sg1(shared_blobs_smx);
 
         size_t resource_blob_version = 0;
         if (resource->m_path != nullptr)
         {
-            resource_blob_version = _get_shared_blob_unload_counter(
-                resource->m_path);
+            resource_blob_version =
+                _je_graphic_shared_context_instance._get_shared_blob_unload_counter(
+                    resource->m_path);
 
             auto fnd = _current_graphic_thread->_m_thread_notifier
                 ->_m_cached_resource_blobs.find(resource->m_path);
@@ -705,7 +794,7 @@ void jegl_using_resource(jegl_resource* resource)
 
     if (resource->m_type == jegl_resource::SHADER)
     {
-        auto uniform_vars = resource->m_raw_shader_data != nullptr 
+        auto uniform_vars = resource->m_raw_shader_data != nullptr
             ? resource->m_raw_shader_data->m_custom_uniforms
             : nullptr;
 
@@ -755,10 +844,27 @@ void _jegl_free_resource_instance(jegl_resource* resource)
     assert(resource->m_raw_ref_count == nullptr);
 
     // Send this resource to destroing list;
-    auto* del_res = new jegl_resource::jegl_destroy_resouce;
-    del_res->m_retry_times = 15;
+    auto* del_res = new _jegl_destroy_resouce;
     del_res->m_destroy_resource = resource;
-    _destroing_graphic_resources.add_one(del_res);
+
+    std::shared_lock sg1(_jegl_alive_glthread_list_mx);
+    auto fnd = std::find(
+        _jegl_alive_glthread_list.begin(),
+        _jegl_alive_glthread_list.end(),
+        del_res->m_destroy_resource->m_graphic_thread);
+
+    if (fnd != _jegl_alive_glthread_list.end())
+        (*fnd)->_m_thread_notifier->_m_closing_resources.add_one(del_res);
+    else
+    {
+        // æ—¢ç„¶è¿™ä¸ªèµ„æºå·²ç»æ²¡æœ‰ç®¡ç†çº¿ç¨‹äº†ï¼Œç›´æ¥å°±åœ°æ€äº†åŸ‹äº†
+        if (del_res->m_destroy_resource->m_graphic_thread != nullptr)
+            jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
+                del_res->m_destroy_resource);
+
+        delete del_res->m_destroy_resource;
+        delete del_res;
+    }
 }
 
 void jegl_close_resource(jegl_resource* resource)
@@ -1191,70 +1297,14 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
 
 }
 
-jegl_resource* _jegl_share_resource(jegl_resource* resource)
-{
-    assert(resource != nullptr);
-    if (resource->m_raw_ref_count == nullptr)
-    {
-        static_assert(sizeof(uint32_t) == sizeof(std::atomic_uint32_t));
-        static_assert(std::atomic_uint32_t::is_always_lock_free);
-
-        resource->m_raw_ref_count = std::launder(reinterpret_cast<uint32_t*>(new std::atomic_uint32_t(1)));
-        assert(std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->load() == 1);
-    }
-    std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_add(1);
-
-    return resource;
-}
-
 jegl_resource* jegl_try_update_shared_resource(jegl_resource* resource, jegl_resource::type aimtype)
 {
-    assert(resource != nullptr && resource->m_path != nullptr);
-    do
-    {
-        std::lock_guard g1(shared_resource_list_smx);
-        if (!enable_shared_resource_list)
-            return resource;
-
-        auto fnd = shared_resource_list.find(resource->m_path);
-        if (fnd != shared_resource_list.end()
-            && fnd->second->m_tobe_replace == false
-            && fnd->second->m_resource->m_type == aimtype)
-        {
-            jegl_close_resource(resource);
-            return _jegl_share_resource(fnd->second->m_resource);
-        }
-
-        // Create new fxxking one!
-        auto shared_info = std::make_unique<shared_resource_instance>();
-        shared_info->m_resource = resource;
-        shared_resource_list[resource->m_path] = std::move(shared_info);
-        return _jegl_share_resource(resource);
-
-    } while (0);
-
-    // Cannot be here
-    abort();
+    return _je_graphic_shared_context_instance.try_update_shared_resource(resource, aimtype);
 }
 
 jegl_resource* jegl_try_load_shared_resource(const char* path)
 {
-    do
-    {
-        std::shared_lock sg1(shared_resource_list_smx);
-
-        if (!enable_shared_resource_list)
-            return nullptr;
-
-        auto fnd = shared_resource_list.find(path);
-        if (fnd != shared_resource_list.end() && fnd->second->m_tobe_replace == false)
-        {
-            return _jegl_share_resource(fnd->second->m_resource);
-        }
-
-    } while (0);
-
-    return nullptr;
+    return _je_graphic_shared_context_instance.try_load_shared_resource(path);
 }
 
 jegl_resource* jegl_load_shader(const char* path)

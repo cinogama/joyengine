@@ -386,18 +386,22 @@ namespace jeecs
             Transform::Translation& trans,
             Editor::EntityMoverRoot& mover)
         {
-            basic::resource<graphic::vertex> select_box_vert =
-                graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                    {
-                           -0.5f,-0.5f,-0.5f,    0.5f,-0.5f,-0.5f,    0.5f,0.5f,-0.5f,      -0.5f,0.5f,-0.5f,     -0.5f,-0.5f,-0.5f,
-                           -0.5f,-0.5f,0.5f,    0.5f,-0.5f,0.5f,    0.5f,0.5f,0.5f,      -0.5f,0.5f,0.5f,     -0.5f,-0.5f,0.5f,
-                           -0.5f,0.5f,0.5f,       -0.5f,0.5f,-0.5f,    0.5f,0.5f,-0.5f,  0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f
-                    },
-                    { 3 });
+            if (!mover.init)
+            {
+                mover.init = true;
 
-            static basic::resource<graphic::shader>
-                axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
-                    R"(
+                basic::resource<graphic::vertex> select_box_vert =
+                    graphic::vertex::create(jegl_vertex::type::LINESTRIP,
+                        {
+                               -0.5f,-0.5f,-0.5f,    0.5f,-0.5f,-0.5f,    0.5f,0.5f,-0.5f,      -0.5f,0.5f,-0.5f,     -0.5f,-0.5f,-0.5f,
+                               -0.5f,-0.5f,0.5f,    0.5f,-0.5f,0.5f,    0.5f,0.5f,0.5f,      -0.5f,0.5f,0.5f,     -0.5f,-0.5f,0.5f,
+                               -0.5f,0.5f,0.5f,       -0.5f,0.5f,-0.5f,    0.5f,0.5f,-0.5f,  0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f
+                        },
+                        { 3 });
+
+                basic::resource<graphic::shader>
+                    axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
+                        { R"(
 import je::shader;
         
 ZTEST (ALWAYS);
@@ -431,10 +435,10 @@ public let frag =
             , ratio = step(float::new(0.5), je_color->x)
     ;
 ;
-        )");
-            static basic::resource<graphic::shader>
-                select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
-                    R"(
+        )" });
+                basic::resource<graphic::shader>
+                    select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
+                        { R"(
 import je::shader;
         
 ZTEST (LESS);
@@ -458,11 +462,7 @@ public let frag =
     }
     ;
 ;
-        )");
-
-            if (!mover.init)
-            {
-                mover.init = true;
+        )" });
 
                 game_world current_world = mover_entity.game_world();
                 game_entity axis_x_e = current_world.add_entity<

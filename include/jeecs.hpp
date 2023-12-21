@@ -1852,12 +1852,6 @@ jegl_resource [类型]
 */
 struct jegl_resource
 {
-    struct jegl_destroy_resouce
-    {
-        jegl_resource* m_destroy_resource;
-        size_t m_retry_times;
-        jegl_destroy_resouce* last;
-    };
     using jegl_custom_resource_t = void*;
     enum type : uint8_t
     {
@@ -2928,6 +2922,25 @@ jeal_load_buffer_from_wav [基本接口]
 从wav文件加载一个波形
 */
 JE_API jeal_buffer* jeal_load_buffer_from_wav(const char* filename);
+
+enum jeal_format
+{
+    MONO8,
+    MONO16,
+    STEREO8,
+    STEREO16,
+};
+
+/*
+jeal_create_buffer [基本接口]
+从指定的波形数据创建波形对象
+*/
+JE_API jeal_buffer* jeal_create_buffer(
+    const void* buffer_data,
+    size_t buffer_data_len,
+    size_t frequency,
+    size_t byterate,
+    jeal_format format);
 
 /*
 jeal_close_buffer [基本接口]
@@ -7401,6 +7414,18 @@ namespace jeecs
             ~buffer()
             {
                 jeal_close_buffer(_m_audio_buffer);
+            }
+            inline static basic::resource<buffer> create(
+                const void* data, 
+                size_t length, 
+                size_t freq, 
+                size_t byterate, 
+                jeal_format format)
+            {
+                auto* buf = jeal_create_buffer(buffer, length, freq, byterate, format);
+                if (buf != nullptr)
+                    return new buffer(buf);
+                return nullptr; 
             }
             inline static basic::resource<buffer> load(const std::string& path)
             {

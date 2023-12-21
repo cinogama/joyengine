@@ -14,7 +14,7 @@ struct jeal_device
 {
     bool        m_alive;
     const char* m_device_name;
-    ALCdevice*  m_openal_device;
+    ALCdevice* m_openal_device;
 };
 struct jeal_source
 {
@@ -203,13 +203,13 @@ void _jeal_restore_context(const _jeal_global_context* context)
         context->listener_information.m_velocity.x,
         context->listener_information.m_velocity.y,
         context->listener_information.m_velocity.z);
-    float orientation[] = { 
+    float orientation[] = {
         context->listener_orientation[0],
         context->listener_orientation[1],
         context->listener_orientation[2],
         context->listener_orientation[3],
         context->listener_orientation[4],
-        context->listener_orientation[5] 
+        context->listener_orientation[5]
     };
     alListenerfv(AL_ORIENTATION, orientation);
     alListenerf(AL_GAIN, context->listener_information.m_volume);
@@ -244,7 +244,7 @@ void _jeal_restore_context(const _jeal_global_context* context)
         }
     }
 }
-jeal_device** _jeal_update_refetch_devices(size_t * out_len)
+jeal_device** _jeal_update_refetch_devices(size_t* out_len)
 {
     auto old_devices = _jeal_all_devices;
     _jeal_all_devices.clear();
@@ -263,7 +263,7 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
     {
         jeal_device* current_device = nullptr;
 
-        auto fnd = std::find_if(old_devices.begin(), old_devices.end(), 
+        auto fnd = std::find_if(old_devices.begin(), old_devices.end(),
             [current_device_name](jeal_device* device)
             {
                 return 0 == strcmp(current_device_name, device->m_device_name);
@@ -306,13 +306,13 @@ jeal_device** _jeal_update_refetch_devices(size_t * out_len)
     {
         if (closed_device->m_alive == false)
         {
-        assert(closed_device != nullptr);
-        alcCloseDevice(closed_device->m_openal_device);
+            assert(closed_device != nullptr);
+            alcCloseDevice(closed_device->m_openal_device);
 
-        jeecs::debug::loginfo("Audio device: %s closed.", closed_device->m_device_name);
-        je_mem_free((void*)closed_device->m_device_name);
+            jeecs::debug::loginfo("Audio device: %s closed.", closed_device->m_device_name);
+            je_mem_free((void*)closed_device->m_device_name);
 
-        delete closed_device;
+            delete closed_device;
         }
     }
 
@@ -583,6 +583,48 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
     return audio_buffer;
 }
 
+jeal_buffer* jeal_create_buffer(
+    const void* buffer_data,
+    size_t buffer_data_len,
+    size_t frequency,
+    size_t byterate,
+    jeal_format format)
+{
+    jeal_buffer* audio_buffer = new jeal_buffer;
+
+    void* copy_buffer_data = malloc(buffer_data_len);
+    memcpy(copy_buffer_data, buffer_data, buffer_data_len);
+
+    audio_buffer->m_data = copy_buffer_data;
+    audio_buffer->m_size = buffer_data_len;
+    audio_buffer->m_frequency = frequency;
+    audio_buffer->m_byterate = byterate;
+
+    switch (format)
+    {
+    case MONO8:
+        audio_buffer->m_format = AL_FORMAT_MONO8; break;
+    case MONO16:
+        audio_buffer->m_format = AL_FORMAT_MONO16; break;
+    case STEREO8:
+        audio_buffer->m_format = AL_FORMAT_STEREO8; break;
+    case STEREO16:
+        audio_buffer->m_format = AL_FORMAT_STEREO16; break;
+    default:
+        jeecs::debug::logerr("Bad audio buffer format: %d", (int)format);
+        break;
+    }
+
+    std::lock_guard g1(_jeal_all_buffers_mx);
+    std::shared_lock g3(_jeal_context_mx);
+
+    _jeal_all_buffers.insert(audio_buffer);
+
+    _jeal_update_buffer_instance(audio_buffer);
+
+    return audio_buffer;
+}
+
 void jeal_close_buffer(jeal_buffer* buffer)
 {
     std::lock_guard g1(_jeal_all_buffers_mx);
@@ -733,10 +775,6 @@ void jeal_listener_direction(float yaw, float pitch, float roll)
     alListenerfv(AL_ORIENTATION, orientation);
 }
 
-/*
-std::atomic<float> _jeal_listener_gain = 1.0f;
-std::atomic<float> _jeal_global_volume_gain = 1.0f;
-*/
 void jeal_listener_volume(float volume)
 {
     std::shared_lock g3(_jeal_context_mx);
