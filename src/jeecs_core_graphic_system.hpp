@@ -22,16 +22,16 @@ import je::shader;
 
 let JE_LIGHT2D_DEFER_0 = 4;
 
-public let DefaultShadow2DSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+let __linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
 
 public let je_light2d_resolutin = uniform("JOYENGINE_LIGHT2D_RESOLUTION", float2::one);
 public let je_light2d_decay = uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
 
-public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 0);
-public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 1);
-public let je_light2d_defer_vspace_position = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpacePosition", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 2);
-public let je_light2d_defer_vspace_normalize = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpaceNormalize", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 3);
-public let je_light2d_defer_shadow = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", DefaultShadow2DSampler, JE_LIGHT2D_DEFER_0 + 4);
+public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", __linear_clamp, JE_LIGHT2D_DEFER_0 + 0);
+public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", __linear_clamp, JE_LIGHT2D_DEFER_0 + 1);
+public let je_light2d_defer_vspace_position = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpacePosition", __linear_clamp, JE_LIGHT2D_DEFER_0 + 2);
+public let je_light2d_defer_vspace_normalize = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpaceNormalize", __linear_clamp, JE_LIGHT2D_DEFER_0 + 3);
+public let je_light2d_defer_shadow = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", __linear_clamp, JE_LIGHT2D_DEFER_0 + 4);
 )";
 
 const char* shader_pbr_path = "je/shader/pbr.wo";
@@ -1002,9 +1002,9 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-    let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
-    let final_shadow = alphatest(float4::create(je_color->xyz, texture(main_texture, vf.uv)->w));
+    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
+    let final_shadow = alphatest(float4::create(je_color->xyz, texture(Main, vf.uv)->w));
 
     return fout{
         shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
@@ -1052,12 +1052,12 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-    let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
+    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
     let final_shadow = alphatest(
         float4::create(
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
-            texture(main_texture, vf.uv)->w));
+            texture(Main, vf.uv)->w));
 
     return fout{
         shadow_factor = float4::create(float3::one, final_shadow->x)
@@ -1105,12 +1105,12 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-    let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
+    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
     let final_shadow = alphatest(
         float4::create(
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
-            texture(main_texture, vf.uv)->w));
+            texture(Main, vf.uv)->w));
 
     return fout{
         shadow_factor = float4::create(float3::one, final_shadow->x)

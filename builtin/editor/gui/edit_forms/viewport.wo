@@ -26,7 +26,7 @@ namespace editor::gui::edit_forms
     {
         if (enable_2dlight)
         {
-            match (je::graphic::shader::load("@/resource/shader/Light2DCameraPass.shader"))
+            match (je::graphic::shader::load("@/resource/shader/CameraDefer2DPass.shader"))
             {
             value(shader)? 
                 {
@@ -35,7 +35,7 @@ namespace editor::gui::edit_forms
 
                     do shaders->>\shad = shad->set_shaders([shader]);;
                 }                
-            none? jeapi::gui::form::errmsg("加载着色器失败", "无法加载文件@/resource/shader/Light2DCameraPass.shader作为着色器");
+            none? jeapi::gui::form::errmsg("加载着色器失败", "无法加载文件@/resource/shader/CameraDefer2DPass.shader作为着色器");
             }                 
         }
         else

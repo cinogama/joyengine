@@ -588,20 +588,20 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 if (BeginMenu("着色器脚本"))
                 {
                     static let editor_origin_shaders = [
-                        ("单色", "MonoColor"),
+                        ("单色", "Mono"),
                         ("无光", "Unlit"),
                         ("无光混合", "UnlitBlend"),
-                        ("2D光照单色", "Forward2DMono"),
-                        ("2D光照", "Forward2D"),
-                        ("2D光照法线", "Forward2DNormal"),
-                        ("2D光照自发光", "SelfGlowingForward2D"),
-                        ("2D光照自发光单色", "SelfGlowingForward2DMono"), 
-                        ("2D光照自发光法线", "SelfGlowingForward2DNormal"),
-                        ("2D光照氛围光", "Light2DAura"),
+                        ("前向2D", "Forward2D"),
+                        ("前向2D单色", "Forward2DMono"),
+                        ("前向2D法线纹理", "Forward2DNormal"),
+                        ("前向2D自发光系数", "Forward2DSelfGlowing"),
+                        ("前向2D自发光系数单色", "Forward2DMonoSelfGlowing"), 
+                        ("前向2D自发光系数法线", "Forward2DNormalSelfGlowing"),
+                        ("前向2D氛围光", "Forward2DAura"),
                         ("2D点光源（光源）", "Light2DPoint"),
                         ("2D平行光源（光源）", "Light2DParallel"),
-                        ("2D光照后处理（摄像机）", "Light2DCameraPass"),
-                        ("2D光照外发光后处理（摄像机）", "Light2DCameraBloomPass"),
+                        ("2D光照后处理（摄像机）", "CameraDefer2DPass"),
+                        ("2D光照外发光后处理（摄像机）", "CameraDefer2DBloomPass"),
                     ];
 
                     let create_shader_at = func(shader_name: string, shader_src: string)

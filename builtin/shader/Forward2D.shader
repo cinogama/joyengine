@@ -45,8 +45,8 @@ public func vert(v: vin)
 
 public func frag(vf: v2f)
 {
-    let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
-    let Albedo = uniform_texture:<texture2d>("Albedo", NearestRepeatSampler, 0);
+    let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+    let Albedo = uniform_texture:<texture2d>("Albedo", nearest_repeat, 0);
     return fout{
         albedo = alphatest(texture(Albedo, vf.uv)),
         self_luminescence = float4::zero,

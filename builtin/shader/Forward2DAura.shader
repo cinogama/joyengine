@@ -1,4 +1,4 @@
-// Light2DAura.shader
+// Forward2DAura.shader
 
 import je::shader;
 

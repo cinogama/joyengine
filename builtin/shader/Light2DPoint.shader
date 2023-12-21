@@ -38,7 +38,7 @@ public func vert(v: vin)
 }
 
 SHADER_FUNCTION!
-func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
+func multi_sampling_for_bias_shadow(shadow: texture2d, uv: float2)
 {
     let mut shadow_factor = float::zero;
     let bias = 1.;
@@ -49,7 +49,7 @@ func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
         (-1., -1., 0.5),   (0., -1., 0.95),    (1., -1., 0.5),
     ];
 
-    let reso_inv = float2::one / reso;
+    let reso_inv = float2::one / je_light2d_resolutin;
 
     for (let _, (x, y, weight) : bias_weight)
     {
@@ -84,22 +84,22 @@ func apply_point_light_effect(
 
 public func frag(vf: v2f)
 {
-    // let albedo_buffer = je_light2d_defer_albedo;
-    // let self_lumine = je_light2d_defer_self_luminescence;
-    let vspace_position = je_light2d_defer_vspace_position;
-    let vspace_normalize = je_light2d_defer_vspace_normalize;
-    let shadow_buffer = je_light2d_defer_shadow;
+    // let Albedo = je_light2d_defer_albedo;
+    // let SelfLumine = je_light2d_defer_self_luminescence;
+    let VSpacePosition = je_light2d_defer_vspace_position;
+    let VSpaceNormalize = je_light2d_defer_vspace_normalize;
+    let Shadow = je_light2d_defer_shadow;
    
     let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);
 
     let pixvpos = vf.vpos->xyz / vf.vpos->w;
 
-    let vposition = texture(vspace_position, uv)->xyz;
-    let vnormalize = texture(vspace_normalize, uv)->xyz;
+    let vposition = texture(VSpacePosition, uv)->xyz;
+    let vnormalize = texture(VSpaceNormalize, uv)->xyz;
     let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
     let fgdistance = distance(vposition, pixvpos);
 
-    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_light2d_resolutin, uv);
+    let shadow_factor = multi_sampling_for_bias_shadow(Shadow, uv);
     let decay = je_light2d_decay;
 
     let fade_factor = pow(1. - uvdistance, decay);

@@ -1,8 +1,8 @@
-// SelfGlowingForward2D.shader
+// Forward2DMonoSelfGlowing.shader
 
 import je::shader;
 
-SHARED(true);
+SHARED(false);
 ZTEST(LESS);
 ZWRITE(ENABLE);
 BLEND(ONE, ZERO);
@@ -18,7 +18,6 @@ using v2f = struct {
     pos     : float4,
     vpos    : float3,
     vnorm   : float3,
-    uv      : float2,
 };
 
 using fout = struct {
@@ -39,21 +38,17 @@ public func vert(v: vin)
         pos = je_p * vpos,
         vpos = vpos->xyz / vpos->w,
         vnorm = vnorm,
-        uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
 
 public func frag(vf: v2f)
 {
-    let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
-    let Albedo = uniform_texture:<texture2d>("Albedo", NearestRepeatSampler, 0);
-
-    let albedo_color = texture(Albedo, vf.uv);
+    let color = uniform("Color", float4::one);
     let self_glowing = uniform("SelfGlowing", float::one);
 
     return fout{
-        albedo = alphatest(albedo_color),
-        self_luminescence = float4::create(albedo_color->xyz * self_glowing, 1.),
+        albedo = color,
+        self_luminescence = float4::create(color->xyz * self_glowing, 1.),
         vspace_position = float4::create(vf.vpos, 1.),
         vspace_normalize = float4::create(vf.vnorm, 1.),
     };

@@ -1,4 +1,4 @@
-// MonoColor.shader
+// Mono.shader
 
 import je::shader;
 

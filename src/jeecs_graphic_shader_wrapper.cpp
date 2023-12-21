@@ -1345,8 +1345,8 @@ public func negative<T>(a: T)=> T
     return apply_operation:<T>("-", a);
 }
 
-public func pow<T>(a: T, b: T)=> T
-    where is_glvalue:<T>;
+public func pow<T, U>(a: T, b: U)=> T
+    where is_glvalue:<T> && (b is real || b is float || b is T);
 {
     return apply_operation:<T>("pow", a, b);
 }

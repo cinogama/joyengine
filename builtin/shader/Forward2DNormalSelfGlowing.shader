@@ -1,4 +1,4 @@
-// SelfGlowingForward2DNormal.shader
+// Forward2DNormalSelfGlowing.shader
 
 import je::shader;
 
@@ -68,9 +68,9 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
 
 public func frag(vf: v2f)
 {
-    let NearestRepeatSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
-    let Albedo = uniform_texture:<texture2d>("Albedo", NearestRepeatSampler, 0);
-    let Normalize = uniform_texture:<texture2d>("Normalize", NearestRepeatSampler, 1);
+    let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+    let Albedo = uniform_texture:<texture2d>("Albedo", nearest_repeat, 0);
+    let Normalize = uniform_texture:<texture2d>("Normalize", nearest_repeat, 1);
 
     let albedo_color = alphatest(texture(Albedo, vf.uv));
     let self_glowing = uniform("SelfGlowing", float::one);

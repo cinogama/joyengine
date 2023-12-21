@@ -2047,10 +2047,10 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let SubShadowSampler = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-    let main_texture = uniform_texture:<texture2d>("MainTexture", SubShadowSampler, 0);
+    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
     return fout{
-        color = texture(main_texture, vf.uv)
+        color = texture(Main, vf.uv)
     };
 }
 )");

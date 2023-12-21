@@ -1,4 +1,4 @@
-// Light2DCameraBloomPass.shader
+// CameraDefer2DBloomPass.shader
 
 import je::shader;
 import je::shader::light2d;
@@ -79,23 +79,23 @@ func multi_samping_glowing_bloom(tex: texture2d, uv : float2, bias : float)
 
 public func frag(vf: v2f)
 {
-    let NearestRepeatSampler = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+    let nearest_repeat = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
 
-    let light_buffer = uniform_texture:<texture2d>("Light", NearestRepeatSampler, 0);
-    let albedo_buffer = je_light2d_defer_albedo;
-    let self_lumine = je_light2d_defer_self_luminescence;
+    let Light = uniform_texture:<texture2d>("Light", nearest_repeat, 0);
+    let Albedo = je_light2d_defer_albedo;
+    let SelfLumine = je_light2d_defer_self_luminescence;
 
-    let albedo_color_rgb = pow(texture(albedo_buffer, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
+    let albedo_color_rgb = pow(texture(Albedo, vf.uv)->xyz, 2.2);
 
     let glowing_color_rgb = 
-        multi_samping_glowing_bloom(light_buffer, vf.uv, float::new(5.))
-        + multi_samping_glowing_bloom(self_lumine, vf.uv, float::new(1.5))
+        multi_samping_glowing_bloom(Light, vf.uv, float::new(3.))
+        + multi_samping_glowing_bloom(SelfLumine, vf.uv, float::new(1.5))
         + float3::new(0.03, 0.03, 0.03);
 
     let mixed_color_rgb = max(float3::zero, albedo_color_rgb * glowing_color_rgb);
 
     let hdr_color_rgb = mixed_color_rgb / (mixed_color_rgb + float3::one);
-    let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::new(1. / 2.2, 1. / 2.2, 1. / 2.2, ));
+    let hdr_ambient_with_gamma = pow(hdr_color_rgb, 1. / 2.2);
 
     return fout{
         color = float4::create(hdr_ambient_with_gamma, 1.)
