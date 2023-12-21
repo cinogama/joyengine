@@ -147,6 +147,8 @@ namespace jeecs
                                         + variables[1]
                                         + ")";
                                 }
+                                else if (funcname == "fract")
+                                    funcname = "frac";
                                 else
                                 {
                                     bool is_casting_op = false;

@@ -660,6 +660,8 @@ public let LINEAR = fliter::LINEAR;
 public let CLAMP = wrap::CLAMP;
 public let REPEAT = wrap::REPEAT;
 
+alias result_gl_t<T> = typeof(std::declval:<T>() is real ? std::declval:<float>() | std::declval:<T>());
+
 let registered_custom_methods = {}mut: map<string, (string, string)>;
 
 public func custom_method<ShaderResultT>(name: string, glsl_src: string, hlsl_src: string)
@@ -1142,7 +1144,7 @@ namespace float4x4
         return apply_operation:<float3x3>("%float3x3", self);
     }
 
-    public func operator * <T>(a:float4x4, b:T)=> T
+    public func operator * <T>(a:float4x4, b:T)
         where b is float4 || b is float4x4;
     {
         if (b is float4x4)
@@ -1167,7 +1169,7 @@ namespace float3x3
 
     public func create(...)=> float3x3{return apply_operation:<float3x3>("float3x3", ......);}
 
-    public func operator * <T>(a:float3x3, b:T)=> T
+    public func operator * <T>(a:float3x3, b:T)
         where b is float3 || b is float3x3;
     {
         if (b is float3x3)
@@ -1276,7 +1278,7 @@ public func uvframebuf(uv: float2)
 
 // Math functions
 
-let is_glvalue<T> = 
+let is_vec_1_4<T> = 
     std::declval:<T>() is real
     || std::declval:<T>() is float
     || std::declval:<T>() is float2
@@ -1289,42 +1291,42 @@ let is_float<T> =
     || std::declval:<T>() is float
 ;
 
-public func lerp<T>(a: T, b: T, uv:float)=> T
-    where is_glvalue:<T>;
+public func lerp<T>(a: T, b: T, uv:float)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("lerp", a, b, uv);
+    return apply_operation:<result_gl_t<T>>("lerp", a, b, uv);
 }
 
-public func sin<T>(a: T)=> T
-    where is_glvalue:<T>;
+public func sin<T>(a: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("sin", a);
+    return apply_operation:<result_gl_t<T>>("sin", a);
 }
-public func cos<T>(a: T)=> T
-    where is_glvalue:<T>;
+public func cos<T>(a: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("cos", a);
+    return apply_operation:<result_gl_t<T>>("cos", a);
 }
-public func tan<T>(a: T)=> T
-    where is_glvalue:<T>;
+public func tan<T>(a: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("tan", a);
+    return apply_operation:<result_gl_t<T>>("tan", a);
 }
 
-public func asin<T>(a: T)=> T
-    where is_glvalue:<T>;
+public func asin<T>(a: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("asin", a);
+    return apply_operation:<result_gl_t<T>>("asin", a);
 }
-public func acos<T>(a: T)=> T
-    where is_glvalue:<T>;
+public func acos<T>(a: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("acos", a);
+    return apply_operation:<result_gl_t<T>>("acos", a);
 }
-public func atan<T>(a: T)=> T
-    where is_glvalue:<T>;
+public func atan<T>(a: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("atan", a);
+    return apply_operation:<result_gl_t<T>>("atan", a);
 }
 public func atan2<AT, BT>(a: AT, b: BT)=> float
     where a is float || a is real
@@ -1333,40 +1335,40 @@ public func atan2<AT, BT>(a: AT, b: BT)=> float
     return apply_operation:<float>("atan2", a, b);
 }
 
-public func abs<T>(a: T)=> T
-    where is_glvalue:<T>;
+public func abs<T>(a: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("abs", a);
+    return apply_operation:<result_gl_t<T>>("abs", a);
 }
 
-public func negative<T>(a: T)=> T
-    where is_glvalue:<T>;
+public func negative<T>(a: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("-", a);
+    return apply_operation:<result_gl_t<T>>("-", a);
 }
 
-public func pow<T, U>(a: T, b: U)=> T
-    where is_glvalue:<T> && (b is real || b is float || b is T);
+public func pow<T, U>(a: T, b: U)
+    where is_vec_1_4:<T> && (b is real || b is float || b is T);
 {
-    return apply_operation:<T>("pow", a, b);
+    return apply_operation:<result_gl_t<T>>("pow", a, b);
 }
 
-public func max<T>(a: T, b: T)=> T
-    where is_glvalue:<T>;
+public func max<T>(a: T, b: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("max", a, b);
+    return apply_operation:<result_gl_t<T>>("max", a, b);
 }
 
-public func min<T>(a: T, b: T)=> T
-    where is_glvalue:<T>;
+public func min<T>(a: T, b: T)
+    where is_vec_1_4:<T>;
 {
-    return apply_operation:<T>("min", a, b);
+    return apply_operation:<result_gl_t<T>>("min", a, b);
 }
 
-public func normalize<T>(a: T)=> T
-    where is_glvalue:<T> && !is_float:<T>;
+public func normalize<T>(a: T)
+    where is_vec_1_4:<T> && !is_float:<T>;
 {
-    return apply_operation:<T>("normalize", a);
+    return apply_operation:<result_gl_t<T>>("normalize", a);
 }
 
 let _movement = custom_method:<float3>("JEBUILTIN_Movement",
@@ -1387,14 +1389,14 @@ public func movement(trans4x4: float4x4)=> float3
     return _movement(trans4x4);
 }
 
-public func clamp<T, FT>(a: T, b: FT, c: FT)=> T
-    where is_glvalue:<T> && (is_float:<FT> || b is T);
+public func clamp<T, FT>(a: T, b: FT, c: FT)
+    where is_vec_1_4:<T> && (is_float:<FT> || b is T);
 {
-    return apply_operation:<T>("clamp", a, b, c);
+    return apply_operation:<result_gl_t<T>>("clamp", a, b, c);
 }
 
 public func dot<T>(a: T, b: T)=> float
-    where is_glvalue:<T> && !(is_float:<T>);
+    where is_vec_1_4:<T> && !(is_float:<T>);
 {
     return apply_operation:<float>("dot", a, b);
 }
@@ -1405,13 +1407,49 @@ public func cross(a: float3, b: float3)=> float3
 }
 
 public func length<T>(a: T)=> float
-    where is_glvalue:<T> && !(is_float:<T>);
+    where is_vec_1_4:<T> && !(is_float:<T>);
 {
     return apply_operation:<float>("length", a);
 }
 
+public func exp<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("exp", a);
+}
+public func fract<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("fract", a);
+}
+public func floor<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("floor", a);
+}
+public func ceil<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("ceil", a);
+}
+public func log<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("log", a);
+}
+public func log2<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("log2", a);
+}
+public func log10<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("log10", a);
+}
+
 public func distance<T>(a: T, b: T)=> float
-    where is_glvalue:<T> && !(is_float:<T>);
+    where is_vec_1_4:<T> && !(is_float:<T>);
 {
     return apply_operation:<float>("distance", a, b);
 }

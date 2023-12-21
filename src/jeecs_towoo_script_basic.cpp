@@ -366,7 +366,7 @@ namespace je::towoo
 {
     public func tid<T>()
     {
-        return typeof(std::declval:<T>())::id;
+        return T::id;
     }
 
     using member<T, IdT> = handle
@@ -1780,17 +1780,17 @@ namespace je::entity::towoo
     public func add_component<T>(self: entity)=> option<T>
         where typeof(std::declval:<T>())::id is je::typeinfo;
     {
-        return _add_component:<T>(self, typeof(std::declval:<T>())::id);
+        return _add_component:<T>(self, T::id);
     }
     public func get_component<T>(self: entity)=> option<T>
         where typeof(std::declval:<T>())::id is je::typeinfo;
     {
-        return _get_component:<T>(self, typeof(std::declval:<T>())::id);
+        return _get_component:<T>(self, T::id);
     }
     public func remove_component<T>(self: entity)=> void
         where typeof(std::declval:<T>())::id is je::typeinfo;
     {
-        _remove_component:<T>(self, typeof(std::declval:<T>())::id);
+        _remove_component:<T>(self, T::id);
     }
 }
 
