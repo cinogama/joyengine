@@ -611,7 +611,7 @@ jeal_buffer* jeal_create_buffer(
     case STEREO16:
         audio_buffer->m_format = AL_FORMAT_STEREO16; break;
     default:
-        jeecs::debug::logerr("Bad audio buffer format: %d", (int)format);
+        jeecs::debug::logerr("Bad audio buffer format: %d.", (int)format);
         break;
     }
 

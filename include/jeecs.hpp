@@ -7422,7 +7422,7 @@ namespace jeecs
                 size_t byterate, 
                 jeal_format format)
             {
-                auto* buf = jeal_create_buffer(buffer, length, freq, byterate, format);
+                auto* buf = jeal_create_buffer(data, length, freq, byterate, format);
                 if (buf != nullptr)
                     return new buffer(buf);
                 return nullptr; 
