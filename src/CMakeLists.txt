@@ -1,6 +1,6 @@
 ﻿# librscene
 #
-cmake_minimum_required (VERSION 3.16)
+cmake_minimum_required (VERSION 3.7)
 
 include_directories("../include")
 include_directories("../3rd/woolang/include")
@@ -11,6 +11,7 @@ include_directories("../3rd/imgui/misc/cpp")
 include_directories("../3rd/box2d/include")
 include_directories("../3rd/openal-soft/include")
 include_directories("../3rd/assimp/include")
+include_directories("../3rd/vulkan/include")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
