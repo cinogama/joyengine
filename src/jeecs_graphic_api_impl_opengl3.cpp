@@ -17,388 +17,16 @@
 #endif
 
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#   include <EGL/egl.h>
-#   include <EGL/eglext.h>
+#   include "jeecs_graphic_api_interface_egl.hpp"
 #else
-#   include <GLFW/glfw3.h>
-#   include <GLFW/glfw3native.h>
+#   include "jeecs_graphic_api_interface_glfw.hpp"
 #endif // JE_GL_USE_EGL_INSTEAD_GLFW
 
 // Here is low-level-graphic-api impl.
 // OpenGL version.
 namespace jeecs::graphic::api::gl3
 {
-    struct jegl_gl3_context
-    {
-        size_t WINDOWS_SIZE_WIDTH;
-        size_t WINDOWS_SIZE_HEIGHT;
-
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-
-        struct egl_context
-        {
-            EGLDisplay m_display;
-            EGLSurface m_surface;
-            EGLContext m_context;
-            EGLNativeWindowType m_window;
-        };
-
-#   ifdef JE_OS_ANDROID
-        struct _jegl_window_android_app
-        {
-            void* m_android_app;
-            void* m_android_window;
-        };
-        struct android_app* m_app;
-#   else
-#       error Unknown platform.
-#   endif
-
-        egl_context m_context;
-#else
-        GLFWwindow* WINDOWS_HANDLE;
-#endif
-    };
-    /////////////////////////////////////////////////////////////////////////////////////
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-    namespace egl
-    {
-        void init()
-        {
-        }
-        void create_interface(bool is_reboot, jegl_thread* thread, jegl_gl3_context* context, const jegl_interface_config* config)
-        {
-            constexpr EGLint attribs[] = {
-               EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-               EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-               EGL_BLUE_SIZE, 8,
-               EGL_GREEN_SIZE, 8,
-               EGL_RED_SIZE, 8,
-               EGL_DEPTH_SIZE, 24,
-               EGL_NONE
-            };
-
-            auto display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-            eglInitialize(display, nullptr, nullptr);
-
-            // figure out how many configs there are
-            EGLint numConfigs;
-            eglChooseConfig(display, attribs, nullptr, 0, &numConfigs);
-
-            // get the list of configurations
-            std::unique_ptr<EGLConfig[]> supportedConfigs(new EGLConfig[numConfigs]);
-            eglChooseConfig(display, attribs, supportedConfigs.get(), numConfigs, &numConfigs);
-
-            // Find a config we like.
-            // Could likely just grab the first if we don't care about anything else in the config.
-            // Otherwise hook in your own heuristic
-            auto egl_config = *std::find_if(
-                supportedConfigs.get(),
-                supportedConfigs.get() + numConfigs,
-                [&display](const EGLConfig& eglconfig) {
-                    EGLint red, green, blue, depth;
-                    if (eglGetConfigAttrib(display, eglconfig, EGL_RED_SIZE, &red)
-                        && eglGetConfigAttrib(display, eglconfig, EGL_GREEN_SIZE, &green)
-                        && eglGetConfigAttrib(display, eglconfig, EGL_BLUE_SIZE, &blue)
-                        && eglGetConfigAttrib(display, eglconfig, EGL_DEPTH_SIZE, &depth)) {
-
-                        return red == 8 && green == 8 && blue == 8 && depth == 24;
-                    }
-                    return false;
-                });
-
-            assert(thread->_m_sync_callback_arg != nullptr);
-
-#   ifdef JE_OS_ANDROID
-            auto* data = (jegl_gl3_context::_jegl_window_android_app*)thread->_m_sync_callback_arg;
-            context->m_context.m_window = (EGLNativeWindowType)data->m_android_window;
-            context->m_app = (struct android_app*)data->m_android_app;
-#   else
-#       error Unknown platform.
-#   endif
-
-            EGLint format;
-            eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
-            EGLSurface surface = eglCreateWindowSurface(display, egl_config, context->m_context.m_window, nullptr);
-
-            // Create a GLES 3 context
-            EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
-            EGLContext eglcontext = eglCreateContext(display, egl_config, nullptr, contextAttribs);
-
-            // get some window metrics
-            auto madeCurrent = eglMakeCurrent(display, surface, surface, eglcontext);
-            assert(madeCurrent);
-
-            // TODO-LIST: 
-            // * MSAA support
-            // * Direction ?
-            // * Double buffer
-            context->m_context.m_display = display;
-            context->m_context.m_surface = surface;
-            context->m_context.m_context = eglcontext;
-
-            if (config->m_fps == 0)
-                eglSwapInterval(context->m_context.m_display, 1);
-            else
-                eglSwapInterval(context->m_context.m_display, 0);
-        }
-        void swap(jegl_gl3_context* context)
-        {
-            eglSwapBuffers(context->m_context.m_display, context->m_context.m_surface);
-        }
-        bool update(jegl_gl3_context* context)
-        {
-            EGLint width;
-            eglQuerySurface(context->m_context.m_display, context->m_context.m_surface, EGL_WIDTH, &width);
-
-            EGLint height;
-            eglQuerySurface(context->m_context.m_display, context->m_context.m_surface, EGL_HEIGHT, &height);
-
-            context->WINDOWS_SIZE_WIDTH = width;
-            context->WINDOWS_SIZE_HEIGHT = height;
-
-            je_io_update_windowsize((int)width, (int)height);
-
-            return true;
-        }
-        void shutdown(jegl_gl3_context* context, bool reboot)
-        {
-            eglMakeCurrent(context->m_context.m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-            eglDestroyContext(context->m_context.m_display, context->m_context.m_context);
-            eglDestroySurface(context->m_context.m_display, context->m_context.m_surface);
-            eglTerminate(context->m_context.m_display);
-        }
-    }
-#else
-    namespace glfw
-    {
-        void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
-        {
-            jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(glfwGetWindowUserPointer(fw)));
-
-            context->WINDOWS_SIZE_WIDTH = (size_t)x;
-            context->WINDOWS_SIZE_HEIGHT = (size_t)y;
-
-            je_io_update_windowsize(x, y);
-        }
-        void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
-        {
-            je_io_update_mousepos(0, (int)x, (int)y);
-        }
-        void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
-        {
-            switch (key)
-            {
-            case GLFW_MOUSE_BUTTON_LEFT:
-                je_io_update_mouse_state(0, jeecs::input::mousecode::LEFT, state); break;
-            case GLFW_MOUSE_BUTTON_MIDDLE:
-                je_io_update_mouse_state(0, jeecs::input::mousecode::MID, state); break;
-            case GLFW_MOUSE_BUTTON_RIGHT:
-                je_io_update_mouse_state(0, jeecs::input::mousecode::RIGHT, state); break;
-            default:
-                // do nothing.
-                break;
-            }
-        }
-        void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
-        {
-            float ox, oy;
-            je_io_get_wheel(0, &ox, &oy);
-            je_io_update_wheel(0, ox + (float)xoffset, oy + (float)yoffset);
-        }
-        void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)
-        {
-            assert(GLFW_KEY_A == 'A');
-            assert(GLFW_KEY_0 == '0');
-            switch (key)
-            {
-            case GLFW_KEY_LEFT_SHIFT:
-                je_io_update_keystate(jeecs::input::keycode::L_SHIFT, stage); break;
-            case GLFW_KEY_LEFT_ALT:
-                je_io_update_keystate(jeecs::input::keycode::L_ALT, stage); break;
-            case GLFW_KEY_LEFT_CONTROL:
-                je_io_update_keystate(jeecs::input::keycode::L_CTRL, stage); break;
-            case GLFW_KEY_TAB:
-                je_io_update_keystate(jeecs::input::keycode::TAB, stage); break;
-            case GLFW_KEY_ENTER:
-            case GLFW_KEY_KP_ENTER:
-                je_io_update_keystate(jeecs::input::keycode::ENTER, stage); break;
-            case GLFW_KEY_ESCAPE:
-                je_io_update_keystate(jeecs::input::keycode::ESC, stage); break;
-            case GLFW_KEY_BACKSPACE:
-                je_io_update_keystate(jeecs::input::keycode::BACKSPACE, stage); break;
-            default:
-                je_io_update_keystate((jeecs::input::keycode)key, stage); break;
-            }
-
-        }
-
-        void init()
-        {
-            if (!glfwInit())
-                jeecs::debug::logfatal("Failed to init glfw.");
-
-#   ifdef JE_ENABLE_GL330_GAPI
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
-#   else
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#       ifdef JE_OS_WINDOWS
-            // ATTENTION: Windows等平台上，运行opengles的时候，环境要求EGL
-            //          但是opengles的支持仅限于移动端设备和Windows借助ARMEMU
-            //          所以这里只针对Windows做了处理
-            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
-#       else
-            glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
-#       endif
-#   endif
-#ifndef NDEBUG
-            glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-#endif
-        }
-
-        void create_interface(jegl_gl3_context* context, const jegl_interface_config* config)
-        {
-            auto* primary_monitor = glfwGetPrimaryMonitor();
-            auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
-
-            context->WINDOWS_SIZE_WIDTH = config->m_width == 0 ? primary_monitor_video_mode->width : config->m_width;
-            context->WINDOWS_SIZE_HEIGHT = config->m_height == 0 ? primary_monitor_video_mode->height : config->m_height;
-
-            glfwWindowHint(GLFW_REFRESH_RATE,
-                config->m_fps == 0
-                ? primary_monitor_video_mode->refreshRate
-                : (int)config->m_fps);
-            glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
-            glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
-
-            je_io_update_windowsize((int)context->WINDOWS_SIZE_WIDTH, (int)context->WINDOWS_SIZE_HEIGHT);
-
-            switch (config->m_display_mode)
-            {
-            case jegl_interface_config::display_mode::BOARDLESS:
-                glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-            case jegl_interface_config::display_mode::WINDOWED:
-                context->WINDOWS_HANDLE = glfwCreateWindow(
-                    (int)context->WINDOWS_SIZE_WIDTH,
-                    (int)context->WINDOWS_SIZE_HEIGHT,
-                    config->m_title,
-                    NULL, NULL);
-                break;
-            case jegl_interface_config::display_mode::FULLSCREEN:
-                context->WINDOWS_HANDLE = glfwCreateWindow(
-                    (int)context->WINDOWS_SIZE_WIDTH,
-                    (int)context->WINDOWS_SIZE_HEIGHT,
-                    config->m_title,
-                    primary_monitor, NULL);
-                break;
-            default:
-                jeecs::debug::logfatal("Unknown display mode to start up graphic thread.");
-                je_clock_sleep_for(1.);
-                abort();
-                break;
-            }
-
-            const char* reason;
-            auto err_code = glfwGetError(&reason);
-            if (err_code != GLFW_NO_ERROR)
-            {
-                auto x = (const char*)glGetString(GL_VERSION);
-                jeecs::debug::logfatal("Opengl3 glfw reports an error(%d): %s.",
-                    err_code, reason);
-                je_clock_sleep_for(1.);
-                abort();
-            }
-
-            // Try load icon from @/icon.png or !/builtin/icon/icon.png.
-            // Do nothing if both not exist.
-            jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load("@/icon.png");
-            if (icon == nullptr)
-                icon = jeecs::graphic::texture::load("!/builtin/icon/icon.png");
-
-            if (icon != nullptr)
-            {
-                GLFWimage icon_data;
-                icon_data.width = (int)icon->width();
-                icon_data.height = (int)icon->height();
-                // Here need a y-direct flip.
-                auto* image_pixels = icon->resouce()->m_raw_texture_data->m_pixels;
-                icon_data.pixels = (unsigned char*)je_mem_alloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
-                assert(icon_data.pixels != nullptr);
-
-                for (size_t iy = 0; iy < (size_t)icon_data.height; ++iy)
-                {
-                    size_t target_place_offset = iy * (size_t)icon_data.width * 4;
-                    size_t origin_place_offset = ((size_t)icon_data.height - iy - 1) * (size_t)icon_data.width * 4;
-                    memcpy(icon_data.pixels + target_place_offset, image_pixels + origin_place_offset, (size_t)icon_data.width * 4);
-                }
-
-                glfwSetWindowIcon(context->WINDOWS_HANDLE, 1, &icon_data);
-
-                je_mem_free(icon_data.pixels);
-            }
-
-            glfwMakeContextCurrent(context->WINDOWS_HANDLE);
-            glfwSetWindowSizeCallback(context->WINDOWS_HANDLE, glfw_callback_windows_size_changed);
-            glfwSetCursorPosCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_pos_changed);
-            glfwSetMouseButtonCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_key_clicked);
-            glfwSetScrollCallback(context->WINDOWS_HANDLE, glfw_callback_mouse_scroll_changed);
-            glfwSetKeyCallback(context->WINDOWS_HANDLE, glfw_callback_keyboard_stage_changed);
-            glfwSetWindowUserPointer(context->WINDOWS_HANDLE, context);
-
-            if (config->m_fps == 0)
-                glfwSwapInterval(1);
-            else
-                glfwSwapInterval(0);
-
-#ifdef JE_ENABLE_GL330_GAPI
-            if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
-                jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
-#endif
-        }
-
-        void swap(jegl_gl3_context* context)
-        {
-            glfwSwapBuffers(context->WINDOWS_HANDLE);
-        }
-
-        bool update(jegl_gl3_context* context)
-        {
-            glfwPollEvents();
-            int mouse_lock_x, mouse_lock_y;
-            if (je_io_get_lock_mouse(&mouse_lock_x, &mouse_lock_y))
-                glfwSetCursorPos(context->WINDOWS_HANDLE, mouse_lock_x, mouse_lock_y);
-
-            int window_width, window_height;
-            if (je_io_fetch_update_windowsize(&window_width, &window_height))
-                glfwSetWindowSize(context->WINDOWS_HANDLE, window_width, window_height);
-
-            const char* title;
-            if (je_io_fetch_update_windowtitle(&title))
-                glfwSetWindowTitle(context->WINDOWS_HANDLE, title);
-
-            if (glfwWindowShouldClose(context->WINDOWS_HANDLE) == GLFW_TRUE)
-            {
-                glfwSetWindowShouldClose(context->WINDOWS_HANDLE, GLFW_FALSE);
-                return false;
-            }
-            return true;
-        }
-
-        void shutdown(jegl_gl3_context* context, bool reboot)
-        {
-            glfwDestroyWindow(context->WINDOWS_HANDLE);
-            if (!reboot)
-                glfwTerminate();
-        }
-    }
-#endif
+    using jegl_gl3_context = basic_interface;
 
     /////////////////////////////////////////////////////////////////////////////////////
 
@@ -454,24 +82,33 @@ namespace jeecs::graphic::api::gl3
 #endif
     jegl_thread::custom_thread_data_t gl_startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
     {
-        jegl_gl3_context* context = new jegl_gl3_context;
+        jegl_gl3_context* context = nullptr;
 
         if (!reboot)
         {
             jeecs::debug::log("Graphic thread (OpenGL3) start!");
-
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-            egl::init();
-#else
-            glfw::init();
-#endif
         }
-
+        context =
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-        egl::create_interface(reboot, gthread, context, config);
+            new egl();
 #else
-        glfw::create_interface(context, config);
+            new glfw(reboot
+                ? glfw::HOLD
+#   ifdef JE_ENABLE_GL330_GAPI
+                : glfw::OPENGL330
+#   else
+                : glfw::OPENGLES300
+#   endif
+            );
 #endif
+
+        context->create_interface(gthread, config);
+
+#if !defined(JE_GL_USE_EGL_INSTEAD_GLFW) && defined(JE_ENABLE_GL330_GAPI)
+        if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
+            jeecs::debug::logfatal("Failed to init glew: %s.", glewGetErrorString(glew_init_result));
+#endif
+
 
 #ifdef JE_ENABLE_GL330_GAPI
 #   ifndef NDEBUG
@@ -537,16 +174,8 @@ namespace jeecs::graphic::api::gl3
                     }
                 }
             },
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#   ifdef JE_OS_ANDROID
-            context->m_app,
-#   else
-#       error Unknown platform.
-#   endif
-#else
-            context->WINDOWS_HANDLE,
-#endif
-            reboot);
+            context->native_handle(),
+                reboot);
 
         return context;
     }
@@ -554,25 +183,15 @@ namespace jeecs::graphic::api::gl3
     bool gl_pre_update(jegl_thread::custom_thread_data_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-        egl::swap(context);
-#else
-        glfw::swap(context);
-#endif
+
+        context->swap();
         return true;
     }
 
     bool gl_update(jegl_thread::custom_thread_data_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-
-        bool update_advise_close = false;
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-        update_advise_close = !egl::update(context);
-#else
-        update_advise_close = !glfw::update(context);
-#endif
-        if (update_advise_close)
+        if (!context->update())
         {
             if (jegui_shutdown_callback())
                 return false;
@@ -595,11 +214,8 @@ namespace jeecs::graphic::api::gl3
 
         jegui_shutdown_gl330(reboot);
 
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-        egl::shutdown(context, reboot);
-#else
-        glfw::shutdown(context, reboot);
-#endif
+        context->shutdown(reboot);
+
         delete context;
     }
 
@@ -1339,9 +955,9 @@ namespace jeecs::graphic::api::gl3
 
         auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
         if (w == 0)
-            w = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_width : context->WINDOWS_SIZE_WIDTH;
+            w = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_width : context->m_interface_width;
         if (h == 0)
-            h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
+            h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->m_interface_height;
         glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
     }
     void gl_clear_framebuffer_color(jegl_thread::custom_thread_data_t, float color[4])

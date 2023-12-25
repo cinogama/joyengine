@@ -6,6 +6,12 @@
 #include "jeecs_imgui_backend_api.hpp"
 #include <vulkan/vulkan.h>
 
+#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
+#   include "jeecs_graphic_api_interface_egl.hpp"
+#else
+#   include "jeecs_graphic_api_interface_glfw.hpp"
+#endif // JE_GL_USE_EGL_INSTEAD_GLFW
+
 namespace jeecs::graphic::api::vk110
 {
     struct vklibrary_instance_proxy
@@ -56,15 +62,195 @@ namespace jeecs::graphic::api::vk110
 #define VK_API_DECL(name) auto name = vk_proxy.api<PFN_##name>(#name);
 
     VK_API_DECL(vkCreateInstance);
-    VK_API_DECL(vkDestoryInstance);
+    VK_API_DECL(vkDestroyInstance);
+
+    VK_API_DECL(vkGetInstanceProcAddr);
+
     VK_API_DECL(vkEnumerateInstanceVersion);
+    VK_API_DECL(vkEnumerateInstanceLayerProperties);
 
     VK_API_DECL(vkEnumeratePhysicalDevices);
     VK_API_DECL(vkGetPhysicalDeviceProperties);
+    VK_API_DECL(vkEnumerateDeviceExtensionProperties);
+
+    VK_API_DECL(vkGetPhysicalDeviceQueueFamilyProperties);
 
     struct jegl_vk110_context
     {
         VkInstance _vk_instance;
+        basic_interface* _vk_jegl_interface;
+
+        VkPhysicalDevice _vk_device;
+
+#ifndef NDEBUG
+        VkDebugUtilsMessengerEXT _vk_debug_manager;
+
+        static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+            VkDebugUtilsMessageSeverityFlagBitsEXT _0, 
+            VkDebugUtilsMessageTypeFlagsEXT _1,
+            const VkDebugUtilsMessengerCallbackDataEXT* info, 
+            void* userdata) 
+        {
+            jeecs::debug::logerr("[Vulkan] %s", info->pMessage);
+            return VK_FALSE;
+        }
+#endif
+        void init_vulkan(const jegl_interface_config* config)
+        {
+            VkApplicationInfo application_info = {};
+            application_info.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
+            application_info.pNext = nullptr;
+            application_info.pApplicationName = config->m_title;
+            application_info.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+            application_info.pEngineName = "JoyEngineECS";
+            application_info.engineVersion = VK_MAKE_API_VERSION(0, 4, 0, 0);
+            application_info.apiVersion = VK_MAKE_API_VERSION(0, 1, 1, 0);
+
+            std::vector<const char*> required_extension = {
+                TODO
+            };
+
+            unsigned int glfw_extension_count = 0;
+            const char** glfw_extensions = nullptr;
+            glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+
+            VkInstanceCreateInfo instance_create_info = {};
+            instance_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+            instance_create_info.pNext = nullptr;
+            instance_create_info.flags = 0;
+            instance_create_info.pApplicationInfo = &application_info;
+            instance_create_info.enabledLayerCount = 0;
+            instance_create_info.ppEnabledLayerNames = nullptr;
+            instance_create_info.enabledExtensionCount = glfw_extension_count;
+            instance_create_info.ppEnabledExtensionNames = glfw_extensions;
+
+            if (VK_SUCCESS != vkCreateInstance(&instance_create_info, nullptr, &_vk_instance))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 instance.");
+                je_clock_sleep_for(1.0);
+                abort();
+            }
+
+            uint32_t vk_layer_count;
+            vkEnumerateInstanceLayerProperties(&vk_layer_count, nullptr);
+
+            std::vector<VkLayerProperties> vk_available_layers((size_t)vk_layer_count);
+            vkEnumerateInstanceLayerProperties(&vk_layer_count, vk_available_layers.data());
+
+            const std::vector<const char*> required_layers = {
+                // TODO; May need some layer?
+            };
+
+            for (const char* required_layer : required_layers) {
+                if (vk_available_layers.end() == std::find_if(vk_available_layers.begin(), vk_available_layers.end(),
+                    [required_layer](const VkLayerProperties& prop)
+                    {
+                        return strcmp(required_layer, prop.layerName) == 0;
+                    }))
+                {
+                    jeecs::debug::logfatal("Required layer '%s', but current instance is not supported.", required_layer);
+                    je_clock_sleep_for(1.0);
+                    abort();
+                }
+            }
+
+            uint32_t enum_deveice_count = 0;
+            vkEnumeratePhysicalDevices(_vk_instance, &enum_deveice_count, nullptr);
+
+            std::vector<VkPhysicalDevice> all_physics_devices((size_t)enum_deveice_count);
+            vkEnumeratePhysicalDevices(_vk_instance, &enum_deveice_count, all_physics_devices.data());
+
+            _vk_device = nullptr;
+            for (auto& device : all_physics_devices)
+            {
+                VkPhysicalDeviceProperties prop = {};
+                vkGetPhysicalDeviceProperties(device, &prop);
+
+                uint32_t vk_queue_family_count = 0;
+                vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, nullptr);
+
+                std::vector<VkQueueFamilyProperties> vk_queue_families(vk_queue_family_count);
+                vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, vk_queue_families.data());
+
+                bool is_graphic_device = false;
+                for (auto & queue_family : vk_queue_families)
+                {
+                    if (queue_family.queueCount > 0 && 0 != (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+                    {
+                        is_graphic_device = true;
+                        break;
+                    }
+                }
+
+                if (is_graphic_device)
+                {
+                    uint32_t vk_device_extension_count = 0;
+                    vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, nullptr);
+
+                    std::vector<VkExtensionProperties> vk_device_extensions(vk_device_extension_count);
+                    vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, vk_device_extensions.data());
+
+                    std::unordered_set<std::string> required_extensions = {
+                        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                    };
+
+                    for (auto& contained_extension : vk_device_extensions) {
+                        required_extensions.erase(contained_extension.extensionName);
+                    }
+
+                    if (required_extensions.empty())
+                    {
+                        _vk_device = device;
+                        jeecs::debug::logwarn("Use the first device: '%s' enumerated by Vulkan, consider implementing "
+                            "it and choose the most appropriate device, todo.", prop.deviceName);
+                    }
+                }
+                if (_vk_device != nullptr)
+                    break;
+            }
+
+            if (_vk_device == nullptr)
+            {
+                vkDestroyInstance(_vk_instance, nullptr);
+
+                jeecs::debug::logfatal("Failed to get vk110 device.");
+                je_clock_sleep_for(1.0);
+                abort();
+            }
+
+#ifndef NDEBUG
+            _vk_debug_manager = nullptr;
+
+            if (vk_available_layers.end() == std::find_if(vk_available_layers.begin(), vk_available_layers.end(),
+                [](const VkLayerProperties& prop)
+                {
+                    return strcmp("VK_LAYER_KHRONOS_validation", prop.layerName) == 0;
+                }))
+            {
+                jeecs::debug::logwarn("'VK_LAYER_KHRONOS_validation' not supported, skip.");
+            }
+            else
+            {
+                VkDebugUtilsMessengerCreateInfoEXT debug_layer_config = {};
+                debug_layer_config.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+                debug_layer_config.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+                debug_layer_config.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+                debug_layer_config.pfnUserCallback = &debug_callback;
+
+                auto _vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)
+                    vkGetInstanceProcAddr(_vk_instance, "vkCreateDebugUtilsMessengerEXT");
+
+                assert(_vkCreateDebugUtilsMessengerEXT != nullptr);
+                if (VK_SUCCESS != _vkCreateDebugUtilsMessengerEXT(_vk_instance, &debug_layer_config, nullptr, &_vk_debug_manager)) {
+                    jeecs::debug::logfatal("Failed to set up debug layer callback.");
+
+                    je_clock_sleep_for(1.0);
+                    abort();
+                }
+            }
+#endif
+
+        }
     };
 
     jegl_thread::custom_thread_data_t
@@ -75,59 +261,10 @@ namespace jeecs::graphic::api::vk110
 
         jegl_vk110_context* context = new jegl_vk110_context;
 
-        VkApplicationInfo application_info = {};
-        application_info.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        application_info.pNext = nullptr;
-        application_info.pApplicationName = nullptr;
-        application_info.applicationVersion = 0;
-        application_info.pEngineName = nullptr;
-        application_info.engineVersion = 0;
-        application_info.apiVersion = VK_MAKE_API_VERSION(0, 1, 3, 0);
+        context->_vk_jegl_interface = new glfw(reboot ? glfw::HOLD : glfw::VULKAN110);
+        context->_vk_jegl_interface->create_interface(gthread, config);
 
-        VkInstanceCreateInfo instance_create_info = {};
-        instance_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        instance_create_info.pNext = nullptr;
-        instance_create_info.flags = 0;
-        instance_create_info.pApplicationInfo = &application_info;
-        instance_create_info.enabledLayerCount = 0;
-        instance_create_info.ppEnabledLayerNames = nullptr;
-        instance_create_info.enabledExtensionCount = 0;
-        instance_create_info.ppEnabledExtensionNames = nullptr;
-
-        if (VK_SUCCESS != vkCreateInstance(&instance_create_info, nullptr, &context->_vk_instance))
-        {
-            delete context;
-
-            jeecs::debug::logfatal("Failed to create vk110 instance.");
-            je_clock_sleep_for(1.0);
-            abort();
-        }
-
-        uint32_t enum_deveice_count = 0;
-        vkEnumeratePhysicalDevices(context->_vk_instance, &enum_deveice_count, nullptr);
-
-        std::vector<VkPhysicalDevice> all_physics_devices((size_t)enum_deveice_count);
-        vkEnumeratePhysicalDevices(context->_vk_instance, &enum_deveice_count, all_physics_devices.data());
-
-        if (enum_deveice_count == 0)
-        {
-            vkDestoryInstance(context->_vk_instance);
-            delete context;
-
-            jeecs::debug::logfatal("Failed to get vk110 device.");
-            je_clock_sleep_for(1.0);
-            abort();
-        }
-
-        for (auto& device : all_physics_devices)
-        {
-            VkPhysicalDeviceProperties prop = {};
-            vkGetPhysicalDeviceProperties(device, &prop);
-
-            jeecs::debug::log("Vulkan device: %s.", prop.deviceName);
-        }
-        
-        // TODO:
+        context->init_vulkan(config);
 
         jegui_init_none(
             [](auto* res)->void* {return nullptr; },
@@ -141,19 +278,41 @@ namespace jeecs::graphic::api::vk110
             jeecs::debug::log("Graphic thread (Vulkan110) shutdown!");
         
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
-        vkDestoryInstance(context->_vk_instance);
+
+        if (context->_vk_debug_manager != nullptr)
+        {
+            auto _vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)
+                vkGetInstanceProcAddr(context->_vk_instance, "vkDestroyDebugUtilsMessengerEXT");
+
+            _vkDestroyDebugUtilsMessengerEXT(context->_vk_instance, context->_vk_debug_manager, nullptr);
+        }
+
+        vkDestroyInstance(context->_vk_instance, nullptr);
+
+        context->_vk_jegl_interface->shutdown(reboot);
+        delete context->_vk_jegl_interface;
 
         delete context;
 
         jegui_shutdown_none(reboot);
     }
 
-    bool pre_update(jegl_thread::custom_thread_data_t)
+    bool pre_update(jegl_thread::custom_thread_data_t ctx)
     {
+        jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
+
+        // context->_vk_jegl_interface->swap();
         return true;
     }
-    bool update(jegl_thread::custom_thread_data_t)
+    bool update(jegl_thread::custom_thread_data_t ctx)
     {
+        jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
+
+        if (!context->_vk_jegl_interface->update())
+        {
+            if (jegui_shutdown_callback())
+                return false;
+        }
         return true;
     }
     bool late_update(jegl_thread::custom_thread_data_t ctx)
