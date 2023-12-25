@@ -21,7 +21,7 @@ namespace jeecs::graphic::api::vk110
         vklibrary_instance_proxy()
         {
 #ifdef JE_OS_WINDOWS
-            _instance = wo_load_lib("je/graphiclib/vulkan", "vulkan-1.dll", false);
+            _instance = wo_load_lib("je/graphiclib/vulkan-1", "vulkan-1.dll", false);
 #else
             _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so.1", false);
             if (_instance == nullptr)
@@ -86,10 +86,10 @@ namespace jeecs::graphic::api::vk110
         VkDebugUtilsMessengerEXT _vk_debug_manager;
 
         static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
-            VkDebugUtilsMessageSeverityFlagBitsEXT _0, 
+            VkDebugUtilsMessageSeverityFlagBitsEXT _0,
             VkDebugUtilsMessageTypeFlagsEXT _1,
-            const VkDebugUtilsMessengerCallbackDataEXT* info, 
-            void* userdata) 
+            const VkDebugUtilsMessengerCallbackDataEXT* info,
+            void* userdata)
         {
             jeecs::debug::logerr("[Vulkan] %s", info->pMessage);
             return VK_FALSE;
@@ -97,6 +97,25 @@ namespace jeecs::graphic::api::vk110
 #endif
         void init_vulkan(const jegl_interface_config* config)
         {
+            // 获取所有支持的层
+            uint32_t vk_layer_count;
+            vkEnumerateInstanceLayerProperties(&vk_layer_count, nullptr);
+
+            std::vector<VkLayerProperties> vk_available_layers((size_t)vk_layer_count);
+            vkEnumerateInstanceLayerProperties(&vk_layer_count, vk_available_layers.data());
+
+            bool vk_validation_layer_supported = false;
+#ifndef NDEBUG
+            if (vk_available_layers.end() == std::find_if(vk_available_layers.begin(), vk_available_layers.end(),
+                [](const VkLayerProperties& prop)
+                {
+                    return strcmp("VK_LAYER_KHRONOS_validation", prop.layerName) == 0;
+                }))
+                jeecs::debug::logwarn("'VK_LAYER_KHRONOS_validation' not supported, skip.");
+            else
+                vk_validation_layer_supported = true;
+#endif
+
             VkApplicationInfo application_info = {};
             application_info.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
             application_info.pNext = nullptr;
@@ -106,23 +125,29 @@ namespace jeecs::graphic::api::vk110
             application_info.engineVersion = VK_MAKE_API_VERSION(0, 4, 0, 0);
             application_info.apiVersion = VK_MAKE_API_VERSION(0, 1, 1, 0);
 
-            std::vector<const char*> required_extension = {
-                TODO
-            };
-
-            unsigned int glfw_extension_count = 0;
-            const char** glfw_extensions = nullptr;
-            glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-
             VkInstanceCreateInfo instance_create_info = {};
             instance_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
             instance_create_info.pNext = nullptr;
             instance_create_info.flags = 0;
             instance_create_info.pApplicationInfo = &application_info;
-            instance_create_info.enabledLayerCount = 0;
-            instance_create_info.ppEnabledLayerNames = nullptr;
-            instance_create_info.enabledExtensionCount = glfw_extension_count;
-            instance_create_info.ppEnabledExtensionNames = glfw_extensions;
+
+            std::vector<const char*> required_layers = {};
+            if (vk_validation_layer_supported)
+                required_layers.push_back("VK_LAYER_KHRONOS_validation");
+
+            instance_create_info.enabledLayerCount = (uint32_t)required_layers.size();
+            instance_create_info.ppEnabledLayerNames = required_layers.data();
+
+            unsigned int glfw_extension_count = 0;
+            const char** glfw_extensions = nullptr;
+            glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+
+            std::vector<const char*> required_extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
+            if (vk_validation_layer_supported)
+                required_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+            instance_create_info.enabledExtensionCount = (uint32_t)required_extensions.size();
+            instance_create_info.ppEnabledExtensionNames = required_extensions.data();
 
             if (VK_SUCCESS != vkCreateInstance(&instance_create_info, nullptr, &_vk_instance))
             {
@@ -130,16 +155,6 @@ namespace jeecs::graphic::api::vk110
                 je_clock_sleep_for(1.0);
                 abort();
             }
-
-            uint32_t vk_layer_count;
-            vkEnumerateInstanceLayerProperties(&vk_layer_count, nullptr);
-
-            std::vector<VkLayerProperties> vk_available_layers((size_t)vk_layer_count);
-            vkEnumerateInstanceLayerProperties(&vk_layer_count, vk_available_layers.data());
-
-            const std::vector<const char*> required_layers = {
-                // TODO; May need some layer?
-            };
 
             for (const char* required_layer : required_layers) {
                 if (vk_available_layers.end() == std::find_if(vk_available_layers.begin(), vk_available_layers.end(),
@@ -173,7 +188,7 @@ namespace jeecs::graphic::api::vk110
                 vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, vk_queue_families.data());
 
                 bool is_graphic_device = false;
-                for (auto & queue_family : vk_queue_families)
+                for (auto& queue_family : vk_queue_families)
                 {
                     if (queue_family.queueCount > 0 && 0 != (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT))
                     {
@@ -276,7 +291,7 @@ namespace jeecs::graphic::api::vk110
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (Vulkan110) shutdown!");
-        
+
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
 
         if (context->_vk_debug_manager != nullptr)
