@@ -6,11 +6,23 @@
 #include "jeecs_imgui_backend_api.hpp"
 #include <vulkan/vulkan.h>
 
+#if defined(JE_OS_WINDOWS)
+#   include <vulkan/vulkan_win32.h>
+#elif defined(JE_OS_ANDROID)
+#   include <vulkan/vulkan_android.h>
+#elif defined(JE_OS_LINUX)
+#   include <vulkan/vulkan_xlib.h>
+#else
+#   error Unsupport platform.
+#endif
+
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   include "jeecs_graphic_api_interface_egl.hpp"
 #else
 #   include "jeecs_graphic_api_interface_glfw.hpp"
 #endif // JE_GL_USE_EGL_INSTEAD_GLFW
+
+#include <optional>
 
 namespace jeecs::graphic::api::vk110
 {
@@ -72,6 +84,25 @@ namespace jeecs::graphic::api::vk110
 
 #undef VK_API_DECL
 
+#if defined(JE_OS_WINDOWS)
+
+#   define VK_API_PLATFORM_API_LIST \
+VK_API_DECL(vkCreateWin32SurfaceKHR)
+
+#elif defined(JE_OS_ANDROID)
+
+#   define VK_API_PLATFORM_API_LIST \
+VK_API_DECL(vkCreateAndroidSurfaceKHR)
+
+#elif defined(JE_OS_LINUX)
+
+#   define VK_API_PLATFORM_API_LIST \
+VK_API_DECL(vkCreateXlibSurfaceKHR)
+
+#else
+#   error Unsupport platform.
+#endif
+
 #define VK_API_LIST \
 VK_API_DECL(vkEnumeratePhysicalDevices);\
 VK_API_DECL(vkGetPhysicalDeviceProperties);\
@@ -82,8 +113,16 @@ VK_API_DECL(vkCreateDevice);\
 VK_API_DECL(vkDestroyDevice);\
 VK_API_DECL(vkGetDeviceQueue);\
 \
+VK_API_PLATFORM_API_LIST;\
+VK_API_DECL(vkDestroySurfaceKHR);\
+\
+VK_API_DECL(vkGetPhysicalDeviceSurfaceSupportKHR);\
+VK_API_DECL(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);\
+VK_API_DECL(vkGetPhysicalDeviceSurfaceFormatsKHR);\
+VK_API_DECL(vkGetPhysicalDeviceSurfacePresentModesKHR);\
+\
 VK_API_DECL(vkCreateDebugUtilsMessengerEXT);\
-VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
+VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
 
     struct jegl_vk110_context
     {
@@ -91,9 +130,13 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
         basic_interface* _vk_jegl_interface;
 
         VkPhysicalDevice    _vk_device;
-        uint32_t            _vk_device_queue_family_index;
+        uint32_t            _vk_device_queue_graphic_family_index;
+        uint32_t            _vk_device_queue_present_family_index;
         VkDevice            _vk_logic_device;
-        VkQueue             _vk_logic_device_queue;
+        VkQueue             _vk_logic_device_graphic_queue;
+        VkQueue             _vk_logic_device_present_queue;
+
+        VkSurfaceKHR        _vk_surface;
 
 #define VK_API_DECL(name) PFN_##name name
         VK_API_LIST;
@@ -112,6 +155,93 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
             return VK_FALSE;
         }
 #endif
+
+        struct physics_device_info
+        {
+            uint32_t queue_graphic_family_index;
+            uint32_t queue_present_family_index;
+        };
+
+        std::optional<physics_device_info> check_physics_device_is_suatable(
+            VkPhysicalDevice device,
+            bool vk_validation_layer_supported,
+            const std::vector<const char*>& required_device_layers,
+            const std::vector<const char*>& required_device_extensions)
+        {
+            assert(_vk_surface != nullptr);
+
+            VkPhysicalDeviceProperties prop = {};
+            vkGetPhysicalDeviceProperties(device, &prop);
+
+            uint32_t vk_queue_family_count = 0;
+            vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, nullptr);
+
+            std::vector<VkQueueFamilyProperties> vk_queue_families(vk_queue_family_count);
+            vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, vk_queue_families.data());
+
+            bool is_graphic_device = false;
+            uint32_t queue_graphic_family_index = 0;
+
+            bool is_present_support = false;
+            uint32_t queue_present_family_index = 0;
+
+            for (auto& queue_family : vk_queue_families)
+            {
+                if (queue_family.queueCount > 0)
+                {
+                    auto family_index = (uint32_t)(&queue_family - vk_queue_families.data());
+
+                    if (!is_graphic_device && 0 != (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+                    {
+                        is_graphic_device = true;
+                        queue_graphic_family_index = family_index;
+                    }
+                    if (!is_present_support)
+                    {
+                        VkBool32 present_support = false;
+                        vkGetPhysicalDeviceSurfaceSupportKHR(
+                            device, family_index, _vk_surface, &present_support);
+
+                        if (present_support)
+                        {
+                            is_present_support = true;
+                            queue_present_family_index = family_index;
+                        }
+                    }
+                    if (is_graphic_device && is_present_support)
+                        break;
+                }
+            }
+
+            if (is_graphic_device && is_present_support)
+            {
+                uint32_t vk_device_extension_count = 0;
+                vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, nullptr);
+
+                std::vector<VkExtensionProperties> vk_device_extensions(vk_device_extension_count);
+                vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, vk_device_extensions.data());
+
+                std::unordered_set<std::string> required_extensions(
+                    required_device_extensions.begin(), required_device_extensions.end());
+
+                for (auto& contained_extension : vk_device_extensions) {
+                    required_extensions.erase(contained_extension.extensionName);
+                }
+
+                if (required_extensions.empty())
+                {
+                    physics_device_info result;
+                    result.queue_graphic_family_index = queue_graphic_family_index;
+                    result.queue_present_family_index = queue_present_family_index;
+
+                    jeecs::debug::logwarn("Use the first suitable device: '%s' enumerated by Vulkan, consider to "
+                        "choose the most appropriate device, todo.", prop.deviceName);
+
+                    return std::make_optional(result);
+                }
+            }
+            return std::nullopt;
+        }
 
         void init_vulkan(const jegl_interface_config* config)
         {
@@ -200,16 +330,84 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
                 }
             }
 
+
+            // 创建Surface，并且绑定窗口句柄
+#if 0
+#   if defined(JE_OS_WINDOWS)
+            VkWin32SurfaceCreateInfoKHR surface_create_info = {};
+            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+            surface_create_info.pNext = nullptr;
+            surface_create_info.flags = 0;
+            surface_create_info.hinstance = GetModuleHandle(nullptr);
+            surface_create_info.hwnd = (HWND)_vk_jegl_interface->native_handle();
+
+            assert(vkCreateWin32SurfaceKHR != nullptr);
+            if (VK_SUCCESS != vkCreateWin32SurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
+            {
+                vkDestroyInstance(_vk_instance, nullptr);
+
+                jeecs::debug::logfatal("Failed to create vk110 win32 surface.");
+                je_clock_sleep_for(1.0);
+                abort();
+            }
+#   elif defined(JE_OS_ANDROID)
+            VkAndroidSurfaceCreateInfoKHR surface_create_info = {};
+            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+            surface_create_info.pNext = nullptr;
+            surface_create_info.flags = 0;
+            surface_create_info.window = (ANativeWindow*)_vk_jegl_interface->native_handle();
+
+            assert(vkCreateAndroidSurfaceKHR != nullptr);
+            if (VK_SUCCESS != vkCreateAndroidSurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
+            {
+                vkDestroyInstance(_vk_instance, nullptr);
+
+                jeecs::debug::logfatal("Failed to create vk110 android surface.");
+                je_clock_sleep_for(1.0);
+                abort();
+            }
+
+#   elif defined(JE_OS_LINUX)
+            VkXlibSurfaceCreateInfoKHR surface_create_info = {};
+            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+            surface_create_info.pNext = nullptr;
+            surface_create_info.flags = 0;
+            surface_create_info.dpy = (Display*)_vk_jegl_interface->native_handle();
+            surface_create_info.window = (Window)_vk_jegl_interface->native_handle();
+
+            assert(vkCreateXlibSurfaceKHR != nullptr);
+            if (VK_SUCCESS != vkCreateXlibSurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
+            {
+                vkDestroyInstance(_vk_instance, nullptr);
+
+                jeecs::debug::logfatal("Failed to create vk110 xlib surface.");
+                je_clock_sleep_for(1.0);
+                abort();
+            }
+#   endif
+#else
+            if (VK_SUCCESS != glfwCreateWindowSurface(
+                _vk_instance, (GLFWwindow*)_vk_jegl_interface->native_handle(), nullptr, &_vk_surface))
+            {
+                vkDestroyInstance(_vk_instance, nullptr);
+
+                jeecs::debug::logfatal("Failed to create vk110 glfw surface.");
+                je_clock_sleep_for(1.0);
+                abort();
+            }
+#endif
+            // 获取可接受的设备
+
             uint32_t enum_deveice_count = 0;
             vkEnumeratePhysicalDevices(_vk_instance, &enum_deveice_count, nullptr);
 
             std::vector<VkPhysicalDevice> all_physics_devices((size_t)enum_deveice_count);
             vkEnumeratePhysicalDevices(_vk_instance, &enum_deveice_count, all_physics_devices.data());
 
-            std::vector<const char*> required_device_layers = {
-            };
+            // 设备应当满足的层和扩展
+            std::vector<const char*> required_device_layers = {};
             if (vk_validation_layer_supported)
-                required_layers.push_back("VK_LAYER_KHRONOS_validation");
+                required_device_layers.push_back("VK_LAYER_KHRONOS_validation");
 
             std::vector<const char*> required_device_extensions = {
                 VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -218,58 +416,26 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
             _vk_device = nullptr;
             for (auto& device : all_physics_devices)
             {
-                VkPhysicalDeviceProperties prop = {};
-                vkGetPhysicalDeviceProperties(device, &prop);
+                auto info = check_physics_device_is_suatable(
+                    device,
+                    vk_validation_layer_supported,
+                    required_device_layers,
+                    required_device_extensions
+                );
 
-                uint32_t vk_queue_family_count = 0;
-                vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, nullptr);
-
-                std::vector<VkQueueFamilyProperties> vk_queue_families(vk_queue_family_count);
-                vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, vk_queue_families.data());
-
-                bool is_graphic_device = false;
-                uint32_t queue_family_index = 0;
-
-                for (auto& queue_family : vk_queue_families)
+                if (info)
                 {
-                    if (queue_family.queueCount > 0 && 0 != (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT))
-                    {
-                        is_graphic_device = true;
-                        queue_family_index = (uint32_t)(&queue_family - vk_queue_families.data());
+                    _vk_device = device;
+                    _vk_device_queue_graphic_family_index = info->queue_graphic_family_index;
+                    _vk_device_queue_present_family_index = info->queue_present_family_index;
 
-                        break;
-                    }
-                }
-
-                if (is_graphic_device)
-                {
-                    uint32_t vk_device_extension_count = 0;
-                    vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, nullptr);
-
-                    std::vector<VkExtensionProperties> vk_device_extensions(vk_device_extension_count);
-                    vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, vk_device_extensions.data());
-
-                    std::unordered_set<std::string> required_extensions(
-                        required_device_extensions.begin(), required_device_extensions.end());
-
-                    for (auto& contained_extension : vk_device_extensions) {
-                        required_extensions.erase(contained_extension.extensionName);
-                    }
-
-                    if (required_extensions.empty())
-                    {
-                        _vk_device = device;
-                        _vk_device_queue_family_index = queue_family_index;
-                        jeecs::debug::logwarn("Use the first device: '%s' enumerated by Vulkan, consider implementing "
-                            "it and choose the most appropriate device, todo.", prop.deviceName);
-                    }
-                }
-                if (_vk_device != nullptr)
                     break;
+                }
             }
 
             if (_vk_device == nullptr)
             {
+                vkDestroySurfaceKHR(_vk_instance, _vk_surface, nullptr);
                 vkDestroyInstance(_vk_instance, nullptr);
 
                 jeecs::debug::logfatal("Failed to get vk110 device.");
@@ -300,16 +466,29 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
 
             // 非常好，到这一步已经创建完vk的实例，也拿到所需的物理设备。现在是时候
             // 创建vk所需的逻辑设备了
+            std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
 
-            VkDeviceQueueCreateInfo queue_create_info = {};
-            queue_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queue_create_info.pNext = nullptr;
-            queue_create_info.flags = 0;
-            queue_create_info.queueFamilyIndex = _vk_device_queue_family_index;
-            queue_create_info.queueCount = 1;
+            // 图形簇和提交簇可能是同一个簇，所以这里用set去重
+            // NOTE: Vulkan 不允许为同一个簇创建不同的队列
+            std::set<uint32_t> unique_queue_family_indexs = {
+                _vk_device_queue_graphic_family_index,
+                _vk_device_queue_present_family_index
+            };
 
             float queue_priority = 1.0f;
-            queue_create_info.pQueuePriorities = &queue_priority;
+
+            for (uint32_t queue_family_index : unique_queue_family_indexs)
+            {
+                VkDeviceQueueCreateInfo queue_create_info = {};
+                queue_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+                queue_create_info.pNext = nullptr;
+                queue_create_info.flags = 0;
+                queue_create_info.queueFamilyIndex = queue_family_index;
+                queue_create_info.queueCount = 1;
+                queue_create_info.pQueuePriorities = &queue_priority;
+
+                queue_create_infos.push_back(queue_create_info);
+            }
 
             VkPhysicalDeviceFeatures device_features = {};
 
@@ -317,8 +496,8 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
             device_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
             device_create_info.pNext = nullptr;
             device_create_info.flags = 0;
-            device_create_info.queueCreateInfoCount = 1;
-            device_create_info.pQueueCreateInfos = &queue_create_info;
+            device_create_info.queueCreateInfoCount = (uint32_t)queue_create_infos.size();
+            device_create_info.pQueueCreateInfos = queue_create_infos.data();
 
             device_create_info.enabledLayerCount = (uint32_t)required_device_layers.size();
             device_create_info.ppEnabledLayerNames = required_device_layers.data();
@@ -329,6 +508,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
 
             if (VK_SUCCESS != vkCreateDevice(_vk_device, &device_create_info, nullptr, &_vk_logic_device))
             {
+                vkDestroySurfaceKHR(_vk_instance, _vk_surface, nullptr);
                 vkDestroyInstance(_vk_instance, nullptr);
 
                 jeecs::debug::logfatal("Failed to create vk110 logic device.");
@@ -336,8 +516,50 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
                 abort();
             }
 
-            vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_family_index, 0, &_vk_logic_device_queue);
-            assert(_vk_logic_device_queue != nullptr);
+            vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_graphic_family_index, 0, &_vk_logic_device_graphic_queue);
+            vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_present_family_index, 0, &_vk_logic_device_present_queue);
+            assert(_vk_logic_device_graphic_queue != nullptr);
+            assert(_vk_logic_device_present_queue != nullptr);
+
+            // 在此处开始创建交换链
+            VkSurfaceCapabilitiesKHR surface_capabilities;
+            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk_device, _vk_surface, &surface_capabilities);
+
+            // 获取交换链支持的格式
+            uint32_t vk_surface_format_count = 0;
+            vkGetPhysicalDeviceSurfaceFormatsKHR(_vk_device, _vk_surface, &vk_surface_format_count, nullptr);
+
+            std::vector<VkSurfaceFormatKHR> vk_surface_formats(vk_surface_format_count);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(_vk_device, _vk_surface, &vk_surface_format_count, vk_surface_formats.data());
+            assert(!vk_surface_formats.empty());
+
+            // 获取交换链支持的呈现模式
+            uint32_t vk_present_mode_count = 0;
+            vkGetPhysicalDeviceSurfacePresentModesKHR(_vk_device, _vk_surface, &vk_present_mode_count, nullptr);
+
+            std::vector<VkPresentModeKHR> vk_present_modes(vk_present_mode_count);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(_vk_device, _vk_surface, &vk_present_mode_count, vk_present_modes.data());
+            assert(!vk_present_modes.empty());
+
+            // 获取受支持的颜色格式，优先选择VK_FORMAT_B8G8R8A8_UNORM 和 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+            VkSurfaceFormatKHR vk_surface_format = {};
+            if (vk_surface_formats.size() == 1 && vk_surface_formats.front().format == VK_FORMAT_UNDEFINED)
+            {
+                vk_surface_format.format = VK_FORMAT_B8G8R8A8_UNORM;
+                vk_surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+            }
+            else
+            {
+                for (auto& format : vk_surface_formats)
+                {
+                    if (format.format == VK_FORMAT_B8G8R8A8_UNORM &&
+                        format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                    {
+                        vk_surface_format = format;
+                        break;
+                    }
+                }
+            }
         }
 
         void shutdown()
@@ -349,6 +571,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
                 assert(vkDestroyDebugUtilsMessengerEXT != nullptr);
                 vkDestroyDebugUtilsMessengerEXT(_vk_instance, _vk_debug_manager, nullptr);
             }
+            vkDestroySurfaceKHR(_vk_instance, _vk_surface, nullptr);
             vkDestroyInstance(_vk_instance, nullptr);
         }
     };
