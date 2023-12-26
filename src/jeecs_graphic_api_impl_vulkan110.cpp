@@ -68,19 +68,36 @@ namespace jeecs::graphic::api::vk110
 
     VK_API_DECL(vkEnumerateInstanceVersion);
     VK_API_DECL(vkEnumerateInstanceLayerProperties);
+    VK_API_DECL(vkEnumerateInstanceExtensionProperties);
 
-    VK_API_DECL(vkEnumeratePhysicalDevices);
-    VK_API_DECL(vkGetPhysicalDeviceProperties);
-    VK_API_DECL(vkEnumerateDeviceExtensionProperties);
+#undef VK_API_DECL
 
-    VK_API_DECL(vkGetPhysicalDeviceQueueFamilyProperties);
+#define VK_API_LIST \
+VK_API_DECL(vkEnumeratePhysicalDevices);\
+VK_API_DECL(vkGetPhysicalDeviceProperties);\
+VK_API_DECL(vkEnumerateDeviceExtensionProperties);\
+\
+VK_API_DECL(vkGetPhysicalDeviceQueueFamilyProperties);\
+VK_API_DECL(vkCreateDevice);\
+VK_API_DECL(vkDestroyDevice);\
+VK_API_DECL(vkGetDeviceQueue);\
+\
+VK_API_DECL(vkCreateDebugUtilsMessengerEXT);\
+VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);
 
     struct jegl_vk110_context
     {
-        VkInstance _vk_instance;
+        VkInstance          _vk_instance;
         basic_interface* _vk_jegl_interface;
 
-        VkPhysicalDevice _vk_device;
+        VkPhysicalDevice    _vk_device;
+        uint32_t            _vk_device_queue_family_index;
+        VkDevice            _vk_logic_device;
+        VkQueue             _vk_logic_device_queue;
+
+#define VK_API_DECL(name) PFN_##name name
+        VK_API_LIST;
+#undef VK_API_DECL
 
 #ifndef NDEBUG
         VkDebugUtilsMessengerEXT _vk_debug_manager;
@@ -95,14 +112,23 @@ namespace jeecs::graphic::api::vk110
             return VK_FALSE;
         }
 #endif
+
         void init_vulkan(const jegl_interface_config* config)
         {
-            // ��ȡ����֧�ֵĲ�
+            // 获取所有支持的层
             uint32_t vk_layer_count;
             vkEnumerateInstanceLayerProperties(&vk_layer_count, nullptr);
 
             std::vector<VkLayerProperties> vk_available_layers((size_t)vk_layer_count);
             vkEnumerateInstanceLayerProperties(&vk_layer_count, vk_available_layers.data());
+
+            // 获取所有支持的拓展
+            uint32_t vk_extension_count;
+            vkEnumerateInstanceExtensionProperties(nullptr, &vk_extension_count, nullptr);
+
+            std::vector<VkExtensionProperties> vk_available_extensions((size_t)vk_extension_count);
+            vkEnumerateInstanceExtensionProperties(nullptr, &vk_extension_count, vk_available_extensions.data());
+
 
             bool vk_validation_layer_supported = false;
 #ifndef NDEBUG
@@ -156,6 +182,11 @@ namespace jeecs::graphic::api::vk110
                 abort();
             }
 
+            // 在此初始化vkAPI
+#define VK_API_DECL(name) name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(_vk_instance, #name));
+            VK_API_LIST;
+#undef VK_API_DECL
+
             for (const char* required_layer : required_layers) {
                 if (vk_available_layers.end() == std::find_if(vk_available_layers.begin(), vk_available_layers.end(),
                     [required_layer](const VkLayerProperties& prop)
@@ -175,6 +206,15 @@ namespace jeecs::graphic::api::vk110
             std::vector<VkPhysicalDevice> all_physics_devices((size_t)enum_deveice_count);
             vkEnumeratePhysicalDevices(_vk_instance, &enum_deveice_count, all_physics_devices.data());
 
+            std::vector<const char*> required_device_layers = {
+            };
+            if (vk_validation_layer_supported)
+                required_layers.push_back("VK_LAYER_KHRONOS_validation");
+
+            std::vector<const char*> required_device_extensions = {
+                VK_KHR_SWAPCHAIN_EXTENSION_NAME
+            };
+
             _vk_device = nullptr;
             for (auto& device : all_physics_devices)
             {
@@ -188,11 +228,15 @@ namespace jeecs::graphic::api::vk110
                 vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, vk_queue_families.data());
 
                 bool is_graphic_device = false;
+                uint32_t queue_family_index = 0;
+
                 for (auto& queue_family : vk_queue_families)
                 {
                     if (queue_family.queueCount > 0 && 0 != (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT))
                     {
                         is_graphic_device = true;
+                        queue_family_index = (uint32_t)(&queue_family - vk_queue_families.data());
+
                         break;
                     }
                 }
@@ -205,9 +249,8 @@ namespace jeecs::graphic::api::vk110
                     std::vector<VkExtensionProperties> vk_device_extensions(vk_device_extension_count);
                     vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, vk_device_extensions.data());
 
-                    std::unordered_set<std::string> required_extensions = {
-                        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                    };
+                    std::unordered_set<std::string> required_extensions(
+                        required_device_extensions.begin(), required_device_extensions.end());
 
                     for (auto& contained_extension : vk_device_extensions) {
                         required_extensions.erase(contained_extension.extensionName);
@@ -216,6 +259,7 @@ namespace jeecs::graphic::api::vk110
                     if (required_extensions.empty())
                     {
                         _vk_device = device;
+                        _vk_device_queue_family_index = queue_family_index;
                         jeecs::debug::logwarn("Use the first device: '%s' enumerated by Vulkan, consider implementing "
                             "it and choose the most appropriate device, todo.", prop.deviceName);
                     }
@@ -236,15 +280,7 @@ namespace jeecs::graphic::api::vk110
 #ifndef NDEBUG
             _vk_debug_manager = nullptr;
 
-            if (vk_available_layers.end() == std::find_if(vk_available_layers.begin(), vk_available_layers.end(),
-                [](const VkLayerProperties& prop)
-                {
-                    return strcmp("VK_LAYER_KHRONOS_validation", prop.layerName) == 0;
-                }))
-            {
-                jeecs::debug::logwarn("'VK_LAYER_KHRONOS_validation' not supported, skip.");
-            }
-            else
+            if (vk_validation_layer_supported)
             {
                 VkDebugUtilsMessengerCreateInfoEXT debug_layer_config = {};
                 debug_layer_config.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -252,11 +288,8 @@ namespace jeecs::graphic::api::vk110
                 debug_layer_config.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
                 debug_layer_config.pfnUserCallback = &debug_callback;
 
-                auto _vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)
-                    vkGetInstanceProcAddr(_vk_instance, "vkCreateDebugUtilsMessengerEXT");
-
-                assert(_vkCreateDebugUtilsMessengerEXT != nullptr);
-                if (VK_SUCCESS != _vkCreateDebugUtilsMessengerEXT(_vk_instance, &debug_layer_config, nullptr, &_vk_debug_manager)) {
+                assert(vkCreateDebugUtilsMessengerEXT != nullptr);
+                if (VK_SUCCESS != vkCreateDebugUtilsMessengerEXT(_vk_instance, &debug_layer_config, nullptr, &_vk_debug_manager)) {
                     jeecs::debug::logfatal("Failed to set up debug layer callback.");
 
                     je_clock_sleep_for(1.0);
@@ -265,6 +298,58 @@ namespace jeecs::graphic::api::vk110
             }
 #endif
 
+            // 非常好，到这一步已经创建完vk的实例，也拿到所需的物理设备。现在是时候
+            // 创建vk所需的逻辑设备了
+
+            VkDeviceQueueCreateInfo queue_create_info = {};
+            queue_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queue_create_info.pNext = nullptr;
+            queue_create_info.flags = 0;
+            queue_create_info.queueFamilyIndex = _vk_device_queue_family_index;
+            queue_create_info.queueCount = 1;
+
+            float queue_priority = 1.0f;
+            queue_create_info.pQueuePriorities = &queue_priority;
+
+            VkPhysicalDeviceFeatures device_features = {};
+
+            VkDeviceCreateInfo device_create_info = {};
+            device_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+            device_create_info.pNext = nullptr;
+            device_create_info.flags = 0;
+            device_create_info.queueCreateInfoCount = 1;
+            device_create_info.pQueueCreateInfos = &queue_create_info;
+
+            device_create_info.enabledLayerCount = (uint32_t)required_device_layers.size();
+            device_create_info.ppEnabledLayerNames = required_device_layers.data();
+
+            device_create_info.enabledExtensionCount = (uint32_t)required_device_extensions.size();
+            device_create_info.ppEnabledExtensionNames = required_device_extensions.data();
+            device_create_info.pEnabledFeatures = &device_features;
+
+            if (VK_SUCCESS != vkCreateDevice(_vk_device, &device_create_info, nullptr, &_vk_logic_device))
+            {
+                vkDestroyInstance(_vk_instance, nullptr);
+
+                jeecs::debug::logfatal("Failed to create vk110 logic device.");
+                je_clock_sleep_for(1.0);
+                abort();
+            }
+
+            vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_family_index, 0, &_vk_logic_device_queue);
+            assert(_vk_logic_device_queue != nullptr);
+        }
+
+        void shutdown()
+        {
+            vkDestroyDevice(_vk_logic_device, nullptr);
+
+            if (_vk_debug_manager != nullptr)
+            {
+                assert(vkDestroyDebugUtilsMessengerEXT != nullptr);
+                vkDestroyDebugUtilsMessengerEXT(_vk_instance, _vk_debug_manager, nullptr);
+            }
+            vkDestroyInstance(_vk_instance, nullptr);
         }
     };
 
@@ -294,16 +379,7 @@ namespace jeecs::graphic::api::vk110
 
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
 
-        if (context->_vk_debug_manager != nullptr)
-        {
-            auto _vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)
-                vkGetInstanceProcAddr(context->_vk_instance, "vkDestroyDebugUtilsMessengerEXT");
-
-            _vkDestroyDebugUtilsMessengerEXT(context->_vk_instance, context->_vk_debug_manager, nullptr);
-        }
-
-        vkDestroyInstance(context->_vk_instance, nullptr);
-
+        context->shutdown();
         context->_vk_jegl_interface->shutdown(reboot);
         delete context->_vk_jegl_interface;
 
