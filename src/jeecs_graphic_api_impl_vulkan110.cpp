@@ -24,6 +24,9 @@
 
 #include <optional>
 
+#undef max
+#undef min
+
 namespace jeecs::graphic::api::vk110
 {
     struct vklibrary_instance_proxy
@@ -116,6 +119,10 @@ VK_API_DECL(vkGetDeviceQueue);\
 VK_API_PLATFORM_API_LIST;\
 VK_API_DECL(vkDestroySurfaceKHR);\
 \
+VK_API_DECL(vkCreateSwapchainKHR);\
+VK_API_DECL(vkDestroySwapchainKHR);\
+VK_API_DECL(vkGetSwapchainImagesKHR);\
+\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceSupportKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceFormatsKHR);\
@@ -127,7 +134,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
     struct jegl_vk110_context
     {
         VkInstance          _vk_instance;
-        basic_interface* _vk_jegl_interface;
+        basic_interface*    _vk_jegl_interface;
 
         VkPhysicalDevice    _vk_device;
         uint32_t            _vk_device_queue_graphic_family_index;
@@ -136,7 +143,94 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
         VkQueue             _vk_logic_device_graphic_queue;
         VkQueue             _vk_logic_device_present_queue;
 
-        VkSurfaceKHR        _vk_surface;
+        VkSurfaceKHR                _vk_surface;
+        VkSurfaceCapabilitiesKHR    _vk_surface_capabilities;
+        VkSurfaceFormatKHR          _vk_surface_format;
+        VkPresentModeKHR            _vk_surface_present_mode;
+
+        VkSwapchainKHR              _vk_swapchain;
+        std::vector<VkImage>        _vk_swapchain_images;
+
+        void recreate_swap_chain_for_current_surface(size_t w, size_t h)
+        {
+            VkExtent2D used_extent = { (uint32_t)w, (uint32_t)h };
+            if (_vk_surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+            {
+                used_extent = _vk_surface_capabilities.currentExtent;
+            }
+            else {
+                used_extent.width = std::max(
+                    _vk_surface_capabilities.minImageExtent.width,
+                    std::min(
+                        _vk_surface_capabilities.maxImageExtent.width,
+                        used_extent.width));
+                used_extent.height =
+                    std::max(
+                        _vk_surface_capabilities.minImageExtent.height,
+                        std::min(
+                            _vk_surface_capabilities.maxImageExtent.height,
+                            used_extent.height));
+            }
+
+            // 尝试三重缓冲？
+            uint32_t swapchain_image_count = _vk_surface_capabilities.minImageCount + 1;
+            if (swapchain_image_count > _vk_surface_capabilities.maxImageCount)
+                swapchain_image_count = _vk_surface_capabilities.maxImageCount;
+
+            VkSwapchainCreateInfoKHR swapchain_create_info = {};
+            swapchain_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+            swapchain_create_info.pNext = nullptr;
+            swapchain_create_info.flags = 0;
+            swapchain_create_info.surface = _vk_surface;
+            swapchain_create_info.minImageCount = swapchain_image_count;
+            swapchain_create_info.imageFormat = _vk_surface_format.format;
+            swapchain_create_info.imageColorSpace = _vk_surface_format.colorSpace;
+            swapchain_create_info.imageExtent = used_extent;
+            swapchain_create_info.imageArrayLayers = 1;
+            swapchain_create_info.imageUsage = VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+            uint32_t queueFamilyIndices[] = {
+                _vk_device_queue_graphic_family_index,
+                 _vk_device_queue_present_family_index
+            };
+            if (_vk_device_queue_graphic_family_index != _vk_device_queue_present_family_index)
+            {
+                // 如果图形簇和提交簇不是同一个，那么就完蛋了，得开CONCURRENT模式
+                swapchain_create_info.imageSharingMode = VkSharingMode::VK_SHARING_MODE_CONCURRENT;
+                swapchain_create_info.queueFamilyIndexCount = 2;
+                swapchain_create_info.pQueueFamilyIndices = queueFamilyIndices;
+            }
+            else
+            {
+                // 如果图形簇和提交簇是同一个，那么就不用开CONCURRENT模式，获取更好的性能
+                swapchain_create_info.imageSharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
+                swapchain_create_info.queueFamilyIndexCount = 0;
+                swapchain_create_info.pQueueFamilyIndices = nullptr;
+            }
+
+            swapchain_create_info.preTransform = _vk_surface_capabilities.currentTransform;
+            swapchain_create_info.compositeAlpha = VkCompositeAlphaFlagBitsKHR::VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+            swapchain_create_info.presentMode = _vk_surface_present_mode;
+            swapchain_create_info.clipped = VK_TRUE;
+
+            swapchain_create_info.oldSwapchain = _vk_swapchain;
+            // TODO: Old swapchain may need be send to vkDestroySwapchainKHR?
+
+            if (VK_SUCCESS != vkCreateSwapchainKHR(_vk_logic_device, &swapchain_create_info, nullptr, &_vk_swapchain))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 swapchain.");
+                je_clock_sleep_for(1.0);
+                abort();
+            }
+
+            uint32_t swapchain_real_image_count = 0;
+            vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, nullptr);
+
+            assert(swapchain_real_image_count == swapchain_image_count);
+
+            _vk_swapchain_images.resize(swapchain_real_image_count);
+            vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, _vk_swapchain_images.data());
+        }
 
 #define VK_API_DECL(name) PFN_##name name
         VK_API_LIST;
@@ -245,6 +339,8 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
 
         void init_vulkan(const jegl_interface_config* config)
         {
+            _vk_swapchain = nullptr;
+
             // 获取所有支持的层
             uint32_t vk_layer_count;
             vkEnumerateInstanceLayerProperties(&vk_layer_count, nullptr);
@@ -522,8 +618,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
             assert(_vk_logic_device_present_queue != nullptr);
 
             // 在此处开始创建交换链
-            VkSurfaceCapabilitiesKHR surface_capabilities;
-            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk_device, _vk_surface, &surface_capabilities);
+            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk_device, _vk_surface, &_vk_surface_capabilities);
 
             // 获取交换链支持的格式
             uint32_t vk_surface_format_count = 0;
@@ -542,28 +637,65 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
             assert(!vk_present_modes.empty());
 
             // 获取受支持的颜色格式，优先选择VK_FORMAT_B8G8R8A8_UNORM 和 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-            VkSurfaceFormatKHR vk_surface_format = {};
+            _vk_surface_format = {};
             if (vk_surface_formats.size() == 1 && vk_surface_formats.front().format == VK_FORMAT_UNDEFINED)
             {
-                vk_surface_format.format = VK_FORMAT_B8G8R8A8_UNORM;
-                vk_surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+                _vk_surface_format.format = VK_FORMAT_B8G8R8A8_UNORM;
+                _vk_surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
             }
             else
             {
+                bool found_support_format = false;;
                 for (auto& format : vk_surface_formats)
                 {
                     if (format.format == VK_FORMAT_B8G8R8A8_UNORM &&
                         format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
                     {
-                        vk_surface_format = format;
+                        found_support_format = true;
+                        _vk_surface_format = format;
                         break;
                     }
                 }
+                if (!found_support_format)
+                    _vk_surface_format = vk_surface_formats.front();
+            }
+
+            // 设置交换链呈现模式，优先选择VK_PRESENT_MODE_MAILBOX_KHR，其次是VK_PRESENT_MODE_FIFO_KHR；
+            // 如果都不支持，则回滚到VK_PRESENT_MODE_IMMEDIATE_KHR；如果以上模式均不支持，则直接终止
+            bool vk_present_mode_mailbox_supported = false;
+            bool vk_present_mode_fifo_supported = false;
+            bool vk_present_mode_immediate_supported = false;
+
+            for (auto& present_mode : vk_present_modes)
+            {
+                if (present_mode == VK_PRESENT_MODE_MAILBOX_KHR)
+                    vk_present_mode_mailbox_supported = true;
+                else if (present_mode == VK_PRESENT_MODE_FIFO_KHR)
+                    vk_present_mode_fifo_supported = true;
+                else if (present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+                    vk_present_mode_immediate_supported = true;
+            }
+
+            if (vk_present_mode_mailbox_supported)
+                _vk_surface_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+            else if (vk_present_mode_fifo_supported)
+                _vk_surface_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+            else if (vk_present_mode_immediate_supported)
+                _vk_surface_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+            else
+            {
+                vkDestroySurfaceKHR(_vk_instance, _vk_surface, nullptr);
+                vkDestroyInstance(_vk_instance, nullptr);
+
+                jeecs::debug::logfatal("Failed to create vk110 swapchain, unsupported present mode.");
+                je_clock_sleep_for(1.0);
+                abort();
             }
         }
 
         void shutdown()
         {
+            vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
             vkDestroyDevice(_vk_logic_device, nullptr);
 
             if (_vk_debug_manager != nullptr)
