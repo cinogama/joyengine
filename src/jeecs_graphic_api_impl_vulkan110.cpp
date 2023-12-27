@@ -123,6 +123,9 @@ VK_API_DECL(vkCreateSwapchainKHR);\
 VK_API_DECL(vkDestroySwapchainKHR);\
 VK_API_DECL(vkGetSwapchainImagesKHR);\
 \
+VK_API_DECL(vkCreateImageView);\
+VK_API_DECL(vkDestroyImageView);\
+\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceSupportKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceFormatsKHR);\
@@ -150,6 +153,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
 
         VkSwapchainKHR              _vk_swapchain;
         std::vector<VkImage>        _vk_swapchain_images;
+        std::vector<VkImageView>    _vk_swapchain_image_views;
 
         void recreate_swap_chain_for_current_surface(size_t w, size_t h)
         {
@@ -215,6 +219,9 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
 
             swapchain_create_info.oldSwapchain = _vk_swapchain;
             // TODO: Old swapchain may need be send to vkDestroySwapchainKHR?
+            // Close old swapchain's view
+            for (auto& view : _vk_swapchain_image_views)
+                vkDestroyImageView(_vk_logic_device, view, nullptr);
 
             if (VK_SUCCESS != vkCreateSwapchainKHR(_vk_logic_device, &swapchain_create_info, nullptr, &_vk_swapchain))
             {
@@ -230,6 +237,39 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
 
             _vk_swapchain_images.resize(swapchain_real_image_count);
             vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, _vk_swapchain_images.data());
+
+            _vk_swapchain_image_views.resize(swapchain_real_image_count);
+            for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
+            {
+                VkImageViewCreateInfo image_view_create_info = {};
+                image_view_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                image_view_create_info.pNext = nullptr;
+                image_view_create_info.flags = 0;
+                image_view_create_info.image = _vk_swapchain_images[i];
+                image_view_create_info.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+                image_view_create_info.format = _vk_surface_format.format;
+                image_view_create_info.components.r = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+                image_view_create_info.components.g = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+                image_view_create_info.components.b = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+                image_view_create_info.components.a = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+                image_view_create_info.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                image_view_create_info.subresourceRange.baseMipLevel = 0;
+                image_view_create_info.subresourceRange.levelCount = 1;
+                image_view_create_info.subresourceRange.baseArrayLayer = 0;
+                image_view_create_info.subresourceRange.layerCount = 1;
+
+                if (VK_SUCCESS != vkCreateImageView(_vk_logic_device, &image_view_create_info, nullptr, &_vk_swapchain_image_views[i]))
+                {
+                    jeecs::debug::logfatal("Failed to create vk110 swapchain image view.");
+                    je_clock_sleep_for(1.0);
+                    abort();
+                }
+            }
+        }
+
+        void create_vk_graphic_pipeline()
+        {
+
         }
 
 #define VK_API_DECL(name) PFN_##name name
@@ -691,6 +731,10 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
                 je_clock_sleep_for(1.0);
                 abort();
             }
+
+            recreate_swap_chain_for_current_surface(
+                _vk_jegl_interface->m_interface_width, 
+                _vk_jegl_interface->m_interface_height);
         }
 
         void shutdown()
