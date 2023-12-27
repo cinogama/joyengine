@@ -11,6 +11,10 @@
 #include "jeecs_graphic_shader_wrapper_glsl.hpp"
 #include "jeecs_graphic_shader_wrapper_hlsl.hpp"
 
+#include <glslang_c_interface.h>
+#include <resource_limits_c.h>
+#include <spirv_cross_c.h>
+
 void delete_shader_value(jegl_shader_value* shader_val)
 {
     do
@@ -2045,6 +2049,99 @@ void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
     }
 }
 
+void _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment)
+{
+    glslang_input_t hlsl_shader_input;
+    hlsl_shader_input.language = glslang_source_t::GLSLANG_SOURCE_HLSL;
+    hlsl_shader_input.stage = is_fragment ? glslang_stage_t::GLSLANG_STAGE_FRAGMENT : glslang_stage_t::GLSLANG_STAGE_VERTEX;
+    hlsl_shader_input.client = glslang_client_t::GLSLANG_CLIENT_VULKAN;
+    hlsl_shader_input.client_version = glslang_target_client_version_t::GLSLANG_TARGET_VULKAN_1_1;
+    hlsl_shader_input.target_language = glslang_target_language_t::GLSLANG_TARGET_SPV;
+    hlsl_shader_input.target_language_version = glslang_target_language_version_t::GLSLANG_TARGET_SPV_1_1;
+    hlsl_shader_input.code = hlsl_src;
+    hlsl_shader_input.default_version = 50; // HLSL VERSION?
+    hlsl_shader_input.default_profile = GLSLANG_NO_PROFILE;
+    hlsl_shader_input.force_default_version_and_profile = 50; // ?
+    hlsl_shader_input.forward_compatible = 0; // ?
+    hlsl_shader_input.messages = glslang_messages_t::GLSLANG_MSG_DEFAULT_BIT;
+    hlsl_shader_input.resource = glslang_default_resource();
+    hlsl_shader_input.callbacks = {};
+    hlsl_shader_input.callbacks_ctx = nullptr;
+
+    glslang_shader_t* hlsl_shader = glslang_shader_create(&hlsl_shader_input);
+    glslang_shader_set_entry_point(hlsl_shader, "main");
+    if (!glslang_shader_preprocess(hlsl_shader, &hlsl_shader_input))
+    {
+        jeecs::debug::logfatal("Failed to preprocess hlsl vertex shader: %s.",
+            glslang_shader_get_info_log(hlsl_shader));
+        je_clock_sleep_for(1.0);
+        abort();
+    }
+    if (!glslang_shader_parse(hlsl_shader, &hlsl_shader_input))
+    {
+        jeecs::debug::logfatal("Failed to preprocess hlsl vertex shader: %s.",
+            glslang_shader_get_info_log(hlsl_shader));
+        je_clock_sleep_for(1.0);
+        abort();
+    }
+
+    glslang_program_t* program = glslang_program_create();
+    glslang_program_add_shader(program, hlsl_shader);
+
+    if (!glslang_program_link(program, GLSLANG_MSG_SPV_RULES_BIT | GLSLANG_MSG_VULKAN_RULES_BIT))
+    {
+        jeecs::debug::logfatal("Failed to preprocess hlsl vertex program: %s.",
+            glslang_program_get_info_log(program));
+        je_clock_sleep_for(1.0);
+        abort();
+    }
+
+    glslang_spv_options_t spv_options{};
+    spv_options.generate_debug_info = false;
+    spv_options.strip_debug_info = false;
+    spv_options.disable_optimizer = false;
+    spv_options.optimize_size = true;
+    spv_options.disassemble = false;
+    spv_options.validate = true;
+    spv_options.emit_nonsemantic_shader_debug_info = false;
+    spv_options.emit_nonsemantic_shader_debug_source = false;
+    spv_options.compile_only = true;
+
+    glslang_program_SPIRV_generate_with_options(program, hlsl_shader_input.stage, &spv_options);
+    if (glslang_program_SPIRV_get_messages(program))
+    {
+        jeecs::debug::logfatal("Failed to generate code hlsl vertex program: %s.",
+            glslang_program_SPIRV_get_messages(program));
+        je_clock_sleep_for(1.0);
+        abort();
+    }
+
+    auto spir_v_code_len = glslang_program_SPIRV_get_size(program);
+    auto spir_v_codes = glslang_program_SPIRV_get_ptr(program);
+
+    spvc_context spvc_ctx = nullptr;
+    spvc_context_create(&spvc_ctx);
+
+    spvc_parsed_ir ir = nullptr;
+    spvc_context_parse_spirv(spvc_ctx, spir_v_codes, spir_v_code_len, &ir);
+
+    spvc_compiler compiler = nullptr;
+    spvc_context_create_compiler(spvc_ctx, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_COPY, &compiler);
+
+    spvc_compiler_options options = nullptr;
+    spvc_compiler_create_compiler_options(compiler, &options);
+
+    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
+  
+    // 转换成hlsl
+    const char* src = nullptr;
+    spvc_compiler_compile(compiler, &src);
+    
+
+    glslang_shader_delete(hlsl_shader);
+    glslang_program_delete(program);
+}
+
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)
 {
     shader_wrapper* shader_wrapper_ptr = (shader_wrapper*)shader_generator;
@@ -2073,6 +2170,10 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
     write_to_shader->m_fragment_hlsl_src
         = jeecs::basic::make_new_string(
             _hlsl_generator.generate_fragment(shader_wrapper_ptr).c_str());
+
+    // 将hlsl翻译到spir-v
+    _jegl_parse_spir_v_from_hlsl(write_to_shader->m_vertex_hlsl_src, false);
+    _jegl_parse_spir_v_from_hlsl(write_to_shader->m_fragment_hlsl_src, true);
 
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
     write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[write_to_shader->m_vertex_in_count];
@@ -2231,4 +2332,13 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
     for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
         delete[]write_to_shader->m_sampler_methods[i].m_pass_ids;
     delete[]write_to_shader->m_sampler_methods;
+}
+
+void jegl_shader_generator_init()
+{
+    glslang_initialize_process();
+}
+void jegl_shader_generator_shutdown()
+{
+    glslang_finalize_process();
 }

@@ -1798,7 +1798,11 @@ struct jegl_shader
     const char* m_fragment_glsl_src;
     const char* m_vertex_hlsl_src;
     const char* m_fragment_hlsl_src;
+
+    size_t      m_vertex_spirv_bin_length;
     const char* m_vertex_spirv_bin;
+
+    size_t      m_fragment_spirv_bin_length;
     const char* m_fragment_spirv_bin;
 
     size_t m_vertex_in_count;

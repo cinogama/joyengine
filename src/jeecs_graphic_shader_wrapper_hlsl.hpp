@@ -475,7 +475,7 @@ namespace jeecs
                 io_declear += "};\n";
 
                 body_result =
-                    "\nv2f_t vertex_main(vin_t _vin)\n{\n"
+                    "\nv2f_t main(vin_t _vin)\n{\n"
                     + body_result
                     + "\n    // value out:\n"
                     + "    v2f_t vout;\n";
@@ -642,7 +642,7 @@ namespace jeecs
                 io_declear += "};\n";
 
                 body_result =
-                    "\nfout_t fragment_main(v2f_t _v2f)\n{\n"
+                    "\nfout_t main(v2f_t _v2f)\n{\n"
                     + body_result
                     + "\n    // value out:\n"
                     + "    fout_t fout;\n";

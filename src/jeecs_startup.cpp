@@ -39,12 +39,14 @@ extern const char* jeecs_physics2d_config_src;
 
 void jeal_init();
 void je_log_init();
+void jegl_shader_generator_init();
 
 void je_ecs_finish();
 void jeal_finish();
 void jegl_finish();
 void jetowoo_finish();
 void je_log_finish();
+void jegl_shader_generator_shutdown();
 
 void jewo_clear_global_pin_value();
 
@@ -63,7 +65,7 @@ void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
 
 jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
-    return jegl_using_vulkan110_apis;
+    // return jegl_using_vulkan110_apis;
     if (_jegl_host_graphic_api == nullptr)
     {
 #if defined(JE_ENABLE_DX11_GAPI)
@@ -159,6 +161,9 @@ void je_init(int argc, char** argv)
     _jegl_host_graphic_api = nullptr;
 
     je_log_init();
+
+    jegl_shader_generator_init();
+
     wo_init(argc, argv);
 
     for (int i = 1; i < argc - 1; ++i)
@@ -387,7 +392,10 @@ void je_finish()
 
     jeecs_file_update_default_fimg(nullptr);
 
+    jegl_shader_generator_shutdown();
+
     je_log_finish();
+
 }
 
 const char* je_build_version()

@@ -42,3 +42,7 @@
 	path = 3rd/glslang
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/glslang.git
 	branch = main
+[submodule "3rd/spirv-cross"]
+	path = 3rd/spirv-cross
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/SPIRV-Cross.git
+	branch = main

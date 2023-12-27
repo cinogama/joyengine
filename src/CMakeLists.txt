@@ -12,6 +12,9 @@ include_directories("../3rd/box2d/include")
 include_directories("../3rd/openal-soft/include")
 include_directories("../3rd/assimp/include")
 include_directories("../3rd/vulkan/include")
+include_directories("../3rd/glslang/glslang/Include")
+include_directories("../3rd/glslang/glslang/Public")
+include_directories("../3rd/spirv-cross")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
@@ -158,4 +161,12 @@ if (NOT WIN32)
 endif()
 target_link_libraries(joyecs ${jeecs_system_libs})
 target_link_libraries(joyecs ${jeecs_graphic_libs})
-target_link_libraries(joyecs woolang box2d OpenAL assimp)
+target_link_libraries(joyecs 
+    woolang
+    box2d 
+    OpenAL 
+    assimp 
+    glslang 
+    SPIRV 
+    glslang-default-resource-limits 
+    spirv-cross-c)

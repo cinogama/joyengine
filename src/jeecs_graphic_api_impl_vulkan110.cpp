@@ -269,7 +269,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
 
         void create_vk_graphic_pipeline()
         {
-
+            // VkPipelineDynamicStateCreateInfo
         }
 
 #define VK_API_DECL(name) PFN_##name name

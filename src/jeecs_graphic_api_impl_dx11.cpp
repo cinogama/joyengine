@@ -859,7 +859,7 @@ namespace jeecs::graphic::api::dx11
                 (string_path + ".vhlsl").c_str(),
                 nullptr,
                 D3D_COMPILE_STANDARD_FILE_INCLUDE,
-                "vertex_main",
+                "main",
                 "vs_5_0",
                 D3DCOMPILE_ENABLE_STRICTNESS
 #ifdef _DEBUG
@@ -985,7 +985,7 @@ namespace jeecs::graphic::api::dx11
                 (string_path + ".fhlsl").c_str(),
                 nullptr,
                 D3D_COMPILE_STANDARD_FILE_INCLUDE,
-                "fragment_main",
+                "main",
                 "ps_5_0",
                 D3DCOMPILE_ENABLE_STRICTNESS
 #ifdef _DEBUG
