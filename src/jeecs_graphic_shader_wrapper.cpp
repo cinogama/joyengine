@@ -13,7 +13,6 @@
 
 #include <glslang_c_interface.h>
 #include <resource_limits_c.h>
-#include <spirv_cross_c.h>
 
 void delete_shader_value(jegl_shader_value* shader_val)
 {
@@ -2049,31 +2048,7 @@ void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
     }
 }
 
-void _jegl_regenerate_hlsl_from_spir_v(uint32_t* spir_v_code, size_t spir_v_ir_count)
-{
-    spvc_context spir_v_cross_context = nullptr;
-    spvc_context_create(&spir_v_cross_context);
-
-    spvc_parsed_ir ir = nullptr;
-    spvc_context_parse_spirv(spir_v_cross_context, spir_v_code, spir_v_ir_count, &ir);
-
-    spvc_compiler compiler = nullptr;
-    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_HLSL, ir, SPVC_CAPTURE_MODE_COPY, &compiler);
-
-    spvc_compiler_options options = nullptr;
-    spvc_compiler_create_compiler_options(compiler, &options);
-
-    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_HLSL_SHADER_MODEL, 50);
-
-    spvc_compiler_install_compiler_options(compiler, options);
-
-    // 转换成hlsl
-    const char* src = nullptr;
-    spvc_compiler_compile(compiler, &src);
-
-    spvc_context_destroy(spir_v_cross_context);
-}
-void _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment)
+jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment, size_t * out_codelen)
 {
     glslang_input_t hlsl_shader_input;
     hlsl_shader_input.language = glslang_source_t::GLSLANG_SOURCE_HLSL;
@@ -2096,7 +2071,7 @@ void _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment)
     hlsl_shader_input.callbacks_ctx = nullptr;
 
     glslang_shader_t* hlsl_shader = glslang_shader_create(&hlsl_shader_input);
-    glslang_shader_set_entry_point(hlsl_shader, "main");
+    glslang_shader_set_entry_point(hlsl_shader, is_fragment ? "fragment_main" : "vertex_main");
     if (!glslang_shader_preprocess(hlsl_shader, &hlsl_shader_input))
     {
         jeecs::debug::logfatal("Failed to preprocess hlsl vertex shader: %s.",
@@ -2146,11 +2121,18 @@ void _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment)
     auto spir_v_code_len = glslang_program_SPIRV_get_size(program);
     auto spir_v_codes = glslang_program_SPIRV_get_ptr(program);
 
-    // _jegl_regenerate_glsl_from_spir_v(spir_v_codes, spir_v_code_len);
-    _jegl_regenerate_hlsl_from_spir_v(spir_v_codes, spir_v_code_len);
+    *out_codelen = spir_v_code_len;
+    jegl_shader::spir_v_code_t* codes = 
+        (jegl_shader::spir_v_code_t*)je_mem_alloc(
+            spir_v_code_len * sizeof(jegl_shader::spir_v_code_t));
+
+    memcpy(codes, spir_v_codes, 
+        spir_v_code_len * sizeof(jegl_shader::spir_v_code_t));
 
     glslang_shader_delete(hlsl_shader);
     glslang_program_delete(program);
+
+    return codes;
 }
 
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader)
@@ -2182,9 +2164,15 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         = jeecs::basic::make_new_string(
             _hlsl_generator.generate_fragment(shader_wrapper_ptr).c_str());
 
-    // 将hlsl翻译到spir-v
-    _jegl_parse_spir_v_from_hlsl(write_to_shader->m_vertex_hlsl_src, false);
-    _jegl_parse_spir_v_from_hlsl(write_to_shader->m_fragment_hlsl_src, true);
+    // 将hlsl翻译到spir-v，不使用glsl的原因是JoyEngine使用的glsl版本是v330
+    write_to_shader->m_vertex_spirv_codes=
+        _jegl_parse_spir_v_from_hlsl(
+            write_to_shader->m_vertex_hlsl_src, false, 
+            &write_to_shader->m_vertex_spirv_count);
+    write_to_shader->m_fragment_spirv_codes=
+        _jegl_parse_spir_v_from_hlsl(
+            write_to_shader->m_fragment_hlsl_src, true, 
+            &write_to_shader->m_fragment_spirv_count);
 
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
     write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[write_to_shader->m_vertex_in_count];
@@ -2316,6 +2304,8 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
     je_mem_free((void*)write_to_shader->m_fragment_glsl_src);
     je_mem_free((void*)write_to_shader->m_vertex_hlsl_src);
     je_mem_free((void*)write_to_shader->m_fragment_hlsl_src);
+    je_mem_free((void*)write_to_shader->m_vertex_spirv_codes);
+    je_mem_free((void*)write_to_shader->m_fragment_spirv_codes);
 
     delete[]write_to_shader->m_vertex_in;
 

@@ -1794,16 +1794,18 @@ struct jegl_shader
         BACK,
     };
 
+    using spir_v_code_t = uint32_t;
+
     const char* m_vertex_glsl_src;
     const char* m_fragment_glsl_src;
     const char* m_vertex_hlsl_src;
     const char* m_fragment_hlsl_src;
 
-    size_t      m_vertex_spirv_bin_length;
-    const char* m_vertex_spirv_bin;
+    size_t m_vertex_spirv_count;
+    const spir_v_code_t* m_vertex_spirv_codes;
 
-    size_t      m_fragment_spirv_bin_length;
-    const char* m_fragment_spirv_bin;
+    size_t m_fragment_spirv_count;
+    const spir_v_code_t* m_fragment_spirv_codes;
 
     size_t m_vertex_in_count;
     vertex_in_variables* m_vertex_in;
