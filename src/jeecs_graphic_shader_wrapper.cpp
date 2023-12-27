@@ -2049,19 +2049,46 @@ void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
     }
 }
 
+void _jegl_regenerate_hlsl_from_spir_v(uint32_t* spir_v_code, size_t spir_v_ir_count)
+{
+    spvc_context spir_v_cross_context = nullptr;
+    spvc_context_create(&spir_v_cross_context);
+
+    spvc_parsed_ir ir = nullptr;
+    spvc_context_parse_spirv(spir_v_cross_context, spir_v_code, spir_v_ir_count, &ir);
+
+    spvc_compiler compiler = nullptr;
+    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_HLSL, ir, SPVC_CAPTURE_MODE_COPY, &compiler);
+
+    spvc_compiler_options options = nullptr;
+    spvc_compiler_create_compiler_options(compiler, &options);
+
+    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_HLSL_SHADER_MODEL, 50);
+
+    spvc_compiler_install_compiler_options(compiler, options);
+
+    // 转换成hlsl
+    const char* src = nullptr;
+    spvc_compiler_compile(compiler, &src);
+
+    spvc_context_destroy(spir_v_cross_context);
+}
 void _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment)
 {
     glslang_input_t hlsl_shader_input;
     hlsl_shader_input.language = glslang_source_t::GLSLANG_SOURCE_HLSL;
-    hlsl_shader_input.stage = is_fragment ? glslang_stage_t::GLSLANG_STAGE_FRAGMENT : glslang_stage_t::GLSLANG_STAGE_VERTEX;
+    hlsl_shader_input.stage = is_fragment 
+        ? glslang_stage_t::GLSLANG_STAGE_FRAGMENT 
+        : glslang_stage_t::GLSLANG_STAGE_VERTEX;
     hlsl_shader_input.client = glslang_client_t::GLSLANG_CLIENT_VULKAN;
     hlsl_shader_input.client_version = glslang_target_client_version_t::GLSLANG_TARGET_VULKAN_1_1;
     hlsl_shader_input.target_language = glslang_target_language_t::GLSLANG_TARGET_SPV;
     hlsl_shader_input.target_language_version = glslang_target_language_version_t::GLSLANG_TARGET_SPV_1_1;
+
     hlsl_shader_input.code = hlsl_src;
     hlsl_shader_input.default_version = 50; // HLSL VERSION?
     hlsl_shader_input.default_profile = GLSLANG_NO_PROFILE;
-    hlsl_shader_input.force_default_version_and_profile = 50; // ?
+    hlsl_shader_input.force_default_version_and_profile = 0; // ?
     hlsl_shader_input.forward_compatible = 0; // ?
     hlsl_shader_input.messages = glslang_messages_t::GLSLANG_MSG_DEFAULT_BIT;
     hlsl_shader_input.resource = glslang_default_resource();
@@ -2105,7 +2132,7 @@ void _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment)
     spv_options.validate = true;
     spv_options.emit_nonsemantic_shader_debug_info = false;
     spv_options.emit_nonsemantic_shader_debug_source = false;
-    spv_options.compile_only = true;
+    spv_options.compile_only = false;
 
     glslang_program_SPIRV_generate_with_options(program, hlsl_shader_input.stage, &spv_options);
     if (glslang_program_SPIRV_get_messages(program))
@@ -2119,24 +2146,8 @@ void _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment)
     auto spir_v_code_len = glslang_program_SPIRV_get_size(program);
     auto spir_v_codes = glslang_program_SPIRV_get_ptr(program);
 
-    spvc_context spvc_ctx = nullptr;
-    spvc_context_create(&spvc_ctx);
-
-    spvc_parsed_ir ir = nullptr;
-    spvc_context_parse_spirv(spvc_ctx, spir_v_codes, spir_v_code_len, &ir);
-
-    spvc_compiler compiler = nullptr;
-    spvc_context_create_compiler(spvc_ctx, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_COPY, &compiler);
-
-    spvc_compiler_options options = nullptr;
-    spvc_compiler_create_compiler_options(compiler, &options);
-
-    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
-  
-    // 转换成hlsl
-    const char* src = nullptr;
-    spvc_compiler_compile(compiler, &src);
-    
+    // _jegl_regenerate_glsl_from_spir_v(spir_v_codes, spir_v_code_len);
+    _jegl_regenerate_hlsl_from_spir_v(spir_v_codes, spir_v_code_len);
 
     glslang_shader_delete(hlsl_shader);
     glslang_program_delete(program);
