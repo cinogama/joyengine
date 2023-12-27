@@ -38,3 +38,7 @@
 	path = 3rd/vulkan
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/Vulkan-Headers.git
 	branch = main
+[submodule "3rd/glslang"]
+	path = 3rd/glslang
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/glslang.git
+	branch = main
