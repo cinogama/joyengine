@@ -145,7 +145,7 @@ The source code is licensed under the Modified BSD License, the Mesa
             {
                 let mut out_line = "";
                 for (let mut x = 0; x < width; x += 1)
-                    out_line += chtex->pix((x, height - y - 1))->get_color[3] <= 0.1 ? "  " | "■";
+                    out_line += chtex->pix((x, height - y - 1))->get_color[3] <= 0.3 ? "  " | "■";
 
                 je::log(F"{out_line}|");
             }

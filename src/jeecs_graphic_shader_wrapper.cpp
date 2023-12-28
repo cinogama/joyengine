@@ -1351,7 +1351,7 @@ public func negative<T>(a: T)
 }
 
 public func pow<T, U>(a: T, b: U)
-    where is_vec_1_4:<T> && (b is real || b is float || b is T);
+    where is_vec_1_4:<T> && b is T || (b is float && a is real) || (b is real && a is float);
 {
     return apply_operation:<result_gl_t<T>>("pow", a, b);
 }

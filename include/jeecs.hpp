@@ -3233,10 +3233,10 @@ namespace jeecs
 
         /*
         jeecs::debug::logfatal [函数]
-        用于产生严重错误日志
+        用于产生致命错误日志
         */
         template<typename ... ArgTs>
-        inline void logfatal(const char* format, ArgTs&& ... args)
+        [[noreturn]] inline void logfatal(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_FATAL, format, args...);
             je_clock_sleep_for(1.0);
@@ -7322,7 +7322,7 @@ namespace jeecs
                                                     src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
                                                     src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
                                                     src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
-                                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
+                                                    src_alpha
                                                 )
                                             );
                                         }

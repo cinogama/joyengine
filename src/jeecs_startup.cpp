@@ -65,7 +65,10 @@ void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
 
 jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
-    // return jegl_using_vulkan110_apis;
+    // 
+    // 
+    return jegl_using_opengl3_apis;
+
     if (_jegl_host_graphic_api == nullptr)
     {
 #if defined(JE_ENABLE_DX11_GAPI)
@@ -93,7 +96,7 @@ void _jedbg_hook_woolang_panic(
     wo_string_t reason)
 {
     auto* trace = vm == nullptr ? nullptr : wo_debug_trace_callstack(vm, 32);
-    jeecs::debug::logfatal("Woolang Panic(%x):%s (%s in %s: %u):\n%s",
+    jeecs::debug::logerr("Woolang Panic(%x):%s (%s in %s: %u):\n%s",
         rterrcode, reason, functionname, src_file, lineno, 
         trace == nullptr ? "<no-found>" : trace);
 
@@ -111,7 +114,7 @@ void _jedbg_hook_woolang_panic(
     }
     else
     {
-        jeecs::debug::logfatal("Engine's woolang panic hook failed, try default.");
+        jeecs::debug::logwarn("Engine's woolang panic hook failed, try default.");
         assert(_je_global_old_panic_handler != nullptr);
         _je_global_old_panic_handler(vm, src_file, lineno, functionname, rterrcode, reason);
     }

@@ -111,7 +111,6 @@ VK_API_DECL(vkCreateDevice);\
 VK_API_DECL(vkDestroyDevice);\
 VK_API_DECL(vkGetDeviceQueue);\
 \
-VK_API_PLATFORM_API_LIST;\
 VK_API_DECL(vkDestroySurfaceKHR);\
 \
 VK_API_DECL(vkCreateSwapchainKHR);\
@@ -121,19 +120,58 @@ VK_API_DECL(vkGetSwapchainImagesKHR);\
 VK_API_DECL(vkCreateImageView);\
 VK_API_DECL(vkDestroyImageView);\
 \
+VK_API_DECL(vkGetPhysicalDeviceMemoryProperties);\
+VK_API_DECL(vkAllocateMemory);\
+VK_API_DECL(vkFreeMemory);\
+VK_API_DECL(vkMapMemory);\
+VK_API_DECL(vkUnmapMemory);\
+VK_API_DECL(vkBindBufferMemory);\
+VK_API_DECL(vkGetBufferMemoryRequirements);\
+VK_API_DECL(vkCreateBuffer);\
+VK_API_DECL(vkDestroyBuffer);\
+\
+VK_API_DECL(vkCreateShaderModule);\
+VK_API_DECL(vkDestroyShaderModule);\
+\
+VK_API_DECL(vkCreatePipelineLayout);\
+VK_API_DECL(vkDestroyPipelineLayout);\
+\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceSupportKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceFormatsKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfacePresentModesKHR);\
 \
 VK_API_DECL(vkCreateDebugUtilsMessengerEXT);\
-VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
+VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);\
+\
+VK_API_PLATFORM_API_LIST
+
 
     struct jevk11_shader_blob
     {
+        inline static const VkDynamicState m_dynamic_states[] =
+        {
+            VkDynamicState::VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY,
+            VkDynamicState::VK_DYNAMIC_STATE_VIEWPORT
+        };
+
         VkShaderModule m_vertex_shader_module;
         VkShaderModule m_fragment_shader_module;
         VkPipelineShaderStageCreateInfo m_shader_stage_infos[2];
+
+        std::vector<VkVertexInputAttributeDescription>  m_vertex_input_attribute_descriptions;
+        VkVertexInputBindingDescription                 m_vertex_input_binding_description;
+        VkPipelineVertexInputStateCreateInfo            m_vertex_input_state_create_info;
+        VkPipelineInputAssemblyStateCreateInfo          m_input_assembly_state_create_info;
+        VkViewport                                      m_viewport;
+        VkRect2D                                        m_scissor;
+        VkPipelineViewportStateCreateInfo               m_viewport_state_create_info;
+        VkPipelineRasterizationStateCreateInfo          m_rasterization_state_create_info;
+        VkPipelineColorBlendAttachmentState             m_color_blend_attachment_state;
+        VkPipelineColorBlendStateCreateInfo             m_color_blend_state_create_info;
+        VkPipelineDynamicStateCreateInfo                m_dynamic_state_create_info;
+
+        VkPipelineLayout                                m_pipeline_layout;
     };
 
     struct jevk11_shader
@@ -729,6 +767,9 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
 
         void shutdown()
         {
+            for (auto& view : _vk_swapchain_image_views)
+                vkDestroyImageView(_vk_logic_device, view, nullptr);
+
             vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
             vkDestroyDevice(_vk_logic_device, nullptr);
 
@@ -739,6 +780,438 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
             }
             vkDestroySurfaceKHR(_vk_instance, _vk_surface, nullptr);
             vkDestroyInstance(_vk_instance, nullptr);
+        }
+
+        jevk11_shader_blob* create_shader_blob(jegl_resource* resource)
+        {
+            jevk11_shader_blob* shader_blob = new jevk11_shader_blob{};
+            assert(resource != nullptr
+                && resource->m_type == jegl_resource::type::SHADER
+                && resource->m_raw_shader_data != nullptr);
+
+            VkShaderModuleCreateInfo vertex_shader_module_create_info = {};
+            vertex_shader_module_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            vertex_shader_module_create_info.pNext = nullptr;
+            vertex_shader_module_create_info.flags = 0;
+            vertex_shader_module_create_info.codeSize =
+                resource->m_raw_shader_data->m_vertex_spirv_count * sizeof(jegl_shader::spir_v_code_t);
+            vertex_shader_module_create_info.pCode = resource->m_raw_shader_data->m_vertex_spirv_codes;
+
+            if (VK_SUCCESS != vkCreateShaderModule(
+                _vk_logic_device,
+                &vertex_shader_module_create_info,
+                nullptr,
+                &shader_blob->m_vertex_shader_module))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 vertex shader module.");
+            }
+
+            VkShaderModuleCreateInfo fragment_shader_module_create_info = {};
+            fragment_shader_module_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            fragment_shader_module_create_info.pNext = nullptr;
+            fragment_shader_module_create_info.flags = 0;
+            fragment_shader_module_create_info.codeSize =
+                resource->m_raw_shader_data->m_fragment_spirv_count * sizeof(jegl_shader::spir_v_code_t);
+            fragment_shader_module_create_info.pCode = resource->m_raw_shader_data->m_fragment_spirv_codes;
+
+            if (VK_SUCCESS != vkCreateShaderModule(
+                _vk_logic_device,
+                &fragment_shader_module_create_info,
+                nullptr,
+                &shader_blob->m_fragment_shader_module))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 fragment shader module.");
+            }
+
+            VkPipelineShaderStageCreateInfo vertex_shader_stage_info = {};
+            vertex_shader_stage_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            vertex_shader_stage_info.pNext = nullptr;
+            vertex_shader_stage_info.flags = 0;
+            vertex_shader_stage_info.stage = VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT;
+            vertex_shader_stage_info.module = shader_blob->m_vertex_shader_module;
+            vertex_shader_stage_info.pName = "main";
+
+            VkPipelineShaderStageCreateInfo fragment_shader_stage_info = {};
+            fragment_shader_stage_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            fragment_shader_stage_info.pNext = nullptr;
+            fragment_shader_stage_info.flags = 0;
+            fragment_shader_stage_info.stage = VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT;
+            fragment_shader_stage_info.module = shader_blob->m_fragment_shader_module;
+            fragment_shader_stage_info.pName = "main";
+
+            shader_blob->m_shader_stage_infos[0] = vertex_shader_stage_info;
+            shader_blob->m_shader_stage_infos[1] = fragment_shader_stage_info;
+
+            for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
+            {
+                switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
+                {
+                case jegl_shader::uniform_type::INT:
+                    break;
+                case jegl_shader::uniform_type::FLOAT:
+                    break;
+                case jegl_shader::uniform_type::FLOAT2:
+                    break;
+                case jegl_shader::uniform_type::FLOAT3:
+                    break;
+                case jegl_shader::uniform_type::FLOAT4:
+                    break;
+                default:
+                    abort();
+                }
+            }
+
+            // 预备管线所需的资源~
+
+            shader_blob->m_vertex_input_attribute_descriptions.resize(
+                resource->m_raw_shader_data->m_vertex_in_count);
+
+            size_t vertex_point_data_size = 0;
+            for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
+            {
+                shader_blob->m_vertex_input_attribute_descriptions[i].binding = 0;
+                shader_blob->m_vertex_input_attribute_descriptions[i].location = (uint32_t)i;
+                shader_blob->m_vertex_input_attribute_descriptions[i].offset = (uint32_t)vertex_point_data_size;
+                switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
+                {
+                case jegl_shader::uniform_type::FLOAT:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32_SFLOAT;
+                    vertex_point_data_size += sizeof(float);
+                    break;
+                case jegl_shader::uniform_type::FLOAT2:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32_SFLOAT;
+                    vertex_point_data_size += sizeof(float) * 2;
+                    break;
+                case jegl_shader::uniform_type::FLOAT3:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32_SFLOAT;
+                    vertex_point_data_size += sizeof(float) * 3;
+                    break;
+                case jegl_shader::uniform_type::FLOAT4:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
+                    vertex_point_data_size += sizeof(float) * 4;
+                    break;
+                }
+            }
+
+            shader_blob->m_vertex_input_binding_description = {};
+            shader_blob->m_vertex_input_binding_description.binding = 0;
+            shader_blob->m_vertex_input_binding_description.stride = (uint32_t)vertex_point_data_size;
+            shader_blob->m_vertex_input_binding_description.inputRate = VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
+
+            shader_blob->m_vertex_input_state_create_info = {};
+            shader_blob->m_vertex_input_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            shader_blob->m_vertex_input_state_create_info.pNext = nullptr;
+            shader_blob->m_vertex_input_state_create_info.flags = 0;
+            shader_blob->m_vertex_input_state_create_info.vertexBindingDescriptionCount = 1;
+            shader_blob->m_vertex_input_state_create_info.pVertexBindingDescriptions = &shader_blob->m_vertex_input_binding_description;
+            shader_blob->m_vertex_input_state_create_info.vertexAttributeDescriptionCount = (uint32_t)shader_blob->m_vertex_input_attribute_descriptions.size();
+            shader_blob->m_vertex_input_state_create_info.pVertexAttributeDescriptions = shader_blob->m_vertex_input_attribute_descriptions.data();
+
+            // TODO: 根据JoyEngine的绘制设计，此处需要允许动态调整或者创建多个图形管线以匹配不同的绘制需求
+            //       这里暂时先挂个最常见的绘制图元模式
+            shader_blob->m_input_assembly_state_create_info = {};
+            shader_blob->m_input_assembly_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            shader_blob->m_input_assembly_state_create_info.pNext = nullptr;
+            shader_blob->m_input_assembly_state_create_info.flags = 0;
+            shader_blob->m_input_assembly_state_create_info.topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+            shader_blob->m_input_assembly_state_create_info.primitiveRestartEnable = VK_FALSE;
+
+            // TODO: 此属性也应当允许自定义，不然玩个p
+            shader_blob->m_viewport = {};
+            shader_blob->m_viewport.x = 0.0f;
+            shader_blob->m_viewport.y = 0.0f;
+            shader_blob->m_viewport.width = (float)_vk_surface_capabilities.currentExtent.width;
+            shader_blob->m_viewport.height = (float)_vk_surface_capabilities.currentExtent.height;
+            shader_blob->m_viewport.minDepth = 0.0f;
+            shader_blob->m_viewport.maxDepth = 1.0f;
+
+            shader_blob->m_scissor = {};
+            shader_blob->m_scissor.offset = { 0, 0 };
+            shader_blob->m_scissor.extent = _vk_surface_capabilities.currentExtent;
+
+            shader_blob->m_viewport_state_create_info = {};
+            shader_blob->m_viewport_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            shader_blob->m_viewport_state_create_info.pNext = nullptr;
+            shader_blob->m_viewport_state_create_info.flags = 0;
+            shader_blob->m_viewport_state_create_info.viewportCount = 1;
+            shader_blob->m_viewport_state_create_info.pViewports = &shader_blob->m_viewport;
+            shader_blob->m_viewport_state_create_info.scissorCount = 1;
+            shader_blob->m_viewport_state_create_info.pScissors = &shader_blob->m_scissor;
+
+            shader_blob->m_rasterization_state_create_info = {};
+            shader_blob->m_rasterization_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            shader_blob->m_rasterization_state_create_info.pNext = nullptr;
+            shader_blob->m_rasterization_state_create_info.flags = 0;
+            shader_blob->m_rasterization_state_create_info.depthClampEnable = VK_FALSE;
+            shader_blob->m_rasterization_state_create_info.rasterizerDiscardEnable = VK_FALSE;
+            shader_blob->m_rasterization_state_create_info.polygonMode = VkPolygonMode::VK_POLYGON_MODE_FILL;
+
+            switch (resource->m_raw_shader_data->m_cull_mode)
+            {
+            case jegl_shader::cull_mode::FRONT:
+                shader_blob->m_rasterization_state_create_info.cullMode = VkCullModeFlagBits::VK_CULL_MODE_FRONT_BIT;
+                break;
+            case jegl_shader::cull_mode::BACK:
+                shader_blob->m_rasterization_state_create_info.cullMode = VkCullModeFlagBits::VK_CULL_MODE_BACK_BIT;
+                break;
+            case jegl_shader::cull_mode::NONE:
+                shader_blob->m_rasterization_state_create_info.cullMode = VkCullModeFlagBits::VK_CULL_MODE_NONE;
+                break;
+            }
+            shader_blob->m_rasterization_state_create_info.frontFace = VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+            // TODO: 配置多重采样，不过JoyEngine的多重采样应该是配置在渲染目标上的，这里暂时不知道怎么处理比较合适
+            //      先挂个默认的，并且也应该允许动态调整
+            //VkPipelineMultisampleStateCreateInfo multisample_state_create_info = {};
+            //multisample_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            //multisample_state_create_info.pNext = nullptr;
+            //multisample_state_create_info.flags = 0;
+            //multisample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
+            //multisample_state_create_info.sampleShadingEnable = VK_FALSE;
+            //multisample_state_create_info.minSampleShading = 1.0f;
+            //multisample_state_create_info.pSampleMask = nullptr;
+            //multisample_state_create_info.alphaToCoverageEnable = VK_FALSE;
+            //multisample_state_create_info.alphaToOneEnable = VK_FALSE;
+
+            // TODO: 深度缓冲区配置
+
+            // 混色方法，这个不需要动态调整，直接从shader配置中读取混合模式
+            shader_blob->m_color_blend_attachment_state = {};
+            if (resource->m_raw_shader_data->m_blend_src_mode == jegl_shader::blend_method::ONE &&
+                resource->m_raw_shader_data->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
+            {
+                shader_blob->m_color_blend_attachment_state.blendEnable = VK_FALSE;
+            }
+            else
+            {
+                shader_blob->m_color_blend_attachment_state.blendEnable = VK_TRUE;
+            }
+
+            switch (resource->m_raw_shader_data->m_blend_src_mode)
+            {
+            case jegl_shader::blend_method::ZERO:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ZERO;
+                break;
+            case jegl_shader::blend_method::ONE:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE;
+                break;
+            case jegl_shader::blend_method::SRC_COLOR:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
+                break;
+            case jegl_shader::blend_method::SRC_ALPHA:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
+                break;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                break;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+                break;
+            case jegl_shader::blend_method::DST_COLOR:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
+                break;
+            case jegl_shader::blend_method::DST_ALPHA:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
+                break;
+            case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+                break;
+            case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+                break;
+            }
+            switch (resource->m_raw_shader_data->m_blend_dst_mode)
+            {
+            case jegl_shader::blend_method::ZERO:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ZERO;
+                break;
+            case jegl_shader::blend_method::ONE:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE;
+                break;
+            case jegl_shader::blend_method::SRC_COLOR:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
+                break;
+            case jegl_shader::blend_method::SRC_ALPHA:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
+                break;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                break;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+                break;
+            case jegl_shader::blend_method::DST_COLOR:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
+                break;
+            case jegl_shader::blend_method::DST_ALPHA:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
+                break;
+            case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+                break;
+            case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+                break;
+            }
+
+            shader_blob->m_color_blend_attachment_state.colorBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
+            shader_blob->m_color_blend_attachment_state.srcAlphaBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE;
+            shader_blob->m_color_blend_attachment_state.dstAlphaBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ZERO;
+            shader_blob->m_color_blend_attachment_state.alphaBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
+            shader_blob->m_color_blend_attachment_state.colorWriteMask = VkColorComponentFlagBits::VK_COLOR_COMPONENT_R_BIT |
+                VkColorComponentFlagBits::VK_COLOR_COMPONENT_G_BIT |
+                VkColorComponentFlagBits::VK_COLOR_COMPONENT_B_BIT |
+                VkColorComponentFlagBits::VK_COLOR_COMPONENT_A_BIT;
+
+            shader_blob->m_color_blend_state_create_info = {};
+            shader_blob->m_color_blend_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            shader_blob->m_color_blend_state_create_info.pNext = nullptr;
+            shader_blob->m_color_blend_state_create_info.flags = 0;
+            shader_blob->m_color_blend_state_create_info.logicOpEnable = VK_FALSE;
+            shader_blob->m_color_blend_state_create_info.logicOp = VkLogicOp::VK_LOGIC_OP_COPY;
+            shader_blob->m_color_blend_state_create_info.attachmentCount = 1;
+            shader_blob->m_color_blend_state_create_info.pAttachments = &shader_blob->m_color_blend_attachment_state;
+            shader_blob->m_color_blend_state_create_info.blendConstants[0] = 0.0f;
+            shader_blob->m_color_blend_state_create_info.blendConstants[1] = 0.0f;
+            shader_blob->m_color_blend_state_create_info.blendConstants[2] = 0.0f;
+            shader_blob->m_color_blend_state_create_info.blendConstants[3] = 0.0f;
+
+            // 动态配置~！
+            // InputAssemblyState 和 Viewport 都应当允许动态配置
+            shader_blob->m_dynamic_state_create_info = {};
+            shader_blob->m_dynamic_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            shader_blob->m_dynamic_state_create_info.pNext = nullptr;
+            shader_blob->m_dynamic_state_create_info.flags = 0;
+            shader_blob->m_dynamic_state_create_info.dynamicStateCount = 2;
+            shader_blob->m_dynamic_state_create_info.pDynamicStates = jevk11_shader_blob::m_dynamic_states;
+
+            // 创建管道布局
+            VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
+            pipeline_layout_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+            pipeline_layout_create_info.pNext = nullptr;
+            pipeline_layout_create_info.flags = 0;
+            pipeline_layout_create_info.setLayoutCount = 0;
+            pipeline_layout_create_info.pSetLayouts = nullptr;
+            pipeline_layout_create_info.pushConstantRangeCount = 0;
+            pipeline_layout_create_info.pPushConstantRanges = nullptr;
+
+            if (VK_SUCCESS != vkCreatePipelineLayout(
+                _vk_logic_device,
+                &pipeline_layout_create_info,
+                nullptr,
+                &shader_blob->m_pipeline_layout))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 pipeline layout.");
+            }
+
+            return shader_blob;
+        }
+        void destroy_shader_blob(jevk11_shader_blob* blob)
+        {
+            vkDestroyPipelineLayout(_vk_logic_device, blob->m_pipeline_layout, nullptr);
+            vkDestroyShaderModule(_vk_logic_device, blob->m_vertex_shader_module, nullptr);
+            vkDestroyShaderModule(_vk_logic_device, blob->m_fragment_shader_module, nullptr);
+
+            delete blob;
+        }
+
+        jevk111_vertex* create_vertex_buffer(jegl_resource* resource)
+        {
+            jevk111_vertex* vertex = new jevk111_vertex();
+
+            VkBufferCreateInfo vertex_buffer_create_info = {};
+            vertex_buffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            vertex_buffer_create_info.pNext = nullptr;
+            vertex_buffer_create_info.flags = 0;
+            vertex_buffer_create_info.size =
+                resource->m_raw_vertex_data->m_point_count *
+                resource->m_raw_vertex_data->m_data_count_per_point *
+                sizeof(float);
+            vertex_buffer_create_info.usage = VkBufferUsageFlagBits::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            vertex_buffer_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
+
+            if (VK_SUCCESS != vkCreateBuffer(
+                _vk_logic_device,
+                &vertex_buffer_create_info,
+                nullptr,
+                &vertex->m_vk_vertex_buffer))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 vertex buffer.");
+            }
+
+            // 获取所需分配的内存类型
+            VkMemoryRequirements vertex_buffer_memory_requirements;
+            vkGetBufferMemoryRequirements(
+                _vk_logic_device,
+                vertex->m_vk_vertex_buffer,
+                &vertex_buffer_memory_requirements);
+
+            auto find_memory_type = [this](uint32_t type_filter, VkMemoryPropertyFlags properties)
+                {
+                    VkPhysicalDeviceMemoryProperties memory_properties;
+                    vkGetPhysicalDeviceMemoryProperties(_vk_device, &memory_properties);
+
+                    for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i)
+                    {
+                        if ((type_filter & (1 << i)) &&
+                            (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
+                        {
+                            return i;
+                        }
+                    }
+                    jeecs::debug::logfatal("Failed to find suitable memory type.");
+                };
+
+            VkMemoryAllocateInfo vertex_buffer_memory_allocate_info = {};
+            vertex_buffer_memory_allocate_info.sType = VkStructureType::VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            vertex_buffer_memory_allocate_info.pNext = nullptr;
+            vertex_buffer_memory_allocate_info.allocationSize = vertex_buffer_memory_requirements.size;
+            vertex_buffer_memory_allocate_info.memoryTypeIndex = find_memory_type(
+                vertex_buffer_memory_requirements.memoryTypeBits,
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+            if (VK_SUCCESS != vkAllocateMemory(
+                _vk_logic_device,
+                &vertex_buffer_memory_allocate_info,
+                nullptr,
+                &vertex->m_vk_vertex_buffer_memory))
+            {
+                jeecs::debug::logfatal("Failed to allocate vk110 vertex buffer memory.");
+            }
+
+            if (VK_SUCCESS != vkBindBufferMemory(
+                _vk_logic_device,
+                vertex->m_vk_vertex_buffer,
+                vertex->m_vk_vertex_buffer_memory,
+                0))
+            {
+                jeecs::debug::logfatal("Failed to bind vk110 vertex buffer memory.");
+            }
+
+            void* vertex_buffer_memory_ptr = nullptr;
+            vkMapMemory(
+                _vk_logic_device,
+                vertex->m_vk_vertex_buffer_memory,
+                0,
+                vertex_buffer_memory_requirements.size,
+                0,
+                &vertex_buffer_memory_ptr);
+            memcpy(
+                vertex_buffer_memory_ptr,
+                resource->m_raw_vertex_data->m_vertex_datas,
+                vertex_buffer_create_info.size);
+            vkUnmapMemory(
+                _vk_logic_device,
+                vertex->m_vk_vertex_buffer_memory);
+
+            return vertex;
+        }
+        void destroy_vertex_buffer(jevk111_vertex* vertex)
+        {
+            vkDestroyBuffer(_vk_logic_device, vertex->m_vk_vertex_buffer, nullptr);
+            vkFreeMemory(_vk_logic_device, vertex->m_vk_vertex_buffer_memory, nullptr);
+            delete vertex;
         }
     };
 
@@ -807,88 +1280,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
-        {
-            jevk11_shader_blob* shader_blob = new jevk11_shader_blob{};
-            assert(resource != nullptr
-                && resource->m_type == jegl_resource::type::SHADER
-                && resource->m_raw_shader_data != nullptr);
-
-            auto* vk_shader = new jevk11_shader();
-
-            VkShaderModuleCreateInfo vertex_shader_module_create_info = {};
-            vertex_shader_module_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-            vertex_shader_module_create_info.pNext = nullptr;
-            vertex_shader_module_create_info.flags = 0;
-            vertex_shader_module_create_info.codeSize =
-                resource->m_raw_shader_data->m_vertex_spirv_count * sizeof(jegl_shader::spir_v_code_t);
-            vertex_shader_module_create_info.pCode = resource->m_raw_shader_data->m_vertex_spirv_codes;
-
-            if (VK_SUCCESS != vkCreateShaderModule(
-                context->_vk_logic_device,
-                &vertex_shader_module_create_info,
-                nullptr,
-                &shader_blob->m_vertex_shader_module))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 vertex shader module.");
-            }
-
-            VkShaderModuleCreateInfo fragment_shader_module_create_info = {};
-            fragment_shader_module_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-            fragment_shader_module_create_info.pNext = nullptr;
-            fragment_shader_module_create_info.flags = 0;
-            fragment_shader_module_create_info.codeSize =
-                resource->m_raw_shader_data->m_fragment_spirv_count * sizeof(jegl_shader::spir_v_code_t);
-            fragment_shader_module_create_info.pCode = resource->m_raw_shader_data->m_fragment_spirv_codes;
-
-            if (VK_SUCCESS != vkCreateShaderModule(
-                context->_vk_logic_device,
-                &fragment_shader_module_create_info,
-                nullptr,
-                &shader_blob->m_fragment_shader_module))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 fragment shader module.");
-            }
-
-            VkPipelineShaderStageCreateInfo vertex_shader_stage_info = {};
-            vertex_shader_stage_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-            vertex_shader_stage_info.pNext = nullptr;
-            vertex_shader_stage_info.flags = 0;
-            vertex_shader_stage_info.stage = VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT;
-            vertex_shader_stage_info.module = shader_blob->m_vertex_shader_module;
-            vertex_shader_stage_info.pName = "main";
-
-            VkPipelineShaderStageCreateInfo fragment_shader_stage_info = {};
-            fragment_shader_stage_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-            fragment_shader_stage_info.pNext = nullptr;
-            fragment_shader_stage_info.flags = 0;
-            fragment_shader_stage_info.stage = VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT;
-            fragment_shader_stage_info.module = shader_blob->m_fragment_shader_module;
-            fragment_shader_stage_info.pName = "main";
-
-            shader_blob->m_shader_stage_infos[0] = vertex_shader_stage_info;
-            shader_blob->m_shader_stage_infos[1] = fragment_shader_stage_info;
-
-            for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
-            {
-                switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
-                {
-                case jegl_shader::uniform_type::INT:
-                    break;
-                case jegl_shader::uniform_type::FLOAT:
-                    break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    break;
-                default:
-                    abort();
-                }
-            }
-
-            return shader_blob;
-        }
+            return context->create_shader_blob(resource);
         case jegl_resource::type::TEXTURE:
             break;
         case jegl_resource::type::VERTEX:
@@ -909,11 +1301,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
             jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
 
             auto* shader_blob = std::launder(reinterpret_cast<jevk11_shader_blob*>(blob));
-
-            vkDestroyShaderModule(context->_vk_logic_device, shader_blob->m_vertex_shader_module, nullptr);
-            vkDestroyShaderModule(context->_vk_logic_device, shader_blob->m_fragment_shader_module, nullptr);
-
-            delete shader_blob;
+            context->destroy_shader_blob(shader_blob);
         }
 
     }
@@ -927,146 +1315,15 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
         {
             assert(blob != nullptr);
             auto* shader_blob = std::launder(reinterpret_cast<jevk11_shader_blob*>(blob));
-
-            std::vector<VkVertexInputAttributeDescription> attribute_desc(resource->m_raw_shader_data->m_vertex_in_count);
-            size_t vertex_point_data_size = 0;
-            for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
-            {
-                attribute_desc[i].binding = 0;
-                attribute_desc[i].location = (uint32_t)i;
-                attribute_desc[i].offset = (uint32_t)vertex_point_data_size;
-                switch(resource->m_raw_shader_data->m_vertex_in[i].m_type)
-                {
-                case jegl_shader::uniform_type::FLOAT:
-                    attribute_desc[i].format = VkFormat::VK_FORMAT_R32_SFLOAT;
-                    vertex_point_data_size += sizeof(float);
-                    break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    attribute_desc[i].format = VkFormat::VK_FORMAT_R32G32_SFLOAT;
-                    vertex_point_data_size += sizeof(float) * 2;
-                    break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    attribute_desc[i].format = VkFormat::VK_FORMAT_R32G32B32_SFLOAT;
-                    vertex_point_data_size += sizeof(float) * 3;
-                    break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    attribute_desc[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
-                    vertex_point_data_size += sizeof(float) * 4;
-                    break;
-                }                
-            }
-
-            VkVertexInputBindingDescription vertex_input_binding_description = {};
-            vertex_input_binding_description.binding = 0;
-            vertex_input_binding_description.stride = (uint32_t)vertex_point_data_size;
-            vertex_input_binding_description.inputRate = VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
-
-            /*
-            TODO:
-            vertexInputInfo.vertexBindingDescriptionCount = 1;
-            vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-            vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-            vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-            */
+            // OK, 终于要开始创建管线了，嘻嘻嘻嘻！从blob里读取管线配置，开始图形管线！
 
             break;
         }
         case jegl_resource::type::TEXTURE:
             break;
         case jegl_resource::type::VERTEX:
-        {
-            jevk111_vertex* vertex = new jevk111_vertex();
-
-            VkBufferCreateInfo vertex_buffer_create_info = {};
-            vertex_buffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            vertex_buffer_create_info.pNext = nullptr;
-            vertex_buffer_create_info.flags = 0;
-            vertex_buffer_create_info.size =
-                resource->m_raw_vertex_data->m_point_count *
-                resource->m_raw_vertex_data->m_data_count_per_point *
-                sizeof(float);
-            vertex_buffer_create_info.usage = VkBufferUsageFlagBits::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-            vertex_buffer_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
-
-            if (VK_SUCCESS != vkCreateBuffer(
-                context->_vk_logic_device,
-                &vertex_buffer_create_info,
-                nullptr,
-                &vertex->m_vk_vertex_buffer))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 vertex buffer.");
-            }
-
-            // 获取所需分配的内存类型
-            VkMemoryRequirements vertex_buffer_memory_requirements;
-            vkGetBufferMemoryRequirements(
-                context->_vk_logic_device,
-                vertex->m_vk_vertex_buffer,
-                &vertex_buffer_memory_requirements);
-
-            auto find_memory_type = [context](uint32_t type_filter, VkMemoryPropertyFlags properties)
-            {
-                VkPhysicalDeviceMemoryProperties memory_properties;
-                vkGetPhysicalDeviceMemoryProperties(context->_vk_device, &memory_properties);
-
-                for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i)
-                {
-                    if ((type_filter & (1 << i)) &&
-                        (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
-                    {
-                        return i;
-                    }
-                }
-                jeecs::debug::logfatal("Failed to find suitable memory type.");
-            };
-
-            VkMemoryAllocateInfo vertex_buffer_memory_allocate_info = {};
-            vertex_buffer_memory_allocate_info.sType = VkStructureType::VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-            vertex_buffer_memory_allocate_info.pNext = nullptr;
-            vertex_buffer_memory_allocate_info.allocationSize = vertex_buffer_memory_requirements.size;
-            vertex_buffer_memory_allocate_info.memoryTypeIndex = find_memory_type(
-                vertex_buffer_memory_requirements.memoryTypeBits,
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-            if (VK_SUCCESS != vkAllocateMemory(
-                context->_vk_logic_device,
-                &vertex_buffer_memory_allocate_info,
-                nullptr,
-                &vertex->m_vk_vertex_buffer_memory))
-            {
-                jeecs::debug::logfatal("Failed to allocate vk110 vertex buffer memory.");
-            }
-
-            if (VK_SUCCESS != vkBindBufferMemory(
-                context->_vk_logic_device,
-                vertex->m_vk_vertex_buffer,
-                vertex->m_vk_vertex_buffer_memory,
-                0))
-            {
-                jeecs::debug::logfatal("Failed to bind vk110 vertex buffer memory.");
-            }
-
-            void* vertex_buffer_memory_ptr = nullptr;
-            vkMapMemory(
-                context->_vk_logic_device,
-                vertex->m_vk_vertex_buffer_memory,
-                0,
-                vertex_buffer_memory_requirements.size,
-                0,
-                &vertex_buffer_memory_ptr);
-            memcpy(
-                vertex_buffer_memory_ptr, 
-                resource->m_raw_vertex_data->m_vertex_datas, 
-                vertex_buffer_create_info.size);
-            vkUnmapMemory(
-                context->_vk_logic_device, 
-                vertex->m_vk_vertex_buffer_memory);
-
-            resource->m_handle.m_ptr = vertex;
-
+            resource->m_handle.m_ptr = context->create_vertex_buffer(resource);
             break;
-        }
         case jegl_resource::type::FRAMEBUF:
             break;
         case jegl_resource::type::UNIFORMBUF:
@@ -1089,10 +1346,7 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
             break;
         case jegl_resource::type::VERTEX:
         {
-            jevk111_vertex* vertex = std::launder(reinterpret_cast<jevk111_vertex*>(resource->m_handle.m_ptr));
-            vkDestroyBuffer(context->_vk_logic_device, vertex->m_vk_vertex_buffer, nullptr);
-            vkFreeMemory(context->_vk_logic_device, vertex->m_vk_vertex_buffer_memory, nullptr);
-            delete vertex;
+            context->destroy_vertex_buffer(std::launder(reinterpret_cast<jevk111_vertex*>(resource->m_handle.m_ptr)));
             break;
         }
         case jegl_resource::type::FRAMEBUF:

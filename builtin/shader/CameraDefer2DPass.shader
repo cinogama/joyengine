@@ -39,7 +39,7 @@ public func frag(vf: v2f)
     let Albedo = je_light2d_defer_albedo;
     let SelfLumine = je_light2d_defer_self_luminescence;
 
-    let albedo_color_rgb = pow(texture(Albedo, vf.uv)->xyz, 2.2);
+    let albedo_color_rgb = pow(texture(Albedo, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
 
     let light_color_rgb = texture(Light, vf.uv)->xyz;
     let self_lumine_color_rgb = texture(SelfLumine, vf.uv)->xyz;
@@ -48,7 +48,7 @@ public func frag(vf: v2f)
     let mixed_color_rgb = max(float3::zero, albedo_color_rgb * glowing_color_rgb);
 
     let hdr_color_rgb = mixed_color_rgb / (mixed_color_rgb + float3::new(1., 1., 1.));
-    let hdr_ambient_with_gamma = pow(hdr_color_rgb, 1. / 2.2);
+    let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::new(1. / 2.2, 1. / 2.2, 1. / 2.2));
 
     return fout{
         color = float4::create(hdr_ambient_with_gamma, 1.)
