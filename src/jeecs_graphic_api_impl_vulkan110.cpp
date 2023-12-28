@@ -927,6 +927,48 @@ VK_API_DECL(vkDestroyDebugUtilsMessengerEXT)
         {
             assert(blob != nullptr);
             auto* shader_blob = std::launder(reinterpret_cast<jevk11_shader_blob*>(blob));
+
+            std::vector<VkVertexInputAttributeDescription> attribute_desc(resource->m_raw_shader_data->m_vertex_in_count);
+            size_t vertex_point_data_size = 0;
+            for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
+            {
+                attribute_desc[i].binding = 0;
+                attribute_desc[i].location = (uint32_t)i;
+                attribute_desc[i].offset = (uint32_t)vertex_point_data_size;
+                switch(resource->m_raw_shader_data->m_vertex_in[i].m_type)
+                {
+                case jegl_shader::uniform_type::FLOAT:
+                    attribute_desc[i].format = VkFormat::VK_FORMAT_R32_SFLOAT;
+                    vertex_point_data_size += sizeof(float);
+                    break;
+                case jegl_shader::uniform_type::FLOAT2:
+                    attribute_desc[i].format = VkFormat::VK_FORMAT_R32G32_SFLOAT;
+                    vertex_point_data_size += sizeof(float) * 2;
+                    break;
+                case jegl_shader::uniform_type::FLOAT3:
+                    attribute_desc[i].format = VkFormat::VK_FORMAT_R32G32B32_SFLOAT;
+                    vertex_point_data_size += sizeof(float) * 3;
+                    break;
+                case jegl_shader::uniform_type::FLOAT4:
+                    attribute_desc[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
+                    vertex_point_data_size += sizeof(float) * 4;
+                    break;
+                }                
+            }
+
+            VkVertexInputBindingDescription vertex_input_binding_description = {};
+            vertex_input_binding_description.binding = 0;
+            vertex_input_binding_description.stride = (uint32_t)vertex_point_data_size;
+            vertex_input_binding_description.inputRate = VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
+
+            /*
+            TODO:
+            vertexInputInfo.vertexBindingDescriptionCount = 1;
+            vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+            vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+            vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+            */
+
             break;
         }
         case jegl_resource::type::TEXTURE:
