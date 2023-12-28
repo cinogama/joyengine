@@ -3239,6 +3239,8 @@ namespace jeecs
         inline void logfatal(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_FATAL, format, args...);
+            je_clock_sleep_for(1.0);
+            abort();
         }
     }
 
@@ -3854,7 +3856,7 @@ namespace jeecs
                 if constexpr (std::is_copy_constructible<T>::value)
                     new(_ptr)T(*(const T*)_be_copy_ptr);
                 else
-                    debug::logfatal("This type: '%s' is not copy-constructible but you try to do it."
+                    debug::logerr("This type: '%s' is not copy-constructible but you try to do it."
                         , typeid(T).name());
             }
             static void mover(void* _ptr, void* _be_moved_ptr)
@@ -3862,7 +3864,7 @@ namespace jeecs
                 if constexpr (std::is_move_constructible<T>::value)
                     new(_ptr)T(std::move(*(T*)_be_moved_ptr));
                 else
-                    debug::logfatal("This type: '%s' is not move-constructible but you try to do it."
+                    debug::logerr("This type: '%s' is not move-constructible but you try to do it."
                         , typeid(T).name());
             }
             static const char* to_string(const void* _ptr)
@@ -3881,7 +3883,7 @@ namespace jeecs
                     return basic::make_new_string(*(const T*)_ptr);
 
                 static auto call_once = []() {
-                    debug::logfatal("This type: '%s' have no function named 'to_string'."
+                    debug::logerr("This type: '%s' have no function named 'to_string'."
                         , typeid(T).name());
                     return 0;
                     }();
@@ -3902,7 +3904,7 @@ namespace jeecs
                 else
                 {
                     static auto call_once = []() {
-                        debug::logfatal("This type: '%s' have no function named 'parse'."
+                        debug::logerr("This type: '%s' have no function named 'parse'."
                             , typeid(T).name());
                         return 0;
                         }();

@@ -1109,7 +1109,7 @@ namespace jeecs_impl
             }
             if (!prefab->is_valid())
             {
-                jeecs::debug::logfatal("It's not allowed to create entity with invalid prefab entity, very dangerous.");
+                jeecs::debug::logerr("It's not allowed to create entity with invalid prefab entity, very dangerous.");
                 return {};
             }
 

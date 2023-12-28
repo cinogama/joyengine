@@ -547,7 +547,7 @@ jegl_thread* jegl_start_graphic_thread(
             if (!*reador)
             {
                 err_api_no++;
-                jeecs::debug::logfatal("GraphicAPI function: %zu is invalid.",
+                jeecs::debug::logerr("GraphicAPI function: %zu is invalid.",
                     (size_t)(reador - (void**)thread_handle->m_apis));
             }
         }
@@ -565,7 +565,6 @@ jegl_thread* jegl_start_graphic_thread(
     if (thread_handle == nullptr)
     {
         jeecs::debug::logfatal("Fail to start up graphic thread, abort and return nullptr.");
-        return nullptr;
     }
 
     // Register finish functions

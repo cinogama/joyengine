@@ -2076,15 +2076,11 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     {
         jeecs::debug::logfatal("Failed to preprocess hlsl vertex shader: %s.",
             glslang_shader_get_info_log(hlsl_shader));
-        je_clock_sleep_for(1.0);
-        abort();
     }
     if (!glslang_shader_parse(hlsl_shader, &hlsl_shader_input))
     {
         jeecs::debug::logfatal("Failed to preprocess hlsl vertex shader: %s.",
             glslang_shader_get_info_log(hlsl_shader));
-        je_clock_sleep_for(1.0);
-        abort();
     }
 
     glslang_program_t* program = glslang_program_create();
@@ -2094,8 +2090,6 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     {
         jeecs::debug::logfatal("Failed to preprocess hlsl vertex program: %s.",
             glslang_program_get_info_log(program));
-        je_clock_sleep_for(1.0);
-        abort();
     }
 
     glslang_spv_options_t spv_options{};
@@ -2114,8 +2108,6 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     {
         jeecs::debug::logfatal("Failed to generate code hlsl vertex program: %s.",
             glslang_program_SPIRV_get_messages(program));
-        je_clock_sleep_for(1.0);
-        abort();
     }
 
     auto spir_v_code_len = glslang_program_SPIRV_get_size(program);

@@ -278,7 +278,7 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
 
             jeecs::debug::loginfo("Found audio device: %s.", current_device_name);
             if (current_device->m_openal_device == nullptr)
-                jeecs::debug::logfatal("Failed to open device: '%s'.", current_device_name);
+                jeecs::debug::logerr("Failed to open device: '%s'.", current_device_name);
         }
         else
             current_device = *fnd;
@@ -317,7 +317,7 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
     }
 
     if (_jeal_all_devices.size() == 0)
-        jeecs::debug::logfatal("No audio device found.");
+        jeecs::debug::logerr("No audio device found.");
 
     *out_len = _jeal_all_devices.size();
     return _jeal_all_devices.data();
