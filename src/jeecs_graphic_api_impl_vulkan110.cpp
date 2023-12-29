@@ -173,7 +173,11 @@ VK_API_PLATFORM_API_LIST
 
         VkPipelineLayout                                m_pipeline_layout;
     };
-
+    struct jevk11_texture
+    {
+        VkBuffer m_vk_texture_buffer;
+        VkDeviceMemory m_vk_texture_buffer_memory;
+    };
     struct jevk11_shader
     {
         VkShaderModule m_vk_shader_module;
@@ -313,14 +317,6 @@ VK_API_PLATFORM_API_LIST
             }
         }
 
-        jevk11_shader* create_vk_graphic_pipeline_(jegl_resource* shader)
-        {
-            // 开始创建vulkan的着色器模型
-            // NOTE: 我总感觉vulkan的图形管线这一概念和着色器很像
-            //       希望别让我失望（
-
-        }
-
 #define VK_API_DECL(name) PFN_##name name
         VK_API_LIST;
 #undef VK_API_DECL
@@ -338,7 +334,6 @@ VK_API_PLATFORM_API_LIST
             return VK_FALSE;
         }
 #endif
-
         struct physics_device_info
         {
             uint32_t queue_graphic_family_index;
@@ -782,6 +777,49 @@ VK_API_PLATFORM_API_LIST
             vkDestroyInstance(_vk_instance, nullptr);
         }
 
+        /////////////////////////////////////////////////////
+
+
+        uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties)
+        {
+            VkPhysicalDeviceMemoryProperties memory_properties;
+            vkGetPhysicalDeviceMemoryProperties(_vk_device, &memory_properties);
+
+            for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i)
+            {
+                if ((type_filter & (1 << i)) &&
+                    (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
+                {
+                    return i;
+                }
+            }
+            jeecs::debug::logfatal("Failed to find suitable memory type.");
+        };
+        VkDeviceMemory alloc_vk_device_memory(const VkMemoryRequirements& requirement, VkMemoryPropertyFlags properties)
+        {
+            VkDeviceMemory result;
+
+            VkMemoryAllocateInfo vertex_buffer_memory_allocate_info = {};
+            vertex_buffer_memory_allocate_info.sType = VkStructureType::VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            vertex_buffer_memory_allocate_info.pNext = nullptr;
+            vertex_buffer_memory_allocate_info.allocationSize = requirement.size;
+            vertex_buffer_memory_allocate_info.memoryTypeIndex = find_memory_type(
+                requirement.memoryTypeBits, properties);
+
+            if (VK_SUCCESS != vkAllocateMemory(
+                _vk_logic_device,
+                &vertex_buffer_memory_allocate_info,
+                nullptr,
+                &result))
+            {
+                jeecs::debug::logfatal("Failed to allocate vk110 device buffer memory.");
+            }
+
+            return result;
+        }
+
+        /////////////////////////////////////////////////////
+
         jevk11_shader_blob* create_shader_blob(jegl_resource* resource)
         {
             jevk11_shader_blob* shader_blob = new jevk11_shader_blob{};
@@ -841,25 +879,6 @@ VK_API_PLATFORM_API_LIST
 
             shader_blob->m_shader_stage_infos[0] = vertex_shader_stage_info;
             shader_blob->m_shader_stage_infos[1] = fragment_shader_stage_info;
-
-            for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
-            {
-                switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
-                {
-                case jegl_shader::uniform_type::INT:
-                    break;
-                case jegl_shader::uniform_type::FLOAT:
-                    break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    break;
-                default:
-                    abort();
-                }
-            }
 
             // 预备管线所需的资源~
 
@@ -1115,7 +1134,12 @@ VK_API_PLATFORM_API_LIST
             delete blob;
         }
 
-        jevk111_vertex* create_vertex_buffer(jegl_resource* resource)
+        jevk11_shader* create_shader_with_blob(jevk11_shader_blob* blob)
+        {
+            
+        }
+
+        jevk111_vertex* create_vertex_instance(jegl_resource* resource)
         {
             jevk111_vertex* vertex = new jevk111_vertex();
 
@@ -1146,39 +1170,11 @@ VK_API_PLATFORM_API_LIST
                 vertex->m_vk_vertex_buffer,
                 &vertex_buffer_memory_requirements);
 
-            auto find_memory_type = [this](uint32_t type_filter, VkMemoryPropertyFlags properties)
-                {
-                    VkPhysicalDeviceMemoryProperties memory_properties;
-                    vkGetPhysicalDeviceMemoryProperties(_vk_device, &memory_properties);
-
-                    for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i)
-                    {
-                        if ((type_filter & (1 << i)) &&
-                            (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
-                        {
-                            return i;
-                        }
-                    }
-                    jeecs::debug::logfatal("Failed to find suitable memory type.");
-                };
-
-            VkMemoryAllocateInfo vertex_buffer_memory_allocate_info = {};
-            vertex_buffer_memory_allocate_info.sType = VkStructureType::VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-            vertex_buffer_memory_allocate_info.pNext = nullptr;
-            vertex_buffer_memory_allocate_info.allocationSize = vertex_buffer_memory_requirements.size;
-            vertex_buffer_memory_allocate_info.memoryTypeIndex = find_memory_type(
-                vertex_buffer_memory_requirements.memoryTypeBits,
+            vertex->m_vk_vertex_buffer_memory = alloc_vk_device_memory(
+                vertex_buffer_memory_requirements, 
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-            if (VK_SUCCESS != vkAllocateMemory(
-                _vk_logic_device,
-                &vertex_buffer_memory_allocate_info,
-                nullptr,
-                &vertex->m_vk_vertex_buffer_memory))
-            {
-                jeecs::debug::logfatal("Failed to allocate vk110 vertex buffer memory.");
-            }
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+            );
 
             if (VK_SUCCESS != vkBindBufferMemory(
                 _vk_logic_device,
@@ -1207,11 +1203,24 @@ VK_API_PLATFORM_API_LIST
 
             return vertex;
         }
-        void destroy_vertex_buffer(jevk111_vertex* vertex)
+        void destroy_vertex_instance(jevk111_vertex* vertex)
         {
             vkDestroyBuffer(_vk_logic_device, vertex->m_vk_vertex_buffer, nullptr);
             vkFreeMemory(_vk_logic_device, vertex->m_vk_vertex_buffer_memory, nullptr);
             delete vertex;
+        }
+
+        jevk11_texture* create_texture_instance(jegl_resource* resource)
+        {
+            jevk11_texture* texture = new jevk11_texture;
+
+            TODO;
+
+            return texture;
+        }
+        void destroy_texture_instance(jevk11_texture* texture)
+        {
+            TODO;
         }
     };
 
@@ -1322,7 +1331,7 @@ VK_API_PLATFORM_API_LIST
         case jegl_resource::type::TEXTURE:
             break;
         case jegl_resource::type::VERTEX:
-            resource->m_handle.m_ptr = context->create_vertex_buffer(resource);
+            resource->m_handle.m_ptr = context->create_vertex_instance(resource);
             break;
         case jegl_resource::type::FRAMEBUF:
             break;
@@ -1346,7 +1355,7 @@ VK_API_PLATFORM_API_LIST
             break;
         case jegl_resource::type::VERTEX:
         {
-            context->destroy_vertex_buffer(std::launder(reinterpret_cast<jevk111_vertex*>(resource->m_handle.m_ptr)));
+            context->destroy_vertex_instance(std::launder(reinterpret_cast<jevk111_vertex*>(resource->m_handle.m_ptr)));
             break;
         }
         case jegl_resource::type::FRAMEBUF:
