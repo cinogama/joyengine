@@ -13,7 +13,7 @@
 
 #include <glslang_c_interface.h>
 #include <resource_limits_c.h>
-#include <spirv_cross_c.h>
+//#include <spirv_cross_c.h>
 
 void delete_shader_value(jegl_shader_value* shader_val)
 {
@@ -2049,6 +2049,7 @@ void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
     }
 }
 
+#if 0
 void _debug_jegl_regenerate_hlsl_from_spir_v(uint32_t* spir_v_code, size_t spir_v_ir_count)
 {
     spvc_context spir_v_cross_context = nullptr;
@@ -2073,7 +2074,6 @@ void _debug_jegl_regenerate_hlsl_from_spir_v(uint32_t* spir_v_code, size_t spir_
 
     spvc_context_destroy(spir_v_cross_context);
 }
-
 void _debug_jegl_regenerate_glsl_from_spir_v(uint32_t* spir_v_code, size_t spir_v_ir_count)
 {
     spvc_context spir_v_cross_context = nullptr;
@@ -2098,6 +2098,7 @@ void _debug_jegl_regenerate_glsl_from_spir_v(uint32_t* spir_v_code, size_t spir_
 
     spvc_context_destroy(spir_v_cross_context);
 }
+#endif
 
 jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment, size_t * out_codelen)
 {
