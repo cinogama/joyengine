@@ -13,6 +13,7 @@
 
 #include <glslang_c_interface.h>
 #include <resource_limits_c.h>
+#include <spirv_cross_c.h>
 
 void delete_shader_value(jegl_shader_value* shader_val)
 {
@@ -2048,6 +2049,56 @@ void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
     }
 }
 
+void _debug_jegl_regenerate_hlsl_from_spir_v(uint32_t* spir_v_code, size_t spir_v_ir_count)
+{
+    spvc_context spir_v_cross_context = nullptr;
+    spvc_context_create(&spir_v_cross_context);
+
+    spvc_parsed_ir ir = nullptr;
+    spvc_context_parse_spirv(spir_v_cross_context, spir_v_code, spir_v_ir_count, &ir);
+
+    spvc_compiler compiler = nullptr;
+    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_HLSL, ir, SPVC_CAPTURE_MODE_COPY, &compiler);
+
+    spvc_compiler_options options = nullptr;
+    spvc_compiler_create_compiler_options(compiler, &options);
+
+    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_HLSL_SHADER_MODEL, 50);
+
+    spvc_compiler_install_compiler_options(compiler, options);
+
+    // 转换成hlsl
+    const char* src = nullptr;
+    spvc_compiler_compile(compiler, &src);
+
+    spvc_context_destroy(spir_v_cross_context);
+}
+
+void _debug_jegl_regenerate_glsl_from_spir_v(uint32_t* spir_v_code, size_t spir_v_ir_count)
+{
+    spvc_context spir_v_cross_context = nullptr;
+    spvc_context_create(&spir_v_cross_context);
+
+    spvc_parsed_ir ir = nullptr;
+    spvc_context_parse_spirv(spir_v_cross_context, spir_v_code, spir_v_ir_count, &ir);
+
+    spvc_compiler compiler = nullptr;
+    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_COPY, &compiler);
+
+    spvc_compiler_options options = nullptr;
+    spvc_compiler_create_compiler_options(compiler, &options);
+
+    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION, 450);
+
+    spvc_compiler_install_compiler_options(compiler, options);
+
+    // 转换成glsl
+    const char* src = nullptr;
+    spvc_compiler_compile(compiler, &src);
+
+    spvc_context_destroy(spir_v_cross_context);
+}
+
 jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment, size_t * out_codelen)
 {
     glslang_input_t hlsl_shader_input;
@@ -2086,7 +2137,7 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     glslang_program_t* program = glslang_program_create();
     glslang_program_add_shader(program, hlsl_shader);
 
-    if (!glslang_program_link(program, GLSLANG_MSG_SPV_RULES_BIT | GLSLANG_MSG_VULKAN_RULES_BIT))
+    if (!glslang_program_link(program, GLSLANG_MSG_SPV_RULES_BIT))
     {
         jeecs::debug::logfatal("Failed to preprocess hlsl vertex program: %s.",
             glslang_program_get_info_log(program));
@@ -2120,6 +2171,9 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
 
     memcpy(codes, spir_v_codes, 
         spir_v_code_len * sizeof(jegl_shader::spir_v_code_t));
+
+    /*_debug_jegl_regenerate_hlsl_from_spir_v(spir_v_codes, spir_v_code_len);
+    _debug_jegl_regenerate_glsl_from_spir_v(spir_v_codes, spir_v_code_len);*/
 
     glslang_shader_delete(hlsl_shader);
     glslang_program_delete(program);

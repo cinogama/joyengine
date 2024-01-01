@@ -431,7 +431,7 @@ namespace jeecs
                 io_declear += "};\n";
 
                 io_declear += "struct v2f_t\n{\n";
-                io_declear += "    float4 vout_position: SV_POSITION0;\n";
+                io_declear += "    float4 vout_position: SV_POSITION;\n";
                 size_t outid = 0;
                 INT_COUNT = 0;
                 FLOAT_COUNT = 0;
@@ -582,7 +582,7 @@ namespace jeecs
                 io_declear += "\n";
 
                 io_declear += "struct v2f_t\n{\n";
-                io_declear += "    float4 vout_position: SV_POSITION0;\n";
+                io_declear += "    float4 vout_position: SV_POSITION;\n";
 
                 size_t outid = 0;
                 size_t INT_COUNT = 0;
