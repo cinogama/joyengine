@@ -281,7 +281,7 @@ VK_API_PLATFORM_API_LIST
         VkRenderPass                _vk_render_pass;
 
         VkCommandPool               _vk_command_pool;
-        std::vector<VkCommandBuffer>_vk_command_buffers;
+        VkCommandBuffer             _vk_command_buffer;
 
         // 俩信号量！
         VkSemaphore                 _vk_image_available_semaphore;
@@ -291,8 +291,27 @@ VK_API_PLATFORM_API_LIST
         uint32_t                    _vk_presenting_swapchain_image_index;
         jevk11_framebuffer* _vk_current_target_framebuffer;
 
+        void destroy_swap_chain()
+        {
+            vkDestroyCommandPool(_vk_logic_device, _vk_command_pool, nullptr);
+
+            vkDestroySemaphore(_vk_logic_device, _vk_render_finished_semaphore, nullptr);
+            vkDestroySemaphore(_vk_logic_device, _vk_image_available_semaphore, nullptr);
+            vkDestroyRenderPass(_vk_logic_device, _vk_render_pass, nullptr);
+
+            for (auto& framebuffers : _vk_swapchain_framebuffers)
+                vkDestroyFramebuffer(_vk_logic_device, framebuffers, nullptr);
+
+            for (auto& view : _vk_swapchain_image_views)
+                vkDestroyImageView(_vk_logic_device, view, nullptr);
+        }
+        
         void recreate_swap_chain_for_current_surface(size_t w, size_t h)
         {
+            vkDeviceWaitIdle(_vk_logic_device);
+
+            _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
+
             // 创建默认的渲染通道，这部分代码后续应该可以复用
             VkAttachmentDescription default_render_attachment = {};
             default_render_attachment.flags = 0;
@@ -410,15 +429,9 @@ VK_API_PLATFORM_API_LIST
             swapchain_create_info.clipped = VK_TRUE;
 
             swapchain_create_info.oldSwapchain = _vk_swapchain;
-            // TODO: Old swapchain may need be send to vkDestroySwapchainKHR?
-            // Close old swapchain's view
+
             if (_vk_swapchain != nullptr)
-            {
-                for (auto& framebuffers : _vk_swapchain_framebuffers)
-                    vkDestroyFramebuffer(_vk_logic_device, framebuffers, nullptr);
-                for (auto& view : _vk_swapchain_image_views)
-                    vkDestroyImageView(_vk_logic_device, view, nullptr);
-            }
+                destroy_swap_chain();
 
             if (VK_SUCCESS != vkCreateSwapchainKHR(_vk_logic_device, &swapchain_create_info, nullptr, &_vk_swapchain))
             {
@@ -478,6 +491,59 @@ VK_API_PLATFORM_API_LIST
                 {
                     jeecs::debug::logfatal("Failed to create vk110 swapchain framebuffer.");
                 }
+            }
+
+            VkSemaphoreCreateInfo semaphore_create_info = {};
+            semaphore_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            semaphore_create_info.pNext = nullptr;
+            semaphore_create_info.flags = 0;
+
+            if (VK_SUCCESS != vkCreateSemaphore(
+                _vk_logic_device,
+                &semaphore_create_info,
+                nullptr,
+                &_vk_image_available_semaphore))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 image available semaphore.");
+            }
+
+            if (VK_SUCCESS != vkCreateSemaphore(
+                _vk_logic_device,
+                &semaphore_create_info,
+                nullptr,
+                &_vk_render_finished_semaphore))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 render finished semaphore.");
+            }
+
+            // 创建默认的命令池
+            VkCommandPoolCreateInfo default_command_pool_create_info = {};
+            default_command_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            default_command_pool_create_info.pNext = nullptr;
+            default_command_pool_create_info.flags =
+                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
+                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            default_command_pool_create_info.queueFamilyIndex = _vk_device_queue_graphic_family_index;
+
+            if (VK_SUCCESS != vkCreateCommandPool(
+                _vk_logic_device,
+                &default_command_pool_create_info,
+                nullptr,
+                &_vk_command_pool))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 default command pool.");
+            }
+
+            VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
+            command_buffer_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            command_buffer_alloc_info.pNext = nullptr;
+            command_buffer_alloc_info.commandPool = _vk_command_pool;
+            command_buffer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            command_buffer_alloc_info.commandBufferCount = 1;
+
+            if (vkAllocateCommandBuffers(_vk_logic_device, &command_buffer_alloc_info, &_vk_command_buffer) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to allocate command buffers!");
             }
         }
 
@@ -591,8 +657,6 @@ VK_API_PLATFORM_API_LIST
             _vk_msaa_config = config->m_msaa;
             if (_vk_msaa_config == 0)
                 _vk_msaa_config = 1;
-
-            _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
 
             _vk_swapchain = nullptr;
             _vk_current_target_framebuffer = nullptr;
@@ -914,82 +978,13 @@ VK_API_PLATFORM_API_LIST
             recreate_swap_chain_for_current_surface(
                 _vk_jegl_interface->m_interface_width,
                 _vk_jegl_interface->m_interface_height);
-
-            // 创建默认的命令池
-            VkCommandPoolCreateInfo default_command_pool_create_info = {};
-            default_command_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-            default_command_pool_create_info.pNext = nullptr;
-            default_command_pool_create_info.flags =
-                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
-                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-            default_command_pool_create_info.queueFamilyIndex = _vk_device_queue_graphic_family_index;
-
-            if (VK_SUCCESS != vkCreateCommandPool(
-                _vk_logic_device,
-                &default_command_pool_create_info,
-                nullptr,
-                &_vk_command_pool))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 default command pool.");
-            }
-
-            _vk_command_buffers.resize(_vk_swapchain_framebuffers.size());
-            VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
-            command_buffer_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            command_buffer_alloc_info.pNext = nullptr;
-            command_buffer_alloc_info.commandPool = _vk_command_pool;
-            command_buffer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            command_buffer_alloc_info.commandBufferCount = (uint32_t)_vk_command_buffers.size();
-
-            if (vkAllocateCommandBuffers(_vk_logic_device, &command_buffer_alloc_info, _vk_command_buffers.data()) != VK_SUCCESS)
-            {
-                throw std::runtime_error("failed to allocate command buffers!");
-            }
-
-            for (auto& command_buffer : _vk_command_buffers)
-            {
-                // 假装做一次录制命令
-            }
-
-            VkSemaphoreCreateInfo semaphore_create_info = {};
-            semaphore_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            semaphore_create_info.pNext = nullptr;
-            semaphore_create_info.flags = 0;
-
-            if (VK_SUCCESS != vkCreateSemaphore(
-                _vk_logic_device,
-                &semaphore_create_info,
-                nullptr,
-                &_vk_image_available_semaphore))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 image available semaphore.");
-            }
-
-            if (VK_SUCCESS != vkCreateSemaphore(
-                _vk_logic_device,
-                &semaphore_create_info,
-                nullptr,
-                &_vk_render_finished_semaphore))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 render finished semaphore.");
-            }
         }
 
         void shutdown()
         {
             vkDeviceWaitIdle(_vk_logic_device);
 
-            vkDestroySemaphore(_vk_logic_device, _vk_render_finished_semaphore, nullptr);
-            vkDestroySemaphore(_vk_logic_device, _vk_image_available_semaphore, nullptr);
-            vkDestroyCommandPool(_vk_logic_device, _vk_command_pool, nullptr);
-
-            vkDestroyRenderPass(_vk_logic_device, _vk_render_pass, nullptr);
-
-            for (auto& framebuffers : _vk_swapchain_framebuffers)
-                vkDestroyFramebuffer(_vk_logic_device, framebuffers, nullptr);
-
-            for (auto& view : _vk_swapchain_image_views)
-                vkDestroyImageView(_vk_logic_device, view, nullptr);
+            destroy_swap_chain();
 
             vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
             vkDestroyDevice(_vk_logic_device, nullptr);
@@ -1599,30 +1594,30 @@ VK_API_PLATFORM_API_LIST
 
         void pre_update()
         {
-            if (_vk_presenting_swapchain_image_index != typing::INVALID_UINT32)
-            {
-                vkQueueWaitIdle(_vk_logic_device_present_queue);
+            if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
+                return;
 
-                VkPresentInfoKHR present_info = {};
-                present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-                present_info.pNext = nullptr;
-                present_info.waitSemaphoreCount = 1;
-                present_info.pWaitSemaphores = &_vk_render_finished_semaphore;
+            vkQueueWaitIdle(_vk_logic_device_present_queue);
 
-                VkSwapchainKHR swapchains[] = { _vk_swapchain };
-                present_info.swapchainCount = 1;
-                present_info.pSwapchains = swapchains;
-                present_info.pImageIndices = &_vk_presenting_swapchain_image_index;
-                present_info.pResults = nullptr;
+            VkPresentInfoKHR present_info = {};
+            present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            present_info.pNext = nullptr;
+            present_info.waitSemaphoreCount = 1;
+            present_info.pWaitSemaphores = &_vk_render_finished_semaphore;
 
-                vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
-            }
+            VkSwapchainKHR swapchains[] = { _vk_swapchain };
+            present_info.swapchainCount = 1;
+            present_info.pSwapchains = swapchains;
+            present_info.pImageIndices = &_vk_presenting_swapchain_image_index;
+            present_info.pResults = nullptr;
+
+            vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
         }
 
         void update()
         {
             // 开始录制！
-            vkAcquireNextImageKHR(
+            auto state = vkAcquireNextImageKHR(
                 _vk_logic_device,
                 _vk_swapchain,
                 UINT64_MAX,
@@ -1630,8 +1625,26 @@ VK_API_PLATFORM_API_LIST
                 VK_NULL_HANDLE,
                 &_vk_presenting_swapchain_image_index);
 
+            if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR)
+            {
+                if (_vk_jegl_interface->m_interface_width != 0 && _vk_jegl_interface->m_interface_height != 0)
+                {
+                    recreate_swap_chain_for_current_surface(
+                        _vk_jegl_interface->m_interface_width,
+                        _vk_jegl_interface->m_interface_height
+                    );
+                    assert(_vk_presenting_swapchain_image_index == typing::INVALID_UINT32);
+                }
+                else
+                    // Just mark for stopping renderering.
+                    _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
+            }
+
+            if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
+                return;
+
             begin_command_buffer_record(
-                _vk_command_buffers[_vk_presenting_swapchain_image_index]);
+                _vk_command_buffer);
 
             VkRenderPassBeginInfo render_pass_begin_info = {};
             render_pass_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1646,18 +1659,19 @@ VK_API_PLATFORM_API_LIST
             render_pass_begin_info.pClearValues = &clear_color;
 
             vkCmdBeginRenderPass(
-                _vk_command_buffers[_vk_presenting_swapchain_image_index],
+                _vk_command_buffer,
                 &render_pass_begin_info,
                 VkSubpassContents::VK_SUBPASS_CONTENTS_INLINE);
         }
 
         void late_update()
         {
+            if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
+                return;
+
             // 结束录制！
-            vkCmdEndRenderPass(
-                _vk_command_buffers[_vk_presenting_swapchain_image_index]); 
-            end_command_buffer_record(
-                _vk_command_buffers[_vk_presenting_swapchain_image_index]);
+            vkCmdEndRenderPass(_vk_command_buffer);
+            end_command_buffer_record(_vk_command_buffer);
 
             VkSemaphore wait_semaphores[] = { _vk_image_available_semaphore };
             VkPipelineStageFlags wait_stages[] = { VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -1669,7 +1683,7 @@ VK_API_PLATFORM_API_LIST
             submit_info.pWaitSemaphores = wait_semaphores;
             submit_info.pWaitDstStageMask = wait_stages;
             submit_info.commandBufferCount = 1;
-            submit_info.pCommandBuffers = &_vk_command_buffers[_vk_presenting_swapchain_image_index];
+            submit_info.pCommandBuffers = &_vk_command_buffer;
 
             VkSemaphore signal_semaphores[] = { _vk_render_finished_semaphore };
             submit_info.signalSemaphoreCount = 1;
@@ -1686,7 +1700,7 @@ VK_API_PLATFORM_API_LIST
         void cmd_bind_shader_pipeline(jevk11_shader * shader)
         {
             vkCmdBindPipeline(
-                _vk_command_buffers[_vk_presenting_swapchain_image_index],
+                _vk_command_buffer,
                 VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
                 shader->prepare_pipeline(this));
         }
@@ -1695,14 +1709,14 @@ VK_API_PLATFORM_API_LIST
             VkBuffer vertex_buffers[] = { vertex->m_vk_vertex_buffer };
             VkDeviceSize offsets[] = { 0 };
             vkCmdBindVertexBuffers(
-                _vk_command_buffers[_vk_presenting_swapchain_image_index],
+                _vk_command_buffer,
                 0,
                 1,
                 vertex_buffers,
                 offsets);
 
             vkCmdDraw(
-                _vk_command_buffers[_vk_presenting_swapchain_image_index],
+                _vk_command_buffer,
                 vertex->m_vertex_point_count,
                 1,
                 0,
