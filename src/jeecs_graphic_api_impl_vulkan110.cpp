@@ -262,7 +262,7 @@ VK_API_PLATFORM_API_LIST
         std::vector<jevk11_color_attachment> 
                         m_attachments;
         VkCommandBuffer m_command_buffer;
-        VkSemaphore     m_render_finished_semaphore;
+        // VkSemaphore     m_render_finished_semaphore;
         VkFence         m_render_finished_fence;
         VkFramebuffer   m_framebuffer;
 
@@ -467,7 +467,7 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to create vk110 swapchain framebuffer.");
             }
 
-            result->m_render_finished_semaphore = create_semaphore();
+            // result->m_render_finished_semaphore = create_semaphore();
             result->m_render_finished_fence = create_fence();
 
             VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
@@ -487,7 +487,7 @@ VK_API_PLATFORM_API_LIST
         void destroy_frame_buffer(jevk11_framebuffer* fb)
         {
             vkFreeCommandBuffers(_vk_logic_device, _vk_command_pool, 1, &fb->m_command_buffer);
-            destroy_semaphore(fb->m_render_finished_semaphore);
+            // destroy_semaphore(fb->m_render_finished_semaphore);
             destroy_fence(fb->m_render_finished_fence);
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
             for (auto& attachment : fb->m_attachments)
@@ -1750,11 +1750,11 @@ VK_API_PLATFORM_API_LIST
             submit_info.pCommandBuffers =
                 &_vk_current_target_framebuffer->m_command_buffer;
 
-            VkSemaphore signal_semaphores[] = {
+            /*VkSemaphore signal_semaphores[] = {
                 _vk_current_target_framebuffer->m_render_finished_semaphore
-            };
-            submit_info.signalSemaphoreCount = 1;
-            submit_info.pSignalSemaphores = signal_semaphores;
+            };*/
+            submit_info.signalSemaphoreCount = 0;
+            submit_info.pSignalSemaphores = nullptr;
 
             if (vkQueueSubmit(
                 _vk_logic_device_graphic_queue, 
@@ -1809,15 +1809,21 @@ VK_API_PLATFORM_API_LIST
             VkPresentInfoKHR present_info = {};
             present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present_info.pNext = nullptr;
-            present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = 
-                &_vk_current_swapchain_framebuffer->m_render_finished_semaphore;
+            present_info.waitSemaphoreCount = 0;
+            present_info.pWaitSemaphores = nullptr;
 
             VkSwapchainKHR swapchains[] = { _vk_swapchain };
             present_info.swapchainCount = 1;
             present_info.pSwapchains = swapchains;
             present_info.pImageIndices = &_vk_presenting_swapchain_image_index;
             present_info.pResults = nullptr;
+
+            vkWaitForFences(
+                _vk_logic_device, 
+                1, 
+                &_vk_current_swapchain_framebuffer->m_render_finished_fence, 
+                VK_TRUE,
+                UINT64_MAX);
 
             vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
         }
