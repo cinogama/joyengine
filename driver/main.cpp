@@ -112,6 +112,8 @@ public func frag(_: v2f)
         jegl_using_resource(shader->resouce());
         jegl_draw_vertex(vertex->resouce());
 
+        jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
+
         jegl_using_resource(shader_b->resouce());
         jegl_draw_vertex(vertex->resouce());
     };

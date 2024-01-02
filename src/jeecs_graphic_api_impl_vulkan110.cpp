@@ -206,6 +206,7 @@ VK_API_PLATFORM_API_LIST
             VkPipelineVertexInputStateCreateInfo            m_vertex_input_state_create_info;
             VkPipelineInputAssemblyStateCreateInfo          m_input_assembly_state_create_info;
             VkRect2D                                        m_scissor;
+            VkPipelineViewportStateCreateInfo               m_viewport_state_create_info;
             VkPipelineRasterizationStateCreateInfo          m_rasterization_state_create_info;
             VkPipelineMultisampleStateCreateInfo            m_multi_sample_state_create_info;
             VkPipelineColorBlendAttachmentState             m_color_blend_attachment_state;
@@ -1259,6 +1260,15 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_scissor.offset = { 0, 0 };
             shader_blob->m_scissor.extent = _vk_surface_capabilities.currentExtent;
 
+            shader_blob->m_viewport_state_create_info = {};
+            shader_blob->m_viewport_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            shader_blob->m_viewport_state_create_info.pNext = nullptr;
+            shader_blob->m_viewport_state_create_info.flags = 0;
+            shader_blob->m_viewport_state_create_info.viewportCount = 0;
+            shader_blob->m_viewport_state_create_info.pViewports = nullptr;
+            shader_blob->m_viewport_state_create_info.scissorCount = 1;
+            shader_blob->m_viewport_state_create_info.pScissors = &shader_blob->m_scissor;
+
             shader_blob->m_rasterization_state_create_info = {};
             shader_blob->m_rasterization_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
             shader_blob->m_rasterization_state_create_info.pNext = nullptr;
@@ -1823,7 +1833,7 @@ VK_API_PLATFORM_API_LIST
         pipeline_create_info.pVertexInputState = &m_blob_data->m_vertex_input_state_create_info;
         pipeline_create_info.pInputAssemblyState = &m_blob_data->m_input_assembly_state_create_info;
         pipeline_create_info.pTessellationState = nullptr;
-        pipeline_create_info.pViewportState = nullptr;
+        pipeline_create_info.pViewportState = &m_blob_data->m_viewport_state_create_info;
         pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
         pipeline_create_info.pMultisampleState = &m_blob_data->m_multi_sample_state_create_info;
         pipeline_create_info.pDepthStencilState = nullptr;
