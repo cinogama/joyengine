@@ -152,6 +152,7 @@ VK_API_DECL(vkDestroyFramebuffer);\
 VK_API_DECL(vkCreateCommandPool);\
 VK_API_DECL(vkDestroyCommandPool);\
 VK_API_DECL(vkAllocateCommandBuffers);\
+VK_API_DECL(vkFreeCommandBuffers);\
 VK_API_DECL(vkBeginCommandBuffer);\
 VK_API_DECL(vkEndCommandBuffer);\
 VK_API_DECL(vkCmdBeginRenderPass);\
@@ -242,7 +243,20 @@ VK_API_PLATFORM_API_LIST
     };
     struct jevk11_framebuffer
     {
+        struct jevk11_color_attachment
+        {
+            VkImage         m_image;
+            VkImageView     m_image_view;
+        };
+        VkRenderPass    m_rendpass;
+        std::vector<jevk11_color_attachment> 
+                        m_attachments;
+        VkCommandBuffer m_command_buffer;
 
+        VkSemaphore     m_image_available_semaphore;
+        VkSemaphore     m_render_finished_semaphore;
+
+        VkFramebuffer   m_framebuffer;
     };
     struct jevk11_vertex
     {
@@ -259,7 +273,7 @@ VK_API_PLATFORM_API_LIST
 
         // Vk的全局实例
         VkInstance          _vk_instance;
-        basic_interface* _vk_jegl_interface;
+        basic_interface*    _vk_jegl_interface;
 
         VkPhysicalDevice    _vk_device;
         uint32_t            _vk_device_queue_graphic_family_index;
@@ -274,43 +288,13 @@ VK_API_PLATFORM_API_LIST
         VkPresentModeKHR            _vk_surface_present_mode;
 
         VkSwapchainKHR              _vk_swapchain;
-        std::vector<VkImage>        _vk_swapchain_images;
-        std::vector<VkImageView>    _vk_swapchain_image_views;// 看起来这个破烂玩意儿就是framebuf了
-        std::vector<VkFramebuffer>  _vk_swapchain_framebuffers;
-
-        VkRenderPass                _vk_render_pass;
 
         VkCommandPool               _vk_command_pool;
-        VkCommandBuffer             _vk_command_buffer;
 
-        // 俩信号量！
-        VkSemaphore                 _vk_image_available_semaphore;
-        VkSemaphore                 _vk_render_finished_semaphore;
-
-        // Following is runtime vk states.
-        uint32_t                    _vk_presenting_swapchain_image_index;
-        jevk11_framebuffer* _vk_current_target_framebuffer;
-
-        void destroy_swap_chain()
+        // TODO: 这里的参数应该还包含fb的附件配置信息
+        jevk11_framebuffer* create_frame_buffer(size_t w, size_t h, const std::vector<VkImage> &attachment_images) 
         {
-            vkDestroyCommandPool(_vk_logic_device, _vk_command_pool, nullptr);
-
-            vkDestroySemaphore(_vk_logic_device, _vk_render_finished_semaphore, nullptr);
-            vkDestroySemaphore(_vk_logic_device, _vk_image_available_semaphore, nullptr);
-            vkDestroyRenderPass(_vk_logic_device, _vk_render_pass, nullptr);
-
-            for (auto& framebuffers : _vk_swapchain_framebuffers)
-                vkDestroyFramebuffer(_vk_logic_device, framebuffers, nullptr);
-
-            for (auto& view : _vk_swapchain_image_views)
-                vkDestroyImageView(_vk_logic_device, view, nullptr);
-        }
-        
-        void recreate_swap_chain_for_current_surface(size_t w, size_t h)
-        {
-            vkDeviceWaitIdle(_vk_logic_device);
-
-            _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
+            jevk11_framebuffer* result = new jevk11_framebuffer{};
 
             // 创建默认的渲染通道，这部分代码后续应该可以复用
             VkAttachmentDescription default_render_attachment = {};
@@ -363,10 +347,127 @@ VK_API_PLATFORM_API_LIST
                 _vk_logic_device,
                 &default_render_pass_create_info,
                 nullptr,
-                &_vk_render_pass))
+                &result->m_rendpass))
             {
                 jeecs::debug::logfatal("Failed to create vk110 default render pass.");
             }
+
+            result->m_attachments.resize(attachment_images.size());
+            for (size_t i = 0; i < attachment_images.size(); ++i)
+            {
+                auto& target_attachment = result->m_attachments[i];
+
+                target_attachment.m_image = attachment_images[i];
+
+                VkImageViewCreateInfo image_view_create_info = {};
+                image_view_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                image_view_create_info.pNext = nullptr;
+                image_view_create_info.flags = 0;
+                image_view_create_info.image = target_attachment.m_image;
+                image_view_create_info.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+                image_view_create_info.format = _vk_surface_format.format;
+                image_view_create_info.components.r = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+                image_view_create_info.components.g = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+                image_view_create_info.components.b = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+                image_view_create_info.components.a = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+                image_view_create_info.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                image_view_create_info.subresourceRange.baseMipLevel = 0;
+                image_view_create_info.subresourceRange.levelCount = 1;
+                image_view_create_info.subresourceRange.baseArrayLayer = 0;
+                image_view_create_info.subresourceRange.layerCount = 1;
+
+                if (VK_SUCCESS != vkCreateImageView(
+                    _vk_logic_device, &image_view_create_info, nullptr, &target_attachment.m_image_view))
+                {
+                    jeecs::debug::logfatal("Failed to create vk110 swapchain image view.");
+                }
+            }
+
+            std::vector<VkImageView> attachment_image_views(result->m_attachments.size());
+            for (size_t i = 0; i< result->m_attachments.size(); ++i)
+            {
+                attachment_image_views[i] = result->m_attachments[i].m_image_view;
+            }
+
+            VkFramebufferCreateInfo framebuffer_create_info = {};
+            framebuffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebuffer_create_info.pNext = nullptr;
+            framebuffer_create_info.flags = 0;
+            framebuffer_create_info.renderPass = result->m_rendpass;
+            framebuffer_create_info.attachmentCount = (uint32_t)attachment_image_views.size();
+            framebuffer_create_info.pAttachments = attachment_image_views.data();
+            framebuffer_create_info.width = (uint32_t)w;
+            framebuffer_create_info.height = (uint32_t)h;
+            framebuffer_create_info.layers = 1;
+
+            if (VK_SUCCESS != vkCreateFramebuffer(_vk_logic_device, &framebuffer_create_info, nullptr, &result->m_framebuffer))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 swapchain framebuffer.");
+            }
+
+            VkSemaphoreCreateInfo semaphore_create_info = {};
+            semaphore_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            semaphore_create_info.pNext = nullptr;
+            semaphore_create_info.flags = 0;
+
+            if (VK_SUCCESS != vkCreateSemaphore(
+                _vk_logic_device,
+                &semaphore_create_info,
+                nullptr,
+                &result->m_image_available_semaphore))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 image available semaphore.");
+            }
+
+            if (VK_SUCCESS != vkCreateSemaphore(
+                _vk_logic_device,
+                &semaphore_create_info,
+                nullptr,
+                &result->m_render_finished_semaphore))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 render finished semaphore.");
+            }
+
+            VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
+            command_buffer_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            command_buffer_alloc_info.pNext = nullptr;
+            command_buffer_alloc_info.commandPool = _vk_command_pool;
+            command_buffer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            command_buffer_alloc_info.commandBufferCount = 1;
+
+            if (vkAllocateCommandBuffers(_vk_logic_device, &command_buffer_alloc_info, &result->m_command_buffer) != VK_SUCCESS)
+            {
+                jeecs::debug::logfatal("Failed to allocate command buffers!");
+            }
+        }
+        void destroy_frame_buffer(jevk11_framebuffer* fb)
+        {
+            vkFreeCommandBuffers(_vk_logic_device, _vk_command_pool, 1, &fb->m_command_buffer);
+            vkDestroySemaphore(_vk_logic_device, fb->m_image_available_semaphore, nullptr);
+            vkDestroySemaphore(_vk_logic_device, fb->m_render_finished_semaphore, nullptr);
+            vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
+            for (auto& attachment : fb->m_attachments)
+                vkDestroyImageView(_vk_logic_device, attachment.m_image_view, nullptr);
+            vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr); 
+        }
+
+        // Following is runtime vk states.
+        uint32_t                            _vk_presenting_swapchain_image_index;
+        std::vector<jevk11_framebuffer*>    _vk_current_target_framebuffers;
+
+        void destroy_swap_chain()
+        {
+            for (auto* fb : _vk_current_target_framebuffers)
+                destroy_frame_buffer(fb);
+   
+            vkDestroyCommandPool(_vk_logic_device, _vk_command_pool, nullptr);
+        }
+        
+        void recreate_swap_chain_for_current_surface(size_t w, size_t h)
+        {
+            vkDeviceWaitIdle(_vk_logic_device);
+
+            _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
 
             VkExtent2D used_extent = { (uint32_t)w, (uint32_t)h };
             if (_vk_surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
@@ -443,108 +544,18 @@ VK_API_PLATFORM_API_LIST
 
             assert(swapchain_real_image_count == swapchain_image_count);
 
-            _vk_swapchain_images.resize(swapchain_real_image_count);
-            vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, _vk_swapchain_images.data());
+            std::vector<VkImage> swapchain_images(swapchain_real_image_count);
+            vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, swapchain_images.data());
 
-            _vk_swapchain_image_views.resize(swapchain_real_image_count);
+            _vk_current_target_framebuffers.resize(swapchain_real_image_count);
             for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
             {
-                VkImageViewCreateInfo image_view_create_info = {};
-                image_view_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-                image_view_create_info.pNext = nullptr;
-                image_view_create_info.flags = 0;
-                image_view_create_info.image = _vk_swapchain_images[i];
-                image_view_create_info.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
-                image_view_create_info.format = _vk_surface_format.format;
-                image_view_create_info.components.r = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-                image_view_create_info.components.g = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-                image_view_create_info.components.b = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-                image_view_create_info.components.a = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-                image_view_create_info.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
-                image_view_create_info.subresourceRange.baseMipLevel = 0;
-                image_view_create_info.subresourceRange.levelCount = 1;
-                image_view_create_info.subresourceRange.baseArrayLayer = 0;
-                image_view_create_info.subresourceRange.layerCount = 1;
-
-                if (VK_SUCCESS != vkCreateImageView(_vk_logic_device, &image_view_create_info, nullptr, &_vk_swapchain_image_views[i]))
-                {
-                    jeecs::debug::logfatal("Failed to create vk110 swapchain image view.");
-                }
-            }
-
-            _vk_swapchain_framebuffers.resize(_vk_swapchain_image_views.size());
-
-            for (size_t i = 0; i < _vk_swapchain_image_views.size(); ++i)
-            {
-                VkFramebufferCreateInfo framebuffer_create_info = {};
-                framebuffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-                framebuffer_create_info.pNext = nullptr;
-                framebuffer_create_info.flags = 0;
-                framebuffer_create_info.renderPass = _vk_render_pass;
-                framebuffer_create_info.attachmentCount = 1;
-                framebuffer_create_info.pAttachments = &_vk_swapchain_image_views[i];
-                framebuffer_create_info.width = used_extent.width;
-                framebuffer_create_info.height = used_extent.height;
-                framebuffer_create_info.layers = 1;
-
-                if (VK_SUCCESS != vkCreateFramebuffer(_vk_logic_device, &framebuffer_create_info, nullptr, &_vk_swapchain_framebuffers[i]))
-                {
-                    jeecs::debug::logfatal("Failed to create vk110 swapchain framebuffer.");
-                }
-            }
-
-            VkSemaphoreCreateInfo semaphore_create_info = {};
-            semaphore_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            semaphore_create_info.pNext = nullptr;
-            semaphore_create_info.flags = 0;
-
-            if (VK_SUCCESS != vkCreateSemaphore(
-                _vk_logic_device,
-                &semaphore_create_info,
-                nullptr,
-                &_vk_image_available_semaphore))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 image available semaphore.");
-            }
-
-            if (VK_SUCCESS != vkCreateSemaphore(
-                _vk_logic_device,
-                &semaphore_create_info,
-                nullptr,
-                &_vk_render_finished_semaphore))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 render finished semaphore.");
-            }
-
-            // 创建默认的命令池
-            VkCommandPoolCreateInfo default_command_pool_create_info = {};
-            default_command_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-            default_command_pool_create_info.pNext = nullptr;
-            default_command_pool_create_info.flags =
-                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
-                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-            default_command_pool_create_info.queueFamilyIndex = _vk_device_queue_graphic_family_index;
-
-            if (VK_SUCCESS != vkCreateCommandPool(
-                _vk_logic_device,
-                &default_command_pool_create_info,
-                nullptr,
-                &_vk_command_pool))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 default command pool.");
-            }
-
-            VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
-            command_buffer_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            command_buffer_alloc_info.pNext = nullptr;
-            command_buffer_alloc_info.commandPool = _vk_command_pool;
-            command_buffer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            command_buffer_alloc_info.commandBufferCount = 1;
-
-            if (vkAllocateCommandBuffers(_vk_logic_device, &command_buffer_alloc_info, &_vk_command_buffer) != VK_SUCCESS)
-            {
-                throw std::runtime_error("failed to allocate command buffers!");
-            }
+                _vk_current_target_framebuffers[i] = create_frame_buffer(
+                    (size_t)used_extent.width,
+                    (size_t)used_extent.height,
+                    { swapchain_images[i] }
+                );
+            }           
         }
 
 #define VK_API_DECL(name) PFN_##name name
@@ -659,7 +670,6 @@ VK_API_PLATFORM_API_LIST
                 _vk_msaa_config = 1;
 
             _vk_swapchain = nullptr;
-            _vk_current_target_framebuffer = nullptr;
 
             // 获取所有支持的层
             uint32_t vk_layer_count;
@@ -973,6 +983,24 @@ VK_API_PLATFORM_API_LIST
             else
             {
                 jeecs::debug::logfatal("Failed to create vk110 swapchain, unsupported present mode.");
+            }
+
+            // 创建默认的命令池
+            VkCommandPoolCreateInfo default_command_pool_create_info = {};
+            default_command_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            default_command_pool_create_info.pNext = nullptr;
+            default_command_pool_create_info.flags =
+                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
+                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            default_command_pool_create_info.queueFamilyIndex = _vk_device_queue_graphic_family_index;
+
+            if (VK_SUCCESS != vkCreateCommandPool(
+                _vk_logic_device,
+                &default_command_pool_create_info,
+                nullptr,
+                &_vk_command_pool))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 default command pool.");
             }
 
             recreate_swap_chain_for_current_surface(
@@ -1599,11 +1627,14 @@ VK_API_PLATFORM_API_LIST
 
             vkQueueWaitIdle(_vk_logic_device_present_queue);
 
+            jevk11_framebuffer* this_frame_buffer = 
+                _vk_current_target_framebuffers[_vk_presenting_swapchain_image_index];
+
             VkPresentInfoKHR present_info = {};
             present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present_info.pNext = nullptr;
             present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = &_vk_render_finished_semaphore;
+            present_info.pWaitSemaphores = &this_frame_buffer->m_render_finished_semaphore;
 
             VkSwapchainKHR swapchains[] = { _vk_swapchain };
             present_info.swapchainCount = 1;
@@ -1691,7 +1722,7 @@ VK_API_PLATFORM_API_LIST
 
             if (vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)
             {
-                throw std::runtime_error("failed to submit draw command buffer!");
+                jeecs::debug::logfatal("Failed to submit draw command buffer!");
             }
         }
 
