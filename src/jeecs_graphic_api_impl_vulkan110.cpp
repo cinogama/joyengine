@@ -160,6 +160,7 @@ VK_API_DECL(vkCmdEndRenderPass);\
 VK_API_DECL(vkCmdBindPipeline);\
 VK_API_DECL(vkCmdBindVertexBuffers);\
 VK_API_DECL(vkCmdDraw);\
+VK_API_DECL(vkCmdSetViewport);\
 \
 VK_API_DECL(vkCreateSemaphore);\
 VK_API_DECL(vkDestroySemaphore);\
@@ -204,9 +205,7 @@ VK_API_PLATFORM_API_LIST
             VkVertexInputBindingDescription                 m_vertex_input_binding_description;
             VkPipelineVertexInputStateCreateInfo            m_vertex_input_state_create_info;
             VkPipelineInputAssemblyStateCreateInfo          m_input_assembly_state_create_info;
-            VkViewport                                      m_viewport;
             VkRect2D                                        m_scissor;
-            VkPipelineViewportStateCreateInfo               m_viewport_state_create_info;
             VkPipelineRasterizationStateCreateInfo          m_rasterization_state_create_info;
             VkPipelineMultisampleStateCreateInfo            m_multi_sample_state_create_info;
             VkPipelineColorBlendAttachmentState             m_color_blend_attachment_state;
@@ -252,11 +251,11 @@ VK_API_PLATFORM_API_LIST
         std::vector<jevk11_color_attachment> 
                         m_attachments;
         VkCommandBuffer m_command_buffer;
-
-        VkSemaphore     m_image_available_semaphore;
         VkSemaphore     m_render_finished_semaphore;
-
         VkFramebuffer   m_framebuffer;
+
+        size_t          m_width;
+        size_t          m_height;
     };
     struct jevk11_vertex
     {
@@ -287,14 +286,42 @@ VK_API_PLATFORM_API_LIST
         VkSurfaceFormatKHR          _vk_surface_format;
         VkPresentModeKHR            _vk_surface_present_mode;
 
-        VkSwapchainKHR              _vk_swapchain;
+        VkSwapchainKHR                      _vk_swapchain;
+        std::vector<jevk11_framebuffer*>    _vk_swapchain_framebuffer;
 
         VkCommandPool               _vk_command_pool;
+        VkSemaphore                 _vk_rendering_image_ready_semaphore;
+
+        VkSemaphore create_semaphore()
+        {
+            VkSemaphoreCreateInfo semaphore_create_info = {};
+            semaphore_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            semaphore_create_info.pNext = nullptr;
+            semaphore_create_info.flags = 0;
+
+            VkSemaphore result = nullptr;
+            if (VK_SUCCESS != vkCreateSemaphore(
+                _vk_logic_device,
+                &semaphore_create_info,
+                nullptr,
+                &result))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 semaphore.");
+            }
+            return result;
+        }
+        void destroy_semaphore(VkSemaphore semaphore)
+        {
+            vkDestroySemaphore(_vk_logic_device, semaphore, nullptr);
+        }
 
         // TODO: 这里的参数应该还包含fb的附件配置信息
         jevk11_framebuffer* create_frame_buffer(size_t w, size_t h, const std::vector<VkImage> &attachment_images) 
         {
             jevk11_framebuffer* result = new jevk11_framebuffer{};
+
+            result->m_width = w;
+            result->m_height = h;
 
             // 创建默认的渲染通道，这部分代码后续应该可以复用
             VkAttachmentDescription default_render_attachment = {};
@@ -405,28 +432,7 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to create vk110 swapchain framebuffer.");
             }
 
-            VkSemaphoreCreateInfo semaphore_create_info = {};
-            semaphore_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            semaphore_create_info.pNext = nullptr;
-            semaphore_create_info.flags = 0;
-
-            if (VK_SUCCESS != vkCreateSemaphore(
-                _vk_logic_device,
-                &semaphore_create_info,
-                nullptr,
-                &result->m_image_available_semaphore))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 image available semaphore.");
-            }
-
-            if (VK_SUCCESS != vkCreateSemaphore(
-                _vk_logic_device,
-                &semaphore_create_info,
-                nullptr,
-                &result->m_render_finished_semaphore))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 render finished semaphore.");
-            }
+            result->m_render_finished_semaphore = create_semaphore();
 
             VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
             command_buffer_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -439,12 +445,13 @@ VK_API_PLATFORM_API_LIST
             {
                 jeecs::debug::logfatal("Failed to allocate command buffers!");
             }
+
+            return result;
         }
         void destroy_frame_buffer(jevk11_framebuffer* fb)
         {
             vkFreeCommandBuffers(_vk_logic_device, _vk_command_pool, 1, &fb->m_command_buffer);
-            vkDestroySemaphore(_vk_logic_device, fb->m_image_available_semaphore, nullptr);
-            vkDestroySemaphore(_vk_logic_device, fb->m_render_finished_semaphore, nullptr);
+            destroy_semaphore(fb->m_render_finished_semaphore);
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
             for (auto& attachment : fb->m_attachments)
                 vkDestroyImageView(_vk_logic_device, attachment.m_image_view, nullptr);
@@ -453,11 +460,12 @@ VK_API_PLATFORM_API_LIST
 
         // Following is runtime vk states.
         uint32_t                            _vk_presenting_swapchain_image_index;
-        std::vector<jevk11_framebuffer*>    _vk_current_target_framebuffers;
+        jevk11_framebuffer*                 _vk_current_swapchain_framebuffer;
+        jevk11_framebuffer*                 _vk_current_target_framebuffer;
 
         void destroy_swap_chain()
         {
-            for (auto* fb : _vk_current_target_framebuffers)
+            for (auto* fb : _vk_swapchain_framebuffer)
                 destroy_frame_buffer(fb);
    
             vkDestroyCommandPool(_vk_logic_device, _vk_command_pool, nullptr);
@@ -547,10 +555,10 @@ VK_API_PLATFORM_API_LIST
             std::vector<VkImage> swapchain_images(swapchain_real_image_count);
             vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, swapchain_images.data());
 
-            _vk_current_target_framebuffers.resize(swapchain_real_image_count);
+            _vk_swapchain_framebuffer.resize(swapchain_real_image_count);
             for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
             {
-                _vk_current_target_framebuffers[i] = create_frame_buffer(
+                _vk_swapchain_framebuffer[i] = create_frame_buffer(
                     (size_t)used_extent.width,
                     (size_t)used_extent.height,
                     { swapchain_images[i] }
@@ -1003,6 +1011,8 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to create vk110 default command pool.");
             }
 
+            _vk_rendering_image_ready_semaphore = create_semaphore();
+
             recreate_swap_chain_for_current_surface(
                 _vk_jegl_interface->m_interface_width,
                 _vk_jegl_interface->m_interface_height);
@@ -1013,8 +1023,10 @@ VK_API_PLATFORM_API_LIST
             vkDeviceWaitIdle(_vk_logic_device);
 
             destroy_swap_chain();
-
             vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
+
+            destroy_semaphore(_vk_rendering_image_ready_semaphore);
+
             vkDestroyDevice(_vk_logic_device, nullptr);
 
             if (_vk_debug_manager != nullptr)
@@ -1243,27 +1255,9 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_input_assembly_state_create_info.topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
             shader_blob->m_input_assembly_state_create_info.primitiveRestartEnable = VK_FALSE;
 
-            // TODO: 此属性也应当允许自定义，不然玩个p
-            shader_blob->m_viewport = {};
-            shader_blob->m_viewport.x = 0.0f;
-            shader_blob->m_viewport.y = 0.0f;
-            shader_blob->m_viewport.width = (float)_vk_surface_capabilities.currentExtent.width;
-            shader_blob->m_viewport.height = (float)_vk_surface_capabilities.currentExtent.height;
-            shader_blob->m_viewport.minDepth = 0.0f;
-            shader_blob->m_viewport.maxDepth = 1.0f;
-
             shader_blob->m_scissor = {};
             shader_blob->m_scissor.offset = { 0, 0 };
             shader_blob->m_scissor.extent = _vk_surface_capabilities.currentExtent;
-
-            shader_blob->m_viewport_state_create_info = {};
-            shader_blob->m_viewport_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-            shader_blob->m_viewport_state_create_info.pNext = nullptr;
-            shader_blob->m_viewport_state_create_info.flags = 0;
-            shader_blob->m_viewport_state_create_info.viewportCount = 1;
-            shader_blob->m_viewport_state_create_info.pViewports = &shader_blob->m_viewport;
-            shader_blob->m_viewport_state_create_info.scissorCount = 1;
-            shader_blob->m_viewport_state_create_info.pScissors = &shader_blob->m_scissor;
 
             shader_blob->m_rasterization_state_create_info = {};
             shader_blob->m_rasterization_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -1430,8 +1424,8 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_dynamic_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
             shader_blob->m_dynamic_state_create_info.pNext = nullptr;
             shader_blob->m_dynamic_state_create_info.flags = 0;
-            // shader_blob->m_dynamic_state_create_info.dynamicStateCount = sizeof(jevk11_shader_blob::blob_data::m_dynamic_states) / sizeof(VkDynamicState);
-            // shader_blob->m_dynamic_state_create_info.pDynamicStates = jevk11_shader_blob::blob_data::m_dynamic_states;
+            shader_blob->m_dynamic_state_create_info.dynamicStateCount = sizeof(jevk11_shader_blob::blob_data::m_dynamic_states) / sizeof(VkDynamicState);
+            shader_blob->m_dynamic_state_create_info.pDynamicStates = jevk11_shader_blob::blob_data::m_dynamic_states;
 
             // 创建管道布局
             VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
@@ -1620,6 +1614,74 @@ VK_API_PLATFORM_API_LIST
 
         /////////////////////////////////////////////////////
 
+        void begin_frame_buffer(jevk11_framebuffer* framebuf, size_t x, size_t y, size_t w, size_t h)
+        {
+            _vk_current_target_framebuffer = framebuf;
+            begin_command_buffer_record(_vk_current_target_framebuffer->m_command_buffer);
+
+            VkRenderPassBeginInfo render_pass_begin_info = {};
+            render_pass_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            render_pass_begin_info.pNext = nullptr;
+            render_pass_begin_info.renderPass = _vk_current_target_framebuffer->m_rendpass;
+            render_pass_begin_info.framebuffer = _vk_current_target_framebuffer->m_framebuffer;
+            render_pass_begin_info.renderArea.offset = { 0, 0 };
+            render_pass_begin_info.renderArea.extent = _vk_surface_capabilities.currentExtent;
+
+            // TODO: 这个破烂得移除掉
+            VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 0.0f };
+            render_pass_begin_info.clearValueCount = 1;
+            render_pass_begin_info.pClearValues = &clear_color;
+
+            // NOTE: Pipeline的viewport的纵向坐标应当翻转以兼容opengl3和dx11实现
+            if (w == 0) w = framebuf->m_width;
+            if (h == 0) h = framebuf->m_height;
+
+            VkViewport viewport = {};
+            viewport.x = (float)x;
+            viewport.y = (float)framebuf->m_height - (float)y;
+            viewport.width = (float)w;
+            viewport.height = -(float)h;
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            
+            vkCmdSetViewport(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &viewport);
+
+            vkCmdBeginRenderPass(
+                _vk_current_target_framebuffer->m_command_buffer,
+                &render_pass_begin_info,
+                VkSubpassContents::VK_SUBPASS_CONTENTS_INLINE);
+        }
+        void finish_frame_buffer()
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+            vkCmdEndRenderPass(_vk_current_target_framebuffer->m_command_buffer);
+            end_command_buffer_record(_vk_current_target_framebuffer->m_command_buffer);
+
+            VkSemaphore wait_semaphores[] = { _vk_rendering_image_ready_semaphore };
+            VkPipelineStageFlags wait_stages[] = { VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+
+            VkSubmitInfo submit_info = {};
+            submit_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submit_info.pNext = nullptr;
+            submit_info.waitSemaphoreCount = 1;
+            submit_info.pWaitSemaphores = wait_semaphores;
+            submit_info.pWaitDstStageMask = wait_stages;
+            submit_info.commandBufferCount = 1;
+            submit_info.pCommandBuffers =
+                &_vk_current_target_framebuffer->m_command_buffer;
+
+            VkSemaphore signal_semaphores[] = {
+                _vk_current_target_framebuffer->m_render_finished_semaphore };
+            submit_info.signalSemaphoreCount = 1;
+            submit_info.pSignalSemaphores = signal_semaphores;
+
+            if (vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)
+            {
+                jeecs::debug::logfatal("Failed to submit draw command buffer!");
+            }
+            _vk_current_target_framebuffer = nullptr;
+        }
+
         void pre_update()
         {
             if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
@@ -1627,14 +1689,15 @@ VK_API_PLATFORM_API_LIST
 
             vkQueueWaitIdle(_vk_logic_device_present_queue);
 
-            jevk11_framebuffer* this_frame_buffer = 
-                _vk_current_target_framebuffers[_vk_presenting_swapchain_image_index];
+            assert(_vk_current_swapchain_framebuffer == 
+                _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
 
             VkPresentInfoKHR present_info = {};
             present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present_info.pNext = nullptr;
             present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = &this_frame_buffer->m_render_finished_semaphore;
+            present_info.pWaitSemaphores = 
+                &_vk_current_swapchain_framebuffer->m_render_finished_semaphore;
 
             VkSwapchainKHR swapchains[] = { _vk_swapchain };
             present_info.swapchainCount = 1;
@@ -1652,7 +1715,7 @@ VK_API_PLATFORM_API_LIST
                 _vk_logic_device,
                 _vk_swapchain,
                 UINT64_MAX,
-                _vk_image_available_semaphore,
+                _vk_rendering_image_ready_semaphore,
                 VK_NULL_HANDLE,
                 &_vk_presenting_swapchain_image_index);
 
@@ -1674,25 +1737,10 @@ VK_API_PLATFORM_API_LIST
             if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
                 return;
 
-            begin_command_buffer_record(
-                _vk_command_buffer);
+            _vk_current_swapchain_framebuffer =
+                _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index];
 
-            VkRenderPassBeginInfo render_pass_begin_info = {};
-            render_pass_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            render_pass_begin_info.pNext = nullptr;
-            render_pass_begin_info.renderPass = _vk_render_pass;
-            render_pass_begin_info.framebuffer = _vk_swapchain_framebuffers[_vk_presenting_swapchain_image_index];
-            render_pass_begin_info.renderArea.offset = { 0, 0 };
-            render_pass_begin_info.renderArea.extent = _vk_surface_capabilities.currentExtent;
-
-            VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
-            render_pass_begin_info.clearValueCount = 1;
-            render_pass_begin_info.pClearValues = &clear_color;
-
-            vkCmdBeginRenderPass(
-                _vk_command_buffer,
-                &render_pass_begin_info,
-                VkSubpassContents::VK_SUBPASS_CONTENTS_INLINE);
+            begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
         }
 
         void late_update()
@@ -1700,54 +1748,48 @@ VK_API_PLATFORM_API_LIST
             if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
                 return;
 
+            assert(_vk_current_swapchain_framebuffer ==
+                _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
+
             // 结束录制！
-            vkCmdEndRenderPass(_vk_command_buffer);
-            end_command_buffer_record(_vk_command_buffer);
-
-            VkSemaphore wait_semaphores[] = { _vk_image_available_semaphore };
-            VkPipelineStageFlags wait_stages[] = { VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-
-            VkSubmitInfo submit_info = {};
-            submit_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submit_info.pNext = nullptr;
-            submit_info.waitSemaphoreCount = 1;
-            submit_info.pWaitSemaphores = wait_semaphores;
-            submit_info.pWaitDstStageMask = wait_stages;
-            submit_info.commandBufferCount = 1;
-            submit_info.pCommandBuffers = &_vk_command_buffer;
-
-            VkSemaphore signal_semaphores[] = { _vk_render_finished_semaphore };
-            submit_info.signalSemaphoreCount = 1;
-            submit_info.pSignalSemaphores = signal_semaphores;
-
-            if (vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)
-            {
-                jeecs::debug::logfatal("Failed to submit draw command buffer!");
-            }
+            finish_frame_buffer();
         }
 
         /////////////////////////////////////////////////////
-
+        void cmd_clear_framebuf_color(float color[4])
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+            //for (auto& attachment : _vk_current_target_framebuffer->m_attachments)
+            //{
+            //    // TODO: 考虑深度缓冲区的问题，深度缓冲区不能用这个方法清空
+            //    vkCmdClearColorImage(
+            //        _vk_current_target_framebuffer->m_command_buffer,
+            //        attachment.m_image,   
+            //        );
+            //}
+        }
         void cmd_bind_shader_pipeline(jevk11_shader * shader)
         {
+            assert(_vk_current_target_framebuffer != nullptr);
             vkCmdBindPipeline(
-                _vk_command_buffer,
+                _vk_current_target_framebuffer->m_command_buffer,
                 VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
                 shader->prepare_pipeline(this));
         }
         void cmd_draw_vertex(jevk11_vertex* vertex)
         {
+            assert(_vk_current_target_framebuffer != nullptr);
             VkBuffer vertex_buffers[] = { vertex->m_vk_vertex_buffer };
             VkDeviceSize offsets[] = { 0 };
             vkCmdBindVertexBuffers(
-                _vk_command_buffer,
+                _vk_current_target_framebuffer->m_command_buffer,
                 0,
                 1,
                 vertex_buffers,
                 offsets);
 
             vkCmdDraw(
-                _vk_command_buffer,
+                _vk_current_target_framebuffer->m_command_buffer,
                 vertex->m_vertex_point_count,
                 1,
                 0,
@@ -1763,11 +1805,9 @@ VK_API_PLATFORM_API_LIST
     }
     VkPipeline jevk11_shader::prepare_pipeline(jegl_vk110_context* context)
     {
-        VkRenderPass target_pass = context->_vk_render_pass;
-        if (context->_vk_current_target_framebuffer != nullptr)
-        {
-            abort(); // TODO;
-        }
+        assert(context->_vk_current_target_framebuffer != nullptr);
+ 
+        VkRenderPass target_pass = context->_vk_current_target_framebuffer->m_rendpass;
         assert(target_pass != nullptr);
 
         auto fnd = m_target_pass_pipelines.find(target_pass);
@@ -1783,7 +1823,7 @@ VK_API_PLATFORM_API_LIST
         pipeline_create_info.pVertexInputState = &m_blob_data->m_vertex_input_state_create_info;
         pipeline_create_info.pInputAssemblyState = &m_blob_data->m_input_assembly_state_create_info;
         pipeline_create_info.pTessellationState = nullptr;
-        pipeline_create_info.pViewportState = &m_blob_data->m_viewport_state_create_info;
+        pipeline_create_info.pViewportState = nullptr;
         pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
         pipeline_create_info.pMultisampleState = &m_blob_data->m_multi_sample_state_create_info;
         pipeline_create_info.pDepthStencilState = nullptr;
@@ -1999,11 +2039,25 @@ VK_API_PLATFORM_API_LIST
     {
     }
 
-    void set_rend_to_framebuffer(jegl_thread::custom_thread_data_t, jegl_resource*, size_t, size_t, size_t, size_t)
+    void set_rend_to_framebuffer(jegl_thread::custom_thread_data_t ctx, jegl_resource* framebuf, size_t x, size_t y, size_t w, size_t h)
     {
+        jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
+
+        jevk11_framebuffer* target_framebuf;
+        if (framebuf == nullptr)
+            target_framebuf = context->_vk_current_swapchain_framebuffer;
+        else
+        {
+            jegl_using_resource(framebuf);
+            target_framebuf = std::launder(reinterpret_cast<jevk11_framebuffer*>(framebuf->m_handle.m_ptr));
+        }
+
+        context->finish_frame_buffer();
+        context->begin_frame_buffer(target_framebuf, x, y, w, h);
     }
-    void clear_framebuffer_color(jegl_thread::custom_thread_data_t, float[4])
+    void clear_framebuffer_color(jegl_thread::custom_thread_data_t ctx, float color[4])
     {
+
     }
     void clear_framebuffer_depth(jegl_thread::custom_thread_data_t)
     {

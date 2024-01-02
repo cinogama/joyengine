@@ -1859,12 +1859,10 @@ namespace jeecs::graphic::api::dx11
         }
 
         auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
-        size_t buf_w, buf_h;
-        buf_w = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_width : context->WINDOWS_SIZE_WIDTH;
-        buf_h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->WINDOWS_SIZE_HEIGHT;
+        size_t buf_h = framw_buffer_raw != nullptr ? framw_buffer_raw->m_height : context->WINDOWS_SIZE_HEIGHT;
 
         if (w == 0)
-            w = buf_w;
+            w = framw_buffer_raw != nullptr ? framw_buffer_raw->m_width : context->WINDOWS_SIZE_WIDTH;
         if (h == 0)
             h = buf_h;
 
