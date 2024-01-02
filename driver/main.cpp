@@ -19,13 +19,13 @@ int main(int argc, char** argv)
     config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
     config.m_enable_resize = true;
     config.m_msaa = 0;
-    config.m_width = 256;
-    config.m_height = 256;
+    config.m_width = 512;
+    config.m_height = 512;
     config.m_fps = 60;
     config.m_title = "Demo";
     config.m_userdata = nullptr;
 
-    jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
+    jegl_set_host_graphic_api(jegl_using_opengl3_apis);
     jegl_thread* gthread = jegl_uhost_get_gl_thread(jegl_uhost_get_or_create_for_universe(u.handle(), &config));
 
     assert(gthread != nullptr);
@@ -103,9 +103,8 @@ public func frag(_: v2f)
     std::function<void(void)> ff = [&]()
     {
         // 画点东西，用指定的着色器渲染指定的模型
-        jegl_rend_to_framebuffer(nullptr, 0, 0, 128, 128);
-
-        float clear_color[4] = { 0.f,0.f,0.f,0.f };
+        
+        float clear_color[4] = { 1.f,1.f,1.f,1.f };
         jegl_clear_framebuffer_color(clear_color);
         jegl_clear_framebuffer_depth();
 

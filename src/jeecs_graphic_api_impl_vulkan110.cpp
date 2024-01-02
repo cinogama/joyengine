@@ -161,9 +161,17 @@ VK_API_DECL(vkCmdBindPipeline);\
 VK_API_DECL(vkCmdBindVertexBuffers);\
 VK_API_DECL(vkCmdDraw);\
 VK_API_DECL(vkCmdSetViewport);\
+VK_API_DECL(vkCmdSetScissor);\
+VK_API_DECL(vkCmdClearAttachments);\
 \
 VK_API_DECL(vkCreateSemaphore);\
 VK_API_DECL(vkDestroySemaphore);\
+VK_API_DECL(vkWaitSemaphores);\
+\
+VK_API_DECL(vkCreateFence);\
+VK_API_DECL(vkDestroyFence);\
+VK_API_DECL(vkWaitForFences);\
+VK_API_DECL(vkResetFences);\
 \
 VK_API_DECL(vkCreateRenderPass);\
 VK_API_DECL(vkDestroyRenderPass);\
@@ -193,6 +201,7 @@ VK_API_PLATFORM_API_LIST
             {
                 //VkDynamicState::VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY,
                 VkDynamicState::VK_DYNAMIC_STATE_VIEWPORT,
+                VkDynamicState::VK_DYNAMIC_STATE_SCISSOR,
             };
 
             jegl_vk110_context* m_context;
@@ -205,6 +214,7 @@ VK_API_PLATFORM_API_LIST
             VkVertexInputBindingDescription                 m_vertex_input_binding_description;
             VkPipelineVertexInputStateCreateInfo            m_vertex_input_state_create_info;
             VkPipelineInputAssemblyStateCreateInfo          m_input_assembly_state_create_info;
+            VkViewport                                      m_viewport;
             VkRect2D                                        m_scissor;
             VkPipelineViewportStateCreateInfo               m_viewport_state_create_info;
             VkPipelineRasterizationStateCreateInfo          m_rasterization_state_create_info;
@@ -253,10 +263,13 @@ VK_API_PLATFORM_API_LIST
                         m_attachments;
         VkCommandBuffer m_command_buffer;
         VkSemaphore     m_render_finished_semaphore;
+        VkFence         m_render_finished_fence;
         VkFramebuffer   m_framebuffer;
 
         size_t          m_width;
         size_t          m_height;
+
+        size_t          m_rend_rounds;
     };
     struct jevk11_vertex
     {
@@ -291,7 +304,7 @@ VK_API_PLATFORM_API_LIST
         std::vector<jevk11_framebuffer*>    _vk_swapchain_framebuffer;
 
         VkCommandPool               _vk_command_pool;
-        VkSemaphore                 _vk_rendering_image_ready_semaphore;
+        VkFence                     _vk_rendering_image_ready_fence;
 
         VkSemaphore create_semaphore()
         {
@@ -316,10 +329,31 @@ VK_API_PLATFORM_API_LIST
             vkDestroySemaphore(_vk_logic_device, semaphore, nullptr);
         }
 
+        VkFence create_fence()
+        {
+            VkFenceCreateInfo fence_create_info = {};
+            fence_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fence_create_info.pNext = nullptr;
+            fence_create_info.flags = 0; // 创建时必须被设置为空就绪状态
+
+            VkFence result = nullptr;
+            if (VK_SUCCESS != vkCreateFence(_vk_logic_device, &fence_create_info, nullptr, &result))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 fence.");
+            }
+            return result;
+        }
+        void destroy_fence(VkFence fence)
+        {
+            vkDestroyFence(_vk_logic_device, fence, nullptr);
+        }
+
         // TODO: 这里的参数应该还包含fb的附件配置信息
         jevk11_framebuffer* create_frame_buffer(size_t w, size_t h, const std::vector<VkImage> &attachment_images) 
         {
             jevk11_framebuffer* result = new jevk11_framebuffer{};
+
+            result->m_rend_rounds = 0;
 
             result->m_width = w;
             result->m_height = h;
@@ -329,7 +363,7 @@ VK_API_PLATFORM_API_LIST
             default_render_attachment.flags = 0;
             default_render_attachment.format = _vk_surface_format.format;
             default_render_attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-            default_render_attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR;
+            default_render_attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             default_render_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
             default_render_attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             default_render_attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -434,6 +468,7 @@ VK_API_PLATFORM_API_LIST
             }
 
             result->m_render_finished_semaphore = create_semaphore();
+            result->m_render_finished_fence = create_fence();
 
             VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
             command_buffer_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -453,6 +488,7 @@ VK_API_PLATFORM_API_LIST
         {
             vkFreeCommandBuffers(_vk_logic_device, _vk_command_pool, 1, &fb->m_command_buffer);
             destroy_semaphore(fb->m_render_finished_semaphore);
+            destroy_fence(fb->m_render_finished_fence);
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
             for (auto& attachment : fb->m_attachments)
                 vkDestroyImageView(_vk_logic_device, attachment.m_image_view, nullptr);
@@ -460,6 +496,7 @@ VK_API_PLATFORM_API_LIST
         }
 
         // Following is runtime vk states.
+        size_t                              _vk_rend_rounds;   
         uint32_t                            _vk_presenting_swapchain_image_index;
         jevk11_framebuffer*                 _vk_current_swapchain_framebuffer;
         jevk11_framebuffer*                 _vk_current_target_framebuffer;
@@ -580,8 +617,7 @@ VK_API_PLATFORM_API_LIST
             const VkDebugUtilsMessengerCallbackDataEXT* info,
             void* userdata)
         {
-            // jeecs::debug::logerr("[Vulkan] %s", info->pMessage);
-            fprintf(stderr, "\n%s\n", info->pMessage);
+            jeecs::debug::logerr("[Vulkan] %s", info->pMessage);
             return VK_FALSE;
         }
 #endif
@@ -674,6 +710,8 @@ VK_API_PLATFORM_API_LIST
 
         void init_vulkan(const jegl_interface_config* config)
         {
+            _vk_rend_rounds = 0;
+
             _vk_msaa_config = config->m_msaa;
             if (_vk_msaa_config == 0)
                 _vk_msaa_config = 1;
@@ -1012,7 +1050,7 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to create vk110 default command pool.");
             }
 
-            _vk_rendering_image_ready_semaphore = create_semaphore();
+            _vk_rendering_image_ready_fence = create_fence();
 
             recreate_swap_chain_for_current_surface(
                 _vk_jegl_interface->m_interface_width,
@@ -1026,7 +1064,7 @@ VK_API_PLATFORM_API_LIST
             destroy_swap_chain();
             vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
 
-            destroy_semaphore(_vk_rendering_image_ready_semaphore);
+            destroy_fence(_vk_rendering_image_ready_fence);
 
             vkDestroyDevice(_vk_logic_device, nullptr);
 
@@ -1256,6 +1294,14 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_input_assembly_state_create_info.topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
             shader_blob->m_input_assembly_state_create_info.primitiveRestartEnable = VK_FALSE;
 
+            shader_blob->m_viewport = {};
+            shader_blob->m_viewport.x = 0;
+            shader_blob->m_viewport.y = 0;
+            shader_blob->m_viewport.width = (float)_vk_surface_capabilities.currentExtent.width;
+            shader_blob->m_viewport.height = (float)_vk_surface_capabilities.currentExtent.height;
+            shader_blob->m_viewport.minDepth = 0;
+            shader_blob->m_viewport.maxDepth = 1;
+
             shader_blob->m_scissor = {};
             shader_blob->m_scissor.offset = { 0, 0 };
             shader_blob->m_scissor.extent = _vk_surface_capabilities.currentExtent;
@@ -1264,8 +1310,8 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_viewport_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
             shader_blob->m_viewport_state_create_info.pNext = nullptr;
             shader_blob->m_viewport_state_create_info.flags = 0;
-            shader_blob->m_viewport_state_create_info.viewportCount = 0;
-            shader_blob->m_viewport_state_create_info.pViewports = nullptr;
+            shader_blob->m_viewport_state_create_info.viewportCount = 1;
+            shader_blob->m_viewport_state_create_info.pViewports = &shader_blob->m_viewport;
             shader_blob->m_viewport_state_create_info.scissorCount = 1;
             shader_blob->m_viewport_state_create_info.pScissors = &shader_blob->m_scissor;
 
@@ -1626,6 +1672,20 @@ VK_API_PLATFORM_API_LIST
 
         void begin_frame_buffer(jevk11_framebuffer* framebuf, size_t x, size_t y, size_t w, size_t h)
         {
+            if (framebuf->m_rend_rounds == _vk_rend_rounds)
+            {
+                vkWaitForFences(
+                    _vk_logic_device, 
+                    1, 
+                    &framebuf->m_render_finished_fence, 
+                    VK_TRUE, 
+                    UINT64_MAX);
+            }
+            else
+                framebuf->m_rend_rounds = _vk_rend_rounds;
+
+            vkResetFences(_vk_logic_device, 1, &framebuf->m_render_finished_fence);
+
             _vk_current_target_framebuffer = framebuf;
             begin_command_buffer_record(_vk_current_target_framebuffer->m_command_buffer);
 
@@ -1638,9 +1698,8 @@ VK_API_PLATFORM_API_LIST
             render_pass_begin_info.renderArea.extent = _vk_surface_capabilities.currentExtent;
 
             // TODO: 这个破烂得移除掉
-            VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 0.0f };
-            render_pass_begin_info.clearValueCount = 1;
-            render_pass_begin_info.pClearValues = &clear_color;
+            render_pass_begin_info.clearValueCount = 0;
+            render_pass_begin_info.pClearValues = nullptr;
 
             // NOTE: Pipeline的viewport的纵向坐标应当翻转以兼容opengl3和dx11实现
             if (w == 0) w = framebuf->m_width;
@@ -1656,40 +1715,85 @@ VK_API_PLATFORM_API_LIST
             
             vkCmdSetViewport(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &viewport);
 
+            VkRect2D scissor = {};
+            scissor.offset = { (int32_t)x, (int32_t)y };
+            scissor.extent = { (uint32_t)w, (uint32_t)h };
+            vkCmdSetScissor(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &scissor);
+
             vkCmdBeginRenderPass(
                 _vk_current_target_framebuffer->m_command_buffer,
                 &render_pass_begin_info,
                 VkSubpassContents::VK_SUBPASS_CONTENTS_INLINE);
         }
+
         void finish_frame_buffer()
         {
             assert(_vk_current_target_framebuffer != nullptr);
             vkCmdEndRenderPass(_vk_current_target_framebuffer->m_command_buffer);
             end_command_buffer_record(_vk_current_target_framebuffer->m_command_buffer);
 
-            VkSemaphore wait_semaphores[] = { _vk_rendering_image_ready_semaphore };
-            VkPipelineStageFlags wait_stages[] = { VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+            // OK 提交页面
+            // TODO: 其实应当等待的是目标缓冲区的image完成屏障，这里暂时先这么实现
+            vkWaitForFences(_vk_logic_device, 1, &_vk_rendering_image_ready_fence, VK_TRUE, UINT64_MAX);
+
+            VkPipelineStageFlags wait_stages[] = { 
+                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+            };
 
             VkSubmitInfo submit_info = {};
             submit_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SUBMIT_INFO;
             submit_info.pNext = nullptr;
-            submit_info.waitSemaphoreCount = 1;
-            submit_info.pWaitSemaphores = wait_semaphores;
+            submit_info.waitSemaphoreCount = 0;
+            submit_info.pWaitSemaphores = nullptr; // TODO: 未来应当支持等待多个信号量，例如延迟管线
             submit_info.pWaitDstStageMask = wait_stages;
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers =
                 &_vk_current_target_framebuffer->m_command_buffer;
 
             VkSemaphore signal_semaphores[] = {
-                _vk_current_target_framebuffer->m_render_finished_semaphore };
+                _vk_current_target_framebuffer->m_render_finished_semaphore
+            };
             submit_info.signalSemaphoreCount = 1;
             submit_info.pSignalSemaphores = signal_semaphores;
 
-            if (vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)
+            if (vkQueueSubmit(
+                _vk_logic_device_graphic_queue, 
+                1,
+                &submit_info,
+                _vk_current_target_framebuffer->m_render_finished_fence) != VK_SUCCESS)
             {
                 jeecs::debug::logfatal("Failed to submit draw command buffer!");
             }
             _vk_current_target_framebuffer = nullptr;
+        }
+
+        void clear_frame_buffer(float color[4])
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+            for (auto& attachment : _vk_current_target_framebuffer->m_attachments)
+            {
+                VkClearValue clear_color = { color[0], color[1], color[2], color[3] };
+                VkClearAttachment clear_attachment = {};
+                clear_attachment.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                clear_attachment.colorAttachment = 0;
+                clear_attachment.clearValue = clear_color;
+
+                VkClearRect clear_rect = {};
+                clear_rect.baseArrayLayer = 0;
+                clear_rect.layerCount = 1;
+                clear_rect.rect.offset = { 0, 0 };
+                clear_rect.rect.extent = { 
+                    (uint32_t)_vk_current_target_framebuffer->m_width,
+                    (uint32_t)_vk_current_target_framebuffer->m_height 
+                    };
+
+                vkCmdClearAttachments(
+                    _vk_current_target_framebuffer->m_command_buffer,
+                    1,
+                    &clear_attachment,
+                    1,
+                    &clear_rect);
+            }
         }
 
         void pre_update()
@@ -1720,13 +1824,17 @@ VK_API_PLATFORM_API_LIST
 
         void update()
         {
+            // NOTE: 用于标志帧缓冲区的起始渲染帧
+            ++_vk_rend_rounds;
+
             // 开始录制！
+            vkResetFences(_vk_logic_device, 1, &_vk_rendering_image_ready_fence);
             auto state = vkAcquireNextImageKHR(
                 _vk_logic_device,
                 _vk_swapchain,
                 UINT64_MAX,
-                _vk_rendering_image_ready_semaphore,
                 VK_NULL_HANDLE,
+                _vk_rendering_image_ready_fence,
                 &_vk_presenting_swapchain_image_index);
 
             if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR)
@@ -1766,18 +1874,6 @@ VK_API_PLATFORM_API_LIST
         }
 
         /////////////////////////////////////////////////////
-        void cmd_clear_framebuf_color(float color[4])
-        {
-            assert(_vk_current_target_framebuffer != nullptr);
-            //for (auto& attachment : _vk_current_target_framebuffer->m_attachments)
-            //{
-            //    // TODO: 考虑深度缓冲区的问题，深度缓冲区不能用这个方法清空
-            //    vkCmdClearColorImage(
-            //        _vk_current_target_framebuffer->m_command_buffer,
-            //        attachment.m_image,   
-            //        );
-            //}
-        }
         void cmd_bind_shader_pipeline(jevk11_shader * shader)
         {
             assert(_vk_current_target_framebuffer != nullptr);
@@ -2067,7 +2163,8 @@ VK_API_PLATFORM_API_LIST
     }
     void clear_framebuffer_color(jegl_thread::custom_thread_data_t ctx, float color[4])
     {
-
+        jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
+        context->clear_frame_buffer(color);
     }
     void clear_framebuffer_depth(jegl_thread::custom_thread_data_t)
     {
