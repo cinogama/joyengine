@@ -11,16 +11,16 @@ int main(int argc, char** argv)
     using namespace jeecs;
     je_init(argc, argv);
 
-    // ´´½¨È«¾ÖÉÏÏÂÎÄ£¬²¢ÔÚµ±Ç°ÉÏÏÂÎÄÉÏÒÔÄ¬ÈÏÅäÖÃ´´½¨Í³Ò»Í¼ĞÎ½Ó¿Ú
+    // åˆ›å»ºå…¨å±€ä¸Šä¸‹æ–‡ï¼Œå¹¶åœ¨å½“å‰ä¸Šä¸‹æ–‡ä¸Šä»¥é»˜è®¤é…ç½®åˆ›å»ºç»Ÿä¸€å›¾å½¢æ¥å£
     game_universe u = game_universe::create_universe();
     jegl_register_sync_thread_callback([](jegl_thread* gthread, void* pgthread) {}, nullptr);
 
     jegl_interface_config config;
     config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
-    config.m_enable_resize = true;
+    config.m_enable_resize = false;
     config.m_msaa = 0;
-    config.m_width = 512;
-    config.m_height = 512;
+    config.m_width = 256;
+    config.m_height = 256;
     config.m_fps = 60;
     config.m_title = "Demo";
     config.m_userdata = nullptr;
@@ -30,7 +30,7 @@ int main(int argc, char** argv)
 
     assert(gthread != nullptr);
 
-    // ´´½¨Ò»¸öÄ£ĞÍ£¬ÕâÀïÊÇÒ»¸ö·½¿é
+    // åˆ›å»ºä¸€ä¸ªæ¨¡å‹ï¼Œè¿™é‡Œæ˜¯ä¸€ä¸ªæ–¹å—
     basic::resource<graphic::vertex> vertex = graphic::vertex::create(
         jegl_vertex::type::TRIANGLESTRIP,
         {
@@ -41,7 +41,7 @@ int main(int argc, char** argv)
         },
         { 3 });
 
-    // ´´½¨Ò»¸ö×ÅÉ«Æ÷£¬ÕâÀïÖ»ÊÇ¼òµ¥Í¿³ÉºìÉ«
+    // åˆ›å»ºä¸€ä¸ªç€è‰²å™¨ï¼Œè¿™é‡Œåªæ˜¯ç®€å•æ¶‚æˆçº¢è‰²
     basic::resource<graphic::shader> shader = graphic::shader::create(
         "!/builtin/demo.shader",
         { R"(
@@ -102,7 +102,7 @@ public func frag(_: v2f)
     );
     std::function<void(void)> ff = [&]()
     {
-        // »­µã¶«Î÷£¬ÓÃÖ¸¶¨µÄ×ÅÉ«Æ÷äÖÈ¾Ö¸¶¨µÄÄ£ĞÍ
+        // ç”»ç‚¹ä¸œè¥¿ï¼Œç”¨æŒ‡å®šçš„ç€è‰²å™¨æ¸²æŸ“æŒ‡å®šçš„æ¨¡å‹
         
         float clear_color[4] = { 1.f,1.f,1.f,1.f };
         jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
@@ -126,16 +126,16 @@ public func frag(_: v2f)
     };
     gthread->_m_frame_rend_work_arg = &ff;
 
-    // ³õÊ¼»¯Í¼ĞÎ½Ó¿Ú
+    // åˆå§‹åŒ–å›¾å½¢æ¥å£
     jegl_sync_init(gthread, false);
 
-    // Ñ­»·Í¼ĞÎ¸üĞÂ£¬Ö±µ½Í¼ĞÎ½Ó¿ÚÍË³ö
+    // å¾ªç¯å›¾å½¢æ›´æ–°ï¼Œç›´åˆ°å›¾å½¢æ¥å£é€€å‡º
     while (jegl_sync_update(gthread) == jegl_sync_state::JEGL_SYNC_COMPLETE)
     {
         
     }
 
-    // Àë¿ªÑ­»·Ö®ºó£¬¹Ø±ÕÍ¼ĞÎ
+    // ç¦»å¼€å¾ªç¯ä¹‹åï¼Œå…³é—­å›¾å½¢
     jegl_sync_shutdown(gthread, false);
 
     game_universe::destroy_universe(u);

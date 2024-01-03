@@ -1617,12 +1617,10 @@ struct jegl_texture
     // NOTE:
     // * Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
     // * If texture's m_pixels is nullptr, only create a texture in pipeline.
-    pixel_data_t* m_pixels;
+    pixel_data_t*   m_pixels;
     size_t          m_width;
     size_t          m_height;
-
-    format  m_format;
-
+    format          m_format;
     bool            m_modified;
 };
 

@@ -358,29 +358,35 @@ VK_API_PLATFORM_API_LIST
             result->m_width = w;
             result->m_height = h;
 
-            // 创建默认的渲染通道，这部分代码后续应该可以复用
-            VkAttachmentDescription default_render_attachment = {};
-            default_render_attachment.flags = 0;
-            default_render_attachment.format = _vk_surface_format.format;
-            default_render_attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-            default_render_attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            default_render_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
-            default_render_attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            default_render_attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            default_render_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
-            default_render_attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            std::vector<VkAttachmentDescription> attachments(attachment_images.size());
+            std::vector<VkAttachmentReference> attachment_refs(attachment_images.size());
 
-            VkAttachmentReference default_render_attachment_ref = {};
-            default_render_attachment_ref.attachment = 0;
-            default_render_attachment_ref.layout = VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            for (size_t attachment_i = 0; attachment_i < attachment_images.size(); ++attachment_i)
+            {
+                // TODO: 这边的目标格式暂时没动，之后真正的framebuffer是需要调整的
+                auto& attachment = attachments[attachment_i];
+                attachment.flags = 0;
+                attachment.format = _vk_surface_format.format;
+                attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
+                attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
+                attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+                attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+                VkAttachmentReference& attachment_ref = attachment_refs[attachment_i];
+                attachment_ref.attachment = (uint32_t)attachment_i;
+                attachment_ref.layout = VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
 
             VkSubpassDescription default_render_subpass = {};
             default_render_subpass.flags = 0;
             default_render_subpass.pipelineBindPoint = VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS;
             default_render_subpass.inputAttachmentCount = 0;
             default_render_subpass.pInputAttachments = nullptr;
-            default_render_subpass.colorAttachmentCount = 1;
-            default_render_subpass.pColorAttachments = &default_render_attachment_ref;
+            default_render_subpass.colorAttachmentCount = (uint32_t)attachment_refs.size();
+            default_render_subpass.pColorAttachments = attachment_refs.data();
             default_render_subpass.pResolveAttachments = nullptr;
             default_render_subpass.pDepthStencilAttachment = nullptr;
             default_render_subpass.preserveAttachmentCount = 0;
@@ -398,8 +404,8 @@ VK_API_PLATFORM_API_LIST
             default_render_pass_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
             default_render_pass_create_info.flags = 0;
             default_render_pass_create_info.pNext = nullptr;
-            default_render_pass_create_info.attachmentCount = 1;
-            default_render_pass_create_info.pAttachments = &default_render_attachment;
+            default_render_pass_create_info.attachmentCount = (uint32_t)attachments.size();
+            default_render_pass_create_info.pAttachments = attachments.data();
             default_render_pass_create_info.subpassCount = 1;
             default_render_pass_create_info.pSubpasses = &default_render_subpass;
             default_render_pass_create_info.dependencyCount = 1;
@@ -1577,89 +1583,112 @@ VK_API_PLATFORM_API_LIST
             delete vertex;
         }
 
+        jevk11_texture* create_framebuf_texture(jegl_texture::format format, size_t w, size_t h)
+        {
+            assert(format & jegl_texture::format::FRAMEBUF);
+            if (format & jegl_texture::format::DEPTH)
+            {
+
+            }
+            else
+            {
+
+            }
+        }
+
         jevk11_texture* create_texture_instance(jegl_resource* resource)
         {
             jegl_texture* texture_raw_data = resource->m_raw_texture_data;
 
-            jevk11_texture* texture = new jevk11_texture;
-
-            size_t texture_buffer_size = texture_raw_data->m_width * texture_raw_data->m_height *
-                (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
-
-            alloc_vk_device_buffer_memory(
-                texture_buffer_size,
-                VkBufferUsageFlagBits::VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                &texture->m_vk_texture_buffer,
-                &texture->m_vk_texture_buffer_memory);
-
-            void* data;
-            vkMapMemory(
-                _vk_logic_device,
-                texture->m_vk_texture_buffer_memory,
-                0,
-                texture_buffer_size,
-                0,
-                &data);
-            memcpy(data, texture_raw_data->m_pixels, texture_buffer_size);
-            vkUnmapMemory(
-                _vk_logic_device,
-                texture->m_vk_texture_buffer_memory);
-
-            VkImageCreateInfo image_create_info = {};
-            image_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            image_create_info.pNext = nullptr;
-            image_create_info.flags = 0;
-            image_create_info.imageType = VkImageType::VK_IMAGE_TYPE_2D;
-            switch (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+            if (texture_raw_data->m_format & jegl_texture::format::FRAMEBUF)
             {
-            case jegl_texture::format::RGBA:
-                image_create_info.format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM; break;
-            case jegl_texture::format::MONO:
-                image_create_info.format = VkFormat::VK_FORMAT_R8_UNORM; break;
+                return create_framebuf_texture(
+                    texture_raw_data->m_format, 
+                    texture_raw_data->m_width, 
+                    texture_raw_data->m_height);
             }
-            image_create_info.extent.width = (uint32_t)texture_raw_data->m_width;
-            image_create_info.extent.height = (uint32_t)texture_raw_data->m_height;
-            image_create_info.extent.depth = 1;
-            image_create_info.mipLevels = 1;
-            image_create_info.arrayLayers = 1;
-            image_create_info.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-            image_create_info.tiling = VkImageTiling::VK_IMAGE_TILING_OPTIMAL;
-            image_create_info.usage =
-                VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT;
-            image_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
-            image_create_info.queueFamilyIndexCount = 0;
-            image_create_info.pQueueFamilyIndices = nullptr;
-            image_create_info.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
-
-            if (VK_SUCCESS != vkCreateImage(
-                _vk_logic_device,
-                &image_create_info,
-                nullptr,
-                &texture->m_vk_texture_image))
+            else
             {
-                jeecs::debug::logfatal("Failed to create vk110 texture image.");
+                jevk11_texture* texture = new jevk11_texture{};
+
+                size_t texture_buffer_size = texture_raw_data->m_width * texture_raw_data->m_height *
+                    (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+
+                alloc_vk_device_buffer_memory(
+                    texture_buffer_size,
+                    VkBufferUsageFlagBits::VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    &texture->m_vk_texture_buffer,
+                    &texture->m_vk_texture_buffer_memory);
+
+                void* data;
+                vkMapMemory(
+                    _vk_logic_device,
+                    texture->m_vk_texture_buffer_memory,
+                    0,
+                    texture_buffer_size,
+                    0,
+                    &data);
+                memcpy(data, texture_raw_data->m_pixels, texture_buffer_size);
+                vkUnmapMemory(
+                    _vk_logic_device,
+                    texture->m_vk_texture_buffer_memory);
+
+                VkImageCreateInfo image_create_info = {};
+                image_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                image_create_info.pNext = nullptr;
+                image_create_info.flags = 0;
+                image_create_info.imageType = VkImageType::VK_IMAGE_TYPE_2D;
+                switch (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+                {
+                case jegl_texture::format::RGBA:
+                    image_create_info.format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM; break;
+                case jegl_texture::format::MONO:
+                    image_create_info.format = VkFormat::VK_FORMAT_R8_UNORM; break;
+                }
+                image_create_info.extent.width = (uint32_t)texture_raw_data->m_width;
+                image_create_info.extent.height = (uint32_t)texture_raw_data->m_height;
+                image_create_info.extent.depth = 1;
+                image_create_info.mipLevels = 1;
+                image_create_info.arrayLayers = 1;
+                image_create_info.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
+                image_create_info.tiling = VkImageTiling::VK_IMAGE_TILING_OPTIMAL;
+                image_create_info.usage =
+                    VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                    VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT;
+                image_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
+                image_create_info.queueFamilyIndexCount = 0;
+                image_create_info.pQueueFamilyIndices = nullptr;
+                image_create_info.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+
+                if (VK_SUCCESS != vkCreateImage(
+                    _vk_logic_device,
+                    &image_create_info,
+                    nullptr,
+                    &texture->m_vk_texture_image))
+                {
+                    jeecs::debug::logfatal("Failed to create vk110 texture image.");
+                }
+
+                VkMemoryRequirements texture_image_memory_requirements;
+                vkGetImageMemoryRequirements(
+                    _vk_logic_device,
+                    texture->m_vk_texture_image,
+                    &texture_image_memory_requirements);
+
+                texture->m_vk_texture_image_memory = alloc_vk_device_memory(
+                    texture_image_memory_requirements,
+                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+                vkBindImageMemory(
+                    _vk_logic_device,
+                    texture->m_vk_texture_image,
+                    texture->m_vk_texture_image_memory,
+                    0);
+
+                return texture;
             }
-
-            VkMemoryRequirements texture_image_memory_requirements;
-            vkGetImageMemoryRequirements(
-                _vk_logic_device,
-                texture->m_vk_texture_image,
-                &texture_image_memory_requirements);
-
-            texture->m_vk_texture_image_memory = alloc_vk_device_memory(
-                texture_image_memory_requirements,
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-            vkBindImageMemory(
-                _vk_logic_device,
-                texture->m_vk_texture_image,
-                texture->m_vk_texture_image_memory,
-                0);
-
-            return texture;
         }
         void destroy_texture_instance(jevk11_texture* texture)
         {
