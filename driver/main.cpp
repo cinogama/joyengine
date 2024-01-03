@@ -105,6 +105,7 @@ public func frag(_: v2f)
         // 画点东西，用指定的着色器渲染指定的模型
         
         float clear_color[4] = { 1.f,1.f,1.f,1.f };
+        jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
 
         jegl_clear_framebuffer_color(clear_color);
         jegl_clear_framebuffer_depth();
@@ -112,7 +113,7 @@ public func frag(_: v2f)
         jegl_using_resource(shader->resouce());
         jegl_draw_vertex(vertex->resouce());
 
-        jegl_rend_to_framebuffer(nullptr, 0, 0, 128, 128);
+        jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
 
         jegl_using_resource(shader_b->resouce());
         jegl_draw_vertex(vertex->resouce());

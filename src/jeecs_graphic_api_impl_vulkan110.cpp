@@ -1697,8 +1697,8 @@ VK_API_PLATFORM_API_LIST
             VkSemaphore signal_semaphores[] = {
                 framebuf->m_render_finished_semaphore
             };
-            submit_info.signalSemaphoreCount = 0;
-            submit_info.pSignalSemaphores = nullptr;
+            submit_info.signalSemaphoreCount = 1;
+            submit_info.pSignalSemaphores = signal_semaphores;
 
             if (vkQueueSubmit(
                 _vk_logic_device_graphic_queue,
@@ -1751,8 +1751,8 @@ VK_API_PLATFORM_API_LIST
             vkCmdSetViewport(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &viewport);
 
             VkRect2D scissor = {};
-            scissor.offset = { (int32_t)x, (int32_t)y };
-            scissor.extent = { (uint32_t)w, (uint32_t)h };
+            scissor.offset = { (int32_t)0, (int32_t)0 };
+            scissor.extent = { (uint32_t)framebuf->m_width, (uint32_t)framebuf->m_height };
             vkCmdSetScissor(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &scissor);
         }
 
