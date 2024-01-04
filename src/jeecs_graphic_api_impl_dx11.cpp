@@ -100,7 +100,7 @@ namespace jeecs::graphic::api::dx11
     {
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_vbo;
         UINT m_count;
-        UINT m_strides;
+        UINT m_stride;
         D3D_PRIMITIVE_TOPOLOGY m_method;
     };
     struct jedx11_uniformbuf
@@ -1540,7 +1540,7 @@ namespace jeecs::graphic::api::dx11
             UINT StructureByteStride;
 
             vertex->m_count = (UINT)resource->m_raw_vertex_data->m_point_count;
-            vertex->m_strides = resource->m_raw_vertex_data->m_data_count_per_point;
+            vertex->m_stride = resource->m_raw_vertex_data->m_data_count_per_point;
 
             vertex_buffer_describe.ByteWidth =
                 (UINT)(resource->m_raw_vertex_data->m_point_count
@@ -1719,7 +1719,7 @@ namespace jeecs::graphic::api::dx11
         {
             auto* vertex = std::launder(reinterpret_cast<jedx11_vertex*>(resource->m_handle.m_ptr));
             const UINT offset = 0;
-            const UINT strides = vertex->m_strides * sizeof(float);
+            const UINT strides = vertex->m_stride * sizeof(float);
             context->m_dx_context->IASetVertexBuffers(
                 0, 1, vertex->m_vbo.GetAddressOf(), &strides, &offset);
             context->m_dx_context->IASetPrimitiveTopology(vertex->m_method);

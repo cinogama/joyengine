@@ -25,21 +25,21 @@ int main(int argc, char** argv)
     config.m_title = "Demo";
     config.m_userdata = nullptr;
 
-    jegl_set_host_graphic_api(jegl_using_dx11_apis);
+    jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
     jegl_thread* gthread = jegl_uhost_get_gl_thread(jegl_uhost_get_or_create_for_universe(u.handle(), &config));
 
     assert(gthread != nullptr);
 
     // 创建一个模型，这里是一个方块
     basic::resource<graphic::vertex> vertex = graphic::vertex::create(
-        jegl_vertex::type::TRIANGLESTRIP,
+        jegl_vertex::type::LINESTRIP,
         {
-            -0.5f, -0.5f, 0.0f,
-            0.5f, -0.5f, 0.0f,
-            -0.5f, 0.5f, 0.0f,
-            0.5f, 0.5f, 0.0f
+            -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f,
+            -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
+            0.5f, 0.5f, 0.0f,       1.0f, 1.0f,  0.0f, 0.0f, -1.0f,
+            0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f, 0.0f, -1.0f,
         },
-        { 3 });
+        { 3, 2, 3 });
 
     // 创建一个着色器，这里只是简单涂成红色
     basic::resource<graphic::shader> shader = graphic::shader::create(
@@ -67,7 +67,7 @@ public func vert(v: vin)
 } 
 public func frag(_: v2f)
 {
-    return fout{ color = float4::create(1., 0., 0., 0.5) };
+    return fout{ color = float4::create(uniform("MainColor", float3::zero), 0.5) };
 } 
 )" }
     );
@@ -82,9 +82,12 @@ BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 
 VAO_STRUCT! vin {
     vertex : float3,
+    uv     : float2,
+    normal : float3,
 };
 using v2f = struct {
     pos : float4,
+    uv  : float2,
 };
 using fout = struct {
     color : float4
@@ -92,11 +95,14 @@ using fout = struct {
 
 public func vert(v: vin)
 {
-    return v2f{ pos = float4::create(v.vertex + float3::new(0.2, 0.2, 0.1), 1.) };
+    return v2f{ 
+        pos = float4::create(v.vertex + float3::new(0.2, 0.2, -0.1), 1.),
+        uv  = v.uv
+    };
 } 
-public func frag(_: v2f)
+public func frag(vf: v2f)
 {
-    return fout{ color = float4::create(0., 0., 1., 0.5) };
+    return fout{ color = float4::create(vf.uv, 0.0, 1.0) };
 } 
 )" }
     );

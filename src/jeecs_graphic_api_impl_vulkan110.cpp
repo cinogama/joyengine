@@ -166,11 +166,13 @@ VK_API_DECL(vkEndCommandBuffer);\
 VK_API_DECL(vkCmdBeginRenderPass);\
 VK_API_DECL(vkCmdEndRenderPass);\
 VK_API_DECL(vkCmdBindPipeline);\
-VK_API_DECL(vkCmdBindVertexBuffers);\
+VK_API_DECL(vkCmdBindVertexBuffers2);\
 VK_API_DECL(vkCmdDraw);\
 VK_API_DECL(vkCmdSetViewport);\
 VK_API_DECL(vkCmdSetScissor);\
 VK_API_DECL(vkCmdClearAttachments);\
+VK_API_DECL(vkCmdSetPrimitiveTopology);\
+VK_API_DECL(vkCmdSetPrimitiveRestartEnable);\
 \
 VK_API_DECL(vkCreateSemaphore);\
 VK_API_DECL(vkDestroySemaphore);\
@@ -180,6 +182,9 @@ VK_API_DECL(vkCreateFence);\
 VK_API_DECL(vkDestroyFence);\
 VK_API_DECL(vkWaitForFences);\
 VK_API_DECL(vkResetFences);\
+\
+VK_API_DECL(vkCreateDescriptorSetLayout);\
+VK_API_DECL(vkDestroyDescriptorSetLayout);\
 \
 VK_API_DECL(vkCreateRenderPass);\
 VK_API_DECL(vkDestroyRenderPass);\
@@ -210,6 +215,9 @@ VK_API_PLATFORM_API_LIST
                 //VkDynamicState::VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY,
                 VkDynamicState::VK_DYNAMIC_STATE_VIEWPORT,
                 VkDynamicState::VK_DYNAMIC_STATE_SCISSOR,
+                VkDynamicState::VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY,
+                VkDynamicState::VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE,
+                VkDynamicState::VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE,
             };
 
             jegl_vk110_context* m_context;
@@ -231,10 +239,12 @@ VK_API_PLATFORM_API_LIST
             VkPipelineColorBlendAttachmentState             m_color_blend_attachment_state;
             VkPipelineColorBlendStateCreateInfo             m_color_blend_state_create_info;
             VkPipelineDynamicStateCreateInfo                m_dynamic_state_create_info;
-
+            VkDescriptorSetLayout                           m_descriptor_set_layout;
             VkPipelineLayout                                m_pipeline_layout;
 
             std::vector<VkSampler>                          m_samplers;
+            std::unordered_map<std::string, uint32_t>       m_ulocations;
+            size_t                                          m_uniform_size;
         };
 
         jeecs::basic::resource<blob_data> m_blob_data;
@@ -249,6 +259,11 @@ VK_API_PLATFORM_API_LIST
 
         VkImageView m_vk_texture_imaeg_view;
     };
+    struct jevk11_uniformbuf
+    {
+        VkBuffer m_uniform_buffer;
+        VkDeviceMemory m_uniform_buffer_memory;
+    };
     struct jevk11_shader
     {
         jeecs::basic::resource<jevk11_shader_blob::blob_data>
@@ -261,7 +276,7 @@ VK_API_PLATFORM_API_LIST
         //      也应该被释放。但是得考虑释放的时机
         std::unordered_map<VkRenderPass, VkPipeline>
             m_target_pass_pipelines;
-
+        jevk11_uniformbuf* m_uniform_variables;
         VkPipeline prepare_pipeline(jegl_vk110_context* context);
     };
     struct jevk11_framebuffer
@@ -286,11 +301,10 @@ VK_API_PLATFORM_API_LIST
         VkDeviceMemory m_vk_vertex_buffer_memory;
 
         uint32_t m_vertex_point_count;
-    };
-    struct jevk11_uniformbuf
-    {
-        VkBuffer m_uniform_buffer;
-        VkDeviceMemory m_uniform_buffer_memory;
+        VkDeviceSize m_size;
+        VkDeviceSize m_stride;
+
+        VkPrimitiveTopology m_topology;
     };
 
     struct jegl_vk110_context
@@ -325,15 +339,15 @@ VK_API_PLATFORM_API_LIST
         constexpr static size_t             _VK_UBO_MAX_COUNT = 16;
         constexpr static size_t             _VK_TEXTURE_MAX_COUNT = 16;
         constexpr static size_t             _VK_SAMPLER_MAX_COUNT = 16;
-        std::vector<VkDescriptorSet>        _vk_global_uniform_buffer_descriptor_sets; 
+        std::vector<VkDescriptorSet>        _vk_global_uniform_buffer_descriptor_sets;
         std::vector<VkDescriptorSet>        _vk_global_texture_descriptor_sets;
         std::vector<VkDescriptorSet>        _vk_global_sampler_descriptor_sets;
-        
+
         // Following is runtime vk states.
         size_t                              _vk_rend_rounds;
         uint32_t                            _vk_presenting_swapchain_image_index;
-        jevk11_framebuffer*                 _vk_current_swapchain_framebuffer;
-        jevk11_framebuffer*                 _vk_current_target_framebuffer;
+        jevk11_framebuffer* _vk_current_swapchain_framebuffer;
+        jevk11_framebuffer* _vk_current_target_framebuffer;
 
         std::unordered_set<jevk11_framebuffer*> _vk_updating_target_framebuffers;
         /////////////////////////////////////////////////////////////////////
@@ -343,7 +357,7 @@ VK_API_PLATFORM_API_LIST
             descriptor_set_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
             descriptor_set_alloc_info.pNext = nullptr;
             descriptor_set_alloc_info.descriptorPool = _vk_global_descriptor_pool;
-            descriptor_set_alloc_info.descriptorSetCount = 1;
+            descriptor_set_alloc_info.descriptorSetCount = 3;
             descriptor_set_alloc_info.pSetLayouts = nullptr;
 
             VkDescriptorSet result = nullptr;
@@ -381,10 +395,10 @@ VK_API_PLATFORM_API_LIST
             _vk_global_texture_descriptor_sets.resize(_VK_TEXTURE_MAX_COUNT);
             _vk_global_sampler_descriptor_sets.resize(_VK_SAMPLER_MAX_COUNT);
 
-            // 创建 0-_VK_UBO_MAX_COUNT 个绑定点
+            // 创建 _VK_UBO_MAX_COUNT 个绑定点，分别对应 0到_VK_UBO_MAX_COUNT 的位置
             for (size_t i = 0; i < _VK_UBO_MAX_COUNT; ++i)
             {
-TODO
+                _vk_global_uniform_buffer_descriptor_sets[i] = create_ubo_descriptor_set(i);
             }
         }
         VkCommandBuffer begin_temp_command_buffer_records()
@@ -897,7 +911,7 @@ TODO
             application_info.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
             application_info.pEngineName = "JoyEngineECS";
             application_info.engineVersion = VK_MAKE_API_VERSION(0, 4, 0, 0);
-            application_info.apiVersion = VK_MAKE_API_VERSION(0, 1, 1, 0);
+            application_info.apiVersion = VK_MAKE_API_VERSION(0, 1, 3, 0);
 
             VkInstanceCreateInfo instance_create_info = {};
             instance_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -1008,7 +1022,8 @@ TODO
                 required_device_layers.push_back("VK_LAYER_KHRONOS_validation");
 
             std::vector<const char*> required_device_extensions = {
-                VK_KHR_SWAPCHAIN_EXTENSION_NAME
+                VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                "VK_EXT_extended_dynamic_state3", // Emmm... Vulkan 真是令人讨厌……
             };
 
             _vk_device = nullptr;
@@ -1228,34 +1243,11 @@ TODO
                 _vk_jegl_interface->m_interface_width,
                 _vk_jegl_interface->m_interface_height);
 
-            // 创建动态大小的描述符集合池，用于分配给Uniform buffer 实例
-            VkDescriptorPoolSize descriptor_ubo_pool_size = {};
-            descriptor_ubo_pool_size.type = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptor_ubo_pool_size.descriptorCount = 1;
-
-            VkDescriptorPoolCreateInfo descriptor_ubo_pool_create_info = {};
-            descriptor_ubo_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-            descriptor_ubo_pool_create_info.pNext = nullptr;
-            descriptor_ubo_pool_create_info.flags = 0;
-            descriptor_ubo_pool_create_info.maxSets = 128;
-            descriptor_ubo_pool_create_info.poolSizeCount = 1;
-            descriptor_ubo_pool_create_info.pPoolSizes = &descriptor_ubo_pool_size;
-
-            if (VK_SUCCESS != vkCreateDescriptorPool(
-                _vk_logic_device,
-                &descriptor_ubo_pool_create_info,
-                nullptr,
-                &_vk_descriptor_ubo_pool))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 descriptor pool for uniform buffer.");
-            }
         }
 
         void shutdown()
         {
             vkDeviceWaitIdle(_vk_logic_device);
-
-            vkDestroyDescriptorPool(_vk_logic_device, _vk_descriptor_ubo_pool, nullptr);
 
             destroy_swap_chain();
             vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
@@ -1803,6 +1795,103 @@ TODO
             shader_blob->m_color_blend_state_create_info.blendConstants[2] = 0.0f;
             shader_blob->m_color_blend_state_create_info.blendConstants[3] = 0.0f;
 
+            // 此处处理UBO布局，类似DX11，我们的Uniform变量实际上是放在location=0的UBO中的
+            // 遍历Uniform，按照vulkan对于ubo的大小和对齐规则，计算实际偏移量；最后得到整个uniform的大小
+            uint32_t last_elem_end_place = 0;
+            size_t max_allign = 4;
+            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+            while (uniforms != nullptr)
+            {
+                size_t unit_size = 0;
+                size_t allign_base = 0;
+                switch (uniforms->m_uniform_type)
+                {
+                case jegl_shader::uniform_type::INT:
+                case jegl_shader::uniform_type::FLOAT:
+                    unit_size = 4;
+                    allign_base = 4;
+                    break;
+                case jegl_shader::uniform_type::FLOAT2:
+                    unit_size = 8;
+                    allign_base = 8;
+                    break;
+                case jegl_shader::uniform_type::FLOAT3:
+                    unit_size = 12;
+                    allign_base = 16;
+                    break;
+                case jegl_shader::uniform_type::FLOAT4:
+                    unit_size = 16;
+                    allign_base = 16;
+                    break;
+                case jegl_shader::uniform_type::FLOAT4X4:
+                    unit_size = 64;
+                    allign_base = 16;
+                    break;
+                default:
+                    unit_size = 0;
+                    break;
+                }
+
+                if (unit_size != 0)
+                {
+                    max_allign = std::max(max_allign, allign_base);
+
+                    last_elem_end_place = jeecs::basic::allign_size(last_elem_end_place, allign_base);
+                    shader_blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
+                    last_elem_end_place += unit_size;
+                }
+                uniforms = uniforms->m_next;
+            }
+            shader_blob->m_uniform_size = jeecs::basic::allign_size(last_elem_end_place, max_allign);
+
+            // 遍历其他的Uniform，按照vulkan对于ubo的大小和对齐规则，计算实际偏移量；最后得到整个uniform的大小
+            last_elem_end_place = 0;
+            max_allign = 4;
+
+            std::vector<jegl_shader::uniform_blocks*> uniform_block_lists;
+            auto* uniform_blocks = resource->m_raw_shader_data->m_custom_uniform_blocks;
+            while (uniform_blocks != nullptr)
+            {
+                uniform_block_lists.push_back(uniform_blocks);
+                uniform_blocks = uniform_blocks->m_next;
+            }
+
+            std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings;
+            auto create_binding_descriptor = [](VkDescriptorType type, uint32_t place) 
+                {
+                    VkDescriptorSetLayoutBinding result = {};
+                    result.binding = place;
+                    result.descriptorType = type;
+                    result.descriptorCount = 1;
+                    result.stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL;
+                    result.pImmutableSamplers = nullptr;
+                    return result;
+                };
+
+            size_t descriptor_set_binding_count = 0;
+
+            if (shader_blob->m_uniform_size != 0)
+                descriptor_set_layout_bindings.push_back(
+                    create_binding_descriptor(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0));
+
+            for (auto* uniform_block_info : uniform_block_lists)
+            {
+                descriptor_set_layout_bindings.push_back(
+                    create_binding_descriptor(
+                        VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+                        uniform_block_info->m_specify_binding_place + 1));
+            }
+
+            // TODO: 绑定Texture和Sampler
+
+            // 保存到blob里面
+            VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
+            descriptor_set_layout_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            descriptor_set_layout_create_info.pNext = nullptr;
+            descriptor_set_layout_create_info.flags = 0;
+            descriptor_set_layout_create_info.bindingCount = (uint32_t)descriptor_set_layout_bindings.size();
+            descriptor_set_layout_create_info.pBindings = descriptor_set_layout_bindings.data();
+
             // 动态配置~！
             // InputAssemblyState 和 Viewport 都应当允许动态配置
             shader_blob->m_dynamic_state_create_info = {};
@@ -1812,13 +1901,18 @@ TODO
             shader_blob->m_dynamic_state_create_info.dynamicStateCount = sizeof(jevk11_shader_blob::blob_data::m_dynamic_states) / sizeof(VkDynamicState);
             shader_blob->m_dynamic_state_create_info.pDynamicStates = jevk11_shader_blob::blob_data::m_dynamic_states;
 
+
+            if (vkCreateDescriptorSetLayout(_vk_logic_device, &descriptor_set_layout_create_info, nullptr, &shader_blob->m_descriptor_set_layout) != VK_SUCCESS) {
+                throw std::runtime_error("failed to create descriptor set layout!");
+            }
+
             // 创建管道布局
             VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
             pipeline_layout_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
             pipeline_layout_create_info.pNext = nullptr;
             pipeline_layout_create_info.flags = 0;
-            pipeline_layout_create_info.setLayoutCount = 0;
-            pipeline_layout_create_info.pSetLayouts = nullptr;
+            pipeline_layout_create_info.setLayoutCount = 1;
+            pipeline_layout_create_info.pSetLayouts = &shader_blob->m_descriptor_set_layout;
             pipeline_layout_create_info.pushConstantRangeCount = 0;
             pipeline_layout_create_info.pPushConstantRanges = nullptr;
 
@@ -1846,6 +1940,11 @@ TODO
 
             jevk11_shader* shader = new jevk11_shader{};
             shader->m_blob_data = blob->m_blob_data;
+            if (shader->m_blob_data->m_uniform_size == 0)
+                shader->m_uniform_variables = nullptr;
+            else
+                shader->m_uniform_variables = create_uniform_buffer_with_size(
+                    shader->m_blob_data->m_uniform_size);
 
             return shader;
         }
@@ -1855,12 +1954,33 @@ TODO
             {
                 vkDestroyPipeline(_vk_logic_device, pipeline, nullptr);
             }
+            if (shader->m_uniform_variables != nullptr)
+                destroy_uniform_buffer(shader->m_uniform_variables);
             delete shader;
         }
 
         jevk11_vertex* create_vertex_instance(jegl_resource* resource)
         {
             jevk11_vertex* vertex = new jevk11_vertex();
+
+            switch (resource->m_raw_vertex_data->m_type)
+            {
+            case jegl_vertex::type::LINES:
+                vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+                break;
+            case jegl_vertex::type::LINESTRIP:
+                vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+                break;
+            case jegl_vertex::type::TRIANGLES:
+                vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+                break;
+            case jegl_vertex::type::TRIANGLESTRIP:
+                vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+                break;
+            default:
+                jeecs::debug::logfatal("Unsupported vertex type.");
+                break;
+            }
 
             size_t vertex_buffer_size = resource->m_raw_vertex_data->m_point_count *
                 resource->m_raw_vertex_data->m_data_count_per_point *
@@ -1894,7 +2014,9 @@ TODO
 
             vertex->m_vertex_point_count =
                 (uint32_t)resource->m_raw_vertex_data->m_point_count;
-
+            vertex->m_size = (VkDeviceSize)vertex_buffer_size;
+            vertex->m_stride = (VkDeviceSize)
+                (resource->m_raw_vertex_data->m_data_count_per_point * sizeof(float));
             return vertex;
         }
         void destroy_vertex_instance(jevk11_vertex* vertex)
@@ -2185,7 +2307,7 @@ TODO
                 // 释放临时缓冲区
                 vkDestroyBuffer(_vk_logic_device, texture_data_buffer, nullptr);
                 vkFreeMemory(_vk_logic_device, texture_data_buffer_memory, nullptr);
-                
+
                 return texture;
             }
         }
@@ -2193,9 +2315,9 @@ TODO
         {
             vkDestroyImageView(_vk_logic_device, texture->m_vk_texture_imaeg_view, nullptr);
 
-            if (texture->m_vk_texture_image == nullptr)
+            if (texture->m_vk_texture_image != nullptr)
                 vkDestroyImage(_vk_logic_device, texture->m_vk_texture_image, nullptr);
-            if (texture->m_vk_texture_image_memory == nullptr)
+            if (texture->m_vk_texture_image_memory != nullptr)
                 vkFreeMemory(_vk_logic_device, texture->m_vk_texture_image_memory, nullptr);
             //vkDestroyBuffer(_vk_logic_device, texture->m_vk_texture_buffer, nullptr);
             //vkFreeMemory(_vk_logic_device, texture->m_vk_texture_buffer_memory, nullptr);
@@ -2414,6 +2536,8 @@ TODO
             scissor.offset = { (int32_t)0, (int32_t)0 };
             scissor.extent = { (uint32_t)framebuf->m_width, (uint32_t)framebuf->m_height };
             vkCmdSetScissor(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &scissor);
+
+            vkCmdSetPrimitiveRestartEnable(_vk_current_target_framebuffer->m_command_buffer, VK_TRUE);
         }
         void cmd_clear_frame_buffer_color(float color[4])
         {
@@ -2473,6 +2597,10 @@ TODO
         void cmd_bind_shader_pipeline(jevk11_shader* shader)
         {
             assert(_vk_current_target_framebuffer != nullptr);
+
+            TODO
+            jegl_using_resource(shader->m_uniform_variables);
+
             vkCmdBindPipeline(
                 _vk_current_target_framebuffer->m_command_buffer,
                 VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -2481,14 +2609,20 @@ TODO
         void cmd_draw_vertex(jevk11_vertex* vertex)
         {
             assert(_vk_current_target_framebuffer != nullptr);
-            VkBuffer vertex_buffers[] = { vertex->m_vk_vertex_buffer };
-            VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(
+            VkDeviceSize offsets = 0;
+
+            vkCmdSetPrimitiveTopology(
+                _vk_current_target_framebuffer->m_command_buffer,
+                vertex->m_topology);
+
+            vkCmdBindVertexBuffers2(
                 _vk_current_target_framebuffer->m_command_buffer,
                 0,
                 1,
-                vertex_buffers,
-                offsets);
+                &vertex->m_vk_vertex_buffer,
+                &offsets,
+                &vertex->m_size,
+                &vertex->m_stride);
 
             vkCmdDraw(
                 _vk_current_target_framebuffer->m_command_buffer,
@@ -2507,6 +2641,8 @@ TODO
 
         for (auto* sampler : m_samplers)
             m_context->vkDestroySampler(m_context->_vk_logic_device, sampler, nullptr);
+
+        m_context->vkDestroyDescriptorSetLayout(m_context->_vk_logic_device, m_descriptor_set_layout, nullptr);
     }
     VkPipeline jevk11_shader::prepare_pipeline(jegl_vk110_context* context)
     {
@@ -2526,7 +2662,7 @@ TODO
         pipeline_create_info.stageCount = 2;
         pipeline_create_info.pStages = m_blob_data->m_shader_stage_infos;
         pipeline_create_info.pVertexInputState = &m_blob_data->m_vertex_input_state_create_info;
-        pipeline_create_info.pInputAssemblyState = &m_blob_data->m_input_assembly_state_create_info;
+        pipeline_create_info.pInputAssemblyState = nullptr; // &m_blob_data->m_input_assembly_state_create_info;
         pipeline_create_info.pTessellationState = nullptr;
         pipeline_create_info.pViewportState = &m_blob_data->m_viewport_state_create_info;
         pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
