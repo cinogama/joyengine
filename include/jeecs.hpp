@@ -1673,7 +1673,7 @@ struct jegl_shader
         uint32_t    m_sampler_id;   // Used for DX11 & HLSL generation
 
         size_t      m_pass_id_count;
-        uint32_t* m_pass_ids;     // Used for GL3 & GLSL generation
+        uint32_t*   m_pass_ids;     // Used for GL3 & GLSL generation
     };
 #ifdef JE_PLATFORM_M64
     static_assert(sizeof(sampler_method) == 24 + 16);
@@ -1844,7 +1844,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t* m_buffer;
+    uint8_t*    m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;

@@ -25,7 +25,7 @@ int main(int argc, char** argv)
     config.m_title = "Demo";
     config.m_userdata = nullptr;
 
-    jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
+    jegl_set_host_graphic_api(jegl_using_dx11_apis);
     jegl_thread* gthread = jegl_uhost_get_gl_thread(jegl_uhost_get_or_create_for_universe(u.handle(), &config));
 
     assert(gthread != nullptr);
@@ -48,7 +48,7 @@ int main(int argc, char** argv)
 import je::shader;
 
 ZTEST   (LESS);
-ZWRITE  (DISABLE);
+ZWRITE  (ENABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 
 VAO_STRUCT! vin {
@@ -63,7 +63,7 @@ using fout = struct {
 
 public func vert(v: vin)
 {
-    return v2f{ pos = float4::create(v.vertex, 1.) };
+    return v2f{ pos = float4::create(v.vertex + float3::new(0., 0., 0.), 1.) };
 } 
 public func frag(_: v2f)
 {
@@ -77,7 +77,7 @@ public func frag(_: v2f)
 import je::shader;
 
 ZTEST   (LESS);
-ZWRITE  (DISABLE);
+ZWRITE  (ENABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 
 VAO_STRUCT! vin {
@@ -92,7 +92,7 @@ using fout = struct {
 
 public func vert(v: vin)
 {
-    return v2f{ pos = float4::create(v.vertex + float3::new(0.2, 0.2, 0.0), 1.) };
+    return v2f{ pos = float4::create(v.vertex + float3::new(0.2, 0.2, 0.1), 1.) };
 } 
 public func frag(_: v2f)
 {

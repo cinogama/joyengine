@@ -107,6 +107,7 @@ VK_API_DECL(vkGetPhysicalDeviceProperties);\
 VK_API_DECL(vkEnumerateDeviceExtensionProperties);\
 \
 VK_API_DECL(vkGetPhysicalDeviceQueueFamilyProperties);\
+VK_API_DECL(vkGetPhysicalDeviceFormatProperties);\
 VK_API_DECL(vkCreateDevice);\
 VK_API_DECL(vkDestroyDevice);\
 VK_API_DECL(vkGetDeviceQueue);\
@@ -123,9 +124,16 @@ VK_API_DECL(vkCreateSwapchainKHR);\
 VK_API_DECL(vkDestroySwapchainKHR);\
 VK_API_DECL(vkGetSwapchainImagesKHR);\
 \
+VK_API_DECL(vkCreateSampler);\
+VK_API_DECL(vkDestroySampler);\
+\
+VK_API_DECL(vkCreateImage);\
+VK_API_DECL(vkDestroyImage);\
+VK_API_DECL(vkBindImageMemory);\
+VK_API_DECL(vkGetImageMemoryRequirements);\
+\
 VK_API_DECL(vkCreateImageView);\
 VK_API_DECL(vkDestroyImageView);\
-VK_API_DECL(vkDestroyImage);\
 \
 VK_API_DECL(vkGetPhysicalDeviceMemoryProperties);\
 VK_API_DECL(vkAllocateMemory);\
@@ -218,23 +226,28 @@ VK_API_PLATFORM_API_LIST
             VkRect2D                                        m_scissor;
             VkPipelineViewportStateCreateInfo               m_viewport_state_create_info;
             VkPipelineRasterizationStateCreateInfo          m_rasterization_state_create_info;
+            VkPipelineDepthStencilStateCreateInfo           m_depth_stencil_state_create_info;
             VkPipelineMultisampleStateCreateInfo            m_multi_sample_state_create_info;
             VkPipelineColorBlendAttachmentState             m_color_blend_attachment_state;
             VkPipelineColorBlendStateCreateInfo             m_color_blend_state_create_info;
             VkPipelineDynamicStateCreateInfo                m_dynamic_state_create_info;
 
             VkPipelineLayout                                m_pipeline_layout;
+
+            std::vector<VkSampler>                          m_samplers;
         };
 
         jeecs::basic::resource<blob_data> m_blob_data;
     };
     struct jevk11_texture
     {
-        VkBuffer m_vk_texture_buffer;
-        VkDeviceMemory m_vk_texture_buffer_memory;
+        //VkBuffer m_vk_texture_buffer;
+        //VkDeviceMemory m_vk_texture_buffer_memory;
 
         VkImage m_vk_texture_image;
         VkDeviceMemory m_vk_texture_image_memory;
+
+        VkImageView m_vk_texture_imaeg_view;
     };
     struct jevk11_shader
     {
@@ -253,14 +266,10 @@ VK_API_PLATFORM_API_LIST
     };
     struct jevk11_framebuffer
     {
-        struct jevk11_color_attachment
-        {
-            VkImage         m_image;
-            VkImageView     m_image_view;
-        };
         VkRenderPass    m_rendpass;
-        std::vector<jevk11_color_attachment> 
-                        m_attachments;
+        std::vector<jevk11_texture*>
+            m_color_attachments;
+        jevk11_texture* m_depth_attachment;
         VkCommandBuffer m_command_buffer;
         VkSemaphore     m_render_finished_semaphore;
         // VkFence         m_render_finished_fence;
@@ -278,6 +287,11 @@ VK_API_PLATFORM_API_LIST
 
         uint32_t m_vertex_point_count;
     };
+    struct jevk11_uniformbuf
+    {
+        VkBuffer m_uniform_buffer;
+        VkDeviceMemory m_uniform_buffer_memory;
+    };
 
     struct jegl_vk110_context
     {
@@ -286,7 +300,7 @@ VK_API_PLATFORM_API_LIST
 
         // Vk的全局实例
         VkInstance          _vk_instance;
-        basic_interface*    _vk_jegl_interface;
+        basic_interface* _vk_jegl_interface;
 
         VkPhysicalDevice    _vk_device;
         uint32_t            _vk_device_queue_graphic_family_index;
@@ -299,12 +313,126 @@ VK_API_PLATFORM_API_LIST
         VkSurfaceCapabilitiesKHR    _vk_surface_capabilities;
         VkSurfaceFormatKHR          _vk_surface_format;
         VkPresentModeKHR            _vk_surface_present_mode;
+        VkFormat                    _vk_depth_format;
 
         VkSwapchainKHR                      _vk_swapchain;
         std::vector<jevk11_framebuffer*>    _vk_swapchain_framebuffer;
 
         VkCommandPool               _vk_command_pool;
         VkFence                     _vk_rendering_image_ready_fence;
+
+        VkDescriptorPool                    _vk_global_descriptor_pool;
+        constexpr static size_t             _VK_UBO_MAX_COUNT = 16;
+        constexpr static size_t             _VK_TEXTURE_MAX_COUNT = 16;
+        constexpr static size_t             _VK_SAMPLER_MAX_COUNT = 16;
+        std::vector<VkDescriptorSet>        _vk_global_uniform_buffer_descriptor_sets; 
+        std::vector<VkDescriptorSet>        _vk_global_texture_descriptor_sets;
+        std::vector<VkDescriptorSet>        _vk_global_sampler_descriptor_sets;
+        
+        // Following is runtime vk states.
+        size_t                              _vk_rend_rounds;
+        uint32_t                            _vk_presenting_swapchain_image_index;
+        jevk11_framebuffer*                 _vk_current_swapchain_framebuffer;
+        jevk11_framebuffer*                 _vk_current_target_framebuffer;
+
+        std::unordered_set<jevk11_framebuffer*> _vk_updating_target_framebuffers;
+        /////////////////////////////////////////////////////////////////////
+        VkDescriptorSet create_ubo_descriptor_set(size_t binding_place)
+        {
+            VkDescriptorSetAllocateInfo descriptor_set_alloc_info = {};
+            descriptor_set_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            descriptor_set_alloc_info.pNext = nullptr;
+            descriptor_set_alloc_info.descriptorPool = _vk_global_descriptor_pool;
+            descriptor_set_alloc_info.descriptorSetCount = 1;
+            descriptor_set_alloc_info.pSetLayouts = nullptr;
+
+            VkDescriptorSet result = nullptr;
+            if (VK_SUCCESS != vkAllocateDescriptorSets(_vk_logic_device, &descriptor_set_alloc_info, &result))
+            {
+                jeecs::debug::logfatal("Failed to allocate vk110 descriptor set.");
+            }
+            return result;
+        }
+
+        void create_init_ubo_tex_sampler_binding_sets()
+        {
+            VkDescriptorPoolSize pool_sizes[3] = {};
+            pool_sizes[0].type = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            pool_sizes[0].descriptorCount = 16;
+            pool_sizes[1].type = VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            pool_sizes[1].descriptorCount = 16;
+            pool_sizes[2].type = VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLER;
+            pool_sizes[2].descriptorCount = 16;
+
+            VkDescriptorPoolCreateInfo pool_create_info = {};
+            pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+            pool_create_info.pNext = nullptr;
+            pool_create_info.flags = 0;
+            pool_create_info.maxSets = 16;
+            pool_create_info.poolSizeCount = 3;
+            pool_create_info.pPoolSizes = pool_sizes;
+
+            if (VK_SUCCESS != vkCreateDescriptorPool(_vk_logic_device, &pool_create_info, nullptr, &_vk_global_descriptor_pool))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 descriptor pool.");
+            }
+
+            _vk_global_uniform_buffer_descriptor_sets.resize(_VK_UBO_MAX_COUNT);
+            _vk_global_texture_descriptor_sets.resize(_VK_TEXTURE_MAX_COUNT);
+            _vk_global_sampler_descriptor_sets.resize(_VK_SAMPLER_MAX_COUNT);
+
+            // 创建 0-_VK_UBO_MAX_COUNT 个绑定点
+            for (size_t i = 0; i < _VK_UBO_MAX_COUNT; ++i)
+            {
+TODO
+            }
+        }
+        VkCommandBuffer begin_temp_command_buffer_records()
+        {
+            VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
+            command_buffer_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            command_buffer_alloc_info.pNext = nullptr;
+            command_buffer_alloc_info.commandPool = _vk_command_pool;
+            command_buffer_alloc_info.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            command_buffer_alloc_info.commandBufferCount = 1;
+
+            VkCommandBuffer result = nullptr;
+            if (vkAllocateCommandBuffers(_vk_logic_device, &command_buffer_alloc_info, &result) != VK_SUCCESS)
+            {
+                jeecs::debug::logfatal("Failed to allocate command buffers!");
+            }
+
+            VkCommandBufferBeginInfo command_buffer_begin_info = {};
+            command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            command_buffer_begin_info.pNext = nullptr;
+            command_buffer_begin_info.flags = 0;
+            command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+            if (vkBeginCommandBuffer(result, &command_buffer_begin_info) != VK_SUCCESS)
+            {
+                jeecs::debug::logfatal("Failed to begin recording command buffer!");
+            }
+
+            return result;
+        }
+        void end_temp_command_buffer_record(VkCommandBuffer cmd_buffer)
+        {
+            if (vkEndCommandBuffer(cmd_buffer) != VK_SUCCESS)
+            {
+                jeecs::debug::logfatal("Failed to record command buffer!");
+            }
+
+            VkSubmitInfo submit_info = {};
+            submit_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submit_info.pNext = nullptr;
+            submit_info.commandBufferCount = 1;
+            submit_info.pCommandBuffers = &cmd_buffer;
+
+            vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE);
+            vkQueueWaitIdle(_vk_logic_device_graphic_queue);
+
+            vkFreeCommandBuffers(_vk_logic_device, _vk_command_pool, 1, &cmd_buffer);
+        }
 
         VkSemaphore create_semaphore()
         {
@@ -349,7 +477,11 @@ VK_API_PLATFORM_API_LIST
         }
 
         // TODO: 这里的参数应该还包含fb的附件配置信息
-        jevk11_framebuffer* create_frame_buffer(size_t w, size_t h, const std::vector<VkImage> &attachment_images) 
+        jevk11_framebuffer* create_frame_buffer(
+            size_t w,
+            size_t h,
+            const std::vector<jevk11_texture*>& attachment_colors,
+            jevk11_texture* attachment_depth)
         {
             jevk11_framebuffer* result = new jevk11_framebuffer{};
 
@@ -358,13 +490,16 @@ VK_API_PLATFORM_API_LIST
             result->m_width = w;
             result->m_height = h;
 
-            std::vector<VkAttachmentDescription> attachments(attachment_images.size());
-            std::vector<VkAttachmentReference> attachment_refs(attachment_images.size());
+            std::vector<VkAttachmentDescription> color_and_depth_attachments(
+                attachment_colors.size() + (attachment_depth == nullptr ? 0 : 1));
+            std::vector<VkAttachmentReference> color_attachment_refs(attachment_colors.size());
 
-            for (size_t attachment_i = 0; attachment_i < attachment_images.size(); ++attachment_i)
+            VkAttachmentReference depth_attachment_ref = {};
+
+            for (size_t attachment_i = 0; attachment_i < attachment_colors.size(); ++attachment_i)
             {
                 // TODO: 这边的目标格式暂时没动，之后真正的framebuffer是需要调整的
-                auto& attachment = attachments[attachment_i];
+                auto& attachment = color_and_depth_attachments[attachment_i];
                 attachment.flags = 0;
                 attachment.format = _vk_surface_format.format;
                 attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
@@ -375,9 +510,28 @@ VK_API_PLATFORM_API_LIST
                 attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
                 attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-                VkAttachmentReference& attachment_ref = attachment_refs[attachment_i];
+                VkAttachmentReference& attachment_ref = color_attachment_refs[attachment_i];
                 attachment_ref.attachment = (uint32_t)attachment_i;
                 attachment_ref.layout = VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
+
+            if (attachment_depth != nullptr)
+            {
+                assert(!color_and_depth_attachments.empty());
+                VkAttachmentDescription& depth_attachment = color_and_depth_attachments.back();
+
+                depth_attachment.flags = 0;
+                depth_attachment.format = _vk_depth_format;
+                depth_attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
+                depth_attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                depth_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
+                depth_attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                depth_attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                depth_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+                depth_attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+                depth_attachment_ref.attachment = (uint32_t)color_and_depth_attachments.size() - 1;
+                depth_attachment_ref.layout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             }
 
             VkSubpassDescription default_render_subpass = {};
@@ -385,10 +539,11 @@ VK_API_PLATFORM_API_LIST
             default_render_subpass.pipelineBindPoint = VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS;
             default_render_subpass.inputAttachmentCount = 0;
             default_render_subpass.pInputAttachments = nullptr;
-            default_render_subpass.colorAttachmentCount = (uint32_t)attachment_refs.size();
-            default_render_subpass.pColorAttachments = attachment_refs.data();
+            default_render_subpass.colorAttachmentCount = (uint32_t)color_attachment_refs.size();
+            default_render_subpass.pColorAttachments = color_attachment_refs.data();
             default_render_subpass.pResolveAttachments = nullptr;
-            default_render_subpass.pDepthStencilAttachment = nullptr;
+            default_render_subpass.pDepthStencilAttachment =
+                attachment_depth != nullptr ? &depth_attachment_ref : nullptr;
             default_render_subpass.preserveAttachmentCount = 0;
             default_render_subpass.pPreserveAttachments = nullptr;
 
@@ -404,8 +559,8 @@ VK_API_PLATFORM_API_LIST
             default_render_pass_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
             default_render_pass_create_info.flags = 0;
             default_render_pass_create_info.pNext = nullptr;
-            default_render_pass_create_info.attachmentCount = (uint32_t)attachments.size();
-            default_render_pass_create_info.pAttachments = attachments.data();
+            default_render_pass_create_info.attachmentCount = (uint32_t)color_and_depth_attachments.size();
+            default_render_pass_create_info.pAttachments = color_and_depth_attachments.data();
             default_render_pass_create_info.subpassCount = 1;
             default_render_pass_create_info.pSubpasses = &default_render_subpass;
             default_render_pass_create_info.dependencyCount = 1;
@@ -420,42 +575,17 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to create vk110 default render pass.");
             }
 
-            result->m_attachments.resize(attachment_images.size());
-            for (size_t i = 0; i < attachment_images.size(); ++i)
+            result->m_color_attachments = attachment_colors;
+            result->m_depth_attachment = attachment_depth;
+
+            std::vector<VkImageView> attachment_image_views(
+                result->m_color_attachments.size() + (attachment_depth == nullptr ? 0 : 1));
+            for (size_t i = 0; i < result->m_color_attachments.size(); ++i)
             {
-                auto& target_attachment = result->m_attachments[i];
-
-                target_attachment.m_image = attachment_images[i];
-
-                VkImageViewCreateInfo image_view_create_info = {};
-                image_view_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-                image_view_create_info.pNext = nullptr;
-                image_view_create_info.flags = 0;
-                image_view_create_info.image = target_attachment.m_image;
-                image_view_create_info.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
-                image_view_create_info.format = _vk_surface_format.format;
-                image_view_create_info.components.r = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-                image_view_create_info.components.g = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-                image_view_create_info.components.b = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-                image_view_create_info.components.a = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-                image_view_create_info.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
-                image_view_create_info.subresourceRange.baseMipLevel = 0;
-                image_view_create_info.subresourceRange.levelCount = 1;
-                image_view_create_info.subresourceRange.baseArrayLayer = 0;
-                image_view_create_info.subresourceRange.layerCount = 1;
-
-                if (VK_SUCCESS != vkCreateImageView(
-                    _vk_logic_device, &image_view_create_info, nullptr, &target_attachment.m_image_view))
-                {
-                    jeecs::debug::logfatal("Failed to create vk110 swapchain image view.");
-                }
+                attachment_image_views[i] = result->m_color_attachments[i]->m_vk_texture_imaeg_view;
             }
-
-            std::vector<VkImageView> attachment_image_views(result->m_attachments.size());
-            for (size_t i = 0; i< result->m_attachments.size(); ++i)
-            {
-                attachment_image_views[i] = result->m_attachments[i].m_image_view;
-            }
+            if (result->m_depth_attachment != nullptr)
+                attachment_image_views.back() = result->m_depth_attachment->m_vk_texture_imaeg_view;
 
             VkFramebufferCreateInfo framebuffer_create_info = {};
             framebuffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -496,27 +626,24 @@ VK_API_PLATFORM_API_LIST
             destroy_semaphore(fb->m_render_finished_semaphore);
             // destroy_fence(fb->m_render_finished_fence);
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
-            for (auto& attachment : fb->m_attachments)
-                vkDestroyImageView(_vk_logic_device, attachment.m_image_view, nullptr);
-            vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr); 
+            vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr);
+
+            for (auto* attachment : fb->m_color_attachments)
+                destroy_texture_instance(attachment);
+            if (fb->m_depth_attachment != nullptr)
+                destroy_texture_instance(fb->m_depth_attachment);
         }
-
-        // Following is runtime vk states.
-        size_t                              _vk_rend_rounds;   
-        uint32_t                            _vk_presenting_swapchain_image_index;
-        jevk11_framebuffer*                 _vk_current_swapchain_framebuffer;
-        jevk11_framebuffer*                 _vk_current_target_framebuffer;
-
-        std::unordered_set<jevk11_framebuffer*> _vk_updating_target_framebuffers;
 
         void destroy_swap_chain()
         {
             for (auto* fb : _vk_swapchain_framebuffer)
                 destroy_frame_buffer(fb);
-   
+
             vkDestroyCommandPool(_vk_logic_device, _vk_command_pool, nullptr);
+
+            _vk_swapchain_framebuffer.clear();
         }
-        
+
         void recreate_swap_chain_for_current_surface(size_t w, size_t h)
         {
             vkDeviceWaitIdle(_vk_logic_device);
@@ -604,12 +731,22 @@ VK_API_PLATFORM_API_LIST
             _vk_swapchain_framebuffer.resize(swapchain_real_image_count);
             for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
             {
+                jevk11_texture* color_attachment = create_framebuf_texture_with_swapchain_image(
+                    swapchain_images[i],
+                    _vk_surface_format.format,
+                    VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT
+                );
+
+                jevk11_texture* depth_attachment = create_framebuf_texture(
+                    (jegl_texture::format)(jegl_texture::format::DEPTH | jegl_texture::format::FRAMEBUF), w, h);
+
                 _vk_swapchain_framebuffer[i] = create_frame_buffer(
                     (size_t)used_extent.width,
                     (size_t)used_extent.height,
-                    { swapchain_images[i] }
+                    { color_attachment },
+                    depth_attachment
                 );
-            }           
+            }
         }
 
 #define VK_API_DECL(name) PFN_##name name
@@ -1013,6 +1150,33 @@ VK_API_PLATFORM_API_LIST
                     _vk_surface_format = vk_surface_formats.front();
             }
 
+            // 获取受支持的深度数据格式
+            _vk_depth_format = VK_FORMAT_UNDEFINED;
+            std::vector<VkFormat> vk_depth_formats = {
+                VK_FORMAT_D32_SFLOAT_S8_UINT,
+                VK_FORMAT_D32_SFLOAT,
+                VK_FORMAT_D24_UNORM_S8_UINT,
+                VK_FORMAT_D16_UNORM_S8_UINT,
+                VK_FORMAT_D16_UNORM
+            };
+
+            for (auto& format : vk_depth_formats)
+            {
+                VkFormatProperties format_properties;
+                vkGetPhysicalDeviceFormatProperties(_vk_device, format, &format_properties);
+
+                if (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+                {
+                    _vk_depth_format = format;
+                    break;
+                }
+            }
+
+            if (_vk_depth_format == VK_FORMAT_UNDEFINED)
+            {
+                jeecs::debug::logfatal("Failed to find suitable depth format.");
+            }
+
             // 设置交换链呈现模式，优先选择VK_PRESENT_MODE_MAILBOX_KHR，其次是VK_PRESENT_MODE_FIFO_KHR；
             // 如果都不支持，则回滚到VK_PRESENT_MODE_IMMEDIATE_KHR；如果以上模式均不支持，则直接终止
             bool vk_present_mode_mailbox_supported = false;
@@ -1063,11 +1227,35 @@ VK_API_PLATFORM_API_LIST
             recreate_swap_chain_for_current_surface(
                 _vk_jegl_interface->m_interface_width,
                 _vk_jegl_interface->m_interface_height);
+
+            // 创建动态大小的描述符集合池，用于分配给Uniform buffer 实例
+            VkDescriptorPoolSize descriptor_ubo_pool_size = {};
+            descriptor_ubo_pool_size.type = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptor_ubo_pool_size.descriptorCount = 1;
+
+            VkDescriptorPoolCreateInfo descriptor_ubo_pool_create_info = {};
+            descriptor_ubo_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+            descriptor_ubo_pool_create_info.pNext = nullptr;
+            descriptor_ubo_pool_create_info.flags = 0;
+            descriptor_ubo_pool_create_info.maxSets = 128;
+            descriptor_ubo_pool_create_info.poolSizeCount = 1;
+            descriptor_ubo_pool_create_info.pPoolSizes = &descriptor_ubo_pool_size;
+
+            if (VK_SUCCESS != vkCreateDescriptorPool(
+                _vk_logic_device,
+                &descriptor_ubo_pool_create_info,
+                nullptr,
+                &_vk_descriptor_ubo_pool))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 descriptor pool for uniform buffer.");
+            }
         }
 
         void shutdown()
         {
             vkDeviceWaitIdle(_vk_logic_device);
+
+            vkDestroyDescriptorPool(_vk_logic_device, _vk_descriptor_ubo_pool, nullptr);
 
             destroy_swap_chain();
             vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
@@ -1085,7 +1273,6 @@ VK_API_PLATFORM_API_LIST
             vkDestroyInstance(_vk_instance, nullptr);
         }
         /////////////////////////////////////////////////////
-
         void begin_command_buffer_record(VkCommandBuffer cmdbuf)
         {
             VkCommandBufferBeginInfo command_buffer_begin_info = {};
@@ -1099,7 +1286,6 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to begin vk110 command buffer record.");
             }
         }
-
         void end_command_buffer_record(VkCommandBuffer cmdbuf)
         {
             if (VK_SUCCESS != vkEndCommandBuffer(cmdbuf))
@@ -1107,7 +1293,6 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to end vk110 command buffer record.");
             }
         }
-
         /////////////////////////////////////////////////////
         uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties)
         {
@@ -1182,9 +1367,7 @@ VK_API_PLATFORM_API_LIST
 
             vkBindBufferMemory(_vk_logic_device, *out_device_buffer, *out_device_memory, 0);
         }
-
         /////////////////////////////////////////////////////
-
         jevk11_shader_blob* create_shader_blob(jegl_resource* resource)
         {
             jevk11_shader_blob::blob_data* shader_blob = new jevk11_shader_blob::blob_data{};
@@ -1193,6 +1376,92 @@ VK_API_PLATFORM_API_LIST
                 && resource->m_raw_shader_data != nullptr);
 
             shader_blob->m_context = this;
+
+            // 此处创建采样器
+            shader_blob->m_samplers.resize(resource->m_raw_shader_data->m_sampler_count);
+            for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
+            {
+                const jegl_shader::sampler_method& method = resource->m_raw_shader_data->m_sampler_methods[i];
+
+                VkSamplerCreateInfo sampler_create_info = {};
+                sampler_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+                sampler_create_info.pNext = nullptr;
+                sampler_create_info.flags = 0;
+
+                // 线性或临近采样
+                switch (method.m_mag)
+                {
+                case jegl_shader::fliter_mode::LINEAR:
+                    sampler_create_info.magFilter = VkFilter::VK_FILTER_LINEAR;
+                    break;
+                case jegl_shader::fliter_mode::NEAREST:
+                    sampler_create_info.magFilter = VkFilter::VK_FILTER_NEAREST;
+                    break;
+                }
+                switch (method.m_min)
+                {
+                case jegl_shader::fliter_mode::LINEAR:
+                    sampler_create_info.minFilter = VkFilter::VK_FILTER_LINEAR;
+                    break;
+                case jegl_shader::fliter_mode::NEAREST:
+                    sampler_create_info.minFilter = VkFilter::VK_FILTER_NEAREST;
+                    break;
+                }
+                switch (method.m_mip)
+                {
+                case jegl_shader::fliter_mode::LINEAR:
+                    sampler_create_info.mipmapMode = VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                    break;
+                case jegl_shader::fliter_mode::NEAREST:
+                    sampler_create_info.mipmapMode = VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_NEAREST;
+                    break;
+                }
+
+                // 边缘采样方式
+                switch (method.m_uwrap)
+                {
+                case jegl_shader::wrap_mode::CLAMP:
+                    sampler_create_info.addressModeU = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                    break;
+                case jegl_shader::wrap_mode::REPEAT:
+                    sampler_create_info.addressModeU = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                    break;
+                }
+                switch (method.m_vwrap)
+                {
+                case jegl_shader::wrap_mode::CLAMP:
+                    sampler_create_info.addressModeV = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                    break;
+                case jegl_shader::wrap_mode::REPEAT:
+                    sampler_create_info.addressModeV = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                    break;
+                }
+                // JoyEngine的纹理没有W方向，现在先随便塞个值
+                sampler_create_info.addressModeW = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+                // 边缘采样颜色， 由于引擎没有提供边缘采样颜色的选项，所以这里也是随便填一个
+                sampler_create_info.borderColor = VkBorderColor::VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+
+                // 乱七八糟的其他设置，统统忽略
+                sampler_create_info.mipLodBias = 0.0f;
+                // 各向异性滤波，此处也简单忽略。不启用
+                sampler_create_info.anisotropyEnable = VK_FALSE;
+                sampler_create_info.maxAnisotropy = 1.0f;
+                sampler_create_info.compareEnable = VK_FALSE;
+                sampler_create_info.compareOp = VkCompareOp::VK_COMPARE_OP_ALWAYS;
+                sampler_create_info.minLod = 0.0f;
+                sampler_create_info.maxLod = 0.0f;
+
+                if (VK_SUCCESS != vkCreateSampler(
+                    _vk_logic_device,
+                    &sampler_create_info,
+                    nullptr,
+                    &shader_blob->m_samplers[i]))
+                {
+                    jeecs::debug::logfatal("Failed to create vk110 sampler.");
+                }
+
+            }
 
             VkShaderModuleCreateInfo vertex_shader_module_create_info = {};
             vertex_shader_module_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1379,7 +1648,59 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_multi_sample_state_create_info.alphaToCoverageEnable = VK_FALSE;
             shader_blob->m_multi_sample_state_create_info.alphaToOneEnable = VK_FALSE;
 
-            // TODO: 深度缓冲区配置
+            // 深度缓冲区配置
+            shader_blob->m_depth_stencil_state_create_info = {};
+            shader_blob->m_depth_stencil_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+            shader_blob->m_depth_stencil_state_create_info.pNext = nullptr;
+            shader_blob->m_depth_stencil_state_create_info.flags = 0;
+
+            switch (resource->m_raw_shader_data->m_depth_mask)
+            {
+            case jegl_shader::depth_mask_method::DISABLE:
+                shader_blob->m_depth_stencil_state_create_info.depthWriteEnable = VK_FALSE;
+                break;
+            case jegl_shader::depth_mask_method::ENABLE:
+                shader_blob->m_depth_stencil_state_create_info.depthWriteEnable = VK_TRUE;
+                break;
+            }
+
+            shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_TRUE;
+            switch (resource->m_raw_shader_data->m_depth_test)
+            {
+            case jegl_shader::depth_test_method::OFF:
+                shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_FALSE;
+                break;
+            case jegl_shader::depth_test_method::NEVER:
+                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_NEVER;
+                break;
+            case jegl_shader::depth_test_method::LESS:       /* DEFAULT */
+                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_LESS;
+                break;
+            case jegl_shader::depth_test_method::EQUAL:
+                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_EQUAL;
+                break;
+            case jegl_shader::depth_test_method::LESS_EQUAL:
+                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_LESS_OR_EQUAL;
+                break;
+            case jegl_shader::depth_test_method::GREATER:
+                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_GREATER;
+                break;
+            case jegl_shader::depth_test_method::NOT_EQUAL:
+                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_NOT_EQUAL;
+                break;
+            case jegl_shader::depth_test_method::GREATER_EQUAL:
+                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_GREATER_OR_EQUAL;
+                break;
+            case jegl_shader::depth_test_method::ALWAYS:
+                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_ALWAYS;
+                break;
+            }
+            shader_blob->m_depth_stencil_state_create_info.depthBoundsTestEnable = VK_FALSE;
+            shader_blob->m_depth_stencil_state_create_info.stencilTestEnable = VK_FALSE;
+            shader_blob->m_depth_stencil_state_create_info.front = {};
+            shader_blob->m_depth_stencil_state_create_info.back = {};
+            shader_blob->m_depth_stencil_state_create_info.minDepthBounds = 0;
+            shader_blob->m_depth_stencil_state_create_info.maxDepthBounds = 1;
 
             // 混色方法，这个不需要动态调整，直接从shader配置中读取混合模式
             shader_blob->m_color_blend_attachment_state = {};
@@ -1571,7 +1892,7 @@ VK_API_PLATFORM_API_LIST
                 _vk_logic_device,
                 vertex->m_vk_vertex_buffer_memory);
 
-            vertex->m_vertex_point_count = 
+            vertex->m_vertex_point_count =
                 (uint32_t)resource->m_raw_vertex_data->m_point_count;
 
             return vertex;
@@ -1583,19 +1904,184 @@ VK_API_PLATFORM_API_LIST
             delete vertex;
         }
 
+        VkImageView create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
+        {
+            VkImageViewCreateInfo image_view_create_info = {};
+            image_view_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            image_view_create_info.pNext = nullptr;
+            image_view_create_info.flags = 0;
+            image_view_create_info.image = image;
+            image_view_create_info.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+            image_view_create_info.format = format;
+            image_view_create_info.components.r = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+            image_view_create_info.components.g = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+            image_view_create_info.components.b = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+            image_view_create_info.components.a = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+            image_view_create_info.subresourceRange.aspectMask = aspect_flags;
+            image_view_create_info.subresourceRange.baseMipLevel = 0;
+            image_view_create_info.subresourceRange.levelCount = 1;
+            image_view_create_info.subresourceRange.baseArrayLayer = 0;
+            image_view_create_info.subresourceRange.layerCount = 1;
+
+            VkImageView result;
+            if (VK_SUCCESS != vkCreateImageView(
+                _vk_logic_device,
+                &image_view_create_info,
+                nullptr,
+                &result))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 image view.");
+            }
+
+            return result;
+        }
+        void create_image(
+            size_t width, size_t height,
+            VkFormat format,
+            VkImageTiling tiling,
+            VkImageUsageFlags usage,
+            VkMemoryPropertyFlags properties,
+            VkImageAspectFlags aspect_flags,
+            VkImage* out_image,
+            VkImageView* out_image_view,
+            VkDeviceMemory* out_memory)
+        {
+            VkImageCreateInfo image_create_info = {};
+            image_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            image_create_info.pNext = nullptr;
+            image_create_info.flags = 0;
+            image_create_info.imageType = VkImageType::VK_IMAGE_TYPE_2D;
+            image_create_info.format = format;
+            image_create_info.extent.width = (uint32_t)width;
+            image_create_info.extent.height = (uint32_t)height;
+            image_create_info.extent.depth = 1;
+            image_create_info.mipLevels = 1;
+            image_create_info.arrayLayers = 1;
+            image_create_info.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
+            image_create_info.tiling = tiling;
+            image_create_info.usage = usage;
+            image_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
+            image_create_info.queueFamilyIndexCount = 0;
+            image_create_info.pQueueFamilyIndices = nullptr;
+            image_create_info.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+
+            if (VK_SUCCESS != vkCreateImage(
+                _vk_logic_device,
+                &image_create_info,
+                nullptr,
+                out_image))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 image.");
+            }
+
+            VkMemoryRequirements image_memory_requirements;
+            vkGetImageMemoryRequirements(
+                _vk_logic_device,
+                *out_image,
+                &image_memory_requirements);
+
+            *out_memory = alloc_vk_device_memory(image_memory_requirements, properties);
+
+            vkBindImageMemory(
+                _vk_logic_device,
+                *out_image,
+                *out_memory,
+                0);
+
+            *out_image_view = create_image_view(*out_image, format, aspect_flags);
+        }
+        jevk11_texture* create_framebuf_texture_with_swapchain_image(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
+        {
+            jevk11_texture* texture = new jevk11_texture{};
+
+            texture->m_vk_texture_image = nullptr; // 不设置此项，不需要释放
+            texture->m_vk_texture_imaeg_view = create_image_view(image, format, aspect_flags);
+            texture->m_vk_texture_image_memory = nullptr;
+
+            return texture;
+        }
         jevk11_texture* create_framebuf_texture(jegl_texture::format format, size_t w, size_t h)
         {
             assert(format & jegl_texture::format::FRAMEBUF);
             if (format & jegl_texture::format::DEPTH)
             {
+                jevk11_texture* texture = new jevk11_texture{};
 
+                create_image(
+                    w, h,
+                    _vk_depth_format,
+                    VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+                    VkImageUsageFlagBits::VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT,
+                    &texture->m_vk_texture_image,
+                    &texture->m_vk_texture_imaeg_view,
+                    &texture->m_vk_texture_image_memory);
+
+                return texture;
             }
             else
             {
-
+                abort();
             }
         }
 
+        void transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
+        {
+            VkCommandBuffer command_buffer = begin_temp_command_buffer_records();
+            {
+                VkImageMemoryBarrier barrier = {};
+                barrier.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.pNext = nullptr;
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = 0;
+                barrier.oldLayout = old_layout;
+                barrier.newLayout = new_layout;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = image;
+                barrier.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                barrier.subresourceRange.baseMipLevel = 0;
+                barrier.subresourceRange.levelCount = 1;
+                barrier.subresourceRange.baseArrayLayer = 0;
+                barrier.subresourceRange.layerCount = 1;
+
+                VkPipelineStageFlags source_stage;
+                VkPipelineStageFlags destination_stage;
+
+                if (old_layout == VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED &&
+                    new_layout == VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+                {
+                    barrier.srcAccessMask = 0;
+                    barrier.dstAccessMask = VkAccessFlagBits::VK_ACCESS_TRANSFER_WRITE_BIT;
+
+                    source_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                    destination_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TRANSFER_BIT;
+                }
+                else if (old_layout == VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+                    new_layout == VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                {
+                    barrier.srcAccessMask = VkAccessFlagBits::VK_ACCESS_TRANSFER_WRITE_BIT;
+                    barrier.dstAccessMask = VkAccessFlagBits::VK_ACCESS_SHADER_READ_BIT;
+
+                    source_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TRANSFER_BIT;
+                    destination_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                }
+                else
+                {
+                    jeecs::debug::logfatal("Unsupported layout transition.");
+                }
+
+                vkCmdPipelineBarrier(
+                    command_buffer,
+                    source_stage, destination_stage,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier);
+            }
+            end_temp_command_buffer_record(command_buffer);
+        }
         jevk11_texture* create_texture_instance(jegl_resource* resource)
         {
             jegl_texture* texture_raw_data = resource->m_raw_texture_data;
@@ -1603,13 +2089,38 @@ VK_API_PLATFORM_API_LIST
             if (texture_raw_data->m_format & jegl_texture::format::FRAMEBUF)
             {
                 return create_framebuf_texture(
-                    texture_raw_data->m_format, 
-                    texture_raw_data->m_width, 
+                    texture_raw_data->m_format,
+                    texture_raw_data->m_width,
                     texture_raw_data->m_height);
             }
             else
             {
                 jevk11_texture* texture = new jevk11_texture{};
+
+                VkFormat image_format;
+                switch (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+                {
+                case jegl_texture::format::RGBA:
+                    image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM; break;
+                case jegl_texture::format::MONO:
+                    image_format = VkFormat::VK_FORMAT_R8_UNORM; break;
+                }
+
+                create_image(
+                    texture_raw_data->m_width,
+                    texture_raw_data->m_height,
+                    image_format,
+                    VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+                    VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                    VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
+                    &texture->m_vk_texture_image,
+                    &texture->m_vk_texture_imaeg_view,
+                    &texture->m_vk_texture_image_memory);
+
+                VkBuffer texture_data_buffer;
+                VkDeviceMemory texture_data_buffer_memory;
 
                 size_t texture_buffer_size = texture_raw_data->m_width * texture_raw_data->m_height *
                     (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
@@ -1619,84 +2130,129 @@ VK_API_PLATFORM_API_LIST
                     VkBufferUsageFlagBits::VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                    &texture->m_vk_texture_buffer,
-                    &texture->m_vk_texture_buffer_memory);
+                    &texture_data_buffer,
+                    &texture_data_buffer_memory);
 
                 void* data;
                 vkMapMemory(
                     _vk_logic_device,
-                    texture->m_vk_texture_buffer_memory,
+                    texture_data_buffer_memory,
                     0,
                     texture_buffer_size,
                     0,
                     &data);
                 memcpy(data, texture_raw_data->m_pixels, texture_buffer_size);
-                vkUnmapMemory(
-                    _vk_logic_device,
-                    texture->m_vk_texture_buffer_memory);
+                vkUnmapMemory(_vk_logic_device, texture_data_buffer_memory);
 
-                VkImageCreateInfo image_create_info = {};
-                image_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-                image_create_info.pNext = nullptr;
-                image_create_info.flags = 0;
-                image_create_info.imageType = VkImageType::VK_IMAGE_TYPE_2D;
-                switch (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
-                {
-                case jegl_texture::format::RGBA:
-                    image_create_info.format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM; break;
-                case jegl_texture::format::MONO:
-                    image_create_info.format = VkFormat::VK_FORMAT_R8_UNORM; break;
-                }
-                image_create_info.extent.width = (uint32_t)texture_raw_data->m_width;
-                image_create_info.extent.height = (uint32_t)texture_raw_data->m_height;
-                image_create_info.extent.depth = 1;
-                image_create_info.mipLevels = 1;
-                image_create_info.arrayLayers = 1;
-                image_create_info.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-                image_create_info.tiling = VkImageTiling::VK_IMAGE_TILING_OPTIMAL;
-                image_create_info.usage =
-                    VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                    VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT;
-                image_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
-                image_create_info.queueFamilyIndexCount = 0;
-                image_create_info.pQueueFamilyIndices = nullptr;
-                image_create_info.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
-
-                if (VK_SUCCESS != vkCreateImage(
-                    _vk_logic_device,
-                    &image_create_info,
-                    nullptr,
-                    &texture->m_vk_texture_image))
-                {
-                    jeecs::debug::logfatal("Failed to create vk110 texture image.");
-                }
-
-                VkMemoryRequirements texture_image_memory_requirements;
-                vkGetImageMemoryRequirements(
-                    _vk_logic_device,
+                // 开始传输纹理数据
+                transition_image_layout(
                     texture->m_vk_texture_image,
-                    &texture_image_memory_requirements);
+                    image_format,
+                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
+                    VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                VkCommandBuffer command_buffer = begin_temp_command_buffer_records();
+                {
+                    VkBufferImageCopy region = {};
+                    region.bufferOffset = 0;
+                    region.bufferRowLength = 0;
+                    region.bufferImageHeight = 0;
+                    region.imageSubresource.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                    region.imageSubresource.mipLevel = 0;
+                    region.imageSubresource.baseArrayLayer = 0;
+                    region.imageSubresource.layerCount = 1;
+                    region.imageOffset = { 0, 0, 0 };
+                    region.imageExtent = {
+                        (uint32_t)texture_raw_data->m_width,
+                        (uint32_t)texture_raw_data->m_height,
+                        1
+                    };
 
-                texture->m_vk_texture_image_memory = alloc_vk_device_memory(
-                    texture_image_memory_requirements,
-                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-                vkBindImageMemory(
-                    _vk_logic_device,
+                    vkCmdCopyBufferToImage(
+                        command_buffer,
+                        texture_data_buffer,
+                        texture->m_vk_texture_image,
+                        VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        1,
+                        &region);
+                }
+                end_temp_command_buffer_record(command_buffer);
+                transition_image_layout(
                     texture->m_vk_texture_image,
-                    texture->m_vk_texture_image_memory,
-                    0);
+                    image_format,
+                    VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+                // 释放临时缓冲区
+                vkDestroyBuffer(_vk_logic_device, texture_data_buffer, nullptr);
+                vkFreeMemory(_vk_logic_device, texture_data_buffer_memory, nullptr);
+                
                 return texture;
             }
         }
         void destroy_texture_instance(jevk11_texture* texture)
         {
-            vkDestroyImage(_vk_logic_device, texture->m_vk_texture_image, nullptr);
-            vkFreeMemory(_vk_logic_device, texture->m_vk_texture_image_memory, nullptr);
-            vkDestroyBuffer(_vk_logic_device, texture->m_vk_texture_buffer, nullptr);
-            vkFreeMemory(_vk_logic_device, texture->m_vk_texture_buffer_memory, nullptr);
+            vkDestroyImageView(_vk_logic_device, texture->m_vk_texture_imaeg_view, nullptr);
+
+            if (texture->m_vk_texture_image == nullptr)
+                vkDestroyImage(_vk_logic_device, texture->m_vk_texture_image, nullptr);
+            if (texture->m_vk_texture_image_memory == nullptr)
+                vkFreeMemory(_vk_logic_device, texture->m_vk_texture_image_memory, nullptr);
+            //vkDestroyBuffer(_vk_logic_device, texture->m_vk_texture_buffer, nullptr);
+            //vkFreeMemory(_vk_logic_device, texture->m_vk_texture_buffer_memory, nullptr);
             delete texture;
+        }
+
+        jevk11_uniformbuf* create_uniform_buffer_with_size(size_t size)
+        {
+            jevk11_uniformbuf* uniformbuf = new jevk11_uniformbuf{};
+
+            // 获取所需分配的内存类型
+            alloc_vk_device_buffer_memory(
+                size,
+                VkBufferUsageFlagBits::VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                &uniformbuf->m_uniform_buffer,
+                &uniformbuf->m_uniform_buffer_memory
+            );
+
+            return uniformbuf;
+        }
+        jevk11_uniformbuf* create_uniform_buffer(jegl_resource* resource)
+        {
+            return create_uniform_buffer_with_size(
+                resource->m_raw_uniformbuf_data->m_buffer_size);
+        }
+        void destroy_uniform_buffer(jevk11_uniformbuf* uniformbuf)
+        {
+            vkDestroyBuffer(_vk_logic_device, uniformbuf->m_uniform_buffer, nullptr);
+            vkFreeMemory(_vk_logic_device, uniformbuf->m_uniform_buffer_memory, nullptr);
+            delete uniformbuf;
+        }
+
+        void update_uniform_buffer(jegl_resource* resource)
+        {
+            jevk11_uniformbuf* uniformbuf = std::launder(
+                reinterpret_cast<jevk11_uniformbuf*>(resource->m_handle.m_ptr));
+
+            auto* raw_uniformbuf_data = resource->m_raw_uniformbuf_data;
+            if (raw_uniformbuf_data != nullptr && raw_uniformbuf_data->m_update_length > 0)
+            {
+                void* data;
+
+                vkMapMemory(
+                    _vk_logic_device,
+                    uniformbuf->m_uniform_buffer_memory,
+                    raw_uniformbuf_data->m_update_begin_offset,
+                    raw_uniformbuf_data->m_update_length,
+                    0,
+                    &data);
+                memcpy(data, raw_uniformbuf_data->m_buffer, raw_uniformbuf_data->m_update_length);
+                vkUnmapMemory(_vk_logic_device, uniformbuf->m_uniform_buffer_memory);
+
+                resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
+                resource->m_raw_uniformbuf_data->m_update_length = 0;
+            }
         }
 
         /////////////////////////////////////////////////////
@@ -1738,82 +2294,6 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to submit draw command buffer!");
             }
         }
-
-        void cmd_begin_frame_buffer(jevk11_framebuffer* framebuf, size_t x, size_t y, size_t w, size_t h)
-        {
-            _vk_current_target_framebuffer = framebuf;
-
-            if (_vk_updating_target_framebuffers.find(framebuf) == _vk_updating_target_framebuffers.end())
-            {
-                _vk_updating_target_framebuffers.insert(framebuf);
-                begin_command_buffer_record(_vk_current_target_framebuffer->m_command_buffer);
-
-                VkRenderPassBeginInfo render_pass_begin_info = {};
-                render_pass_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                render_pass_begin_info.pNext = nullptr;
-                render_pass_begin_info.renderPass = _vk_current_target_framebuffer->m_rendpass;
-                render_pass_begin_info.framebuffer = _vk_current_target_framebuffer->m_framebuffer;
-                render_pass_begin_info.renderArea.offset = { 0, 0 };
-                render_pass_begin_info.renderArea.extent = _vk_surface_capabilities.currentExtent;
-
-                // TODO: 这个破烂得移除掉
-                render_pass_begin_info.clearValueCount = 0;
-                render_pass_begin_info.pClearValues = nullptr;
-
-                vkCmdBeginRenderPass(
-                    _vk_current_target_framebuffer->m_command_buffer,
-                    &render_pass_begin_info,
-                    VkSubpassContents::VK_SUBPASS_CONTENTS_INLINE);
-            }
-
-            // NOTE: Pipeline的viewport的纵向坐标应当翻转以兼容opengl3和dx11实现
-            if (w == 0) w = framebuf->m_width;
-            if (h == 0) h = framebuf->m_height;
-
-            VkViewport viewport = {};
-            viewport.x = (float)x;
-            viewport.y = (float)framebuf->m_height - (float)y;
-            viewport.width = (float)w;
-            viewport.height = -(float)h;
-            viewport.minDepth = 0.0f;
-            viewport.maxDepth = 1.0f;
-            vkCmdSetViewport(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &viewport);
-
-            VkRect2D scissor = {};
-            scissor.offset = { (int32_t)0, (int32_t)0 };
-            scissor.extent = { (uint32_t)framebuf->m_width, (uint32_t)framebuf->m_height };
-            vkCmdSetScissor(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &scissor);
-        }
-
-        void cmd_clear_frame_buffer(float color[4])
-        {
-            assert(_vk_current_target_framebuffer != nullptr);
-            for (auto& attachment : _vk_current_target_framebuffer->m_attachments)
-            {
-                VkClearValue clear_color = { color[0], color[1], color[2], color[3] };
-                VkClearAttachment clear_attachment = {};
-                clear_attachment.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
-                clear_attachment.colorAttachment = 0;
-                clear_attachment.clearValue = clear_color;
-
-                VkClearRect clear_rect = {};
-                clear_rect.baseArrayLayer = 0;
-                clear_rect.layerCount = 1;
-                clear_rect.rect.offset = { 0, 0 };
-                clear_rect.rect.extent = { 
-                    (uint32_t)_vk_current_target_framebuffer->m_width,
-                    (uint32_t)_vk_current_target_framebuffer->m_height 
-                    };
-
-                vkCmdClearAttachments(
-                    _vk_current_target_framebuffer->m_command_buffer,
-                    1,
-                    &clear_attachment,
-                    1,
-                    &clear_rect);
-            }
-        }
-
         void pre_update()
         {
             if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
@@ -1821,7 +2301,7 @@ VK_API_PLATFORM_API_LIST
 
             vkQueueWaitIdle(_vk_logic_device_present_queue);
 
-            assert(_vk_current_swapchain_framebuffer == 
+            assert(_vk_current_swapchain_framebuffer ==
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
 
             VkPresentInfoKHR present_info = {};
@@ -1838,7 +2318,6 @@ VK_API_PLATFORM_API_LIST
 
             vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
         }
-
         void update()
         {
             // NOTE: 用于标志帧缓冲区的起始渲染帧
@@ -1877,7 +2356,6 @@ VK_API_PLATFORM_API_LIST
 
             cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
         }
-
         void late_update()
         {
             if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
@@ -1892,9 +2370,107 @@ VK_API_PLATFORM_API_LIST
 
             _vk_updating_target_framebuffers.clear();
         }
-
         /////////////////////////////////////////////////////
-        void cmd_bind_shader_pipeline(jevk11_shader * shader)
+        void cmd_begin_frame_buffer(jevk11_framebuffer* framebuf, size_t x, size_t y, size_t w, size_t h)
+        {
+            _vk_current_target_framebuffer = framebuf;
+
+            if (_vk_updating_target_framebuffers.find(framebuf) == _vk_updating_target_framebuffers.end())
+            {
+                _vk_updating_target_framebuffers.insert(framebuf);
+                begin_command_buffer_record(_vk_current_target_framebuffer->m_command_buffer);
+
+                VkRenderPassBeginInfo render_pass_begin_info = {};
+                render_pass_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                render_pass_begin_info.pNext = nullptr;
+                render_pass_begin_info.renderPass = _vk_current_target_framebuffer->m_rendpass;
+                render_pass_begin_info.framebuffer = _vk_current_target_framebuffer->m_framebuffer;
+                render_pass_begin_info.renderArea.offset = { 0, 0 };
+                render_pass_begin_info.renderArea.extent = _vk_surface_capabilities.currentExtent;
+
+                render_pass_begin_info.clearValueCount = 0;
+                render_pass_begin_info.pClearValues = nullptr;
+
+                vkCmdBeginRenderPass(
+                    _vk_current_target_framebuffer->m_command_buffer,
+                    &render_pass_begin_info,
+                    VkSubpassContents::VK_SUBPASS_CONTENTS_INLINE);
+            }
+
+            // NOTE: Pipeline的viewport的纵向坐标应当翻转以兼容opengl3和dx11实现
+            if (w == 0) w = framebuf->m_width;
+            if (h == 0) h = framebuf->m_height;
+
+            VkViewport viewport = {};
+            viewport.x = (float)x;
+            viewport.y = (float)framebuf->m_height - (float)y;
+            viewport.width = (float)w;
+            viewport.height = -(float)h;
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            vkCmdSetViewport(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &viewport);
+
+            VkRect2D scissor = {};
+            scissor.offset = { (int32_t)0, (int32_t)0 };
+            scissor.extent = { (uint32_t)framebuf->m_width, (uint32_t)framebuf->m_height };
+            vkCmdSetScissor(_vk_current_target_framebuffer->m_command_buffer, 0, 1, &scissor);
+        }
+        void cmd_clear_frame_buffer_color(float color[4])
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+
+            for (size_t i = 0; i < _vk_current_target_framebuffer->m_color_attachments.size(); ++i)
+            {
+                VkClearValue clear_color = { color[0], color[1], color[2], color[3] };
+                VkClearAttachment clear_attachment = {};
+                clear_attachment.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                clear_attachment.colorAttachment = (uint32_t)i;
+                clear_attachment.clearValue = clear_color;
+
+                VkClearRect clear_rect = {};
+                clear_rect.baseArrayLayer = 0;
+                clear_rect.layerCount = 1;
+                clear_rect.rect.offset = { 0, 0 };
+                clear_rect.rect.extent = {
+                    (uint32_t)_vk_current_target_framebuffer->m_width,
+                    (uint32_t)_vk_current_target_framebuffer->m_height
+                };
+
+                vkCmdClearAttachments(
+                    _vk_current_target_framebuffer->m_command_buffer,
+                    1,
+                    &clear_attachment,
+                    1,
+                    &clear_rect);
+            }
+        }
+        void cmd_clear_frame_buffer_depth()
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+
+            VkClearAttachment clear_attachment = {};
+            clear_attachment.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT;
+            clear_attachment.colorAttachment = 0;
+            clear_attachment.clearValue.depthStencil.depth = 1.0f;
+            clear_attachment.clearValue.depthStencil.stencil = 0;
+
+            VkClearRect clear_rect = {};
+            clear_rect.baseArrayLayer = 0;
+            clear_rect.layerCount = 1;
+            clear_rect.rect.offset = { 0, 0 };
+            clear_rect.rect.extent = {
+                (uint32_t)_vk_current_target_framebuffer->m_width,
+                (uint32_t)_vk_current_target_framebuffer->m_height
+            };
+
+            vkCmdClearAttachments(
+                _vk_current_target_framebuffer->m_command_buffer,
+                1,
+                &clear_attachment,
+                1,
+                &clear_rect);
+        }
+        void cmd_bind_shader_pipeline(jevk11_shader* shader)
         {
             assert(_vk_current_target_framebuffer != nullptr);
             vkCmdBindPipeline(
@@ -1928,11 +2504,14 @@ VK_API_PLATFORM_API_LIST
         m_context->vkDestroyPipelineLayout(m_context->_vk_logic_device, m_pipeline_layout, nullptr);
         m_context->vkDestroyShaderModule(m_context->_vk_logic_device, m_vertex_shader_module, nullptr);
         m_context->vkDestroyShaderModule(m_context->_vk_logic_device, m_fragment_shader_module, nullptr);
+
+        for (auto* sampler : m_samplers)
+            m_context->vkDestroySampler(m_context->_vk_logic_device, sampler, nullptr);
     }
     VkPipeline jevk11_shader::prepare_pipeline(jegl_vk110_context* context)
     {
         assert(context->_vk_current_target_framebuffer != nullptr);
- 
+
         VkRenderPass target_pass = context->_vk_current_target_framebuffer->m_rendpass;
         assert(target_pass != nullptr);
 
@@ -1952,7 +2531,7 @@ VK_API_PLATFORM_API_LIST
         pipeline_create_info.pViewportState = &m_blob_data->m_viewport_state_create_info;
         pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
         pipeline_create_info.pMultisampleState = &m_blob_data->m_multi_sample_state_create_info;
-        pipeline_create_info.pDepthStencilState = nullptr;
+        pipeline_create_info.pDepthStencilState = &m_blob_data->m_depth_stencil_state_create_info;
         pipeline_create_info.pColorBlendState = &m_blob_data->m_color_blend_state_create_info;
         pipeline_create_info.pDynamicState = &m_blob_data->m_dynamic_state_create_info;
         pipeline_create_info.layout = m_blob_data->m_pipeline_layout;
@@ -1990,9 +2569,9 @@ VK_API_PLATFORM_API_LIST
 
         context->init_vulkan(config);
 
-       /* jegui_init_none(
-            [](auto* res)->void* {return nullptr; },
-            [](auto* res) {});*/
+        /* jegui_init_none(
+             [](auto* res)->void* {return nullptr; },
+             [](auto* res) {});*/
 
         return context;
     }
@@ -2136,7 +2715,7 @@ VK_API_PLATFORM_API_LIST
             break;
         }
         case jegl_resource::type::TEXTURE:
-        {   
+        {
             context->destroy_texture_instance(std::launder(reinterpret_cast<jevk11_texture*>(resource->m_handle.m_ptr)));
             break;
         }
@@ -2185,10 +2764,12 @@ VK_API_PLATFORM_API_LIST
     void clear_framebuffer_color(jegl_thread::custom_thread_data_t ctx, float color[4])
     {
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
-        context->cmd_clear_frame_buffer(color);
+        context->cmd_clear_frame_buffer_color(color);
     }
-    void clear_framebuffer_depth(jegl_thread::custom_thread_data_t)
+    void clear_framebuffer_depth(jegl_thread::custom_thread_data_t ctx)
     {
+        jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
+        context->cmd_clear_frame_buffer_depth();
     }
 
     void set_uniform(jegl_thread::custom_thread_data_t, uint32_t, jegl_shader::uniform_type, const void*)
