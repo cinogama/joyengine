@@ -1818,7 +1818,7 @@ struct jegl_shader
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
 
-    sampler_method* m_sampler_methods;
+    sampler_method*     m_sampler_methods;
     size_t              m_sampler_count;
 };
 
