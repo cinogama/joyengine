@@ -295,7 +295,7 @@ public let frag =
                     ? (float)RENDAIMBUFFER_WIDTH/(float)RENDAIMBUFFER_HEIGHT * ortho_height_gain
                     : 1.0f;
 
-                float ortho_depth_gain = ortho != nullptr ? 1.0f : zfar * 0.5f;
+                float ortho_depth_gain = ortho != nullptr ? zfar * 0.5f : 1.0f;
 
                 // Left clipping plane
                 frustumCulling->frustum_plane_normals[0] =
@@ -344,7 +344,7 @@ public let frag =
                         projection.view_projection[1][3] + projection.view_projection[1][2],
                         projection.view_projection[2][3] + projection.view_projection[2][2]
                     );
-                frustumCulling->frustum_plane_distance[5] =
+                frustumCulling->frustum_plane_distance[4] =
                     ortho_depth_gain * (projection.view_projection[3][3] + projection.view_projection[3][2]);
 
                 // Far clipping plane
