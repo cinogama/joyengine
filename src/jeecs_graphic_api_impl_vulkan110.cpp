@@ -189,6 +189,10 @@ VK_API_DECL(vkDestroyDescriptorSetLayout);\
 VK_API_DECL(vkCreateRenderPass);\
 VK_API_DECL(vkDestroyRenderPass);\
 \
+VK_API_DECL(vkCreateDescriptorPool);\
+VK_API_DECL(vkDestroyDescriptorPool);\
+VK_API_DECL(vkAllocateDescriptorSets);\
+\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceSupportKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);\
 VK_API_DECL(vkGetPhysicalDeviceSurfaceFormatsKHR);\
@@ -2690,16 +2694,17 @@ VK_API_PLATFORM_API_LIST
                 1,
                 &clear_rect);
         }
-        void bind_uniform_buffer(jevk11_uniformbuf* uniformbuf)
+        void cmd_bind_uniform_buffer(jevk11_uniformbuf* uniformbuf)
         {
-
+            // TODO
+            abort();
 
         }
         void cmd_bind_shader_pipeline(jevk11_shader* shader)
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
-            cmd_bind_uniform_buffer(shader->m_uniform_variables);
+            // cmd_bind_uniform_buffer(shader->m_uniform_variables);
 
             vkCmdBindPipeline(
                 _vk_current_target_framebuffer->m_command_buffer,
@@ -2707,7 +2712,7 @@ VK_API_PLATFORM_API_LIST
                 shader->prepare_pipeline(this));
 
             // WTF
-            for ()
+           /* for ()
             {
                 shader->m_blob_data
             }
@@ -2719,7 +2724,7 @@ VK_API_PLATFORM_API_LIST
                 1,
                 &uniformbuf->m_descriptor_set,
                 0,
-                nullptr);
+                nullptr);*/
         }
         void cmd_draw_vertex(jevk11_vertex* vertex)
         {
