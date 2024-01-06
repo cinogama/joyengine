@@ -2716,7 +2716,6 @@ VK_API_PLATFORM_API_LIST
         }
         void cmd_bind_uniform_buffer(jevk11_uniformbuf* uniformbuf)
         {
-            vkDescriptorSetLayout
             vkUpdateDescriptorSets(_vk_logic_device, 1, &uniformbuf->m_descriptor_write, 0, nullptr);
         }
         void cmd_bind_sampler(const jevk11_shader_blob::blob_data::sampler_data& samp)
