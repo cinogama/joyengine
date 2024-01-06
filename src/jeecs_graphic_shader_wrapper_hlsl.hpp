@@ -11,10 +11,10 @@ namespace jeecs
         protected:
             std::string attrib_binding(size_t loc, size_t set)
             {
-                return "[[vk::binding(" + 
+                return "#ifdef GLSLANG_HLSL_TO_SPIRV\n[[vk::binding(" + 
                     std::to_string(loc) + ", " + 
                     std::to_string(set) + 
-                    ")]]\n";
+                    ")]]\n#endif\n";
             }
             virtual std::string get_typename(jegl_shader_value::type type) override
             {

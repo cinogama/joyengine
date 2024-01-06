@@ -3,6 +3,16 @@
 
 #ifdef JE_ENABLE_VK110_GAPI
 
+/*
+暂停支持
+
+Vulkan目前遇到的问题是，描述符集的需求数量是在创建时就需要确定的，而不是在运行时动态分配的。
+而需求却是在运行时动态分配的，这就导致了一个问题，如果在运行时动态分配，那么就需要在每次
+渲染时都重新创建描述符集，这样就会导致性能问题，显然这不可能。
+
+所以，目前的解决方案是，暂停支持Vulkan，直到有更好的解决方案出现。
+*/
+
 #include "jeecs_imgui_backend_api.hpp"
 #include <vulkan/vulkan.h>
 
@@ -2706,6 +2716,7 @@ VK_API_PLATFORM_API_LIST
         }
         void cmd_bind_uniform_buffer(jevk11_uniformbuf* uniformbuf)
         {
+            vkDescriptorSetLayout
             vkUpdateDescriptorSets(_vk_logic_device, 1, &uniformbuf->m_descriptor_write, 0, nullptr);
         }
         void cmd_bind_sampler(const jevk11_shader_blob::blob_data::sampler_data& samp)

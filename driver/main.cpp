@@ -25,7 +25,7 @@ int main(int argc, char** argv)
     config.m_title = "Demo";
     config.m_userdata = nullptr;
 
-    jegl_set_host_graphic_api(jegl_using_dx11_apis);
+    jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
     jegl_thread* gthread = jegl_uhost_get_gl_thread(jegl_uhost_get_or_create_for_universe(u.handle(), &config));
 
     assert(gthread != nullptr);

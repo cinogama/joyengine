@@ -2125,6 +2125,7 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     glslang_shader_t* hlsl_shader = glslang_shader_create(&hlsl_shader_input);
     
     glslang_shader_set_entry_point(hlsl_shader, is_fragment ? "fragment_main" : "vertex_main");
+    glslang_shader_set_preamble(hlsl_shader, "#define GLSLANG_HLSL_TO_SPIRV 1");
 
     if (!glslang_shader_preprocess(hlsl_shader, &hlsl_shader_input))
     {
