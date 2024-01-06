@@ -9,6 +9,13 @@ namespace jeecs
         class hlsl_generator : public shader_source_generator
         {
         protected:
+            std::string attrib_binding(size_t loc, size_t set)
+            {
+                return "[[vk::binding(" + 
+                    std::to_string(loc) + ", " + 
+                    std::to_string(set) + 
+                    ")]]\n";
+            }
             virtual std::string get_typename(jegl_shader_value::type type) override
             {
                 switch (type)
@@ -52,7 +59,7 @@ namespace jeecs
             }
             virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) override
             {
-                std::string decl = "cbuffer " + st->name + ": register(b" + std::to_string(st->binding_place + 1) + ")\n{\n";
+                std::string decl = attrib_binding(st->binding_place + 1, 0) + "cbuffer " + st->name + ": register(b" + std::to_string(st->binding_place + 1) + ")\n{\n";
                 for (auto& variable_inform : st->variables)
                     if (variable_inform.type == jegl_shader_value::type::STRUCT)
                         decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
@@ -330,7 +337,9 @@ namespace jeecs
                 std::string sampler_decl;
                 for (auto* sampler : wrap->decleared_samplers)
                 {
-                    sampler_decl += "SamplerState sampler_"
+                    sampler_decl += 
+                        attrib_binding(sampler->m_sampler_id, 2)
+                        + "SamplerState sampler_"
                         + std::to_string(sampler->m_sampler_id)
                         + ": register(s"
                         + std::to_string(sampler->m_sampler_id)
@@ -344,7 +353,7 @@ namespace jeecs
                 std::string uniform_decl = "";
                 size_t uniform_count = 0;
 
-                uniform_decl += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
+                uniform_decl += attrib_binding(0, 0) + "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
                 for (auto& [name, uinfo] : wrap->uniform_variables)
                 {
                     auto value_type = uinfo.m_value->get_type();
@@ -355,7 +364,8 @@ namespace jeecs
                         if (uinfo.m_used_in_vertex)
                         {
                             texture_decl
-                                += get_typename(value_type)
+                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 1)
+                                + get_typename(value_type)
                                 + " "
                                 + name
                                 + ": register(t"
@@ -531,7 +541,9 @@ namespace jeecs
                 std::string sampler_decl;
                 for (auto* sampler : wrap->decleared_samplers)
                 {
-                    sampler_decl += "SamplerState sampler_"
+                    sampler_decl += 
+                        attrib_binding(sampler->m_sampler_id, 2)
+                        + "SamplerState sampler_"
                         + std::to_string(sampler->m_sampler_id)
                         + ": register(s"
                         + std::to_string(sampler->m_sampler_id)
@@ -545,7 +557,9 @@ namespace jeecs
                 std::string uniform_decl = "";
                 size_t uniform_count = 0;
 
-                uniform_decl += "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
+                uniform_decl += 
+                    attrib_binding(0, 0)
+                    + "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
                 for (auto& [name, uinfo] : wrap->uniform_variables)
                 {
                     auto value_type = uinfo.m_value->get_type();
@@ -556,7 +570,8 @@ namespace jeecs
                         if (uinfo.m_used_in_fragment)
                         {
                             texture_decl
-                                += get_typename(value_type)
+                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 1)
+                                + get_typename(value_type)
                                 + " "
                                 + name
                                 + ": register(t"

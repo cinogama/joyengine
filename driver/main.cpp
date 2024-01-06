@@ -25,14 +25,14 @@ int main(int argc, char** argv)
     config.m_title = "Demo";
     config.m_userdata = nullptr;
 
-    jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
+    jegl_set_host_graphic_api(jegl_using_dx11_apis);
     jegl_thread* gthread = jegl_uhost_get_gl_thread(jegl_uhost_get_or_create_for_universe(u.handle(), &config));
 
     assert(gthread != nullptr);
 
     // 创建一个模型，这里是一个方块
     basic::resource<graphic::vertex> vertex = graphic::vertex::create(
-        jegl_vertex::type::LINESTRIP,
+        jegl_vertex::type::TRIANGLESTRIP,
         {
             -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f,
             -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
@@ -50,6 +50,7 @@ import je::shader;
 ZTEST   (LESS);
 ZWRITE  (ENABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (BACK);
 
 VAO_STRUCT! vin {
     vertex : float3,
@@ -79,6 +80,7 @@ import je::shader;
 ZTEST   (LESS);
 ZWRITE  (ENABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (BACK);
 
 VAO_STRUCT! vin {
     vertex : float3,
@@ -102,10 +104,14 @@ public func vert(v: vin)
 } 
 public func frag(vf: v2f)
 {
-    return fout{ color = float4::create(vf.uv, 0.0, 1.0) };
+    let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+    let Main = uniform_texture:<texture2d>("Main", nearest_repeat, 0);
+    return fout{ color = uniform("MainColor", float4::zero) + texture(Main, vf.uv) };
 } 
 )" }
     );
+    basic::resource<graphic::texture> texture = graphic::texture::load("!/builtin/icon/Joy.png");
+
     std::function<void(void)> ff = [&]()
     {
         // 画点东西，用指定的着色器渲染指定的模型
@@ -119,7 +125,9 @@ public func frag(vf: v2f)
         jegl_using_resource(shader->resouce());
         jegl_draw_vertex(vertex->resouce());
 
-        jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
+        // jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
+
+        jegl_using_texture(texture->resouce(), 0);
 
         jegl_using_resource(shader_b->resouce());
         jegl_draw_vertex(vertex->resouce());

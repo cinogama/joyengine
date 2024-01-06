@@ -2123,7 +2123,9 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     hlsl_shader_input.callbacks_ctx = nullptr;
 
     glslang_shader_t* hlsl_shader = glslang_shader_create(&hlsl_shader_input);
+    
     glslang_shader_set_entry_point(hlsl_shader, is_fragment ? "fragment_main" : "vertex_main");
+
     if (!glslang_shader_preprocess(hlsl_shader, &hlsl_shader_input))
     {
         jeecs::debug::logfatal("Failed to preprocess hlsl vertex shader: %s.",
