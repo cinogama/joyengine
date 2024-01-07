@@ -21,11 +21,11 @@ int main(int argc, char** argv)
     config.m_msaa = 0;
     config.m_width = 256;
     config.m_height = 256;
-    config.m_fps = 60;
+    config.m_fps = SIZE_MAX;
     config.m_title = "Demo";
     config.m_userdata = nullptr;
 
-    jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
+    jegl_set_host_graphic_api(jegl_using_dx11_apis);
     jegl_thread* gthread = jegl_uhost_get_gl_thread(jegl_uhost_get_or_create_for_universe(u.handle(), &config));
 
     assert(gthread != nullptr);
@@ -105,7 +105,7 @@ public func vert(v: vin)
 public func frag(vf: v2f)
 {
     let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
-    let Main = uniform_texture:<texture2d>("Main", nearest_repeat, 0);
+    let Main = uniform_texture:<texture2d>("Main", nearest_repeat, 2);
     return fout{ color = uniform("MainColor", float4::zero) + texture(Main, vf.uv) };
 } 
 )" }
@@ -122,12 +122,7 @@ public func frag(vf: v2f)
         jegl_clear_framebuffer_color(clear_color);
         jegl_clear_framebuffer_depth();
 
-        jegl_using_resource(shader->resouce());
-        jegl_draw_vertex(vertex->resouce());
-
-        // jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
-
-        jegl_using_texture(texture->resouce(), 0);
+        jegl_using_texture(texture->resouce(), 2);
 
         jegl_using_resource(shader_b->resouce());
         jegl_draw_vertex(vertex->resouce());

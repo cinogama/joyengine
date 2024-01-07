@@ -59,7 +59,7 @@ namespace jeecs
             }
             virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) override
             {
-                std::string decl = attrib_binding(st->binding_place + 1, 0) + "cbuffer " + st->name + ": register(b" + std::to_string(st->binding_place + 1) + ")\n{\n";
+                std::string decl = attrib_binding(st->binding_place, 1) + "cbuffer " + st->name + ": register(b" + std::to_string(st->binding_place + 1) + ")\n{\n";
                 for (auto& variable_inform : st->variables)
                     if (variable_inform.type == jegl_shader_value::type::STRUCT)
                         decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
@@ -338,7 +338,7 @@ namespace jeecs
                 for (auto* sampler : wrap->decleared_samplers)
                 {
                     sampler_decl += 
-                        attrib_binding(sampler->m_sampler_id, 2)
+                        attrib_binding(sampler->m_sampler_id, 3)
                         + "SamplerState sampler_"
                         + std::to_string(sampler->m_sampler_id)
                         + ": register(s"
@@ -364,7 +364,7 @@ namespace jeecs
                         if (uinfo.m_used_in_vertex)
                         {
                             texture_decl
-                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 1)
+                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 2)
                                 + get_typename(value_type)
                                 + " "
                                 + name
@@ -542,7 +542,7 @@ namespace jeecs
                 for (auto* sampler : wrap->decleared_samplers)
                 {
                     sampler_decl += 
-                        attrib_binding(sampler->m_sampler_id, 2)
+                        attrib_binding(sampler->m_sampler_id, 3)
                         + "SamplerState sampler_"
                         + std::to_string(sampler->m_sampler_id)
                         + ": register(s"
@@ -570,7 +570,7 @@ namespace jeecs
                         if (uinfo.m_used_in_fragment)
                         {
                             texture_decl
-                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 1)
+                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 2)
                                 + get_typename(value_type)
                                 + " "
                                 + name
