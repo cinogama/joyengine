@@ -455,6 +455,9 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context* context = new jegl_dx11_context;
         _je_dx_current_thread_context = context;
 
+        // 禁止高DPI缩放
+        SetProcessDPIAware();
+
         context->m_current_target_shader = nullptr;
         context->m_current_target_framebuffer = nullptr;
         context->m_dx_context_finished = false;
