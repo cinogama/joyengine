@@ -272,6 +272,7 @@ VK_API_PLATFORM_API_LIST
         VkDeviceMemory m_vk_texture_image_memory;
 
         VkImageView m_vk_texture_image_view;
+        VkFormat m_vk_texture_format;
     };
     struct jevk11_uniformbuf
     {
@@ -805,8 +806,6 @@ VK_API_PLATFORM_API_LIST
 
         std::unordered_set<jevk11_framebuffer*> _vk_updating_target_framebuffers;
 
-        uint32_t                            _vk_current_binding_texture_pass_location;
-
         /////////////////////////////////////////////////////////////////////
         VkCommandBuffer begin_temp_command_buffer_records()
         {
@@ -922,7 +921,7 @@ VK_API_PLATFORM_API_LIST
                 // TODO: 这边的目标格式暂时没动，之后真正的framebuffer是需要调整的
                 auto& attachment = color_and_depth_attachments[attachment_i];
                 attachment.flags = 0;
-                attachment.format = _vk_surface_format.format;
+                attachment.format = attachment_colors[attachment_i]->m_vk_texture_format;
                 attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
                 attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
@@ -942,7 +941,7 @@ VK_API_PLATFORM_API_LIST
                 VkAttachmentDescription& depth_attachment = color_and_depth_attachments.back();
 
                 depth_attachment.flags = 0;
-                depth_attachment.format = _vk_depth_format;
+                depth_attachment.format = attachment_depth->m_vk_texture_format;
                 depth_attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
                 depth_attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 depth_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
@@ -1070,7 +1069,6 @@ VK_API_PLATFORM_API_LIST
             vkDeviceWaitIdle(_vk_logic_device);
 
             _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
-            _vk_current_binding_texture_pass_location = typing::INVALID_UINT32;
 
             VkExtent2D used_extent = { (uint32_t)w, (uint32_t)h };
             if (_vk_surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
@@ -2485,16 +2483,18 @@ VK_API_PLATFORM_API_LIST
             texture->m_vk_texture_image = nullptr; // 不设置此项，不需要释放
             texture->m_vk_texture_image_view = create_image_view(image, format, aspect_flags);
             texture->m_vk_texture_image_memory = nullptr;
+            texture->m_vk_texture_format = format;
 
             return texture;
         }
         jevk11_texture* create_framebuf_texture(jegl_texture::format format, size_t w, size_t h)
         {
             assert(format & jegl_texture::format::FRAMEBUF);
+
+            jevk11_texture* texture = new jevk11_texture{};
+
             if (format & jegl_texture::format::DEPTH)
             {
-                jevk11_texture* texture = new jevk11_texture{};
-
                 create_image(
                     w, h,
                     _vk_depth_format,
@@ -2505,13 +2505,39 @@ VK_API_PLATFORM_API_LIST
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
                     &texture->m_vk_texture_image_memory);
-
-                return texture;
+                texture->m_vk_texture_format = _vk_depth_format;
             }
             else
             {
-                abort();
+                bool is_float16 = 0 != (format & jegl_texture::format::FLOAT16);
+                VkFormat vk_attachment_format;
+                if (format & jegl_texture::format::RGBA)
+                {
+                    vk_attachment_format = is_float16
+                        ? VkFormat::VK_FORMAT_R16G16B16A16_SFLOAT
+                        : VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
+                }
+                else
+                {
+                    vk_attachment_format = is_float16
+                        ? VkFormat::VK_FORMAT_R16_SFLOAT
+                        : VkFormat::VK_FORMAT_R8_UNORM;
+                }
+
+                create_image(
+                    w, h,
+                    vk_attachment_format,
+                    VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+                    VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
+                    &texture->m_vk_texture_image,
+                    &texture->m_vk_texture_image_view,
+                    &texture->m_vk_texture_image_memory);
+                texture->m_vk_texture_format = vk_attachment_format;
             }
+
+            return texture;
         }
 
         void transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
@@ -2606,6 +2632,7 @@ VK_API_PLATFORM_API_LIST
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
                     &texture->m_vk_texture_image_memory);
+                texture->m_vk_texture_format = image_format;
 
                 VkBuffer texture_data_buffer;
                 VkDeviceMemory texture_data_buffer_memory;
@@ -2720,7 +2747,6 @@ VK_API_PLATFORM_API_LIST
             vkFreeMemory(_vk_logic_device, uniformbuf->m_uniform_buffer_memory, nullptr);
             delete uniformbuf;
         }
-
         void update_and_bind_uniform_buffer(jegl_resource* resource)
         {
             jevk11_uniformbuf* uniformbuf = std::launder(
@@ -3192,7 +3218,34 @@ VK_API_PLATFORM_API_LIST
             resource->m_handle.m_ptr = context->create_vertex_instance(resource);
             break;
         case jegl_resource::type::FRAMEBUF:
+        {
+            std::vector<jevk11_texture*> color_attachments;
+            jevk11_texture* depth_attachment = nullptr;
+
+            jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+                std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture>*>(
+                    resource->m_raw_framebuf_data->m_output_attachments));
+
+            for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
+            {
+                auto& attachment = attachments[i];
+                jegl_using_resource(attachment->resouce());
+
+                auto* attach_texture_instance = std::launder(reinterpret_cast<jevk11_texture*>(attachment->resouce()->m_handle.m_ptr));
+                if (0 != (attachment->resouce()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
+                    depth_attachment = attach_texture_instance;
+                else
+                    color_attachments.push_back(attach_texture_instance);
+            }
+
+            resource->m_handle.m_ptr = context->create_frame_buffer(
+                resource->m_raw_framebuf_data->m_width,
+                resource->m_raw_framebuf_data->m_height,
+                color_attachments,
+                depth_attachment);
+
             break;
+        }
         case jegl_resource::type::UNIFORMBUF:
             resource->m_handle.m_ptr = context->create_uniform_buffer(resource);
             break;
@@ -3213,10 +3266,6 @@ VK_API_PLATFORM_API_LIST
         }
         case jegl_resource::type::TEXTURE:
         {
-            auto* texture = std::launder(reinterpret_cast<jevk11_texture*>(resource->m_handle.m_ptr));
-            context->_vk_descriptor_set_allocator->bind_texture(
-                context->_vk_current_binding_texture_pass_location, 
-                texture->m_vk_texture_image_view);
             break;
         }
         case jegl_resource::type::VERTEX:
@@ -3267,8 +3316,13 @@ VK_API_PLATFORM_API_LIST
     void bind_texture(jegl_thread::custom_thread_data_t ctx, jegl_resource* texture, size_t pass)
     {
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
-        context->_vk_current_binding_texture_pass_location = (uint32_t)pass;
+        
         jegl_using_resource(texture);
+
+        auto* texture_instance = std::launder(reinterpret_cast<jevk11_texture*>(texture->m_handle.m_ptr));
+        context->_vk_descriptor_set_allocator->bind_texture(
+            (uint32_t)pass,
+            texture_instance->m_vk_texture_image_view);
     }
 
     void set_rend_to_framebuffer(jegl_thread::custom_thread_data_t ctx, jegl_resource* framebuf, size_t x, size_t y, size_t w, size_t h)

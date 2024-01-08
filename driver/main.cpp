@@ -21,11 +21,11 @@ int main(int argc, char** argv)
     config.m_msaa = 0;
     config.m_width = 256;
     config.m_height = 256;
-    config.m_fps = SIZE_MAX;
+    config.m_fps = 60;
     config.m_title = "Demo";
     config.m_userdata = nullptr;
 
-    jegl_set_host_graphic_api(jegl_using_dx11_apis);
+    jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
     jegl_thread* gthread = jegl_uhost_get_gl_thread(jegl_uhost_get_or_create_for_universe(u.handle(), &config));
 
     assert(gthread != nullptr);
@@ -98,35 +98,50 @@ using fout = struct {
 public func vert(v: vin)
 {
     return v2f{ 
-        pos = float4::create(v.vertex + float3::new(0.2, 0.2, -0.1), 1.),
+        pos = float4::create(v.vertex, 1.),
         uv  = v.uv
     };
 } 
 public func frag(vf: v2f)
 {
-    let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+    let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
     let Main = uniform_texture:<texture2d>("Main", nearest_repeat, 2);
     return fout{ color = uniform("MainColor", float4::zero) + texture(Main, vf.uv) };
 } 
 )" }
     );
     basic::resource<graphic::texture> texture = graphic::texture::load("!/builtin/icon/Joy.png");
+    basic::resource<graphic::framebuffer> framebuf = graphic::framebuffer::create(128, 128, {
+        jegl_texture::format::RGBA
+        });
+
 
     std::function<void(void)> ff = [&]()
     {
         // 画点东西，用指定的着色器渲染指定的模型
-        
         float clear_color[4] = { 1.f,1.f,1.f,1.f };
+
+        jegl_rend_to_framebuffer(framebuf->resouce(), 0, 0, 0, 0);
+        {
+            jegl_clear_framebuffer_color(clear_color);
+            jegl_clear_framebuffer_depth();
+
+            jegl_using_texture(texture->resouce(), 2);
+
+            jegl_using_resource(shader_b->resouce());
+            jegl_draw_vertex(vertex->resouce());
+        }
+
         jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
+        {
+            jegl_clear_framebuffer_color(clear_color);
+            jegl_clear_framebuffer_depth();
 
-        jegl_clear_framebuffer_color(clear_color);
-        jegl_clear_framebuffer_depth();
+            jegl_using_texture(texture->resouce(), 2);
 
-        jegl_using_texture(texture->resouce(), 2);
-
-        jegl_using_resource(shader_b->resouce());
-        jegl_draw_vertex(vertex->resouce());
-
+            jegl_using_resource(shader_b->resouce());
+            jegl_draw_vertex(vertex->resouce());
+        }
     };
 
     gthread->_m_frame_rend_work = [](jegl_thread* gthread, void* pgthread)

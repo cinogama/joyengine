@@ -64,8 +64,6 @@ namespace jeecs::graphic::api::dx11
         size_t m_windows_changing_width;
         size_t m_windows_changing_height;
 
-        UINT m_next_binding_texture_place;
-
         jedx11_shader* m_current_target_shader;
         jedx11_framebuffer* m_current_target_framebuffer;
     };
@@ -469,7 +467,6 @@ namespace jeecs::graphic::api::dx11
         context->m_lock_resolution_for_fullscreen = false;
         context->MSAA_LEVEL = config->m_msaa;
         context->FPS = config->m_fps;
-        context->m_next_binding_texture_place = 0;
         context->m_win32_window_icon = nullptr;
         context->m_windows_changing = false;
         context->m_windows_changing_width = context->WINDOWS_SIZE_WIDTH;
@@ -1708,14 +1705,6 @@ namespace jeecs::graphic::api::dx11
                     dx11_init_resource(ctx, nullptr, resource);
                 }
             }
-            auto* texture = std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
-            if (texture->m_texture_view.Get() != nullptr)
-            {
-                context->m_dx_context->VSSetShaderResources(
-                    context->m_next_binding_texture_place, 1, texture->m_texture_view.GetAddressOf());
-                context->m_dx_context->PSSetShaderResources(
-                    context->m_next_binding_texture_place, 1, texture->m_texture_view.GetAddressOf());
-            }
             break;
         }
         case jegl_resource::type::VERTEX:
@@ -1839,8 +1828,17 @@ namespace jeecs::graphic::api::dx11
     void dx11_bind_texture(jegl_thread::custom_thread_data_t ctx, jegl_resource* texture, size_t pass)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
-        context->m_next_binding_texture_place = pass;
+
         jegl_using_resource(texture);
+
+        auto* texture_instance = std::launder(reinterpret_cast<jedx11_texture*>(texture->m_handle.m_ptr));
+        if (texture_instance->m_texture_view.Get() != nullptr)
+        {
+            context->m_dx_context->VSSetShaderResources(
+                (UINT)pass, 1, texture_instance->m_texture_view.GetAddressOf());
+            context->m_dx_context->PSSetShaderResources(
+                (UINT)pass, 1, texture_instance->m_texture_view.GetAddressOf());
+        }
     }
 
     void dx11_set_rend_to_framebuffer(jegl_thread::custom_thread_data_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
