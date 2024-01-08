@@ -3369,6 +3369,7 @@ VK_API_PLATFORM_API_LIST
             break;
         }
     }
+    void close_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource);
     void using_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
     {
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
@@ -3382,7 +3383,17 @@ VK_API_PLATFORM_API_LIST
         }
         case jegl_resource::type::TEXTURE:
         {
-            // TODO: Apply updated texture!
+            if (resource->m_raw_texture_data != nullptr)
+            {
+                if (resource->m_raw_texture_data->m_modified)
+                {
+                    resource->m_raw_texture_data->m_modified = false;
+                    // Modified, free current resource id, reload one.
+                    close_resource(ctx, resource);
+                    resource->m_handle.m_ptr = nullptr;
+                    init_resource(ctx, nullptr, resource);
+                }
+            }
             break;
         }
         case jegl_resource::type::VERTEX:
