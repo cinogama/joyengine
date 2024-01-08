@@ -746,7 +746,7 @@ namespace jeecs::graphic::api::dx11
 #endif
     }
 
-    bool dx11_update(jegl_thread::custom_thread_data_t ctx)
+    jegl_graphic_api::update_result dx11_update(jegl_thread::custom_thread_data_t ctx)
     {
         jegl_dx11_context* context =
             std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
@@ -760,7 +760,7 @@ namespace jeecs::graphic::api::dx11
         if (context->m_window_should_close)
         {
             if (jegui_shutdown_callback())
-                return false;
+                return jegl_graphic_api::update_result::STOP_REND;
             context->m_window_should_close = false;
         }
 
@@ -795,7 +795,7 @@ namespace jeecs::graphic::api::dx11
         if (je_io_fetch_update_windowtitle(&title))
             SetWindowTextA(context->m_window_handle, title);
 
-        return true;
+        return jegl_graphic_api::update_result::DO_FRAME_WORK;
     }
 
     bool dx11_pre_update(jegl_thread::custom_thread_data_t ctx)

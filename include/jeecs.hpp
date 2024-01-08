@@ -1903,10 +1903,18 @@ jegl_graphic_api [类型]
 */
 struct jegl_graphic_api
 {
+    enum update_result
+    {
+        STOP_REND,
+        DO_FRAME_WORK,
+        SKIP_FRAME_WORK,
+    };
+
     using startup_interface_func_t = jegl_thread::custom_thread_data_t(*)(jegl_thread*, const jegl_interface_config*, bool);
     using shutdown_interface_func_t = void(*)(jegl_thread*, jegl_thread::custom_thread_data_t, bool);
 
-    using update_interface_func_t = bool(*)(jegl_thread::custom_thread_data_t);
+    using pre_or_late_update_interface_func_t = bool(*)(jegl_thread::custom_thread_data_t);
+    using update_interface_func_t = update_result(*)(jegl_thread::custom_thread_data_t);
 
     using create_resource_blob_func_t = jegl_resource_blob(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
     using close_resource_blob_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource_blob);
@@ -1927,9 +1935,9 @@ struct jegl_graphic_api
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   shutdown_interface;
 
-    update_interface_func_t     pre_update_interface;
+    pre_or_late_update_interface_func_t     pre_update_interface;
     update_interface_func_t     update_interface;
-    update_interface_func_t     late_update_interface;
+    pre_or_late_update_interface_func_t     late_update_interface;
 
     create_resource_blob_func_t create_resource_blob;
     close_resource_blob_func_t  close_resource_blob;

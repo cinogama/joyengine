@@ -301,8 +301,8 @@ VK_API_PLATFORM_API_LIST
         //      也应该被释放。但是得考虑释放的时机
         std::unordered_map<VkRenderPass, VkPipeline>
             m_target_pass_pipelines;
-        jevk11_uniformbuf*  m_uniform_variables;
-        void*               m_uniform_cpu_buffer;
+        jevk11_uniformbuf* m_uniform_variables;
+        void* m_uniform_cpu_buffer;
         size_t              m_uniform_cpu_buffer_size;
         bool                m_uniform_cpu_buffer_updated;
 
@@ -359,6 +359,7 @@ VK_API_PLATFORM_API_LIST
 
         VkSwapchainKHR                      _vk_swapchain;
         std::vector<jevk11_framebuffer*>    _vk_swapchain_framebuffer;
+        std::vector<jevk11_texture*>        _vk_swapchain_textures_for_free;
 
         VkFence                     _vk_rendering_image_ready_fence;
 
@@ -879,12 +880,11 @@ VK_API_PLATFORM_API_LIST
         command_buffer_allocator* _vk_command_buffer_allocator;
 
         // Following is runtime vk states.
-        size_t                              _vk_rend_rounds;
         uint32_t                            _vk_presenting_swapchain_image_index;
-        jevk11_framebuffer*                 _vk_current_swapchain_framebuffer;
-        jevk11_framebuffer*                 _vk_current_target_framebuffer;
+        jevk11_framebuffer* _vk_current_swapchain_framebuffer;
+        jevk11_framebuffer* _vk_current_target_framebuffer;
         VkCommandBuffer                     _vk_current_command_buffer;
-        jevk11_shader*                      _vk_current_binded_shader;
+        jevk11_shader* _vk_current_binded_shader;
 
         /////////////////////////////////////////////////////////////////////
         VkCommandBuffer begin_temp_command_buffer_records()
@@ -968,7 +968,8 @@ VK_API_PLATFORM_API_LIST
             size_t w,
             size_t h,
             const std::vector<jevk11_texture*>& attachment_colors,
-            jevk11_texture* attachment_depth)
+            jevk11_texture* attachment_depth,
+            VkImageLayout final_layout)
         {
             jevk11_framebuffer* result = new jevk11_framebuffer{};
 
@@ -995,7 +996,7 @@ VK_API_PLATFORM_API_LIST
                 attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
                 attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
-                attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+                attachment.finalLayout = final_layout;
 
                 VkAttachmentReference& attachment_ref = color_attachment_refs[attachment_i];
                 attachment_ref.attachment = (uint32_t)attachment_i;
@@ -1108,16 +1109,21 @@ VK_API_PLATFORM_API_LIST
             for (auto* fb : _vk_swapchain_framebuffer)
                 destroy_frame_buffer(fb);
 
-            
+            for (auto* tex : _vk_swapchain_textures_for_free)
+                destroy_texture_instance(tex);
 
+            _vk_swapchain_textures_for_free.clear();
             _vk_swapchain_framebuffer.clear();
+
+            vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
         }
 
         void recreate_swap_chain_for_current_surface(size_t w, size_t h)
         {
             vkDeviceWaitIdle(_vk_logic_device);
 
-            _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
+            // 在此处开始创建交换链
+            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk_device, _vk_surface, &_vk_surface_capabilities);
 
             VkExtent2D used_extent = { (uint32_t)w, (uint32_t)h };
             if (_vk_surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
@@ -1137,6 +1143,102 @@ VK_API_PLATFORM_API_LIST
                             _vk_surface_capabilities.maxImageExtent.height,
                             used_extent.height));
             }
+
+            // 获取交换链支持的格式
+            uint32_t vk_surface_format_count = 0;
+            vkGetPhysicalDeviceSurfaceFormatsKHR(_vk_device, _vk_surface, &vk_surface_format_count, nullptr);
+
+            std::vector<VkSurfaceFormatKHR> vk_surface_formats(vk_surface_format_count);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(_vk_device, _vk_surface, &vk_surface_format_count, vk_surface_formats.data());
+            assert(!vk_surface_formats.empty());
+
+            // 获取交换链支持的呈现模式
+            uint32_t vk_present_mode_count = 0;
+            vkGetPhysicalDeviceSurfacePresentModesKHR(_vk_device, _vk_surface, &vk_present_mode_count, nullptr);
+
+            std::vector<VkPresentModeKHR> vk_present_modes(vk_present_mode_count);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(_vk_device, _vk_surface, &vk_present_mode_count, vk_present_modes.data());
+            assert(!vk_present_modes.empty());
+
+            // 获取受支持的颜色格式，优先选择VK_FORMAT_B8G8R8A8_UNORM 和 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+            _vk_surface_format = {};
+            if (vk_surface_formats.size() == 1 && vk_surface_formats.front().format == VK_FORMAT_UNDEFINED)
+            {
+                _vk_surface_format.format = VK_FORMAT_B8G8R8A8_UNORM;
+                _vk_surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+            }
+            else
+            {
+                bool found_support_format = false;;
+                for (auto& format : vk_surface_formats)
+                {
+                    if (format.format == VK_FORMAT_B8G8R8A8_UNORM &&
+                        format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                    {
+                        found_support_format = true;
+                        _vk_surface_format = format;
+                        break;
+                    }
+                }
+                if (!found_support_format)
+                    _vk_surface_format = vk_surface_formats.front();
+            }
+
+            // 获取受支持的深度数据格式
+            _vk_depth_format = VK_FORMAT_UNDEFINED;
+            std::vector<VkFormat> vk_depth_formats = {
+                VK_FORMAT_D32_SFLOAT_S8_UINT,
+                VK_FORMAT_D32_SFLOAT,
+                VK_FORMAT_D24_UNORM_S8_UINT,
+                VK_FORMAT_D16_UNORM_S8_UINT,
+                VK_FORMAT_D16_UNORM
+            };
+
+            for (auto& format : vk_depth_formats)
+            {
+                VkFormatProperties format_properties;
+                vkGetPhysicalDeviceFormatProperties(_vk_device, format, &format_properties);
+
+                if (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+                {
+                    _vk_depth_format = format;
+                    break;
+                }
+            }
+
+            if (_vk_depth_format == VK_FORMAT_UNDEFINED)
+            {
+                jeecs::debug::logfatal("Failed to find suitable depth format.");
+            }
+
+            // 设置交换链呈现模式，优先选择VK_PRESENT_MODE_MAILBOX_KHR，其次是VK_PRESENT_MODE_FIFO_KHR；
+            // 如果都不支持，则回滚到VK_PRESENT_MODE_IMMEDIATE_KHR；如果以上模式均不支持，则直接终止
+            bool vk_present_mode_mailbox_supported = false;
+            bool vk_present_mode_fifo_supported = false;
+            bool vk_present_mode_immediate_supported = false;
+
+            for (auto& present_mode : vk_present_modes)
+            {
+                if (present_mode == VK_PRESENT_MODE_MAILBOX_KHR)
+                    vk_present_mode_mailbox_supported = true;
+                else if (present_mode == VK_PRESENT_MODE_FIFO_KHR)
+                    vk_present_mode_fifo_supported = true;
+                else if (present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+                    vk_present_mode_immediate_supported = true;
+            }
+
+            if (vk_present_mode_mailbox_supported)
+                _vk_surface_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+            else if (vk_present_mode_fifo_supported)
+                _vk_surface_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+            else if (vk_present_mode_immediate_supported)
+                _vk_surface_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+            else
+            {
+                jeecs::debug::logfatal("Failed to create vk110 swapchain, unsupported present mode.");
+            }
+
+            _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
 
             // 尝试三重缓冲？
             uint32_t swapchain_image_count = _vk_surface_capabilities.minImageCount + 1;
@@ -1179,7 +1281,7 @@ VK_API_PLATFORM_API_LIST
             swapchain_create_info.presentMode = _vk_surface_present_mode;
             swapchain_create_info.clipped = VK_TRUE;
 
-            swapchain_create_info.oldSwapchain = _vk_swapchain;
+            swapchain_create_info.oldSwapchain = nullptr;
 
             if (_vk_swapchain != nullptr)
                 destroy_swap_chain();
@@ -1209,11 +1311,16 @@ VK_API_PLATFORM_API_LIST
                 jevk11_texture* depth_attachment = create_framebuf_texture(
                     (jegl_texture::format)(jegl_texture::format::DEPTH | jegl_texture::format::FRAMEBUF), w, h);
 
+                _vk_swapchain_textures_for_free.push_back(color_attachment);
+                _vk_swapchain_textures_for_free.push_back(depth_attachment);
+
+
                 _vk_swapchain_framebuffer[i] = create_frame_buffer(
                     (size_t)used_extent.width,
                     (size_t)used_extent.height,
                     { color_attachment },
-                    depth_attachment
+                    depth_attachment,
+                    VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
                 );
             }
         }
@@ -1231,8 +1338,7 @@ VK_API_PLATFORM_API_LIST
             const VkDebugUtilsMessengerCallbackDataEXT* info,
             void* userdata)
         {
-            // jeecs::debug::logerr("[Vulkan] %s", info->pMessage);
-            printf("%s\n\n", info->pMessage);
+            jeecs::debug::logerr("[Vulkan] %s", info->pMessage);
             return VK_FALSE;
         }
 #endif
@@ -1325,7 +1431,6 @@ VK_API_PLATFORM_API_LIST
 
         void init_vulkan(const jegl_interface_config* config)
         {
-            _vk_rend_rounds = 0;
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
             _vk_current_binded_shader = nullptr;
@@ -1589,104 +1694,6 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_logic_device_graphic_queue != nullptr);
             assert(_vk_logic_device_present_queue != nullptr);
 
-            // 在此处开始创建交换链
-            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk_device, _vk_surface, &_vk_surface_capabilities);
-
-            // 获取交换链支持的格式
-            uint32_t vk_surface_format_count = 0;
-            vkGetPhysicalDeviceSurfaceFormatsKHR(_vk_device, _vk_surface, &vk_surface_format_count, nullptr);
-
-            std::vector<VkSurfaceFormatKHR> vk_surface_formats(vk_surface_format_count);
-            vkGetPhysicalDeviceSurfaceFormatsKHR(_vk_device, _vk_surface, &vk_surface_format_count, vk_surface_formats.data());
-            assert(!vk_surface_formats.empty());
-
-            // 获取交换链支持的呈现模式
-            uint32_t vk_present_mode_count = 0;
-            vkGetPhysicalDeviceSurfacePresentModesKHR(_vk_device, _vk_surface, &vk_present_mode_count, nullptr);
-
-            std::vector<VkPresentModeKHR> vk_present_modes(vk_present_mode_count);
-            vkGetPhysicalDeviceSurfacePresentModesKHR(_vk_device, _vk_surface, &vk_present_mode_count, vk_present_modes.data());
-            assert(!vk_present_modes.empty());
-
-            // 获取受支持的颜色格式，优先选择VK_FORMAT_B8G8R8A8_UNORM 和 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-            _vk_surface_format = {};
-            if (vk_surface_formats.size() == 1 && vk_surface_formats.front().format == VK_FORMAT_UNDEFINED)
-            {
-                _vk_surface_format.format = VK_FORMAT_B8G8R8A8_UNORM;
-                _vk_surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-            }
-            else
-            {
-                bool found_support_format = false;;
-                for (auto& format : vk_surface_formats)
-                {
-                    if (format.format == VK_FORMAT_B8G8R8A8_UNORM &&
-                        format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-                    {
-                        found_support_format = true;
-                        _vk_surface_format = format;
-                        break;
-                    }
-                }
-                if (!found_support_format)
-                    _vk_surface_format = vk_surface_formats.front();
-            }
-
-            // 获取受支持的深度数据格式
-            _vk_depth_format = VK_FORMAT_UNDEFINED;
-            std::vector<VkFormat> vk_depth_formats = {
-                VK_FORMAT_D32_SFLOAT_S8_UINT,
-                VK_FORMAT_D32_SFLOAT,
-                VK_FORMAT_D24_UNORM_S8_UINT,
-                VK_FORMAT_D16_UNORM_S8_UINT,
-                VK_FORMAT_D16_UNORM
-            };
-
-            for (auto& format : vk_depth_formats)
-            {
-                VkFormatProperties format_properties;
-                vkGetPhysicalDeviceFormatProperties(_vk_device, format, &format_properties);
-
-                if (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
-                {
-                    _vk_depth_format = format;
-                    break;
-                }
-            }
-
-            if (_vk_depth_format == VK_FORMAT_UNDEFINED)
-            {
-                jeecs::debug::logfatal("Failed to find suitable depth format.");
-            }
-
-            // 设置交换链呈现模式，优先选择VK_PRESENT_MODE_MAILBOX_KHR，其次是VK_PRESENT_MODE_FIFO_KHR；
-            // 如果都不支持，则回滚到VK_PRESENT_MODE_IMMEDIATE_KHR；如果以上模式均不支持，则直接终止
-            bool vk_present_mode_mailbox_supported = false;
-            bool vk_present_mode_fifo_supported = false;
-            bool vk_present_mode_immediate_supported = false;
-
-            for (auto& present_mode : vk_present_modes)
-            {
-                if (present_mode == VK_PRESENT_MODE_MAILBOX_KHR)
-                    vk_present_mode_mailbox_supported = true;
-                else if (present_mode == VK_PRESENT_MODE_FIFO_KHR)
-                    vk_present_mode_fifo_supported = true;
-                else if (present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR)
-                    vk_present_mode_immediate_supported = true;
-            }
-
-            if (vk_present_mode_mailbox_supported)
-                _vk_surface_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-            else if (vk_present_mode_fifo_supported)
-                _vk_surface_present_mode = VK_PRESENT_MODE_FIFO_KHR;
-            else if (vk_present_mode_immediate_supported)
-                _vk_surface_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-            else
-            {
-                jeecs::debug::logfatal("Failed to create vk110 swapchain, unsupported present mode.");
-            }
-
-            // 创建默认的命令池
             _vk_rendering_image_ready_fence = create_fence();
 
             recreate_swap_chain_for_current_surface(
@@ -1705,7 +1712,6 @@ VK_API_PLATFORM_API_LIST
             delete _vk_command_buffer_allocator;
 
             destroy_swap_chain();
-            vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
 
             destroy_fence(_vk_rendering_image_ready_fence);
 
@@ -2228,10 +2234,14 @@ VK_API_PLATFORM_API_LIST
                 break;
             }
 
+            shader_blob->m_color_blend_attachment_state.srcAlphaBlendFactor =
+                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor;
+            shader_blob->m_color_blend_attachment_state.dstAlphaBlendFactor =
+                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor;
+
             shader_blob->m_color_blend_attachment_state.colorBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
-            shader_blob->m_color_blend_attachment_state.srcAlphaBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE;
-            shader_blob->m_color_blend_attachment_state.dstAlphaBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ZERO;
             shader_blob->m_color_blend_attachment_state.alphaBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
+
             shader_blob->m_color_blend_attachment_state.colorWriteMask =
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_R_BIT |
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_G_BIT |
@@ -2344,7 +2354,7 @@ VK_API_PLATFORM_API_LIST
 
             shader->m_blob_data = blob->m_blob_data;
             shader->m_uniform_cpu_buffer_size = shader->m_blob_data->m_uniform_size;
-            
+
             shader->m_uniform_cpu_buffer_updated = true;
 
             if (shader->m_blob_data->m_uniform_size == 0)
@@ -2372,7 +2382,7 @@ VK_API_PLATFORM_API_LIST
                 destroy_uniform_buffer(shader->m_uniform_variables);
                 free(shader->m_uniform_cpu_buffer);
             }
-            
+
             delete shader;
         }
 
@@ -2844,7 +2854,8 @@ VK_API_PLATFORM_API_LIST
 
             // OK 提交页面
             // TODO: 其实应当等待的是目标缓冲区的image完成屏障，这里暂时先这么实现
-            vkWaitForFences(_vk_logic_device, 1, &_vk_rendering_image_ready_fence, VK_TRUE, UINT64_MAX);
+            if (_vk_presenting_swapchain_image_index != typing::INVALID_UINT32)
+                vkWaitForFences(_vk_logic_device, 1, &_vk_rendering_image_ready_fence, VK_TRUE, UINT64_MAX);
 
             VkPipelineStageFlags wait_stages[] = {
                 VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -2859,11 +2870,8 @@ VK_API_PLATFORM_API_LIST
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers = &_vk_current_command_buffer;
 
-            VkSemaphore signal_semaphores[] = {
-                framebuf->m_render_finished_semaphore
-            };
-            submit_info.signalSemaphoreCount = 1;
-            submit_info.pSignalSemaphores = signal_semaphores;
+            submit_info.signalSemaphoreCount = 0;
+            submit_info.pSignalSemaphores = nullptr;
 
             if (vkQueueSubmit(
                 _vk_logic_device_graphic_queue,
@@ -2890,8 +2898,8 @@ VK_API_PLATFORM_API_LIST
             VkPresentInfoKHR present_info = {};
             present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present_info.pNext = nullptr;
-            present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = &_vk_current_swapchain_framebuffer->m_render_finished_semaphore;
+            present_info.waitSemaphoreCount = 0;
+            present_info.pWaitSemaphores = nullptr;
 
             VkSwapchainKHR swapchains[] = { _vk_swapchain };
             present_info.swapchainCount = 1;
@@ -2901,38 +2909,46 @@ VK_API_PLATFORM_API_LIST
 
             vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
         }
-        void update()
+        bool update()
         {
-            // NOTE: 用于标志帧缓冲区的起始渲染帧
-            ++_vk_rend_rounds;
-
             // 开始录制！
-            vkResetFences(_vk_logic_device, 1, &_vk_rendering_image_ready_fence);
-            auto state = vkAcquireNextImageKHR(
-                _vk_logic_device,
-                _vk_swapchain,
-                UINT64_MAX,
-                VK_NULL_HANDLE,
-                _vk_rendering_image_ready_fence,
-                &_vk_presenting_swapchain_image_index);
-
-            if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR)
+            for (;;)
             {
-                if (_vk_jegl_interface->m_interface_width != 0 && _vk_jegl_interface->m_interface_height != 0)
+                vkResetFences(_vk_logic_device, 1, &_vk_rendering_image_ready_fence);
+                auto state = vkAcquireNextImageKHR(
+                    _vk_logic_device,
+                    _vk_swapchain,
+                    UINT64_MAX,
+                    VK_NULL_HANDLE,
+                    _vk_rendering_image_ready_fence,
+                    &_vk_presenting_swapchain_image_index);
+
+                if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR || state == VkResult::VK_SUBOPTIMAL_KHR)
                 {
-                    recreate_swap_chain_for_current_surface(
-                        _vk_jegl_interface->m_interface_width,
-                        _vk_jegl_interface->m_interface_height
-                    );
-                    assert(_vk_presenting_swapchain_image_index == typing::INVALID_UINT32);
+                    if (_vk_jegl_interface->m_interface_width != 0 &&
+                        _vk_jegl_interface->m_interface_height != 0)
+                    {
+                        recreate_swap_chain_for_current_surface(
+                            _vk_jegl_interface->m_interface_width,
+                            _vk_jegl_interface->m_interface_height
+                        );
+                    }
+                    else
+                    {
+                        _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
+                        break;
+                    }
+                }
+                else if (state != VkResult::VK_SUCCESS)
+                {
+                    jeecs::debug::logfatal("Failed to acquire swap chain image.");
                 }
                 else
-                    // Just mark for stopping renderering.
-                    _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
+                    break;
             }
 
             if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
-                return;
+                return false;
 
             _vk_current_swapchain_framebuffer =
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index];
@@ -2941,6 +2957,7 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_current_command_buffer == nullptr);
 
             cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
+            return true;
         }
         void late_update()
         {
@@ -2977,7 +2994,8 @@ VK_API_PLATFORM_API_LIST
             render_pass_begin_info.renderPass = _vk_current_target_framebuffer->m_rendpass;
             render_pass_begin_info.framebuffer = _vk_current_target_framebuffer->m_framebuffer;
             render_pass_begin_info.renderArea.offset = { 0, 0 };
-            render_pass_begin_info.renderArea.extent = _vk_surface_capabilities.currentExtent;
+            render_pass_begin_info.renderArea.extent.width = (uint32_t)framebuf->m_width;
+            render_pass_begin_info.renderArea.extent.height = (uint32_t)framebuf->m_height;
 
             render_pass_begin_info.clearValueCount = 0;
             render_pass_begin_info.pClearValues = nullptr;
@@ -3228,18 +3246,20 @@ VK_API_PLATFORM_API_LIST
         context->pre_update();
         return true;
     }
-    bool update(jegl_thread::custom_thread_data_t ctx)
+    jegl_graphic_api::update_result update(jegl_thread::custom_thread_data_t ctx)
     {
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
 
-        context->update();
+        jegl_graphic_api::update_result result = jegl_graphic_api::update_result::DO_FRAME_WORK;
+        if (!context->update())
+            result = jegl_graphic_api::update_result::SKIP_FRAME_WORK;
 
         if (!context->_vk_jegl_interface->update())
         {
             if (jegui_shutdown_callback())
-                return false;
+                return jegl_graphic_api::update_result::STOP_REND;
         }
-        return true;
+        return result;
     }
     bool late_update(jegl_thread::custom_thread_data_t ctx)
     {
@@ -3348,7 +3368,8 @@ VK_API_PLATFORM_API_LIST
                 resource->m_raw_framebuf_data->m_width,
                 resource->m_raw_framebuf_data->m_height,
                 color_attachments,
-                depth_attachment);
+                depth_attachment,
+                VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
             break;
         }

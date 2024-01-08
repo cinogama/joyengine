@@ -402,10 +402,11 @@ jegl_sync_state jegl_sync_update(jegl_thread* thread)
 
         thread->_m_thread_notifier->_m_commited_rendchains.clear();
 
-        if (!thread->m_apis->update_interface(thread->m_userdata))
+        auto result = thread->m_apis->update_interface(thread->m_userdata);
+        if (result == jegl_graphic_api::update_result::STOP_REND)
             // graphic thread want to exit. mark stop update
             std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
-        else
+        else if (result == jegl_graphic_api::update_result::DO_FRAME_WORK)
         {
             // Invoke frame work
             thread->_m_frame_rend_work(thread, thread->_m_frame_rend_work_arg);

@@ -29,9 +29,9 @@ namespace jeecs::graphic::api::none
     {
         return true;
     }
-    bool update(jegl_thread::custom_thread_data_t)
+    jegl_graphic_api::update_result update(jegl_thread::custom_thread_data_t)
     {
-        return true;
+        return jegl_graphic_api::update_result::DO_FRAME_WORK;
     }
     bool late_update(jegl_thread::custom_thread_data_t ctx)
     {

@@ -188,15 +188,15 @@ namespace jeecs::graphic::api::gl3
         return true;
     }
 
-    bool gl_update(jegl_thread::custom_thread_data_t ctx)
+    jegl_graphic_api::update_result gl_update(jegl_thread::custom_thread_data_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         if (!context->update())
         {
             if (jegui_shutdown_callback())
-                return false;
+                return jegl_graphic_api::update_result::STOP_REND;
         }
-        return true;
+        return jegl_graphic_api::update_result::DO_FRAME_WORK;
     }
 
     bool gl_lateupdate(jegl_thread::custom_thread_data_t ctx)
