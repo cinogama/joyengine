@@ -247,7 +247,6 @@ VK_API_PLATFORM_API_LIST
             VkPipelineDepthStencilStateCreateInfo           m_depth_stencil_state_create_info;
             VkPipelineMultisampleStateCreateInfo            m_multi_sample_state_create_info;
             VkPipelineColorBlendAttachmentState             m_color_blend_attachment_state;
-            VkPipelineColorBlendStateCreateInfo             m_color_blend_state_create_info;
             VkPipelineDynamicStateCreateInfo                m_dynamic_state_create_info;
             VkPipelineLayout                                m_pipeline_layout;
 
@@ -1467,7 +1466,6 @@ VK_API_PLATFORM_API_LIST
             else
                 vk_validation_layer_supported = true;
 #endif
-            vk_validation_layer_supported = false;
 
             VkApplicationInfo application_info = {};
             application_info.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -2075,27 +2073,7 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_multi_sample_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
             shader_blob->m_multi_sample_state_create_info.pNext = nullptr;
             shader_blob->m_multi_sample_state_create_info.flags = 0;
-            switch (_vk_msaa_config)
-            {
-            case 1:
-                shader_blob->m_multi_sample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-                break;
-            case 2:
-                shader_blob->m_multi_sample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_2_BIT;
-                break;
-            case 4:
-                shader_blob->m_multi_sample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_4_BIT;
-                break;
-            case 8:
-                shader_blob->m_multi_sample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_8_BIT;
-                break;
-            case 16:
-                shader_blob->m_multi_sample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_16_BIT;
-                break;
-            default:
-                shader_blob->m_multi_sample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-                break;
-            }
+            shader_blob->m_multi_sample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
             shader_blob->m_multi_sample_state_create_info.sampleShadingEnable = VK_FALSE;
             shader_blob->m_multi_sample_state_create_info.minSampleShading = 1.0f;
             shader_blob->m_multi_sample_state_create_info.pSampleMask = nullptr;
@@ -2248,19 +2226,6 @@ VK_API_PLATFORM_API_LIST
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_G_BIT |
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_B_BIT |
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_A_BIT;
-
-            shader_blob->m_color_blend_state_create_info = {};
-            shader_blob->m_color_blend_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-            shader_blob->m_color_blend_state_create_info.pNext = nullptr;
-            shader_blob->m_color_blend_state_create_info.flags = 0;
-            shader_blob->m_color_blend_state_create_info.logicOpEnable = VK_FALSE;
-            shader_blob->m_color_blend_state_create_info.logicOp = VkLogicOp::VK_LOGIC_OP_COPY;
-            shader_blob->m_color_blend_state_create_info.attachmentCount = 1;
-            shader_blob->m_color_blend_state_create_info.pAttachments = &shader_blob->m_color_blend_attachment_state;
-            shader_blob->m_color_blend_state_create_info.blendConstants[0] = 0.0f;
-            shader_blob->m_color_blend_state_create_info.blendConstants[1] = 0.0f;
-            shader_blob->m_color_blend_state_create_info.blendConstants[2] = 0.0f;
-            shader_blob->m_color_blend_state_create_info.blendConstants[3] = 0.0f;
 
             // 此处处理UBO布局，类似DX11，我们的Uniform变量实际上是放在location=0的UBO中的
             // 遍历Uniform，按照vulkan对于ubo的大小和对齐规则，计算实际偏移量；最后得到整个uniform的大小
@@ -3181,7 +3146,27 @@ VK_API_PLATFORM_API_LIST
         pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
         pipeline_create_info.pMultisampleState = &m_blob_data->m_multi_sample_state_create_info;
         pipeline_create_info.pDepthStencilState = &m_blob_data->m_depth_stencil_state_create_info;
-        pipeline_create_info.pColorBlendState = &m_blob_data->m_color_blend_state_create_info;
+
+        std::vector<VkPipelineColorBlendAttachmentState> attachment_states(
+            context->_vk_current_target_framebuffer->m_color_attachments.size());
+
+        for (auto& state : attachment_states)
+            state = m_blob_data->m_color_blend_attachment_state;
+
+        VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {};
+        color_blend_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        color_blend_state_create_info.pNext = nullptr;
+        color_blend_state_create_info.flags = 0;
+        color_blend_state_create_info.logicOpEnable = VK_FALSE;
+        color_blend_state_create_info.logicOp = VkLogicOp::VK_LOGIC_OP_COPY;
+        color_blend_state_create_info.attachmentCount = (uint32_t)attachment_states.size();
+        color_blend_state_create_info.pAttachments = attachment_states.data();
+        color_blend_state_create_info.blendConstants[0] = 0.0f;
+        color_blend_state_create_info.blendConstants[1] = 0.0f;
+        color_blend_state_create_info.blendConstants[2] = 0.0f;
+        color_blend_state_create_info.blendConstants[3] = 0.0f;
+
+        pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
         pipeline_create_info.pDynamicState = &m_blob_data->m_dynamic_state_create_info;
         pipeline_create_info.layout = m_blob_data->m_pipeline_layout;
         pipeline_create_info.renderPass = target_pass;
