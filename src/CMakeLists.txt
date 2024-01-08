@@ -101,6 +101,10 @@ endif()
 # Vulkan 1.1
 if (JE4_ENABLE_VULKAN110_GAPI)
     add_definitions(-DJE_ENABLE_VK110_GAPI)
+
+    # list(APPEND imgui_srcs
+    #     "../3rd/imgui/backends/imgui_impl_vulkan.cpp"
+    #     "../3rd/imgui/backends/imgui_impl_vulkan.h")
 endif()
 
 # Metal

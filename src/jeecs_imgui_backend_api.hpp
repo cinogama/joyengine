@@ -37,6 +37,21 @@ void jegui_update_gl330();
 void jegui_shutdown_gl330(bool reboot);
 #endif
 
+#if defined(JE_ENABLE_VK110_GAPI) && false
+#   include <imgui_impl_vulkan.h>
+
+void jegui_init_vk110(
+    void* (*get_img_res)(jegl_resource*),
+    void (*apply_shader_sampler)(jegl_resource*),
+    void* window_handle,
+    bool reboot,
+    ImGui_ImplVulkan_InitInfo* vkinfo,
+    VkRenderPass pass);
+void jegui_update_vk110(VkCommandBuffer cmdbuf);
+void jegui_shutdown_vk110(bool reboot);
+
+#endif
+
 void jegui_init_none(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*));

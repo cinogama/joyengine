@@ -1467,6 +1467,7 @@ VK_API_PLATFORM_API_LIST
             else
                 vk_validation_layer_supported = true;
 #endif
+            vk_validation_layer_supported = false;
 
             VkApplicationInfo application_info = {};
             application_info.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -3217,9 +3218,15 @@ VK_API_PLATFORM_API_LIST
 
         context->init_vulkan(config);
 
-        /* jegui_init_none(
-             [](auto* res)->void* {return nullptr; },
-             [](auto* res) {});*/
+        /* ImGui_ImplVulkan_InitInfo init_info = {};
+
+        jegui_init_vk110(
+            [](auto* res)->void* {return nullptr; },
+            [](auto* res) {},
+            context->_vk_jegl_interface->native_handle(),
+            reboot,
+            & init_info,
+            context->_vk_swapchain_framebuffer.front()->m_rendpass);*/
 
         return context;
     }

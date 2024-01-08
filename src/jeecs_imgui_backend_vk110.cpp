@@ -104,7 +104,9 @@ void jegui_init_vk110(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*),
     void* window_handle,
-    bool reboot)
+    bool reboot,
+    ImGui_ImplVulkan_InitInfo* vkinfo,
+    VkRenderPass pass)
 {
     jegui_init_basic(false, get_img_res, apply_shader_sampler);
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
@@ -116,13 +118,13 @@ void jegui_init_vk110(
 #else
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
 #endif
-    ImGui_ImplVulkan_InitInfo info;
+    ImGui_ImplVulkan_InitInfo info = {};
 
 
-    ImGui_ImplVulkan_Init();
+    ImGui_ImplVulkan_Init(vkinfo, pass);
 }
 
-void jegui_update_vk110()
+void jegui_update_vk110(VkCommandBuffer cmdbuf)
 {
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   ifdef JE_OS_ANDROID
@@ -153,7 +155,7 @@ void jegui_update_vk110()
     ImGui_ImplGlfw_NewFrame();
 #endif
     jegui_update_basic();
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData());
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdbuf);
 }
 
 void jegui_shutdown_vk110(bool reboot)
