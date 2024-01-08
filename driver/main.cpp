@@ -77,8 +77,8 @@ public func frag(_: v2f)
         { R"(
 import je::shader;
 
-ZTEST   (LESS);
-ZWRITE  (ENABLE);
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 CULL    (BACK);
 
@@ -119,11 +119,11 @@ public func frag(vf: v2f)
     std::function<void(void)> ff = [&]()
     {
         // 画点东西，用指定的着色器渲染指定的模型
-        float clear_color[4] = { 1.f,1.f,1.f,1.f };
-
+        float clear_color_a[4] = { 0.f,1.f,1.f,1.f };
+        float clear_color_b[4] = { 1.f,1.f,1.f,1.f };
         jegl_rend_to_framebuffer(framebuf->resouce(), 0, 0, 0, 0);
         {
-            jegl_clear_framebuffer_color(clear_color);
+            jegl_clear_framebuffer_color(clear_color_a);
             jegl_clear_framebuffer_depth();
 
             jegl_using_texture(texture->resouce(), 2);
@@ -134,10 +134,10 @@ public func frag(vf: v2f)
 
         jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
         {
-            jegl_clear_framebuffer_color(clear_color);
+            jegl_clear_framebuffer_color(clear_color_b);
             jegl_clear_framebuffer_depth();
 
-            jegl_using_texture(texture->resouce(), 2);
+            jegl_using_texture(framebuf->get_attachment(0)->resouce(), 2);
 
             jegl_using_resource(shader_b->resouce());
             jegl_draw_vertex(vertex->resouce());
