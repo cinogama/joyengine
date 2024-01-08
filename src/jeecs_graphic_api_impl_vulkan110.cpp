@@ -360,7 +360,6 @@ VK_API_PLATFORM_API_LIST
         VkSwapchainKHR                      _vk_swapchain;
         std::vector<jevk11_framebuffer*>    _vk_swapchain_framebuffer;
 
-        VkCommandPool               _vk_command_pool;
         VkFence                     _vk_rendering_image_ready_fence;
 
         struct descriptor_set_allocator
@@ -809,6 +808,8 @@ VK_API_PLATFORM_API_LIST
         struct command_buffer_allocator
         {
             jegl_vk110_context* m_context;
+
+            VkCommandPool                   m_command_pool;
             std::vector<VkCommandBuffer>    m_cmd_buffers;
             size_t                          m_next_cmd_buffer;
 
@@ -820,7 +821,7 @@ VK_API_PLATFORM_API_LIST
                 VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
                 command_buffer_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
                 command_buffer_alloc_info.pNext = nullptr;
-                command_buffer_alloc_info.commandPool = m_context->_vk_command_pool;
+                command_buffer_alloc_info.commandPool = m_command_pool;
                 command_buffer_alloc_info.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
                 command_buffer_alloc_info.commandBufferCount = 1;
 
@@ -846,11 +847,30 @@ VK_API_PLATFORM_API_LIST
             {
                 m_context = context;
                 assert(m_context != nullptr);
+
+                VkCommandPoolCreateInfo default_command_pool_create_info = {};
+                default_command_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+                default_command_pool_create_info.pNext = nullptr;
+                default_command_pool_create_info.flags =
+                    VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
+                    VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+                default_command_pool_create_info.queueFamilyIndex = m_context->_vk_device_queue_graphic_family_index;
+
+                if (VK_SUCCESS != m_context->vkCreateCommandPool(
+                    m_context->_vk_logic_device,
+                    &default_command_pool_create_info,
+                    nullptr,
+                    &m_command_pool))
+                {
+                    jeecs::debug::logfatal("Failed to create vk110 default command pool.");
+                }
             }
             ~command_buffer_allocator()
             {
                 for (auto& cmd_buffer : m_cmd_buffers)
-                    m_context->vkFreeCommandBuffers(m_context->_vk_logic_device, m_context->_vk_command_pool, 1, &cmd_buffer);
+                    m_context->vkFreeCommandBuffers(m_context->_vk_logic_device, m_command_pool, 1, &cmd_buffer);
+
+                m_context->vkDestroyCommandPool(m_context->_vk_logic_device, m_command_pool, nullptr);
             }
 
         };
@@ -869,18 +889,7 @@ VK_API_PLATFORM_API_LIST
         /////////////////////////////////////////////////////////////////////
         VkCommandBuffer begin_temp_command_buffer_records()
         {
-            VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
-            command_buffer_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            command_buffer_alloc_info.pNext = nullptr;
-            command_buffer_alloc_info.commandPool = _vk_command_pool;
-            command_buffer_alloc_info.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            command_buffer_alloc_info.commandBufferCount = 1;
-
-            VkCommandBuffer result = nullptr;
-            if (vkAllocateCommandBuffers(_vk_logic_device, &command_buffer_alloc_info, &result) != VK_SUCCESS)
-            {
-                jeecs::debug::logfatal("Failed to allocate command buffers!");
-            }
+            VkCommandBuffer result = _vk_command_buffer_allocator->allocate_command_buffer();
 
             VkCommandBufferBeginInfo command_buffer_begin_info = {};
             command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -910,8 +919,6 @@ VK_API_PLATFORM_API_LIST
 
             vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE);
             vkQueueWaitIdle(_vk_logic_device_graphic_queue);
-
-            vkFreeCommandBuffers(_vk_logic_device, _vk_command_pool, 1, &cmd_buffer);
         }
 
         VkSemaphore create_semaphore()
@@ -1101,7 +1108,7 @@ VK_API_PLATFORM_API_LIST
             for (auto* fb : _vk_swapchain_framebuffer)
                 destroy_frame_buffer(fb);
 
-            vkDestroyCommandPool(_vk_logic_device, _vk_command_pool, nullptr);
+            
 
             _vk_swapchain_framebuffer.clear();
         }
@@ -1680,23 +1687,6 @@ VK_API_PLATFORM_API_LIST
             }
 
             // 创建默认的命令池
-            VkCommandPoolCreateInfo default_command_pool_create_info = {};
-            default_command_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-            default_command_pool_create_info.pNext = nullptr;
-            default_command_pool_create_info.flags =
-                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
-                VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-            default_command_pool_create_info.queueFamilyIndex = _vk_device_queue_graphic_family_index;
-
-            if (VK_SUCCESS != vkCreateCommandPool(
-                _vk_logic_device,
-                &default_command_pool_create_info,
-                nullptr,
-                &_vk_command_pool))
-            {
-                jeecs::debug::logfatal("Failed to create vk110 default command pool.");
-            }
-
             _vk_rendering_image_ready_fence = create_fence();
 
             recreate_swap_chain_for_current_surface(

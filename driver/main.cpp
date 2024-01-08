@@ -17,7 +17,7 @@ int main(int argc, char** argv)
 
     jegl_interface_config config;
     config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
-    config.m_enable_resize = false;
+    config.m_enable_resize = true;
     config.m_msaa = 0;
     config.m_width = 256;
     config.m_height = 256;
