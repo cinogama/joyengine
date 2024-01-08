@@ -106,7 +106,7 @@ public func frag(vf: v2f)
 {
     let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
     let Main = uniform_texture:<texture2d>("Main", nearest_repeat, 2);
-    return fout{ color = uniform("MainColor", float4::zero) + texture(Main, vf.uv) };
+    return fout{ color = uniform("MainColor", float4::one) + texture(Main, vf.uv) };
 } 
 )" }
     );
@@ -115,6 +115,7 @@ public func frag(vf: v2f)
         jegl_texture::format::RGBA
         });
 
+    shader_b->set_uniform("MainColor", math::vec4(0.f, 0.f, 0.f, 0.f));
 
     std::function<void(void)> ff = [&]()
     {

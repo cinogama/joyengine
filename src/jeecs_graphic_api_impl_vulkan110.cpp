@@ -262,6 +262,14 @@ VK_API_PLATFORM_API_LIST
         };
 
         jeecs::basic::resource<blob_data> m_blob_data;
+
+        uint32_t get_built_in_location(const std::string& name)const
+        {
+            auto fnd = m_blob_data->m_ulocations.find(name);
+            if (fnd == m_blob_data->m_ulocations.end())
+                return jeecs::typing::INVALID_UINT32;
+            return fnd->second;
+        }
     };
     struct jevk11_texture
     {
@@ -293,7 +301,11 @@ VK_API_PLATFORM_API_LIST
         //      也应该被释放。但是得考虑释放的时机
         std::unordered_map<VkRenderPass, VkPipeline>
             m_target_pass_pipelines;
-        jevk11_uniformbuf* m_uniform_variables;
+        jevk11_uniformbuf*  m_uniform_variables;
+        void*               m_uniform_cpu_buffer;
+        size_t              m_uniform_cpu_buffer_size;
+        bool                m_uniform_cpu_buffer_updated;
+
         VkPipeline prepare_pipeline(jegl_vk110_context* context);
     };
     struct jevk11_framebuffer
@@ -330,7 +342,7 @@ VK_API_PLATFORM_API_LIST
 
         // Vk的全局实例
         VkInstance          _vk_instance;
-        basic_interface*    _vk_jegl_interface;
+        basic_interface* _vk_jegl_interface;
 
         VkPhysicalDevice    _vk_device;
         uint32_t            _vk_device_queue_graphic_family_index;
@@ -625,7 +637,7 @@ VK_API_PLATFORM_API_LIST
                 for (uint32_t i = 0; i < MAX_LAYOUT_COUNT; ++i)
                 {
                     auto& write = m_updated_writes_reusing[i];
-                   
+
                     write.sType = VkStructureType::VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                     write.pNext = nullptr;
                     write.dstBinding = i;
@@ -776,7 +788,7 @@ VK_API_PLATFORM_API_LIST
                     }
                 }
 
-                m_vk_global_descriptor_sets[DescriptorSetType::UNIFORM_VARIABLES].m_layout = 
+                m_vk_global_descriptor_sets[DescriptorSetType::UNIFORM_VARIABLES].m_layout =
                     m_vk_global_descriptor_set_layouts[DescriptorSetType::UNIFORM_VARIABLES];
                 m_vk_global_descriptor_sets[DescriptorSetType::UNIFORM_BUFFER].m_layout =
                     m_vk_global_descriptor_set_layouts[DescriptorSetType::UNIFORM_BUFFER];
@@ -788,7 +800,7 @@ VK_API_PLATFORM_API_LIST
             ~descriptor_set_allocator()
             {
                 for (auto& layout : m_vk_global_descriptor_set_layouts)
-                    m_context->vkDestroyDescriptorSetLayout(m_context->_vk_logic_device, layout, nullptr);    
+                    m_context->vkDestroyDescriptorSetLayout(m_context->_vk_logic_device, layout, nullptr);
 
                 for (auto& pool : m_pools)
                     m_context->vkDestroyDescriptorPool(m_context->_vk_logic_device, pool, nullptr);
@@ -796,10 +808,10 @@ VK_API_PLATFORM_API_LIST
         };
         struct command_buffer_allocator
         {
-            jegl_vk110_context*             m_context;
+            jegl_vk110_context* m_context;
             std::vector<VkCommandBuffer>    m_cmd_buffers;
             size_t                          m_next_cmd_buffer;
-            
+
             VkCommandBuffer allocate_command_buffer()
             {
                 if (m_next_cmd_buffer < m_cmd_buffers.size())
@@ -852,6 +864,7 @@ VK_API_PLATFORM_API_LIST
         jevk11_framebuffer*                 _vk_current_swapchain_framebuffer;
         jevk11_framebuffer*                 _vk_current_target_framebuffer;
         VkCommandBuffer                     _vk_current_command_buffer;
+        jevk11_shader*                      _vk_current_binded_shader;
 
         /////////////////////////////////////////////////////////////////////
         VkCommandBuffer begin_temp_command_buffer_records()
@@ -1081,11 +1094,6 @@ VK_API_PLATFORM_API_LIST
             // destroy_fence(fb->m_render_finished_fence);
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
             vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr);
-
-            for (auto* attachment : fb->m_color_attachments)
-                destroy_texture_instance(attachment);
-            if (fb->m_depth_attachment != nullptr)
-                destroy_texture_instance(fb->m_depth_attachment);
         }
 
         void destroy_swap_chain()
@@ -1313,6 +1321,7 @@ VK_API_PLATFORM_API_LIST
             _vk_rend_rounds = 0;
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
+            _vk_current_binded_shader = nullptr;
 
             _vk_msaa_config = config->m_msaa;
             if (_vk_msaa_config == 0)
@@ -2233,7 +2242,7 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_color_blend_attachment_state.srcAlphaBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE;
             shader_blob->m_color_blend_attachment_state.dstAlphaBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ZERO;
             shader_blob->m_color_blend_attachment_state.alphaBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
-            shader_blob->m_color_blend_attachment_state.colorWriteMask = 
+            shader_blob->m_color_blend_attachment_state.colorWriteMask =
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_R_BIT |
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_G_BIT |
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_B_BIT |
@@ -2342,12 +2351,23 @@ VK_API_PLATFORM_API_LIST
             assert(blob != nullptr);
 
             jevk11_shader* shader = new jevk11_shader{};
+
             shader->m_blob_data = blob->m_blob_data;
+            shader->m_uniform_cpu_buffer_size = shader->m_blob_data->m_uniform_size;
+            
+            shader->m_uniform_cpu_buffer_updated = true;
+
             if (shader->m_blob_data->m_uniform_size == 0)
+            {
                 shader->m_uniform_variables = nullptr;
+                shader->m_uniform_cpu_buffer = nullptr;
+            }
             else
+            {
                 shader->m_uniform_variables = create_uniform_buffer_with_size(
                     0, shader->m_blob_data->m_uniform_size);
+                shader->m_uniform_cpu_buffer = malloc(shader->m_uniform_cpu_buffer_size);
+            }
 
             return shader;
         }
@@ -2358,7 +2378,11 @@ VK_API_PLATFORM_API_LIST
                 vkDestroyPipeline(_vk_logic_device, pipeline, nullptr);
             }
             if (shader->m_uniform_variables != nullptr)
+            {
                 destroy_uniform_buffer(shader->m_uniform_variables);
+                free(shader->m_uniform_cpu_buffer);
+            }
+            
             delete shader;
         }
 
@@ -2786,6 +2810,20 @@ VK_API_PLATFORM_API_LIST
             vkFreeMemory(_vk_logic_device, uniformbuf->m_uniform_buffer_memory, nullptr);
             delete uniformbuf;
         }
+        void update_uniform_buffer_with_range(jevk11_uniformbuf* ubuf, void* data, size_t offset, size_t size)
+        {
+            void* mdata;
+
+            vkMapMemory(
+                _vk_logic_device,
+                ubuf->m_uniform_buffer_memory,
+                (VkDeviceSize)offset,
+                (VkDeviceSize)size,
+                0,
+                &mdata);
+            memcpy(mdata, data, size);
+            vkUnmapMemory(_vk_logic_device, ubuf->m_uniform_buffer_memory);
+        }
         void update_and_bind_uniform_buffer(jegl_resource* resource)
         {
             jevk11_uniformbuf* uniformbuf = std::launder(
@@ -2794,17 +2832,11 @@ VK_API_PLATFORM_API_LIST
             auto* raw_uniformbuf_data = resource->m_raw_uniformbuf_data;
             if (raw_uniformbuf_data != nullptr && raw_uniformbuf_data->m_update_length > 0)
             {
-                void* data;
-
-                vkMapMemory(
-                    _vk_logic_device,
-                    uniformbuf->m_uniform_buffer_memory,
+                update_uniform_buffer_with_range(
+                    uniformbuf,
+                    raw_uniformbuf_data->m_buffer + raw_uniformbuf_data->m_update_begin_offset,
                     raw_uniformbuf_data->m_update_begin_offset,
-                    raw_uniformbuf_data->m_update_length,
-                    0,
-                    &data);
-                memcpy(data, raw_uniformbuf_data->m_buffer, raw_uniformbuf_data->m_update_length);
-                vkUnmapMemory(_vk_logic_device, uniformbuf->m_uniform_buffer_memory);
+                    raw_uniformbuf_data->m_buffer_size);
 
                 resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
                 resource->m_raw_uniformbuf_data->m_update_length = 0;
@@ -2835,7 +2867,7 @@ VK_API_PLATFORM_API_LIST
             submit_info.pWaitSemaphores = nullptr; // TODO: 未来应当支持等待多个信号量，例如延迟管线
             submit_info.pWaitDstStageMask = wait_stages;
             submit_info.commandBufferCount = 1;
-            submit_info.pCommandBuffers =&_vk_current_command_buffer;
+            submit_info.pCommandBuffers = &_vk_current_command_buffer;
 
             VkSemaphore signal_semaphores[] = {
                 framebuf->m_render_finished_semaphore
@@ -3044,6 +3076,8 @@ VK_API_PLATFORM_API_LIST
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
+            _vk_current_binded_shader = shader;
+
             if (shader->m_uniform_variables != nullptr)
                 _vk_descriptor_set_allocator->bind_uniform_vars(
                     shader->m_uniform_variables->m_uniform_buffer);
@@ -3065,7 +3099,21 @@ VK_API_PLATFORM_API_LIST
         void cmd_draw_vertex(jevk11_vertex* vertex)
         {
             assert(_vk_current_target_framebuffer != nullptr);
+            assert(_vk_current_binded_shader != nullptr);
             VkDeviceSize offsets = 0;
+
+            if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
+            {
+                if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
+                {
+                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = false;
+                    update_uniform_buffer_with_range(
+                        _vk_current_binded_shader->m_uniform_variables,
+                        _vk_current_binded_shader->m_uniform_cpu_buffer,
+                        0,
+                        _vk_current_binded_shader->m_uniform_cpu_buffer_size);
+                }
+            }
 
             _vk_descriptor_set_allocator->apply_binding_work();
 
@@ -3255,6 +3303,28 @@ VK_API_PLATFORM_API_LIST
             assert(blob != nullptr);
             auto* shader_blob = std::launder(reinterpret_cast<jevk11_shader_blob*>(blob));
             resource->m_handle.m_ptr = context->create_shader_with_blob(shader_blob);
+
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JOYENGINE_TRANS_M");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JOYENGINE_TRANS_MV");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
+
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
+
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_resolution = shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_decay = shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
+
+            // ATTENTION: 注意，以下参数特殊shader可能挪作他用
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JOYENGINE_MAIN_COLOR");
+
+            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+            while (uniforms != nullptr)
+            {
+                uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
+                uniforms = uniforms->m_next;
+            }
+
             break;
         }
         case jegl_resource::type::TEXTURE:
@@ -3312,15 +3382,19 @@ VK_API_PLATFORM_API_LIST
         }
         case jegl_resource::type::TEXTURE:
         {
+            // TODO: Apply updated texture!
             break;
         }
         case jegl_resource::type::VERTEX:
         {
-            // Do nothing.
+            // Nothing to do.
             break;
         }
         case jegl_resource::type::FRAMEBUF:
+        {
+            // Nothing to do.
             break;
+        }
         case jegl_resource::type::UNIFORMBUF:
             context->update_and_bind_uniform_buffer(resource);
             break;
@@ -3343,6 +3417,7 @@ VK_API_PLATFORM_API_LIST
             context->destroy_vertex_instance(std::launder(reinterpret_cast<jevk11_vertex*>(resource->m_handle.m_ptr)));
             break;
         case jegl_resource::type::FRAMEBUF:
+            context->destroy_frame_buffer(std::launder(reinterpret_cast<jevk11_framebuffer*>(resource->m_handle.m_ptr)));
             break;
         case jegl_resource::type::UNIFORMBUF:
             context->destroy_uniform_buffer(std::launder(reinterpret_cast<jevk11_uniformbuf*>(resource->m_handle.m_ptr)));
@@ -3362,7 +3437,7 @@ VK_API_PLATFORM_API_LIST
     void bind_texture(jegl_thread::custom_thread_data_t ctx, jegl_resource* texture, size_t pass)
     {
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
-        
+
         jegl_using_resource(texture);
 
         auto* texture_instance = std::launder(reinterpret_cast<jevk11_texture*>(texture->m_handle.m_ptr));
@@ -3383,9 +3458,6 @@ VK_API_PLATFORM_API_LIST
             jegl_using_resource(framebuf);
             target_framebuf = std::launder(reinterpret_cast<jevk11_framebuffer*>(framebuf->m_handle.m_ptr));
         }
-
-        // 此处实际上不需要关闭上一个缓冲区，仅需要设置新的目标缓冲区即可
-        // Vulkan的工作机制决定了，渲染的命令将被在最后统一结束提交
         context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
     }
     void clear_framebuffer_color(jegl_thread::custom_thread_data_t ctx, float color[4])
@@ -3399,8 +3471,42 @@ VK_API_PLATFORM_API_LIST
         context->cmd_clear_frame_buffer_depth();
     }
 
-    void set_uniform(jegl_thread::custom_thread_data_t, uint32_t, jegl_shader::uniform_type, const void*)
+    void set_uniform(jegl_thread::custom_thread_data_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
     {
+        jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
+
+        assert(context->_vk_current_binded_shader != nullptr);
+
+        if (location == jeecs::typing::INVALID_UINT32)
+            return;
+
+        context->_vk_current_binded_shader->m_uniform_cpu_buffer_updated = true;
+        assert(context->_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0);
+        assert(context->_vk_current_binded_shader->m_uniform_cpu_buffer != nullptr);
+
+        size_t data_size_byte_length = 0;
+        switch (type)
+        {
+        case jegl_shader::INT:
+        case jegl_shader::FLOAT:
+            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 4);
+            break;
+        case jegl_shader::FLOAT2:
+            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 8);
+            break;
+        case jegl_shader::FLOAT3:
+            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 12);
+            break;
+        case jegl_shader::FLOAT4:
+            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 16);
+            break;
+        case jegl_shader::FLOAT4X4:
+            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 64);
+            break;
+        default:
+            jeecs::debug::logerr("Unknown uniform variable type to set."); break;
+            break;
+        }
     }
 }
 
