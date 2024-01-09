@@ -283,16 +283,8 @@ VK_API_PLATFORM_API_LIST
     };
     struct jevk11_uniformbuf
     {
-        size_t m_uniform_memory_size;
-        size_t m_update_frame_round;
-
-        struct uniform_buffer_instance
-        {
-            VkBuffer m_uniform_buffer;
-            VkDeviceMemory m_uniform_buffer_memory;
-        };
-        std::vector<uniform_buffer_instance> m_allocated_instances;
-        size_t m_next_allocate_index;
+        VkBuffer m_uniform_buffer;
+        VkDeviceMemory m_uniform_buffer_memory;
 
         uint32_t m_real_binding_place;
     };
@@ -308,12 +300,18 @@ VK_API_PLATFORM_API_LIST
         //      也应该被释放。但是得考虑释放的时机
         std::unordered_map<VkRenderPass, VkPipeline>
             m_target_pass_pipelines;
-        jevk11_uniformbuf* m_uniform_variables;
-        void* m_uniform_cpu_buffer;
+        
+        std::vector<jevk11_uniformbuf*> m_uniform_variables;
+        size_t m_next_allocate_ubos_for_uniform_variable;
+        size_t m_command_commit_round;
+
+        void*               m_uniform_cpu_buffer;
         size_t              m_uniform_cpu_buffer_size;
         bool                m_uniform_cpu_buffer_updated;
 
         VkPipeline prepare_pipeline(jegl_vk110_context* context);
+        jevk11_uniformbuf* allocate_ubo_for_vars(jegl_vk110_context* context);
+        jevk11_uniformbuf* get_last_usable_variable(jegl_vk110_context* context);
     };
     struct jevk11_framebuffer
     {
@@ -887,11 +885,12 @@ VK_API_PLATFORM_API_LIST
         command_buffer_allocator* _vk_command_buffer_allocator;
 
         // Following is runtime vk states.
-        uint32_t                            _vk_presenting_swapchain_image_index;
+        uint32_t            _vk_presenting_swapchain_image_index;
         jevk11_framebuffer* _vk_current_swapchain_framebuffer;
         jevk11_framebuffer* _vk_current_target_framebuffer;
-        VkCommandBuffer                     _vk_current_command_buffer;
-        jevk11_shader* _vk_current_binded_shader;
+        VkCommandBuffer     _vk_current_command_buffer;
+        jevk11_shader*      _vk_current_binded_shader;
+        size_t              _vk_command_commit_round;
 
         /////////////////////////////////////////////////////////////////////
         VkCommandBuffer begin_temp_command_buffer_records()
@@ -1441,6 +1440,7 @@ VK_API_PLATFORM_API_LIST
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
             _vk_current_binded_shader = nullptr;
+            _vk_command_commit_round = 1;
 
             _vk_msaa_config = config->m_msaa;
             if (_vk_msaa_config == 0)
@@ -1735,6 +1735,8 @@ VK_API_PLATFORM_API_LIST
         /////////////////////////////////////////////////////
         void begin_command_buffer_record(VkCommandBuffer cmdbuf)
         {
+            ++_vk_command_commit_round;
+
             VkCommandBufferBeginInfo command_buffer_begin_info = {};
             command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             command_buffer_begin_info.pNext = nullptr;
@@ -2330,18 +2332,13 @@ VK_API_PLATFORM_API_LIST
             shader->m_uniform_cpu_buffer_size = shader->m_blob_data->m_uniform_size;
 
             shader->m_uniform_cpu_buffer_updated = true;
+            shader->m_next_allocate_ubos_for_uniform_variable = 0;
+            shader->m_command_commit_round = 0;
 
             if (shader->m_blob_data->m_uniform_size == 0)
-            {
-                shader->m_uniform_variables = nullptr;
                 shader->m_uniform_cpu_buffer = nullptr;
-            }
             else
-            {
-                shader->m_uniform_variables = create_uniform_buffer_with_size(
-                    0, shader->m_blob_data->m_uniform_size);
                 shader->m_uniform_cpu_buffer = malloc(shader->m_uniform_cpu_buffer_size);
-            }
 
             return shader;
         }
@@ -2351,11 +2348,12 @@ VK_API_PLATFORM_API_LIST
             {
                 vkDestroyPipeline(_vk_logic_device, pipeline, nullptr);
             }
-            if (shader->m_uniform_variables != nullptr)
+            for (auto* ubo : shader->m_uniform_variables)
             {
-                destroy_uniform_buffer(shader->m_uniform_variables);
-                free(shader->m_uniform_cpu_buffer);
+                destroy_uniform_buffer(ubo);
             }
+            if (shader->m_uniform_cpu_buffer != nullptr)
+                free(shader->m_uniform_cpu_buffer);
 
             delete shader;
         }
@@ -3060,10 +3058,6 @@ VK_API_PLATFORM_API_LIST
 
             _vk_current_binded_shader = shader;
 
-            if (shader->m_uniform_variables != nullptr)
-                _vk_descriptor_set_allocator->bind_uniform_vars(
-                    shader->m_uniform_variables->m_uniform_buffer);
-
             for (auto& sampler : shader->m_blob_data->m_samplers)
             {
                 _vk_descriptor_set_allocator->bind_sampler(
@@ -3089,12 +3083,18 @@ VK_API_PLATFORM_API_LIST
                 if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
                 {
                     _vk_current_binded_shader->m_uniform_cpu_buffer_updated = false;
+
+                    auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
+
                     update_uniform_buffer_with_range(
-                        _vk_current_binded_shader->m_uniform_variables,
+                        new_ubo,
                         _vk_current_binded_shader->m_uniform_cpu_buffer,
                         0,
                         _vk_current_binded_shader->m_uniform_cpu_buffer_size);
                 }
+
+                _vk_descriptor_set_allocator->bind_uniform_vars(
+                    _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
             }
 
             _vk_descriptor_set_allocator->apply_binding_work();
@@ -3196,6 +3196,36 @@ VK_API_PLATFORM_API_LIST
 
         m_target_pass_pipelines[target_pass] = pipeline;
         return pipeline;
+    }
+    jevk11_uniformbuf* jevk11_shader::allocate_ubo_for_vars(jegl_vk110_context* context)
+    {
+        if (m_next_allocate_ubos_for_uniform_variable >= m_uniform_variables.size())
+        {
+            auto * ubo = context->create_uniform_buffer_with_size(
+                0, m_uniform_cpu_buffer_size);
+
+            m_uniform_variables.push_back(ubo);
+            ++m_next_allocate_ubos_for_uniform_variable;
+            return ubo;
+        }
+        return m_uniform_variables[m_next_allocate_ubos_for_uniform_variable++];
+    }
+
+    jevk11_uniformbuf* jevk11_shader::get_last_usable_variable(jegl_vk110_context* context)
+    {
+        if (m_next_allocate_ubos_for_uniform_variable == 0)
+        {
+            return allocate_ubo_for_vars(context);
+        }
+        else if (m_command_commit_round != context->_vk_command_commit_round)
+        {
+            if (m_next_allocate_ubos_for_uniform_variable != 0)
+                std::swap(m_uniform_variables[0], m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1]);
+
+            m_command_commit_round = context->_vk_command_commit_round;
+            m_next_allocate_ubos_for_uniform_variable = 1;
+        }
+        return m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1];
     }
 
     jegl_thread::custom_thread_data_t
