@@ -283,8 +283,16 @@ VK_API_PLATFORM_API_LIST
     };
     struct jevk11_uniformbuf
     {
-        VkBuffer m_uniform_buffer;
-        VkDeviceMemory m_uniform_buffer_memory;
+        size_t m_uniform_memory_size;
+        size_t m_update_frame_round;
+
+        struct uniform_buffer_instance
+        {
+            VkBuffer m_uniform_buffer;
+            VkDeviceMemory m_uniform_buffer_memory;
+        };
+        std::vector<uniform_buffer_instance> m_allocated_instances;
+        size_t m_next_allocate_index;
 
         uint32_t m_real_binding_place;
     };
