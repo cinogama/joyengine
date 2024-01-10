@@ -207,6 +207,8 @@ VK_API_DECL(vkGetPhysicalDeviceSurfacePresentModesKHR);\
 VK_API_DECL(vkCreateDebugUtilsMessengerEXT);\
 VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);\
 \
+VK_API_DECL(vkGetPhysicalDeviceProperties2);\
+\
 VK_API_PLATFORM_API_LIST
 
     struct jegl_vk110_context;
@@ -1363,7 +1365,7 @@ VK_API_PLATFORM_API_LIST
             const VkDebugUtilsMessengerCallbackDataEXT* info,
             void* userdata)
         {
-            jeecs::debug::logerr("[Vulkan] %s", info->pMessage);
+            debug::logwarn("[Vulkan] %s\n\n", info->pMessage);
             return VK_FALSE;
         }
 #endif
@@ -1730,23 +1732,25 @@ VK_API_PLATFORM_API_LIST
             _vk_descriptor_set_allocator = new descriptor_set_allocator(this);
             _vk_command_buffer_allocator = new command_buffer_allocator(this);
         }
-
-        void shutdown()
+        void pre_shutdown()
         {
             vkDeviceWaitIdle(_vk_logic_device);
-
+        }
+        void shutdown()
+        {
             delete _vk_descriptor_set_allocator;
             delete _vk_command_buffer_allocator;
 
             destroy_swap_chain();
 
             vkDestroyDevice(_vk_logic_device, nullptr);
-
+#ifndef NDEBUG
             if (_vk_debug_manager != nullptr)
             {
                 assert(vkDestroyDebugUtilsMessengerEXT != nullptr);
                 vkDestroyDebugUtilsMessengerEXT(_vk_instance, _vk_debug_manager, nullptr);
             }
+#endif
             vkDestroySurfaceKHR(_vk_instance, _vk_surface, nullptr);
             vkDestroyInstance(_vk_instance, nullptr);
         }
@@ -2047,7 +2051,7 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_input_assembly_state_create_info.pNext = nullptr;
             shader_blob->m_input_assembly_state_create_info.flags = 0;
             shader_blob->m_input_assembly_state_create_info.topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-            shader_blob->m_input_assembly_state_create_info.primitiveRestartEnable = VK_FALSE;
+            shader_blob->m_input_assembly_state_create_info.primitiveRestartEnable = VK_TRUE;
 
             shader_blob->m_viewport = {};
             shader_blob->m_viewport.x = 0;
@@ -2918,36 +2922,38 @@ VK_API_PLATFORM_API_LIST
 
             for (;;)
             {
-                auto state = vkAcquireNextImageKHR(
-                    _vk_logic_device,
-                    _vk_swapchain,
-                    UINT64_MAX,
-                    _vk_last_command_buffer_semaphore,
-                    VK_NULL_HANDLE,
-                    &_vk_presenting_swapchain_image_index);
-
-                if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR || state == VkResult::VK_SUBOPTIMAL_KHR)
+                if (_vk_jegl_interface->m_interface_width != 0 &&
+                    _vk_jegl_interface->m_interface_height != 0)
                 {
-                    if (_vk_jegl_interface->m_interface_width != 0 &&
-                        _vk_jegl_interface->m_interface_height != 0)
+                    auto state = vkAcquireNextImageKHR(
+                        _vk_logic_device,
+                        _vk_swapchain,
+                        UINT64_MAX,
+                        _vk_last_command_buffer_semaphore,
+                        VK_NULL_HANDLE,
+                        &_vk_presenting_swapchain_image_index);
+
+                    if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR || state == VkResult::VK_SUBOPTIMAL_KHR)
                     {
+
                         recreate_swap_chain_for_current_surface(
                             _vk_jegl_interface->m_interface_width,
                             _vk_jegl_interface->m_interface_height
                         );
+
+                    }
+                    else if (state != VkResult::VK_SUCCESS)
+                    {
+                        jeecs::debug::logfatal("Failed to acquire swap chain image.");
                     }
                     else
-                    {
-                        _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
                         break;
-                    }
-                }
-                else if (state != VkResult::VK_SUCCESS)
-                {
-                    jeecs::debug::logfatal("Failed to acquire swap chain image.");
                 }
                 else
+                {
+                    _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
                     break;
+                }
             }
 
             if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
@@ -2962,15 +2968,18 @@ VK_API_PLATFORM_API_LIST
             cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
             return true;
         }
-        void late_update()
+        bool late_update()
         {
             if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
-                return;
+                return false;
 
             assert(_vk_current_swapchain_framebuffer ==
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
 
+            jegui_update_none();
+
             finish_frame_buffer();
+            return true;
         }
         /////////////////////////////////////////////////////
         void cmd_begin_frame_buffer(jevk11_framebuffer* framebuf, size_t x, size_t y, size_t w, size_t h)
@@ -3174,8 +3183,7 @@ VK_API_PLATFORM_API_LIST
         pipeline_create_info.stageCount = 2;
         pipeline_create_info.pStages = m_blob_data->m_shader_stage_infos;
         pipeline_create_info.pVertexInputState = &m_blob_data->m_vertex_input_state_create_info;
-        pipeline_create_info.pInputAssemblyState = nullptr;
-        pipeline_create_info.pTessellationState = nullptr;
+        pipeline_create_info.pInputAssemblyState = &m_blob_data->m_input_assembly_state_create_info;
         pipeline_create_info.pViewportState = &m_blob_data->m_viewport_state_create_info;
         pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
         pipeline_create_info.pMultisampleState = &m_blob_data->m_multi_sample_state_create_info;
@@ -3273,6 +3281,12 @@ VK_API_PLATFORM_API_LIST
 
         return context;
     }
+    void pre_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t ctx, bool reboot)
+    {
+        jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
+
+        context->pre_shutdown();
+    }
     void shutdown(jegl_thread*, jegl_thread::custom_thread_data_t ctx, bool reboot)
     {
         if (!reboot)
@@ -3315,9 +3329,8 @@ VK_API_PLATFORM_API_LIST
     {
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
 
-        jegui_update_none();
-
         context->late_update();
+
         return true;
     }
 
@@ -3587,6 +3600,7 @@ void jegl_using_vulkan110_apis(jegl_graphic_api* write_to_apis)
     using namespace jeecs::graphic::api::vk110;
 
     write_to_apis->init_interface = startup;
+    write_to_apis->pre_shutdown_interface = pre_shutdown;
     write_to_apis->shutdown_interface = shutdown;
 
     write_to_apis->pre_update_interface = pre_update;

@@ -204,7 +204,9 @@ namespace jeecs::graphic::api::gl3
         jegui_update_gl330();
         return true;
     }
-
+    void gl_pre_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t, bool)
+    {
+    }
     void gl_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t userdata, bool reboot)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(userdata));
@@ -978,6 +980,7 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     using namespace jeecs::graphic::api::gl3;
 
     write_to_apis->init_interface = gl_startup;
+    write_to_apis->pre_shutdown_interface = gl_pre_shutdown;
     write_to_apis->shutdown_interface = gl_shutdown;
 
     write_to_apis->pre_update_interface = gl_pre_update;

@@ -478,6 +478,11 @@ jegl_sync_state jegl_sync_update(jegl_thread* thread)
 
 bool jegl_sync_shutdown(jegl_thread* thread, bool isreboot)
 {
+    thread->m_apis->pre_shutdown_interface(
+        thread,
+        thread->m_userdata,
+        isreboot);
+
     for (auto& [_, resource_blob] : thread->_m_thread_notifier->_m_cached_resource_blobs)
     {
         thread->m_apis->close_resource_blob(thread->m_userdata, resource_blob.m_blob);

@@ -1933,6 +1933,7 @@ struct jegl_graphic_api
     using set_uniform_func_t = void(*)(jegl_thread::custom_thread_data_t, uint32_t, jegl_shader::uniform_type, const void*);
 
     startup_interface_func_t    init_interface;
+    shutdown_interface_func_t   pre_shutdown_interface;
     shutdown_interface_func_t   shutdown_interface;
 
     pre_or_late_update_interface_func_t     pre_update_interface;

@@ -17,6 +17,9 @@ namespace jeecs::graphic::api::none
 
         return nullptr;
     }
+    void pre_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t, bool)
+    {
+    }
     void shutdown(jegl_thread*, jegl_thread::custom_thread_data_t ctx, bool reboot)
     {
         if (!reboot)
@@ -85,6 +88,7 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     using namespace jeecs::graphic::api::none;
 
     write_to_apis->init_interface = startup;
+    write_to_apis->pre_shutdown_interface = pre_shutdown;
     write_to_apis->shutdown_interface = shutdown;
 
     write_to_apis->pre_update_interface = pre_update;
