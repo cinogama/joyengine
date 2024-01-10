@@ -300,12 +300,12 @@ VK_API_PLATFORM_API_LIST
         //      也应该被释放。但是得考虑释放的时机
         std::unordered_map<VkRenderPass, VkPipeline>
             m_target_pass_pipelines;
-        
+
         std::vector<jevk11_uniformbuf*> m_uniform_variables;
         size_t m_next_allocate_ubos_for_uniform_variable;
         size_t m_command_commit_round;
 
-        void*               m_uniform_cpu_buffer;
+        void* m_uniform_cpu_buffer;
         size_t              m_uniform_cpu_buffer_size;
         bool                m_uniform_cpu_buffer_updated;
 
@@ -365,8 +365,6 @@ VK_API_PLATFORM_API_LIST
         VkSwapchainKHR                      _vk_swapchain;
         std::vector<jevk11_framebuffer*>    _vk_swapchain_framebuffer;
         std::vector<jevk11_texture*>        _vk_swapchain_textures_for_free;
-
-        VkFence                     _vk_rendering_image_ready_fence;
 
         struct descriptor_set_allocator
         {
@@ -816,9 +814,23 @@ VK_API_PLATFORM_API_LIST
             jegl_vk110_context* m_context;
 
             VkCommandPool                   m_command_pool;
+
             std::vector<VkCommandBuffer>    m_cmd_buffers;
             size_t                          m_next_cmd_buffer;
 
+            std::vector<VkSemaphore>        m_cmd_semaphores;
+            size_t                          m_next_cmd_semaphore;
+
+            VkSemaphore allocate_semaphore()
+            {
+                if (m_next_cmd_semaphore < m_cmd_semaphores.size())
+                    return m_cmd_semaphores[m_next_cmd_semaphore++];
+
+                VkSemaphore result = m_context->create_semaphore();
+                m_cmd_semaphores.push_back(result);
+                m_next_cmd_semaphore++;
+                return result;
+            }
             VkCommandBuffer allocate_command_buffer()
             {
                 if (m_next_cmd_buffer < m_cmd_buffers.size())
@@ -845,6 +857,7 @@ VK_API_PLATFORM_API_LIST
             void flush_command_buffer_allocator()
             {
                 m_next_cmd_buffer = 0;
+                m_next_cmd_semaphore = 0;
             }
 
             JECS_DISABLE_MOVE_AND_COPY(command_buffer_allocator);
@@ -889,8 +902,11 @@ VK_API_PLATFORM_API_LIST
         jevk11_framebuffer* _vk_current_swapchain_framebuffer;
         jevk11_framebuffer* _vk_current_target_framebuffer;
         VkCommandBuffer     _vk_current_command_buffer;
-        jevk11_shader*      _vk_current_binded_shader;
+        jevk11_shader* _vk_current_binded_shader;
         size_t              _vk_command_commit_round;
+
+        VkSemaphore         _vk_last_command_buffer_semaphore;
+        VkPipelineStageFlags _vk_wait_for_last_command_buffer_stage;
 
         /////////////////////////////////////////////////////////////////////
         VkCommandBuffer begin_temp_command_buffer_records()
@@ -1001,7 +1017,7 @@ VK_API_PLATFORM_API_LIST
                 attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
                 attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+                attachment.initialLayout = final_layout;
                 attachment.finalLayout = final_layout;
 
                 VkAttachmentReference& attachment_ref = color_attachment_refs[attachment_i];
@@ -1021,7 +1037,7 @@ VK_API_PLATFORM_API_LIST
                 depth_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
                 depth_attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 depth_attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                depth_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+                depth_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
                 depth_attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
                 depth_attachment_ref.attachment = (uint32_t)color_and_depth_attachments.size() - 1;
@@ -1437,6 +1453,9 @@ VK_API_PLATFORM_API_LIST
 
         void init_vulkan(const jegl_interface_config* config)
         {
+            _vk_last_command_buffer_semaphore = nullptr;
+            _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
             _vk_current_binded_shader = nullptr;
@@ -1701,8 +1720,6 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_logic_device_graphic_queue != nullptr);
             assert(_vk_logic_device_present_queue != nullptr);
 
-            _vk_rendering_image_ready_fence = create_fence();
-
             recreate_swap_chain_for_current_surface(
                 _vk_jegl_interface->m_interface_width,
                 _vk_jegl_interface->m_interface_height);
@@ -1720,8 +1737,6 @@ VK_API_PLATFORM_API_LIST
 
             destroy_swap_chain();
 
-            destroy_fence(_vk_rendering_image_ready_fence);
-
             vkDestroyDevice(_vk_logic_device, nullptr);
 
             if (_vk_debug_manager != nullptr)
@@ -1735,8 +1750,6 @@ VK_API_PLATFORM_API_LIST
         /////////////////////////////////////////////////////
         void begin_command_buffer_record(VkCommandBuffer cmdbuf)
         {
-            ++_vk_command_commit_round;
-
             VkCommandBufferBeginInfo command_buffer_begin_info = {};
             command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             command_buffer_begin_info.pNext = nullptr;
@@ -2819,31 +2832,27 @@ VK_API_PLATFORM_API_LIST
         }
 
         /////////////////////////////////////////////////////
-        void finish_frame_buffer(jevk11_framebuffer* framebuf)
+        void finish_frame_buffer()
         {
             vkCmdEndRenderPass(_vk_current_command_buffer);
             end_command_buffer_record(_vk_current_command_buffer);
 
             // OK 提交页面
-            // TODO: 其实应当等待的是目标缓冲区的image完成屏障，这里暂时先这么实现
-            if (_vk_presenting_swapchain_image_index != typing::INVALID_UINT32)
-                vkWaitForFences(_vk_logic_device, 1, &_vk_rendering_image_ready_fence, VK_TRUE, UINT64_MAX);
-
-            VkPipelineStageFlags wait_stages[] = {
-                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            };
+            assert(_vk_last_command_buffer_semaphore != nullptr);
 
             VkSubmitInfo submit_info = {};
             submit_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SUBMIT_INFO;
             submit_info.pNext = nullptr;
-            submit_info.waitSemaphoreCount = 0;
-            submit_info.pWaitSemaphores = nullptr; // TODO: 未来应当支持等待多个信号量，例如延迟管线
-            submit_info.pWaitDstStageMask = wait_stages;
+            submit_info.waitSemaphoreCount = 1;
+            submit_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore; // TODO: 未来应当支持等待多个信号量，例如延迟管线
+            submit_info.pWaitDstStageMask = &_vk_wait_for_last_command_buffer_stage;
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers = &_vk_current_command_buffer;
 
-            submit_info.signalSemaphoreCount = 0;
-            submit_info.pSignalSemaphores = nullptr;
+            auto* new_semphore = _vk_command_buffer_allocator->allocate_semaphore();
+
+            submit_info.signalSemaphoreCount = 1;
+            submit_info.pSignalSemaphores = &new_semphore;
 
             if (vkQueueSubmit(
                 _vk_logic_device_graphic_queue,
@@ -2853,6 +2862,14 @@ VK_API_PLATFORM_API_LIST
             {
                 jeecs::debug::logfatal("Failed to submit draw command buffer!");
             }
+
+            _vk_last_command_buffer_semaphore = new_semphore;
+            if (_vk_current_target_framebuffer == _vk_current_swapchain_framebuffer)
+                _vk_wait_for_last_command_buffer_stage =
+                    VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            else
+                _vk_wait_for_last_command_buffer_stage =
+                    VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
@@ -2870,8 +2887,8 @@ VK_API_PLATFORM_API_LIST
             VkPresentInfoKHR present_info = {};
             present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present_info.pNext = nullptr;
-            present_info.waitSemaphoreCount = 0;
-            present_info.pWaitSemaphores = nullptr;
+            present_info.waitSemaphoreCount = 1;
+            present_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore;
 
             VkSwapchainKHR swapchains[] = { _vk_swapchain };
             present_info.swapchainCount = 1;
@@ -2880,19 +2897,26 @@ VK_API_PLATFORM_API_LIST
             present_info.pResults = nullptr;
 
             vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
+
+            _vk_descriptor_set_allocator->flush_descriptor_set_allocator();
+            _vk_command_buffer_allocator->flush_command_buffer_allocator();
+
+            ++_vk_command_commit_round;
         }
         bool update()
         {
             // 开始录制！
+            _vk_last_command_buffer_semaphore = _vk_command_buffer_allocator->allocate_semaphore();
+            _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
             for (;;)
             {
-                vkResetFences(_vk_logic_device, 1, &_vk_rendering_image_ready_fence);
                 auto state = vkAcquireNextImageKHR(
                     _vk_logic_device,
                     _vk_swapchain,
                     UINT64_MAX,
                     VK_NULL_HANDLE,
-                    _vk_rendering_image_ready_fence,
+                    VK_NULL_HANDLE,
                     &_vk_presenting_swapchain_image_index);
 
                 if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR || state == VkResult::VK_SUBOPTIMAL_KHR)
@@ -2939,19 +2963,14 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_current_swapchain_framebuffer ==
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
 
-            finish_frame_buffer(_vk_current_target_framebuffer);
-
-            // 结束录制！
-            _vk_descriptor_set_allocator->flush_descriptor_set_allocator();
-            _vk_command_buffer_allocator->flush_command_buffer_allocator();
+            finish_frame_buffer();
         }
         /////////////////////////////////////////////////////
         void cmd_begin_frame_buffer(jevk11_framebuffer* framebuf, size_t x, size_t y, size_t w, size_t h)
         {
             if (_vk_current_target_framebuffer != nullptr)
-            {
-                finish_frame_buffer(_vk_current_target_framebuffer);
-            }
+                finish_frame_buffer();
+
             assert(_vk_current_target_framebuffer == nullptr);
             assert(_vk_current_command_buffer == nullptr);
 
@@ -3148,7 +3167,7 @@ VK_API_PLATFORM_API_LIST
         pipeline_create_info.stageCount = 2;
         pipeline_create_info.pStages = m_blob_data->m_shader_stage_infos;
         pipeline_create_info.pVertexInputState = &m_blob_data->m_vertex_input_state_create_info;
-        pipeline_create_info.pInputAssemblyState = nullptr; // &m_blob_data->m_input_assembly_state_create_info;
+        pipeline_create_info.pInputAssemblyState = nullptr;
         pipeline_create_info.pTessellationState = nullptr;
         pipeline_create_info.pViewportState = &m_blob_data->m_viewport_state_create_info;
         pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
@@ -3201,7 +3220,7 @@ VK_API_PLATFORM_API_LIST
     {
         if (m_next_allocate_ubos_for_uniform_variable >= m_uniform_variables.size())
         {
-            auto * ubo = context->create_uniform_buffer_with_size(
+            auto* ubo = context->create_uniform_buffer_with_size(
                 0, m_uniform_cpu_buffer_size);
 
             m_uniform_variables.push_back(ubo);
@@ -3241,15 +3260,9 @@ VK_API_PLATFORM_API_LIST
 
         context->init_vulkan(config);
 
-        /* ImGui_ImplVulkan_InitInfo init_info = {};
-
-        jegui_init_vk110(
+        jegui_init_none(
             [](auto* res)->void* {return nullptr; },
-            [](auto* res) {},
-            context->_vk_jegl_interface->native_handle(),
-            reboot,
-            & init_info,
-            context->_vk_swapchain_framebuffer.front()->m_rendpass);*/
+            [](auto* res) {});
 
         return context;
     }
@@ -3266,7 +3279,7 @@ VK_API_PLATFORM_API_LIST
 
         delete context;
 
-        //jegui_shutdown_none(reboot);
+        jegui_shutdown_none(reboot);
     }
 
     bool pre_update(jegl_thread::custom_thread_data_t ctx)
@@ -3295,7 +3308,7 @@ VK_API_PLATFORM_API_LIST
     {
         jegl_vk110_context* context = std::launder(reinterpret_cast<jegl_vk110_context*>(ctx));
 
-        //jegui_update_none();
+        jegui_update_none();
 
         context->late_update();
         return true;
