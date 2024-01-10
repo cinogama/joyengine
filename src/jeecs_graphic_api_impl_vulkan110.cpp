@@ -889,6 +889,9 @@ VK_API_PLATFORM_API_LIST
                 for (auto& cmd_buffer : m_cmd_buffers)
                     m_context->vkFreeCommandBuffers(m_context->_vk_logic_device, m_command_pool, 1, &cmd_buffer);
 
+                for (auto& semaphore : m_cmd_semaphores)
+                    m_context->destroy_semaphore(semaphore);
+
                 m_context->vkDestroyCommandPool(m_context->_vk_logic_device, m_command_pool, nullptr);
             }
 
@@ -1017,7 +1020,7 @@ VK_API_PLATFORM_API_LIST
                 attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
                 attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                attachment.initialLayout = final_layout;
+                attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
                 attachment.finalLayout = final_layout;
 
                 VkAttachmentReference& attachment_ref = color_attachment_refs[attachment_i];
@@ -1037,7 +1040,7 @@ VK_API_PLATFORM_API_LIST
                 depth_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
                 depth_attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 depth_attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                depth_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+                depth_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
                 depth_attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
                 depth_attachment_ref.attachment = (uint32_t)color_and_depth_attachments.size() - 1;
@@ -2476,6 +2479,7 @@ VK_API_PLATFORM_API_LIST
             VkImageUsageFlags usage,
             VkMemoryPropertyFlags properties,
             VkImageAspectFlags aspect_flags,
+            VkImageLayout image_layout,
             VkImage* out_image,
             VkImageView* out_image_view,
             VkDeviceMemory* out_memory)
@@ -2550,6 +2554,7 @@ VK_API_PLATFORM_API_LIST
                     VkImageUsageFlagBits::VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT,
+                    VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
                     &texture->m_vk_texture_image_memory);
@@ -2579,6 +2584,7 @@ VK_API_PLATFORM_API_LIST
                     VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
+                    VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
                     &texture->m_vk_texture_image_memory);
@@ -2677,6 +2683,7 @@ VK_API_PLATFORM_API_LIST
                     VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
+                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
                     &texture->m_vk_texture_image_memory);
@@ -2915,7 +2922,7 @@ VK_API_PLATFORM_API_LIST
                     _vk_logic_device,
                     _vk_swapchain,
                     UINT64_MAX,
-                    VK_NULL_HANDLE,
+                    _vk_last_command_buffer_semaphore,
                     VK_NULL_HANDLE,
                     &_vk_presenting_swapchain_image_index);
 

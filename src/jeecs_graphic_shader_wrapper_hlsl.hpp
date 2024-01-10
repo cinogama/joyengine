@@ -427,10 +427,11 @@ namespace jeecs
 
                 io_declear += "struct vin_t\n{\n";
 
+                std::map<size_t, std::string> in_value_wraper;
                 for (auto& indecl : contex._in_value)
                 {
-                    io_declear +=
-                        "    "
+                    in_value_wraper[indecl.second.first] 
+                        = "    "
                         + get_value_typename(indecl.first)
                         + " _in_"
                         + std::to_string(indecl.second.first)
@@ -438,6 +439,10 @@ namespace jeecs
                         + vertex_in_semantics[indecl.second.first]
                         + ";\n";
                 }
+
+                for(auto& codegendata : in_value_wraper)
+                    io_declear += codegendata.second;
+
                 io_declear += "};\n";
 
                 io_declear += "struct v2f_t\n{\n";
