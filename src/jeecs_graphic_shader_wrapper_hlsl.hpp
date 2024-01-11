@@ -321,6 +321,45 @@ namespace jeecs
             }
 
         public:
+            void generate_uniform_declear(shader_wrapper* wrap, bool in_vertex, std::string* out_uniform, std::string* out_utexture)
+            {
+                std::string uniform_decl = "\n";
+                size_t uniform_count = 0;
+
+                uniform_decl += attrib_binding(0, 0) + "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
+                for (auto& [name, uinfo] : wrap->uniform_variables)
+                {
+                    auto value_type = uinfo.m_value->get_type();
+                    if (value_type == jegl_shader_value::type::TEXTURE2D
+                        || value_type == jegl_shader_value::type::TEXTURE2D_MS
+                        || value_type == jegl_shader_value::type::TEXTURE_CUBE)
+                    {
+                        if ((uinfo.m_used_in_vertex && in_vertex) || (uinfo.m_used_in_fragment && !in_vertex))
+                        {
+                            *out_utexture
+                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 2)
+                                + get_typename(value_type)
+                                + " "
+                                + name
+                                + ": register(t"
+                                + std::to_string(uinfo.m_value->m_uniform_texture_channel)
+                                + ");\n";
+                        }
+                    }
+                    else
+                    {
+                        ++uniform_count;
+                        uniform_decl += "    " + get_typename(value_type) + " " + name + ";\n";
+                    }
+                }
+                uniform_decl += "};";
+
+                if (uniform_count != 0)
+                {
+                    *out_uniform = uniform_decl;
+                }
+            }
+
             virtual std::string generate_vertex(shader_wrapper* wrap) override
             {
                 _shader_wrapper_contex contex;
@@ -351,43 +390,11 @@ namespace jeecs
                 // Generate shaders
                 std::string texture_decl = "";
                 std::string uniform_decl = "";
-                size_t uniform_count = 0;
-
-                uniform_decl += attrib_binding(0, 0) + "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
-                for (auto& [name, uinfo] : wrap->uniform_variables)
-                {
-                    auto value_type = uinfo.m_value->get_type();
-                    if (value_type == jegl_shader_value::type::TEXTURE2D
-                        || value_type == jegl_shader_value::type::TEXTURE2D_MS
-                        || value_type == jegl_shader_value::type::TEXTURE_CUBE)
-                    {
-                        if (uinfo.m_used_in_vertex)
-                        {
-                            texture_decl
-                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 2)
-                                + get_typename(value_type)
-                                + " "
-                                + name
-                                + ": register(t"
-                                + std::to_string(uinfo.m_value->m_uniform_texture_channel)
-                                + ");\n";
-                        }
-                    }
-                    else
-                    {
-                        ++uniform_count;
-                        uniform_decl += "    " + get_typename(value_type) + " " + name + ";\n";
-                    }
-                }
-                uniform_decl += "};";
+               
+                generate_uniform_declear(wrap, true, &uniform_decl, &texture_decl);
 
                 io_declear += texture_decl;
-                if (uniform_count != 0)
-                {
-                    io_declear += "\n";
-                    io_declear += uniform_decl;
-                }
-
+                io_declear += uniform_decl;
                 io_declear += "\n";
 
                 size_t INT_COUNT = 0;
@@ -560,44 +567,11 @@ namespace jeecs
                 // Generate shaders
                 std::string texture_decl = "";
                 std::string uniform_decl = "";
-                size_t uniform_count = 0;
 
-                uniform_decl += 
-                    attrib_binding(0, 0)
-                    + "cbuffer SHADER_UNIFORM: register(b0)\n{\n";
-                for (auto& [name, uinfo] : wrap->uniform_variables)
-                {
-                    auto value_type = uinfo.m_value->get_type();
-                    if (value_type == jegl_shader_value::type::TEXTURE2D
-                        || value_type == jegl_shader_value::type::TEXTURE2D_MS
-                        || value_type == jegl_shader_value::type::TEXTURE_CUBE)
-                    {
-                        if (uinfo.m_used_in_fragment)
-                        {
-                            texture_decl
-                                += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 2)
-                                + get_typename(value_type)
-                                + " "
-                                + name
-                                + ": register(t"
-                                + std::to_string(uinfo.m_value->m_uniform_texture_channel)
-                                + ");\n";
-                        }
-                    }
-                    else
-                    {
-                        ++uniform_count;
-                        uniform_decl += "    " + get_typename(value_type) + " " + name + ";\n";
-                    }
-                }
-                uniform_decl += "};";
+                generate_uniform_declear(wrap, false, &uniform_decl, &texture_decl);
 
                 io_declear += texture_decl;
-                if (uniform_count != 0)
-                {
-                    io_declear += "\n";
-                    io_declear += uniform_decl;
-                }
+                io_declear += uniform_decl;
 
                 io_declear += "\n";
 

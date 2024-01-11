@@ -2121,7 +2121,8 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     hlsl_shader_input.resource = glslang_default_resource();
     hlsl_shader_input.callbacks = {};
     hlsl_shader_input.callbacks_ctx = nullptr;
-
+    
+    glslang_program_t* program = glslang_program_create();
     glslang_shader_t* hlsl_shader = glslang_shader_create(&hlsl_shader_input);
     
     glslang_shader_set_entry_point(hlsl_shader, is_fragment ? "fragment_main" : "vertex_main");
@@ -2138,7 +2139,7 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
             glslang_shader_get_info_log(hlsl_shader));
     }
 
-    glslang_program_t* program = glslang_program_create();
+
     glslang_program_add_shader(program, hlsl_shader);
 
     if (!glslang_program_link(program, GLSLANG_MSG_SPV_RULES_BIT))
