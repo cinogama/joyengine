@@ -107,7 +107,7 @@ build_win64_dx11_opengl:
       -DJE4_ENABLE_DX11_GAPI=ON
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
-      -DJE4_ENABLE_VULKAN110_GAPI=OFF
+      -DJE4_ENABLE_VULKAN110_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
     - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
     - cd ..
@@ -144,7 +144,7 @@ build_win64_dx11_opengles:
       -DJE4_ENABLE_DX11_GAPI=ON
       -DJE4_ENABLE_OPENGL330_GAPI=OFF
       -DJE4_ENABLE_OPENGLES300_GAPI=ON
-      -DJE4_ENABLE_VULKAN110_GAPI=OFF
+      -DJE4_ENABLE_VULKAN110_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
     - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
   tags:

@@ -104,12 +104,11 @@ void jegui_init_vk110(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*),
     void* window_handle,
-    bool reboot,
     ImGui_ImplVulkan_InitInfo* vkinfo,
     VkRenderPass pass,
     VkCommandBuffer cmdbuf)
 {
-    jegui_init_basic(false, get_img_res, apply_shader_sampler);
+    jegui_init_basic(true, get_img_res, apply_shader_sampler);
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   ifdef JE_OS_ANDROID
     jegui_android_init((struct android_app*)window_handle);
